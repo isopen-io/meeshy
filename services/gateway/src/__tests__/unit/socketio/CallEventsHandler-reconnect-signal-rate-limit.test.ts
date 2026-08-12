@@ -81,6 +81,7 @@ function makeCallService() {
     generateIceServers: jest.fn<any>().mockReturnValue([{ urls: 'stun:stun.example.com:3478' }]),
     getIceServerTtl: jest.fn<any>().mockReturnValue(480),
     getCallSession: jest.fn<any>().mockResolvedValue({
+      status: 'active',
       participants: [{ participantId: 'participant-1', leftAt: null, participant: { userId: USER_ID } }],
     }),
   } as any;

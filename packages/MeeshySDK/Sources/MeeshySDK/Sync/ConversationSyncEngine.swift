@@ -2,6 +2,28 @@ import Foundation
 import Combine
 import os
 
+// MARK: - Realtime message mutations
+
+/// A real-time mutation of an already-persisted message, expressed without any
+/// storage vocabulary so the engine stays agnostic of the host app's store.
+/// The host maps each case onto its canonical table (GRDB `messages`).
+///
+/// Every case is idempotent by construction on the receiving side: the same
+/// broadcast may reach both this relay and the open conversation's own socket
+/// handler, and replaying it must not double-count a reaction or resurrect a
+/// stale edit.
+public enum RealtimeMessageMutation: Sendable, Equatable {
+    case edited(messageId: String, content: String, editedAt: Date)
+    /// `message:edited` porteur d'un résumé d'appel : la transition live →
+    /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
+    /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
+    case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
+    case deleted(messageId: String, deletedAt: Date)
+    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
+    case reactionRemoved(messageId: String, emoji: String, participantId: String?)
+    case consumed(messageId: String, viewOnceCount: Int)
+}
+
 // MARK: - Protocol
 
 public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
@@ -34,7 +56,9 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
+    /// Efface la frontière de lecture locale (geste « marquer comme non lu »).
+    func markConversationUnreadLocally(_ conversationId: String) async
+    func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async
 
     /// Declare which conversation is currently visible to the user.
     /// While set, the engine will:
@@ -136,6 +160,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         set { stateQueue.sync { _apiMessagePersistor = newValue } }
     }
 
+    /// Sibling of `apiMessagePersistor` for the mutations that carry no
+    /// `APIMessage` payload: edit, delete, reaction add/remove and view-once
+    /// consumption. Those four broadcasts only ever reached `cache.messages`
+    /// (a namespace the conversation screen does not render) — the canonical
+    /// GRDB table was refreshed by the REST refetch on reopen alone, so
+    /// offline the timeline still showed the pre-edit text, the deleted
+    /// bubble and the missing reaction. Installed by the host app, which owns
+    /// the store; `nil` in tests that only exercise the cache surfaces.
+    private var _realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)?
+    public var realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)? {
+        get { stateQueue.sync { _realtimeMessagePersistor } }
+        set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
+    }
+
     // Cooldown between successive delta syncs. The gateway delta endpoint
     // is cheap (~10-50 ms) but a chatty socket that flaps reconnect every
     // 200 ms used to spam `/conversations?updatedSince=...` once per flap
@@ -212,6 +250,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.fullReconcileInterval = fullReconcileInterval
     }
 
+    // MARK: - Sync Checkpoints (logout / re-auth reset)
+
+    /// sync-04 — efface les trois checkpoints UserDefaults pour que le compte
+    /// suivant (ou une ré-authentification du même compte, dont le cache est
+    /// purgé par ailleurs) reparte de `.distantPast` au lieu d'hériter du
+    /// watermark de la session sortante — sinon un delta déclenché avant le
+    /// premier fullSync réussi persiste une liste PARTIELLE comme fraîche.
+    /// `lastDeltaSyncAt` est remis aussi pour que le tout premier delta ne
+    /// soit pas avalé par le cooldown en mémoire.
+    public func resetSyncCheckpoints() {
+        UserDefaults.standard.removeObject(forKey: syncTimestampKey)
+        UserDefaults.standard.removeObject(forKey: cleanupDateKey)
+        UserDefaults.standard.removeObject(forKey: fullReconcileKey)
+        lastDeltaSyncAt = .distantPast
+    }
+
     // MARK: - Full Sync (cold start)
 
     /// Run a full sync and return whether it completed successfully.
@@ -268,6 +322,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }.value
     }
 
+    @discardableResult
     public func fullSync() async -> Bool {
         guard !isSyncing else { return true }
         isSyncing = true
@@ -276,6 +331,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let pageSize = 100
         let userId = await currentUserId()
         let service = self.conversationService
+        // Figée AVANT la première écriture : `saveSorted(firstPage)` remplace le
+        // cache par la seule page 1, et sans cette baseline les pages suivantes
+        // n'auraient plus d'homologue local où retrouver leur frontière de lecture.
+        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -291,7 +350,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             firstPage = (await Self.mapConversationsOffMain(response.data, userId: userId))
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
-            await saveSorted(firstPage, to: "list")
+            await saveSorted(firstPage, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
@@ -427,7 +486,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 succeeded = recoveredAll
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         }
@@ -458,7 +517,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
                 if !newItems.isEmpty {
-                    await saveSorted(merged, to: "list")
+                    await saveSorted(merged, to: "list", baseline: baseline)
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                 }
@@ -508,32 +567,110 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
-    @discardableResult
-    public func syncSinceLastCheckpoint() async -> Bool {
-        let ok = await deltaSyncCore()
-        // P7-10 — réconciliation complète périodique, chaînée APRÈS le delta
-        // (hors du garde `isSyncing` que le corps tient) : fullSync remplace
-        // la liste par la vérité serveur → purge les fantômes hard-supprimés
-        // que le delta upsert-only ne peut pas voir. Bornée à 1× par
-        // `fullReconcileInterval` (24 h) — le delta reste le chemin nominal
-        // bon marché. Seulement sur delta RÉUSSI : offline/panne, on garde
-        // le cache intact (local-first) et on retentera au prochain delta.
-        if ok && isFullReconcileDue {
-            await fullSync()
-        }
-        return ok
+    /// Ce qu'une page delta prouve, au-delà d'avoir abouti.
+    private struct DeltaOutcome: Sendable {
+        let succeeded: Bool
+        /// La fenêtre `updatedSince` contenait plus de lignes que la page n'en
+        /// a rendues — donc ce delta ne prouve PAS qu'il a tout vu.
+        let mayHaveMore: Bool
+
+        /// Delta abouti sans reste — également l'issue des exécutions SAUTÉES
+        /// (sync en cours, anti-rafale) : rien n'a été lu, donc rien n'est
+        /// incomplet, et le curseur n'a pas bougé.
+        static let complete = DeltaOutcome(succeeded: true, mayHaveMore: false)
+        static let failed = DeltaOutcome(succeeded: false, mayHaveMore: false)
     }
 
-    private func deltaSyncCore() async -> Bool {
-        guard !isSyncing else { return true }
+    /// Plafond serveur de `GET /conversations` (`Math.min(limit, 100)` dans
+    /// `routes/conversations/core.ts`) — jumeau de `DELTA_PAGE_LIMIT`
+    /// (`apps/web/hooks/queries/use-conversations-delta-sync.ts`).
+    ///
+    /// Le demander explicitement plutôt que `500` ne change RIEN au nombre de
+    /// lignes rendues ; ça rend la troncature lisible, et ça rend utilisable le
+    /// repli `data.count >= deltaPageLimit` du jour où la réponse n'annonce pas
+    /// sa pagination — sous `limit=500`, ce repli n'aurait jamais pu déclencher.
+    static let deltaPageLimit = 100
+
+    /// JUMEAU WEB — `apps/web/hooks/queries/use-conversations-delta-sync.ts` +
+    /// `apps/web/lib/conversations/delta-sync.ts` portent la même règle sur le
+    /// cache React Query : même endpoint (`GET /conversations?updatedSince=`),
+    /// même upsert par id, même retrait sur `isActive == false`, même repli sur
+    /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
+    /// évolution de la règle touche les DEUX plateformes.
+    ///
+    /// TRONCATURE : `GET /conversations` plafonne à 100
+    /// (`Math.min(limit, 100)`, `routes/conversations/core.ts`). Une fenêtre
+    /// ayant touché plus de 100 conversations rend donc une page tronquée.
+    ///
+    /// La route trie DÉSORMAIS une page delta par `updatedAt` croissant (elle
+    /// triait par `lastMessageAt` décroissant, sans rapport avec le filtre) :
+    /// les lignes coupées sont exactement celles d'`updatedAt` supérieur à la
+    /// dernière rendue, donc `lastSyncTimestamp` — avancé au max des `updatedAt`
+    /// reçus — pointe dessus au lieu de les enjamber. La troncature est une
+    /// pagination, plus une perte.
+    ///
+    /// RÉSIDU que l'ordre ne rattrape pas : plus de 100 conversations portant la
+    /// MÊME milliseconde d'`updatedAt` (écriture en masse) débordent d'une page
+    /// que la borne stricte `gt` ne peut pas reprendre. Une page dont le serveur
+    /// annonce du reste (`pagination.hasMore`, autoritaire sur une page delta —
+    /// voir `deltaSyncCore`) est donc traitée comme une preuve d'INCOMPLÉTUDE,
+    /// jamais comme un delta de confiance, et escalade vers `fullSync` —
+    /// exactement comme le web escalade vers la relecture complète.
+    ///
+    /// DIVERGENCE ASSUMÉE avec le web sur le curseur, parce que sa nature
+    /// diffère : le web le RECALCULE depuis son cache à chaque exécution, iOS le
+    /// PERSISTE. Un curseur persisté avancé sur une page tronquée survivrait à
+    /// une escalade échouée et enjamberait les lignes coupées à vie ; iOS ne
+    /// l'avance donc pas tant que la page ne prouve pas sa complétude
+    /// (`SyncWatermark.advancedAfterDeltaPage`).
+    @discardableResult
+    public func syncSinceLastCheckpoint() async -> Bool {
+        let outcome = await deltaSyncCore()
+        // Réconciliation complète, chaînée APRÈS le delta (hors du garde
+        // `isSyncing` que le corps tient). Deux raisons de la déclencher, une
+        // seule action — fullSync remplace la liste par la vérité serveur :
+        //
+        // - page laissant du RESTE ⇒ le delta ne PROUVE plus qu'il a tout vu, et
+        //   son curseur est resté en arrière pour que la fenêtre reste
+        //   rejouable. L'escalade est la seule voie pour combler le reste ET la
+        //   seule qui fera repartir le curseur (`SyncWatermark.fromFullSync`) ;
+        // - fenêtre de 24 h échue ⇒ purge des fantômes hard-supprimés, que le
+        //   delta upsert-only ne peut pas voir. Bornée à 1× par
+        //   `fullReconcileInterval` — le delta reste le chemin nominal bon
+        //   marché.
+        //
+        // Seulement sur delta RÉUSSI : offline/panne, on garde le cache intact
+        // (local-first) et on retentera au prochain delta.
+        if outcome.succeeded && (outcome.mayHaveMore || isFullReconcileDue) {
+            await fullSync()
+        }
+        return outcome.succeeded
+    }
+
+    /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
+    /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
+    ///
+    /// `mergeConversationDelta` (`apps/web/lib/conversations/delta-sync.ts`) ne
+    /// porte que la RÈGLE 1 de `reconcileUnread` — conversation ouverte ⇒ 0.
+    /// La règle 2 (« lecture locale postérieure au dernier message serveur »)
+    /// n'a pas de transposition sûre : elle s'appuie sur `userState.lastReadAt`,
+    /// frontière LOCALE que le modèle web ne porte pas, et c'est le fait que
+    /// `markAsUnread` EFFACE cette frontière qui laisse le compteur serveur
+    /// reprendre la main. Une transposition basée sur `unreadCount` +
+    /// `lastMessageAt` n'a pas cet interrupteur : elle rendrait un
+    /// « marquer comme non lu » cross-device définitivement invisible sur le
+    /// web. Fermer l'écart demande de faire voyager la frontière de lecture
+    /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
+    private func deltaSyncCore() async -> DeltaOutcome {
+        guard !isSyncing else { return .complete }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
-        // `true` is intentional — from the caller's perspective the
+        // `.complete` is intentional — from the caller's perspective the
         // delta is "fresh enough" since a recent one just landed.
         let now = Date()
         if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
-            return true
+            return .complete
         }
         lastDeltaSyncAt = now
         isSyncing = true
@@ -543,7 +680,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let since = lastSyncTimestamp
             let sinceStr = ISO8601DateFormatter().string(from: since)
             let queryItems = [
-                URLQueryItem(name: "limit", value: "500"),
+                URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
                 URLQueryItem(name: "offset", value: "0"),
                 URLQueryItem(name: "updatedSince", value: sinceStr)
             ]
@@ -569,7 +706,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 await cache.messages.invalidate(for: removedId)
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: existing)
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
@@ -577,11 +714,33 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // the device clock (R15b) — a device ahead of the server used to push
             // `updatedSince` past real updates in `[serverNow, deviceNow]` and drop
             // them. Never regresses; an empty delta keeps the prior cursor.
-            lastSyncTimestamp = SyncWatermark.advanced(previous: lastSyncTimestamp, receivedUpdatedAt: deltaConversations.map(\.updatedAt))
-            return true
+            //
+            // Et une page qui a laissé du RESTE ne le fait pas avancer du tout :
+            // elle n'a pas prouvé qu'elle rendait toute la fenêtre, qui reste
+            // donc ouverte pour l'escalade que `syncSinceLastCheckpoint`
+            // enchaîne — ou pour le prochain delta si cette escalade échoue. La
+            // fusion ci-dessus est conservée dans les deux cas : ce qu'on a reçu
+            // est vrai, c'est seulement la COUVERTURE qui n'est pas prouvée.
+            //
+            // `hasMore` est AUTORITAIRE ici, et pas l'heuristique « la page est
+            // pleine » : une page delta part toujours d'`offset=0`, ce qui fait
+            // compter au serveur toutes les lignes de la MÊME clause
+            // `updatedAt > since` (`prisma.conversation.count({ where:
+            // whereClause })`, `routes/conversations/core.ts`) — `hasMore` y vaut
+            // `N < total`. Une fenêtre de très exactement 100 conversations ne
+            // déclenche donc AUCUNE escalade, là où `count >= limit` en aurait
+            // imposé une pour rien. Repli sur l'heuristique si le bloc pagination
+            // manque : conservateur, on suppose qu'il en reste.
+            let mayHaveMore = response.pagination?.hasMore ?? (response.data.count >= Self.deltaPageLimit)
+            lastSyncTimestamp = SyncWatermark.advancedAfterDeltaPage(
+                previous: lastSyncTimestamp,
+                receivedUpdatedAt: deltaConversations.map(\.updatedAt),
+                pageMayHaveMore: mayHaveMore
+            )
+            return DeltaOutcome(succeeded: true, mayHaveMore: mayHaveMore)
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
-            return false
+            return .failed
         }
     }
 
@@ -856,6 +1015,45 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Conversation metadata updated (title, avatar, description, …).
+        // `ConversationStoreSocketBridge` routes the same broadcast to the RAM
+        // store; this relay is what makes it survive a cold start.
+        messageSocket.conversationUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleConversationUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // Profil public d'un CONTACT (nom, avatar, bannière). Même raison que
+        // le relais ci-dessus : sans lui, la ligne redevient périmée au
+        // prochain démarrage à froid, le temps que le REST réponde.
+        messageSocket.userUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleUserUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // Conversation deleted server-side — drop the row (and its messages)
+        // from the persisted cache, not only from the RAM store.
+        messageSocket.conversationDeleted
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleConversationDeleted(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // `message:consumed` (vue unique consommée) reçu conversation FERMÉE :
+        // sans ce relais, seule la conversation ouverte marquait le message
+        // consommé — le rouvrir hors-ligne réaffichait un média déjà brûlé.
+        messageSocket.messageConsumed
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleMessageConsumed(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in
@@ -884,8 +1082,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         let userId = await currentUserId()
         let username = await currentUsername()
+        let displayName = await currentUserDisplayName()
         let isMe = apiMessage.senderId == userId
-        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        let msg = apiMessage.toMessage(
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -900,11 +1100,26 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await apiMessagePersistor?([apiMessage])
         _messagesDidChange.send(msg.conversationId)
 
-        // Preserve the existing author when the broadcast payload omits the
-        // sender envelope (can happen for lightweight socket echoes). Falling
-        // back to `nil` would otherwise wipe the preview author for the whole
-        // list row until the next full sync.
-        let resolvedSenderName = msg.senderName ?? msg.senderUsername
+        // Facette COMPLÈTE du nouveau dernier message. Les onze champs
+        // `lastMessage*` décrivent un seul message : n'en écrire que trois
+        // laissait la ligne mélanger le texte du nouveau message avec la pièce
+        // jointe, l'expiration et le drapeau « vue unique » de l'ANCIEN — un
+        // texte tout neuf résumé « Vue unique » parce que la photo précédente
+        // l'était. Cf. `LastMessageFacet`.
+        //
+        // Changement assumé : quand un écho socket allégé omet l'enveloppe
+        // expéditeur, l'auteur devient `nil` au lieu de conserver le précédent.
+        // Garder l'ancien collait le nom d'Alice sous le message de Bob — la
+        // ligne était FAUSSE, pas incomplète, et rien ne la corrigeait. Ne pas
+        // « restaurer » ce repli.
+        let facet = LastMessageFacet(
+            message: msg,
+            preview: msg.content,
+            translations: Self.previewTranslations(
+                from: apiMessage,
+                viewerLanguages: await currentPreferredLanguages()
+            )
+        )
 
         // Snapshot the cached list to decide whether the conversation
         // already exists. The `update` mutate closure is sync +
@@ -921,12 +1136,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     // regress the row to older content/position once a
                     // newer message has already been applied.
                     guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].lastMessagePreview = msg.content.meeshyPreviewTruncated
-                    updated[idx].lastMessageId = msg.id
-                    if let resolvedSenderName, !resolvedSenderName.isEmpty {
-                        updated[idx].lastMessageSenderName = resolvedSenderName
-                    }
-                    updated[idx].lastMessageAt = msg.createdAt
+                    updated[idx].applyLastMessage(facet)
                     let conv = updated.remove(at: idx)
                     updated.insert(conv, at: 0)
                 }
@@ -973,10 +1183,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private func handleEditedMessage(_ apiMessage: APIMessage) async {
         let userId = await currentUserId()
         let username = await currentUsername()
-        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        let displayName = await currentUserDisplayName()
+        let msg = apiMessage.toMessage(
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
+        await realtimeMessagePersistor?(Self.mutation(for: apiMessage, content: msg.content))
         _messagesDidChange.send(msg.conversationId)
         // If the edited message is the conversation's last message, the list-row
         // preview still shows the pre-edit text — refresh it in place.
@@ -985,9 +1198,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
+        let callId = await cache.messages.load(for: event.conversationId).snapshot()?
+            .first(where: { $0.id == event.messageId })?.callSummary?.callId
+
+        let deletedAt = Date()
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.deletedAt = Date()
+            msg.deletedAt = deletedAt
             msg.content = ""
+        }
+        await realtimeMessagePersistor?(.deleted(messageId: event.messageId, deletedAt: deletedAt))
+        if let callId {
+            await CallTranscriptStore.shared.invalidate(for: callId)
         }
         _messagesDidChange.send(event.conversationId)
         // If the deleted message was the conversation's last message, the list-row
@@ -1066,16 +1287,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
         guard let convId = event.conversationId else { return }
+        let reaction = MeeshyReaction(
+            messageId: event.messageId,
+            participantId: event.participantId,
+            emoji: event.emoji
+        )
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            let reaction = MeeshyReaction(
-                messageId: event.messageId,
-                participantId: event.participantId,
-                emoji: event.emoji
-            )
             if !msg.reactions.contains(where: { $0.emoji == reaction.emoji && $0.participantId == reaction.participantId }) {
                 msg.reactions.append(reaction)
             }
         }
+        await realtimeMessagePersistor?(.reactionAdded(
+            messageId: event.messageId,
+            reactionId: reaction.id,
+            emoji: event.emoji,
+            participantId: event.participantId,
+            maxCount: event.aggregation?.count
+        ))
         _messagesDidChange.send(convId)
     }
 
@@ -1084,6 +1312,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
             msg.reactions.removeAll { $0.emoji == event.emoji && $0.participantId == event.participantId }
         }
+        await realtimeMessagePersistor?(.reactionRemoved(
+            messageId: event.messageId,
+            emoji: event.emoji,
+            participantId: event.participantId
+        ))
         _messagesDidChange.send(convId)
     }
 
@@ -1218,6 +1451,141 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         return updated
     }
 
+    /// Classe un `message:edited` : un message porteur d'un résumé d'appel
+    /// décrit la fin de l'appel, pas une édition utilisateur. Le confondre avec
+    /// `.edited` poserait « modifié » sur un avis d'appel et écraserait le
+    /// résumé — même distinction que `ConversationSocketHandler` applique déjà
+    /// sur la conversation ouverte. Pure + testable.
+    nonisolated static func mutation(
+        for apiMessage: APIMessage, content: String
+    ) -> RealtimeMessageMutation {
+        guard let callSummary = apiMessage.callSummary else {
+            // L'horloge SERVEUR, jamais celle de l'appareil : `markEdited`
+            // compare cet instant au précédent pour rejeter les échos
+            // désordonnés, ce qui n'a de sens qu'entre horloges comparables.
+            return .edited(
+                messageId: apiMessage.id,
+                content: content,
+                editedAt: apiMessage.editedAt ?? Date()
+            )
+        }
+        return .callNoticeUpdated(
+            messageId: apiMessage.id,
+            content: content,
+            callSummaryJson: try? JSONEncoder().encode(callSummary),
+            serverUpdatedAt: apiMessage.updatedAt ?? apiMessage.editedAt ?? Date()
+        )
+    }
+
+    // MARK: - Conversation lifecycle (persisted)
+
+    /// `conversation:updated` relayed into the PERSISTED list. The RAM
+    /// `ConversationStore` already applied it (via `ConversationStoreSocketBridge`)
+    /// but nothing wrote it to disk: a rename received while the list screen was
+    /// gone came back to its old title on the next cold start.
+    ///
+    /// The merge runs INSIDE the cache mutation closure so a concurrent
+    /// `userState` write (read receipt, pin) can't be clobbered by a row rebuilt
+    /// from a pre-read snapshot. The pre-read exists only to skip the write —
+    /// and the `_conversationsDidChange` fan-out — when nothing changed.
+    private func handleConversationUpdated(_ event: ConversationUpdatedEvent) async {
+        let storeEvent = ConversationStoreSocketBridge.mapConversationUpdated(event)
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard Self.applyingConversationUpdate(storeEvent, to: list) != nil else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            Self.applyingConversationUpdate(storeEvent, to: conversations) ?? conversations
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Apply a `conversation:updated` payload to a cached list, returning `nil`
+    /// when the event changes nothing. Delegates the per-row rule to
+    /// `ConversationStore.merging` so the persisted list and the RAM store can
+    /// never disagree. Re-sorts only when `lastMessageAt` moved — the cache
+    /// invariant is "sorted by `lastMessageAt` DESC" (cf. `saveSorted`), and
+    /// `sorted(by:)` is not stable, so re-sorting on a metadata-only change
+    /// would shuffle rows sharing a timestamp for nothing.
+    nonisolated static func applyingConversationUpdate(
+        _ event: ConversationUpdatedStoreEvent,
+        to conversations: [MeeshyConversation]
+    ) -> [MeeshyConversation]? {
+        guard let index = conversations.firstIndex(where: { $0.id == event.conversationId }),
+              let merged = ConversationStore.merging(conversations[index], with: event)
+        else { return nil }
+        var updated = conversations
+        updated[index] = merged
+        guard merged.lastMessageAt != conversations[index].lastMessageAt else { return updated }
+        return updated.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// `user:updated` relayed into the PERSISTED list. Le store RAM l'applique
+    /// déjà via `ConversationStoreSocketBridge` ; sans ce relais, un contact
+    /// renommé pendant que l'écran de liste était fermé retrouvait son ancien
+    /// nom au prochain démarrage à froid.
+    ///
+    /// Même découpage que `handleConversationUpdated` : la fusion tourne DANS
+    /// la fermeture de mutation pour ne pas écraser une écriture `userState`
+    /// concurrente, et la pré-lecture ne sert qu'à éviter l'écriture — et le
+    /// fan-out `_conversationsDidChange` — quand rien ne change.
+    private func handleUserUpdated(_ event: UserUpdatedEvent) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard Self.applyingUserUpdate(event, to: list) != nil else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            Self.applyingUserUpdate(event, to: conversations) ?? conversations
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Apply a `user:updated` payload to a cached list, returning `nil` when it
+    /// changes nothing. Delegates the per-row rule to
+    /// `ConversationStore.merging(_:withUserUpdate:)` — même raison que son
+    /// jumeau ci-dessus : la liste persistée et le store RAM ne peuvent pas
+    /// diverger sur ce que l'événement VEUT DIRE.
+    ///
+    /// Aucun tri : une identité de contact ne touche jamais `lastMessageAt`, et
+    /// `sorted(by:)` n'étant pas stable, re-trier brasserait pour rien les
+    /// lignes qui partagent un horodatage.
+    nonisolated static func applyingUserUpdate(
+        _ event: UserUpdatedEvent,
+        to conversations: [MeeshyConversation]
+    ) -> [MeeshyConversation]? {
+        var updated = conversations
+        var changed = false
+        for index in updated.indices {
+            guard let merged = ConversationStore.merging(updated[index], withUserUpdate: event) else { continue }
+            updated[index] = merged
+            changed = true
+        }
+        return changed ? updated : nil
+    }
+
+    /// `conversation:deleted` relayed into the PERSISTED list. Without it the
+    /// row survived on disk and the next cold start resurrected a conversation
+    /// the server no longer knows — inopenable, and only killed by a manual
+    /// pull-to-refresh. Its message cache goes with it, mirroring the removal
+    /// path of `deltaSyncCore`.
+    private func handleConversationDeleted(_ event: ConversationDeletedSocketEvent) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.contains(where: { $0.id == event.conversationId }) else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            conversations.filter { $0.id != event.conversationId }
+        }
+        await cache.messages.invalidate(for: event.conversationId)
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// `message:consumed` for a CLOSED conversation. `ConversationSocketHandler`
+    /// covers the open one; without this relay a view-once media burnt on
+    /// another device stayed viewable here until the next REST refetch.
+    private func handleMessageConsumed(_ event: MessageConsumedEvent) async {
+        await realtimeMessagePersistor?(.consumed(
+            messageId: event.messageId,
+            viewOnceCount: event.viewOnceCount
+        ))
+        _messagesDidChange.send(event.conversationId)
+    }
+
     // MARK: - Local-First Updates
 
     private func handleAttachmentStatusUpdated(_ event: AttachmentStatusUpdatedEvent) async {
@@ -1282,21 +1650,73 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
+    /// `[langue: contenu]` du message, prêt pour le Prisme de la ligne de liste.
+    /// Les codes sont minusculés — `resolvedLastMessagePreview` résout en
+    /// minuscules et une clé « FR » ne serait jamais trouvée.
+    ///
+    /// **Jumeau socket de `buildLastMessagePreviewTranslations`** (gateway,
+    /// `routes/conversations/utils/last-message-preview.ts`), qui sert la MÊME
+    /// carte par REST. Les deux chemins alimentent une seule ligne de liste :
+    /// toute exclusion présente d'un côté et absente de l'autre fait dépendre
+    /// le texte affiché du transport qui l'a apporté. Les quatre exclusions et
+    /// le plafond sont donc repris ici tels quels.
+    ///
+    /// 1. **Hors prisme du lecteur** — le résolveur n'affiche qu'UNE valeur ;
+    ///    garder les N langues de la conversation n'alourdit que le cache.
+    /// 2. **Langue d'origine** — elle EST déjà `lastMessagePreview`. La facette
+    ///    socket transporte `lastMessageOriginalLanguage`, donc le résolveur
+    ///    sert toujours l'original à SON rang (règle #3 du Prisme) sans avoir
+    ///    besoin de la clé.
+    /// 3. **Traduction chiffrée** — `translatedContent` est alors un
+    ///    cryptogramme et la clé de déchiffrement ne transite pas par ce
+    ///    chemin : la poser afficherait du base64 dans la liste, là où le même
+    ///    message servi par REST retombe correctement sur l'original. C'est la
+    ///    seule des quatre qui change le texte affiché.
+    /// 4. **Texte inexploitable** — une entrée vide ou blanche ne décrit aucun
+    ///    aperçu.
+    ///
+    /// Rend `nil` — jamais `[:]` — quand il ne reste rien, l'état que le
+    /// résolveur distingue pour retomber sur l'original.
+    static func previewTranslations(
+        from apiMessage: APIMessage,
+        viewerLanguages: [String]
+    ) -> [String: String]? {
+        guard let translations = apiMessage.translations, !translations.isEmpty else { return nil }
+        let wanted = viewerLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        guard !wanted.isEmpty else { return nil }
+        let original = apiMessage.originalLanguage?.lowercased()
+
+        var out: [String: String] = [:]
+        for target in wanted {
+            if let original, target == original { continue }
+            if out[target] != nil { continue }
+            // `last(where:)` conserve la règle « la dernière entrée gagne » du
+            // `uniquingKeysWith` d'origine, pour un payload qui répéterait une
+            // langue.
+            guard let match = translations.last(where: { $0.targetLanguage.lowercased() == target })
+            else { continue }
+            guard match.isEncrypted != true else { continue }
+            let text = match.translatedContent
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            out[target] = text.meeshyPreviewTruncated
+        }
+
+        return out.isEmpty ? nil : out
+    }
+
+    /// Applique la facette du message qu'on vient d'envoyer, AVANT tout écho
+    /// serveur. La ligne montre donc immédiatement l'auteur, la pièce jointe et
+    /// les effets du message réellement envoyé — et non ceux du précédent.
+    public func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = messagePreview.meeshyPreviewTruncated
-                updated[idx].lastMessageAt = messageAt
-                // Propagate the author so the conversation list renders
-                // "You: <preview>" in groups immediately — previously this
-                // field kept the prior sender until the socket broadcast
-                // echoed back, producing a confusing "Alice: <your msg>"
-                // for a second or two after every send.
-                if let senderName, !senderName.isEmpty {
-                    updated[idx].lastMessageSenderName = senderName
-                }
+                updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
+                // Envoyer, c'est avoir lu : la frontière avance au-delà du
+                // message qu'on vient de poser, sinon `reconcileUnread` la
+                // trouverait périmée face au nouveau `lastMessageAt`.
+                updated[idx].userState.lastReadAt = Date()
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
@@ -1311,6 +1731,31 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.unreadCount = 0
+                // Frontière de lecture locale — lue par `reconcileUnread` pour
+                // qu'un instantané serveur en retard sur l'accusé de lecture
+                // (outbox encore pleine, hors-ligne, 429) ne rallume pas la
+                // pastille.
+                updated[idx].userState.lastReadAt = Date()
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// Symétrique de `markConversationReadLocally` : « marquer comme non lu »
+    /// EFFACE la frontière de lecture, sinon `reconcileUnread` ramènerait le
+    /// compteur à 0 au prochain instantané et le geste serait sans effet.
+    public func markConversationUnreadLocally(_ conversationId: String) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].userState.lastReadAt = nil
+                if updated[idx].userState.unreadCount == 0 {
+                    // Le serveur reste autoritatif sur le compte exact ; on pose
+                    // localement ≥ 1 pour que la pastille apparaisse tout de suite.
+                    updated[idx].userState.unreadCount = 1
+                }
             }
             return updated
         }
@@ -1328,6 +1773,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await MainActor.run { AuthManager.shared.currentUser?.username }
     }
 
+    private func currentUserDisplayName() async -> String? {
+        await MainActor.run { AuthManager.shared.currentUser?.displayName }
+    }
+
+    /// Prisme ORDONNÉ du lecteur, seule autorité iOS sur cet ordre
+    /// (`systemLanguage` > `regionalLanguage` > `customDestinationLanguage` >
+    /// `deviceLocale`). Jamais réimplémenté localement. Vide sans session : la
+    /// carte d'aperçu est alors `nil` et la ligne rend l'original — même
+    /// comportement que le chemin REST pour un participant anonyme.
+    private func currentPreferredLanguages() async -> [String] {
+        await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
+    }
+
     /// Persist a conversation list pre-sorted by `lastMessageAt` DESC. Centralising
     /// the sort here keeps the cache invariant consistent across every save site
     /// (full sync, delta sync, parallel pages, sequential tail) so any cold-start
@@ -1335,8 +1793,38 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// grouping pipeline. Backend pagination is not guaranteed to be timestamp-
     /// sorted (interleaved deltas, parallel page merges, server-side tweaks),
     /// so the engine must enforce the order rather than trust the network.
-    private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
-        let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    /// - Parameter baseline: instantané cache pris AVANT le début de la sync.
+    ///   Indispensable pour `fullSync`, qui persiste sa première page avant
+    ///   d'avoir les suivantes : sans baseline figée, la deuxième écriture
+    ///   confronterait les pages 2+ à un cache réduit à la page 1, et leurs
+    ///   frontières de lecture — introuvables — seraient silencieusement
+    ///   perdues. `nil` relit le cache (appelants à écriture unique).
+    private func saveSorted(
+        _ items: [MeeshyConversation],
+        to cacheKey: String,
+        baseline: [MeeshyConversation]? = nil
+    ) async {
+        // Chokepoint UNIQUE de toute écriture liste dérivée du serveur (fullSync
+        // ×3, deltaSync ×1) : on y réconcilie le non-lu AVANT de persister, sinon
+        // un instantané serveur en retard sur un `markAsRead` encore dans
+        // l'outbox rallume la pastille (« ça part puis ça revient »).
+        let reconciled: [MeeshyConversation]
+        if cacheKey == "list" {
+            let existing: [MeeshyConversation]
+            if let baseline {
+                existing = baseline
+            } else {
+                existing = await cache.conversations.load(for: cacheKey).snapshot() ?? []
+            }
+            reconciled = Self.reconcileUnread(
+                incoming: items,
+                existing: existing,
+                openConversationId: currentlyOpenConversationId
+            )
+        } else {
+            reconciled = items
+        }
+        let sorted = reconciled.sorted { $0.lastMessageAt > $1.lastMessageAt }
         do {
             try await cache.conversations.save(sorted, for: cacheKey)
         } catch {
@@ -1344,6 +1832,70 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         if cacheKey == "list" {
             await recomputeTotalUnread()
+        }
+    }
+
+    // MARK: - Réconciliation du non-lu
+
+    /// Réconcilie un instantané serveur avec la frontière de lecture LOCALE.
+    ///
+    /// Le gateway ne renvoie jamais `lastReadAt` (`APIConversation.toConversation`
+    /// ne le mappe pas) : ce champ est donc une frontière purement locale, posée
+    /// par `markConversationReadLocally` et par l'entrée dans une conversation,
+    /// et qui survit au round-trip GRDB. Deux règles, dans cet ordre :
+    ///
+    /// 1. **Conversation ouverte** → 0. L'utilisateur la REGARDE ; tout compteur
+    ///    non nul est un mensonge visuel. Même gate que `handleUnreadUpdated`,
+    ///    qui l'appliquait déjà aux broadcasts socket mais pas aux syncs REST.
+    /// 2. **Lecture locale postérieure au dernier message connu du serveur** → 0.
+    ///    Le compteur serveur est en retard (accusé de lecture encore dans
+    ///    l'outbox, hors-ligne, 429…). Dès qu'un message VRAIMENT plus récent
+    ///    arrive, `lastMessageAt` repasse devant la frontière et le compteur
+    ///    serveur reprend la main — la règle se répare donc toute seule et ne
+    ///    peut pas masquer durablement un vrai non-lu.
+    ///
+    /// La frontière locale est toujours préservée (le serveur ne la porte pas),
+    /// ce qui laisse `markAsUnread` — qui l'efface — survivre au prochain sync.
+    nonisolated static func reconcileUnread(
+        incoming: MeeshyConversation,
+        local: MeeshyConversation?,
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> MeeshyConversation {
+        var result = incoming
+        // La frontière ne voyage que localement : la reprendre du cache est la
+        // seule façon qu'elle traverse l'écrasement par l'instantané serveur.
+        result.userState.lastReadAt = local?.userState.lastReadAt ?? incoming.userState.lastReadAt
+
+        if incoming.id == openConversationId {
+            result.userState.unreadCount = 0
+            result.userState.lastReadAt = max(result.userState.lastReadAt ?? .distantPast, now)
+            return result
+        }
+
+        if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
+            result.userState.unreadCount = 0
+        }
+        return result
+    }
+
+    /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en
+    /// la confrontant à son homologue en cache.
+    nonisolated static func reconcileUnread(
+        incoming: [MeeshyConversation],
+        existing: [MeeshyConversation],
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> [MeeshyConversation] {
+        guard !incoming.isEmpty else { return incoming }
+        let localById = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return incoming.map {
+            reconcileUnread(
+                incoming: $0,
+                local: localById[$0.id],
+                openConversationId: openConversationId,
+                now: now
+            )
         }
     }
 
@@ -1395,6 +1947,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
                     updated[idx].userState.unreadCount = 0
+                    // Frontière de lecture : sans elle, le prochain instantané
+                    // serveur (delta au retour en avant-plan, reconnexion socket)
+                    // ré-injecterait le compteur d'AVANT l'ouverture.
+                    updated[idx].userState.lastReadAt = Date()
                 }
                 return updated
             }

@@ -9,9 +9,11 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
+import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.entity.CallHistoryEntity
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.core.database.entity.FriendEntity
@@ -19,9 +21,11 @@ import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
+import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.core.database.entity.SuggestionEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.core.database.entity.TusUploadCheckpointEntity
 
 /**
  * The single on-device source of truth (ADR-004). Network, sockets, FCM and
@@ -42,8 +46,10 @@ import me.meeshy.core.database.entity.SyncMetaEntity
         FriendEntity::class,
         SuggestionEntity::class,
         ProfileStatsCacheEntity::class,
+        StatusBarCacheEntity::class,
+        TusUploadCheckpointEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -57,4 +63,6 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun friendDao(): FriendDao
     public abstract fun suggestionDao(): SuggestionDao
     public abstract fun profileStatsCacheDao(): ProfileStatsCacheDao
+    public abstract fun statusBarCacheDao(): StatusBarCacheDao
+    public abstract fun tusUploadCheckpointDao(): TusUploadCheckpointDao
 }

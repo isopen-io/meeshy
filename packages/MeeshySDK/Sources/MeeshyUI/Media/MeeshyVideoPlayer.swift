@@ -52,7 +52,7 @@ public struct MeeshyVideoPlayer: View {
         public nonisolated static let loop        = ControlSet(rawValue: 1 << 13)
 
         public nonisolated static let none: ControlSet              = []
-        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .speed]
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .pip, .airplay, .speed]
         public nonisolated static let fullscreenDefault: ControlSet = [
             .playPause, .scrubber, .duration, .save, .share, .close,
             .speed, .author, .mute, .airplay, .pip, .loop
@@ -157,6 +157,10 @@ public struct MeeshyVideoPlayer: View {
     /// (autoplay unmutes). The product decision "detail = sound on, feed = muted"
     /// lives app-side; the SDK only forwards the flag (SDK purity).
     public let autoplayMuted: Bool
+    /// Diamètre du bouton play/download central du renderer `.inline`.
+    /// Paramètre opaque : l'app le réduit pour les petites cellules (grille
+    /// multi-média) et garde le défaut 64pt pour les surfaces pleine largeur.
+    public let playButtonDiameter: CGFloat
     public let author: VideoAuthor?
     public let caption: String?
     public let fileName: String?
@@ -180,6 +184,7 @@ public struct MeeshyVideoPlayer: View {
         performance: PerformanceOptions? = nil,
         autoplayOnAppear: Bool = false,
         autoplayMuted: Bool = false,
+        playButtonDiameter: CGFloat = 64,
         author: VideoAuthor? = nil,
         caption: String? = nil,
         fileName: String? = nil,
@@ -200,6 +205,7 @@ public struct MeeshyVideoPlayer: View {
         self.performance = performance ?? Self.inferPerformance(for: style)
         self.autoplayOnAppear = autoplayOnAppear
         self.autoplayMuted = autoplayMuted
+        self.playButtonDiameter = playButtonDiameter
         self.author = author
         self.caption = caption
         self.fileName = fileName

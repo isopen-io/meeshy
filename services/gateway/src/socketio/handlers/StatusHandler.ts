@@ -117,24 +117,43 @@ export class StatusHandler {
     otherSocketIds?: ReadonlySet<string>
   ): Promise<void> {
     const typers = this.activeTypers.get(socketId);
-    if (typers && typers.length > 0) {
-      for (const { conversationId, userId, username, displayName } of typers) {
-        if (otherSocketIds && otherSocketIds.size > 0) {
-          const anotherIsTyping = [...otherSocketIds].some(sid =>
-            (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === conversationId)
-          );
-          if (anotherIsTyping) continue;
+    try {
+      if (typers && typers.length > 0) {
+        for (const { conversationId, userId, username, displayName } of typers) {
+          // Per-conversation isolation: a transient DB failure in the
+          // blocked-viewer lookup (or a throwing broadcast) for ONE conversation
+          // must not abort the loop — the socket's other typing conversations
+          // must still receive their typing:stop, and cleanup below must always
+          // run. Mirrors the try/catch in handleTypingStart / handleTypingStop.
+          try {
+            if (otherSocketIds && otherSocketIds.size > 0) {
+              const anotherIsTyping = [...otherSocketIds].some(sid =>
+                (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === conversationId)
+              );
+              if (anotherIsTyping) continue;
+            }
+            const room = ROOMS.conversation(conversationId);
+            const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
+            const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
+            broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
+          } catch (error) {
+            logger.error('typing:stop broadcast on disconnect failed', { error, socketId, conversationId });
+          }
         }
-        const room = ROOMS.conversation(conversationId);
-        const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
-        const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
-        broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
       }
-      this.activeTypers.delete(socketId);
-    }
-    const userIdOrToken = this.socketToUser.get(socketId);
-    if (userIdOrToken) {
-      this.clearTypingThrottle(userIdOrToken);
+    } finally {
+      // Cleanup MUST run even if the loop threw: this handler is fired
+      // fire-and-forget (`void ...`) with no .catch at the call site, so an
+      // escaping rejection surfaces as a false "unhandled rejection" crash, and
+      // a skipped delete leaks the socket's activeTypers entry (memory) while
+      // peers keep a phantom "typing…" indicator for a user who has left.
+      if (typers && typers.length > 0) {
+        this.activeTypers.delete(socketId);
+      }
+      const userIdOrToken = this.socketToUser.get(socketId);
+      if (userIdOrToken) {
+        this.clearTypingThrottle(userIdOrToken);
+      }
     }
   }
 
@@ -174,38 +193,6 @@ export class StatusHandler {
     const filtered = existing.filter(t => t.conversationId !== conversationId);
     if (filtered.length === 0) this.activeTypers.delete(socketId);
     else this.activeTypers.set(socketId, filtered);
-  }
-
-  /**
-   * Returns the conversations where `userId` was recently typing (throttle
-   * map entry exists within TTL) and simultaneously clears those entries so
-   * the caller can broadcast `typing:stop` on behalf of a disconnected socket
-   * without waiting for the 15-second safety timer on every client.
-   *
-   * Also returns the cached identity so the caller can compose the stop event
-   * without an extra DB round-trip. Returns `null` identity when the user has
-   * no cache entry (never typed this session or cache already evicted).
-   */
-  drainActiveTypingState(userId: string): {
-    conversationIds: string[];
-    identity: { username: string; displayName: string } | null;
-  } {
-    const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
-    const conversationIds: string[] = [];
-    const prefix = `${userId}:`;
-    for (const [key, ts] of this.typingThrottleMap) {
-      if (!key.startsWith(prefix)) continue;
-      if (ts >= stale) {
-        conversationIds.push(key.slice(prefix.length));
-      }
-      this.typingThrottleMap.delete(key);
-    }
-    const cacheKey = `user:${userId}`;
-    const cached = this.identityCache.get(cacheKey);
-    const identity = cached
-      ? { username: cached.username, displayName: cached.displayName }
-      : null;
-    return { conversationIds, identity };
   }
 
   /**
@@ -269,6 +256,19 @@ export class StatusHandler {
       const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
       if (!identity) return;
 
+      // Track THIS socket as typing before the emit-throttle gate below. The
+      // throttle is keyed per (user, conversation) — shared across all of the
+      // user's devices — so a second device that starts typing within the
+      // window is throttled out of BROADCASTING. But it is still genuinely
+      // typing, and `handleSocketDisconnecting`'s multi-device suppression
+      // relies on every typing socket being present in `activeTypers` to avoid
+      // emitting a premature typing:stop when one device drops. Tracking after
+      // the throttle return left that second device untracked, so an unrelated
+      // device dropping cleared the indicator while the user was still typing.
+      // `_trackTyping` is idempotent per (socket, conversation), so running it
+      // on every start — throttled or not — is safe.
+      this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
+
       const typingEvent: TypingEvent = {
         userId: userId,
         username: identity.username,
@@ -290,7 +290,6 @@ export class StatusHandler {
       const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
       const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
       emitter.emit(SERVER_EVENTS.TYPING_START, typingEvent);
-      this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
     } catch (error) {
       logger.error('typing:start failed', { error });
     }
@@ -315,56 +314,94 @@ export class StatusHandler {
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+      await this.retractTypingIn(socket, normalizedId);
+    } catch (error) {
+      logger.error('typing:stop failed', { error });
+    }
+  }
 
-      const result = getConnectedUser(userIdOrToken, this.connectedUsers);
-      if (!result) {
-        logger.warn('typing:stop — user not connected', { userId: userIdOrToken });
-        return;
-      }
-      const { user: connectedUser, realUserId: userId } = result;
+  /**
+   * Retracte la frappe que CE socket a diffusée dans UNE conversation, déjà
+   * normalisée.
+   *
+   * Deux entrées, un seul énoncé : le `typing:stop` explicite du client
+   * (ci-dessus) et le départ de la conversation
+   * (`ConversationHandler.handleConversationLeave`). La seconde existe parce
+   * que `disconnecting` était le seul autre chemin de retraction, et que
+   * changer de conversation ne déconnecte pas le socket — les pairs gardaient
+   * donc un « X est en train d'écrire… » fantôme jusqu'à leur propre filet de
+   * sécurité local.
+   *
+   * Prend l'id DÉJÀ RÉSOLU : les deux appelants viennent de le normaliser, et
+   * le refaire coûterait un `findUnique` par changement de conversation.
+   */
+  async retractTypingIn(socket: Socket, normalizedId: string): Promise<void> {
+    // A typing:stop retracts a typing:start THIS socket broadcast, and
+    // `activeTypers` is the record of exactly that — `_trackTyping` runs on
+    // every start that cleared the participant and privacy gates. So the
+    // tracking entry is at once the authorisation, the audience and the
+    // payload of the retraction, and nothing else may override it:
+    //
+    //  · No entry ⇒ nothing was ever shown to peers, so there is nothing to
+    //    take back. Returning here BEFORE any I/O also closes an
+    //    amplification asymmetry: typing:start is rate-limited, typing:stop
+    //    is not, and the old path spent `resolveParticipant` + the privacy
+    //    lookup + the blocked-viewer query and then fanned a spurious
+    //    retraction across the whole room for every unmatched packet a client
+    //    cared to send.
+    //  · An entry ⇒ the start already passed the participant and privacy
+    //    gates when it was broadcast. Re-checking them here can only refuse
+    //    to take back something peers have already been shown, which is how a
+    //    participant removed mid-burst — or one who turned the indicator off
+    //    mid-burst — left a phantom "typing…" behind.
+    //  · The entry carries the identity the start went out under, so the
+    //    retraction matches it even across a rename, and owes no lookup.
+    const tracked = (this.activeTypers.get(socket.id) ?? []).find(
+      t => t.conversationId === normalizedId
+    );
+    if (!tracked) return;
+    const userId = tracked.userId;
 
-      const participant = await resolveParticipant({
-        prisma: this.prisma,
-        userIdOrToken,
-        conversationId: normalizedId,
-        connectedUsers: this.connectedUsers,
-      });
-      if (!participant) {
-        logger.warn('typing:stop — not a participant in conversation', { userId, conversationId: normalizedId });
-        return;
-      }
+    // Cleanup is unconditional from here: a socket that reaches this point
+    // MUST shed its tracking entry and throttle window even if the retraction
+    // below is suppressed (another device still typing) — otherwise the leak
+    // this guard fixes would reappear on that path.
+    this._untrackTyping(socket.id, normalizedId);
+    // A retraction ends the typing burst — whether the client asked for it or
+    // left the conversation — so drop the throttle window for this
+    // (user, conversation): the next typing:start is a NEW burst and must not
+    // be swallowed by the 2s coalescing guard (start→stop→start is the common
+    // "send a message then immediately type the next" flow, and
+    // leave→re-enter→type is its equivalent across a conversation switch).
+    this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
 
-      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
-        userId,
-        connectedUser.isAnonymous
-      );
-      if (!shouldShowTyping) {
-        return;
-      }
+    const typingEvent: TypingEvent = {
+      userId: userId,
+      username: tracked.username,
+      displayName: tracked.displayName,
+      conversationId: normalizedId,
+      isTyping: false
+    };
 
-      const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
-      if (!identity) return;
-
-      const typingEvent: TypingEvent = {
-        userId: userId,
-        username: identity.username,
-        displayName: identity.displayName,
-        conversationId: normalizedId,
-        isTyping: false
-      };
-
+    // Multi-device suppression: the typing indicator is a per-USER signal
+    // (peers render one "Alice is typing…" per user, not per device). If the
+    // same user is still tracked as typing on ANOTHER socket in this
+    // conversation, an explicit stop from this device must NOT retract the
+    // indicator peers still owe to the other device. Mirrors the disconnect
+    // guard in `handleSocketDisconnecting`; without it, a second device that
+    // started typing within the shared 2s throttle window (tracked but not
+    // re-broadcast) has its "still typing" state wrongly cleared. Checked
+    // AFTER this socket is untracked above — it inspects OTHER sockets only
+    // (`sid !== socket.id`), so untracking self does not affect the result.
+    const anotherIsTyping = [...(this.userSockets.get(userId) ?? [])].some(
+      sid => sid !== socket.id &&
+        (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === normalizedId)
+    );
+    if (!anotherIsTyping) {
       const room = ROOMS.conversation(normalizedId);
       const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
       const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
       emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
-      this._untrackTyping(socket.id, normalizedId);
-      // An explicit stop ends the typing burst, so drop the throttle window for
-      // this (user, conversation): the next typing:start is a NEW burst and must
-      // not be swallowed by the 2s coalescing guard (start→stop→start is the
-      // common "send a message then immediately type the next" flow).
-      this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
-    } catch (error) {
-      logger.error('typing:stop failed', { error });
     }
   }
 

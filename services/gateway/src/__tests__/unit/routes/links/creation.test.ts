@@ -85,11 +85,13 @@ async function buildApp(opts: {
   auth?: 'registered' | 'anonymous' | 'unauthenticated';
   role?: string;
   prisma?: ReturnType<typeof makePrisma>;
+  socketIOHandler?: { getManager: jest.Mock<any> } | null;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'registered', role = 'USER', prisma = makePrisma() } = opts;
+  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
+  if (socketIOHandler) app.decorate('socketIOHandler', socketIOHandler);
 
   // Set _testAuthContext early (onRequest) so the mocked auth middleware can read it
   app.addHook('onRequest', async (req: FastifyRequest) => {
@@ -228,6 +230,27 @@ describe('POST /links — creates new conversation from newConversation data', (
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('auto-joins the creator and members to the new conversation socket room', async () => {
+    const MEMBER_ID = '507f1f77bcf86cd799439033';
+    const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
+    const prisma = makePrisma();
+    prisma.user.findMany = jest.fn<any>().mockResolvedValue([
+      { id: MEMBER_ID, displayName: 'Member', username: 'member' },
+    ]);
+    const { app } = await buildApp({
+      prisma,
+      socketIOHandler: { getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom }) },
+    });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { newConversation: { title: 'Brand New Group', memberIds: [MEMBER_ID] } },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(USER_ID, CONV_ID);
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(MEMBER_ID, CONV_ID);
     await app.close();
   });
 });

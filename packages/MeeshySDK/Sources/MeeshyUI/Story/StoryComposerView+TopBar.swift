@@ -9,84 +9,83 @@ import MeeshySDK
 // MARK: - StoryComposerView + TopBar
 
 extension StoryComposerView {
-    /// C-DIR2 (d)+(c) : le header suit EXACTEMENT les conditions des FABs —
-    /// visible uniquement canvas plein écran au repos (aucun panneau, aucune
-    /// édition texte/dessin, pas de zoom). L'ancienne règle le gardait affiché
-    /// pendant l'édition (`|| activeTool != nil || selectedElementId != nil`),
-    /// à rebours de « n'afficher que l'utile à l'instant t ».
-    var showTopBar: Bool {
-        ComposerChromePolicy.fullChromeVisible(
-            fabsVisible: areFabsVisible,
-            bandHidden: bandStateMachine.state == .hidden,
-            isTextEditing: viewModel.textEditingMode != .inactive,
-            isDrawingActive: viewModel.drawingEditingMode.isActive,
-            isViewportZoomed: viewModel.isCanvasZoomed
-        )
-    }
+    // `showTopBar` a déménagé en `StoryComposerView+Chrome.swift` : il lit
+    // désormais le contexte de chrome unique, comme la barre de FABs.
 
-    // MARK: - Top Bar
+    // MARK: - Top Bar (icônes flottantes — directive user 2026-07-10)
 
+    /// Le header n'est PLUS une barre : plus de fond `.ultraThinMaterial`
+    /// pleine largeur ni de hauteur réservée — chaque commande est une icône
+    /// de verre individuelle qui FLOTTE au-dessus du canvas plein écran
+    /// (parité IMG_0944 : X à gauche, actions à droite). La bande de slides
+    /// vit SUR la même rangée, ENTRE le X et le sélecteur d'audience
+    /// (directive user 2026-07-10), présente uniquement quand elle est utile
+    /// (« les éléments apparaissent et quittent selon le besoin »). Les
+    /// commandes d'annulation ont quitté le header pour la colonne verticale
+    /// du flanc droit (`historyColumn`).
     var topBar: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .center, spacing: 0) {
             dismissButton
-                .padding(.leading, 16)
 
-            slideStrip
-                .frame(maxWidth: .infinity)
+            // Bande de slides — entre le bouton de fermeture et le choix de la
+            // cible d'audience. Le rail scrolle horizontalement et occupe tout
+            // l'interstice ; sur un composer vierge (empty-state picker), il
+            // disparaît et laisse l'espace vide. PAS de surface de verre :
+            // les vignettes flottent nues par-dessus le canvas, comme les
+            // icônes du header (directive user 2026-07-10).
+            if shouldShowFloatingSlideStrip {
+                slideStrip
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .transition(.opacity)
+            } else {
+                Spacer(minLength: 12)
+            }
 
             // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
             // adjacent glass morphs into one continuous surface; iOS 16–25 falls
             // back to material/solid via the adaptiveGlass wrappers). Publish keeps
             // the primary brand tint via prominent glass; overflow (⋯) sits last,
             // right of Publish.
-            AdaptiveGlassContainer(spacing: 6) {
-                HStack(spacing: 6) {
-                    // C9 Inc.4 — n'afficher que l'utile : les commandes
-                    // d'annulation n'existent à l'écran QUE quand la
-                    // trajectoire le permet (canUndo/canRedo).
-                    if viewModel.canUndoGlobal {
-                        historyButton(
-                            icon: "arrow.uturn.backward",
-                            label: String(localized: "story.composer.undo",
-                                          defaultValue: "Annuler", bundle: .module),
-                            action: performUndo
-                        )
-                    }
-                    if viewModel.canRedoGlobal {
-                        historyButton(
-                            icon: "arrow.uturn.forward",
-                            label: String(localized: "story.composer.redo",
-                                          defaultValue: "Rétablir", bundle: .module),
-                            action: performRedo
-                        )
-                    }
+            // Interstice de LAYOUT ramené à zéro : chaque pastille porte
+            // désormais une boîte de 44 pt qui inclut 4 pt de marge transparente
+            // par côté, si bien que l'écart VISUEL passe de 6 à 8 pt et que deux
+            // cibles voisines sont exactement jointives — jamais chevauchantes,
+            // ce qui aurait laissé SwiftUI arbitrer par ordre de dessin et fait
+            // déclencher « Aperçu » sur un tap au bord de « Publier ». Le
+            // paramètre du conteneur reste une distance d'EFFET (morphing du
+            // verre iOS 26) et suit l'écart visuel réel.
+            AdaptiveGlassContainer(spacing: ComposerControlMetrics.glassBlendSpacing) {
+                HStack(spacing: ComposerControlMetrics.groupSpacing) {
                     visibilityMenu
                     previewButton
                     publishButton
                     overflowMenu
                 }
-                .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                           value: viewModel.canUndoGlobal)
-                .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                           value: viewModel.canRedoGlobal)
             }
-            .padding(.trailing, 16)
         }
-        .frame(height: 60)
-        .background(.ultraThinMaterial)
-        .clipShape(
-            RoundedRectangle(cornerRadius: 0)
-        )
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: shouldShowFloatingSlideStrip)
+    }
+
+    /// La bande n'apparaît que quand elle est UTILE : navigation entre
+    /// plusieurs slides, ou slide courant avec du contenu (vignette d'état +
+    /// affordance « + » C6). Composer vierge = canvas nu, zéro chrome inutile.
+    var shouldShowFloatingSlideStrip: Bool {
+        viewModel.slides.count > 1 || composerHasContent
     }
 
     var dismissButton: some View {
         Button { handleDismiss() } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .glassControlForeground()
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 
@@ -100,34 +99,46 @@ extension StoryComposerView {
         } label: {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .glassControlForeground()
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 
+    /// Icône seule (directive user 2026-07-11 « enlever le terme Publier —
+    /// juste la flèche et la couleur primaire ») : cercle 36 pt aligné sur les
+    /// autres actions du header, le verre proéminent teinté brand restant le
+    /// SEUL marqueur d'action primaire. Le libellé survit en accessibilité.
     var publishButton: some View {
-        let isPublishing = publishTask != nil
+        let isPublishing = didHandOffPublish
         return Button { publishAllSlides() } label: {
-            HStack(spacing: 4) {
+            Group {
                 if isPublishing {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
                         .scaleEffect(0.7)
                 } else {
-                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
                 }
             }
-            .fixedSize()
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+            .frame(width: ComposerControlMetrics.visualDiameter,
+                   height: ComposerControlMetrics.visualDiameter)
+            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
+            .composerHitTarget()
         }
-        .disabled(isPublishing)
+        // `canPublish`, et jamais `composerHasContent` : la story « fond +
+        // musique » ne porte aucun contenu visuel au sens de S2 et doit rester
+        // publiable — les quatre autres consommateurs de `composerHasContent`,
+        // eux, gardent l'arbitrage S2 intact.
+        .disabled(isPublishing || !canPublish)
+        .accessibilityLabel(isEditingExistingStory
+            ? String(localized: "story.composer.updateStory", defaultValue: "Mettre à jour", bundle: .module)
+            : String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))
     }
 
     var visibilityMenu: some View {
@@ -150,10 +161,13 @@ extension StoryComposerView {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(.white)
+            .glassControlForeground()
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.18))
+            .adaptiveGlass(in: Capsule(), tint: MeeshyColors.brandPrimary.opacity(0.18))
+            // Capsule d'environ 27 pt de haut (paddings 10/6 sur une police 12) :
+            // le débord de contact la porte à 44 sans changer sa hauteur rendue.
+            .composerHitTarget()
         }
         .sheet(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
@@ -164,14 +178,49 @@ extension StoryComposerView {
 
     // MARK: - Undo/redo global (C9 Inc.4)
 
+    /// Colonne verticale annuler/rétablir, ancrée en bas à droite sur le flanc
+    /// droit du canvas (directive user 2026-07-10 — libère le header pour la
+    /// bande de slides). Même règle d'apparition que le header (chrome plein
+    /// écran au repos) ; chaque commande n'existe à l'écran QUE quand la
+    /// trajectoire le permet (canUndo/canRedo — C9 Inc.4).
+    var historyColumn: some View {
+        AdaptiveGlassContainer(spacing: 10) {
+            // Interstice de layout réduit de la marge de contact des deux
+            // pastilles : l'écart VISUEL de 10 pt est conservé à l'identique.
+            VStack(spacing: ComposerControlMetrics.columnSpacing) {
+                if viewModel.canUndoGlobal {
+                    historyButton(
+                        icon: "arrow.uturn.backward",
+                        label: String(localized: "story.composer.undo",
+                                      defaultValue: "Annuler", bundle: .module),
+                        action: performUndo
+                    )
+                }
+                if viewModel.canRedoGlobal {
+                    historyButton(
+                        icon: "arrow.uturn.forward",
+                        label: String(localized: "story.composer.redo",
+                                      defaultValue: "Rétablir", bundle: .module),
+                        action: performRedo
+                    )
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                       value: viewModel.canUndoGlobal)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                       value: viewModel.canRedoGlobal)
+        }
+    }
+
     func historyButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .glassControlForeground()
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
         .transition(.scale.combined(with: .opacity))
         .accessibilityLabel(label)
@@ -205,7 +254,11 @@ extension StoryComposerView {
                     systemImage: "rectangle.2.swap"
                 )
             }
-            Button { viewModel.isTimelineVisible = true } label: {
+            // Intention UNIQUE d'ouverture (S4) : `openTimeline` synchronise
+            // machine + flag ViewModel, quel que soit l'état d'où le menu est
+            // ouvert (le menu ⋯ n'est visible qu'à `.hidden` aujourd'hui, mais
+            // le seul point de vérité reste la fonction partagée).
+            Button { bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible) } label: {
                 Label(
                     String(localized: "story.composer.timeline", defaultValue: "Timeline", bundle: .module),
                     systemImage: "clock"
@@ -214,6 +267,8 @@ extension StoryComposerView {
 
             Divider()
 
+            // 2026-08-02 (point c) : « Sauvegarder » s'offre AUSSI en édition —
+            // le brouillon porte `editingPostId` et rouvre le mode édition.
             Button { saveDraft() } label: {
                 Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
             }
@@ -235,10 +290,11 @@ extension StoryComposerView {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .glassControlForeground()
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 }

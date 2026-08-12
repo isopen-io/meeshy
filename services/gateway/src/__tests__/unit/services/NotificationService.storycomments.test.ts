@@ -74,6 +74,15 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     friendRequest: {
       findMany: jest.fn(),
     },
+    communityMember: {
+      findMany: jest.fn(),
+    },
+    // Le seau « engagés antérieurs » passe par le test d'admission
+    // `filterPostConsumers`, dont l'audience est amis ∪ contacts DM : un double
+    // qui tairait `participant` ferait passer ses refus pour des refus d'ACL.
+    participant: {
+      findMany: jest.fn(),
+    },
   };
 
   return {
@@ -81,10 +90,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -178,6 +190,11 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(result.previousCommenterIds).not.toContain(COMMENTER_ID);
     });
 
+    // L'auteur est désormais écarté DEUX fois, pour deux raisons distinctes : par
+    // la requête, pour qu'il ne dépense pas le budget du plafond (voir « le
+    // plafond tient son chiffre »), et ici, parce que « ni l'auteur ni le
+    // commentateur ne sortent de cette méthode » est sa postcondition — elle doit
+    // tenir quelle que soit la clause `where` du jour. Ce test tient le second.
     it('excludes story author from previousCommenterIds', async () => {
       // Story author also posted a prior comment
       prisma.postComment.findMany.mockResolvedValue([
@@ -231,7 +248,6 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
           where: expect.objectContaining({
             postId: POST_ID,
             deletedAt: null,
-            NOT: { authorId: COMMENTER_ID },
           }),
         })
       );
@@ -246,25 +262,27 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       );
     });
 
-    it('caps postComment query at 500 rows to bound fan-out on viral posts', async () => {
+    // Le `take` vaut 501 : 500 destinataires + une ligne témoin, jamais notifiée.
+    // Détail dans « le plafond se dénonce » plus bas.
+    it('caps postComment query at the fan-out row cap plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.postComment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
     });
 
-    it('caps friendRequest query at 500 rows to bound fan-out on popular authors', async () => {
+    it('caps friendRequest query at the fan-out row cap plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
     });
 
@@ -322,7 +340,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(result.previousCommenterIds).not.toContain(COMMENTER_ID);
     });
 
-    it('test_getStoryNotificationRecipients_postReactionQuery_excludesCommenterAndCapsAt500', async () => {
+    it('test_getStoryNotificationRecipients_postReactionQuery_scopedToPostAndCapped', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.postReaction.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
@@ -331,11 +349,8 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            postId: POST_ID,
-            NOT: { userId: COMMENTER_ID },
-          }),
-          take: 500,
+          where: expect.objectContaining({ postId: POST_ID }),
+          take: 501,
         })
       );
     });
@@ -346,12 +361,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
   // ======================================================
 
   describe('createStoryCommentNotificationsBatch', () => {
+    // `visibility` est REQUIS depuis le cycle 31 : le défaut `PUBLIC` implicite
+    // désarmait la garde d'audience sans que rien ne le signale. Les cas
+    // restreints le surchargent au cas par cas.
     const baseParams = {
       postId: POST_ID,
       commentId: COMMENT_ID,
       storyAuthorId: AUTHOR_ID,
       commenterId: COMMENTER_ID,
       commentExcerpt: 'Great story!',
+      visibility: 'PUBLIC',
     };
 
     beforeEach(() => {
@@ -612,6 +631,143 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(threadCall).toBeDefined();
     });
 
+    // ------------------------------------------------------------------
+    // Visibility gating — a restricted post must NOT fan a comment excerpt
+    // out to friends/thread-participants outside the post's audience.
+    // Mirrors SocialEventsHandler.getVisibilityFilteredRecipients.
+    // ------------------------------------------------------------------
+
+    it('ONLY: notifies a friend on the allow-list, NOT a friend off it', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_1],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeUndefined();
+    });
+
+    it('EXCEPT: does NOT notify a friend on the exclude-list', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'EXCEPT',
+        visibilityUserIds: [FRIEND_2],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeUndefined();
+    });
+
+    it('PRIVATE: fans out to nobody but the story author', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        visibility: 'PRIVATE',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
+      // The story author (bucket 1) is exempt — they own the post.
+      expect(calls.find((c) => c[0].data.userId === AUTHOR_ID)?.[0].data.type).toBe('story_new_comment');
+    });
+
+    it('ONLY: also gates the thread bucket (prior commenter off the allow-list is dropped)', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_1], // PREV_COMMENTER_1 not allowed
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
+    });
+
+    it('COMMUNITY: fans out to community co-members, not the author-friend graph', async () => {
+      const CO_MEMBER = '507f1f77bcf86cd799439009';
+      // getCommunityCoMemberIds resolves memberships then co-members.
+      prisma.communityMember.findMany
+        .mockResolvedValueOnce([{ communityId: 'comm-1' }]) // author's memberships
+        .mockResolvedValueOnce([{ userId: CO_MEMBER }]);    // co-members of comm-1
+      prisma.postComment.findMany.mockResolvedValue([]);
+      // FRIEND_1 is a friend but NOT a community co-member → must be dropped.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'COMMUNITY',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === CO_MEMBER)?.[0].data.type).toBe('friend_story_comment');
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
+    });
+
+    it('une visibilité NULLE se lit comme FRIENDS, jamais comme publique', async () => {
+      // Le seau des amis vient de l'énumérateur : il reste servi. Celui des
+      // engagés antérieurs passe par l'admission, qui refuse un inconnu — une
+      // visibilité qu'on n'a pas su établir ne doit rien ouvrir de plus qu'un
+      // post réservé aux amis.
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({ ...baseParams, visibility: null });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
+    });
+
     it('uses the comment excerpt as content when present', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
@@ -660,10 +816,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     const POST_ID_2 = 'cccccccccccccccccccccccc';
     const COMMENT_ID_2 = 'dddddddddddddddddddddddd';
 
+    // Audience PUBLIC : ces cas portent sur le contenu, la priorité, le débit et
+    // l'auto-mention, pas sur le droit de voir. Un post public admet tout le
+    // monde, donc la garde d'audience y est un no-op — le filtrage lui-même est
+    // verrouillé par `NotificationService.mentionaudience.test.ts`.
     const baseCommentMentionParams = {
       commentId: COMMENT_ID_2,
       postId: POST_ID_2,
       commenterId: COMMENTER_ID,
+      postAuthorId: AUTHOR_ID,
+      visibility: 'PUBLIC',
       mentionedUserIds: [ALICE_ID, BOB_ID],
       commentExcerpt: 'Hey @alice and @bob check this out!',
     };
@@ -857,6 +1019,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
           commentId: COMMENT_ID,
           storyAuthorId: AUTHOR_ID,
           commenterId: COMMENTER_ID,
+          visibility: 'PUBLIC',
         })
       ).resolves.not.toThrow();
 
@@ -893,6 +1056,148 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
   });
 
   // ======================================================
+  // Le plafond de fan-out : ce qu'il coûte, et ce qu'il dit
+  // ======================================================
+
+  describe('getStoryNotificationRecipients — le plafond tient son chiffre', () => {
+    // Les IDs jamais notifiables doivent sortir PAR LA REQUÊTE. Filtrés en aval,
+    // leurs lignes sont payées sur le budget du plafond — et l'auteur qui répond
+    // à chacun de ses commentateurs est l'engagé le plus prolifique de son fil.
+    it('test_getStoryNotificationRecipients_postCommentQuery_excludesAuthorAndCommenterInWhere', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      const where = prisma.postComment.findMany.mock.calls[0][0].where;
+      expect(where.authorId.notIn).toEqual(expect.arrayContaining([COMMENTER_ID, AUTHOR_ID]));
+    });
+
+    it('test_getStoryNotificationRecipients_postReactionQuery_excludesAuthorAndCommenterInWhere', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      const where = prisma.postReaction.findMany.mock.calls[0][0].where;
+      expect(where.userId.notIn).toEqual(expect.arrayContaining([COMMENTER_ID, AUTHOR_ID]));
+    });
+
+    it('test_getStoryNotificationRecipients_authorCommentsOnOwnPost_excludedOnce', async () => {
+      // commenterId === authorId : la liste d'exclusion ne doit pas dégénérer.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, AUTHOR_ID);
+
+      const where = prisma.postComment.findMany.mock.calls[0][0].where;
+      expect(where.authorId.notIn).toEqual([AUTHOR_ID]);
+    });
+  });
+
+  describe('getStoryNotificationRecipients — le plafond se dénonce', () => {
+    // Le +1 est un TÉMOIN, pas un élargissement : sans lui, `take: 500` rend le
+    // même tableau à 500 lignes et à 50 000, et une diffusion tronquée ressemble
+    // trait pour trait à une diffusion complète.
+    const otherUser = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
+
+    it('test_getStoryNotificationRecipients_queries_takeCapPlusWitnessRow', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.postComment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 501 })
+      );
+    });
+
+    it('test_getStoryNotificationRecipients_underCap_reportsNoTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).toEqual([]);
+    });
+
+    it('test_getStoryNotificationRecipients_exactlyCapRows_reportsNoTruncation', async () => {
+      // 500 lignes pile : la base a rendu tout ce qu'elle avait, rien n'est perdu.
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 500 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).not.toContain('previousComments');
+      expect(result.previousCommenterIds).toHaveLength(500);
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsCommentTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).toContain('previousComments');
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRow_neverNotified', async () => {
+      // Le témoin sert à COMPTER, jamais à élargir la diffusion : la 501e ligne
+      // est lue puis jetée, sinon le plafond passerait silencieusement à 501.
+      prisma.postComment.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ authorId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.previousCommenterIds).toHaveLength(500);
+      expect(result.previousCommenterIds).not.toContain(otherUser(500));
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsReactionTruncation', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ userId: otherUser(i) }))
+      );
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).toContain('reactors');
+      expect(result.previousCommenterIds).toHaveLength(500);
+      expect(result.previousCommenterIds).not.toContain(otherUser(500));
+    });
+
+    it('test_getStoryNotificationRecipients_witnessRowPresent_reportsFriendTruncation', async () => {
+      // Sans `distinct`, le témoin est EXACT sur ce seau — et c'est celui où la
+      // troncature est la plus probable : un auteur à plus de 500 amis est banal.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => ({ senderId: AUTHOR_ID, receiverId: otherUser(i) }))
+      );
+
+      const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(result.truncatedBuckets).toContain('friendRequests');
+      expect(result.friendIds).toHaveLength(500);
+      expect(result.friendIds).not.toContain(otherUser(500));
+    });
+  });
+
+  // ======================================================
   // Fix 1 (P0): reactor in createStoryCommentNotificationsBatch
   // ======================================================
 
@@ -921,6 +1226,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -943,6 +1249,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -965,6 +1272,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
@@ -1000,6 +1308,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID, BOB_ID],
         postExcerpt: 'Check this out @alice @bob',
       });
@@ -1026,6 +1335,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [POSTER_ID, ALICE_ID, BOB_ID],
         postExcerpt: 'Check this out @alice @bob',
       });
@@ -1046,6 +1356,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
         postExcerpt: 'Check this out @alice',
       });
@@ -1065,6 +1376,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1083,6 +1395,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [POSTER_ID, ALICE_ID],
       });
 
@@ -1101,6 +1414,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1113,6 +1427,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [],
       });
 
@@ -1126,6 +1441,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1142,6 +1458,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         await service.createPostMentionNotificationsBatch({
           postId: P2_POST_ID,
           posterId: POSTER_ID,
+        visibility: 'PUBLIC',
           mentionedUserIds: [ALICE_ID],
         });
       }
@@ -1152,6 +1469,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.createPostMentionNotificationsBatch({
         postId: P2_POST_ID,
         posterId: POSTER_ID,
+        visibility: 'PUBLIC',
         mentionedUserIds: [ALICE_ID],
       });
 
@@ -1192,6 +1510,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         commentId: COMMENT_ID,
         storyAuthorId: AUTHOR_ID,
         commenterId: COMMENTER_ID,
+        visibility: 'PUBLIC',
       });
 
       // Flush fire-and-forget emitCountsUpdate microtasks

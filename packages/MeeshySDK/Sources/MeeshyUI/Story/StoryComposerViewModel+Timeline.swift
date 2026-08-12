@@ -14,6 +14,26 @@ extension StoryComposerViewModel {
         let stack = CommandStack()
         let snap = SnapEngine(toleranceSeconds: 0.06)
         let vm = TimelineViewModel(engine: engine, commandStack: stack, snapEngine: snap)
+        // Preview vivante : le canvas derrière la sheet suit le playhead
+        // (scrub + ticks engine) et l'état du transport. Gaté sur
+        // `isTimelineVisible` — un tick tardif après fermeture ne doit pas
+        // ré-armer la preview sur un canvas rendu à l'édition.
+        vm.onPlayheadChanged = { [weak self] time in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.scrub(seconds: Double(time))
+        }
+        vm.onPlaybackStateChanged = { [weak self] playing in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.setPlaying(playing)
+        }
+        vm.onPlaybackEnded = { [weak self] in
+            guard let self, self.isTimelineVisible else { return }
+            // Fin de lecture : le canvas quitte la preview et REVIENT à
+            // l'état statique du design — tous les éléments posés, positions
+            // et opacités de base (retour user 2026-07-20). Le playhead a
+            // déjà été remis à 0 par le VM avant cette notification.
+            self.canvasTimelineBridge.end()
+        }
         _timelineViewModel = vm
         return vm
     }
@@ -79,9 +99,9 @@ extension StoryComposerViewModel {
     /// image represented on the timeline as a locked, full-duration clip.
     /// Synthetic clips are stripped before persisting back to the slide via
     /// `commitTimelineToCurrentSlide()`.
-    public static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
+    public nonisolated static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
 
-    public static func isSyntheticTimelineClipId(_ id: String) -> Bool {
+    public nonisolated static func isSyntheticTimelineClipId(_ id: String) -> Bool {
         id.hasPrefix(syntheticTimelineClipIdPrefix)
     }
 
@@ -126,6 +146,16 @@ extension StoryComposerViewModel {
     public func loadCurrentSlideIntoTimeline() {
         let slide = currentSlide
         var project = TimelineProject(from: slide)
+
+        // The opening/closing transition-effect chips write ONLY to this VM's
+        // own `openingEffect`/`closingEffect` (same source the live canvas
+        // preview reads) — NOT synchronously through to `slide.effects.opening`/
+        // `.closing` (that only happens via the decoupled granularCanvasSync).
+        // `TimelineProject(from: slide)` above therefore just read the stale/
+        // unsynced slide side of that split. Override with the live VM values
+        // so the chrome lane reflects what the user actually just picked.
+        project.openingEffect = openingEffect
+        project.closingEffect = closingEffect
 
         // Surface a static background image (stored separately in slideImages)
         // as a locked synthetic clip on the timeline so the user can see what

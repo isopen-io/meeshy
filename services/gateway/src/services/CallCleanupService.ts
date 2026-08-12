@@ -3,14 +3,22 @@
  *
  * Spec Section 2.6: Server cron every 60s with tiered cleanup:
  * - initiated/ringing > 120s → MISSED
- * - connecting > 30s → FAILED
  * - active/reconnecting > 2h → ENDED (garbageCollected)
  * - active with stale heartbeat > 120s → ENDED (heartbeatTimeout)
+ *
+ * There is deliberately no `connecting`-status tier: the FSM (CallService
+ * Item F) never persists `CallStatus.connecting` — `joinCall` goes straight
+ * initiated/ringing → ringing, and the answer signal takes a call straight
+ * to `active` (CallEventsHandler, on the SDP answer). A stuck ICE/DTLS
+ * negotiation therefore surfaces as an `active` call with no heartbeat, and
+ * is caught by the heartbeat tier below (DB fallback anchored on
+ * `joinedAt` when no in-memory heartbeat exists yet).
  */
 
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
@@ -28,13 +36,9 @@ export class CallCleanupService {
   // wake the device + show the incoming call UI, then the user needs time to
   // swipe/tap answer. 60s was routinely too short on slow networks, causing
   // valid incoming calls to be force-MISSed before the user could answer.
+  // Étage 3 (dernier filet) de la cascade 45s client / 60s serveur / 120s GC —
+  // voir CallService.RINGING_TIMEOUT_MS (audit 2026-07-11 #7).
   private readonly MAX_INITIATED_RINGING_MS = 120 * 1000;
-  // CALL-FIX 2026-06-25 — 30s→90s and anchored on `answeredAt` (entry into
-  // `connecting`) instead of `startedAt`. ICE/DTLS over a TURN relay on a weak
-  // cellular link routinely needs 5–15s; anchoring on `startedAt` left a callee
-  // who answered late only the remainder of 30s to negotiate, force-FAILing
-  // healthy calls mid-handshake ("it rings, I answer, it drops").
-  private readonly MAX_CONNECTING_MS = 90 * 1000;
   // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
   // client; a device with moderate network latency may miss 5-6 beats before
   // the connection recovers, and the 60s window was too tight for cellular
@@ -78,6 +82,29 @@ export class CallCleanupService {
   // background push that tears it down.
   private missedCallCancelPush: ((callId: string, conversationId: string | undefined, duration: number) => Promise<void>) | null = null;
 
+  // Sibling-drift fix (2026-07-07) — set via `setMissedCallNotificationCallback()`.
+  // `CallEventsHandler.handleMissedCall` (the in-process ringing-timeout path)
+  // both marks the call missed AND creates a persisted `Notification` (badge/
+  // notification-center entry) for every unresponded participant. GC tier 1
+  // (initiated/ringing > 120s → missed) is the backstop for when that
+  // in-process timer never fires — it already mirrors the OTHER two side
+  // effects of a missed call (the `postSummary` system message and the
+  // `missedCallCancelPush` silent APNs push above) but had no bridge for the
+  // notification itself, so a call resolved ONLY by this GC path left the
+  // callee with no notification-center/badge trace it was ever called.
+  // `markCallAsMissed` is NOT re-invoked here — GC's own transaction above
+  // already performed the terminal write, so only the notification side
+  // effect is needed.
+  private missedCallNotify: ((callId: string) => Promise<void>) | null = null;
+
+  // `CallEventsHandler.invalidateSignalSession` is only reachable from that
+  // instance and documents its own invariant: every path writing
+  // `CallParticipant.leftAt` must evict the entry, or `call:signal` can relay
+  // SDP/ICE for up to its 2s TTL after a participant the DB already marked
+  // departed. `forceEndCall` writes `leftAt` but had no bridge for it — mirrors
+  // `clearQualityStreaks` above.
+  private invalidateSignalCache: ((callId: string) => void) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -120,6 +147,14 @@ export class CallCleanupService {
     logger.info('[CallCleanupService] Quality-streak cleanup callback attached — GC-ended calls will release their streak entries');
   }
 
+  // Mirrors `setQualityStreakCleanupCallback` — injected from server startup
+  // once CallEventsHandler exists, so GC-ended calls evict their `call:signal`
+  // session cache entry (see the field comment above).
+  setSignalCacheInvalidationCallback(invalidateSignalCache: (callId: string) => void): void {
+    this.invalidateSignalCache = invalidateSignalCache;
+    logger.info('[CallCleanupService] Signal-cache invalidation callback attached — GC-ended calls will evict their call:signal session cache entry');
+  }
+
   // Phantom-ringing safety net (see field doc above) — injected from server
   // startup once CallEventsHandler exists, mirroring attachSocketServer/
   // setCallService/setPostSummaryCallback.
@@ -128,6 +163,15 @@ export class CallCleanupService {
   ): void {
     this.missedCallCancelPush = cancelPush;
     logger.info('[CallCleanupService] Missed-call cancel-push callback attached — phantom-ringing callees will be released on GC tier 1');
+  }
+
+  // Mirrors `setMissedCallCancelPushCallback` (see the field doc above) —
+  // injected from server startup once CallEventsHandler exists, so a call
+  // resolved only by GC tier 1 also gets its persisted missed-call
+  // notification, not just the silent cancel push.
+  setMissedCallNotificationCallback(notify: (callId: string) => Promise<void>): void {
+    this.missedCallNotify = notify;
+    logger.info('[CallCleanupService] Missed-call notification callback attached — GC tier 1 will create notifications for unresponded participants');
   }
 
   start(): void {
@@ -139,7 +183,6 @@ export class CallCleanupService {
     logger.info('[CallCleanupService] Starting GC', {
       intervalMs: this.CLEANUP_INTERVAL_MS,
       maxInitiatedMs: this.MAX_INITIATED_RINGING_MS,
-      maxConnectingMs: this.MAX_CONNECTING_MS,
       maxActiveMs: CallCleanupService.MAX_ACTIVE_MS,
       heartbeatTimeoutMs: this.HEARTBEAT_TIMEOUT_MS
     });
@@ -181,7 +224,7 @@ export class CallCleanupService {
     for (const call of staleInitiated) {
       try {
         const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
+          call.id, now, call.answeredAt,
           [CallStatus.initiated, CallStatus.ringing], CallStatus.missed, CallEndReason.missed
         );
         if (ended) {
@@ -194,37 +237,7 @@ export class CallCleanupService {
       }
     }
 
-    // 2. connecting > 90s (since answeredAt) → FAILED.
-    // Anchor on `answeredAt` — the moment the call entered `connecting` — not
-    // `startedAt`, so a callee who answered late still gets the full negotiation
-    // budget. A `connecting` row always has `answeredAt` set (joinCall stamps it
-    // at the initiated→connecting transition); a null `answeredAt` is skipped
-    // here, which fails safe (never force-FAILs a call we can't time).
-    const connectingCutoff = new Date(now.getTime() - this.MAX_CONNECTING_MS);
-    const staleConnecting = await this.prisma.callSession.findMany({
-      where: {
-        status: CallStatus.connecting,
-        answeredAt: { lt: connectingCutoff }
-      }
-    });
-
-    for (const call of staleConnecting) {
-      try {
-        const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
-          [CallStatus.connecting], CallStatus.failed, CallEndReason.failed
-        );
-        if (ended) {
-          logger.warn('[CallCleanupService] Force FAILED', { callId: call.id });
-          cleaned++;
-        }
-      } catch (error) {
-        logger.error('[CallCleanupService] Failed to force FAILED', { callId: call.id, error });
-        errors++;
-      }
-    }
-
-    // 3. active/reconnecting > 2h with NO fresh liveness → ENDED (garbageCollected).
+    // 2. active/reconnecting > 2h with NO fresh liveness → ENDED (garbageCollected).
     // The wall-clock cap is a safety net for rows the heartbeat tier cannot
     // judge (orphans with zero live participants, or no CallService attached) —
     // never a duration limit: a multi-hour call whose participants still beat
@@ -250,7 +263,7 @@ export class CallCleanupService {
       }
       try {
         const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
+          call.id, now, call.answeredAt,
           [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.garbageCollected
         );
         if (ended) {
@@ -284,7 +297,7 @@ export class CallCleanupService {
           if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
             try {
               const ended = await this.forceEndCall(
-                call.id, now, call.startedAt,
+                call.id, now, call.answeredAt,
                 [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
               );
               if (ended) {
@@ -324,7 +337,7 @@ export class CallCleanupService {
           if (dbStaleParticipants.length > 0 && dbStaleParticipants.length >= call.participants.length) {
             try {
               const ended = await this.forceEndCall(
-                call.id, now, call.startedAt,
+                call.id, now, call.answeredAt,
                 [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
               );
               if (ended) {
@@ -395,12 +408,20 @@ export class CallCleanupService {
   private async forceEndCall(
     callId: string,
     now: Date,
-    startedAt: Date,
+    answeredAt: Date | null,
     fromStatuses: CallStatus[],
     status: CallStatus,
     endReason: CallEndReason
   ): Promise<boolean> {
-    const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+    // Vague 30 — anchor duration on `answeredAt` (talk time), mirroring
+    // CallService.endCall()'s `call.answeredAt ? … : 0` (Vague 27's sibling
+    // fix covered every OTHER terminal writer but missed this one, in a
+    // different class/file). Tier 1 reaps calls still `initiated`/`ringing` —
+    // by definition never answered — so this was persisting a phantom
+    // ring-length `duration` on calls call history should report as 0.
+    const duration = answeredAt
+      ? Math.max(0, Math.floor((now.getTime() - answeredAt.getTime()) / 1000))
+      : 0;
 
     // Read conversationId BEFORE the transaction so we can broadcast to the
     // conversation room as well (the call room would already empty if every
@@ -452,6 +473,8 @@ export class CallCleanupService {
     this.callService?.clearRingingTimeout(callId);
     // Sibling-drift fix (2026-07-05) — see the field comment on `clearQualityStreaks`.
     this.clearQualityStreaks?.(callId);
+    // See the field comment on `invalidateSignalCache`.
+    this.invalidateSignalCache?.(callId);
 
     // Release the conversation's active-call claim (CallService.initiateCall's
     // atomic race guard) so a new call can be started once this one is
@@ -485,6 +508,16 @@ export class CallCleanupService {
       });
     }
 
+    // Sibling-drift fix (2026-07-07) — same tier-1-only scope as the cancel
+    // push above: only a still-ringing call GC'd into `missed` has
+    // unresponded participants who never got the missed-call notification
+    // any other path (`handleMissedCall`) would have created for them.
+    if (this.missedCallNotify && endReason === CallEndReason.missed) {
+      this.missedCallNotify(callId).catch((error) => {
+        logger.error('[CallCleanupService] Failed to create missed-call notification for GC-ended call', { callId, error });
+      });
+    }
+
     // Broadcast `call:ended` to the FULL termination audience — call room,
     // conversation room AND every conversation member's user room (same
     // audience as `call:initiated`). Without the user-room fanout, a callee
@@ -503,6 +536,15 @@ export class CallCleanupService {
       const rooms = await resolveCallEndedRooms(this.prisma, callId, session?.conversationId);
       this.io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
       logger.info('[CallCleanupService] Broadcast call:ended', { callId, endReason, conversationId: session?.conversationId });
+
+      // Vague 21 (2026-07-07) — every client-driven termination path
+      // (call:end, call:leave, call:force-leave) evicts sockets from
+      // `ROOMS.call(callId)` right after this same broadcast; this GC path
+      // never did, leaving still-connected sockets permanently joined to a
+      // dead call room until they disconnect. Mirrors CallEventsHandler's
+      // call:end room cleanup exactly.
+      const socketsInCallRoom = await this.io.in(ROOMS.call(callId)).fetchSockets();
+      await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
     } else {
       logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
     }

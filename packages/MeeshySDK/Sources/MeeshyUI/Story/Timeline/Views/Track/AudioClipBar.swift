@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 public struct AudioClipBar: View, Equatable {
 
@@ -16,6 +17,9 @@ public struct AudioClipBar: View, Equatable {
             && lhs.geometry == rhs.geometry
             && lhs.laneHeight == rhs.laneHeight
             && lhs.waveformSamples == rhs.waveformSamples
+            && lhs.audioURL == rhs.audioURL
+            && VolumeCurveOverlay.volumeSignature(lhs.keyframes)
+                == VolumeCurveOverlay.volumeSignature(rhs.keyframes)
     }
 
     public let clipId: String
@@ -32,24 +36,61 @@ public struct AudioClipBar: View, Equatable {
     public let waveformSamples: [Float]
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
-    public let onLongPress: () -> Void
     public let onMoveDelta: (CGFloat) -> Void
     /// Fired when the move drag ends so the caller can commit the move as
     /// an undoable command and clear the in-flight drag state. Without this
     /// the drift snowballs across frames because each `onChanged` re-reads
     /// the (already-mutated) clip start. Mirrors `VideoClipBar.onMoveEnded`.
     public let onMoveEnded: () -> Void
+    /// Poignées de trim — la fenêtre d'un audio se règle au doigt (affichées
+    /// à la sélection). Défauts no-op pour les call sites existants.
+    public let onTrimStartDelta: (CGFloat) -> Void
+    public let onTrimEndDelta: (CGFloat) -> Void
+    /// URL locale du fichier — quand `waveformSamples` est vide (draft
+    /// restauré, repost), la barre extrait elle-même sa forme d'onde
+    /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
+    public let audioURL: URL?
+    /// Points d'automation du clip — seule leur composante `volume` est
+    /// tracée, en lecture seule. L'édition passe par la fiche.
+    public let keyframes: [StoryKeyframe]
+    /// Mute UN-BOUTON de la piste. Non-nil → le badge haut-parleur devient un
+    /// bouton TOUJOURS visible (toggle) ; nil → comportement historique, badge
+    /// d'état affiché seulement quand la piste est coupée.
+    public let onToggleMute: (() -> Void)?
+
+    /// Forme d'onde auto-extraite (état interne, hors `==`).
+    @State private var loadedSamples: [Float] = []
+
+    var effectiveSamples: [Float] {
+        Self.resolveSamples(local: loadedSamples, published: waveformSamples)
+    }
+
+    /// Arbitre entre les deux sources de forme d'onde.
+    ///
+    /// Le calcul local prime dès qu'il a abouti : il est en haute résolution et
+    /// à l'amplitude réelle, alors que `waveformSamples` transporte 80 valeurs
+    /// normalisées au pic — deux pistes de niveaux très différents s'y
+    /// dessinaient à la même hauteur, ce qui rend le réglage d'un volume
+    /// impossible à l'œil. Les valeurs publiées restent le repli des reposts et
+    /// des brouillons restaurés, pour qui aucun fichier local n'existe.
+    nonisolated static func resolveSamples(local: [Float], published: [Float]) -> [Float] {
+        local.isEmpty ? published : local
+    }
 
     public init(
         clipId: String, title: String, startTime: Float, duration: Float,
         volume: Float, isMuted: Bool, isSelected: Bool, isLocked: Bool,
         isDark: Bool, geometry: TimelineGeometry, laneHeight: CGFloat,
         waveformSamples: [Float],
+        audioURL: URL? = nil,
+        keyframes: [StoryKeyframe] = [],
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
-        onLongPress: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
-        onMoveEnded: @escaping () -> Void = {}
+        onMoveEnded: @escaping () -> Void = {},
+        onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
+        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in },
+        onToggleMute: (() -> Void)? = nil
     ) {
         self.clipId = clipId; self.title = title
         self.startTime = startTime; self.duration = duration
@@ -57,9 +98,14 @@ public struct AudioClipBar: View, Equatable {
         self.isSelected = isSelected; self.isLocked = isLocked
         self.isDark = isDark; self.geometry = geometry
         self.laneHeight = laneHeight; self.waveformSamples = waveformSamples
+        self.audioURL = audioURL
+        self.keyframes = keyframes
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
-        self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
+        self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
+        self.onTrimStartDelta = onTrimStartDelta
+        self.onTrimEndDelta = onTrimEndDelta
+        self.onToggleMute = onToggleMute
     }
 
     public var accessibilityComposed: String {
@@ -78,29 +124,45 @@ public struct AudioClipBar: View, Equatable {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
-            waveform
+            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
+            volumeCurve
             titleOverlay
-            if isMuted { muteBadge }
+            if onToggleMute != nil {
+                muteToggleButton
+            } else if isMuted {
+                muteBadge
+            }
             if isSelected {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
+            }
+            if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
+                ClipTrimHandles(laneHeight: laneHeight,
+                                onTrimStartDelta: onTrimStartDelta,
+                                onTrimEndDelta: onTrimEndDelta)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .offset(x: geometry.x(for: startTime))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture { onTap() }
-        .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
-        .gesture(
+        // Même composition que VideoClipBar : le drag en haute priorité AVANT
+        // les taps, sans long-press. En basse priorité il cédait au ScrollView
+        // horizontal, et le long-press à 0,4 s avalait le glissement lent.
+        .highPriorityGesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { v in if !isLocked { onMoveDelta(v.translation.width) } }
                 .onEnded { _ in if !isLocked { onMoveEnded() } }
         )
+        .onTapGesture(count: 2) { onDoubleTap() }
+        .onTapGesture { onTap() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityValue(accessibilityValueDescription)
+        .task(id: audioURL) {
+            guard waveformSamples.isEmpty, let audioURL else { return }
+            loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)
+        }
     }
 
     /// In-clip name chip — parity with `VideoClipBar.titleLabel` so audio
@@ -113,51 +175,66 @@ public struct AudioClipBar: View, Equatable {
     private var titleOverlay: some View {
         let width = geometry.width(for: duration)
         if width >= 44 && !title.isEmpty {
-            HStack(spacing: 4) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: VideoClipBar.titleBandHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .allowsHitTesting(false)
         }
     }
 
-    private var waveform: some View {
-        GeometryReader { geo in
-            // Empty waveform → render nothing. Previously this used
-            // `max(samples.count, 1)` + ForEach(0..<count) which then
-            // dereferenced samples[0] and crashed with
-            // 'Index out of range' on any audio clip that hadn't yet
-            // had its waveform extracted. iterating samples.indices
-            // is correct for any count including 0.
-            if !waveformSamples.isEmpty {
-                let count = waveformSamples.count
-                let stepX = geo.size.width / CGFloat(count)
-                HStack(alignment: .center, spacing: 1) {
-                    ForEach(waveformSamples.indices, id: \.self) { i in
-                        let amp = CGFloat(waveformSamples[i])
-                        Capsule()
-                            .fill(Color.white.opacity(0.85))
-                            .frame(width: max(1, stepX - 1),
-                                   height: max(2, amp * (geo.size.height - 6)))
-                    }
-                }
-                .frame(maxHeight: .infinity, alignment: .center)
+    /// Courbe d'automation — même teinte que sur les pistes vidéo, pour qu'elle
+    /// se reconnaisse d'un coup d'œil quel que soit le type de piste.
+    ///
+    /// Elle laisse la bande de titre libre, comme sur la vidéo : superposée,
+    /// elle barrait le nom du clip dès que le volume passait à mi-course. La
+    /// forme d'onde, elle, occupe toute la hauteur — sur une piste audio elle
+    /// EST le contenu, pas une bande d'appoint.
+    @ViewBuilder
+    private var volumeCurve: some View {
+        if !keyframes.isEmpty {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: VideoClipBar.titleBandHeight)
+                VolumeCurveOverlay(keyframes: keyframes,
+                                   duration: duration,
+                                   tint: MeeshyColors.warning)
             }
         }
-        .padding(.horizontal, 3)
-        .drawingGroup()   // SOTA P7: bake to Metal layer, skip re-stroke when props unchanged
-        .accessibilityHidden(true)
+    }
+
+    /// Bouton mute UN TAP, toujours visible sur le bord traînant du clip.
+    /// `.onTapGesture` (pas `Button`) : un tap enfant prime sur les taps du
+    /// conteneur, et le drag haute-priorité du clip (minimumDistance 4) laisse
+    /// passer un tap immobile — même recette que `ClipTrimHandles`.
+    private var muteToggleButton: some View {
+        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            .font(.caption2)
+            .padding(5)
+            .background(Circle().fill(Color.black.opacity(isMuted ? 0.75 : 0.45)))
+            .foregroundStyle(isMuted ? MeeshyColors.error : Color.white)
+            .padding(3)
+            .contentShape(Rectangle().inset(by: -6))
+            .onTapGesture { onToggleMute?() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isMuted
+                ? String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
+                : String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module))
     }
 
     private var muteBadge: some View {

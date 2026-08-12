@@ -20,6 +20,29 @@ public struct GlassCard: ViewModifier {
     }
 }
 
+// MARK: - Glass Control Foreground (lisibilité light + dark)
+
+/// Foreground adaptatif pour une icône / un label posé sur une surface glass ou
+/// material (barre, capsule, menu). Blanc en mode sombre, `indigo950` en mode
+/// clair : le glass seul ne garantit pas le contraste d'un contenu **blanc** sur
+/// fond clair, d'où les boutons du composer illisibles en light mode. Miroir du
+/// pattern déjà éprouvé dans `ComposerToolPanelHost` / `ComposerBottomBand`.
+public struct GlassControlForeground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    public init() {}
+    public func body(content: Content) -> some View {
+        content.foregroundStyle(colorScheme == .dark ? Color.white : MeeshyColors.indigo950)
+    }
+}
+
+public extension View {
+    /// Applique un foreground adaptatif (blanc en sombre, `indigo950` en clair)
+    /// pour rester lisible sur une surface glass dans les deux thèmes.
+    func glassControlForeground() -> some View {
+        modifier(GlassControlForeground())
+    }
+}
+
 // MARK: - Glowing Border
 
 public struct GlowingBorder: ViewModifier {

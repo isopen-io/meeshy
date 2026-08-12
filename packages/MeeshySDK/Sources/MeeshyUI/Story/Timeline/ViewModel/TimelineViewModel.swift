@@ -44,8 +44,34 @@ public final class TimelineViewModel: ObservableObject {
     // MARK: - State observable by Views
 
     @Published public internal(set) var project: TimelineProject
-    @Published public private(set) var currentTime: Float = 0
-    @Published public private(set) var isPlaying: Bool = false
+    @Published public private(set) var currentTime: Float = 0 {
+        didSet { onPlayheadChanged?(currentTime) }
+    }
+    @Published public private(set) var isPlaying: Bool = false {
+        didSet {
+            guard oldValue != isPlaying else { return }
+            onPlaybackStateChanged?(isPlaying)
+        }
+    }
+
+    // MARK: - Preview bridge (Lot B — living preview)
+
+    /// Fired on EVERY playhead move — scrub frames and engine playback ticks
+    /// alike. The composer wires this to the canvas behind the timeline sheet
+    /// (via `StoryCanvasTimelineBridge`) so the canvas renders the slide at
+    /// the playhead, at UIKit level, without re-evaluating the composer's
+    /// SwiftUI body 60 times per second.
+    public var onPlayheadChanged: ((Float) -> Void)?
+    /// Fired when playback starts/stops (transport toggle, playback end).
+    /// The canvas uses it to switch between seek-paused (scrub) and
+    /// play-muted-in-sync (engine owns the audio) preview strategies.
+    public var onPlaybackStateChanged: ((Bool) -> Void)?
+
+    /// Fin NATURELLE de lecture (le moteur a atteint `slideDuration`) —
+    /// distincte d'une pause manuelle. Émise APRÈS le retour de la tête au
+    /// début : l'abonné (canvas du composer) reçoit d'abord le scrub(0) du
+    /// `didSet`, puis peut rendre l'état STATIQUE sans ré-armement de preview.
+    public var onPlaybackEnded: (() -> Void)?
     /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
     /// re-render on toggle. The engine remains the audio-routing source of
     /// truth — this stored property is the @Published view-state seam that
@@ -55,9 +81,72 @@ public final class TimelineViewModel: ObservableObject {
     @Published public private(set) var canRedo: Bool = false
     @Published public internal(set) var isSnapEnabled: Bool = true
     @Published public var selection: ClipSelectionState = .init()
-    @Published public var mode: TimelineMode = .quick
     @Published public var zoomScale: CGFloat = 1.0
     @Published public var errorMessage: String?
+    /// One-shot signal that `project.slideDuration` was just auto-recomputed
+    /// to a NEW value by a content-mutating edit (trim/split/delete/add/move).
+    /// `nil` after the consuming view presents its toast. Never fires when
+    /// the recomputed value matches what was already on screen, and never
+    /// fires mid-clip-drag (only once the drag ends) — see
+    /// `recomputeSlideDuration()`.
+    @Published public var durationDidAutoAdjust: (from: Float, to: Float)?
+
+    /// Snapshot of `project.slideDuration` captured when the active clip drag
+    /// began. Mid-drag frames silently update `project.slideDuration` live (so
+    /// the ruler tracks the edit in real time — see `recomputeSlideDuration()`),
+    /// so by the time the drag ends the live value no longer reflects what was
+    /// on screen when the gesture started. This snapshot is what the
+    /// end-of-drag toast's `from` value is computed against. Cleared after use
+    /// (drag end) or on cancel — never leaks into an unrelated edit's toast
+    /// baseline.
+    private var slideDurationBeforeDrag: Float?
+
+    /// Durée voulue par l'AUTEUR — ce que pose « +10 s ». `nil` = la durée
+    /// dérive du contenu, comme toujours.
+    ///
+    /// Champ SÉPARÉ, et c'est tout l'enjeu : la version précédente du bouton
+    /// écrivait directement `project.slideDuration`, que le premier
+    /// `recomputeSlideDuration()` venu écrasait — rien ne distinguait une
+    /// valeur posée par l'auteur d'un reste de calcul. C'est ce défaut, et non
+    /// le bouton, qui avait motivé son retrait le 2026-07-27.
+    ///
+    /// Traité comme un PLANCHER, pas comme une autorité : un contenu plus long
+    /// que la demande l'emporte toujours. « +10 s » n'a jamais servi à rogner.
+    public private(set) var authoredSlideDuration: Float?
+
+    /// Retrouve la durée d'auteur d'un projet entrant : tout ce qui dépasse la
+    /// durée dérivée du contenu ne peut venir que d'un réglage explicite —
+    /// `TimelineProject(from:)` lit `computedTotalDuration()`, qui donne la
+    /// priorité au pin `effects.timelineDuration`.
+    nonisolated static func authoredDuration(in project: TimelineProject) -> Float? {
+        let derived = Float(StoryEffects.contentDerivedDuration(
+            mediaObjects: project.mediaObjects,
+            audioPlayerObjects: project.audioPlayerObjects,
+            textObjects: project.textObjects
+        ))
+        return project.slideDuration - derived > 0.05 ? project.slideDuration : nil
+    }
+
+    /// Prolonge la timeline d'un pas fixe, plafonné à `ClipWindowResolver.maximumEnd`.
+    ///
+    /// Passe par la pile de commandes comme toute autre édition : un appui de
+    /// trop se retire avec « Annuler », et deux appuis se retirent un par un.
+    public func extendSlideDuration(by seconds: Float = TimelineOperationsBar.extendStepSeconds) {
+        let target = min(ClipWindowResolver.maximumEnd, project.slideDuration + seconds)
+        guard target - project.slideDuration > 0.05 else { return }
+        let command = SetSlideDurationCommand(oldDuration: project.slideDuration,
+                                              newDuration: target,
+                                              oldAuthoredDuration: authoredSlideDuration)
+        do {
+            try command.apply(to: &project)
+            commandStack.push(.setSlideDuration(command))
+            authoredSlideDuration = target
+            scheduleEngineReconfigure()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
@@ -123,6 +212,10 @@ public final class TimelineViewModel: ObservableObject {
         self.project = project
         self.pendingMediaURLs = mediaURLs
         self.pendingImages = images
+        // Une durée déjà épinglée sur la slide est une demande d'auteur : la
+        // perdre au bootstrap ferait retomber la timeline sur le contenu à la
+        // première édition, exactement comme avant le correctif.
+        self.authoredSlideDuration = Self.authoredDuration(in: project)
 
         // Cancel any in-flight bootstrap before reassigning so we don't race
         // two configure() calls on the same engine.
@@ -160,7 +253,14 @@ public final class TimelineViewModel: ObservableObject {
             self?.currentTime = time
         }
         engine.onPlaybackEnd = { [weak self] in
-            self?.isPlaying = false
+            guard let self else { return }
+            self.isPlaying = false
+            // Fin de lecture = retour au début (convention transport). La
+            // tête laissée à `slideDuration` figeait le canvas du composer
+            // sur le dernier instant — éléments hors fenêtre masqués — au
+            // lieu de l'état statique du design (capture user 2026-07-20).
+            self.scrub(to: 0, precise: true)
+            self.onPlaybackEnded?()
         }
         engine.onError = { [weak self] error in
             self?.errorMessage = error.localizedDescription
@@ -189,23 +289,83 @@ public final class TimelineViewModel: ObservableObject {
         if let id { selection.select(id) } else { selection.deselect() }
     }
 
+    /// Ouvre la fiche d'édition d'un clip — double tap sur une piste, ou tap
+    /// simple sur un marqueur de keyframe / transition : ces cibles font 12 à
+    /// 16 pt, leur demander un double tap serait une régression.
+    public func inspectClip(id: String) {
+        selection.inspect(id)
+    }
+
+    /// Referme la fiche en gardant le clip surligné.
+    public func endInspection() {
+        selection.endInspection()
+    }
+
     // MARK: - Clip drag
 
     public func beginClipDrag(clipId: String) {
         guard let original = clipStartTime(id: clipId) else { return }
         selection.beginDrag(clipId: clipId, originalStartTime: original)
+        slideDurationBeforeDrag = project.slideDuration
     }
 
     public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
         guard var drag = selection.activeDrag else { return }
-        let snapResult = snapEngine.snap(rawTime: rawTime,
-                                         candidates: snapCandidates,
-                                         disabled: !isSnapEnabled)
+        let previouslySnapped = drag.snappedTo != nil
+        // Aimantation : on complète les candidats fournis par les bords (début ET
+        // fin) de TOUS les autres objets du canvas, plus les bornes du slide et la
+        // tête de lecture — « coordinateurs entre le début et la fin des objets par
+        // effet magnet quand un objet est proche de la fin d'un autre ».
+        let magnetCandidates = magneticSnapCandidates(excludingClipId: drag.clipId)
+        // Tolérance adaptée au zoom (~8pt de doigt). L'engine figé à 0.06s était
+        // trop serré pour un aimant perceptible ; le magnet doit accrocher dès
+        // qu'un bord approche visuellement celui d'un autre.
+        let magnetEngine = SnapEngine(
+            toleranceSeconds: TimelineGeometry(zoomScale: zoomScale).dragSnapToleranceSeconds)
+        let snapResult = magnetEngine.snap(rawTime: rawTime,
+                                           candidates: snapCandidates + magnetCandidates,
+                                           disabled: !isSnapEnabled)
         drag.currentStartTime = snapResult.snappedTime
         drag.snappedTo = mapSnapKind(snapResult.matched?.kind)
+        // Retour haptique léger au MOMENT où l'aimant accroche (transition
+        // non-accroché → accroché), pas à chaque frame.
+        if drag.snappedTo != nil, !previouslySnapped {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
         selection.updateDrag(currentStartTime: drag.currentStartTime,
                              snappedTo: drag.snappedTo)
         applyClipPosition(clipId: drag.clipId, newStartTime: drag.currentStartTime)
+    }
+
+    /// Points d'accroche magnétiques pour un drag de clip : les bords `début` et
+    /// `fin` de chaque AUTRE objet du canvas (media, audio, texte), plus les
+    /// bornes du slide (`0` / `slideDuration`) et la tête de lecture. C'est ce
+    /// jeu de candidats qui manquait (tous les call sites passaient `[]`), rendant
+    /// l'aimantation inopérante malgré un moteur de snap déjà branché.
+    func magneticSnapCandidates(excludingClipId excluded: String) -> [SnapCandidate] {
+        var candidates: [SnapCandidate] = [
+            SnapCandidate(kind: .slideStart, time: 0),
+            SnapCandidate(kind: .slideEnd, time: project.slideDuration),
+            SnapCandidate(kind: .playhead, time: currentTime)
+        ]
+        func addEdges(id: String, start: Float, duration: Float) {
+            guard id != excluded else { return }
+            candidates.append(SnapCandidate(kind: .clipStart, time: start))
+            candidates.append(SnapCandidate(kind: .clipEnd, time: start + max(0, duration)))
+        }
+        for m in project.mediaObjects {
+            addEdges(id: m.id, start: Float(m.startTime ?? 0), duration: Float(m.duration ?? 0))
+        }
+        for a in project.audioPlayerObjects {
+            addEdges(id: a.id, start: a.startTime ?? 0, duration: a.duration ?? 0)
+        }
+        for t in project.textObjects {
+            addEdges(id: t.id, start: Float(t.startTime ?? 0), duration: Float(t.duration ?? 0))
+        }
+        for s in project.stickerObjects {
+            addEdges(id: s.id, start: Float(s.startTime ?? 0), duration: Float(s.duration ?? 0))
+        }
+        return candidates
     }
 
     public func endClipDrag() {
@@ -216,6 +376,7 @@ public final class TimelineViewModel: ObservableObject {
         let unchanged = abs(drag.currentStartTime - drag.originalStartTime) < 0.0005
         guard !unchanged else {
             selection.endDrag()
+            slideDurationBeforeDrag = nil
             return
         }
 
@@ -227,6 +388,11 @@ public final class TimelineViewModel: ObservableObject {
         )
         commandStack.push(.moveClip(cmd))
         selection.endDrag()
+        // AFTER endDrag(): recomputeSlideDuration()'s toast is suppressed
+        // while selection.activeDrag is non-nil (every drag frame already
+        // called it via applyClipPosition) — this call, with the drag now
+        // cleared, is what actually surfaces the final value's toast.
+        recomputeSlideDuration()
     }
 
     /// Cancels an in-flight clip drag, restoring the clip's startTime to the value
@@ -237,6 +403,7 @@ public final class TimelineViewModel: ObservableObject {
         guard let drag = selection.activeDrag else { return }
         applyClipPosition(clipId: drag.clipId, newStartTime: drag.originalStartTime)
         selection.endDrag()
+        slideDurationBeforeDrag = nil
     }
 
     /// Returns the timeline-clip kind for a given object id.
@@ -248,6 +415,7 @@ public final class TimelineViewModel: ObservableObject {
         }
         if project.audioPlayerObjects.contains(where: { $0.id == id }) { return .audio }
         if project.textObjects.contains(where: { $0.id == id }) { return .text }
+        if project.stickerObjects.contains(where: { $0.id == id }) { return .sticker }
         return nil
     }
 
@@ -263,41 +431,81 @@ public final class TimelineViewModel: ObservableObject {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return Float(m.startTime ?? 0) }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
         if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return Float(s.startTime ?? 0) }
         return nil
     }
 
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
             project.mediaObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.mediaObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
             project.audioPlayerObjects[i].startTime = newStartTime
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + (project.audioPlayerObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
             project.textObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.textObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
+            return
+        }
+        if let i = project.stickerObjects.firstIndex(where: { $0.id == clipId }) {
+            project.stickerObjects[i].startTime = Double(newStartTime)
+            recomputeSlideDuration()
         }
     }
 
-    /// Auto-extends the working `project.slideDuration` when an element is
-    /// dragged past the current playable range. Without this, the playhead
-    /// (which clamps at `slideDuration`) couldn't reach the element's tail
-    /// after the drop and the ruler / clip lane wouldn't visualise it. The
-    /// computed total duration handles persistence — this is the live in-edit
-    /// equivalent so the editor follows the user's intent in real time.
-    private func extendSlideDurationIfNeeded(elementEnd: Float) {
-        guard elementEnd.isFinite, elementEnd > project.slideDuration else { return }
-        project.slideDuration = elementEnd
+    /// Recomputes `project.slideDuration` from the current content using the
+    /// same "longest data wins" rule as `StorySlide.computedTotalDuration()`
+    /// (via `StoryEffects.contentDerivedDuration`), so the ruler/track length
+    /// always matches what will actually play — never left stale after a
+    /// trim/split/delete/add/move (design doc 2026-07-18). Fires
+    /// `durationDidAutoAdjust` only when the value actually changes, so a
+    /// no-op edit doesn't spam a toast.
+    ///
+    /// Called on every frame of a clip drag via `applyClipPosition` — the
+    /// toast is suppressed while `selection.activeDrag` is non-nil so it
+    /// doesn't fire 60 times/sec mid-gesture; `endClipDrag()` calls this
+    /// again once the drag ends so the final value still gets its toast.
+    ///
+    /// - Parameter announcing: `false` quand le recalcul accompagne une action
+    ///   dont l'utilisateur connaît DÉJÀ l'effet — `undo()` / `redo()`. Le
+    ///   toast est là pour expliquer un effet de bord subi ; le faire sonner
+    ///   sur une restauration explicitement demandée n'apprendrait rien.
+    func recomputeSlideDuration(announcing: Bool = true) {
+        let derived = Float(StoryEffects.contentDerivedDuration(
+            mediaObjects: project.mediaObjects,
+            audioPlayerObjects: project.audioPlayerObjects,
+            textObjects: project.textObjects
+        ))
+        // La demande de l'auteur fait PLANCHER : sans elle, « +10 s » ne
+        // survivait pas à l'édition suivante. Un contenu plus long l'emporte
+        // quand même — le bouton allonge, il n'a jamais rogné.
+        let auto = max(derived, authoredSlideDuration ?? 0)
+        let liveValueBeforeThisCall = project.slideDuration
+        if abs(auto - liveValueBeforeThisCall) > 0.05 {
+            project.slideDuration = auto
+            if currentTime > auto {
+                scrub(to: auto, precise: true)
+            }
+        }
+
+        // Toast decision is separate from the live-value update above: during
+        // a drag, activeDrag is non-nil and we stop here (no toast). Once the
+        // drag has ended, compare the FINAL value against the baseline
+        // captured at drag start (not against `project.slideDuration`, which
+        // this function's own mid-drag calls already advanced) — that's the
+        // only way the true before/after values reach the toast.
+        guard selection.activeDrag == nil else { return }
+
+        let toastBaseline = slideDurationBeforeDrag ?? liveValueBeforeThisCall
+        slideDurationBeforeDrag = nil
+        guard announcing else { return }
+        if abs(auto - toastBaseline) > 0.05 {
+            durationDidAutoAdjust = (from: toastBaseline, to: auto)
+        }
     }
 
     private func mapSnapKind(_ kind: SnapCandidate.Kind?) -> ClipSelectionState.ActiveDrag.SnappedKind? {
@@ -313,11 +521,23 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Undo / Redo
 
+    /// Annuler restaure le CONTENU — la durée de slide doit suivre, sinon la
+    /// règle graduée et la longueur des pistes restent figées sur la valeur
+    /// d'après l'édition annulée : la timeline ment alors sur ce qui va
+    /// réellement jouer, jusqu'à ce qu'une édition sans rapport la
+    /// resynchronise par accident.
     public func undo() {
         guard let command = commandStack.undo() else { return }
         do {
             try command.underlying.revert(from: &project)
+            // La durée d'AUTEUR ne vit pas dans le projet : sans cette reprise,
+            // `recomputeSlideDuration` juste en dessous la relirait et
+            // restaurerait la longueur qu'on vient d'annuler.
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.oldAuthoredDuration
+            }
             scheduleEngineReconfigure()
+            recomputeSlideDuration(announcing: false)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -327,7 +547,11 @@ public final class TimelineViewModel: ObservableObject {
         guard let command = commandStack.redo() else { return }
         do {
             try command.underlying.apply(to: &project)
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.newDuration
+            }
             scheduleEngineReconfigure()
+            recomputeSlideDuration(announcing: false)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -361,9 +585,14 @@ public final class TimelineViewModel: ObservableObject {
 
     /// Marks the end of a continuous playhead drag. Subsequent `scrub(to:)`
     /// calls go back to frame-accurate seeking. Safe to call when no scrub is
-    /// in flight (idempotent).
+    /// in flight (idempotent). When a scrub WAS in flight, the release
+    /// position is re-seeked with frame accuracy — every drag frame used
+    /// sub-50ms tolerance, so without this anchor the frame on screen can be
+    /// up to 50ms away from where the user released.
     public func endScrub() {
+        guard isScrubbing else { return }
         isScrubbing = false
+        engine.seek(to: currentTime, precise: true)
     }
 
     /// Seeks the engine to `time`. Precision is auto-selected from
@@ -408,26 +637,31 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.splitClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    /// Returns the duration of any clip (media/audio/text) by id, or nil.
+    /// Returns the duration of any clip (media/audio/text/sticker) by id, or nil.
     private func clipDuration(forId id: String) -> Float? {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
         return nil
     }
 
     // MARK: - Transitions
 
-    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) {
-        guard fromClipId != toClipId else { return }
+    /// Returns the created transition's id (for routing the selection to the
+    /// TransitionInspector right after creation), or nil when rejected.
+    @discardableResult
+    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) -> String? {
+        guard fromClipId != toClipId else { return nil }
         let mediaIds = project.mediaObjects.map(\.id)
-        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return }
-        guard duration.isFinite, duration > 0 else { return }
+        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return nil }
+        guard duration.isFinite, duration > 0 else { return nil }
         let transition = StoryClipTransition(
             fromClipId: fromClipId,
             toClipId: toClipId,
@@ -440,21 +674,29 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.addTransition(cmd))
             scheduleEngineReconfigure()
+            return transition.id
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
     // MARK: - Keyframes
 
+    /// Pose un keyframe au playhead sur le clip sélectionné.
+    ///
+    /// `volume` est le 5ᵉ canal : passé seul, il crée un point d'automation
+    /// sonore pur, sans toucher position, échelle ni opacité.
     public func addKeyframeAtPlayhead(x: CGFloat? = nil, y: CGFloat? = nil,
-                                      scale: CGFloat? = nil, opacity: CGFloat? = nil) {
+                                      scale: CGFloat? = nil, opacity: CGFloat? = nil,
+                                      volume: Float? = nil) {
         guard let id = selection.selectedClipId,
               let clipStart = clipStartTime(id: id) else { return }
         let relativeTime = max(0, currentTime - clipStart)
         let kf = StoryKeyframe(
             time: relativeTime,
             x: x, y: y, scale: scale, opacity: opacity,
+            volume: volume.map { min(StoryVolume.maxGain, max(0, $0)) },
             easing: .linear
         )
         guard let kind = clipKind(forId: id) else { return }
@@ -468,11 +710,7 @@ public final class TimelineViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mode + snap toggles
-
-    public func setMode(_ newMode: TimelineMode) {
-        mode = newMode
-    }
+    // MARK: - Snap toggle
 
     public func toggleSnap() {
         isSnapEnabled.toggle()

@@ -14,47 +14,20 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type {
-  ConversationPreferencesPayload,
-  UserPreferencesConversationUpdatedEventData,
-  UserPreferencesReorderedEventData,
-} from '@meeshy/shared/types/socketio-events';
+import type { UserPreferencesConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { validatePagination } from '../utils/pagination';
-
-interface ConversationPrefRow {
-  isPinned: boolean;
-  isMuted: boolean;
-  mentionsOnly: boolean;
-  isArchived: boolean;
-  tags: string[];
-  categoryId: string | null;
-  orderInCategory: number | null;
-  customName: string | null;
-  reaction: string | null;
-  deletedForUserAt: Date | null;
-  clearHistoryBefore: Date | null;
-  version: number;
-}
-
-const toPreferencesPayload = (row: ConversationPrefRow): ConversationPreferencesPayload => ({
-  isPinned: row.isPinned,
-  isMuted: row.isMuted,
-  mentionsOnly: row.mentionsOnly,
-  isArchived: row.isArchived,
-  tags: row.tags ?? [],
-  categoryId: row.categoryId,
-  orderInCategory: row.orderInCategory,
-  customName: row.customName,
-  reaction: row.reaction,
-  deletedForUserAt: row.deletedForUserAt ? row.deletedForUserAt.toISOString() : null,
-  clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
-});
+import {
+  writeConversationPreferences,
+  reorderConversationPreferences,
+  ConversationPreferencesScopeError,
+  type ConversationPreferencesWrite,
+} from '../services/conversationPreferencesSync';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -167,6 +140,12 @@ const reorderConversationsRequestSchema = {
   properties: {
     updates: {
       type: 'array',
+      // One drag-and-drop reorders a category the user can see. The membership
+      // filter already bounds the writes to conversations the caller is in, but
+      // it does so only after the batch has been parsed and de-duplicated, so an
+      // unbounded array is still work a caller can ask for for free. The bound
+      // is well past any real category.
+      maxItems: 200,
       items: {
         type: 'object',
         required: ['conversationId', 'orderInCategory'],
@@ -175,7 +154,7 @@ const reorderConversationsRequestSchema = {
           orderInCategory: { type: 'number', minimum: 0, description: 'New order value' }
         }
       },
-      description: 'Array of conversation reorder updates'
+      description: 'Array of conversation reorder updates (max 200)'
     }
   }
 } as const;
@@ -415,6 +394,8 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             }
           },
           401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema
         }
       }
@@ -431,58 +412,40 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const data = request.body;
 
         // Prepare update data (filter undefined values)
-        const updateData: any = {};
-        if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
-        if (data.isMuted !== undefined) updateData.isMuted = data.isMuted;
-        if (data.mentionsOnly !== undefined) updateData.mentionsOnly = data.mentionsOnly;
-        if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
-        if (data.tags !== undefined) updateData.tags = data.tags;
-        if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-        if (data.orderInCategory !== undefined) updateData.orderInCategory = data.orderInCategory;
-        if (data.customName !== undefined) updateData.customName = data.customName;
-        if (data.reaction !== undefined) updateData.reaction = data.reaction;
+        const updateData: ConversationPreferencesWrite = {
+          ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
+          ...(data.isMuted !== undefined && { isMuted: data.isMuted }),
+          ...(data.mentionsOnly !== undefined && { mentionsOnly: data.mentionsOnly }),
+          ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
+          ...(data.tags !== undefined && { tags: data.tags }),
+          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+          ...(data.orderInCategory !== undefined && { orderInCategory: data.orderInCategory }),
+          ...(data.customName !== undefined && { customName: data.customName }),
+          ...(data.reaction !== undefined && { reaction: data.reaction }),
+        };
 
-        const preferences = await fastify.prisma.userConversationPreferences.upsert({
-          where: {
-            userId_conversationId: {
-              userId,
-              conversationId
-            }
-          },
-          create: {
-            userId,
-            conversationId,
-            ...updateData,
-            // First-ever upsert starts at version 1 (not the schema default 0).
-            // This keeps every broadcast `version >= 1`, so the DELETE/reset
-            // payload (which carries version = existingRow.version + 1) is
-            // never misinterpreted as a stale "no-op create" event by clients
-            // applying the documented `incoming.version <= local -> drop` rule.
-            version: 1,
-          },
-          update: {
-            ...updateData,
-            version: { increment: 1 },
-          },
-          include: {
-            category: true
-          }
-        });
-
-        const eventPayload: UserPreferencesConversationUpdatedEventData = {
+        const preferences = await writeConversationPreferences(fastify, {
           userId,
           conversationId,
-          version: (preferences as unknown as ConversationPrefRow).version ?? 0,
-          reset: false,
-          preferences: toPreferencesPayload(preferences as unknown as ConversationPrefRow),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
+          data: updateData,
+        });
 
         return sendSuccess(reply, {
           ...preferences,
           isDefault: false
         });
       } catch (error) {
+        // Both ids in this request name rows the caller may not be entitled to.
+        // Non-membership is stated plainly — the caller already knows whether
+        // they are in a conversation, and the sibling `user-deletions.ts` routes
+        // answer the same way. A category that is not theirs is reported as
+        // simply absent, matching every route in `me/preferences/categories.ts`,
+        // so the response cannot be used to probe another user's categories.
+        if (error instanceof ConversationPreferencesScopeError) {
+          return error.reason === 'not-a-participant'
+            ? sendForbidden(reply, 'Not a member of this conversation')
+            : sendNotFound(reply, 'Category not found');
+        }
         logError(fastify.log, 'Error upserting conversation preferences:', error);
         return sendInternalError(reply, 'Error updating preferences');
       }
@@ -526,29 +489,37 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { conversationId } = request.params;
 
-        // Read the existing version BEFORE deletion so we can broadcast a
-        // strictly-greater version. Otherwise clients applying the documented
-        // `incoming.version <= local -> drop` rule would silently discard
-        // every reset for users with any prior pin/mute history.
-        const existing = await fastify.prisma.userConversationPreferences.findUnique({
-          where: { userId_conversationId: { userId, conversationId } },
-          select: { version: true },
-        });
-        const resetVersion = (existing?.version ?? 0) + 1;
-
-        await fastify.prisma.userConversationPreferences.delete({
+        // A reset restores the preference columns to their defaults; it does
+        // NOT drop the row. `version` is the monotonic sequence every client
+        // gates on (`incoming.version <= local -> drop`), and it lives on the
+        // row: deleting the row restarts the sequence at 1 on the next upsert,
+        // so the first pin/mute made after a reset carried a version BELOW the
+        // reset the other devices had just stored — they dropped it, and every
+        // later change with it, until an unrelated full refetch. Resetting in
+        // place keeps the counter strictly increasing across the reset, which
+        // is what the schema promises ("Monotonic version for
+        // optimistic-concurrency resolution"). The single `update` also makes
+        // the version advance atomic, where the previous read-then-write could
+        // interleave with a concurrent upsert. Absent row still yields P2025 →
+        // 404, unchanged.
+        const resetRow = await fastify.prisma.userConversationPreferences.update({
           where: {
             userId_conversationId: {
               userId,
               conversationId
             }
-          }
+          },
+          data: {
+            ...CONVERSATION_PREFERENCES_DEFAULTS,
+            version: { increment: 1 },
+          },
+          select: { version: true },
         });
 
         const resetPayload: UserPreferencesConversationUpdatedEventData = {
           userId,
           conversationId,
-          version: resetVersion,
+          version: resetRow.version,
           reset: true,
           preferences: null,
         };
@@ -580,6 +551,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         body: reorderConversationsRequestSchema,
         response: {
           200: successMessageResponseSchema,
+          400: errorResponseSchema,
           401: errorResponseSchema,
           500: errorResponseSchema
         }
@@ -595,29 +567,11 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { updates } = request.body;
 
-        // Batch update
-        await Promise.all(
-          updates.map(update =>
-            fastify.prisma.userConversationPreferences.updateMany({
-              where: {
-                userId,
-                conversationId: update.conversationId
-              },
-              data: {
-                orderInCategory: update.orderInCategory
-              }
-            })
-          )
-        );
-
-        const reorderPayload: UserPreferencesReorderedEventData = {
-          userId,
-          updates: updates.map(u => ({
-            conversationId: u.conversationId,
-            orderInCategory: u.orderInCategory,
-          })),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, reorderPayload);
+        // Persist first, broadcast what was persisted. The previous `updateMany`
+        // matched nothing whenever the user had never customized the
+        // conversation, yet the route still answered 200 and told every device
+        // to move the row — an order no refetch could ever confirm.
+        await reorderConversationPreferences(fastify, { userId, updates });
 
         return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {

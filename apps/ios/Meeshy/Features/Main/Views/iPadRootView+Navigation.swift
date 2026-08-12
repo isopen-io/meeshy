@@ -25,6 +25,31 @@ extension iPadRootView {
         }
     }
 
+    // MARK: - Sync Pill
+
+    /// Ouvre la cible d'une entrée de la pastille de synchronisation. Miroir
+    /// iPad de `RootView.handleSyncPillTap` : sans lui, `ConnectionBanner` était
+    /// construit sans `onItemTap` et taper « Envoi dans <conversation> » ne
+    /// menait nulle part (la pastille se contentait d'avancer d'un cran).
+    func handleSyncPillTap(_ source: OutboxUIItem.Source) {
+        switch source {
+        case .conversation(let id):
+            guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
+                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
+                return
+            }
+            openConversation(conv)
+        case .post(let id):
+            rightPanelRoute = .postDetail(id, nil, showComments: false)
+        case .story:
+            // Parité RootView : ouvrir une story exige un StoryIntent + un
+            // StoryNotificationContext que la pastille ne transporte pas.
+            Logger.messages.info("syncPill tap: story open not yet supported")
+        case .unknown:
+            break
+        }
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ deepLink: DeepLink?) {
@@ -77,6 +102,8 @@ extension iPadRootView {
             rightPanelRoute = .profile
         case .userLinks:
             rightPanelRoute = .links
+        case .hashtag(let tag):
+            rightPanelRoute = .hashtagResults(tag: tag)
         case .magicLink:
             break
         }
@@ -179,7 +206,12 @@ extension iPadRootView {
              .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             guard let conversationId = data?.conversationId else { return }
-            navigateToConversationById(conversationId)
+            // Parité iPhone/push : scroll + flash sur le message exact.
+            navigateToConversationById(
+                conversationId,
+                highlightMessageId: notification.context?.messageId,
+                ensureUnread: true
+            )
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
@@ -195,67 +227,28 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
-            if let postId = notification.context?.postId ?? data?.postId {
-                rightPanelRoute = .postDetail(postId)
-            }
-
-        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
-            if let postId = notification.context?.postId ?? data?.postId {
-                let postType = notification.metadata?.postType
-                if isStoryPost(postId: postId, postType: postType) {
-                    router.push(.storyNotificationTarget(
-                        storyId: postId,
-                        intent: .comments,
-                        context: StoryNotificationContext.from(notification)
-                    ))
-                } else {
-                    rightPanelRoute = .postDetail(
-                        postId,
-                        nil,
-                        showComments: true,
-                        commentId: notification.context?.commentId ?? notification.metadata?.commentId,
-                        parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId
-                    )
-                }
-            }
-
-        case .storyReaction, .statusReaction:
-            // Phase G follow-up — every story-reaction notification routes
-            // through the dedicated screen (which redirects into the viewer's
-            // viewers/reactions sheet, or surfaces the expired empty state
-            // when the underlying story is gone). Replaces the previous
-            // best-effort `groupIndex(forStoryId:)` lookup that silently
-            // dropped the notification when the local tray hadn't loaded
-            // the story yet.
-            if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .reactions,
-                    context: StoryNotificationContext.from(notification)
-                ))
-            }
-
-        case .storyNewComment, .friendStoryComment, .storyThreadReply:
-            if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .comments,
-                    context: StoryNotificationContext.from(notification)
-                ))
-            }
-
-        case .friendNewStory, .friendNewMood:
-            if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .view,
-                    context: StoryNotificationContext.from(notification)
-                ))
+        // ===== SOCIAL CONTENT =====
+        // Single decision point, shared with iPhone via
+        // `NotificationContentRouter` — see `routeSocialNotification`.
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
+             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
+             .storyReaction, .statusReaction,
+             .storyNewComment, .friendStoryComment, .storyThreadReply,
+             .friendNewStory, .friendNewMood:
+            if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
+                routeSocialNotification(
+                    postId: postId,
+                    postType: notification.metadata?.postType,
+                    contentType: notification.metadata?.contentType,
+                    type: notification.notificationType,
+                    commentId: notification.context?.commentId ?? notification.metadata?.commentId,
+                    parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
+                    storyContext: StoryNotificationContext.from(notification)
+                )
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
-             .incomingCall, .callEnded, .legacyCallIncoming:
+             .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
             if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
@@ -269,7 +262,9 @@ extension iPadRootView {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
-            break
+            // Pas d'entité cible : ouvrir le panneau notifications plutôt
+            // qu'un tap muet.
+            rightPanelRoute = .notifications
         }
     }
 
@@ -281,52 +276,69 @@ extension iPadRootView {
              .mention, .missedCall,
              .newConversation, .newConversationDirect, .newConversationGroup, .addedToConversation, .memberJoined:
             if let conversationId = event.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            if let senderId = event.senderId, let username = event.senderUsername {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: username
+                // Parité iPhone/push : scroll + flash sur le message exact.
+                navigateToConversationById(
+                    conversationId,
+                    highlightMessageId: event.messageId,
+                    ensureUnread: true
                 )
             }
 
-        case .postLike, .legacyPostLike, .postRepost:
-            if let postId = event.postId {
-                rightPanelRoute = .postDetail(postId)
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+            if let senderId = event.senderId {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: senderId,
+                    username: event.senderUsername ?? senderId
+                )
             }
 
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+        // ===== SOCIAL CONTENT =====
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
+             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
+             .storyReaction, .statusReaction,
+             .storyNewComment, .friendStoryComment, .storyThreadReply,
+             .friendNewStory, .friendNewMood:
             if let postId = event.postId {
-                if isStoryPost(postId: postId, postType: event.postType) {
-                    router.push(.storyNotificationTarget(
-                        storyId: postId,
-                        intent: .comments,
-                        context: makeStoryContext(from: event)
-                    ))
-                } else {
-                    rightPanelRoute = .postDetail(
-                        postId,
-                        nil,
-                        showComments: true,
-                        commentId: event.commentId,
-                        parentCommentId: event.parentCommentId
-                    )
-                }
+                routeSocialNotification(
+                    postId: postId,
+                    postType: event.postType,
+                    contentType: event.metadata?.contentType,
+                    type: event.notificationType,
+                    commentId: event.commentId,
+                    parentCommentId: event.parentCommentId,
+                    storyContext: makeStoryContext(from: event)
+                )
             }
 
-        case .storyReaction, .statusReaction:
-            if let postId = event.postId {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .reactions,
-                    context: makeStoryContext(from: event)
-                ))
-            }
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            rightPanelRoute = .userStats
+
+        case .legacyAffiliateSignup:
+            rightPanelRoute = .affiliate
+
+        case .securityAlert, .loginNewDevice, .legacySystemAlert,
+             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+            rightPanelRoute = .notifications
 
         default:
-            break
+            // Parité avec le chemin push : ~30 types (familles legacy message,
+            // communauté, appels…) tombaient ici en tap MUET. Toute entité
+            // conversationnelle → conversation (avec highlight), sinon entité
+            // sociale → surface post/story/reel.
+            if let conversationId = event.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId, highlightMessageId: event.messageId)
+            } else if let postId = event.postId, !postId.isEmpty {
+                routeSocialNotification(
+                    postId: postId,
+                    postType: event.postType,
+                    contentType: event.metadata?.contentType,
+                    type: event.notificationType,
+                    commentId: event.commentId,
+                    parentCommentId: event.parentCommentId,
+                    storyContext: makeStoryContext(from: event)
+                )
+            }
         }
     }
 
@@ -368,55 +380,43 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
-            if let postId = payload.postId, !postId.isEmpty {
-                rightPanelRoute = .postDetail(postId)
-            }
-
-        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
-            if let postId = payload.postId, !postId.isEmpty {
-                if isStoryPost(postId: postId, postType: payload.postType) {
-                    router.push(.storyNotificationTarget(
-                        storyId: postId,
-                        intent: .comments,
-                        context: makeStoryContext(from: payload)
-                    ))
-                } else {
-                    rightPanelRoute = .postDetail(
-                        postId,
-                        nil,
-                        showComments: true,
-                        commentId: payload.commentId,
-                        parentCommentId: payload.parentCommentId
-                    )
+        // Guideline 5 (MIIT) — China-region incoming-call push, same
+        // rationale/wiring as RootView.navigateFromNotification: no CallKit,
+        // no PushKit VoIP registration there, so this tap is the only way to
+        // engage the call. A plain deep-link would neither negotiate WebRTC
+        // nor show an answer UI.
+        case .incomingCallAlert:
+            guard let callId = payload.callId, !callId.isEmpty else {
+                if let conversationId = payload.conversationId, !conversationId.isEmpty {
+                    navigateToConversationById(conversationId)
                 }
+                return
             }
+            CallManager.shared.handleIncomingCallNotification(
+                callId: callId,
+                fromUserId: payload.callerUserId ?? "",
+                fromUsername: payload.callerName ?? payload.senderUsername ?? "",
+                isVideo: payload.isVideoCall,
+                iceServers: VoIPPushManager.parseIceServers(payload.iceServersJSON),
+                conversationId: payload.conversationId
+            )
 
-        case .storyReaction, .statusReaction:
+        // ===== SOCIAL CONTENT =====
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
+             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
+             .storyReaction, .statusReaction,
+             .storyNewComment, .friendStoryComment, .storyThreadReply,
+             .friendNewStory, .friendNewMood:
             if let postId = payload.postId, !postId.isEmpty {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .reactions,
-                    context: makeStoryContext(from: payload)
-                ))
-            }
-
-        case .storyNewComment, .friendStoryComment, .storyThreadReply:
-            if let postId = payload.postId, !postId.isEmpty {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .comments,
-                    context: makeStoryContext(from: payload)
-                ))
-            }
-
-        case .friendNewStory, .friendNewMood:
-            if let postId = payload.postId, !postId.isEmpty {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .view,
-                    context: makeStoryContext(from: payload)
-                ))
+                routeSocialNotification(
+                    postId: postId,
+                    postType: payload.postType,
+                    contentType: payload.contentType,
+                    type: type,
+                    commentId: payload.commentId,
+                    parentCommentId: payload.parentCommentId,
+                    storyContext: makeStoryContext(from: payload)
+                )
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
@@ -428,7 +428,9 @@ extension iPadRootView {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
-            break
+            // Pas d'entité cible : ouvrir le panneau notifications plutôt
+            // qu'un tap muet.
+            rightPanelRoute = .notifications
         }
     }
 
@@ -442,6 +444,7 @@ extension iPadRootView {
             }
             if let messageId = highlightMessageId {
                 router.pendingHighlightMessageId = messageId
+                router.pendingHighlightConversationId = conversationId
             }
             openConversation(conv)
             return
@@ -462,6 +465,7 @@ extension iPadRootView {
                     }
                     if let messageId = highlightMessageId {
                         router.pendingHighlightMessageId = messageId
+                        router.pendingHighlightConversationId = conversationId
                     }
                     openConversation(conv)
                     return
@@ -520,28 +524,51 @@ extension iPadRootView {
         }
     }
 
-    // MARK: - Story Notification Heuristics
+    // MARK: - Social Notification Routing
     //
-    // Mirrors the iPhone (RootView) heuristic: a `.postComment` /
-    // `.commentReply` notification routes to the dedicated story
-    // notification screen when (a) the gateway tagged the post as
-    // `metadata.postType == "STORY"`, OR (b) the local cache holds a post
-    // with a non-nil `expiresAt` (which is, by definition, a story).
-    // Both signals are best-effort — the dedicated screen still degrades
-    // gracefully (`expired` empty state) for posts that no longer exist.
+    // Single decision point shared with iPhone (`RootView.socialSurface`) via
+    // the pure `NotificationContentRouter`: the metadata discriminant
+    // (`postType`, or `contentType` for the `friend_new_*` family) decides the
+    // surface, the notification type only decides the intent.
+    //
+    // iPad has no immersive reel viewer, so a réel lands on the universal
+    // `.postDetail` surface (which renders it) — but it is NEVER sent to the
+    // story notification screen, which would resolve an unrelated story.
 
-    func isStoryPost(postId: String, postType: String?) -> Bool {
-        // A reel is never a story: an explicit `REEL` tag must win over the
-        // cache-expiry heuristic below, otherwise a reel comment/reaction could
-        // be misrouted into the story notification screen (the "story view opens
-        // with the wrong post" bug). iPad has no immersive reel viewer, so reels
-        // fall through to the universal `.postDetail` surface, which renders them.
-        if postType?.uppercased() == "REEL" { return false }
-        if postType?.uppercased() == "STORY" { return true }
-        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
-            return true
+    func routeSocialNotification(
+        postId: String,
+        postType: String?,
+        contentType: String?,
+        type: MeeshyNotificationType,
+        commentId: String?,
+        parentCommentId: String?,
+        storyContext: StoryNotificationContext
+    ) {
+        let surface = NotificationContentRouter.surface(
+            postType: postType,
+            contentType: contentType,
+            notificationType: type,
+            storyLifecycleHint: StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
+        )
+
+        switch surface {
+        case .story:
+            router.push(.storyNotificationTarget(
+                storyId: postId,
+                intent: NotificationContentRouter.intent(for: type),
+                context: storyContext,
+                commentId: commentId,
+                parentCommentId: parentCommentId
+            ))
+        case .reel, .post:
+            rightPanelRoute = .postDetail(
+                postId,
+                nil,
+                showComments: NotificationContentRouter.opensComments(type),
+                commentId: commentId,
+                parentCommentId: parentCommentId
+            )
         }
-        return false
     }
 
     // Push payloads + socket events don't carry the typed metadata that

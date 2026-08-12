@@ -4,19 +4,320 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
-**Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
-Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
-`User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`
-`RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options = full
-`LanguageData.allLanguages`; primary/system language hidden unless it is the stored choice;
-trimmed/case-insensitive marking + label lookup + name/nativeName/code search; empty query → all; unknown
-code → no label, no crash). Wiring reuses `edit-profile-optimistic` — **no new store**:
-`SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
-UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint + durable `UPDATE_PROFILE` + wake
-worker on real `cmid`) + UI-only `setRegionalLanguageQuery`; `SettingsScreen` searchable flag+native-name
-dialog (EN/FR/ES/PT). +24 tests, `assembleDebug`+`testDebugUnitTest` green, diff = `apps/android` only.
-Next: the worker drain-list Robolectric test (PROGRESS.md "Next" #5).
+## This loop (Phase: Chat §C) — slice `chat-unread-separator` ✅
+The "new messages" boundary above the first unread message on open — completes the "unread separator" pending
+sub-item of the §C date-headers box. Pure `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?`
+SSOT (port of iOS `unreadStartIndex = messages.count - initialUnreadCount`, guarded by `!candidate.isMe`: boundary
+at `size-unreadCount`, `null` if nothing unread / empty window / count>window / boundary on an outgoing message).
+`ChatListItem.UnreadSeparator` row + `buildChatListItems(firstUnreadId = null)` inserts one separator directly above
+the matching message (below its day header). `ChatViewModel` captures the cached `unreadCount` BEFORE `markConversationRead`
+zeroes it, then latches the boundary once (a later message never shifts it); `ChatScreen` renders an accent-coherent
+`UnreadSeparatorRow` (EN/FR/ES/PT). +17 tests (8 marker, +5 list-item, +2 VM); mutation-proven (drop the `isOutgoing`
+guard → exactly the own-at-boundary test fails, `8 completed, 1 failed`). Full `assembleDebug testDebugUnitTest` green.
+Diff = `apps/android` only. Reviewer PASS. Next: §C joined banner / unread-scroll-to-first affordance, `CategoryPickerField`,
+`OnboardingFlowView`, or Kover coverage-gate infra.
+
+## Prior loop (Phase: Conversations §B) — slice `conversation-drag-to-category` ✅
+Conversation → user-category (re)assignment — closes the last box on the §B "Sectioned list … +
+drag-to-category" line (reducer/hydration/socket shipped 2026-07-26 had no way to *move* a conversation into a
+category). Pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT (idempotent:
+same → `Unchanged`, else `AssignTo(id)`, port of iOS `setCategory`); `ConversationRepository.setCategoryOptimistic`
+via the shared `updatePreferencesOptimistic` (cache re-buckets instantly, outbox snapshot flushes); `categoryId`
+threaded through `ConversationPrefsPayload` + `ConversationPreferencesUpdate` → `PUT /user-preferences/conversations/:id`
+(gateway already accepts it, `null` = uncategorize, broadcasts back); VM `reassignCategory` + long-press context-menu
+"Move to category" (current checked, en/fr/es/pt). +7 tests, idempotency-guard mutation-proven (always-`AssignTo` →
+exactly the 2 no-op tests fail). Full `assembleDebug testDebugUnitTest` green (4m 51s, 943 tasks, APK). Diff =
+`apps/android` only. Reviewer PASS. Uncategorize (`categoryId = null`) deferred: `explicitNulls = false` drops a null
+field so it needs an explicit-null `PUT`.
+
+## Prior loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
+Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical
+reaction-removal event into the live mood-statuses bar (a SOTA symmetry iOS's `StatusViewModel` bar handlers lack).
+`:core:model` `SocketStatusUnreactedData{statusId,userId,emoji}`; `:sdk-core` `SocialSocketManager.statusUnreacted`
+flow + `listen("status:unreacted")`; `:feature:feed` pure `StatusBarListState.unreacted` reducer (decrement, clamp ≥0,
+drop spent bucket, inert on absent/no-such-reaction) + `StatusesViewModel` fold skipping the un-reactor's own echo.
++8 tests, mutation-proven own-echo guard. `:app:assembleDebug` + touched test modules green. Diff = `apps/android`
+only. Reviewer PASS. Next: §H Calls WebRTC core, or the tracked Kover 90% coverage-gate infra.
+
+## Prior loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
+**@-mention autocomplete — debounced remote directory merge.** Completes §Chat "@-mention autocomplete (debounced
+API + local merge)" (local roster shipped 2026-07-06; this is the online half). Extends the existing pure
+`:feature:chat` `ChatMention` SSOT with `shouldQueryRemote` (≥2 trimmed chars) + `mergeSuggestions` (local-first
+dedup: locals win, remote appended when its handle — trimmed, case-insensitive — is non-blank, not local, not a
+remote dup), plus a staleness-guarded `MentionAutocompleteState.applyRemote(query, remote)` reducer (folds only while
+`query == activeQuery` — the pure equivalent of iOS's `Task.isCancelled`). Protocol-injected `MentionSearch` +
+`DirectoryMentionSearch` over `UserRepository.searchUsers` (`@Binds` module; failure → empty, roster still serves).
+`ChatViewModel` fires a 300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous `Job`),
+excludes self, applies via `applyRemote`; cancelled on paste-capture + select. Panel binding unchanged (merged rows
+render below the roster — SSOT). +20 tests (5 gate, 8 merge, 3 applyRemote, 4 VM), mutation-checked (dropping the
+dedup/blank guard fails exactly the 6 dedup/blank/merge cases). `:feature:chat:testDebugUnitTest` green; full
+`assembleDebug testDebugUnitTest` APK assembles + all touched modules green (lone failure = documented `:sdk-core`
+DataStore flake, green in isolation). Diff = `apps/android` only. Reviewer PASS. Next: audio-over-socket send
+(`message:send-with-attachments` + voice-pill bytes), a file/photo picker over the REST attachment chain, the
+conversation info sheet, or advance to §Feed.
+
+## Prior loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
+**Live-location socket start/update/stop wiring.** Feeds the previously-unfed `LiveLocationSessions` reducer from
+the socket. Ships `:core:model` pure `LiveLocationEventFold` (`started`/`updated`/`stopped` fold the already-modelled
+`Location.kt` wire DTOs into the reducer, resolving ISO dates via the shared `isoToEpochMillisOrNull` and applying
+iOS's exact fallbacks — `expiresAt ?? now+duration·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive
+window→`now` — with `now` threaded in for purity, surpassing iOS's internal `Date()`). Wired real (exempt glue):
+`MessageSocketManager` gains three `liveLocation*` flows + `location:live-*` listeners; `ChatViewModel` collects
+them (conversation-scoped) into `ChatUiState.liveLocations` and exposes `liveLocationBadges`; `ChatScreen` renders a
+self-terminating accent-coherent `LiveLocationBadge` per active session. +17 tests (fold 13, VM 4), mutation-checked
+(anchoring the expiry fallback on `startedAt` vs `now` fails exactly the boundary test — `now` set 10 min past
+`startedAt`). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android`
+only. Reviewer PASS. Next: in-app browser (Chrome Custom Tabs) + rich-card image loading, or the fullscreen
+map/directions for live location (needs Maps SDK), or the attachment send pipeline.
+
+## Prior loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
+**Large-paste detection → clipboard-content preview.** Advances the §Chat "Large-paste detection →
+clipboard-content attachment" line to detection+preview done. Ships `:feature:chat` pure `LargePasteDetector`
+(fires when composer text grows past 2000 chars **and** jumps >250 chars in one edit — readable port of iOS
+`handleClipboardCheck`'s `delta = 2·growth` heuristic) + clock-injected `ClipboardContent` value type
+(`of(text, nowMillis)` → id / charCount / 200-char truncated preview; surpasses iOS's twin `Date()` reads +
+id-only equality). Wired real (exempt glue): `ChatViewModel.onDraftChange` folds a captured paste into
+`ChatUiState.clipboardContent` + clears the draft; `removeClipboardContent` discards it; `ChatComposer` shows an
+accent-tinted `ClipboardContentPreview` chip (en/fr/es/pt). +24 tests (detector 13, model 8, VM 3), mutation-checked
+(growth boundary `>`→`>=` fails exactly the boundary test). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon
+recipe, 5m14s), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS. Next: send the captured content
+as a real clipboard_content attachment (gated on the attachment send pipeline), or live-location socket wiring, or
+the in-app browser / rich-card image loading link-preview follow-ups.
+
+## Prior loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
+**Floating preview-bubble overlay layout law — pure SSOT + real lifted hero.** Completes the §Chat "Long-press
+overlay menu" line (all four parts now done: quick-reactions + action-grid + drag-to-detail + preview bubble). Ships
+`:feature:chat` `MessageOverlayLayout.compute(...)` — a faithful port of the iOS `MessageOverlayMenu` "native-lean"
+`nl*` geometry: stacks `[emoji bar]·gap·[preview hero]·gap·[action menu]` into a `MessageOverlayCluster` (scale +
+preview rect + emoji/menu anchor points), with a two-stage scale cascade (height cap at 320px/floor 0.55 → fit
+squeeze/floor 0.4, band floored at 160), a trailing/leading unclamped hero anchor, a safe-area cluster-top clamp,
+and independent emoji/menu X clamps. +17 tests, mutation-checked (swap anchor branches → exactly 3 red; the check
+caught a symmetric-at-scale-1.0 anchor blind spot in the first draft → fixed by testing on a scaled preview). Wired
+for real in `ChatScreen` (exempt glue): each row's window frame captured via `onGloballyPositioned` into a plain
+`bubbleFrames` map; on long-press a new `MessageOverlayPreviewHero` Popup lifts a scaled copy of the tapped
+`MessageBubble` above the action sheet, positioned by the law (frame-miss skips gracefully). Full `assembleDebug
+testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS.
+Next: universal composer / voice-recording pill (waveform core already exists), or the in-overlay audio/video preview.
+
+## Prior loop (Phase: Chat) — slice `chat-composer-effects-picker` ✅
+**Composer effects picker — pure presentation SSOT + real send wiring.** The whole pure effects pipeline
+(`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) and the effects-ready `sendOptimistic` already
+existed, but nothing armed or sent effects — the composer had no picker. Ships `:core:model`
+`MessageEffectsPickerPresenter.build(effects)` (+ `MessageEffectOption`/`MessageEffectSection` catalog): a pure
+derivation of the whole sheet state the iOS `EffectsPickerView` recomputes inline (per-chip `isActive`, ephemeral
+`showEphemeralDuration`/`isSelected` under flag authority, `activeCount` popcount, `showSummary`). +16 tests,
+mutation-checked (force `showEphemeralDuration=true` → exactly 3 fail). Wired for real in `:feature:chat`:
+`ChatUiState.pendingEffects`/`isEffectsPickerOpen`, ViewModel intents (`toggleEffect`/`selectEphemeralDuration`/
+`clearEffects`/`open`/`dismiss` — dismiss keeps the selection), `send()` stamps `pendingEffects` onto
+`sendOptimistic(effects=…)` then disarms; `ChatComposer` AutoAwesome button opens the `EffectsPickerSheet` (exempt
+Compose glue, accent chips, en/fr/es/pt). +7 ViewModel tests. Full `assembleDebug testDebugUnitTest` green, APK
+produced, diff = `apps/android` only. Reviewer PASS. Next: propagate the already-decoded `ApiMessage.effects` into
+`BubbleContent` so `Modifier.messageEffects` fires on received messages; or the one-shot appearance rendering.
+
+## Prior loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+**ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
+`me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
+`thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,
+`hasAlpha`, `isLandscape`, `decode`→`ThumbHashImage(w,h,rgba)`) — YCoCg→RGB inverse-DCT over primitives, no
+Android `Bitmap`. Surpasses the reference: rejects a hash too short for the region it reads
+(`IllegalArgumentException` vs silent OOB) + clamps the raster to ≥1×1 (no zero-sized image from a degenerate
+header). +21 tests. `:core:model` tests green; `:app:assembleDebug` → BUILD SUCCESSFUL, APK produced.
+Two-mutation RED check (flip YCoCg blue reconstruction + drop portrait aspect scale) failed exactly the 4
+relevant tests. Reviewer PASS, diff = `apps/android` only. Full-tree tests show only 2 pre-existing flaky
+`:sdk-core` DataStore-timeout failures (pass on retry; unrelated module). The raster→`Bitmap` wrap + Coil
+placeholder wiring + ThumbHash *encoder* (slide generation) remain app-side/next. Next: raster→`Bitmap` + Coil
+placeholder consuming `ThumbHash.decode`; ThumbHash encoder; app-side Bitmap re-encode consuming
+`ImageCompressionPlan`; or app-side voice recorder pill consuming the waveform core.
+
+## Prior loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅ (merged PR #1896)
+**Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
+shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
+`AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
+guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory` + initial 15-zero fill),
+`WaveformInterpolator.interpolate` (levels→`barCount` linear-blend strip in one pass, ports
+`UniversalComposerBar.interpolatedLevel`, degenerate cases pinned). +28 tests (normalizer 7, window 11,
+interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
+produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
+exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
+`Canvas` paint remain app-side glue.
+
+## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
+**Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`
+over an **Android-accurate** curated catalog (Compose/AndroidX/Material/Hilt/Coroutines/Serialization/Coil/OkHttp/
+Retrofit/Media3/Room/Timber/ZXing/Firebase/Socket.IO-java/WebRTC-android) — the libs that actually ship, not iOS's
+Swift deps. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.licenses`): `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/
+OTHER, decl order = render order), `OpenSourceLicenseResolver.resolvable` (launchability gate, `http(s)://` only —
+narrowed vs Support's `mailto:`), `OpenSourceLicensePresentationBuilder.build` (**surpasses iOS's flat list**:
+groups by type in enum order, sorts each group by name case-insensitively, drops empty groups, excludes
+non-launchable up front), `OpenSourceLicenseCatalog` (curated list + `groups()`). `LicensesScreen` glue:
+accent-coded per-family section cards, tappable repo rows via `ACTION_VIEW`. Wired a new **Open source licenses**
+row in Settings → About (`Routes.LICENSES`). +26 tests (resolver 9, builder 8, catalog 7). Full `:app:assembleDebug`
++ all-module tests green (6m36s, APK produced); two-mutation RED check (break sort + widen resolver to `mailto:`)
+failed exactly the 3 relevant tests. Reviewer PASS, diff = `apps/android` only, EN/FR/ES/PT. **⚠ Merge held:**
+PR #1894 CI is red only on a pre-existing, unrelated gateway failure (`calls-routes.test.ts`, 3 tests) that also
+fails on main's own push CI (sha `6d0b17d`) — can't fix without touching gateway prod logic (out of scope), and
+hard rule = never merge past red CI. Will squash-merge once main's gateway suite is green. Next: chat media view
+consuming `MediaAutoDownloadDecider`; §K crop/resize/compress before upload; or a §K row (device-sessions / 2FA /
+voice-cloning / blocked-users).
+
+## Prior loop (Phase: Settings §L) — slice `settings-legal-documents` ✅
+**Terms of Service + Privacy Policy** — port of iOS `TermsOfServiceView` + `PrivacyPolicyView`, **unified**
+into one data-driven screen keyed by `LegalDocumentKind`, wiring the two previously **dead-end** Settings → About
+rows. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.legal`): `LegalDocumentKind` (route `arg` + `fromArg` parser,
+null on blank/unknown), `LegalSectionKey` (9 ToS + 7 Privacy), `LegalDocumentCatalog.sections`/`.numbered`
+(ordered keys + iOS `index + 1` numbering). `LegalDocumentScreen` glue: numbered Info-blue cards, content resolved
+app-side across values-* → **automatic EN/FR/ES/PT**, surpassing iOS's manual fr/en picker. +14 tests
+(catalog 7 order/numbering/partition invariants, kind 7 parse/case/trim/null). `:app:assembleDebug` + all-module
+`testDebugUnitTest` green; one-mutation RED check (drop `TOS_CONTACT`) failed exactly the order+partition tests.
+Reviewer PASS, diff = `apps/android` only. Next: remaining §L static screens (Help & Support; open-source
+licenses — Android-accurate curated catalog), the chat media view consuming `MediaAutoDownloadDecider`, or §K
+crop/resize/compress before upload.
+
+## Prior loop (Phase: Profile §K) — slice `profile-avatar-banner-upload` ✅
+**Avatar + banner upload** — port of iOS `AttachmentUploader` + `UserService.updateAvatar`, generalised to a
+banner (iOS uploads only a single compressed JPEG avatar). Four pure `:core:model` SSOTs: `ImageUploadTarget`
+(AVATAR/BANNER + per-target `maxBytes` 8/12 MiB), `ImageUploadValidator` (priority gate empty → non-image →
+oversize → Accepted; MIME parsed before `;` + case-folded; a 10 MiB image passes as banner, fails as avatar),
+`AvatarBannerUpload.firstUploadedUrl` (first non-blank URL else null), `AvatarBannerApply` (optimistic-paint
+merge mirroring `ProfileEditApply`). Dedicated `AvatarBannerUploadViewModel` validates (reject → typed
+`ImageUploadError`, no network) → uploads via the existing `MediaRepository`/`MediaApi` → optimistic session
+paint → confirms via existing `UserRepository.updateAvatar`/`updateBanner` → adopts server user / rolls back on
+failure; single-flight + cancellation-safe. `ProfileScreen`: tappable edit-mode avatar (Indigo camera badge +
+spinner) via `PickVisualMedia` + "Change cover photo" banner button, snackbar errors, EN/FR/ES/PT; added
+`androidx.activity.compose` to the module. +36 tests (validator 14, apply 4, url-select 4, VM 14); one-mutation
+RED check on the size branch confirmed the size tests. Full `assembleDebug` + all-module tests green, diff =
+`apps/android` only. Next: crop/resize/compress before upload (§K polish); live `ConnectivityManager` monitor
+(§L); or another §K/§L row (crash diagnostics, static pages, device-sessions/2FA/voice-cloning).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-cache` ✅
+**Media cache management** — port of iOS `DataStorageView` + `CacheCoordinator.clearAll`, **surpassing iOS**: iOS
+shows **no sizes** and offers only a single "clear all" (its own audit flags a size readout as a future TODO;
+`estimatedDiskBytes()` is unused); Android shows the **total + every per-category size** and clears **per-category
+or all**. Two pure `:core:model` SSOTs: `ByteSizeFormatter` (binary KB/MB/GB, adaptive 1-decimal, negatives→0,
+sub-KB still in KB — ports the shared iOS `ByteCountFormatter` convention) + `MediaCacheReport`/`MediaCacheCategory`
+(per-category bytes, `of` normalisation + clamp, derived `totalBytes`/`isEmpty`/`nonEmptyCategories`, optimistic
+`withCleared`). `:feature:settings` pure `MediaCacheScanner` (recursive `walkTopDown` size + content-wipe-keep-dir,
+missing-dir = 0/no-op, tested on real temp dirs), `MediaCacheStore`/`AndroidMediaCacheStore` (4 categories →
+`cacheDir/image_cache` [Coil default, populated today] + `cacheDir/media/{audio,video,thumbnails}` [pipeline-ready];
+`Dispatchers.IO`), `MediaCacheViewModel` (init scan, SWR refresh, optimistic per-/all-category clear with snapshot
+rollback, single-flight guard, SCAN/CLEAR mapping, cancellation-safe) + `MediaCacheScreen` (amber info card, Indigo
+total card, per-category rows with inline clear, destructive clear-all behind an `AlertDialog`). Wired the two
+previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`. +43 tests
+(ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, VM 12); full `assembleDebug` + all-module tests for
+verification, diff = `apps/android` only, EN/FR/ES/PT. Next: live `ConnectivityManager` monitor + first pipeline
+consumer of the media policy engine; avatar/banner upload (§K); or another §L row (crash diagnostics, static pages).
+
+## Prior loop (Phase: Settings §L) — slice `settings-data-export` ✅
+**GDPR data export** — port of iOS `DataExportView` + `DataExportService`, surpassing iOS twice: iOS shared only
+the summary counts (dropping the real payload) and shared truncatable text — Android shares the **full** payload
+as a real **file** via FileProvider. Three pure `:core:model` SSOTs: `DataExportRequestBuilder` (always-on
+`profile` + `types` order + format token, mirrors gateway `parseTypes`), `DataExportData` (full response model,
+timestamps as raw ISO strings → lossless round-trip), `DataExportFileBuilder` (safe fileName from the ISO
+`exportDate`; `text/csv` on a non-empty server `csv` map else a JSON re-encode of the whole payload). `:core:network`
+`DataExportApi` (`GET me/export`); `:sdk-core` `DataExportRepository` online + session-gated. `DataExportViewModel`
+(double-tap guard; any selection change invalidates a stale artifact; re-select = inert; NETWORK/GENERIC mapping) +
+`DataExportScreen` (format picker + content toggles + success card whose Share writes to `cacheDir/exports` and
+launches the chooser). Added an app-module FileProvider (`${applicationId}.fileprovider` + `file_paths.xml`), wired
+Settings → Data "Export my data" (`Routes.DATA_EXPORT`). +34 tests (RequestBuilder 7, FileBuilder 8, DataDecode 3,
+Repository 4, VM 12); `:app:assembleDebug` + touched-module tests green (the 2 sdk-core DataStore-store failures are
+the documented parallel-load flake — green in isolation, untouched here), diff = `apps/android` only, EN/FR/ES/PT.
+Next: media cache management (§L), live `ConnectivityManager` monitor + first pipeline consumer of the media policy
+engine, or avatar/banner upload (§K).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
+**Media auto-download preferences** — port of iOS `MediaDownloadSettingsView` + the
+`MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor` trio. Pure `:core:model` SSOTs:
+`AutoDownloadPolicy` × `MediaKind` → `MediaDownloadPreferences` (per-kind policy, `policy`/`withPolicy` lenses,
+iOS defaults) + corruption-safe JSON codec + `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)`
+(4×4 truth table + offline gate) + `NetworkConditionResolver.resolveFromFlags(...)` (flag→condition; iOS's dead
+`isExpensive` dropped). Durable `MediaDownloadPreferencesStore` (`:sdk-core`, hydrate + self-heal). `MediaDownload-
+ViewModel` mirrors the store → immutable UI state, writes per-kind through the store — base read **inside** the
+launch so concurrent kind-edits never clobber, re-select = no-op. `MediaDownloadScreen`: accent-coherent per-kind
+`RadioButton` sections, reached from Settings → Data "Auto-download" (`Routes.MEDIA_DOWNLOAD`). +37 tests
+(engine 6, resolver 9, prefs/codec 10, store 7, VM 5); `:app:assembleDebug` + touched-module `testDebugUnitTest`
+green (sdk-core DataStore flake green on retry/isolation), diff = `apps/android` only, EN/FR/ES/PT.
+Next: live `ConnectivityManager` monitor over `NetworkConditionResolver` + first pipeline consumer of the engine,
+or avatar/banner upload (§K), or another §L row (Privacy, media cache, GDPR export).
+
+## Prior loop (Phase: Translation §D) — slice `feed-post-language-switch` ✅
+**Interactive per-post language switch** — the read-only feed flag strip is now **tappable** (tap a chip →
+switch the post's displayed language; tap the active chip → revert to the default Prisme resolution), mirroring
+the chat bubble. SSOT: the pure `LanguageFlagTapResolver` was **relocated `:feature:chat` → `:sdk-ui`** so chat
++ feed share one flag-tap rule. `FeedPostBuilder` gained override-aware `build(..., activeLanguageCode)` +
+`resolveActiveCode(post, prefs, override)` (pure, tested) driving content + strip highlight; `FeedViewModel`
+holds a per-post `activeLanguageOverride` StateFlow kept **outside** the cache stream (choice survives every
+refresh — instant-app) + `onPostFlagTap`; `FeedScreen` chips are `.clickable`. +19 tests (+8 `FeedPostBuilderTest`,
++5 `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest`); `:sdk-ui`+`:feature:feed`+`:feature:chat`
+`testDebugUnitTest` + `:app:assembleDebug` green, diff = `apps/android` only.
+Next: interactive `includeTranslatable` arm for posts (tap absent language → on-demand request, needs a
+post-translation path), the per-story timeline strip, or persisted translations across cold start (§D offline Prisme).
+
+## Prior loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
+**Per-post Prisme language flag strip** — the feed sibling of the chat `MessageLanguageStrip`. New pure
+`:sdk-ui` `PostLanguageStrip.build(...) → List<LanguageChip>` adapts a post's language-keyed
+`Map<code, ApiPostTranslationEntry>` into `LanguageResolver.TranslationLike` rows and **delegates to
+`MessageLanguageStrip`** (SSOT — one strip algorithm). Read-only default: original + configured languages that
+have content; **empty** when the post isn't translated for the viewer (Prisme rule 1), the same predicate
+driving `ApiPost.isTranslated`. Wired into `FeedPostBuilder`/`FeedPostPresentation` (`languageStrip`, pure/
+tested) and rendered in `FeedScreen` as an accent-coherent chip strip (flag + active native name in the
+language colour), replacing the old binary "Translated" label. +15 tests (13 `PostLanguageStripTest`, +2
+`FeedPostBuilderTest`); full `assembleDebug` + all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: interactive `includeTranslatable` arm for posts (tap absent language → on-demand request), the per-story
+timeline strip, or persisted translations across cold start (§D "offline Prisme").
+
+## Prior loop (Phase: Translation §D) — slice `chat-message-detail-explorer` ✅
+**Per-message language explorer sheet** — the exhaustive Prisme view (iOS `MessageLanguageDetailView`). New
+pure `:sdk-ui` `MessageDetailExplorer.build(...) → MessageLanguageExplorer` projects the original-language
+banner + one row per explorable language: viewer's **configured** languages first (system → regional →
+custom), then the remaining candidates (default `LanguageData.allLanguagesCommonFirst`) — preference-led, not
+iOS's fixed 18-entry list. Each `LanguageExplorerRow` has a truncated preview, `hasContent`/`isTranslating`/
+`isSelected` + `canRetranslate`. `ChatViewModel` surfaces the in-flight `translatingLanguages` set into state,
+projects the model reactively into `ChatUiState.languageExplorer` (off a `latestMessagesFlow` mirror), reuses
+`onFlagTap` for select/translate, and adds `onExplorerRetranslate` (force refetch even with content). Entry:
+message-actions sheet → "Explore languages" → `MessageLanguageExplorerSheet` (accent-coherent, single-sheet
+gesture). +31 tests (21 `MessageDetailExplorerTest`, +10 `ChatViewModelTest`); full `assembleDebug` +
+all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: progressive **audio-voice translation** (`audio:translation-ready` → cloned-voice playback, needs
+BubbleAudio UI), or the per-post translation strip.
+
+## Prior loop (Phase: Translation §D) — slice `chat-compose-language-detection` ✅
+**Source-language stamping from the composed text (Prisme §D).** `ChatViewModel.send()` stamped
+`originalLanguage = user.systemLanguage ?: "fr"` — it ignored the resolution chain (regional/custom-only
+users mis-stamped `fr`) and never inspected what was typed. New pure `:core:model`
+`ComposeLanguageDetector.detect(text, fallback)` ports the shared web heuristic
+(`apps/web/utils/language-detection.ts`: `detectLanguage` script/stopword scoring + `detectComposeLanguage`
+guards — strip URLs, require ≥4 letters, best-score-or-fallback). `send()` now stamps
+`detect(text, fallback = LanguageResolver.resolveUserLanguage(user))` (system → regional → custom → `fr`,
+never device locale); result is always a `LanguageData`-supported code or the fallback. Forward path
+untouched. +19 tests (17 `ComposeLanguageDetectorTest`, +2 `ChatViewModelTest`); full `assembleDebug` +
+all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: the message detail explorer sheet (per-language translate/retranslate), or progressive **audio-voice
+translation** (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI).
+
+## Prior loop (Phase: Translation §D) — slice `chat-on-demand-translate` ✅
+**On-demand translation of an absent language** — makes the resolver's `RequestTranslation` arm live. The
+inline strip now surfaces the viewer's configured content languages that lack content as **translatable
+chips** (`LanguageChip.isTranslatable`, dimmed flag + "＋"), opt-in via `MessageLanguageStrip.build(...,
+includeTranslatable)` (default false keeps the read-only projection byte-identical → every prior strip/builder
+test green unchanged); `BubbleContentBuilder` opts in. New `:sdk-core` `MessageRepository.requestTranslation(
+messageId, target)` blocking-translates the original text (`TranslationApi`), merges via
+`MessageTranslationMerge`, no outbox (derived server truth); returns false (inert) on unknown/deleted/blank-
+target/blank-result/network-fail/idempotent. `ChatViewModel` wires `RequestTranslation` → request → activate,
+with an in-flight guard (no duplicate translate on a second tap). +19 tests (7 `MessageLanguageStripTest`, 1
+`BubbleContentBuilderTest`, 7 `MessageRepositoryTest`, 4 `ChatViewModelTest`), `assembleDebug` +
+sdk-ui/sdk-core/feature:chat unit tests green, diff = `apps/android` only.
+Next: the full detail explorer sheet, or progressive **audio-voice translation** (`audio:translation-ready` →
+cloned-voice playback, needs BubbleAudio UI).
+
+## Prior loop (Phase: Chat §C) — slice `chat-typing-in-control` ✅
+**Typing folded into the scroll-to-bottom control** — pure `:feature:chat`
+`ScrollControlContent.of(affordance, typing)` SSOT (Hidden/Typing/Unread/Plain) with **typing taking priority
+over the unread count** (iOS `ConversationScrollControlsView` rule); rendered as an accent `TypingPill`. The
+`TypingLabel`→string mapping was extracted to a shared `typingLabelText` reused by the inline `TypingIndicator`
+(DRY). Reuses the existing `TypingLabel`/`TypingParticipants` cores — no new roster logic. +10 tests,
+`:feature:chat:testDebugUnitTest` green, diff = `apps/android` only.
+Next: `chat-typing-header` (typing under the conversation title) or resume Profile/Settings §K/§L
+(PROGRESS.md "Next").
 
 ## Prior loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
 **Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/

@@ -58,6 +58,11 @@ struct MessageViewsDetailView: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
+    // Historique local des tentatives d'envoi (spec 2026-07-08
+    // message-send-failure-retry-flow) — vide pour les messages reçus
+    // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
+    @State private var sendAttempts: [SendAttemptRecord] = []
+
     private var availableViewsFilters: [ViewsFilter] {
         var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
         let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
@@ -71,6 +76,7 @@ struct MessageViewsDetailView: View {
         viewsTabContent
             .onAppear {
                 Task {
+                    await loadSendAttempts()
                     await loadReadStatus()
                     await loadAttachmentStatuses()
                 }
@@ -172,6 +178,13 @@ struct MessageViewsDetailView: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // The count is shown visually and the active filter is otherwise
+        // signalled by color alone — surface both to VoiceOver (explicit label
+        // carries the count, .isSelected carries the active state) so no
+        // information is lost to non-sighted users (HIG: never rely on color to
+        // convey state). Mirrors MessageReactionsDetailView.reactionFilterCapsule.
+        .accessibilityLabel(count.map { "\(filter.label), \($0)" } ?? filter.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -269,6 +282,124 @@ struct MessageViewsDetailView: View {
                     .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if !sendAttempts.isEmpty {
+                sendAttemptsCard(accent: accent)
+            }
+        }
+    }
+
+    // MARK: - Historique d'envoi (tentatives locales)
+
+    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
+    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
+    static func sendAttemptCountLabel(_ count: Int) -> String {
+        String(
+            localized: "message-detail.send-history.attempt-count",
+            defaultValue: "\(count) \(count == 1 ? "attempt" : "attempts")",
+            bundle: .main
+        )
+    }
+
+    private func sendAttemptsCard(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(accent.opacity(0.7))
+                Text(String(localized: "message-detail.send-history.title", defaultValue: "Send history", bundle: .main))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Text(Self.sendAttemptCountLabel(sendAttempts.count))
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            if let first = sendAttempts.first {
+                metaInfoRow(
+                    icon: "paperplane",
+                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1st attempt", bundle: .main),
+                    value: formatDateTimeFR(first.startedAt),
+                    accent: accent
+                )
+            }
+
+            VStack(spacing: 0) {
+                ForEach(sendAttempts, id: \.attemptNumber) { attempt in
+                    sendAttemptRow(attempt, accent: accent)
+                    if attempt.attemptNumber != sendAttempts.last?.attemptNumber {
+                        metaDivider
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(accent.opacity(0.1), lineWidth: 0.5)
+                )
+        )
+    }
+
+    private func sendAttemptRow(_ attempt: SendAttemptRecord, accent: Color) -> some View {
+        let isSuccess = attempt.outcome == SendAttemptRecord.Outcome.success.rawValue
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.caption2.weight(.medium))
+                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
+                .frame(width: 16)
+                .padding(.top, 1)
+                .accessibilityLabel(isSuccess
+                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Succeeded", bundle: .main)
+                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Failed", bundle: .main))
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Attempt \(attempt.attemptNumber)", bundle: .main))
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(sendAttemptTransportLabel(attempt.transport))
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(accent.opacity(0.8))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(accent.opacity(0.1)))
+                }
+                if let errorMessage = attempt.errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.caption2)
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+
+            Text(formatTimeWithSecondsFR(attempt.startedAt))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundColor(theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func sendAttemptTransportLabel(_ transport: String) -> String {
+        switch SendAttemptRecord.Transport(rawValue: transport) {
+        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Real-time", bundle: .main)
+        case .rest: return "REST"
+        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Real-time fallback", bundle: .main)
+        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Auto retry", bundle: .main)
+        case nil: return transport
         }
     }
 
@@ -281,23 +412,23 @@ struct MessageViewsDetailView: View {
         switch level {
         case 3:
             icon = "eye.fill"
-            label = "Lu"
+            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
             color = .green
         case 2:
             icon = "checkmark.circle.fill"
-            label = "Distribue"
+            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
             color = accent
         case 1:
             icon = "checkmark"
-            label = "Envoye"
+            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
             color = accent.opacity(0.7)
         case 0:
             icon = "arrow.up.circle"
-            label = "Envoi..."
+            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
             color = theme.textMuted
         default:
             icon = "exclamationmark.circle"
-            label = "Echec"
+            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
             color = .red
         }
 
@@ -314,6 +445,7 @@ struct MessageViewsDetailView: View {
             Capsule()
                 .fill(color.opacity(0.12))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
@@ -354,7 +486,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Aucune confirmation de distribution", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "checkmark.circle.fill",
@@ -390,7 +522,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
-                    emptyStateView(icon: "eye.slash", text: "Personne n'a lu ce message", accent: accent)
+                    emptyStateView(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.fill",
@@ -427,7 +559,7 @@ struct MessageViewsDetailView: View {
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Tout le monde a recu le message", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a recu le message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.slash.fill",
@@ -473,7 +605,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: "Aucun audio attache", accent: accent)
+                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attache", bundle: .main), accent: accent)
                 }
             }
         }
@@ -497,7 +629,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: "Aucune video attachee", accent: accent)
+                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune video attachee", bundle: .main), accent: accent)
                 }
             }
         }
@@ -630,60 +762,80 @@ struct MessageViewsDetailView: View {
                     let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
                     let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
                     let count = isAudio ? user.listenCount : user.watchCount
+                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
 
-                    HStack(spacing: 10) {
-                        MeeshyAvatar(
-                            name: user.username,
-                            context: .userListItem,
-                            accentColor: contactColor,
-                            avatarURL: user.avatar
-                        )
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            MeeshyAvatar(
+                                name: user.username,
+                                context: .userListItem,
+                                accentColor: contactColor,
+                                avatarURL: user.avatar
+                            )
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(user.username)
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(user.username)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(theme.textPrimary)
 
-                            if let date = listenDate {
-                                Text(relativeDate(date))
-                                    .font(.caption2)
+                                if let date = listenDate {
+                                    Text(relativeDate(date))
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                }
+                            }
+
+                            Spacer()
+
+                            // Play count badge
+                            if let c = count, c > 1 {
+                                Text("\(c)x")
+                                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                                    .foregroundColor(accent.opacity(0.8))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(accent.opacity(0.08))
+                                    )
+                            }
+
+                            // Completion status
+                            if isComplete {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                        .font(.caption2.weight(.semibold))
+                                }
+                                .foregroundColor(MeeshyColors.success)
+                            } else if let pos = positionMs, pos > 0 {
+                                Text(formatDuration(pos / 1000))
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
                                     .foregroundColor(theme.textMuted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                    )
                             }
                         }
 
-                        Spacer()
-
-                        // Play count badge
-                        if let c = count, c > 1 {
-                            Text("\(c)x")
-                                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                                .foregroundColor(accent.opacity(0.8))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule().fill(accent.opacity(0.08))
-                                )
-                        }
-
-                        // Completion status
-                        if isComplete {
-                            HStack(spacing: 3) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption2)
-                                Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                    .font(.caption2.weight(.semibold))
+                        // Live playback progress — real-time position pushed via
+                        // `attachment-status:updated` (percentage/playPositionMs)
+                        // lands here through `attachmentStatuses` reload, same as
+                        // the mm:ss chip above.
+                        if !isComplete, fraction > 0 {
+                            HStack(spacing: 6) {
+                                ProgressView(value: fraction)
+                                    .progressViewStyle(.linear)
+                                    .tint(accent)
+                                Text("\(Int((fraction * 100).rounded()))%")
+                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                    .foregroundColor(theme.textMuted)
+                                    .frame(minWidth: 30, alignment: .trailing)
                             }
-                            .foregroundColor(MeeshyColors.success)
-                        } else if let pos = positionMs, pos > 0 {
-                            Text(formatDuration(pos / 1000))
-                                .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                .foregroundColor(theme.textMuted)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                )
+                            .padding(.leading, 54)
                         }
                     }
                     .padding(.vertical, 4)
@@ -714,21 +866,33 @@ struct MessageViewsDetailView: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the caption below already states the empty state.
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        // Read the whole empty state as the single caption, not "image" + text.
+        .accessibilityElement(children: .combine)
     }
 
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
-                .font(.system(size: 28, weight: .light))
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the error caption + Retry button carry the meaning.
+                // Not combined into one element: the button must stay independently
+                // focusable for VoiceOver.
+                .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -756,6 +920,12 @@ struct MessageViewsDetailView: View {
     /// les endpoints `/messages/:id/...` répondraient 400 "Validation failed".
     private var messageHasServerId: Bool {
         message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
+    }
+
+    private func loadSendAttempts() async {
+        guard sendAttempts.isEmpty else { return }
+        sendAttempts = (try? await DependencyContainer.shared.messagePersistence
+            .sendAttempts(messageId: message.id)) ?? []
     }
 
     private func loadReadStatus() async {
@@ -827,6 +997,10 @@ struct MessageViewsDetailView: View {
         date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
+    private func formatTimeWithSecondsFR(_ date: Date) -> String {
+        date.formatted(.dateTime.hour().minute().second())
+    }
+
     private func formatDuration(_ seconds: Int) -> String {
         let mins = seconds / 60
         let secs = seconds % 60
@@ -835,6 +1009,17 @@ struct MessageViewsDetailView: View {
 
     private func relativeDate(_ date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
+    }
+
+    /// Fraction (`0...1`) of an attachment consumed by a participant — ported
+    /// from the (now-deleted) `MessageInfoSheet.mediaFraction`. `complete`
+    /// always wins: a media marked complete reads as fully consumed
+    /// regardless of the last reported position (matches the server's own
+    /// `listenedComplete`/`watchedComplete` semantics).
+    static func positionFraction(positionMs: Int?, complete: Bool, durationMs: Int?) -> Double {
+        if complete { return 1 }
+        guard let durationMs, durationMs > 0, let positionMs else { return 0 }
+        return min(1, max(0, Double(positionMs) / Double(durationMs)))
     }
 }
 

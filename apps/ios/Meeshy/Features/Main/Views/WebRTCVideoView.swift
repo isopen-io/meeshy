@@ -20,7 +20,6 @@ struct WebRTCVideoView: UIViewRepresentable {
         if let track {
             track.add(view)
             context.coordinator.currentTrack = track
-            context.coordinator.renderer = view
         }
         return view
     }
@@ -55,7 +54,6 @@ struct WebRTCVideoView: UIViewRepresentable {
 
     class Coordinator {
         var currentTrack: RTCVideoTrack?
-        var renderer: RTCMTLVideoView?
     }
 }
 
@@ -69,6 +67,7 @@ struct CallVideoView: View {
     var body: some View {
         if let rtcTrack = track as? RTCVideoTrack {
             WebRTCVideoView(track: rtcTrack, mirror: mirror, contentMode: contentMode)
+                .accessibilityLabel(String(localized: "call.video.active", defaultValue: "Video en direct", bundle: .main))
         } else {
             if let unexpected = track {
                 let _ = videoLogger.error("CallVideoView: unexpected track type \(type(of: unexpected)) — expected RTCVideoTrack")

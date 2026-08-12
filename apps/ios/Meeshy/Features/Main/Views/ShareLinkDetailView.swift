@@ -50,6 +50,7 @@ struct ShareLinkDetailView: View {
                     .frame(width: 60, height: 60)
                 Image(systemName: isActive ? "link" : "link.badge.minus").font(.title)
                     .foregroundColor(isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
             }
             Text(link.displayName).font(.title3.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -70,6 +71,7 @@ struct ShareLinkDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 20)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var statusBadge: some View {
@@ -90,16 +92,13 @@ struct ShareLinkDetailView: View {
                          color: copiedFeedback ? MeeshyColors.success : MeeshyColors.shareAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "shareLink.a11y.copied", defaultValue: "Lien copié", bundle: .main))
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     withAnimation { copiedFeedback = false }
                 }
             }
-            actionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.shareAccent) {
-                guard let url = URL(string: link.joinUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                presentSheet(av)
-            }
+            shareActionButton
             actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Disable", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activate", bundle: .main),
                          icon: isActive ? "pause.circle" : "play.circle",
                          color: isActive ? MeeshyColors.warning : MeeshyColors.success) {
@@ -113,18 +112,56 @@ struct ShareLinkDetailView: View {
 
     private func actionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: icon).font(.title3)
-                        .foregroundColor(color)
-                }
-                Text(label).font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textSecondary)
-            }
+            actionButtonLabel(label, icon: icon, color: color)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 48, height: 48)
+                Image(systemName: icon).font(.title3)
+                    .foregroundColor(color)
+                    .accessibilityHidden(true)
+            }
+            Text(label).font(.caption2.weight(.medium))
+                .foregroundColor(theme.textSecondary)
+        }
+    }
+
+    /// Native share: `ShareLink` gives the activity sheet, the iPad popover
+    /// anchor and top-VC presentation for free — no manual
+    /// `UIActivityViewController` / window-hierarchy traversal (doctrine:
+    /// prefer first-party SwiftUI over UIKit, cf. `CommunityLinkDetailView`).
+    /// The `presentSheet(_:)` helper it replaces resolved its presenter from
+    /// `connectedScenes.first`; `connectedScenes` is an *unordered* `Set`, so
+    /// under iPad multitasking / Stage Manager it could target a background
+    /// scene and present the sheet on a window nobody can see.
+    ///
+    /// `ShareLink` is already a button, so it carries `.isButton` natively —
+    /// no `.accessibilityAddTraits` needed, unlike the `actionButton` siblings.
+    @ViewBuilder
+    private var shareActionButton: some View {
+        let shareLabel = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        if let url = URL(string: link.joinUrl) {
+            ShareLink(item: url) {
+                actionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.shareAccent)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(shareLabel)
+        } else {
+            // Malformed join URL: the old Button stayed tappable and silently
+            // did nothing. Dim it and hide it from VoiceOver rather than
+            // offering a dead control.
+            actionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.shareAccent)
+                .frame(maxWidth: .infinity)
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
     }
 
     // MARK: - Stats
@@ -142,6 +179,7 @@ struct ShareLinkDetailView: View {
     private func statCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)
@@ -155,6 +193,7 @@ struct ShareLinkDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(Color(hex: color).opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Info section
@@ -184,11 +223,13 @@ struct ShareLinkDetailView: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text).font(.caption.weight(.semibold))
             .foregroundColor(theme.textSecondary).kerning(0.8)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Actions
@@ -218,19 +259,4 @@ struct ShareLinkDetailView: View {
         }
     }
 
-    private func presentSheet(_ vc: UIViewController) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = scene.windows.first,
-              let root = window.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        // iPad requires a popover anchor for UIActivityViewController or
-        // -present crashes. Anchor to the presenter's view, centered, no arrow.
-        if let popover = vc.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-        topVC.present(vc, animated: true)
-    }
 }

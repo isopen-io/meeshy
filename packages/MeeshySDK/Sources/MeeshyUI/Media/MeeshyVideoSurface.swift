@@ -14,6 +14,17 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
     let player: AVPlayer
     let gravity: AVLayerVideoGravity
     let isMuted: Bool
+    /// Opt-in Picture-in-Picture. `false` par défaut : attacher un
+    /// `AVPictureInPictureController` pose aussi
+    /// `canStartPictureInPictureAutomaticallyFromInline = true`, donc une
+    /// surface qui n'expose pas de contrôle PiP ne doit JAMAIS l'activer —
+    /// elle ouvrirait une fenêtre système au passage en arrière-plan sans
+    /// que l'utilisateur l'ait demandé. Miroir de `ReelVideoSurface.enablesPip`
+    /// (`ReelsPlayerView.swift`). `var` (et non `let`) avec valeur par
+    /// défaut : `MeeshyVideoSurface` est `internal` et n'a pas d'init
+    /// explicite, l'init memberwise synthétisé porte donc le défaut — tout
+    /// call site futur reste inchangé et hors PiP.
+    var enablesPip: Bool = false
 
     func makeUIView(context: Context) -> _SurfaceUIView {
         let view = _SurfaceUIView()
@@ -21,6 +32,9 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         view.playerLayer.videoGravity = gravity
         view.playerLayer.player = player
         player.isMuted = isMuted
+        if enablesPip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+        }
         return view
     }
 
@@ -33,6 +47,10 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         }
         if player.isMuted != isMuted {
             player.isMuted = isMuted
+        }
+        if enablesPip {
+            // Idempotent : garde d'identité de layer dans `configurePip`.
+            SharedAVPlayerManager.shared.configurePip(playerLayer: uiView.playerLayer)
         }
     }
 

@@ -80,6 +80,29 @@ describe('parseMentions', () => {
       expect(parseMentions('écris à André@atabeth.com', participants)).toEqual([]);
       expect(parseMentions('Привет Влад@jcharlesnm bonjour', participants)).toEqual([]);
     });
+
+    it('ne résout PAS un @handle collé APRÈS un @mention résolu (domaine e-mail)', () => {
+      // Invariant NAME_BOUNDARY_LEFT : un `@` précédé d'un caractère de nom
+      // appartient à une adresse e-mail, pas à une mention. La résolution
+      // @DisplayName ne doit pas « décoller » le handle suivant en supprimant
+      // le span matché — sinon `@Marie@atabeth.com` résoudrait atabeth depuis
+      // le domaine e-mail. Parité stricte avec `extractMentions` / `hasMentions`
+      // (types/mention.ts) qui n'extraient QUE `Marie` sur la même entrée.
+      expect(parseMentions('@Marie@atabeth.com', participants)).toEqual(['u3']);
+      expect(parseMentions('@Marie@atabeth', participants)).toEqual(['u3']);
+    });
+
+    it('ne résout PAS un displayName collé APRÈS un autre displayName résolu', () => {
+      // `@Andre Tabeth@Marie` : le second `@` est collé à la lettre `h` de
+      // « Tabeth » → morceau d'adresse, pas une mention. La suppression du span
+      // `@Andre Tabeth` ne doit pas décoller `@Marie`. Seul Andre Tabeth est
+      // résolu (les mentions volontairement multiples s'écrivent séparées).
+      expect(parseMentions('@Andre Tabeth@Marie', participants)).toEqual(['u1']);
+      // Contrôle : correctement séparées, les deux se résolvent.
+      expect(parseMentions('@Andre Tabeth @Marie', participants)).toEqual(
+        expect.arrayContaining(['u1', 'u3'])
+      );
+    });
   });
 
   describe('@username fallback', () => {
@@ -179,6 +202,42 @@ describe('parseMentions', () => {
       expect(parseMentions('écris à contact@marie.com', [])).toEqual([]);
       expect(hasMentions('écris à contact@marie.com')).toBe(false);
       expect(hasMentions('reply to jean.dupont@example.org please')).toBe(false);
+    });
+  });
+
+  describe('invariant sans drift hasMentions ⟷ raw parseMentions (participant-agnostique)', () => {
+    // Le docstring des deux fonctions interdit tout drift : sur le chemin
+    // participant-agnostique (aucun participant), un `@handle` détecté par
+    // `hasMentions` DOIT être extrait comme handle brut par `parseMentions`.
+    // Le fallback brut utilisait MENTION_HANDLE_CHARS (ASCII, aligné username),
+    // là où hasMentions utilise NAME_CHAR (Unicode) — d'où un handle non-latin
+    // signalé mais jamais extrait.
+
+    it('extrait un handle brut non-latin (cyrillique) — parité hasMentions', () => {
+      expect(parseMentions('@Владимир', [])).toEqual(['@Владимир']);
+    });
+
+    it('extrait un handle brut à initiale accentuée — parité hasMentions', () => {
+      expect(parseMentions('Salut @Éric', [])).toEqual(['@Éric']);
+      expect(parseMentions('Coucou @André', [])).toEqual(['@André']);
+    });
+
+    it('hasMentions(x) est vrai SSI parseMentions(x, []) est non vide', () => {
+      const samples = [
+        'Salut @alice',
+        '@marie-claire on y va',
+        'Привет @Владимир',
+        'Salut @Éric ça va ?',
+        '@André Tabeth bonjour',
+        'écris à contact@marie.com',
+        'reply to jean.dupont@example.org please',
+        'test@ domain.com',
+        'Bonjour tout le monde',
+        '',
+      ];
+      for (const s of samples) {
+        expect(hasMentions(s)).toBe(parseMentions(s, []).length > 0);
+      }
     });
   });
 });

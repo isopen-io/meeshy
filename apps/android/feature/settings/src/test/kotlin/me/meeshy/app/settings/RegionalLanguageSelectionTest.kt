@@ -147,6 +147,24 @@ class RegionalLanguageSelectionTest {
     }
 
     @Test
+    fun theOptionsSurfaceTheCommonLanguagesFirstInTheirDeclaredOrder() {
+        // With no primary hidden and no filter, the picker leads with the common set so
+        // the most frequently picked languages are reachable without scrolling.
+        val result = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "")
+
+        val leading = result.options.map { it.code }.take(LanguageData.commonLanguageCodes.size)
+        assertThat(leading).isEqualTo(LanguageData.commonLanguageCodes)
+    }
+
+    @Test
+    fun theSelectedLabelResolvesALegacyAliasCode() {
+        // "fil" is the BCP-47 spelling of Filipino ("tl"); the label still resolves.
+        val result = RegionalLanguageSelection.build(regionalCode = "fil", systemCode = null, query = "")
+
+        assertThat(result.selectedLabel).isEqualTo(LanguageData.info("tl")!!.nativeName)
+    }
+
+    @Test
     fun eachOptionCarriesTheFlagAndDisplayNamesFromTheLanguageTable() {
         val result = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "Japanese")
 

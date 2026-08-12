@@ -38,14 +38,31 @@ class OutboxLaneMapTest {
     }
 
     @Test
-    fun `each remaining kind maps to its own dedicated shared lane`() {
+    fun `pin and unpin share the pin lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PIN_MESSAGE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PIN))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNPIN_MESSAGE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PIN))
+    }
+
+    @Test
+    fun `read receipt and mark-unread share the read-receipt lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.READ_RECEIPT))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.MARK_UNREAD))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))
+    }
+
+    @Test
+    fun `each remaining kind maps to its own dedicated shared lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_CONVERSATION_PREFS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PROFILE))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PROFILE))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        // Privacy sync shares the settings lane but is a distinct kind (independent coalescing).
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PRIVACY_SETTINGS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PUBLISH_STORY))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.STORY))

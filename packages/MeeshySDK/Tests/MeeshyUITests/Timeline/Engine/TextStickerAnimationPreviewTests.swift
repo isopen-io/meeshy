@@ -144,6 +144,89 @@ final class TextStickerAnimationPreviewTests: XCTestCase {
         XCTAssertEqual(Double(textLayer?.opacity ?? 0), 0.25, accuracy: 1e-3)
     }
 
+    // MARK: - Régression cache — l'enveloppe fade doit être re-posée à chaque tick
+
+    /// `ItemSignature` (clé du `StoryRendererCache`) ne retient que l'opacité
+    /// des KEYFRAMES, jamais l'enveloppe fadeIn/fadeOut. Une layer construite
+    /// au premier tick où sa fenêtre s'ouvre est ensuite resservie telle
+    /// quelle : sans re-pose par tick, elle garderait à jamais l'opacité de
+    /// son tick de construction.
+    ///
+    /// Bug de production (2026-07-25) : un texte à `startTime = 20.006` avec
+    /// `fadeIn = 0.5`, construit à t ≈ 20.01, restait figé à ≈ 2 % d'opacité
+    /// — invisible pour toute la story. Vérifié sur Meeshy-iOS26.
+    func test_resolvedNonMediaOpacity_text_progressesAcrossTicks() {
+        let text = StoryTextObject(
+            id: "t1", text: "hi",
+            startTime: 20.0, duration: nil,
+            fadeIn: 0.5, fadeOut: 0.3
+        )
+        // Tick de construction : tout début de la rampe de fade-in.
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: text, at: 20.01) ?? -1,
+                       0.02, accuracy: 0.03)
+        // Milieu de rampe.
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: text, at: 20.25) ?? -1,
+                       0.5, accuracy: 0.01)
+        // Au-delà de la rampe : pleine opacité — c'est la valeur que le cache
+        // empêchait d'atteindre.
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: text, at: 25.0) ?? -1,
+                       1.0, accuracy: 1e-3)
+    }
+
+    /// `duration` absente (cas réel en production) : la fenêtre reste ouverte
+    /// jusqu'à la fin, et l'absence de borne ne doit pas rouvrir un fade-out.
+    func test_resolvedNonMediaOpacity_openEndedWindow_staysFullyOpaque() {
+        let text = StoryTextObject(
+            id: "t1", text: "hi",
+            startTime: 20.0, duration: nil,
+            fadeIn: 0.5, fadeOut: 0.3
+        )
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: text, at: 55.0) ?? -1,
+                       1.0, accuracy: 1e-3)
+    }
+
+    func test_resolvedNonMediaOpacity_sticker_progressesAcrossTicks() {
+        let sticker = StorySticker(
+            id: "s1", emoji: "*",
+            startTime: 10.0, duration: 10.0,
+            fadeIn: 0.5, fadeOut: nil
+        )
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: sticker, at: 10.01) ?? -1,
+                       0.02, accuracy: 0.03)
+        XCTAssertEqual(StoryRenderer.resolvedNonMediaOpacity(item: sticker, at: 15.0) ?? -1,
+                       1.0, accuracy: 1e-3)
+    }
+
+    /// Sans enveloppe ni keyframe, rien n'est écrit : la layer conserve son
+    /// opacité par défaut (1.0) et la post-passe ne la touche pas.
+    func test_resolvedNonMediaOpacity_withoutEnvelope_returnsNil() {
+        let text = StoryTextObject(
+            id: "t1", text: "hi",
+            startTime: 0, duration: 5,
+            fadeIn: nil, fadeOut: nil
+        )
+        XCTAssertNil(StoryRenderer.resolvedNonMediaOpacity(item: text, at: 2.5))
+    }
+
+    /// Garde de source : la post-passe doit rester câblée dans `render`.
+    /// Les tests d'intégration à double render + cache ne sont pas tenables
+    /// ici (le teardown xctest double-libère les layers retenues par le
+    /// cache) ; cette garde couvre le risque qu'un refactor retire l'appel.
+    func test_render_wiresNonMediaOpacityPostPass() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Engine
+                .deletingLastPathComponent()   // Timeline
+                .deletingLastPathComponent()   // MeeshyUITests
+                .deletingLastPathComponent()   // Tests
+                .deletingLastPathComponent()   // MeeshySDK
+                .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("resolvedNonMediaOpacity(item: item, at: time.seconds)"),
+                      "la post-passe d'opacité des non-médias doit rester appelée dans render()")
+    }
+
     func test_render_inEditMode_skipsFadeOpacity() {
         // Edit mode never gates by playhead — items render fully opaque so
         // the author can manipulate them. This is the regression guard for

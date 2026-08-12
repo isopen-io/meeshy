@@ -1,5 +1,11 @@
 package me.meeshy.app.profile
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -16,13 +22,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -54,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -62,30 +74,71 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.LanguageData
-import me.meeshy.sdk.model.PresenceState
+import androidx.compose.material3.TopAppBarDefaults
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.format.RelativeTimeLongText
+import me.meeshy.ui.format.rememberRelativeTimeLongStrings
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.DateFormat
+import java.time.ZoneId
 import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
+    onReport: (userId: String, username: String) -> Unit = { _, _ -> },
+    onViewPosts: (userId: String) -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
+    uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var shareTarget by remember { mutableStateOf<ProfileSharePresentation?>(null) }
+
+    val context = LocalContext.current
+    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { context.contentResolver.readMediaUploadItem(it) }
+            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.AVATAR, it) }
+    }
+    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { context.contentResolver.readMediaUploadItem(it) }
+            ?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) }
+    }
+    val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
+    val uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) }
+    LaunchedEffect(uploadErrorMessage) {
+        uploadErrorMessage?.let {
+            snackbar.showSnackbar(it)
+            uploadViewModel.dismissError()
+        }
+    }
 
+    MeeshyBackground {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                    actionIconContentColor = MeeshyPalette.Indigo500,
+                ),
                 title = { Text(if (state.isEditing) stringResource(R.string.profile_edit_title) else stringResource(R.string.profile_title)) },
                 navigationIcon = {
                     IconButton(onClick = if (state.isEditing) viewModel::cancelEditing else onBack) {
@@ -94,15 +147,33 @@ fun ProfileScreen(
                 },
                 actions = {
                     if (!state.isEditing) {
-                        IconButton(onClick = viewModel::startEditing) {
-                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
+                        state.user?.let { user ->
+                            ProfileShareBuilder.build(user)?.let { share ->
+                                IconButton(onClick = { shareTarget = share }) {
+                                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.profile_share_action))
+                                }
+                            }
+                        }
+                    }
+                    when {
+                        state.isEditing -> Unit
+                        state.isOwnProfile -> {
+                            IconButton(onClick = viewModel::startEditing) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
+                            }
+                        }
+                        else -> {
+                            state.user?.let { user ->
+                                IconButton(onClick = { onReport(user.id, user.username) }) {
+                                    Icon(Icons.Default.Flag, contentDescription = stringResource(R.string.profile_report))
+                                }
+                            }
                         }
                     }
                 },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -130,28 +201,69 @@ fun ProfileScreen(
                     header?.completionPercent?.let { percent ->
                         ProfileCompletionRing(
                             percent = percent,
-                            color = MaterialTheme.colorScheme.primary,
-                            track = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MeeshyPalette.Indigo500,
+                            track = MeeshyTheme.tokens.backgroundTertiary,
                             modifier = Modifier.size(108.dp),
                         )
                     }
                 }
+                val uploadingAvatar = uploadState.uploading == ImageUploadTarget.AVATAR
+                val avatarModifier = Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .let { base ->
+                        if (state.isEditing) {
+                            base.clickable(enabled = uploadState.uploading == null) {
+                                avatarPicker.launch(imageOnly)
+                            }
+                        } else {
+                            base
+                        }
+                    }
                 if (user?.avatar != null) {
                     AsyncImage(
                         model = user.avatar,
                         contentDescription = user.displayName ?: avatarDescription,
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(CircleShape),
+                        modifier = avatarModifier,
                     )
                 } else {
                     MeeshyAvatar(
                         name = user?.displayName ?: user?.username ?: "?",
-                        modifier = Modifier.size(96.dp),
+                        modifier = avatarModifier,
                     )
                 }
+                if (uploadingAvatar) {
+                    Surface(
+                        color = MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.55f),
+                        shape = CircleShape,
+                        modifier = Modifier.size(96.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(28.dp))
+                        }
+                    }
+                }
+                if (state.isEditing && !uploadingAvatar) {
+                    Surface(
+                        color = MeeshyPalette.Indigo500,
+                        shape = CircleShape,
+                        border = BorderStroke(2.dp, MeeshyTheme.tokens.backgroundPrimary),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(30.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.profile_change_avatar),
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
                 if (!state.isEditing) {
-                    presenceDotColor(header?.presence)?.let { dot ->
+                    meeshyPresenceDotColor(header?.presence)?.let { dot ->
                         Surface(
                             color = dot,
                             shape = CircleShape,
@@ -165,6 +277,18 @@ fun ProfileScreen(
             }
 
             if (state.isEditing) {
+                val uploadingBanner = uploadState.uploading == ImageUploadTarget.BANNER
+                TextButton(
+                    onClick = { bannerPicker.launch(imageOnly) },
+                    enabled = uploadState.uploading == null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (uploadingBanner) {
+                        CircularProgressIndicator(Modifier.size(18.dp))
+                        Spacer(Modifier.width(MeeshySpacing.sm))
+                    }
+                    Text(stringResource(R.string.profile_change_banner))
+                }
                 OutlinedTextField(
                     value = state.firstName,
                     onValueChange = viewModel::onFirstNameChange,
@@ -238,7 +362,22 @@ fun ProfileScreen(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+                header?.lastSeenEpochMillis?.let { lastSeen ->
+                    val longStrings = rememberRelativeTimeLongStrings()
+                    val relative = RelativeTimeLongText.long(
+                        epochMillis = lastSeen,
+                        referenceMillis = System.currentTimeMillis(),
+                        zone = ZoneId.systemDefault(),
+                        locale = Locale.getDefault(),
+                        strings = longStrings,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_last_seen, relative),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.bio?.let {
@@ -251,14 +390,14 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MeeshyPalette.Indigo500,
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = stringResource(R.string.profile_e2ee),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MeeshyPalette.Indigo500,
                         )
                     }
                 }
@@ -266,21 +405,64 @@ fun ProfileScreen(
                     Text(
                         text = stringResource(R.string.profile_completion, percent),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.memberSinceEpochMillis?.let { millis ->
                     Text(
                         text = stringResource(R.string.profile_member_since, formatMemberSince(millis)),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.let { ProfileDetailsSection(it) }
+                state.user?.id?.takeIf { it.isNotBlank() }?.let { id ->
+                    ProfilePostsRow(onClick = { onViewPosts(id) })
+                }
                 state.stats?.let { ProfileStatsSection(it) }
                 state.timeline?.let { ProfileTimelineSection(it) }
             }
         }
+    }
+    }
+
+    shareTarget?.let { share ->
+        ProfileShareSheet(share = share, onDismiss = { shareTarget = null })
+    }
+}
+
+/** A tappable row leading to this user's authored-posts feed. */
+@Composable
+private fun ProfilePostsRow(onClick: () -> Unit) {
+    Spacer(Modifier.height(MeeshySpacing.md))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshySpacing.sm))
+            .clickable(onClick = onClick)
+            .padding(vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Article,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo500,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        Text(
+            text = stringResource(R.string.profile_view_posts),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -297,7 +479,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
             text = stringResource(R.string.profile_stats_title),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MeeshyTheme.tokens.textPrimary,
         )
         stats.tiles.chunked(2).forEach { rowTiles ->
             Row(
@@ -322,7 +504,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
                     text = stringResource(R.string.profile_achievements_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MeeshyTheme.tokens.textPrimary,
                 )
                 Text(
                     text = stringResource(
@@ -331,7 +513,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
                         stats.totalCount,
                     ),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                 )
             }
             stats.badges.forEach { AchievementBadgeView(it) }
@@ -343,7 +525,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
 @Composable
 private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
     if (timeline.bars.isEmpty()) return
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = MeeshyPalette.Indigo500
     Spacer(Modifier.height(MeeshySpacing.md))
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -358,12 +540,12 @@ private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
                 text = stringResource(R.string.profile_activity_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MeeshyTheme.tokens.textPrimary,
             )
             Text(
                 text = stringResource(R.string.profile_activity_average, timeline.averagePerDay),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
         if (timeline.hasActivity) {
@@ -378,7 +560,7 @@ private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
             Text(
                 text = stringResource(R.string.profile_activity_empty),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }
@@ -437,7 +619,7 @@ private fun StatTileView(tile: StatTile, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MeeshyTheme.tokens.backgroundTertiary,
     ) {
         Column(
             modifier = Modifier
@@ -449,12 +631,12 @@ private fun StatTileView(tile: StatTile, modifier: Modifier = Modifier) {
                 text = tile.formattedValue,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MeeshyTheme.tokens.textPrimary,
             )
             Text(
                 text = stringResource(statMetricLabel(tile.metric)),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }
@@ -470,14 +652,14 @@ private fun AchievementBadgeView(badge: AchievementBadge) {
         Text(
             text = badge.name,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (badge.isUnlocked) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (badge.isUnlocked) MeeshyTheme.tokens.textPrimary
+            else MeeshyTheme.tokens.textSecondary,
             fontWeight = if (badge.isUnlocked) FontWeight.SemiBold else FontWeight.Normal,
         )
         Text(
             text = "${badge.progressPercent}%",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
         )
     }
 }
@@ -489,17 +671,6 @@ private fun statMetricLabel(metric: StatMetric): Int = when (metric) {
     StatMetric.FRIEND_REQUESTS -> R.string.profile_stat_friend_requests
     StatMetric.LANGUAGES -> R.string.profile_stat_languages
     StatMetric.MEMBER_DAYS -> R.string.profile_stat_member_days
-}
-
-/** Presence dot colours (semantic, static per the design system): green online, amber away. */
-private val OnlineIndicator = Color(0xFF34D399)
-private val AwayIndicator = Color(0xFFFBBF24)
-
-/** The dot colour for a resolved presence, or null when no dot should show (offline/unknown). */
-private fun presenceDotColor(state: PresenceState?): Color? = when (state) {
-    PresenceState.ONLINE -> OnlineIndicator
-    PresenceState.AWAY -> AwayIndicator
-    PresenceState.OFFLINE, null -> null
 }
 
 /** Localized medium-date label for the "member since" line. */
@@ -530,7 +701,7 @@ private fun ProfileDetailRowView(row: ProfileDetailRow) {
         Text(
             text = stringResource(profileDetailLabel(row.kind)),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             row.flag?.let {
@@ -619,7 +790,7 @@ private fun ContentLanguageField(
                 .clickable { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LanguageData.allLanguages.forEach { lang ->
+            LanguageData.allLanguagesCommonFirst.forEach { lang ->
                 DropdownMenuItem(
                     text = { Text("${lang.flag} ${lang.name}") },
                     onClick = {
@@ -631,3 +802,33 @@ private fun ContentLanguageField(
         }
     }
 }
+
+/** Maps an [ImageUploadError] to the user-facing string shown in the snackbar. */
+private fun ImageUploadError.messageRes(): Int = when (this) {
+    ImageUploadError.EMPTY -> R.string.profile_image_error_empty
+    ImageUploadError.UNSUPPORTED_TYPE -> R.string.profile_image_error_type
+    ImageUploadError.TOO_LARGE -> R.string.profile_image_error_too_large
+    ImageUploadError.UPLOAD_FAILED -> R.string.profile_image_error_upload
+    ImageUploadError.UPDATE_FAILED -> R.string.profile_image_error_update
+}
+
+/**
+ * Reads the picked content into a [MediaUploadItem] (bytes + advertised filename +
+ * MIME). Returns null when the stream can't be opened. Pure-IO glue — the
+ * filename/MIME defaulting lives in `MediaUpload`, and the accept/reject decision in
+ * `ImageUploadValidator`, so this stays a thin reader.
+ */
+private fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
+    val bytes = runCatching { openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
+    val mimeType = getType(uri).orEmpty()
+    val fileName = displayName(uri).orEmpty()
+    return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
+}
+
+private fun ContentResolver.displayName(uri: Uri): String? =
+    runCatching {
+        query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()

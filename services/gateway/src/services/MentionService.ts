@@ -8,7 +8,7 @@
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { parseMentions, MENTION_HANDLE_CHARS, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 
 // Logger dédié pour MentionService
@@ -36,7 +36,10 @@ export class MentionService {
   // Regex pour détecter les mentions @username (lettres, chiffres, underscore, tiret).
   // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) et la validation username /^[a-zA-Z0-9_-]+$/ :
   // `\w` seul tronquait `@marie-claire` en `marie`.
-  private readonly MENTION_REGEX = new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g');
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+  // appartient à une adresse e-mail (`john@example.com`) et ne doit PAS être extrait comme
+  // mention — sinon `@example` déclenche une fausse notification. Flag `u` requis (classes `\p{...}`).
+  private readonly MENTION_REGEX = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu');
 
   // Regex stricte pour valider les usernames (alphanumeric + underscore + tiret, 1-30 caractères),
   // appliquée après lowercase — parité avec le charset username.
@@ -714,14 +717,17 @@ export class MentionService {
    * Valide les permissions de mention selon le type de conversation
    *
    * @param conversationId - ID de la conversation
-   * @param mentionedUserIds - IDs des utilisateurs à mentionner
-   * @param senderId - ID de l'utilisateur qui envoie le message
+   * @param mentionedUserIds - `User.id` des utilisateurs à mentionner
+   * @param senderId - `User.id` de l'expéditeur — le MÊME espace que
+   *   `mentionedUserIds`, puisque la règle des conversations directes les
+   *   compare entre eux. `null` pour un expéditeur anonyme : il ne possède
+   *   aucun `User.id`, donc ne peut être aucun des mentionnés.
    * @returns Résultat de validation avec les userIds valides et invalides
    */
   async validateMentionPermissions(
     conversationId: string,
     mentionedUserIds: string[],
-    senderId: string
+    senderId: string | null
   ): Promise<MentionValidationResult> {
     if (mentionedUserIds.length === 0) {
       return {
@@ -848,7 +854,7 @@ export class MentionService {
         this.prisma.mention.create({
           data: {
             messageId,
-            mentionedParticipantId: userId
+            mentionedUserId: userId
           }
         }).catch((error: any) => {
           // Ignorer les erreurs de doublons (code P2002)
@@ -870,28 +876,48 @@ export class MentionService {
     const mentions = await this.prisma.mention.findMany({
       where: { messageId },
       include: {
-        mentionedParticipant: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
+        mentionedUser: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
           }
         }
       }
     });
 
-    return mentions.map(m => m.mentionedParticipant?.user).filter(Boolean) as User[];
+    return mentions.map(m => m.mentionedUser).filter(Boolean) as User[];
   }
 
   /**
-   * Récupère les mentions récentes pour un utilisateur
+   * Récupère les mentions récentes pour un utilisateur.
+   *
+   * L'admission est celle de `GET /mentions/messages/:messageId`, la route
+   * soeur du même fichier : le message ne doit pas avoir été retiré, et
+   * l'appelant doit être un participant TOUJOURS actif de sa conversation.
+   *
+   * La garde vit ici plutôt que dans la route parce que la ligne `Mention`
+   * n'est atteignable QUE par cette fonction — c'est le seul endroit qu'un
+   * futur lecteur ne peut pas oublier. Sans elle, l'inbox était le seul chemin
+   * du gateway qui rendait `Message.content` sans vérifier `deletedAt` :
+   *
+   *  - un message RAPPELÉ par son auteur disparaissait de la conversation pour
+   *    tout le monde (`MESSAGE_DELETED` diffusé, `translations` vidées) mais
+   *    restait lisible en clair, avec son auteur et le titre de la
+   *    conversation, dans l'inbox de chaque personne qu'il nommait —
+   *    définitivement : aucun écrivain ne supprime jamais la ligne `Mention`
+   *    (l'unique `mention.deleteMany` du dépôt est la réconciliation
+   *    d'édition), et le `onDelete: Cascade` du schéma ne se déclenche que sur
+   *    une suppression PHYSIQUE, que le retrait doux ne fait jamais ;
+   *  - une personne retirée d'un groupe continuait d'y lire une entrée dont le
+   *    titre de conversation est relu LIVE à chaque appel.
+   *
+   * Filtrage à la LECTURE, et non purge des lignes au retrait du message : il
+   * couvre du même coup les lignes déjà en base (aucun script de réparation) et
+   * le cas appartenance, qu'aucun nettoyage à l'écriture ne pourrait voir.
    *
    * @param userId - ID de l'utilisateur
    * @param limit - Nombre maximum de mentions à retourner
@@ -900,7 +926,18 @@ export class MentionService {
   async getRecentMentionsForUser(userId: string, limit: number = 50) {
     const mentions = await this.prisma.mention.findMany({
       where: {
-        mentionedParticipantId: userId
+        mentionedUserId: userId,
+        message: {
+          deletedAt: null,
+          conversation: {
+            participants: {
+              some: {
+                userId,
+                isActive: true
+              }
+            }
+          }
+        }
       },
       include: {
         message: {
@@ -1044,7 +1081,10 @@ export async function resolveMentionedUsers(
   const usernames = new Set<string>();
   // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) : inclut le tiret, sinon `@marie-claire`
   // était résolu comme `marie` et l'utilisateur à tiret ne remontait jamais.
-  const mentionRegex = new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,30})`, 'g');
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`, flag `u` requis) : un `@`
+  // collé après un caractère de nom appartient à une adresse e-mail (`john@example.com`) et
+  // ne doit PAS être extrait — sinon un tiers nommé `example` est faussement mentionné/notifié.
+  const mentionRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,30})`, 'gu');
 
   for (const content of contents) {
     if (!content) continue;
@@ -1055,9 +1095,17 @@ export async function resolveMentionedUsers(
 
   if (usernames.size === 0) return [];
 
+  // MongoDB ignores `mode: 'insensitive'` when combined with `in` (see the note
+  // in `MentionService.resolveUsernames`), so an `in` list matches case-SENSITIVELY.
+  // Parsed handles are lowercased above while stored usernames preserve case
+  // (e.g. `Alice_B`), so an `in` query silently dropped every mixed-case mention.
+  // Use OR + case-insensitive `equals`, one clause per handle — the pattern that
+  // actually resolves case-insensitively on Prisma + MongoDB.
   const users = await prisma.user.findMany({
     where: {
-      username: { in: [...usernames], mode: 'insensitive' },
+      OR: [...usernames].map((username) => ({
+        username: { equals: username, mode: 'insensitive' as const }
+      })),
       isActive: true
     },
     select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true }
@@ -1072,4 +1120,38 @@ export async function resolveMentionedUsers(
       avatar: u.avatar
     };
   });
+}
+
+/**
+ * Résout une liste de @username (déjà extraits/validés) en identifiants
+ * utilisateur. Source de vérité unique pour la résolution username→id de la
+ * couche temps réel (socket handlers, pipeline de mention agent).
+ *
+ * Ne filtre PAS sur `isActive`/`deletedAt` — parité avec
+ * {@link MentionService.resolveUsernames}, pour cohérence avec l'autocomplete
+ * (un utilisateur mentionnable via l'autocomplete doit rester résoluble).
+ *
+ * MongoDB ignore `mode: 'insensitive'` combiné à `in` (cf. la note dans
+ * {@link MentionService.resolveUsernames}), donc un `in` matche de façon
+ * SENSIBLE À LA CASSE. Les handles parsés sont lowercased alors que les
+ * usernames stockés préservent la casse (`normalizeUsername` ne lowercase
+ * jamais, ex. `Alice_B`), si bien qu'un `in` droppait silencieusement toute
+ * mention mixed-case — mention perdue, notification jamais émise. On utilise
+ * OR + `equals` insensible, une clause par handle — le pattern qui résout
+ * réellement de façon insensible à la casse sur Prisma + MongoDB.
+ */
+export async function resolveUsernamesToIds(
+  prisma: PrismaClient,
+  usernames: readonly string[]
+): Promise<string[]> {
+  if (usernames.length === 0) return [];
+  const users = await prisma.user.findMany({
+    where: {
+      OR: usernames.map((username) => ({
+        username: { equals: username, mode: 'insensitive' as const }
+      }))
+    },
+    select: { id: true }
+  });
+  return users.map((u) => u.id);
 }

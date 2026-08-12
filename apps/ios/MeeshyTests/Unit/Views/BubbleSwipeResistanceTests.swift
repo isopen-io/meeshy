@@ -40,4 +40,35 @@ final class BubbleSwipeResistanceTests: XCTestCase {
         XCTAssertFalse(BubbleSwipeResistance.shouldEngage(
             translationWidth: 60, translationHeight: 18, isScrubbing: false, resistance: .resistant))
     }
+
+    // MARK: - isGestureOwnershipClaimed
+    //
+    // `BubbleSwipeContainer` mirrors two independent PreferenceKeys (media
+    // scrubbing, inline carousel paging) into this OR combination to decide
+    // whether reply/forward swipe stays disengaged. Neither preference-key
+    // propagation itself, nor the `@GestureState` reset-on-interruption fix
+    // in `AudioPlayerView`/`MeeshyVideoPlayer+Controls` that feeds
+    // `mediaScrubbing`, is unit-testable without a full SwiftUI/UIKit host —
+    // this covers the composition contract those two signals are combined
+    // through.
+
+    func test_isGestureOwnershipClaimed_neitherActive_false() {
+        XCTAssertFalse(BubbleSwipeResistance.isGestureOwnershipClaimed(
+            mediaScrubbing: false, inlinePaging: false))
+    }
+
+    func test_isGestureOwnershipClaimed_onlyMediaScrubbing_true() {
+        XCTAssertTrue(BubbleSwipeResistance.isGestureOwnershipClaimed(
+            mediaScrubbing: true, inlinePaging: false))
+    }
+
+    func test_isGestureOwnershipClaimed_onlyInlinePaging_true() {
+        XCTAssertTrue(BubbleSwipeResistance.isGestureOwnershipClaimed(
+            mediaScrubbing: false, inlinePaging: true))
+    }
+
+    func test_isGestureOwnershipClaimed_bothActive_true() {
+        XCTAssertTrue(BubbleSwipeResistance.isGestureOwnershipClaimed(
+            mediaScrubbing: true, inlinePaging: true))
+    }
 }

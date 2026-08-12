@@ -56,22 +56,7 @@ struct CommunityLinkDetailView: View {
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            communityActionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.communityAccent) {
-                guard let url = URL(string: link.joinUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                      let window = scene.windows.first,
-                      let root = window.rootViewController else { return }
-                var topVC = root
-                while let presented = topVC.presentedViewController { topVC = presented }
-                // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                if let popover = av.popoverPresentationController {
-                    popover.sourceView = topVC.view
-                    popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                    popover.permittedArrowDirections = []
-                }
-                topVC.present(av, animated: true)
-            }
+            shareActionButton
             communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
@@ -79,20 +64,44 @@ struct CommunityLinkDetailView: View {
         }
     }
 
+    // Native share: ShareLink handles the activity sheet, iPad popover anchoring
+    // and top-VC presentation for free — no manual UIActivityViewController /
+    // window-hierarchy traversal (doctrine: prefer first-party SwiftUI over UIKit).
+    @ViewBuilder
+    private var shareActionButton: some View {
+        let shareLabel = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        if let url = URL(string: link.joinUrl) {
+            ShareLink(item: url) {
+                communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
+            }
+            .simultaneousGesture(TapGesture().onEnded { HapticFeedback.light() })
+            .accessibilityLabel(shareLabel)
+        } else {
+            communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
     private func communityActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 52, height: 52)
-                    // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
-                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
-                        .accessibilityHidden(true)
-                }
-                Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
-            }
-        }.frame(maxWidth: .infinity)
+            communityActionButtonLabel(label, icon: icon, color: color)
+        }
         .accessibilityLabel(label)
+    }
+
+    private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 52, height: 52)
+                // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
+                Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                    .accessibilityHidden(true)
+            }
+            Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var statsSection: some View {

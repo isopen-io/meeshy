@@ -28,6 +28,7 @@
     "online": "Online",
     "offline": "Offline",
     "away": "Ausente",
+    "idle": "Inativo",
     "pending": "Pendente",
     "rejected": "Recusado",
     "neverSeen": "Nunca visto",

@@ -1,5 +1,10 @@
 import Foundation
 import MeeshySDK
+import os
+
+private extension Logger {
+    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+}
 
 /// Starts a 1:1 call from anywhere that has a user but not necessarily a
 /// conversation (keypad results, contact rows, the call journal).
@@ -38,19 +43,21 @@ enum CallStarter {
         onUnavailable: @escaping () -> Void = { showUnavailableToast() }
     ) {
         if let conversationId, !conversationId.isEmpty {
-            CallManager.shared.startCall(
-                conversationId: conversationId,
-                userId: userId,
-                displayName: displayName,
-                isVideo: isVideo
-            )
+            Task { @MainActor in
+                await CallManager.shared.requestPermissionsThenStartCall(
+                    conversationId: conversationId,
+                    userId: userId,
+                    displayName: displayName,
+                    isVideo: isVideo
+                )
+            }
             return
         }
 
         Task { @MainActor in
             do {
                 if let conversation = try await ConversationService.shared.findDirectWith(userId: userId) {
-                    CallManager.shared.startCall(
+                    await CallManager.shared.requestPermissionsThenStartCall(
                         conversationId: conversation.id,
                         userId: userId,
                         displayName: displayName,
@@ -60,6 +67,7 @@ enum CallStarter {
                     onUnavailable()
                 }
             } catch {
+                Logger.calls.error("CallStarter: findDirectWith failed for userId=\(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 onUnavailable()
             }
         }

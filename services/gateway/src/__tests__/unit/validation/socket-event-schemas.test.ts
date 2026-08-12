@@ -7,6 +7,7 @@
 import {
   SocketMessageSendSchema,
   SocketMessageSendWithAttachmentsSchema,
+  SocketMessageEditSchema,
   SocketConversationJoinSchema,
   SocketConversationLeaveSchema,
   SocketReactionAddSchema,
@@ -100,6 +101,67 @@ describe('SocketMessageSendWithAttachmentsSchema', () => {
       content: 'x'.repeat(100_001),
     });
     expect(result.success).toBe(false);
+  });
+
+  // Effect-field parity with SocketMessageSendSchema (text path) and the REST
+  // POST /messages route. Zod's z.object strips undeclared keys, so without
+  // these fields a view-once / blurred / expiring photo sent over the PRIMARY
+  // WebSocket attachment path is silently downgraded to a normal, non-ephemeral
+  // attachment (the recipient can re-open a "view-once" photo forever, a
+  // "blurred" spoiler renders unblurred, a disappearing message never expires).
+  // They must survive validation here exactly as they do on the text path.
+  it('preserves message-effect fields (isViewOnce / isBlurred / expiresAt / effectFlags / maxViewOnceCount)', () => {
+    const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+    const result = SocketMessageSendWithAttachmentsSchema.safeParse({
+      ...base,
+      isViewOnce: true,
+      isBlurred: true,
+      expiresAt,
+      effectFlags: 3,
+      maxViewOnceCount: 1,
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.isViewOnce).toBe(true);
+    expect(result.data.isBlurred).toBe(true);
+    expect(result.data.expiresAt).toBe(expiresAt);
+    expect(result.data.effectFlags).toBe(3);
+    expect(result.data.maxViewOnceCount).toBe(1);
+  });
+});
+
+describe('SocketMessageEditSchema', () => {
+  const base = {
+    messageId: VALID_MONGO_ID,
+    content: 'Edited content',
+  };
+
+  it('accepts a valid edit', () => {
+    expect(SocketMessageEditSchema.safeParse(base).success).toBe(true);
+  });
+
+  // Regression: the handler allows clearing a caption on an attachment message
+  // (MessageHandler.handleMessageEdit gates emptiness on hasAttachments). A
+  // `.min(1)` here would reject the empty string at the boundary and make that
+  // branch unreachable, silently killing caption removal over the socket path.
+  it('accepts empty content (caption removal on attachment messages)', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: '' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an invalid messageId', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, messageId: 'not-an-objectid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects content exceeding 100 000 chars', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: 'x'.repeat(100_001) });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts content at exactly 100 000 chars', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: 'x'.repeat(100_000) });
+    expect(result.success).toBe(true);
   });
 });
 

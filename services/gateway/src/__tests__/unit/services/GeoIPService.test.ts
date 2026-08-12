@@ -47,4 +47,28 @@ describe('GeoIPService — mergeClientHeaders', () => {
     });
     expect(result.geoData?.location).toBe('Lyon, FR');
   });
+
+  it('recalcule location cohérente avec un override country partiel (client prioritaire)', () => {
+    const geoData = {
+      ip: '1.2.3.4', country: 'FR', countryName: 'France',
+      city: 'Paris', region: 'IDF', timezone: 'Europe/Paris',
+      location: 'Paris, FR', latitude: 48.8, longitude: 2.3,
+    };
+    // Utilisateur VPN : le client affirme US, seul le header country est envoyé.
+    const result = mergeClientHeaders(null, geoData, { 'x-meeshy-country': 'US' });
+    expect(result.geoData?.country).toBe('US');
+    expect(result.geoData?.city).toBe('Paris');
+    // location ne doit plus contredire le country prioritaire.
+    expect(result.geoData?.location).toBe('Paris, US');
+  });
+
+  it('recalcule location avec un override city partiel sur un geoData existant', () => {
+    const geoData = {
+      ip: '1.2.3.4', country: 'US', countryName: 'United States',
+      city: 'New York', region: 'NY', timezone: 'America/New_York',
+      location: 'New York, US', latitude: 40.7, longitude: -74.0,
+    };
+    const result = mergeClientHeaders(null, geoData, { 'x-meeshy-city': 'Boston' });
+    expect(result.geoData?.location).toBe('Boston, US');
+  });
 });

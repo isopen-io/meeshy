@@ -16,7 +16,7 @@
 
 import { render } from '@testing-library/react';
 import { act } from 'react';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, isChecking: false }),
@@ -197,5 +197,39 @@ describe('CallManager — reconnect re-join', () => {
     });
 
     expect(useCallStore.getState().isInCall).toBe(false);
+  });
+});
+
+// Regression: `attachListeners`'s cleanup used `socket.off(EVENT)` with no
+// handler argument — real (and this fake) Socket.IO removes EVERY listener
+// registered for that event name, not just CallManager's own. Since
+// `attachListeners` re-runs on every `connect` (reconnect) while a call is
+// active, a sibling component (VideoCallInterface) that separately calls
+// `socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, ...)` has its listener
+// silently deleted the moment CallManager reconnects mid-call.
+describe('CallManager — foreign listeners on shared events survive re-attach', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useCallStore.getState().reset();
+  });
+
+  it('does not remove a listener another component registered for CALL_PARTICIPANT_LEFT', () => {
+    const socket = makeFakeSocket(true); // already connected at mount
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const foreignListener = jest.fn();
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, foreignListener);
+
+    render(<CallManager />);
+    setActiveCall(CALL_ID);
+
+    // A reconnect re-runs attachListeners a second time.
+    act(() => {
+      socket.fire('connect');
+    });
+
+    socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, { callId: CALL_ID, userId: 'peer-1' });
+
+    expect(foreignListener).toHaveBeenCalledWith({ callId: CALL_ID, userId: 'peer-1' });
   });
 });

@@ -99,6 +99,19 @@ class IncomingCallRingStoreTest {
     }
 
     @Test
+    fun `a stop push advances the ring so a late ring delivery of the dead call is suppressed`() {
+        val store = IncomingCallRingStore()
+
+        val stop = store.route(mapOf("type" to "call_cancel", "callId" to "c1"), nowMillis = 100)
+        assertThat(stop).isInstanceOf(IncomingCallPushRoute.StopRing::class.java)
+
+        // The cancel landed before the throttled original ring push — the dead
+        // call must stay silent.
+        val lateRing = store.route(callData(callId = "c1"), nowMillis = 200)
+        assertThat(suppressReason(lateRing)).isEqualTo(IncomingCallDecision.Reason.DUPLICATE)
+    }
+
+    @Test
     fun `an active call suppresses an unrelated push as busy without recording it`() {
         val store = IncomingCallRingStore()
 

@@ -49,6 +49,7 @@ jest.mock('../../../utils/logger', () => ({
 import { PostReactionService, createPostReactionService } from '../../../services/PostReactionService';
 import type { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { ConflictError } from '../../../errors/custom-errors';
 
 describe('PostReactionService', () => {
   let service: PostReactionService;
@@ -249,6 +250,52 @@ describe('PostReactionService', () => {
       expect(mockPrisma.postReaction.create).not.toHaveBeenCalled();
     });
 
+    // The handler relies on `unchanged` to decide whether to re-broadcast
+    // `post:liked` and re-notify the author. A re-fire (existing row) MUST report
+    // unchanged: true so the handler skips both. Mirrors ReactionService.
+    it('should report unchanged: true when the reaction already exists', async () => {
+      const existingReaction = createMockPostReaction();
+      mockPrisma.postReaction.findFirst.mockResolvedValue(existingReaction);
+
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+      expect(mockPrisma.postReaction.create).not.toHaveBeenCalled();
+    });
+
+    it('should report unchanged: false on a fresh insert', async () => {
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(false);
+      expect(mockPrisma.postReaction.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should report unchanged: true on a concurrent-insert race (P2002)', async () => {
+      const existingReaction = createMockPostReaction();
+      // First findFirst (pre-check) misses, create races and hits the unique
+      // constraint, the P2002 branch re-reads and finds the winner's row.
+      mockPrisma.postReaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.postReaction.create.mockRejectedValue({ code: 'P2002' });
+
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+    });
+
     it('should throw error when max reactions per user reached', async () => {
       // User has already 1 different emoji (MAX_REACTIONS_PER_USER = 1)
       mockPrisma.postReaction.findMany.mockResolvedValue([
@@ -262,6 +309,21 @@ describe('PostReactionService', () => {
           emoji: '❤️' // Trying to add 2nd different emoji
         })
       ).rejects.toThrow('Maximum 1 different reactions per post reached');
+    });
+
+    it('should throw a typed ConflictError (409) when max reactions per user reached', async () => {
+      // The reaction-limit guard is a reachable domain error (emoji change),
+      // not a server fault. It must be a typed ConflictError so the REST like
+      // route maps it to HTTP 409, never a 500 INTERNAL_ERROR.
+      mockPrisma.postReaction.findMany.mockResolvedValue([{ emoji: '👍' }]);
+
+      const error = await service
+        .addReaction({ postId: testPostId, userId: testUserId, emoji: '❤️' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).statusCode).toBe(409);
+      expect((error as ConflictError).code).toBe('REACTION_LIMIT_REACHED');
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {

@@ -132,7 +132,9 @@ export function transformToConversationItem(
         type: getMessageType(lastMessage),
         attachmentCount: lastMessage.attachments?.length,
         timestamp: formatRelativeTime(lastMessage.createdAt, t, locale),
-        senderName: isGroup ? (lastMessage.sender as any)?.displayName : undefined,
+        senderName: isGroup
+          ? (getUserDisplayNameOrNull(lastMessage.sender as any) ?? undefined)
+          : undefined,
       }
     : {
         content: '',

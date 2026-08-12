@@ -45,34 +45,30 @@ extension UserProfileSheet {
 
     var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty, let url = URL(string: bannerURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        defaultBannerGradient
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: ProfileHeaderMetrics.expandedBanner)
-                            .clipped()
-                            .onTapGesture {
-                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                            }
-                            // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-                            .accessibilityElement()
-                            .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction {
-                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                            }
-                    case .failure:
-                        defaultBannerGradient
-                    @unknown default:
-                        defaultBannerGradient
-                    }
+            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
+                // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+                // la bannière n'est téléchargée qu'une fois par installation, et le
+                // resolver interne accepte aussi les chemins relatifs du gateway.
+                // showsStatusOverlays: false — echec silencieux, degradation
+                // vers le gradient deja fourni ci-dessous ; pas de bouton
+                // retry sur une banniere decorative (D2, no-retry-on-avatars).
+                CachedAsyncImage(url: bannerURL, showsStatusOverlays: false) {
+                    defaultBannerGradient
                 }
+                .scaledToFill()
                 .frame(height: ProfileHeaderMetrics.expandedBanner)
+                .clipped()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                }
+                // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                }
             } else {
                 defaultBannerGradient
             }
@@ -169,23 +165,37 @@ extension UserProfileSheet {
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: isBlockedByTarget ? nil : moodEmoji,
-            presenceState: isBlockedByTarget ? .offline : presenceFromUser,
+            presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: isBlockedByTarget ? nil : onMoodTap
         )
     }
 
-    var presenceFromUser: PresenceState {
-        displayUser.isOnline == true ? .online : .offline
+    /// Présence affichée sur l'avatar (grand header + barre compacte).
+    /// Priorité au `presenceProvider` injecté par l'app — même source temps
+    /// réel que la liste de conversations — puis fallback sur le snapshot
+    /// REST `isOnline` + `lastActiveAt` du profil chargé quand l'utilisateur
+    /// n'est pas suivi (provider absent ou retour `nil`).
+    var resolvedPresence: PresenceState {
+        if let presenceProvider,
+           let userId = resolvedUserId, !userId.isEmpty,
+           let live = presenceProvider(userId) {
+            return live
+        }
+        return UserPresence(
+            isOnline: displayUser.isOnline ?? false,
+            lastActiveAt: displayUser.lastActiveAt
+        ).state
     }
 
-    /// Couleur du libellé de présence selon l'ancienneté : vert < 5 min,
-    /// orange < 30 min, gris sinon. Miroir de `presenceColorClass` (web).
+    /// Couleur du libellé de présence — dérive l'état via la règle canonique
+    /// (`UserPresence.state`) puis le mapping couleur central (PresenceStyle) :
+    /// vert actif (<= 5 min), orange away (5-30 min), gris texte au-delà.
+    /// Miroir de `presenceColorClass` (web).
     func presenceColor(for date: Date, now: Date = Date()) -> Color {
-        let minutes = now.timeIntervalSince(date) / 60
-        if minutes < 5 { return MeeshyColors.success }
-        if minutes < 30 { return MeeshyColors.warning }
-        return theme.textSecondary
+        let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
+        if state == .offline { return theme.textSecondary }
+        return state.dotColor
     }
 
     // MARK: - Pinned tab bar (section header — pins on scroll)
@@ -278,7 +288,7 @@ extension UserProfileSheet {
                 accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
-                presenceState: isBlockedByTarget ? .offline : presenceFromUser
+                presenceState: isBlockedByTarget ? nil : resolvedPresence
             )
 
             VStack(alignment: .leading, spacing: 0) {
@@ -305,6 +315,6 @@ extension UserProfileSheet {
             Divider().opacity(0.3)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
+        .accessibilityLabel(Text(verbatim: "\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
     }
 }

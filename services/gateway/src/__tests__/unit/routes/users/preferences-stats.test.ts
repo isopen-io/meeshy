@@ -144,6 +144,29 @@ describe('GET /users/:userId/stats — achievements unlocked when counts exceed 
   });
 });
 
+// ─── totalConversations counts only ACTIVE memberships ────────────────────────
+
+describe('GET /users/:userId/stats — totalConversations excludes left/banned/removed conversations', () => {
+  it('filters participant.count by isActive: true', async () => {
+    const participantCount = jest.fn<any>().mockResolvedValue(5);
+    const app = await buildApp({
+      participant: { count: participantCount },
+    });
+    const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
+    expect(res.statusCode).toBe(200);
+    // Participant rows are soft-deactivated on leave/ban/delete-for-me, never
+    // deleted — the count MUST be scoped to active memberships or it inflates
+    // totalConversations with conversations the user is no longer in.
+    expect(participantCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true }),
+      })
+    );
+    expect(res.json().data.totalConversations).toBe(5);
+    await app.close();
+  });
+});
+
 // ─── $runCommandRaw returns no `n` field → r.n ?? 0 right-side ───────────────
 
 describe('GET /users/:userId/stats — $runCommandRaw returns no n field', () => {

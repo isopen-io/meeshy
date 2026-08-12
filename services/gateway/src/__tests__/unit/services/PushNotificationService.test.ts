@@ -4,8 +4,8 @@
  * Tests:
  * - Service initialization with Firebase and APNS providers
  * - Configuration flags (enabled/disabled)
- * - sendToUser method with various token types
- * - sendVoIPPush method for VoIP calls
+ * - sendToUser method with various token types, incl. VoIP calls and the
+ *   ENABLE_VOIP_PUSH kill switch
  * - sendViaFCM method (private, tested via sendToUser)
  * - sendViaAPNS method (private, tested via sendToUser)
  * - handleFailedToken method for invalid tokens
@@ -23,27 +23,31 @@ const mockFirebaseMessagingSend = jest.fn();
 const mockFirebaseInitializeApp = jest.fn();
 const mockFirebaseCredentialCert = jest.fn().mockReturnValue({});
 
-// Shared shape for both default and named-export sides of the mock.
-// Production uses `import * as admin from 'firebase-admin'` (or `import admin
-// from 'firebase-admin'`) and then accesses `admin.apps`, `admin.initializeApp`,
-// `admin.credential`, `admin.messaging()`. Under ts-jest's CJS interop, those
-// land on the top-level namespace, not on `.default`, so we expose both.
-const mockFirebaseMessagingFactory = jest.fn(() => ({
+// firebase-admin 14 modular API: production imports `getApps`/`initializeApp`/
+// `cert` from 'firebase-admin/app' and `getMessaging` from
+// 'firebase-admin/messaging' (the v13 namespace `admin.apps`/`admin.credential`/
+// `admin.messaging()` no longer exists).
+const mockFirebaseGetApps = jest.fn(() => []);
+const mockFirebaseGetMessaging = jest.fn(() => ({
   send: mockFirebaseMessagingSend,
 }));
-const firebaseAdminMockShape = {
-  apps: [],
+const firebaseAppMockShape = {
+  getApps: mockFirebaseGetApps,
   initializeApp: mockFirebaseInitializeApp,
-  credential: {
-    cert: mockFirebaseCredentialCert,
-  },
-  messaging: mockFirebaseMessagingFactory,
+  cert: mockFirebaseCredentialCert,
+};
+const firebaseMessagingMockShape = {
+  getMessaging: mockFirebaseGetMessaging,
 };
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
   __esModule: true,
-  default: firebaseAdminMockShape,
-  ...firebaseAdminMockShape,
+  ...firebaseAppMockShape,
+}));
+
+jest.mock('firebase-admin/messaging', () => ({
+  __esModule: true,
+  ...firebaseMessagingMockShape,
 }));
 
 // APNS mock
@@ -219,12 +223,14 @@ describe('PushNotificationService', () => {
     // Reset module cache to get fresh config
     jest.resetModules();
 
-    // Re-apply mocks after module reset. Mirror the top-level mock shape so
-    // both `admin.X` and `admin.default.X` resolve under ts-jest CJS interop.
-    jest.doMock('firebase-admin', () => ({
+    // Re-apply mocks after module reset (firebase-admin 14 modular subpaths).
+    jest.doMock('firebase-admin/app', () => ({
       __esModule: true,
-      default: firebaseAdminMockShape,
-      ...firebaseAdminMockShape,
+      ...firebaseAppMockShape,
+    }));
+    jest.doMock('firebase-admin/messaging', () => ({
+      __esModule: true,
+      ...firebaseMessagingMockShape,
     }));
 
     jest.doMock('@parse/node-apn', () => ({
@@ -498,6 +504,447 @@ describe('PushNotificationService', () => {
       expect(result[0].success).toBe(true);
     });
 
+    // Gateway audit finding (2026-07-08): the `ENABLE_VOIP_PUSH` kill switch
+    // was only enforced inside the unused `sendVoIPPush` helper. The real
+    // incoming-call path (CallEventsHandler) calls `sendToUser({types:
+    // ['voip']})` directly, so setting ENABLE_VOIP_PUSH=false never actually
+    // stopped VoIP pushes from going out.
+    it('does not deliver a voip push when ENABLE_VOIP_PUSH=false, even called via sendToUser directly', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        ENABLE_VOIP_PUSH: 'false',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: 'Incoming Call',
+          body: 'John is calling...',
+          callId: 'call-123',
+          callerName: 'John',
+        },
+        types: ['voip'],
+        bypassDnd: true,
+      });
+
+      expect(result).toEqual([]);
+      expect(mockPrisma.pushToken.findMany).not.toHaveBeenCalled();
+      expect(mockApnsProviderSend).not.toHaveBeenCalled();
+    });
+
+    // Gateway audit finding (2026-07-08): DND blocked call-management pushes
+    // with no exemption, unlike every comparable calling product (FaceTime,
+    // WhatsApp, Signal all ring through Do Not Disturb).
+    describe('DND (Do Not Disturb)', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+        // Midday UTC, safely inside a '00:00'-'23:59' DND window regardless
+        // of the machine running the suite's real wall-clock time.
+        jest.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+      });
+
+      // Mirrors the `isPushAllowed` describe block's own convention below:
+      // `userPreferences` isn't part of the base mock, so each test adds it
+      // and this cleans it up afterward — jest.clearAllMocks() does not
+      // reset the mockResolvedValue implementation on a re-added mock.
+      afterEach(() => {
+        jest.useRealTimers();
+        delete (mockPrisma as any).userPreferences;
+      });
+
+      it('blocks a normal push during the user\'s DND window', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '00:00', dndEndTime: '23:59' },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toEqual([]);
+        expect(mockApnsProviderSend).not.toHaveBeenCalled();
+      });
+
+      it('bypassDnd:true still delivers an incoming-call VoIP push during the DND window', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '00:00', dndEndTime: '23:59' },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: {
+            title: 'Incoming Call',
+            body: 'John is calling...',
+            callId: 'call-123',
+            callerName: 'John',
+          },
+          types: ['voip'],
+          bypassDnd: true,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      // GW6 — pushEnabled governs NOTIFICATION pushes only. Call pushes are a
+      // separate product category gated by the dedicated `callsEnabled`
+      // preference (default true): disabling message banners must not make
+      // incoming calls silently unreachable (FaceTime/WhatsApp/Signal parity).
+      it('pushEnabled:false still delivers an incoming-call VoIP push (callsEnabled default)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: false, dndEnabled: true, dndStartTime: '00:00', dndEndTime: '23:59' },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Incoming Call', body: 'John is calling...', callId: 'call-123', callerName: 'John' },
+          types: ['voip'],
+          bypassDnd: true,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('pushEnabled:false still delivers a call-management data push (call_cancel)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: '', body: '', silent: true, data: { type: 'call_cancel', callId: 'call-123' } },
+          types: ['apns'],
+          bypassDnd: true,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('callsEnabled:false blocks call pushes even with bypassDnd', async () => {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, callsEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Incoming Call', body: 'John is calling...', callId: 'call-123', callerName: 'John' },
+          types: ['voip'],
+          bypassDnd: true,
+        });
+
+        expect(result).toEqual([]);
+        expect(mockApnsProviderSend).not.toHaveBeenCalled();
+      });
+
+      // GW7 — DND parity with NotificationService via the SHARED isWithinDnd
+      // helper: the window is evaluated in the user's local wall-clock
+      // (dndUtcOffsetMinutes), no longer in server UTC.
+      it('GW7 — blocks a normal push at 23:00 Tokyo local (14:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T14:00:00.000Z'));
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toEqual([]);
+      });
+
+      it('GW7 — allows a normal push at 12:00 Tokyo local (03:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T03:00:00.000Z'));
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('callsEnabled:false does not affect normal notification pushes', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, callsEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Regular message', data: { type: 'new_message' } },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+    });
+
+    // GW8 — les préférences de livraison (Sons / Badges / regroupement) doivent
+    // être appliquées au chokepoint transport pour couvrir TOUS les producteurs :
+    // avant ce correctif, soundEnabled / notificationBadgeEnabled /
+    // groupNotifications étaient persistées mais jamais lues à l'envoi.
+    describe('delivery preferences (soundEnabled / notificationBadgeEnabled / groupNotifications)', () => {
+      afterEach(() => {
+        delete (mockPrisma as any).userPreferences;
+      });
+
+      const apnsEnv = {
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      };
+
+      const setupService = async (notificationPrefs: Record<string, unknown>) => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+        const { PushNotificationService } = await getServiceWithEnv(apnsEnv);
+        const service = new PushNotificationService(mockPrisma as any);
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({ notification: notificationPrefs }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+        mockPrisma.pushToken.update.mockResolvedValue({});
+        return service;
+      };
+
+      const richPayload = {
+        title: 'Test',
+        body: 'Test message',
+        badge: 5,
+        threadId: 'conv-42',
+        data: { type: 'new_message' },
+      };
+
+      it('soundEnabled:false delivers the banner without any APNs sound', async () => {
+        const service = await setupService({ pushEnabled: true, soundEnabled: false });
+
+        const result = await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.sound).toBeUndefined();
+        // Le reste du payload reste intact : seul le son est coupé.
+        expect(sent.badge).toBe(5);
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('notificationBadgeEnabled:false forces aps.badge to 0 (mirror of the iOS icon-badge gate)', async () => {
+        const service = await setupService({ pushEnabled: true, notificationBadgeEnabled: false });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        // 0 (et non undefined) : efface le badge résiduel quand l'app est tuée,
+        // exactement comme NotificationCoordinator.syncNow côté iOS.
+        expect(sent.badge).toBe(0);
+        expect(sent.sound).toBe('default');
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('groupNotifications:false drops the threadId so banners no longer stack per conversation', async () => {
+        const service = await setupService({ pushEnabled: true, groupNotifications: false });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.threadId).toBeUndefined();
+        expect(sent.badge).toBe(5);
+        expect(sent.sound).toBe('default');
+      });
+
+      it('default preferences leave sound, badge and threadId untouched', async () => {
+        const service = await setupService({ pushEnabled: true });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.sound).toBe('default');
+        expect(sent.badge).toBe(5);
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('call pushes are exempt from delivery preferences (ring must stay audible)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
+        const { PushNotificationService } = await getServiceWithEnv({
+          ...apnsEnv,
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { soundEnabled: false, notificationBadgeEnabled: false, groupNotifications: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+        mockPrisma.pushToken.update.mockResolvedValue({});
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Incoming Call', body: 'John is calling...', callId: 'call-123', callerName: 'John' },
+          types: ['voip'],
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+    });
+
     it('silent payload builds a pure background APNS push: no alert, no sound, pushType background, priority 5', async () => {
       mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
 
@@ -539,6 +986,11 @@ describe('PushNotificationService', () => {
       expect(sentNotification.payload).toEqual(
         expect.objectContaining({ type: 'call_cancel', callId: 'call-123' })
       );
+      // Expiration ~60 s (fenêtre de sonnerie) : un stop-ring livré plus tard
+      // n'a plus rien à éteindre — miroir du TTL FCM Android.
+      const nowSec = Math.floor(Date.now() / 1000);
+      expect(sentNotification.expiry).toBeGreaterThanOrEqual(nowSec + 55);
+      expect(sentNotification.expiry).toBeLessThanOrEqual(nowSec + 65);
     });
 
     it('should filter tokens by type when specified', async () => {
@@ -590,6 +1042,10 @@ describe('PushNotificationService', () => {
         where: {
           userId: 'user-123',
           isActive: true,
+          // No explicit `types` filter was passed, so all token types are
+          // queried (equivalent to no type filter — apns/fcm/voip are the
+          // only token types that exist).
+          type: { in: ['apns', 'fcm', 'voip'] },
           platform: { in: ['ios', 'android'] },
         },
         select: expect.any(Object),
@@ -1152,81 +1608,42 @@ describe('PushNotificationService', () => {
   // ==============================================
   // SEND VOIP PUSH TESTS
   // ==============================================
+  //
+  // There is no dedicated sendVoIPPush() method — real callers (e.g. the
+  // incoming-call push in CallEventsHandler) send VoIP pushes via
+  // sendToUser({ types: ['voip'], platforms: ['ios'], bypassDnd: true }).
+  // Coverage lives in the `sendToUser` describe block above, including the
+  // ENABLE_VOIP_PUSH kill-switch test.
 
-  describe('sendVoIPPush', () => {
-    it('should return empty array when VoIP push is disabled', async () => {
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'false',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
+  it('only targets iOS VoIP tokens when types/platforms scope to voip', async () => {
+    const { PushNotificationService } = await getServiceWithEnv({
+      ENABLE_PUSH_NOTIFICATIONS: 'true',
+      ENABLE_VOIP_PUSH: 'true',
+      ENABLE_APNS_PUSH: 'true',
+      APNS_KEY_ID: 'test-key-id',
+      APNS_TEAM_ID: 'test-team-id',
+      APNS_KEY_PATH: '/path/to/key.p8',
+    });
+    const service = new PushNotificationService(mockPrisma as any);
 
-      const result = await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-        callerAvatar: 'https://example.com/avatar.png',
-        conversationId: 'conv-456',
-      });
+    mockPrisma.pushToken.findMany.mockResolvedValue([]);
 
-      expect(result).toEqual([]);
+    await service.sendToUser({
+      userId: 'user-123',
+      payload: { title: 'Incoming Call', body: 'John Doe is calling...', callId: 'call-123', callerName: 'John Doe' },
+      types: ['voip'],
+      platforms: ['ios'],
+      bypassDnd: true,
     });
 
-    it('should send VoIP push notification successfully', async () => {
-      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
-
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'true',
-        ENABLE_APNS_PUSH: 'true',
-        APNS_KEY_ID: 'test-key-id',
-        APNS_TEAM_ID: 'test-team-id',
-        APNS_KEY_PATH: '/path/to/key.p8',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
-      ]);
-      mockPrisma.pushToken.update.mockResolvedValue({});
-
-      const result = await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-        callerAvatar: 'https://example.com/avatar.png',
-        conversationId: 'conv-456',
-      });
-
-      expect(result).toHaveLength(1);
-      expect(result[0].success).toBe(true);
-    });
-
-    it('should only target iOS VoIP tokens', async () => {
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'true',
-        ENABLE_APNS_PUSH: 'true',
-        APNS_KEY_ID: 'test-key-id',
-        APNS_TEAM_ID: 'test-team-id',
-        APNS_KEY_PATH: '/path/to/key.p8',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([]);
-
-      await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-      });
-
-      expect(mockPrisma.pushToken.findMany).toHaveBeenCalledWith({
-        where: {
-          userId: 'user-123',
-          isActive: true,
-          type: { in: ['voip'] },
-          platform: { in: ['ios'] },
-        },
-        select: expect.any(Object),
-      });
+    expect(mockPrisma.pushToken.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-123',
+        isActive: true,
+        type: { in: ['voip'] },
+        platform: { in: ['ios'] },
+      },
+      select: expect.any(Object),
     });
   });
 
@@ -1867,6 +2284,85 @@ describe('PushNotificationService', () => {
         jest.useRealTimers();
       }
     });
+
+    it('should block push in an overnight window morning tail when the window START day is selected', async () => {
+      // dndDays ['mon'] + 22:00→08:00 means "quiet Monday night → Tuesday morning".
+      // Tuesday 2026-01-06 07:00 UTC is the tail of Monday night's window and must
+      // be blocked — even though today's weekday ('tue') is not itself in dndDays.
+      jest.useFakeTimers({ now: new Date('2026-01-06T07:00:00Z') });
+      try {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: {
+              pushEnabled: true,
+              dndEnabled: true,
+              dndDays: ['mon'],
+              dndStartTime: '22:00',
+              dndEndTime: '08:00', // overnight
+            },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok', token: 'any', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-morning-tail-blocked',
+          payload: { title: 'Test', body: 'Test' },
+        });
+
+        expect(result).toEqual([]);
+        expect(mockLoggerInfo).toHaveBeenCalledWith(
+          'Push blocked by user preferences',
+          expect.objectContaining({ userId: 'user-morning-tail-blocked' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should allow push in an overnight window morning tail when the window START day is NOT selected', async () => {
+      // Monday 2026-01-05 07:00 UTC is the tail of Sunday night's window. With
+      // dndDays ['mon'] the Sunday-night window is not selected, so the push must
+      // be allowed — the naive "check today's weekday" logic wrongly blocked it.
+      jest.useFakeTimers({ now: new Date('2026-01-05T07:00:00Z') });
+      try {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: {
+              pushEnabled: true,
+              dndEnabled: true,
+              dndDays: ['mon'],
+              dndStartTime: '22:00',
+              dndEndTime: '08:00', // overnight
+            },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([]);
+
+        await service.sendToUser({
+          userId: 'user-morning-tail-allowed',
+          payload: { title: 'Test', body: 'Test' },
+        });
+
+        expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+          'Push blocked by user preferences',
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   // ==============================================
@@ -1969,6 +2465,79 @@ describe('PushNotificationService', () => {
 
       const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.android?.notification?.sound).toBe('default');
+    });
+
+    // --- Pushes d'appel Android : DATA-ONLY obligatoire ---------------------
+    // Un message FCM portant un bloc `notification` est rendu par le SYSTÈME
+    // quand l'app est backgroundée/tuée : onMessageReceived ne s'exécute
+    // JAMAIS — le full-screen ring, StopRing (call_cancel/answered_elsewhere)
+    // et SeenCallRing étaient donc morts précisément dans le scénario visé.
+
+    it('un push silent android part data-only — aucun bloc notification', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android',
+        payload: {
+          title: '',
+          body: '',
+          silent: true,
+          data: { type: 'call_cancel', callId: 'call-1' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
+      expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
+    });
+
+    it('le ring android part data-only avec le title/body localisés DANS data', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android',
+        payload: {
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+          data: { type: 'call', callId: 'call-1', callerName: 'Alice' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.data?.title).toBe('Alice vous appelle');
+      expect(sentMsg?.data?.body).toBe('Appel audio');
+      expect(sentMsg?.data?.callId).toBe('call-1');
+      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
+    });
+
+    it('un push d’appel iOS-via-FCM garde son bloc notification (hors périmètre android)', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-ios', type: 'fcm', platform: 'ios', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-ios',
+        payload: {
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+          data: { type: 'call', callId: 'call-1' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toEqual({ title: 'Alice vous appelle', body: 'Appel audio' });
     });
 
     it('should include webpush config with link for web FCM tokens', async () => {

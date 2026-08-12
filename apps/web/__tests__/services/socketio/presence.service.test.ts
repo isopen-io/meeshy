@@ -40,6 +40,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_NEW: 'conversation:new',
     CONVERSATION_DELETED: 'conversation:deleted',
     CONVERSATION_UPDATED: 'conversation:updated',
+    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
     CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
     CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
@@ -98,6 +99,7 @@ describe('PresenceService', () => {
         'conversation:new',
         'conversation:deleted',
         'conversation:updated',
+        'conversation:participant-joined',
         'conversation:participant-left',
         'conversation:participant-banned',
         'conversation:participant-unbanned',
@@ -187,6 +189,16 @@ describe('PresenceService', () => {
       service.onConversationJoined(listener);
       const event = { conversationId: 'conv-1', userId: 'u1' };
       socket._trigger('conversation:joined', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('forwards conversation:participant-joined events', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationParticipantJoined(listener);
+      const event = { conversationId: 'conv-1', userId: 'u9', displayName: 'Zoe', joinedAt: '2026-08-11T00:00:00.000Z' };
+      socket._trigger('conversation:participant-joined', event);
       expect(listener).toHaveBeenCalledWith(event);
     });
 

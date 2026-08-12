@@ -99,11 +99,14 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
           regionalLanguage: 'fr',
           autoTranslateEnabled: true,
           isOnline: updates.isOnline ?? false,
-          lastActiveAt: updates.lastActiveAt || new Date(),
+          // A missing lastActiveAt must stay absent — never fabricate now(),
+          // which would make getUserStatus decay to 'online' for an offline
+          // contact whose "last seen" is hidden by privacy prefs.
+          lastActiveAt: updates.lastActiveAt,
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date(),
-        } as User;
+        } as unknown as User;
 
     const newMap = new Map(state.usersMap);
     newMap.set(userId, updatedUser);

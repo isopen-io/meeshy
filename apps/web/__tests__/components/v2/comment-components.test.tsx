@@ -59,6 +59,19 @@ jest.mock('@/components/v2/Skeleton', () => ({
   Skeleton: ({ className }: { className?: string }) => <div data-testid="skeleton" className={className} />,
 }));
 
+// CommentList monte un CommentReplies (query React Query des réponses) par
+// commentaire ayant des réponses — stub neutre : pas de réseau, thread vide.
+jest.mock('@/hooks/queries/use-comments-query', () => ({
+  useCommentRepliesQuery: () => ({
+    data: undefined,
+    isLoading: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: jest.fn(),
+  }),
+  useCommentRepliesList: () => [],
+}));
+
 const mockComment: PostComment = {
   id: 'comment-1',
   postId: 'post-1',
@@ -288,20 +301,114 @@ describe('CommentList', () => {
     (Element.prototype as any).scrollIntoView = original;
   });
 
-  it('no-ops when targetCommentId is not in the loaded list', () => {
+  it('hunts next top-level pages when the target is missing, bounded to 15 pages', () => {
     const scrollSpy = jest.fn();
     const original = (Element.prototype as any).scrollIntoView;
     (Element.prototype as any).scrollIntoView = scrollSpy;
+    const onLoadMore = jest.fn();
+
+    const pageOf = (count: number): PostComment[] => [
+      mockComment,
+      ...Array.from({ length: count }, (_, i) => ({ ...mockComment2, id: `filler-${i}` })),
+    ];
+
+    const { rerender } = render(
+      <CommentList
+        postId="post-1"
+        comments={pageOf(0)}
+        targetCommentId="missing-comment"
+        hasMore
+        onLoadMore={onLoadMore}
+      />,
+    );
+
+    // Cible absente + pages restantes → la chasse suit le curseur.
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    // Chaque « page » arrivée sans la cible relance la chasse — jusqu'à la
+    // borne de 15 pages, après quoi elle s'arrête définitivement.
+    for (let page = 1; page <= 20; page += 1) {
+      rerender(
+        <CommentList
+          postId="post-1"
+          comments={pageOf(page)}
+          targetCommentId="missing-comment"
+          hasMore
+          onLoadMore={onLoadMore}
+        />,
+      );
+    }
+
+    expect(onLoadMore).toHaveBeenCalledTimes(15);
+    expect(scrollSpy).not.toHaveBeenCalled();
+    (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('does not hunt when there are no further pages', () => {
+    const scrollSpy = jest.fn();
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+    const onLoadMore = jest.fn();
 
     render(
       <CommentList
         postId="post-1"
         comments={[mockComment]}
         targetCommentId="missing-comment"
+        hasMore={false}
+        onLoadMore={onLoadMore}
       />,
     );
 
+    expect(onLoadMore).not.toHaveBeenCalled();
     expect(scrollSpy).not.toHaveBeenCalled();
     (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('calls onUnlike when a comment already carries the current user heart reaction', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[{ ...mockComment, currentUserReactions: ['❤️'] }]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onLikeComment).not.toHaveBeenCalled();
+  });
+
+  it('calls onLike when a comment has no reaction from the current user', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Like comment' }));
+    expect(onLikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onUnlikeComment).not.toHaveBeenCalled();
+  });
+
+  it('honours an explicit likedCommentIds override even without reaction data', () => {
+    const onUnlikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        likedCommentIds={new Set(['comment-1'])}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
   });
 });

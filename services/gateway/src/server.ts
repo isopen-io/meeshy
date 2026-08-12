@@ -20,7 +20,10 @@ import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import winston from 'winston';
+// Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
+// logger sans importer `server.ts` (effets de bord au chargement du module —
+// voir le commentaire en tête de `route-registration.ts`).
+import { logger } from './gateway-logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
@@ -31,63 +34,16 @@ import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
+import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
+import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
-import { authRoutes } from './routes/auth';
-import { conversationRoutes } from './routes/conversations';
-import { syncRoutes } from './routes/sync';
-import { linksRoutes } from './routes/links';
-import { trackingLinksRoutes } from './routes/tracking-links';
-import { anonymousRoutes } from './routes/anonymous';
-import { communityRoutes } from './routes/communities';
-// import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
-import { dashboardRoutes } from './routes/admin/dashboard';
-import { userAdminRoutes } from './routes/admin/users';
-import { reportRoutes } from './routes/admin/reports';
-import { invitationRoutes } from './routes/admin/invitations';
-import { analyticsRoutes } from './routes/admin/analytics';
-import { languagesRoutes } from './routes/admin/languages';
-import { messagesRoutes } from './routes/admin/messages';
-import { registerContentRoutes } from './routes/admin/content';
-import { anonymousUsersAdminRoutes } from './routes/admin/anonymous-users';
-import { systemRankingsRoutes } from './routes/admin/system-rankings';
-import { broadcastRoutes } from './routes/admin/broadcasts';
-import { adminPostRoutes } from './routes/admin/posts';
-import { agentAdminRoutes } from './routes/admin/agent';
-import { agentTopicsRoutes } from './routes/admin/agent-topics';
-import { userRoutes } from './routes/users';
-import meRoutes from './routes/me';
-import conversationPreferencesRoutes from './routes/conversation-preferences';
-import communityPreferencesRoutes from './routes/community-preferences';
-import conversationEncryptionRoutes from './routes/conversation-encryption';
-import signalProtocolRoutes from './routes/signal-protocol';
-import { translationRoutes } from './routes/translation-non-blocking';
-import { translationRoutes as translationBlockingRoutes } from './routes/translation';
-import { translationJobsRoutes } from './routes/translation-jobs';
-import { maintenanceRoutes } from './routes/maintenance';
-import affiliateRoutes from './routes/affiliate';
-import { userStatsRoutes } from './routes/user-stats';
-import messageRoutes from './routes/messages';
-import messageReadStatusRoutes from './routes/message-read-status';
-import mentionRoutes from './routes/mentions';
-import { notificationRoutes } from './routes/notifications';
-import { friendRequestRoutes } from './routes/friends';
-import { invitationRoutes as publicInvitationRoutes } from './routes/invitations';
-import { attachmentRoutes } from './routes/attachments';
-import reactionRoutes from './routes/reactions';
-import callRoutes from './routes/calls';
-import { voiceProfileRoutes } from './routes/voice-profile';
-import { registerVoiceRoutes } from './routes/voice';
-import { registerTusRoutes } from './routes/uploads/tus-handler';
-import { voiceAnalysisRoutes } from './routes/voice-analysis';
-import { getAudioTranslateService } from './services/AudioTranslateService';
-import { passwordResetRoutes } from './routes/password-reset';
-import { twoFactorRoutes } from './routes/two-factor';
-import { magicLinkRoutes } from './routes/magic-link';
-import userDeletionsRoutes from './routes/user-deletions';
-import { pushTokenRoutes } from './routes/push-tokens';
-import { postRoutes } from './routes/posts';
+// L'enregistrement des routes REST (~50 fichiers) vit dans `./route-registration`,
+// un module SANS effet de bord au chargement (voir le commentaire en tête de
+// ce fichier) — nécessaire pour que le test de garde des routes puisse
+// l'importer sans déclencher `meeshyServer.start()`.
+import { registerAllRoutes } from './route-registration';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -131,73 +87,9 @@ function loadConfiguration(): Config {
 
 const config = loadConfiguration();
 
-// API versioning
-const API_VERSION = 'v1';
-const API_PREFIX = `/api/${API_VERSION}`;
-
 // ============================================================================
-// LOGGER SETUP
+// LOGGER SETUP (voir `./gateway-logger`)
 // ============================================================================
-
-const logger = winston.createLogger({
-  level: config.isDev ? 'debug' : 'warn', // Production: seulement warn et error
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.errors({ stack: true }),
-    config.isDev
-      ? winston.format.combine(
-          winston.format.colorize(),
-          winston.format.printf(({ timestamp, level, message, stack }) => {
-            return `${timestamp} [GWY] [${level}] ${message}${stack ? '\n' + stack : ''}`;
-          })
-        )
-      : winston.format.combine(
-          winston.format.printf((info) => {
-            const { timestamp, level, message, stack, module, func, ...meta } = info;
-
-            // Format structuré : [LEVEL][SERVICE][MODULE][FUNCTION] {data}
-            const logParts = [
-              `[${level.toUpperCase()}]`,
-              '[GWY]',
-              module ? `[${module}]` : '',
-              func ? `[${func}]` : ''
-            ].filter(Boolean);
-
-            const logObj: any = {
-              msg: message
-            };
-
-            // Ajouter le stack si présent
-            if (stack) {
-              logObj.stack = stack;
-            }
-
-            // Ajouter toutes les métadonnées supplémentaires
-            if (Object.keys(meta).length > 0) {
-              Object.assign(logObj, meta);
-            }
-
-            return `${timestamp} ${logParts.join('')} ${JSON.stringify(logObj)}`;
-          })
-        )
-  ),
-  transports: [
-    new winston.transports.Console(),
-    ...(!config.isDev ? [
-      new winston.transports.File({
-        filename: 'logs/error.log',
-        level: 'error',
-        maxsize: 5242880, // 5MB
-        maxFiles: 5
-      }),
-      new winston.transports.File({
-        filename: 'logs/combined.log',
-        maxsize: 5242880, // 5MB
-        maxFiles: 5
-      })
-    ] : [])
-  ]
-});
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -497,7 +389,8 @@ class MeeshyServer {
         logger.warn(`CORS rejected origin: "${origin}"`);
         return cb(new Error('Not allowed by CORS'), false);
       },
-      credentials: true
+      credentials: true,
+      methods: CORS_METHODS
     });
 
     // OpenAPI/Swagger documentation
@@ -614,6 +507,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // routes already carry `request.user`; public routes simply no-op.
     this.server.addHook('preHandler', createDeviceLocaleMiddleware(this.prisma));
     logger.info('✅ deviceLocale hook registered (X-Device-Locale → User.deviceLocale)');
+
+    // Guideline 5 (MIIT) CallKit-in-China compliance — continuous device
+    // country signal (registrationCountry is only captured once at signup).
+    // CallEventsHandler reads User.deviceCountry to route incoming-call
+    // pushes away from the PushKit/CallKit 'voip' token type in China.
+    this.server.addHook('preHandler', createDeviceCountryMiddleware(this.prisma));
+    logger.info('✅ deviceCountry hook registered (X-Meeshy-Country → User.deviceCountry)');
 
     // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
     // can wrap their writes in `recordOrReturn(...)` for idempotency.
@@ -872,249 +772,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   // --------------------------------------------------------------------------
 
   private async setupRoutes(): Promise<void> {
-    logger.info('Configuring REST API routes...');
-
-    // Health check endpoint
-    this.server.get('/health', async (request, reply) => {
-      try {
-        const [userCount, translationHealthy] = await Promise.all([
-          this.prisma.user.count(),
-          this.translationService.healthCheck().catch(() => false)
-        ]);
-
-        const health = {
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          environment: config.nodeEnv,
-          version: '1.0.0',
-          services: {
-            database: { status: 'up', userCount },
-            translation: { status: translationHealthy ? 'up' : 'down' },
-            websocket: { status: 'up' }
-          },
-          uptime: process.uptime()
-        };
-
-        reply.code(200).send(health);
-      } catch (error) {
-        logger.error('Health check failed:', error);
-        reply.code(503).send({
-          status: 'unhealthy',
-          timestamp: new Date().toISOString(),
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
+    // Corps déplacé dans `registerAllRoutes` (module-level, exportée) pour que
+    // le test de garde des routes (`__tests__/security/route-auth-coverage.test.ts`)
+    // puisse assembler le même graphe de routes sans instancier tout MeeshyServer.
+    await registerAllRoutes(this.server, {
+      prisma: this.prisma,
+      translationService: this.translationService,
+      messagingService: this.messagingService,
+      mentionService: this.mentionService,
+      orphanMediaCleanup: this.orphanMediaCleanup,
     });
-
-    // Service information endpoint
-    this.server.get('/info', async (request, reply) => {
-      return {
-        name: 'Meeshy Translation Gateway',
-        version: '1.0.0',
-        environment: config.nodeEnv,
-        architecture: {
-          frontend: 'WebSocket + REST API',
-          backend: 'ZMQ + Protocol Buffers',
-          database: 'PostgreSQL + Prisma'
-        },
-        endpoints: {
-          websocket: '/socket.io/',
-          health: '/health',
-          translate: '/translate'
-        },
-        supportedLanguages: ['fr', 'en', 'es', 'de', 'pt', 'zh', 'ja', 'ar'],
-        features: ['real-time translation', 'multiple language support', 'caching', 'typing indicators']
-      };
-    });
-
-        // Register translation routes with the translation service
-    await this.server.register(async (fastify) => {
-      // Décorer le serveur avec le service de traduction et messaging
-      fastify.decorate('translationService', this.translationService);
-      fastify.decorate('messagingService', this.messagingService);
-      fastify.decorate('mentionService', this.mentionService);
-
-      // Enregistrer les routes de traduction (non-blocking)
-      await fastify.register(translationRoutes);
-
-      // Enregistrer les routes de traduction (blocking)
-      await fastify.register(translationBlockingRoutes);
-
-      // Enregistrer les routes de gestion des jobs de traduction
-      await fastify.register(translationJobsRoutes);
-    }, { prefix: API_PREFIX });
-
-    // Register authentication routes with /api/auth prefix
-    await this.server.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
-
-    // Register password reset routes with /api/auth prefix
-    await this.server.register(passwordResetRoutes, { prefix: `${API_PREFIX}/auth` });
-
-    // Register 2FA routes with /api/auth/2fa prefix
-    await this.server.register(twoFactorRoutes, { prefix: `${API_PREFIX}/auth/2fa` });
-
-    // Register magic link routes with /api/auth prefix
-    await this.server.register(magicLinkRoutes, { prefix: `${API_PREFIX}/auth` });
-
-    // Register user deletions routes (delete for me feature)
-    await this.server.register(userDeletionsRoutes, { prefix: '' });
-
-    // Register conversation routes with /api prefix
-    await this.server.register(async (fastify) => {
-      await conversationRoutes(fastify);
-    }, { prefix: API_PREFIX });
-    // Register links management routes
-    await this.server.register(linksRoutes, { prefix: API_PREFIX });
-    // SyncEngine unifié — endpoint delta /sync (spec §7, A3)
-    await this.server.register(syncRoutes, { prefix: API_PREFIX });
-
-    // Register tracking links routes
-    await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });
-
-    // Register anonymous participation routes
-    await this.server.register(anonymousRoutes, { prefix: API_PREFIX });
-
-    // Register community routes
-    await this.server.register(communityRoutes, { prefix: API_PREFIX });
-
-    // Register admin routes - Each admin route is registered individually below with specific prefixes
-    // (Removed global adminRoutes registration to avoid duplicate route declarations)
-
-    // Register admin dashboard routes (at /api/admin/dashboard)
-    await this.server.register(dashboardRoutes, { prefix: `${API_PREFIX}/admin` });
-
-    // Register enhanced admin user management routes (at /api/v1/admin/users)
-    await this.server.register(userAdminRoutes, { prefix: API_PREFIX });
-
-    // Register admin report routes (at /api/admin/reports)
-    await this.server.register(reportRoutes, { prefix: `${API_PREFIX}/admin/reports` });
-
-    // Register admin invitations routes (at /api/admin/invitations)
-    await this.server.register(invitationRoutes, { prefix: `${API_PREFIX}/admin/invitations` });
-
-    // Register admin analytics routes (at /api/admin/analytics)
-    await this.server.register(analyticsRoutes, { prefix: `${API_PREFIX}/admin/analytics` });
-
-    // Register admin languages routes (at /api/admin/languages)
-    await this.server.register(languagesRoutes, { prefix: `${API_PREFIX}/admin/languages` });
-
-    // Register admin messages routes (at /api/admin/messages/stats|trends|engagement)
-    await this.server.register(messagesRoutes, { prefix: `${API_PREFIX}/admin/messages` });
-
-    // Register admin content routes (messages list, communities, translations, share-links)
-    await this.server.register(registerContentRoutes, { prefix: `${API_PREFIX}/admin` });
-
-    // Register admin anonymous users routes (at /api/admin/anonymous-users)
-    await this.server.register(anonymousUsersAdminRoutes, { prefix: `${API_PREFIX}/admin` });
-
-    // Register admin rankings routes (at /api/admin/ranking)
-    await this.server.register(systemRankingsRoutes, { prefix: `${API_PREFIX}/admin` });
-
-    // Register admin broadcasts routes (at /api/admin/broadcasts)
-    await this.server.register(broadcastRoutes, { prefix: `${API_PREFIX}/admin/broadcasts` });
-
-    // Register admin post moderation routes (at /api/admin/posts)
-    await this.server.register(adminPostRoutes, { prefix: `${API_PREFIX}/admin` });
-
-    // Register agent admin routes (at /api/v1/admin/agent)
-    await this.server.register(agentAdminRoutes, { prefix: `${API_PREFIX}/admin/agent` });
-    await this.server.register(agentTopicsRoutes, { prefix: `${API_PREFIX}/admin/agent` });
-
-    // Register user routes
-    await this.server.register(userRoutes, { prefix: API_PREFIX });
-
-    // Register /me routes (NEW unified preferences API)
-    await this.server.register(meRoutes, { prefix: `${API_PREFIX}/me` });
-
-    // Register push notification token routes (device registration for APNS/FCM/VoIP)
-    await this.server.register(pushTokenRoutes, { prefix: API_PREFIX });
-
-    // Register conversation preferences routes with /api prefix
-    await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });
-
-    // Register community preferences routes with /api prefix
-    await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
-
-    // Register conversation encryption routes with /api prefix
-    // (enable + read encryption mode toggle: e2ee / server / hybrid)
-    await this.server.register(conversationEncryptionRoutes, { prefix: API_PREFIX });
-
-    // Register Signal Protocol routes for E2EE key generation
-    await this.server.register(signalProtocolRoutes, { prefix: API_PREFIX });
-
-    // Register affiliate routes
-    await this.server.register(affiliateRoutes, { prefix: API_PREFIX });
-
-    // Register user stats routes (GET /users/me/stats, /timeline, /achievements)
-    await this.server.register(userStatsRoutes, { prefix: API_PREFIX });
-
-
-    // Register maintenance routes with /api prefix
-    await this.server.register(maintenanceRoutes, { prefix: API_PREFIX });
-
-    // Register message routes with /api prefix
-    await this.server.register(messageRoutes, { prefix: API_PREFIX });
-
-    // Register message read status routes
-    await this.server.register(messageReadStatusRoutes, { prefix: API_PREFIX });
-
-    // Register mention routes with /api prefix
-    await this.server.register(mentionRoutes, { prefix: API_PREFIX });
-
-    // Register attachment routes with /api/v1 prefix
-    await this.server.register(attachmentRoutes, { prefix: API_PREFIX });
-
-    // LEGACY: Register attachment routes with /api prefix (without v1) for backward compatibility
-    // Existing data in DB uses /api/attachments/file/... URLs without v1
-    await this.server.register(attachmentRoutes, { prefix: '/api' });
-
-    // Register tus resumable upload routes (mounted at /api/v1/uploads)
-    await this.server.register(registerTusRoutes);
-    logger.info('✓ TUS resumable upload routes registered');
-
-    // Register reaction routes with /api prefix
-    await this.server.register(reactionRoutes, { prefix: API_PREFIX });
-
-    // Register notification routes with /api prefix
-    await this.server.register(notificationRoutes, { prefix: API_PREFIX });
-
-    // Register friend request routes with /api prefix
-    await this.server.register(friendRequestRoutes, { prefix: API_PREFIX });
-
-    // Register invitation routes with /api prefix
-    await this.server.register(publicInvitationRoutes, { prefix: API_PREFIX });
-
-    // Register call routes with /api prefix (Phase 1A: P2P Video Calls MVP)
-    await this.server.register(callRoutes, { prefix: API_PREFIX });
-
-    // Register voice profile routes with /api/voice/profile prefix
-    await this.server.register(voiceProfileRoutes, { prefix: `${API_PREFIX}/voice/profile` });
-
-    // Register voice analysis routes with /api/voice-analysis prefix
-    await this.server.register(voiceAnalysisRoutes);
-    logger.info('✓ Voice Analysis routes registered');
-
-    // Register voice API routes (transcribe, translate, analyze, etc.)
-    const zmqClient = this.translationService.getZmqClient();
-    if (zmqClient) {
-      const audioTranslateService = getAudioTranslateService(this.prisma, zmqClient);
-      registerVoiceRoutes(this.server, audioTranslateService, this.translationService);
-      logger.info('✓ Voice API routes registered');
-    } else {
-      logger.warn('⚠️ ZMQ client not available, voice routes not registered');
-    }
-
-    // Register post/feed routes with /api/v1 prefix.
-    // Decorate the scoped instance with orphanMediaCleanup so the repost
-    // path in PostService can register snapshot files in the outbox before
-    // the surrounding transaction commits (Pilier 4 producer side).
-    await this.server.register(async (instance) => {
-      instance.decorate('orphanMediaCleanup', this.orphanMediaCleanup);
-      await postRoutes(instance);
-    }, { prefix: API_PREFIX });
-    logger.info('✓ Post/Feed routes registered');
-
-    logger.info('✓ REST API routes configured successfully');
   }
 
   // --------------------------------------------------------------------------
@@ -1315,11 +982,41 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setPostSummaryCallback(
           (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
         );
+        // Live-call message — initiateCall's OWN GC sweeps (phantom stale
+        // participations, zombie active call) end calls with garbageCollected
+        // without any summary hook: an already-posted live "en cours" message
+        // would stay frozen forever. Same conversion path as the GC tiers.
+        cleanupManager.getCallService().setReapedCallCallback(
+          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
+        );
+        // Parité socket (2026-07-12) — les routes REST end/leave n'ont pas d'`io`
+        // et ne diffusaient jamais `call:ended` au pair (qui restait « en appel »
+        // jusqu'au GC ~120s). Elles délèguent le fanout ici, même audience
+        // dédupliquée que les handlers socket call:end/call:leave.
+        cleanupManager.getCallService().setCallEndedBroadcaster(
+          (callId, conversationId, endedEvent) =>
+            callEventsHandler.broadcastCallEndedForTerminatedCall(
+              cleanupManager.getIO(), callId, conversationId, endedEvent
+            )
+        );
+        // Bug fix (2026-08-01) — initiateCall's own GC sweeps (phantom stale
+        // participations, zombie active call) write `CallParticipant.leftAt`
+        // exactly like every path above, but had no bridge to
+        // CallEventsHandler's `call:signal` session cache: without this, a
+        // `call:signal` for that callId could still relay SDP/ICE for up to
+        // the cache's 2s TTL after the DB already marked the participant gone.
+        cleanupManager.getCallService().setSignalCacheInvalidationCallback(
+          (callId) => callEventsHandler.invalidateSignalSession(callId)
+        );
         // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
         // path) also release their qualityDegradedStreaks entries, matching
         // the three paths CallEventsHandler already hooks into itself.
         this.callCleanupService.setQualityStreakCleanupCallback(
           (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
+        );
+        // Same bridge as CallService's sweeps above, for GC's own forceEndCall.
+        this.callCleanupService.setSignalCacheInvalidationCallback(
+          (callId) => callEventsHandler.invalidateSignalSession(callId)
         );
         // Phantom-ringing safety net — a callee whose VoIP push was
         // delivered but whose socket never joined the call room needs the
@@ -1329,6 +1026,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setMissedCallCancelPushCallback(
           (callId, conversationId, duration) =>
             callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
+        );
+        // Sibling-drift fix (2026-07-07) — GC tier 1 (initiated/ringing > 120s
+        // → missed) now also creates the persisted missed-call notification
+        // for unresponded participants, matching the in-process ringing-
+        // timeout path (`handleMissedCall`). Calls `createMissedCallNotifications`
+        // directly, NOT `handleMissedCall` — GC's own transaction already
+        // performed the terminal `missed` write, so re-running
+        // `markCallAsMissed` here would be redundant.
+        this.callCleanupService.setMissedCallNotificationCallback(
+          (callId) => callEventsHandler.createMissedCallNotifications(callId)
         );
         // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
         // crash/restart wiped, so pre-answer calls interrupted by the restart
@@ -1376,6 +1083,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       try {
         const socketManager = this.socketIOHandler?.getManager?.();
         socketManager?.getCallEventsHandler?.().prepareForShutdown();
+        // Release the handler's own periodic buffered-offer cleanup interval
+        // and any leftover disconnect-grace timers — `prepareForShutdown()`
+        // only flips shutdown mode and clears the grace timers; it does not
+        // stop the interval, which would otherwise keep querying a handler
+        // that's about to be torn down.
+        socketManager?.getCallEventsHandler?.().destroy();
+        socketManager?.getCallService?.()?.destroy();
         logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
       } catch (callShutdownError) {
         logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);

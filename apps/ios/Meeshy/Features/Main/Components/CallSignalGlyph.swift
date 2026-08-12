@@ -62,14 +62,25 @@ enum CallSignalStrength: Equatable {
         }
     }
 
+    /// Décrit UNIQUEMENT la force du signal, jamais un événement de connexion
+    /// (reconnexion/perte) — `.fair`/`.poor`/`.lost` sont produits aussi bien
+    /// par un repli ICE binaire (avant le 1er échantillon de stats) QUE par de
+    /// vraies métriques temps réel sur un lien pleinement `.connected` (voir
+    /// `from(level:connection:)`) : le même cas ne permet pas de distinguer les
+    /// deux sources. Un libellé "Reconnexion"/"Connexion perdue" mentait donc à
+    /// VoiceOver sur un appel simplement dégradé mais jamais interrompu — les
+    /// vrais événements de reconnexion/perte sont déjà annoncés séparément par
+    /// les bannières `isSignalingDegraded`/`isRemoteQualityDegraded` de CallView.
     var accessibilityLabel: String {
         switch self {
         case .excellent, .good:
             return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
         case .fair:
-            return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
-        case .poor, .lost:
-            return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+            return String(localized: "call.quality.fair", defaultValue: "Signal moyen", bundle: .main)
+        case .poor:
+            return String(localized: "call.quality.poor", defaultValue: "Signal faible", bundle: .main)
+        case .lost:
+            return String(localized: "call.quality.lost", defaultValue: "Signal très faible", bundle: .main)
         case .connecting:
             return String(localized: "call.quality.inProgress", defaultValue: "Connexion en cours", bundle: .main)
         }

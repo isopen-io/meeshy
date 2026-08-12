@@ -290,8 +290,6 @@ final class WebRTCServiceTests: XCTestCase {
             "The newest candidate must always be retained by the FIFO ring.")
     }
 
-    // MARK: - Transcription Channel
-
     // MARK: - TestableWebRTCClient Stats Configuration
 
     func test_testableClient_statsToReturn_isNilByDefault() async {
@@ -307,14 +305,6 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(result?.availableOutgoingBitrateBps, 1_500_000)
     }
 
-    func test_createTranscriptionChannel_delegatesToClient() {
-        let (sut, client) = makeSUT()
-        client.createDataChannelResult = true
-        let result = sut.createTranscriptionChannel()
-        XCTAssertTrue(result)
-        XCTAssertEqual(client.lastDataChannelLabel, "transcription")
-    }
-
     // MARK: - Connection State Delegate
 
     func test_connectionStateChange_updatesConnectionState() async {
@@ -324,10 +314,10 @@ final class WebRTCServiceTests: XCTestCase {
 
         // webRTCClient(_:didChangeConnectionState:) is nonisolated and applies
         // the new state on a hopped @MainActor Task — yield until it drains.
-        var observed = await sut.connectionState
+        var observed = sut.connectionState
         for _ in 0..<100 where observed != .connected {
             await Task.yield()
-            observed = await sut.connectionState
+            observed = sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
     }
@@ -676,10 +666,13 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
 // MARK: - Jitter-aware bitrate gate source guards
 
 /// `adjustBitrate` applies a jitter gate after the RTT/loss tier selection:
-/// when `stats.jitterMs > QualityThresholds.highJitterThresholdMs` the effective
-/// bitrate is capped to `minBitrate` regardless of RTT/loss signal.
-/// High jitter degrades Opus PLC even on a low-latency path; shedding encoder
-/// complexity gives the jitter buffer headroom to absorb the spikes.
+/// two consecutive ticks with `jitterMs > QualityThresholds.highJitterThresholdMs`
+/// (via `JitterBitrateCapTracker`) cap the effective bitrate to `minBitrate`
+/// regardless of RTT/loss signal. High jitter degrades Opus PLC even on a
+/// low-latency path; shedding encoder complexity gives the jitter buffer
+/// headroom to absorb the spikes. The hysteresis (vs. a single-tick gate)
+/// prevents a lone jitter blip from yanking bitrate down and back up on the
+/// very next 5s tick (audible warble on a link that's otherwise fine).
 @MainActor
 final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
 
@@ -696,27 +689,27 @@ final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
     func test_adjustBitrate_jitterGate_comparesAgainstHighJitterThreshold() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
+            src.contains("thresholdMs: QualityThresholds.highJitterThresholdMs"),
             "adjustBitrate must gate on QualityThresholds.highJitterThresholdMs — " +
             "a hardcoded literal here would silently diverge from the tested constant."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_usesHysteresisTracker() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("jitterBitrateCapTracker.record("),
+            "adjustBitrate must gate the jitter cap through JitterBitrateCapTracker — " +
+            "a raw single-tick comparison re-introduces the audible warble a lone jitter blip caused."
         )
     }
 
     func test_adjustBitrate_jitterGate_capsToMinBitrate() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("? QualityThresholds.minBitrate : newBitrate"),
-            "When jitterMs exceeds the threshold the effective bitrate must be minBitrate — " +
+            src.contains("let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate"),
+            "When the jitter tracker confirms the cap, the effective bitrate must be minBitrate — " +
             "any other fallback value leaves the Opus encoder at a bitrate too high for the jitter buffer to compensate."
-        )
-    }
-
-    func test_adjustBitrate_jitterGate_producesEffectiveBitrate() throws {
-        let src = try webRTCServiceSource()
-        XCTAssertTrue(
-            src.contains("let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
-            "The jitter gate must produce an `effectiveBitrate` binding that downstream code uses for both " +
-            "the applyAudioEncoding call and the change-detection guard (currentBitrate comparison)."
         )
     }
 
@@ -727,6 +720,69 @@ final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
             "When jitter caps the bitrate the log message must include a [capped] tag so operators " +
             "can distinguish a jitter-driven reduction from a network-congestion-driven one."
         )
+    }
+
+    func test_stopQualityMonitor_resetsJitterTracker() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func stopQualityMonitor()") else {
+            XCTFail("stopQualityMonitor not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("jitterBitrateCapTracker.reset()"),
+            "stopQualityMonitor must reset the jitter hysteresis streak — otherwise a streak from the " +
+            "end of one call/monitor cycle could carry into the next and cap bitrate prematurely."
+        )
+    }
+}
+
+// MARK: - JitterBitrateCapTracker (behavioral)
+
+/// Mirrors `DegradedLinkTrackerTests`: two consecutive high-jitter ticks
+/// before capping, immediate clear on the first tick back under threshold.
+final class JitterBitrateCapTrackerTests: XCTestCase {
+
+    private let threshold = 30.0
+
+    func test_record_singleHighJitterTick_doesNotCap() {
+        var tracker = JitterBitrateCapTracker()
+        XCTAssertFalse(tracker.record(jitterMs: 45, thresholdMs: threshold))
+    }
+
+    func test_record_consecutiveHighJitterTicks_caps() {
+        var tracker = JitterBitrateCapTracker()
+        _ = tracker.record(jitterMs: 45, thresholdMs: threshold)
+        XCTAssertTrue(tracker.record(jitterMs: 50, thresholdMs: threshold))
+    }
+
+    func test_record_healthyTick_clearsImmediately() {
+        var tracker = JitterBitrateCapTracker()
+        _ = tracker.record(jitterMs: 45, thresholdMs: threshold)
+        _ = tracker.record(jitterMs: 50, thresholdMs: threshold)
+        XCTAssertFalse(tracker.record(jitterMs: 10, thresholdMs: threshold))
+    }
+
+    func test_record_interruptedStreak_doesNotCap() {
+        var tracker = JitterBitrateCapTracker()
+        _ = tracker.record(jitterMs: 45, thresholdMs: threshold)
+        _ = tracker.record(jitterMs: 5, thresholdMs: threshold)
+        XCTAssertFalse(tracker.record(jitterMs: 45, thresholdMs: threshold))
+    }
+
+    func test_record_jitterAtExactThreshold_doesNotCap() {
+        var tracker = JitterBitrateCapTracker()
+        _ = tracker.record(jitterMs: threshold, thresholdMs: threshold)
+        XCTAssertFalse(tracker.record(jitterMs: threshold, thresholdMs: threshold))
+    }
+
+    func test_reset_clearsStreakAndCap() {
+        var tracker = JitterBitrateCapTracker()
+        _ = tracker.record(jitterMs: 45, thresholdMs: threshold)
+        _ = tracker.record(jitterMs: 50, thresholdMs: threshold)
+        tracker.reset()
+        XCTAssertFalse(tracker.isCapped)
+        XCTAssertFalse(tracker.record(jitterMs: 45, thresholdMs: threshold))
     }
 }
 
@@ -970,8 +1026,12 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 
     func test_switchCamera_chainsOntoPreviousTask() throws {
         let src = try webRTCServiceSource()
-        guard let body = body(of: "func switchCamera()", in: src) else {
-            XCTFail("switchCamera() not found"); return
+        // Ancre sur le nom + la parenthèse ouvrante, pas la liste de paramètres
+        // complète : `switchCamera()` a depuis gagné un `completion:` optionnel,
+        // ce qui cassait ce garde de source sur un simple changement de
+        // signature sans rapport avec le comportement testé ci-dessous.
+        guard let body = body(of: "func switchCamera(", in: src) else {
+            XCTFail("switchCamera(...) not found"); return
         }
         XCTAssertTrue(
             body.contains("switchCameraTask"),
@@ -986,7 +1046,10 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 
     func test_switchToCamera_chainsOntoPreviousTask() throws {
         let src = try webRTCServiceSource()
-        guard let body = body(of: "func switchToCamera(uniqueID: String)", in: src) else {
+        // Ancre sur le nom + la parenthèse ouvrante, pas la liste de paramètres
+        // complète : `switchToCamera(uniqueID:)` a depuis gagné un `completion:`
+        // optionnel (même rationale que `switchCamera()` ci-dessus).
+        guard let body = body(of: "func switchToCamera(", in: src) else {
             XCTFail("switchToCamera(uniqueID:) not found"); return
         }
         XCTAssertTrue(

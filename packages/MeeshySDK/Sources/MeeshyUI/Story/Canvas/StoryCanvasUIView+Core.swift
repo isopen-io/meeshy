@@ -31,6 +31,7 @@ extension StoryCanvasUIView {
         rootLayer.frame = bounds
         itemsContainer.frame = bounds
         editOverlayLayer.frame = bounds
+        inlineEditScrimLayer.frame = bounds
         CATransaction.commit()
         rebuildLayers()
     }
@@ -108,6 +109,25 @@ extension StoryCanvasUIView {
         }
     }
 
+    /// Bascule la chaine de langues en cours de lecture (exploration du Prisme
+    /// depuis le viewer) sans toucher aux resolvers média posés à la
+    /// construction.
+    ///
+    /// Le rebuild des layers est indispensable : le cache de layers est indexé
+    /// sur une signature qui inclut la langue, et l'audio est re-schedulé parce
+    /// que `currentSlideKey` change — une story dont la voix existe en variante
+    /// TTS doit repartir dans la langue choisie.
+    public func setPreferredLanguages(_ languages: [String]) {
+        guard readerContext.preferredLanguages != languages else { return }
+        readerContext = readerContext.withPreferredLanguages(languages)
+        rebuildLayers()
+        if mode == .play {
+            lastAudioConfigRevision = nil
+            reconfigureAudioForPlayback()
+            startAudioPlayback()
+        }
+    }
+
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
         let wasPlay = mode == .play
         let didChange = mode != newMode
@@ -122,6 +142,12 @@ extension StoryCanvasUIView {
         // pour ne pas servir un layer obsolète.
         if didChange { rendererCache.invalidate() }
         rebuildLayers()
+        // L'état de closing (opacité / sublayerTransform / mask du rootLayer)
+        // est re-dérivé du playhead à chaque tick de lecture ; entrer dans un
+        // mode repart de l'état neutre pour qu'un replay — ou un retour en
+        // `.edit` après la frame de sortie — n'hérite jamais de l'exit frame
+        // de la lecture précédente.
+        StoryRenderer.resetClosing(rootLayer: rootLayer)
         // Apply slide opening animation when transitioning edit→play at t=0.
         // Runs after rebuildLayers() so the layer tree is fresh.
         if newMode == .play && !wasPlay {

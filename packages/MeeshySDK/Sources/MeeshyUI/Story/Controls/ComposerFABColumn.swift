@@ -2,11 +2,17 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-/// Column of 2 floating action buttons (Contenu + Effets) pinned to the
-/// bottom-leading corner. Pure presentation — owns no state.
+/// Barre HORIZONTALE des 6 outils du composer, centrée en bas du canvas
+/// (directive user 2026-07-10 : disposition type Instagram, mais en
+/// horizontal bas — les outils à portée de pouce, le canvas dégagé).
+/// Pure presentation — owns no state.
 ///
 /// Inputs are primitives (`Int`, optional `BandCategory`) so the view is
 /// `Equatable` and skips re-evaluation when its inputs haven't changed.
+///
+/// Grammaire gestuelle conservée : tap = ouvre/ferme le panneau, swipe-up
+/// sur un outil = ouvre, swipe-down n'importe où sur la barre = cache les
+/// outils (canvas nu + poignée fantôme C3).
 struct ComposerFABColumn: View, Equatable {
     let mediaBadge: Int
     let sonBadge: Int
@@ -22,25 +28,27 @@ struct ComposerFABColumn: View, Equatable {
 
     @Environment(\.theme) private var theme
 
+    /// 48 pt : 6 outils + 5 interstices de 10 pt = 338 pt — tient sur la
+    /// largeur du plus petit iPhone supporté (SE, 375 pt) sans scroll.
+    private static let fabDiameter: CGFloat = 48
+
     var body: some View {
-        VStack(spacing: 12) {
-            fab(category: .timeline, icon: "clock", badge: timelineBadge)
-            fab(category: .texture, icon: "paintpalette.fill", badge: textureBadge)
-            fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
-            fab(category: .text, icon: "textformat", badge: textBadge)
-            fab(category: .son, icon: "music.note", badge: sonBadge)
-            fab(category: .media, icon: "play.rectangle.fill", badge: mediaBadge)
+        // Ordre canonique unique (`StoryToolMode.composerOrder`) : cette barre en
+        // EST la référence, la grille d'état vide et les chips de switch la
+        // suivent. Six appels manuels laissaient trois ordres diverger.
+        HStack(spacing: 10) {
+            ForEach(StoryToolMode.composerOrder, id: \.rawValue) { tool in
+                fab(tool: tool)
+            }
         }
-        .padding(.leading, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     @ViewBuilder
-    private func fab(
-        category: BandCategory,
-        icon: String,
-        badge: Int
-    ) -> some View {
+    private func fab(tool: StoryToolMode) -> some View {
+        let category = tool.bandCategory
+        let icon = tool.symbolName
+        let badge = badge(for: tool)
         let isActive = activeCategory == category
         let accent: Color = {
             switch category {
@@ -68,11 +76,11 @@ struct ComposerFABColumn: View, Equatable {
                         Circle().stroke(accent.opacity(0.4), lineWidth: 1)
                     }
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(isActive ? .white : accent)
                         .accessibilityHidden(true)
                 }
-                .frame(width: 56, height: 56)
+                .frame(width: Self.fabDiameter, height: Self.fabDiameter)
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {
                         Text("\(badge)")
@@ -107,7 +115,22 @@ struct ComposerFABColumn: View, Equatable {
                 : String(localized: "story.composer.fab.hint.open",
                          defaultValue: "Touchez deux fois pour ouvrir.", bundle: .module))
         }
-        .frame(width: 56, height: 56)
+        .frame(width: Self.fabDiameter, height: Self.fabDiameter)
+    }
+
+    /// Compteur d'éléments de l'outil. Les six pastilles arrivent en primitives
+    /// (`Int`) pour que la vue reste `Equatable` ; ce switch les re-associe à
+    /// l'outil pour que l'ordre soit consommé, pas récrit.
+    private func badge(for tool: StoryToolMode) -> Int {
+        switch tool {
+        case .media:    return mediaBadge
+        case .audio:    return sonBadge
+        case .text:     return textBadge
+        case .drawing:  return drawingBadge
+        case .texture:  return textureBadge
+        case .timeline: return timelineBadge
+        case .filters:  return 0   // hors `composerOrder` — jamais rendu
+        }
     }
 
     /// Nom AFFICHÉ de l'outil (mêmes clés que les tuiles/chips — story.tool.*),
@@ -201,6 +224,10 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
         container.backgroundColor = .clear
 
         let host = UIHostingController(rootView: content())
+        // L'environnement SwiftUI ne traverse pas un UIHostingController : le
+        // `\.colorScheme` épinglé par le parent (chrome canvas) serait perdu et
+        // le contenu suivrait le thème de l'app. On forwarde via les traits.
+        host.overrideUserInterfaceStyle = context.environment.colorScheme == .dark ? .dark : .light
         host.view.translatesAutoresizingMaskIntoConstraints = false
         host.view.backgroundColor = .clear
         container.addSubview(host.view)
@@ -223,6 +250,8 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onSwipeUp = onSwipeUp
         context.coordinator.onSwipeDown = onSwipeDown
+        context.coordinator.hostingController?.overrideUserInterfaceStyle =
+            context.environment.colorScheme == .dark ? .dark : .light
         (context.coordinator.hostingController as? UIHostingController<Content>)?.rootView = content()
     }
 

@@ -19,6 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
+import type { LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -80,6 +81,13 @@ export class SocketIOOrchestrator {
 
   // Current user ID for E2EE initialization
   private currentUserId: string | null = null;
+
+  // Handle of setCurrentUser()'s auth-retry interval (armed while waiting for
+  // a token to appear). Tracked so a later setCurrentUser() call or cleanup()
+  // can cancel it — without this, two rapid setCurrentUser() calls each armed
+  // their own interval (double initializeConnection() once a token landed),
+  // and cleanup()/logout had no way to stop a still-pending one from firing.
+  private authRetryInterval: ReturnType<typeof setInterval> | null = null;
 
   // Message queue for messages sent before socket is ready
   private pendingMessages: PendingMessage[] = [];
@@ -174,6 +182,18 @@ export class SocketIOOrchestrator {
     this.processPendingMessages();
   }
 
+  // Annule et oublie le timeout individuel d'un message en attente. Appelé sur
+  // chaque chemin qui retire un message de la file (traité, expulsé, cleanup) —
+  // sans quoi le timer resterait armé et l'entrée de la Map fuiterait sur onglet
+  // longue durée.
+  private clearPendingTimeout(clientMessageId: string): void {
+    const timeout = this.pendingMessageTimeouts.get(clientMessageId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.pendingMessageTimeouts.delete(clientMessageId);
+    }
+  }
+
   /**
    * Process pending messages queue after socket is connected
    */
@@ -197,11 +217,7 @@ export class SocketIOOrchestrator {
       if (!pending) continue;
 
       // Annuler le timeout individuel puisqu'on traite maintenant le message
-      const pendingTimeout = this.pendingMessageTimeouts.get(pending.clientMessageId);
-      if (pendingTimeout) {
-        clearTimeout(pendingTimeout);
-        this.pendingMessageTimeouts.delete(pending.clientMessageId);
-      }
+      this.clearPendingTimeout(pending.clientMessageId);
 
       // Check if message has expired
       if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
@@ -288,25 +304,39 @@ export class SocketIOOrchestrator {
     const hasSessionToken = typeof window !== 'undefined' && !!require('../auth-manager.service').authManager.getAnonymousSession()?.token;
 
     if (!hasAuthToken && !hasSessionToken) {
-      // Retry with short delay
+      // Retry with short delay. Cancel any retry already in flight first —
+      // at most one may ever be pending, so a stray call can never stack a
+      // second interval alongside it (see authRetryInterval doc comment).
+      this.stopAuthRetry();
+
       let attempts = 0;
       const maxAttempts = 3;
-      const retryInterval = setInterval(() => {
+      this.authRetryInterval = setInterval(() => {
         attempts++;
         const retryAuthToken = require('../auth-manager.service').authManager.getAuthToken();
         const retryAnonymousToken = require('../auth-manager.service').authManager.getAnonymousSession()?.token;
 
         if ((retryAuthToken || retryAnonymousToken)) {
-          clearInterval(retryInterval);
+          this.stopAuthRetry();
           this.initializeConnection();
         } else if (attempts >= maxAttempts) {
-          clearInterval(retryInterval);
+          this.stopAuthRetry();
         }
       }, 200);
       return;
     }
 
     this.initializeConnection();
+  }
+
+  /**
+   * Cancel setCurrentUser()'s pending auth-retry interval, if any.
+   */
+  private stopAuthRetry(): void {
+    if (this.authRetryInterval) {
+      clearInterval(this.authRetryInterval);
+      this.authRetryInterval = null;
+    }
   }
 
   /**
@@ -400,6 +430,7 @@ export class SocketIOOrchestrator {
         logger.warn('[SocketIOOrchestrator]', 'Message queue full, oldest message will be discarded');
         const oldest = this.pendingMessages.shift();
         if (oldest) {
+          this.clearPendingTimeout(oldest.clientMessageId);
           oldest.resolve({ success: false });
         }
       }
@@ -572,7 +603,7 @@ export class SocketIOOrchestrator {
     return this.messagingService.onPendingMessagesDelivered(listener);
   }
 
-  onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): UnsubscribeFn {
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
     return this.messagingService.onLinkMessageNew(listener);
   }
 
@@ -710,6 +741,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationUpdated(listener);
   }
 
+  onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantJoined(listener);
+  }
+
   onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
     return this.presenceService.onConversationParticipantLeft(listener);
   }
@@ -733,10 +768,16 @@ export class SocketIOOrchestrator {
   // ============ CLEANUP ============
 
   cleanup(): void {
-    // Reject all pending messages
+    // Cancel a still-pending auth retry — without this a logout mid-retry
+    // could see initializeConnection() fire after cleanup, once a token
+    // happened to appear within the remaining retry window.
+    this.stopAuthRetry();
+
+    // Reject all pending messages and clear their armed timers
     while (this.pendingMessages.length > 0) {
       const pending = this.pendingMessages.shift();
       if (pending) {
+        this.clearPendingTimeout(pending.clientMessageId);
         pending.resolve({ success: false });
       }
     }

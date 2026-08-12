@@ -24,7 +24,7 @@ struct SenderIdentity: Equatable, Sendable {
     let avatarURL: String?
     let accentColor: String
     let moodEmoji: String?
-    let presence: PresenceState
+    let presence: PresenceState?
     let storyRing: StoryRingState
 }
 

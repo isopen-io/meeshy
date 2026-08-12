@@ -23,9 +23,25 @@ export interface RemoveAttachmentReactionOptions {
 export class AttachmentReactionService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addAttachmentReaction(o: AddAttachmentReactionOptions): Promise<void> {
+  async addAttachmentReaction(o: AddAttachmentReactionOptions): Promise<{ changed: boolean }> {
     const emoji = sanitizeEmoji(o.emoji);
     if (!isValidEmoji(emoji)) throw new Error('Invalid emoji');
+
+    // Idempotency: the participant already holding exactly this emoji on this
+    // attachment (optimistic double-fire, a socket retry after a lost ACK, or a
+    // second device echoing the same tap) is a no-op — report `changed: false`
+    // so the handler can skip the ATTACHMENT_REACTION_ADDED broadcast. Mirrors
+    // ReactionService.addReaction's `unchanged` contract (iter 134).
+    const previous = await this.prisma.attachmentReaction.findUnique({
+      where: {
+        attachment_participant_reaction: {
+          attachmentId: o.attachmentId,
+          participantId: o.participantId,
+        },
+      },
+      select: { emoji: true },
+    });
+    if (previous?.emoji === emoji) return { changed: false };
 
     // Single-reaction-per-user model: the DB unique key is (attachmentId,
     // participantId) — no emoji — so this upsert is atomic at the Mongo level.
@@ -49,16 +65,22 @@ export class AttachmentReactionService {
       },
       update: { emoji },
     });
+    return { changed: true };
   }
 
-  async removeAttachmentReaction(o: RemoveAttachmentReactionOptions): Promise<void> {
-    await this.prisma.attachmentReaction.deleteMany({
+  async removeAttachmentReaction(o: RemoveAttachmentReactionOptions): Promise<boolean> {
+    // Return whether a row was actually deleted so the handler can stay
+    // idempotent: an already-absent reaction (retry, double-tap, second device)
+    // reports `false` and skips the ATTACHMENT_REACTION_REMOVED broadcast.
+    // Mirrors ReactionService.removeReaction's `count > 0` contract.
+    const result = await this.prisma.attachmentReaction.deleteMany({
       where: {
         attachmentId: o.attachmentId,
         participantId: o.participantId,
         emoji: sanitizeEmoji(o.emoji),
       },
     });
+    return result.count > 0;
   }
 
   /** Comptes agrégés par emoji pour une pièce jointe. */

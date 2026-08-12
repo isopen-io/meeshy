@@ -34,9 +34,15 @@ class SessionRepository @Inject constructor(
     val currentUserId: String?
         get() = _currentUser.value?.id
 
-    /** Adopt the identity returned by a fresh login or register. */
+    /**
+     * Adopt the identity returned by a fresh login or register. Mirrors the id into
+     * [TokenStore.userId] alongside the in-memory publish — the persisted copy is
+     * what a cold, widget-triggered process (which never runs this app's normal
+     * startup flow) reads back.
+     */
     fun adopt(user: MeeshyUser) {
         _currentUser.value = user
+        tokenStore.userId = user.id
     }
 
     /**
@@ -61,7 +67,10 @@ class SessionRepository @Inject constructor(
             return
         }
         when (val result = apiCall { authApi.me() }) {
-            is NetworkResult.Success -> _currentUser.value = result.data
+            is NetworkResult.Success -> {
+                _currentUser.value = result.data.user
+                tokenStore.userId = result.data.user.id
+            }
             is NetworkResult.Failure -> Unit
         }
     }
@@ -69,5 +78,6 @@ class SessionRepository @Inject constructor(
     /** Drop the identity on logout / account switch. */
     fun clear() {
         _currentUser.value = null
+        tokenStore.userId = null
     }
 }

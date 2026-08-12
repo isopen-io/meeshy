@@ -76,7 +76,7 @@ struct MentionSuggestionPanel: View {
         // above the composer is input-assistance chrome (like the QuickType
         // bar), not conversation content — an accent tint would read as content.
         // Accent tint stays reserved for message-content surfaces (e.g. the
-        // long-press ContextActionMenu).
+        // long-press MessageActionsMenu).
         .adaptiveGlass(in: Rectangle())
     }
 

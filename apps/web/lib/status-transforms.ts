@@ -1,4 +1,5 @@
 import type { Post } from '@meeshy/shared/types/post';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StatusItem } from '@/components/v2/StatusBar';
 
 // ============================================================================
@@ -41,8 +42,11 @@ export function postToStatusItem(post: Post, currentUserId: string): StatusItem 
   return {
     id: post.id,
     author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
+      // Résolution via la SOURCE UNIQUE `getUserDisplayName` (displayName non-vide
+      // > username > fallback) — un displayName vide/blanc ne produit plus un
+      // libellé de statut vide. Avatar vide (`''`) normalisé en `undefined`.
+      name: getUserDisplayName(author, 'Unknown'),
+      avatar: author?.avatar || undefined,
     },
     moodEmoji: post.moodEmoji ?? DEFAULT_MOOD_EMOJI,
     content: post.content ?? undefined,

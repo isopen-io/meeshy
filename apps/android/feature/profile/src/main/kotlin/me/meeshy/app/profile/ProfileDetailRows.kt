@@ -46,7 +46,7 @@ object ProfileDetailRows {
     }
 
     private fun languageRow(kind: ProfileDetailKind, code: String): ProfileDetailRow {
-        val info = LanguageData.info(code.lowercase())
+        val info = LanguageData.info(code)
         return ProfileDetailRow(
             kind = kind,
             flag = info?.flag,

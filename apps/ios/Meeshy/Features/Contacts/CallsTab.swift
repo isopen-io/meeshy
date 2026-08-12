@@ -50,6 +50,11 @@ struct CallsTab: View {
                 .padding(.vertical, 7)
                 .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
                 .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+                // The capsule stays visually compact, but the tappable area is
+                // widened to the 44x44pt HIG minimum (frame + contentShape) —
+                // the visible pill was ~27-30pt tall, under the tap-target floor.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -69,8 +74,8 @@ struct CallsTab: View {
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
                 icon: "phone.arrow.up.right",
-                title: String(localized: "calls.empty.title", defaultValue: "Aucun appel recent", bundle: .main),
-                subtitle: String(localized: "calls.empty.subtitle", defaultValue: "Vos appels recus, manques, annules et emis apparaitront ici.", bundle: .main)
+                title: String(localized: "calls.empty.title", defaultValue: "Aucun appel récent", bundle: .main),
+                subtitle: String(localized: "calls.empty.subtitle", defaultValue: "Vos appels reçus, manqués, annulés et émis apparaîtront ici.", bundle: .main)
             )
         } else {
             list
@@ -109,9 +114,8 @@ private struct CallJournalRow: View, Equatable {
     }
 
     var body: some View {
-        let name = record.displayName
+        let name = record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
         let color = DynamicColorGenerator.colorForName(name)
-        let isOnline = record.peer?.isOnline ?? false
 
         HStack(spacing: 14) {
             Button(action: onTap) {
@@ -121,7 +125,7 @@ private struct CallJournalRow: View, Equatable {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: record.avatarURL,
-                        presenceState: isOnline ? .online : .offline
+                        presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
                     )
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -154,6 +158,18 @@ private struct CallJournalRow: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            // Scoped to this Button only — grouping the WHOLE row (including
+            // CallRowDialButton) under one combined element, as before, swallowed
+            // the redial Menu entirely: VoiceOver could never reach "Rappeler"
+            // (found in accessibility audit 2026-07-06/08). CallRowDialButton
+            // keeps its own accessibilityLabel/Hint as a separate, reachable element.
+            // Le `.accessibilityLabel` explicite REMPLACE le texte combiné des enfants
+            // (sémantique SwiftUI) — il doit donc recomposer TOUT ce que la rangée montre
+            // visuellement : type audio/vidéo, ancienneté et durée, sinon VoiceOver ne
+            // les annonce jamais (207i : le label ne portait que nom + direction).
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(rowAccessibilityLabel(name: name))
 
             if let peer = record.peer {
                 CallRowDialButton(
@@ -166,9 +182,6 @@ private struct CallJournalRow: View, Equatable {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(accessibilityDirection)")
     }
 
     private var directionIcon: String {
@@ -184,6 +197,22 @@ private struct CallJournalRow: View, Equatable {
         case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel recu", bundle: .main)
         case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manque", bundle: .main)
         }
+    }
+
+    // Recompose le label VoiceOver de la rangée pour refléter EXACTEMENT le contenu
+    // visible : nom, direction, type (vocal/vidéo — réutilise les clés de CallDetailSheet),
+    // ancienneté, puis durée si présente (mêmes segments que la pastille visuelle). Zéro clé
+    // i18n neuve. Miroir de la détail-sheet, cohérent cross-écran.
+    private func rowAccessibilityLabel(name: String) -> String {
+        let type = record.isVideo
+            ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+            : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
+        var parts = [name, accessibilityDirection, type, record.startedAt.relativeTimeString]
+        if !record.durationLabel.isEmpty {
+            let durationWord = String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main)
+            parts.append("\(durationWord) \(record.durationLabel)")
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -213,7 +242,8 @@ private struct CallRowDialButton: View {
             Image(systemName: defaultIsVideo ? "video.fill" : "phone.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                // 44x44 — Apple HIG minimum tap target (was 40x40).
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
         }
         .accessibilityLabel(String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))

@@ -4,11 +4,16 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
-  generateDefaultConversationTitle
+  generateDefaultConversationTitle,
+  resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  buildLastMessagePreviewTranslations,
+  truncateMessagePreview
+} from './utils/last-message-preview';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -18,9 +23,11 @@ import {
   createConversationRequestSchema,
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
+import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import {
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier
@@ -32,33 +39,16 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
-/**
- * Cap (in Unicode code points) applied to `lastMessage.content` in the GET
- * /conversations LIST response. The clients only ever render this field as a
- * 1–2 line row preview, yet it was shipped raw — a single long message
- * multiplied across every list refresh inflates payloads and forces the iOS
- * text engine to typeset the full string on every row measurement
- * (CoreText cost is O(total length), `lineLimit` does not bound it).
- * Truncation iterates code points, never splitting a surrogate pair.
- * The full content still flows through GET /conversations/:id/messages.
- */
-export const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 300;
-
-export function truncateMessagePreview(content: string | null | undefined): string | null | undefined {
-  if (content == null || content.length <= LAST_MESSAGE_PREVIEW_MAX_LENGTH) return content;
-  let result = '';
-  let count = 0;
-  for (const char of content) {
-    if (count >= LAST_MESSAGE_PREVIEW_MAX_LENGTH) break;
-    result += char;
-    count += 1;
-  }
-  return result;
-}
+export {
+  LAST_MESSAGE_PREVIEW_MAX_LENGTH,
+  truncateMessagePreview,
+} from './utils/last-message-preview';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -173,7 +163,7 @@ export const conversationDetailInclude = {
     }
   },
   _count: {
-    select: { participants: { where: { isActive: true } } }
+    select: conversationActiveMemberCountSelect
   }
 } as const;
 
@@ -348,6 +338,29 @@ export function registerCoreRoutes(
         delete whereClause.participants;
       }
 
+      // Visibilité DM vide — Prisme design doc 2026-08-04. Ajouté APRÈS le
+      // bloc withUserId ci-dessus (qui reconstruit whereClause.participants
+      // /.AND) pour ne jamais être écrasé par lui : un OR à la racine du
+      // whereClause se combine par ET implicite avec .AND/.participants,
+      // quel que soit leur contenu.
+      whereClause.OR = [
+        { type: { not: 'direct' } },
+        {
+          // `NOT: { firstMessageSentAt: null }` seul ne matche PAS les
+          // documents où le champ est ABSENT sur le connecteur MongoDB de
+          // Prisma (il ne matche que present-et-non-null) — il exclurait donc
+          // à tort tout DM legacy (créé avant cette migration, jamais
+          // backfillé). Les deux branches sont nécessaires : déjà posé (message
+          // envoyé) OU absent (legacy, avant migration) ⇒ visible.
+          OR: [
+            { NOT: { firstMessageSentAt: null } },
+            { firstMessageSentAt: { isSet: false } }
+          ]
+        },
+        { participants: { some: { userId, role: 'creator' } } },
+        { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
+      ];
+
       // Cursor-based pagination: filter by lastMessageAt of the cursor conversation
       let cursorLastMessageAt: Date | null = null;
       if (beforeCursor) {
@@ -361,12 +374,55 @@ export function registerCoreRoutes(
         }
       }
 
+      // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
+      // ce que « mis à jour » veut dire :
+      //   - iOS   : `ConversationSyncEngine.deltaSyncCore`
+      //   - web   : `syncConversationsDelta` (use-conversations-delta-sync.ts)
+      // Il porte son propre index (`@@index([isActive, updatedAt])`). La borne
+      // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
+      // re-télécharge pas la ligne qu'il détient déjà.
+      let isDeltaPage = false;
       if (updatedSince) {
         const sinceDate = new Date(updatedSince);
         if (!isNaN(sinceDate.getTime())) {
           whereClause.updatedAt = { gt: sinceDate };
+          isDeltaPage = true;
         }
       }
+
+      // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
+      // TRONQUÉE est rattrapable.
+      //
+      // Le `limit` est plafonné à 100 (voir plus haut) et les deux clients
+      // avancent leur watermark au max des `updatedAt` REÇUS. Trié par
+      // `lastMessageAt` décroissant — l'ordre de l'écran de liste, sans aucun
+      // rapport avec le filtre — les lignes coupées ne sont pas « les plus
+      // anciennes mises à jour » : le prochain `updatedSince` passe PAR-DESSUS
+      // et ne les revoit qu'à la réconciliation complète (1×/24 h sur iOS).
+      // Pendant ce temps la liste affiche des compteurs de non-lus et des
+      // aperçus périmés sans qu'aucun signal ne l'indique.
+      //
+      // Trié par `updatedAt` croissant, les lignes coupées sont exactement
+      // celles dont l'`updatedAt` est SUPÉRIEUR à celui de la dernière ligne
+      // rendue : le watermark qui les enjambait pointe désormais dessus, et
+      // l'appel delta suivant les rend. La troncature devient une pagination
+      // naturelle, sans aucun changement client. `id` départage les égalités
+      // pour que deux appels identiques rendent la même page.
+      //
+      // Résidu assumé : plus de `limit` conversations portant la MÊME
+      // milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
+      // la borne stricte `gt` ne peut pas reprendre. Le web traite déjà une page
+      // PLEINE comme une preuve d'incomplétude et escalade vers la relecture
+      // complète (`DELTA_PAGE_LIMIT`, use-conversations-delta-sync.ts) : c'est
+      // ce cas-là, et lui seul, qui reste à sa charge.
+      //
+      // Le curseur `before` garde la main : il BORNE sur `lastMessageAt`, donc
+      // une page ordonnée par `updatedAt` le rendrait incohérent. Aucun client
+      // ne combine les deux aujourd'hui — la garde existe pour que celui qui
+      // essaiera obtienne une pagination cohérente plutôt qu'un mélange.
+      const orderBy = isDeltaPage && !beforeCursor
+        ? [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
+        : { lastMessageAt: 'desc' as const };
 
       t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
@@ -385,7 +441,14 @@ export function registerCoreRoutes(
           banner: true,
           avatar: true,
           communityId: true,
-          memberCount: true,
+          // Effectif compté par la base, PAS la colonne dénormalisée du même
+          // nom : voir `conversationActiveMemberCountSelect`. La ligne de liste
+          // en dépend visiblement (badge de groupe iOS `memberCount > 1`,
+          // saturation de la couleur d'accent `min(memberCount/100, 1) × 0.2`),
+          // et la colonne rendait `0` pour toute conversation créée depuis la
+          // migration héritée : badge absent, et couleur d'accent différente
+          // entre la liste et le fil ouvert, qui lui compte.
+          _count: { select: conversationActiveMemberCountSelect },
           isAnnouncementChannel: true,
           participants: {
             take: 5,
@@ -416,6 +479,18 @@ export function registerCoreRoutes(
               isViewOnce: true,
               effectFlags: true,
               expiresAt: true,
+              // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
+              // MÊME document Mongo que le message (`translations` est une
+              // colonne JSON, pas une relation) : les sélectionner ne coûte ni
+              // jointure ni requête. Sans eux, la ligne de liste restait dans la
+              // langue de l'expéditeur pour tout le monde — cf.
+              // `utils/last-message-preview.ts`.
+              translations: true,
+              originalLanguage: true,
+              // Lot 3 : aperçu de conversation — sans `metadata`, un dernier
+              // message géolocalisé n'affiche jamais sa position dans la
+              // liste des conversations.
+              metadata: true,
               sender: {
                 select: {
                   id: true,
@@ -456,7 +531,7 @@ export function registerCoreRoutes(
             }
           }
         },
-        orderBy: { lastMessageAt: 'desc' }
+        orderBy
       });
       perfTimings.conversationsQuery = performance.now() - t0;
 
@@ -519,6 +594,17 @@ export function registerCoreRoutes(
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
       const presenceChecker = fastify.presenceChecker;
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun — même règle que le broadcast user:status et le
+      // presence:snapshot. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversations.flatMap((conversation) => [
+          ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
+          conversation.messages[0]?.sender?.userId,
+        ]).filter((uid): uid is string => !!uid)
+      );
+
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
       //      offset===0 — see L401-405), `hasMore = offset + N < total`.
@@ -536,6 +622,26 @@ export function registerCoreRoutes(
         hasMore = conversations.length === limit;
       }
 
+      // Prisme Linguistique du lecteur : systemLanguage → regionalLanguage →
+      // customDestinationLanguage → deviceLocale. Résolu UNE fois pour la page
+      // entière, depuis l'utilisateur déjà chargé (et mis en cache) par le
+      // middleware d'auth — aucune requête supplémentaire sur ce hot path.
+      // `resolveUserLanguagesOrdered` est la seule autorité du dépôt sur cet
+      // ordre : ne jamais le réimplémenter ici.
+      const viewerPrefs = authRequest.authContext.registeredUser as
+        | {
+            systemLanguage?: string | null;
+            regionalLanguage?: string | null;
+            customDestinationLanguage?: string | null;
+            deviceLocale?: string | null;
+          }
+        | undefined;
+      const viewerLanguages = viewerPrefs
+        ? resolveUserLanguagesOrdered(viewerPrefs, {
+            deviceLocale: viewerPrefs.deviceLocale ?? undefined
+          })
+        : [];
+
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
@@ -547,6 +653,9 @@ export function registerCoreRoutes(
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+            const hideOnline = vis?.showOnline === false;
+            const hideLastSeen = vis?.showLastSeenTimestamp === false;
             return {
               ...m,
               // Bannière de profil top-level : le schéma participant (minimal) est
@@ -555,9 +664,14 @@ export function registerCoreRoutes(
               // client ignore `participantBanner` (évite le sur-transfert).
               // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
               banner: isDirect ? (m.user?.banner ?? null) : null,
-              isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
+              isOnline: hideOnline ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+              lastActiveAt: hideLastSeen ? null : m.lastActiveAt,
               user: m.userId
-                ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
+                ? {
+                    ...m.user,
+                    isOnline: hideOnline ? false : (liveOnline === undefined ? m.user?.isOnline : liveOnline),
+                    lastActiveAt: hideLastSeen ? null : m.user?.lastActiveAt
+                  }
                 : null
             };
           });
@@ -579,26 +693,73 @@ export function registerCoreRoutes(
                   userId
                 ));
 
+        const latestMessage = conversation.messages[0] as
+          | { translations?: unknown; originalLanguage?: string | null }
+          | undefined;
+
+        // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
+        // le schéma wire ne déclare pas, et le champ que les clients lisent est
+        // `memberCount`. Le laisser passer paierait la sérialisation d'un objet
+        // que `fast-json-stringify` strippe.
+        const { _count: activeMembers, ...conversationData } = conversation as typeof conversation & {
+          _count: { participants: number };
+        };
+
         return {
-          ...conversation,
+          ...conversationData,
+          memberCount: activeMembers.participants,
           participants: membersWithUser,
           title: displayTitle,
+          // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
+          // au niveau CONVERSATION et non dans `lastMessage` parce que c'est là
+          // que le client les attend depuis toujours
+          // (`MeeshyConversation.lastMessageTranslations`), et parce que la
+          // carte compacte `{ langue: aperçu }` n'a pas la forme de
+          // `Message.translations` (un tableau de `MessageTranslation`) : deux
+          // formes sous un même nom auraient dérivé.
+          lastMessageOriginalLanguage: latestMessage?.originalLanguage ?? null,
+          lastMessageTranslations: buildLastMessagePreviewTranslations({
+            translations: latestMessage?.translations,
+            originalLanguage: latestMessage?.originalLanguage,
+            viewerLanguages: viewerLanguages
+          }),
           lastMessage: (() => {
             const msg = conversation.messages[0];
             if (!msg) return null;
+            // `translations` (JSON brut, potentiellement chiffré, une entrée par
+            // langue de la conversation) et `originalLanguage` sont consommés
+            // ci-dessus pour construire la carte d'aperçu ; les laisser fuiter
+            // dans le spread renverrait le blob complet à chaque ligne.
+            const { translations: _rawTranslations, originalLanguage: _originalLanguage, ...msgRest } =
+              msg as typeof msg & { translations?: unknown; originalLanguage?: string | null };
             const sender = msg.sender as any;
+            const senderLiveOnline = sender
+              ? presenceChecker?.isOnline(sender.userId ?? sender.id)
+              : undefined;
+            const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
+            // Lot 3 : hisser metadata.location en `location` top-level. Un
+            // message géolocalisé SANS légende a un `content` vide — hisser
+            // la position ne fabrique aucun texte de repli ; c'est au client
+            // de décider comment rendre l'aperçu (ex. via `messageType` ou la
+            // seule présence de `location`), pas au serveur.
+            const place = sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
             return {
-              ...msg,
+              ...msgRest,
               content: truncateMessagePreview(msg.content),
+              ...(place ? { location: place } : {}),
               sender: sender ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
-                displayName: sender.displayName ?? sender.user?.displayName ?? null,
+                displayName: resolveParticipantDisplayName(sender),
                 avatar: resolveParticipantAvatar(sender),
-                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
-                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+                isOnline: senderVis?.showOnline === false
+                  ? false
+                  : (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null),
+                lastActiveAt: senderVis?.showLastSeenTimestamp === false
+                  ? null
+                  : (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null),
               } : null
             };
           })(),
@@ -731,13 +892,16 @@ export function registerCoreRoutes(
                 userId
               ));
 
-      // Calculer le unreadCount pour l'utilisateur courant
+      // Calculer le unreadCount pour l'utilisateur courant.
+      // `resolveCallerParticipant` et pas un `where: { userId }` ecrit a la main :
+      // pour un invite de lien partage, `authContext.userId` PORTE un
+      // `Participant.id` (branche anonyme d'`UnifiedAuthService`), donc la clause
+      // manuelle comparait un id de participant a la colonne `userId` et ne
+      // matchait rien. Le compteur retombait silencieusement a 0 — et ce 0
+      // ecrasait ensuite le badge que le socket venait de pousser juste.
       let unreadCount = 0;
       try {
-        const participant = await prisma.participant.findFirst({
-          where: { conversationId, userId, isActive: true },
-          select: { id: true },
-        });
+        const participant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
         if (participant) {
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(prisma);
@@ -764,9 +928,27 @@ export function registerCoreRoutes(
       // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
       // Les clients consomment les stats via l'event Socket.IO
       // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
+      // Même politique de présence que la liste : override runtime + gate
+      // showOnlineStatus/showLastSeen (cf. GET /conversations).
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversation.participants
+          .map((m: any) => m.userId)
+          .filter((uid: string | null): uid is string => !!uid)
+      );
+      const gatedParticipants = conversation.participants.map((m: any) => {
+        const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
+        const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+        return {
+          ...m,
+          isOnline: vis?.showOnline === false ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+          lastActiveAt: vis?.showLastSeenTimestamp === false ? null : m.lastActiveAt
+        };
+      });
+
       const { _count, ...conversationData } = conversation;
       return sendSuccess(reply, {
         ...conversationData,
+        participants: gatedParticipants,
         title: displayTitle,
         memberCount: _count.participants,
         unreadCount
@@ -912,6 +1094,46 @@ export function registerCoreRoutes(
           }
         });
         if (existingDirect) {
+          const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
+          const creatorParticipant = existingDirect.participants.find((p: any) => p.role === 'creator');
+          // `!firstMessageSentAt` est ambigu (absent ET null donnent `null`
+          // côté client JS) mais sans risque ici : le flip ci-dessous est
+          // gardé par un `updateMany({ where: { firstMessageSentAt: null } })`
+          // qui ne matche jamais un champ absent (legacy) — 0 ligne, no-op.
+          // Ne jamais retirer ce garde sans revoir cette ambiguïté.
+          const isEmptyDirect = existingDirect.type === 'direct' && !existingDirect.firstMessageSentAt;
+
+          if (isEmptyDirect && creatorParticipant && callerParticipant?.role !== 'creator') {
+            // Le destinataire silencieux réinitie lui-même la conversation —
+            // intention mutuelle aussi explicite qu'un message. On la rend
+            // visible désormais des deux côtés (Prisme design doc 2026-08-04).
+            const flip = await prisma.conversation.updateMany({
+              where: { id: existingDirect.id, firstMessageSentAt: null },
+              data: { firstMessageSentAt: new Date() }
+            });
+            if (flip.count > 0) {
+              existingDirect.firstMessageSentAt = new Date();
+              try {
+                const socketIOHandler = fastify.socketIOHandler;
+                const io = socketIOHandler?.getManager()?.getIO();
+                if (io && creatorParticipant.userId) {
+                  io.to(ROOMS.user(creatorParticipant.userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
+                    conversationId: existingDirect.id,
+                    conversationType: existingDirect.type,
+                    title: existingDirect.title,
+                    creatorId: creatorParticipant.userId,
+                    participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
+                    createdAt: existingDirect.createdAt instanceof Date
+                      ? existingDirect.createdAt.toISOString()
+                      : String(existingDirect.createdAt)
+                  });
+                }
+              } catch (broadcastError) {
+                logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
+              }
+            }
+          }
+
           return sendSuccess(reply, {
             ...existingDirect,
             title: existingDirect.title || null
@@ -947,6 +1169,11 @@ export function registerCoreRoutes(
           description,
           communityId: communityId || null,
           ...(isBroadcast ? { isAnnouncementChannel: true, defaultWriteRole: 'admin' } : {}),
+          // Explicite (pas juste omis) : Prisma/MongoDB omettrait le champ si
+          // on ne le posait pas, ce qui le laisserait ABSENT plutôt que
+          // `null` — voir Prisme design doc 2026-08-04 (DM vide et silencieux
+          // jusqu'au premier message).
+          ...(type === 'direct' ? { firstMessageSentAt: null } : {}),
           participants: {
             create: [
               {
@@ -1043,9 +1270,20 @@ export function registerCoreRoutes(
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
         const socketIOHandler = fastify.socketIOHandler;
-        const io = socketIOHandler?.getManager()?.getIO();
+        const socketManager = socketIOHandler?.getManager();
+        const io = socketManager?.getIO();
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
+          // Auto-join every already-connected participant's sockets to the
+          // conversation room BEFORE announcing it. Without this, connected
+          // participants are in `connectedUsers` (so never offline-queued)
+          // but not in ROOMS.conversation(id) — every message:new for the
+          // new conversation is silently missed until their next reconnect.
+          for (const participantId of allParticipantIds) {
+            socketManager.joinUserToConversationRoom(participantId, conversation.id).catch(
+              (err: unknown) => logger.error('Failed to auto-join participant to new conversation room', { participantId, error: err })
+            );
+          }
           const conversationNewPayload = {
             conversationId: conversation.id,
             conversationType: type,
@@ -1056,7 +1294,11 @@ export function registerCoreRoutes(
               ? conversation.createdAt.toISOString()
               : String(conversation.createdAt)
           };
-          for (const participantId of allParticipantIds) {
+          // Un direct fraîchement créé (0 message) reste silencieux pour les
+          // autres participants — seul le créateur voit sa conversation
+          // vide apparaître immédiatement (Prisme design doc 2026-08-04).
+          const emitParticipantIds = type === 'direct' ? [userId] : allParticipantIds;
+          for (const participantId of emitParticipantIds) {
             io.to(ROOMS.user(participantId)).emit(
               SERVER_EVENTS.CONVERSATION_NEW,
               conversationNewPayload
@@ -1069,9 +1311,11 @@ export function registerCoreRoutes(
         // au prochain delta sync ou via la notification legacy ci-dessous.
       }
 
-      // Envoyer des notifications aux participants invités
+      // Envoyer des notifications aux participants invités — sauf pour un
+      // direct fraîchement créé (0 message) : silencieux à la création, voir
+      // Prisme design doc 2026-08-04.
       const notificationService = fastify.notificationService;
-      if (notificationService && uniqueParticipantIds.length > 0) {
+      if (notificationService && uniqueParticipantIds.length > 0 && type !== 'direct') {
         try {
           // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
           // pas de second aller-retour DB.
@@ -1222,12 +1466,38 @@ export function registerCoreRoutes(
       const socketIOHandler = fastify.socketIOHandler
       const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
-        const room = ROOMS.conversation(id)
-        io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        // La room de conversation ne suffit pas, et c'est le MÊME raisonnement
+        // qui a fait naître `emitConversationPreviewUpdate` pour l'autre moitié
+        // de ce payload : un participant posé sur l'écran de LISTE a quitté
+        // `conversation:<id>` et n'est joignable que par sa room personnelle.
+        // Sans elle, un renommage — ou un changement d'avatar, de bannière, de
+        // mode lent, de canal d'annonce — n'atteignait que ceux qui avaient le
+        // fil ouvert. La ligne de liste de tous les autres gardait l'ancien
+        // titre jusqu'à un rechargement complet.
+        //
+        // Le helper chaîne les rooms (au plus UNE copie par socket, même pour
+        // un client qui est à la fois dans le fil et dans sa room) et nomme la
+        // room d'un participant sans compte par son `Participant.id`
+        // (`userId ?? id`) — la seule ligne que chaque copie de ce code avait
+        // ratée. Les participants inactifs sont écartés : quitter une
+        // conversation, c'est cesser d'en recevoir les métadonnées.
+        //
+        // Le payload ne porte AUCUNE clé `lastMessage*`, et c'est délibéré :
+        // le tri-état client distingue « clé absente » (cet événement ne parle
+        // pas du dernier message) de « clé nulle » (la carte du Prisme est
+        // périmée). Un `lastMessageTranslations: null` posé ici effacerait une
+        // traduction parfaitement valide sur toutes les lignes de liste.
+        emitToConversationParticipants({
+          io,
           conversationId: id,
-          ...changedFields,
-          updatedBy: { id: userId },
-          updatedAt: new Date().toISOString(),
+          participants: updatedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+          payload: {
+            conversationId: id,
+            ...changedFields,
+            updatedBy: { id: userId },
+            updatedAt: new Date().toISOString(),
+          },
         })
       }
 
@@ -1305,18 +1575,30 @@ export function registerCoreRoutes(
 
       // Marquer la conversation comme inactive plutôt que de la supprimer
       const now = new Date()
-      await prisma.conversation.update({
+      // Les participants sont ramenés PAR l'écriture : le fan-out ci-dessous a
+      // besoin de nommer leurs rooms personnelles, et une seconde requête pour
+      // les lire pourrait tomber sur un état déjà modifié.
+      const closedConversation = await prisma.conversation.update({
         where: { id: conversationId },
-        data: { isActive: false, closedAt: now, closedBy: userId }
+        data: { isActive: false, closedAt: now, closedBy: userId },
+        include: { participants: { select: { id: true, userId: true, isActive: true } } }
       });
 
-      // Broadcast closure to all members
+      // Broadcast closure to all members — ce que le commentaire annonçait sans
+      // que le code le fasse. Adressée à la seule room de conversation, la
+      // clôture n'atteignait que les membres ayant le fil OUVERT ; tous les
+      // autres gardaient la ligne dans leur liste et n'apprenaient la fermeture
+      // qu'en tapant dessus. Même raison que le renommage ci-dessus : la room
+      // personnelle est le seul endroit où joindre un client posé sur la liste.
       const io = fastify.socketIOHandler?.getManager()?.getIO()
       if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(
-          SERVER_EVENTS.CONVERSATION_CLOSED,
-          { conversationId, closedBy: userId, closedAt: now.toISOString() }
-        )
+        emitToConversationParticipants({
+          io,
+          conversationId,
+          participants: closedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+          payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
+        })
       }
 
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });

@@ -272,6 +272,52 @@ final class PiPCallControllerSourceTests: XCTestCase {
         )
     }
 
+    // MARK: - Detach flush ordering (no cross-thread race on the display layer)
+
+    func test_detachRenderer_flushesThroughRendererQueueWhenRendererExists() {
+        // `remoteTrack.remove(renderer)` only stops FUTURE frames — an already
+        // in-flight `consume()` block posted to the renderer's own serial queue
+        // can still be running. Flushing directly on MainActor (flushSurface())
+        // right after would race that block on the shared AVSampleBufferDisplayLayer.
+        // detachRenderer() must instead route the flush through the renderer's own
+        // queue via flushOnQueue() when a renderer is actually attached.
+        let teardownRange = Self.source.range(of: "func detachRenderer() {\n")
+        XCTAssertNotNil(teardownRange, "PiPCallController.detachRenderer() implementation must be present")
+        guard let start = teardownRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: start..<Self.source.endIndex) else {
+            return XCTFail("Could not locate detachRenderer() body")
+        }
+        let body = Self.source[start..<bodyEnd.lowerBound]
+        XCTAssertTrue(
+            body.contains("guard let renderer else"),
+            "detachRenderer must branch on whether a renderer is actually attached"
+        )
+        XCTAssertTrue(
+            body.contains("renderer.flushOnQueue()"),
+            "When a renderer is attached, detachRenderer must flush via renderer.flushOnQueue() " +
+            "(through the renderer's own serial queue) instead of flushing the shared display layer " +
+            "directly on MainActor, which would race an in-flight consume() call"
+        )
+    }
+
+    func test_detachRenderer_removesFromTrackBeforeClearingRenderer() {
+        let teardownRange = Self.source.range(of: "func detachRenderer() {\n")
+        guard let start = teardownRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: start..<Self.source.endIndex) else {
+            return XCTFail("Could not locate detachRenderer() body")
+        }
+        let body = Self.source[start..<bodyEnd.lowerBound]
+        guard let removeRange = body.range(of: "remoteTrack?.remove(renderer)"),
+              let nilRange = body.range(of: "self.renderer = nil") else {
+            return XCTFail("detachRenderer must call remoteTrack?.remove(renderer) then self.renderer = nil")
+        }
+        XCTAssertLessThan(
+            removeRange.lowerBound, nilRange.lowerBound,
+            "remoteTrack?.remove(renderer) must happen before self.renderer = nil so flushOnQueue() " +
+            "below still has a valid renderer reference to call it on"
+        )
+    }
+
     // MARK: - Rotation wiring (PiPVideoRenderer.onRotation → surfaceView.applyRotation)
 
     func test_attachRenderer_wiresOnRotationToSurfaceViewApplyRotation() {

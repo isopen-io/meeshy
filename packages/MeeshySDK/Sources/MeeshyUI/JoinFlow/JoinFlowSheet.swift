@@ -86,7 +86,7 @@ public struct JoinFlowSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "joinFlow.header.title", defaultValue: "Rejoindre", bundle: .module))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -96,22 +96,23 @@ public struct JoinFlowSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
             .accessibilityLabel(String(localized: "joinFlow.close.accessibilityLabel", defaultValue: "Fermer", bundle: .module))
+            .meeshyTapTarget()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Loading
 
     private var loadingState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             Spacer()
 
             ProgressView()
@@ -119,7 +120,7 @@ public struct JoinFlowSheet: View {
                 .tint(MeeshyColors.indigo400)
 
             Text(String(localized: "joinFlow.loading.message", defaultValue: "Chargement du lien...", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
             Spacer()
@@ -130,7 +131,7 @@ public struct JoinFlowSheet: View {
     // MARK: - Success
 
     private var successState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             Spacer()
 
             ZStack {
@@ -139,20 +140,20 @@ public struct JoinFlowSheet: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 56))
+                    .font(MeeshyFont.relative(56))
                     .foregroundColor(MeeshyColors.success)
             }
 
             Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {
                 Text("Vous avez rejoint \(result.conversation.title ?? "la conversation") en tant que \(result.participant.username)")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
 
             Button {
@@ -161,20 +162,20 @@ public struct JoinFlowSheet: View {
                 }
                 dismiss()
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                     Text(String(localized: "joinFlow.success.openConversation", defaultValue: "Ouvrir la conversation", bundle: .module))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, MeeshySpacing.lg)
                 .background(MeeshyColors.brandGradient)
-                .cornerRadius(16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             }
-            .padding(.horizontal, 40)
-            .padding(.top, 12)
+            .padding(.horizontal, MeeshySpacing.xxxl + MeeshySpacing.sm)
+            .padding(.top, MeeshySpacing.md)
 
             Spacer()
         }
@@ -183,7 +184,7 @@ public struct JoinFlowSheet: View {
     // MARK: - Error
 
     private func errorState(_ message: String) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             Spacer()
 
             ZStack {
@@ -192,44 +193,44 @@ public struct JoinFlowSheet: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 48))
+                    .font(MeeshyFont.relative(48))
                     .foregroundColor(MeeshyColors.error)
             }
 
             Text(String(localized: "joinFlow.error.title", defaultValue: "Lien indisponible", bundle: .module))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(message)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, MeeshySpacing.xxxl + MeeshySpacing.sm)
 
             Button {
                 Task { await viewModel.loadLinkInfo() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.clockwise")
                     Text(String(localized: "joinFlow.error.retry", defaultValue: "Reessayer", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.xxl)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
                     Capsule()
                         .strokeBorder(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1.5)
                 )
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
 
             Button(String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module)) {
                 dismiss()
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(theme.textMuted)
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
 
             Spacer()
         }

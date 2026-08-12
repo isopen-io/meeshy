@@ -188,7 +188,7 @@ function injectBufferedOffer(handler: CallEventsHandler, signalFrom: string, sig
       sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',
     },
   };
-  (handler as any).bufferedOffers.set(CALL_ID, { signal: offer, bufferedAt: Date.now() });
+  (handler as any).bufferedOffers.set(`${CALL_ID}:${signalTo}`, { signal: offer, bufferedAt: Date.now() });
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
     });
 
     it('clears the buffered offer from the map so it cannot replay again', () => {
-      const buffered = (handler as any).bufferedOffers.get(CALL_ID);
+      const buffered = (handler as any).bufferedOffers.get(`${CALL_ID}:${CALLEE_ID}`);
       expect(buffered).toBeUndefined();
     });
   });
@@ -297,6 +297,71 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
       const signalCalls = directEmit.mock.calls.filter(([ev]) => ev === CALL_EVENTS.SIGNAL);
       expect(signalCalls).toHaveLength(0);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4.6 follow-up — buffered ANSWER replay to the (re)joining caller
+//
+// The offer/answer buffer is keyed `${callId}:${to}` (independent per
+// recipient) precisely so a buffered offer for the callee and a buffered
+// answer for the caller can coexist on the same call without one
+// overwriting the other. This proves the replay path (call:join) delivers
+// a buffered answer just like it already delivers a buffered offer.
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — buffered ANSWER replay on (re)join', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  function injectBufferedAnswer(handler: CallEventsHandler, signalFrom: string, signalTo: string): void {
+    const answer = {
+      callId: CALL_ID,
+      signal: {
+        type: 'answer' as const,
+        from: signalFrom,
+        to: signalTo,
+        sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',
+      },
+    };
+    (handler as any).bufferedOffers.set(`${CALL_ID}:${signalTo}`, { signal: answer, bufferedAt: Date.now() });
+  }
+
+  it('replays a buffered answer to the (re)joining caller', async () => {
+    // Callee (sender of the answer) is still active
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+
+    const prisma = makePrisma();
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    injectBufferedAnswer(handler, CALLEE_ID, CALLER_ID);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    const signalCalls = directEmit.mock.calls.filter(([ev]: any[]) => ev === CALL_EVENTS.SIGNAL);
+    expect(signalCalls).toHaveLength(1);
+    expect(signalCalls[0][1].signal.type).toBe('answer');
+  });
+
+  it('does not replay a buffered offer meant for the callee to the (re)joining caller', async () => {
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+
+    const prisma = makePrisma();
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    // Offer buffered for the CALLEE's slot — the CALLER joining must not see it.
+    injectBufferedOffer(handler, CALLER_ID, CALLEE_ID);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    const signalCalls = directEmit.mock.calls.filter(([ev]: any[]) => ev === CALL_EVENTS.SIGNAL);
+    expect(signalCalls).toHaveLength(0);
   });
 });
 

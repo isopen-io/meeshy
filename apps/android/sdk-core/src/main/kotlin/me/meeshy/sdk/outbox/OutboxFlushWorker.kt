@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
@@ -21,9 +22,12 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
+import me.meeshy.sdk.media.TusUploadRepository
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
+import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.BlockApi
@@ -60,6 +64,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val conversationApi: ConversationApi,
     private val postApi: PostApi,
     private val mediaRepository: MediaRepository,
+    private val tusUploadRepository: TusUploadRepository,
     private val mediaBlobStore: MediaBlobStore,
     private val blockApi: BlockApi,
     private val preferencesApi: PreferencesApi,
@@ -92,10 +97,23 @@ class OutboxFlushWorker @AssistedInject constructor(
                     // A hard-exhausted profile edit reverts the optimistic paint to
                     // the gateway's truth so the identity never drifts from the server.
                     OutboxKind.UPDATE_PROFILE -> sessionRepository.refresh()
+                    // A hard-exhausted pin/unpin refreshes the conversation so the
+                    // optimistic pinnedAt flip is reconciled with the server truth.
+                    OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE ->
+                        runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                            .getOrNull()
+                            ?.let { messageRepository.refresh(it.conversationId) }
                     else -> Unit
                 }
             },
-            graftProducedId = PublishMediaWriteBack::graft,
+            // A delivered upload's real id must reach both dependent shapes: a
+            // still-queued chat send (attachmentIds) and a story publish (mediaIds).
+            // Each graft owns one payload shape and declines the other, so order is
+            // immaterial (see OutboxPayloadGrafts).
+            graftProducedId = OutboxPayloadGrafts.firstOf(
+                MessageMediaWriteBack::graft,
+                PublishMediaWriteBack::graft,
+            ),
         )
 
         // Derived from the kind→lane SSOT so a registered sender can never be
@@ -104,11 +122,10 @@ class OutboxFlushWorker @AssistedInject constructor(
 
         val reports = mutableListOf<DrainReport>()
 
-        // Drain per-conversation message lanes
-        val messageLanes = outboxRepository
-            .deliverable(OutboxLanes.forMessage(""))
-            .map { it.lane }
-            .distinct()
+        // Drain per-conversation message lanes. Lane ids are dynamic (only known at enqueue
+        // time), so they are discovered via activeMessageLanes() rather than enumerated like
+        // the fixed shared lanes below.
+        val messageLanes = outboxRepository.activeMessageLanes()
         for (lane in messageLanes) {
             val report = drainer.drainLane(lane)
             Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
@@ -176,6 +193,12 @@ class OutboxFlushWorker @AssistedInject constructor(
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },
+        OutboxKind.MARK_UNREAD to MutationSender { row ->
+            when (apiCall { conversationApi.markUnread(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
         OutboxKind.UPDATE_CONVERSATION_PREFS to MutationSender { row ->
             val prefs = runCatching { json.decodeFromString<ConversationPrefsPayload>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
@@ -184,6 +207,7 @@ class OutboxFlushWorker @AssistedInject constructor(
                 isMuted = prefs.isMuted,
                 isArchived = prefs.isArchived,
                 mentionsOnly = prefs.mentionsOnly,
+                categoryId = prefs.categoryId,
             )
             when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success
@@ -200,7 +224,19 @@ class OutboxFlushWorker @AssistedInject constructor(
         },
         OutboxKind.UPLOAD_MEDIA to MutationSender { row ->
             val item = mediaBlobStore.get(row.cmid)
-            val result = MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            // A blank payload (every row enqueued before MediaUploadPayload existed,
+            // and every still-legacy chat-attachment enqueue) means "no TUS context" —
+            // not a decode failure, so it is not routed through the PermanentFailure
+            // path the other kinds use for a genuinely malformed payload.
+            val context = row.payload.takeIf { it.isNotBlank() }
+                ?.let { runCatching { json.decodeFromString<MediaUploadPayload>(it) }.getOrNull() }
+                ?.uploadContext
+                ?.let { TusUploadContext.fromWire(it) }
+            val result = if (context != null) {
+                MediaUploadSender.send(item) { tusUploadRepository.upload(it, context) }
+            } else {
+                MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            }
             if (result !is SendResult.TransientFailure) {
                 mediaBlobStore.remove(row.cmid)
             }
@@ -235,6 +271,30 @@ class OutboxFlushWorker @AssistedInject constructor(
             val body = runCatching { json.decodeFromString<NotificationPreferenceSyncBody>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
             when (apiCall { preferencesApi.updateNotification(body) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_PRIVACY_SETTINGS to MutationSender { row ->
+            val body = runCatching { json.decodeFromString<PrivacyPreferenceSyncBody>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { preferencesApi.updatePrivacy(body) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.PIN_MESSAGE to MutationSender { row ->
+            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { messageApi.pin(payload.conversationId, row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNPIN_MESSAGE to MutationSender { row ->
+            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { messageApi.unpin(payload.conversationId, row.targetId) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }

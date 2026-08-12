@@ -154,6 +154,17 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING/CALL_RECONNECTED
     keyPrefix: 'socket:call:check-active'
   },
+  // Gateway calling-stack audit 2026-07-08 — `presence:app-state` was the one
+  // remaining call-adjacent handler with zero throttling (no getUserId check
+  // either, unlike every sibling). Impact per-event is minimal (sets a flag
+  // on the socket, no DB write, no broadcast), but scenePhase transitions can
+  // fire in bursts on a flaky device — a generous per-minute budget only
+  // catches scripted flooding, not normal foreground/background churn.
+  PRESENCE_APP_STATE: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:presence:app-state'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods
@@ -191,11 +202,6 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate
     keyPrefix: 'socket:typing'
   },
-  LOCATION_SHARE: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:location:share'
-  },
   LOCATION_LIVE_UPDATE: {
     maxRequests: 120,
     windowMs: 60000, // 1 minute — allows ~2 GPS updates/sec (typical accuracy)
@@ -226,10 +232,13 @@ export class SocketRateLimiter {
   private cleanupInterval: NodeJS.Timeout;
 
   constructor() {
-    // Clean up expired entries every minute
+    // Clean up expired entries every minute. unref: ce timer d'hygiène ne
+    // doit jamais maintenir le process en vie (jest/outillage) — même
+    // pattern que les intervals de CallEventsHandler/NotificationService.
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 60000);
+    this.cleanupInterval.unref?.();
   }
 
   /**

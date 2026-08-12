@@ -1,5 +1,9 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { ConversationMessageStatsService } from '../../../services/ConversationMessageStatsService';
+import {
+  ConversationMessageStatsService,
+  resolveAttachmentType,
+  statsAuthorKey,
+} from '../../../services/ConversationMessageStatsService';
 
 // Reset the singleton between tests to ensure isolation.
 // The private static field must be cleared because there is no other way to
@@ -400,6 +404,30 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.textMessages).toEqual({ increment: 1 });
     });
 
+    it('increments textMessages for a whitespace-only text message (matches recompute — content emptiness is not a gate)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      // A ' ' body passes the gateway's `min(1)` content schema and is stored
+      // as messageType 'text' with no attachments. recompute() counts it
+      // (`msgType === 'text' && attachments.length === 0`), so the incremental
+      // path MUST too, or contentTypes.text drifts down until the next recompute.
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, ' ', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ increment: 1 });
+    });
+
+    it('increments textMessages for an empty-content text message (parity with recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, '', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ increment: 1 });
+    });
+
     it('does not increment textMessages for a non-text messageType with a caption (matches recompute)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
@@ -409,6 +437,30 @@ describe('ConversationMessageStatsService', () => {
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
       expect(updateCall.data.textMessages).toBeUndefined();
       expect(updateCall.data.totalMessages).toEqual({ increment: 1 });
+    });
+
+    it('increments locationCount for a location messageType (parity with recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      // Location is a messageType, not an attachment token — callers never put
+      // 'location' in attachmentTypes. The incremental path MUST count it by
+      // messageType, exactly like recompute (`msgType === 'location'`), or
+      // locationCount stays frozen at its seed forever (no periodic recompute).
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'en', 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toEqual({ increment: 1 });
+    });
+
+    it('does not touch locationCount for a plain text message', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'hello', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toBeUndefined();
     });
 
     it('increments textMessages when messageType is explicitly text', async () => {
@@ -663,15 +715,26 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.participantStats[USER_B]).toBeUndefined();
     });
 
-    it('calls recompute when stats row does not exist', async () => {
+    it('ne recalcule RIEN quand la ligne de compteurs n\'existe pas', async () => {
+      // Position d'`onMessageDeleted`, et l'édition a encore moins de raisons
+      // de s'en écarter : elle ne crée aucun message, donc l'absence de ligne
+      // ne rend rien périmé — `getStats` la bâtira, exacte, à la première
+      // lecture.
+      //
+      // Ce test remplace son inverse, qui exigeait le `recompute()`. La règle a
+      // changé parce que son exposition a changé : les QUATRE transports
+      // d'édition attendent cet appel AVANT d'acquitter le client, et
+      // `recompute()` balaie tous les messages vivants de la conversation.
+      // L'accusé de réception d'une édition ne doit pas passer derrière un scan
+      // complet. Le comptage à l'envoi garde le sien : il est fire-and-forget,
+      // hors du chemin de l'ACK.
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
-      prisma.message.findMany.mockResolvedValue([]);
-      prisma.conversationMessageStats.upsert.mockResolvedValue(makeExistingStats({ totalMessages: 0 }));
 
       await service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'old', 'new');
 
-      expect(prisma.message.findMany).toHaveBeenCalled();
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+      expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
       expect(prisma.conversationMessageStats.update).not.toHaveBeenCalled();
     });
 
@@ -742,6 +805,16 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
     });
 
+    it('decrements textMessages when a whitespace-only text message is deleted (symmetry with onNewMessage + recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, ' ', [], 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
+    });
+
     it('does not decrement textMessages when deleted message was a non-text type (symmetry with onNewMessage)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
@@ -751,6 +824,26 @@ describe('ConversationMessageStatsService', () => {
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
       expect(updateCall.data.textMessages).toBeUndefined();
       expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
+    });
+
+    it('decrements locationCount when a location message is deleted (symmetry with onNewMessage)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats({ locationCount: 3 }));
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toEqual({ decrement: 1 });
+    });
+
+    it('does not touch locationCount when a plain text message is deleted', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello', [], 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toBeUndefined();
     });
 
     it('does not decrement textMessages when message had attachments', async () => {
@@ -965,5 +1058,82 @@ describe('resolveAttachmentType — via recompute attachment classification', ()
     const counts = await typeFrom('application/pdf');
     expect(counts.fileCount).toBe(1);
     expect(counts.imageCount + counts.audioCount + counts.videoCount).toBe(0);
+  });
+});
+
+/**
+ * `resolveAttachmentType` et `statsAuthorKey` sont exportés depuis que les deux
+ * unités partagées d'effets (post-commit et retrait) les appliquent : la table
+ * MIME → compteur et la clé de crédit vivaient recopiées inline dans le handler
+ * socket et dans la route de suppression, c'est-à-dire à côté de `recompute()`,
+ * qui est pourtant l'autorité — celle qui reconstruit la ligne depuis les
+ * messages et qui contredirait n'importe quelle copie divergente.
+ */
+describe('resolveAttachmentType', () => {
+  it('classe les MIME comme le fait recompute()', () => {
+    expect(resolveAttachmentType('image/heic')).toBe('image');
+    expect(resolveAttachmentType('audio/mp4')).toBe('audio');
+    expect(resolveAttachmentType('video/quicktime')).toBe('video');
+    expect(resolveAttachmentType('application/pdf')).toBe('file');
+  });
+
+  it('classe un MIME absent en `file` plutôt que de jeter', () => {
+    // Les appelants rendent `att.mimeType ?? ''` : une colonne nulle en base ne
+    // doit pas faire échouer le comptage de tout le message.
+    expect(resolveAttachmentType('')).toBe('file');
+    expect(resolveAttachmentType(null as unknown as string)).toBe('file');
+  });
+});
+
+describe('statsAuthorKey', () => {
+  it('crédite l\'utilisateur enregistré', () => {
+    expect(statsAuthorKey(USER_B, USER_A)).toBe(USER_A);
+  });
+
+  it('retombe sur le Participant pour un anonyme', () => {
+    expect(statsAuthorKey(USER_B, null)).toBe(USER_B);
+    expect(statsAuthorKey(USER_B, undefined)).toBe(USER_B);
+    expect(statsAuthorKey(USER_B, '')).toBe(USER_B);
+  });
+});
+
+/**
+ * Le balayage des messages vides est le seul écrivain de `deletedAt` qui
+ * retire en LOT : il ne tient de ses messages que leur id et leur conversation,
+ * jamais l'auteur ni le contenu qu'un décrément demande. Le recalcul est donc
+ * le seul geste possible — et la garde d'existence est ce qui l'empêche de
+ * FABRIQUER des lignes de compteurs pour des conversations dont personne n'a
+ * jamais demandé les statistiques (`recompute()` fait un `upsert`).
+ */
+describe('recomputeIfTracked', () => {
+  let service: ConversationMessageStatsService;
+
+  beforeEach(() => {
+    resetSingleton();
+    service = ConversationMessageStatsService.getInstance();
+  });
+
+  it('ne touche à rien quand la conversation n\'a pas de compteurs', async () => {
+    const prisma = makePrisma();
+    prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
+
+    await service.recomputeIfTracked(prisma as any, CONV_ID);
+
+    expect(prisma.message.findMany).not.toHaveBeenCalled();
+    expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
+  });
+
+  it('recalcule depuis les messages vivants quand les compteurs existent', async () => {
+    const prisma = makePrisma();
+    prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.conversationMessageStats.upsert.mockResolvedValue(makeExistingStats({ totalMessages: 0 }));
+
+    await service.recomputeIfTracked(prisma as any, CONV_ID);
+
+    expect(prisma.message.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { conversationId: CONV_ID, deletedAt: null } })
+    );
+    expect(prisma.conversationMessageStats.upsert).toHaveBeenCalled();
   });
 });

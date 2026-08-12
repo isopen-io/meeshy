@@ -1,6 +1,9 @@
 import Foundation
 import MeeshySDK
 import MeeshyUI
+import os
+
+private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-save")
 
 // MARK: - Request
 
@@ -122,8 +125,15 @@ final class MediaSaveCoordinator: ObservableObject {
         pendingRequest = nil
     }
 
-    func pick(_ destination: MediaSaveDestination) async {
-        guard let request = pendingRequest else { return }
+    /// - Parameter explicitRequest: requête capturée SYNCHRONIQUEMENT au tap
+    ///   du bouton de destination. Indispensable : le `confirmationDialog`
+    ///   vide `pendingRequest` (via `cancel()`) à sa fermeture, qui survient
+    ///   AVANT que ce `Task` async ne s'exécute. Sans capture explicite,
+    ///   `pendingRequest` serait déjà nil ici et la sauvegarde ne se ferait
+    ///   jamais (aucun appel système). `pendingRequest` reste le fallback pour
+    ///   les tests / appels programmatiques hors dialog.
+    func pick(_ destination: MediaSaveDestination, request explicitRequest: MediaSaveRequest? = nil) async {
+        guard let request = explicitRequest ?? pendingRequest else { return }
         pendingRequest = nil
         guard destination.accepts(request.kind) else {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
@@ -152,6 +162,7 @@ final class MediaSaveCoordinator: ObservableObject {
                 shareURL = try Self.stageForExport(localFile, request: request)
             }
         } catch {
+            mediaSaveLog.error("pick FAILED: \(error.localizedDescription, privacy: .public)")
             lastOutcome = .failed(error.localizedDescription)
             activeRequest = nil
         }
@@ -268,15 +279,15 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
     }
 }
 
-/// Report production : `POST /attachments/:id/status` action `downloaded`
-/// (même contrat que les chemins historiques ImageViewer/DocumentViewer —
-/// P7-9). Best-effort : un échec ne dégrade jamais un enregistrement réussi.
+/// Report production : action `downloaded`, remontée par le même entonnoir que
+/// tous les autres rapports de consommation (`AttachmentStatusReporter`). Le
+/// rapport est rendu durable par l'outbox — un enregistrement effectué hors
+/// réseau remonte au retour de la connexion. Un échec ne dégrade jamais un
+/// enregistrement réussi.
 struct AttachmentStatusDownloadReporter: MediaSaveDownloadReporting {
     func reportDownloaded(attachmentId: String) async {
         let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
-        let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-            endpoint: "/attachments/\(attachmentId)/status", body: body
-        )
+        await AttachmentStatusReporter.reportAwaiting(attachmentId: attachmentId, body: body)
     }
 }
 

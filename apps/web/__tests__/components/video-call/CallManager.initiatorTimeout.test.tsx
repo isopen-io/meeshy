@@ -9,6 +9,11 @@
  * auto-cleanup into dead code: the caller's ringing screen depended entirely
  * on the server's 60s ringing-timeout broadcast to ever clear. See
  * tasks/calls-fonctionnel-todo.md Vague 16.
+ *
+ * Timeout value updated 2026-07-11 (Vague 38): bumped from 30s to 45s to
+ * match iOS's documented `outgoingRingTimeoutSeconds` convention (45s,
+ * 15s headroom under the gateway's 60s hard cap) — the caller and callee
+ * share the same `CALL_TIMEOUT_MS` constant.
  */
 
 import { render } from '@testing-library/react';
@@ -53,7 +58,7 @@ import { useCallStore } from '@/stores/call-store';
 import { CallManager } from '@/components/video-call/CallManager';
 
 const CALL_ID = 'call-initiator-timeout-abc';
-const CALL_TIMEOUT_MS = 30000;
+const CALL_TIMEOUT_MS = 45000;
 
 type Handler = (...args: unknown[]) => void;
 
@@ -107,7 +112,7 @@ describe('CallManager — initiator no-answer timeout', () => {
     jest.useRealTimers();
   });
 
-  it('arms the 30s no-answer timeout for the initiator even though call:initiated never reaches its own socket', () => {
+  it('arms the 45s no-answer timeout for the initiator even though call:initiated never reaches its own socket', () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
 
@@ -138,7 +143,7 @@ describe('CallManager — initiator no-answer timeout', () => {
     });
 
     act(() => {
-      // Callee joins before the 30s window elapses — status flips to 'active'.
+      // Callee joins before the 45s window elapses — status flips to 'active'.
       useCallStore.getState().updateCallStatus('active');
     });
 

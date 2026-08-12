@@ -67,3 +67,43 @@ describe('transformToConversationItem — direct conversation name resolution (S
     expect(item.name).toBe('Anon');
   });
 });
+
+describe('transformToConversationItem — group last-message senderName (SSOT)', () => {
+  function groupConversationWithLastMessageSender(sender: Record<string, unknown>): Conversation {
+    return {
+      id: 'conv_group',
+      type: 'group',
+      title: 'Groupe',
+      participants: [{ userId: 'me', type: 'registered' }],
+      lastMessage: {
+        content: 'coucou',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        sender,
+      },
+    } as unknown as Conversation;
+  }
+
+  it('prefers the sender displayName when present', () => {
+    const item = transformToConversationItem(
+      groupConversationWithLastMessageSender({ displayName: 'Ali', firstName: 'Alice', lastName: 'Martin', username: 'amartin_99' }),
+      baseOptions
+    );
+    expect(item.lastMessage?.senderName).toBe('Ali');
+  });
+
+  it('falls back to firstName + lastName when the sender has no displayName (regression: no longer undefined)', () => {
+    const item = transformToConversationItem(
+      groupConversationWithLastMessageSender({ displayName: null, firstName: 'Alice', lastName: 'Martin', username: 'amartin_99' }),
+      baseOptions
+    );
+    expect(item.lastMessage?.senderName).toBe('Alice Martin');
+  });
+
+  it('falls back to username when the sender has only a username', () => {
+    const item = transformToConversationItem(
+      groupConversationWithLastMessageSender({ username: 'amartin_99' }),
+      baseOptions
+    );
+    expect(item.lastMessage?.senderName).toBe('amartin_99');
+  });
+});

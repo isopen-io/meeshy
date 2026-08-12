@@ -1,7 +1,11 @@
 /**
  * Unit tests for message routes (messages.ts)
- * Tests GET/PUT/DELETE /messages/:messageId, status, history, translations,
+ * Tests GET/PUT/DELETE /messages/:messageId, status, translations,
  * status-details, and attachment routes.
+ *
+ * `GET /messages/:messageId/history` a été retirée : aucune donnée
+ * d'historique n'existe en base, aucun des quatre clients ne l'appelait, et
+ * elle portait une quatrième copie — divergente — de la règle d'admission.
  *
  * @jest-environment node
  */
@@ -22,6 +26,18 @@ jest.mock('../../../middleware/auth', () => ({
 }));
 
 const mockDeleteAttachment = jest.fn().mockResolvedValue(undefined);
+// Les compteurs de conversation : seul le singleton est doublé, la table
+// MIME → compteur et la clé de crédit restent les vraies.
+const mockOnMessageDeleted = jest.fn(async () => undefined);
+const mockOnMessageEdited = jest.fn(async () => undefined);
+jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onMessageDeleted: (...a: any[]) => (mockOnMessageDeleted as any)(...a),
+    onMessageEdited: (...a: any[]) => (mockOnMessageEdited as any)(...a),
+  },
+}));
+
 jest.mock('../../../services/attachments/index', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     deleteAttachment: (...args: any[]) => mockDeleteAttachment(...args),
@@ -86,9 +102,12 @@ const mockMarkVideoAsWatched = jest.fn().mockResolvedValue(undefined);
 const mockMarkImageAsViewed = jest.fn().mockResolvedValue(undefined);
 const mockMarkAttachmentAsDownloaded = jest.fn().mockResolvedValue(undefined);
 
+const mockRecordMessageLanguageView = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     markMessagesAsRead: (...args: any[]) => mockMarkMessagesAsRead(...args),
+    recordMessageLanguageView: (...args: any[]) => mockRecordMessageLanguageView(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
     getMessageStatusDetails: (...args: any[]) => mockGetMessageStatusDetails(...args),
     getAttachmentStatusDetails: (...args: any[]) => mockGetAttachmentStatusDetails(...args),
@@ -186,13 +205,24 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn().mockResolvedValue(mockAttachment),
     },
     conversation: {
+      // `applyMessageRemovalEffects` relit `lastMessageAt` au plus près de son
+      // écriture conditionnelle plutôt que de le recevoir joint au message :
+      // la garde CAS porte ainsi sur une valeur fraîche, et la route économise
+      // la jointure. Le double rend ce que la jointure rendait.
+      findUnique: jest.fn().mockResolvedValue({
+        lastMessageAt: mockMessage.conversation.lastMessageAt,
+        createdAt: mockMessage.conversation.createdAt,
+      }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   });
 
   app.decorate('translationService', {
-    _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+    retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
   });
 
   app.decorate('socketIOHandler', { getManager: () => null });
@@ -234,6 +264,19 @@ describe('GET /messages/:messageId', () => {
     const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
     expect(res.statusCode).toBe(500);
   });
+
+  it('restitue `location` en champ top-level pour un message géolocalisé', async () => {
+    // Lot 1 : le message affiché en entier (bulle complète) doit montrer sa
+    // position — sans hoist, l'utilisateur ouvre le message et ne voit rien.
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+      ...mockMessage,
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+    });
+    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ─── PUT /messages/:messageId ─────────────────────────────────────────────────
@@ -273,6 +316,27 @@ describe('PUT /messages/:messageId', () => {
     expect((app as any).prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: MSG_ID, deletedAt: null },
     }));
+  });
+
+  // Ce transport — celui qu'emploie iOS — n'ajustait pas les compteurs :
+  // `totalWords`/`totalCharacters` restaient sur les longueurs du texte
+  // d'origine, définitivement (aucun recalcul périodique n'existe).
+  it('ajuste les compteurs sur l\'écart de longueur', async () => {
+    (mockOnMessageEdited as any).mockClear();
+
+    const res = await app.inject({
+      method: 'PUT', url: '/messages/' + MSG_ID,
+      payload: { content: 'Updated content' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const calls = (mockOnMessageEdited as any).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [, conversationId, authorKey, previous, next] = calls[0];
+    expect(conversationId).toBe(CONV_ID);
+    expect(authorKey).toBe(USER_ID);
+    expect(previous).toBe('Hello!');
+    expect(next).toBe('Updated content');
   });
 
   it('returns 404 without broadcasting when the message was deleted between read and write (concurrent delete race)', async () => {
@@ -333,6 +397,32 @@ describe('DELETE /messages/:messageId', () => {
     (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
     expect(res.statusCode).toBe(500);
+  });
+
+  // Cette route — celle qu'emploie Android — retirait le message sans jamais
+  // rendre son crédit aux compteurs. Le décompte ne vivait que dans la route
+  // iOS/web, et le comptage que dans le handler socket : aucune des deux
+  // moitiés ne couvrait l'autre.
+  it('débite les compteurs de la conversation', async () => {
+    (mockOnMessageDeleted as any).mockClear();
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce({
+        ...mockMessage,
+        attachments: [{ id: 'att-1', mimeType: 'audio/mp4' }],
+      })
+      .mockResolvedValueOnce(null);
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    const calls = (mockOnMessageDeleted as any).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [, conversationId, authorKey, content, tokens, messageType] = calls[0];
+    expect(conversationId).toBe(CONV_ID);
+    expect(authorKey).toBe(USER_ID);
+    expect(content).toBe('Hello!');
+    expect(tokens).toEqual(['audio']);
+    expect(messageType).toBe('text');
   });
 
   it('recomputes lastMessageAt via an optimistic-concurrency updateMany guarded on the pre-delete value', async () => {
@@ -412,39 +502,6 @@ describe('POST /messages/:messageId/status', () => {
       method: 'POST', url: '/messages/' + MSG_ID + '/status',
       payload: { status: 'read' },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-  });
-});
-
-// ─── GET /messages/:messageId/history ─────────────────────────────────────────
-
-describe('GET /messages/:messageId/history', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 404 when message not found', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('returns 403 when user lacks history permission', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
-      ...mockMessage,
-      sender: { userId: 'other-user' },
-      conversation: {
-        ...mockMessage.conversation,
-        participants: [{ userId: USER_ID, role: 'member' }],
-      },
-    });
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 200 with history (message author can view)', async () => {
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });

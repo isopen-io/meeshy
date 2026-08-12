@@ -30,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,18 +37,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
-
-/** Presence dot colours (semantic, kept static per the design system): green online, amber away. */
-private val OnlineIndicator = Color(0xFF34D399)
-private val AwayIndicator = Color(0xFFFBBF24)
+import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The Contacts (all-friends) tab — the online-first friend list with a filter
@@ -80,7 +76,7 @@ fun ContactsListTab(
             state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
             state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
             state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
-            else -> FriendList(state.visibleFriends)
+            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor)
         }
     }
 }
@@ -110,17 +106,17 @@ private fun FilterRow(
 }
 
 @Composable
-private fun FriendList(friends: List<FriendRequestUser>) {
+private fun FriendList(friends: List<FriendRequestUser>, moodEmojiFor: (String) -> String?) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        items(friends, key = { it.id }) { friend -> FriendRow(friend) }
+        items(friends, key = { it.id }) { friend -> FriendRow(friend, moodEmoji = moodEmojiFor(friend.id)) }
     }
 }
 
 @Composable
-private fun FriendRow(friend: FriendRequestUser) {
+private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
         modifier = Modifier
@@ -132,6 +128,7 @@ private fun FriendRow(friend: FriendRequestUser) {
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(friend.id.ifBlank { name })),
+            moodEmoji = moodEmoji,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -145,13 +142,13 @@ private fun FriendRow(friend: FriendRequestUser) {
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        presenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
+        meeshyPresenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
             Surface(
                 color = dot,
                 shape = CircleShape,
@@ -163,13 +160,6 @@ private fun FriendRow(friend: FriendRequestUser) {
     }
 }
 
-/** The dot colour for a resolved presence, or null when no dot should show (offline). */
-private fun presenceDotColor(state: PresenceState): Color? = when (state) {
-    PresenceState.ONLINE -> OnlineIndicator
-    PresenceState.AWAY -> AwayIndicator
-    PresenceState.OFFLINE -> null
-}
-
 @Composable
 private fun ErrorState(onRetry: () -> Unit) {
     Centered {
@@ -177,7 +167,7 @@ private fun ErrorState(onRetry: () -> Unit) {
             Text(
                 text = stringResource(R.string.contacts_list_error),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.contacts_list_retry)) }
@@ -191,7 +181,7 @@ private fun EmptyMessage(message: String) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(32.dp),
         )
     }

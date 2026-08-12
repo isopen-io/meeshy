@@ -86,6 +86,12 @@ export class WebRTCService {
   private makingOffer = false;
   private isSettingRemoteAnswerPending = false;
   private ignoreOffer = false;
+  // Set when negotiate({iceRestart:true}) is dropped by the makingOffer
+  // guard because an unrelated renegotiation (e.g. A/V switch) is already in
+  // flight. Without this, a colliding ICE restart is discarded with no
+  // retry and the connection can be stranded in 'failed' forever — replayed
+  // from negotiate()'s finally block once the in-flight offer settles.
+  private pendingIceRestart = false;
   // Auto-renegotiation (onnegotiationneeded → negotiate) is suppressed during
   // the initial explicit offer/answer to avoid a duplicate first offer. It is
   // armed once the connection is established so mid-call media changes (A/V
@@ -96,6 +102,15 @@ export class WebRTCService {
   // a track — never by addTransceiver mid-call (which desyncs m-line order).
   private videoTransceiver: RTCRtpTransceiver | null = null;
   private currentVideoTier: VideoQualityTier = 'high';
+  // The track this instance's own sender is currently transmitting — set by
+  // addLocalMedia() (its own `.clone()` of the shared stream's video track,
+  // Vague 96 — see that method's doc comment for why a literal, unshared
+  // reference is unsafe) and by enableVideoSend()/switchVideoSendTrack().
+  // Always exclusive to this instance, never another peer's sender: nothing
+  // else references it, so close({stopLocalTracks: false})/disableVideoSend()/
+  // switchVideoSendTrack() can always stop it without risk of killing a
+  // sibling peer's outbound video in a group call.
+  private exclusiveVideoTrack: MediaStreamTrack | null = null;
   // Grace timer for a transient ICE 'disconnected' before escalating to an ICE
   // restart. A blip often self-heals within a couple of seconds; restarting
   // immediately causes needless churn.
@@ -318,6 +333,20 @@ export class WebRTCService {
       logger.debug('[WebRTCService] Creating peer connection', { participantId });
 
       this.participantId = participantId;
+
+      // Perfect-negotiation state is scoped to the RTCPeerConnection this
+      // method is about to build — a service instance can be reused across a
+      // participant leave→rejoin without an intervening close() (see
+      // use-webrtc-p2p.ts's per-participant service cache), so any state left
+      // over from a prior connection (e.g. autoNegotiate=true from a
+      // completed initial negotiation) is stale and must not leak onto the
+      // new one, or onnegotiationneeded can fire a second, racing offer.
+      this.videoTransceiver = null;
+      this.autoNegotiate = false;
+      this.makingOffer = false;
+      this.isSettingRemoteAnswerPending = false;
+      this.ignoreOffer = false;
+      this.pendingIceRestart = false;
 
       // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
@@ -748,9 +777,19 @@ export class WebRTCService {
       throw new Error('Peer connection not initialized');
     }
     if (this.makingOffer) {
-      logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
-        participantId: this.participantId,
-      });
+      if (options.iceRestart) {
+        // Do not drop this on the floor: a colliding ICE restart must still
+        // happen once the in-flight offer settles, or the connection can be
+        // stranded in 'failed' with no further recovery signal.
+        this.pendingIceRestart = true;
+        logger.warn('[WebRTCService] negotiate() iceRestart deferred: offer already in flight', {
+          participantId: this.participantId,
+        });
+      } else {
+        logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
+          participantId: this.participantId,
+        });
+      }
       return;
     }
     try {
@@ -777,6 +816,15 @@ export class WebRTCService {
       throw err;
     } finally {
       this.makingOffer = false;
+      if (this.pendingIceRestart) {
+        this.pendingIceRestart = false;
+        logger.info('[WebRTCService] Replaying deferred ICE restart after in-flight offer settled', {
+          participantId: this.participantId,
+        });
+        void this.negotiate({ iceRestart: true }).catch((error) => {
+          logger.error('[WebRTCService] Deferred ICE restart replay failed', { error });
+        });
+      }
     }
   }
 
@@ -855,6 +903,23 @@ export class WebRTCService {
    * track) when the call starts as video, recvonly (no track) for an audio-only
    * call — so it can later be upgraded by flipping direction + replaceTrack
    * without an addTransceiver (which would reorder m-lines).
+   *
+   * The outgoing video track is always a `.clone()` of `stream`'s current
+   * video track, never the literal object (Vague 96). This method runs once
+   * per NEW peer connection — including a late joiner added to an ALREADY
+   * video-active group call, at which point `stream.getVideoTracks()[0]` is
+   * another already-connected peer's live sender.track (enableVideo()/
+   * switchCamera() in use-webrtc-p2p.ts hand that same literal object to
+   * whichever peer is first in their snapshot). Attaching it here directly
+   * would alias two independent RTCRtpSenders to one MediaStreamTrack: the
+   * next unrelated switchVideoSendTrack()/disableVideoSend() on THAT other
+   * peer reads its own sender.track as ground truth and stops it
+   * unconditionally, silently freezing this peer's outbound video too.
+   * Cloning — and recording the clone as `exclusiveVideoTrack` — gives this
+   * instance the same self-contained ownership every other track-attaching
+   * path already keeps, so it can never be stopped by anyone else's cleanup,
+   * and is itself correctly released (instead of leaked) if this peer alone
+   * leaves the group call via close({ stopLocalTracks: false }).
    */
   addLocalMedia(stream: MediaStream, options: { sendVideo: boolean }): void {
     if (!this.peerConnection) {
@@ -862,7 +927,7 @@ export class WebRTCService {
     }
     this.localStream = stream;
     const audioTrack = stream.getAudioTracks()[0] ?? null;
-    const videoTrack = stream.getVideoTracks()[0] ?? null;
+    const sourceVideoTrack = stream.getVideoTracks()[0] ?? null;
 
     const audioTransceiver = this.peerConnection.addTransceiver(audioTrack ?? 'audio', {
       direction: 'sendrecv',
@@ -870,7 +935,8 @@ export class WebRTCService {
     });
     this.applyAudioCodecPreferences(audioTransceiver);
 
-    if (options.sendVideo && videoTrack) {
+    if (options.sendVideo && sourceVideoTrack) {
+      const videoTrack = sourceVideoTrack.clone();
       // Hint the encoder toward camera content (drop resolution before
       // framerate under constraint).
       try { videoTrack.contentHint = 'motion'; } catch { /* not supported */ }
@@ -878,10 +944,21 @@ export class WebRTCService {
         direction: 'sendrecv',
         streams: [stream],
       });
+      this.localStream.addTrack(videoTrack);
+      this.exclusiveVideoTrack = videoTrack;
     } else {
-      // Reserve the video m-line without lighting the camera/LED.
+      // Reserve the video m-line without lighting the camera/LED. Still
+      // pre-associate it with `stream` (same as the sendVideo branch above):
+      // a sender's MSID/stream grouping is fixed at addTransceiver() time —
+      // replaceTrack() in enableVideoSend() later attaches the camera track
+      // but does NOT change that association. Without it, the mid-call
+      // audio→video upgrade renegotiates with no stream grouping, and the
+      // remote peer's ontrack event fires with an empty `event.streams`,
+      // silently dropping the upgrade (use-webrtc-p2p.ts's onTrack handler
+      // gates on `event.streams[0]`).
       this.videoTransceiver = this.peerConnection.addTransceiver('video', {
         direction: 'recvonly',
+        streams: [stream],
       });
     }
   }
@@ -901,6 +978,7 @@ export class WebRTCService {
     if (this.localStream) {
       this.localStream.addTrack(track);
     }
+    this.exclusiveVideoTrack = track;
     await this.videoTransceiver.sender.replaceTrack(track);
     if (this.videoTransceiver.direction !== 'sendrecv') {
       this.videoTransceiver.direction = 'sendrecv';
@@ -911,6 +989,42 @@ export class WebRTCService {
       await this.negotiate();
     }
     await this.applyVideoEncoding(this.currentVideoTier === 'audio-only' ? 'high' : this.currentVideoTier);
+  }
+
+  /**
+   * Swap the currently-sent camera track for a new one without a full
+   * enable/disable cycle (front↔back camera flip, FaceTime-style — Vague 95).
+   * The transceiver is already sendrecv and stays that way: replaceTrack()
+   * alone is sufficient, no renegotiation needed, unlike enableVideoSend().
+   *
+   * Reads the outgoing track straight off the sender (ground truth) before
+   * replacing — the same technique disableVideoSend() already uses — rather
+   * than trusting `exclusiveVideoTrack`, so this instance's own previous
+   * track is the only one ever stopped/removed. use-webrtc-p2p.ts's
+   * enableVideo() gives each peer beyond the first its own `.clone()`; a
+   * camera switch must respect that same per-peer ownership or it silently
+   * orphans a live camera capture on every other peer's track in a group
+   * call (the bug this method replaces: handleSwitchCamera used to replace
+   * every sender with one shared track object while assuming `localStream`
+   * held exactly one video track).
+   */
+  async switchVideoSendTrack(track: MediaStreamTrack): Promise<void> {
+    if (!this.videoTransceiver) {
+      throw new Error('Video transceiver not initialized');
+    }
+    try { track.contentHint = 'motion'; } catch { /* not supported */ }
+    const previousTrack = this.videoTransceiver.sender.track;
+    await this.videoTransceiver.sender.replaceTrack(track);
+    if (this.localStream) {
+      this.localStream.addTrack(track);
+      if (previousTrack) {
+        this.localStream.removeTrack(previousTrack);
+      }
+    }
+    if (previousTrack) {
+      previousTrack.stop();
+    }
+    this.exclusiveVideoTrack = track;
   }
 
   /**
@@ -927,6 +1041,7 @@ export class WebRTCService {
       track.stop();
       this.localStream?.removeTrack(track);
     }
+    this.exclusiveVideoTrack = null;
     if (this.videoTransceiver.direction !== 'recvonly') {
       this.videoTransceiver.direction = 'recvonly';
     }
@@ -1116,9 +1231,19 @@ export class WebRTCService {
   }
 
   /**
-   * Close connection and cleanup
+   * Close connection and cleanup.
+   *
+   * `stopLocalTracks` defaults to `true` (full-teardown behavior). Pass
+   * `false` when closing ONE peer connection among several that share the
+   * same local `MediaStream` reference (group calls: use-webrtc-p2p.ts keeps
+   * one WebRTCService per remote participant, all fed the same stream via
+   * addLocalMedia) — stopping the hardware tracks here would kill local
+   * audio/video for every OTHER still-connected participant, not just this
+   * one. The shared stream's real lifecycle (camera/mic release) belongs to
+   * whoever owns it (call-store's reset()), not to a single peer's cleanup.
    */
-  close(): void {
+  close(options: { stopLocalTracks?: boolean } = {}): void {
+    const { stopLocalTracks = true } = options;
     logger.debug('[WebRTCService] Closing connection', {
       participantId: this.participantId,
     });
@@ -1127,16 +1252,27 @@ export class WebRTCService {
     this.stopQualityMonitor();
     this.clearDisconnectGraceTimer();
 
-    // Stop all local tracks
+    // Release this instance's own reference; only stop the tracks themselves
+    // when this service owns the full teardown (see doc comment above).
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        track.stop();
-        logger.debug('[WebRTCService] Stopped local track', {
-          trackKind: track.kind,
+      if (stopLocalTracks) {
+        this.localStream.getTracks().forEach((track) => {
+          track.stop();
+          logger.debug('[WebRTCService] Stopped local track', {
+            trackKind: track.kind,
+          });
         });
-      });
+      } else if (this.exclusiveVideoTrack) {
+        // Not a full teardown (group call, one peer among several), but this
+        // instance's own video track from enableVideoSend() is never shared
+        // with another peer's sender — release it or it leaks on the shared
+        // stream forever. See the field doc comment.
+        this.exclusiveVideoTrack.stop();
+        this.localStream.removeTrack(this.exclusiveVideoTrack);
+      }
       this.localStream = null;
     }
+    this.exclusiveVideoTrack = null;
 
     // Close peer connection
     if (this.peerConnection) {
@@ -1150,6 +1286,7 @@ export class WebRTCService {
     this.makingOffer = false;
     this.isSettingRemoteAnswerPending = false;
     this.ignoreOffer = false;
+    this.pendingIceRestart = false;
 
     logger.info('[WebRTCService]', 'Connection closed and cleaned up');
   }

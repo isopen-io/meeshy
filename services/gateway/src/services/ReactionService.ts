@@ -38,6 +38,16 @@ export interface AddReactionResult {
    * a REACTION_REMOVED event per entry so other clients drop the old emoji.
    */
   replacedEmojis: string[];
+  /**
+   * True when the participant already had exactly this emoji on this message,
+   * so addReaction made no DB change. Callers MUST skip the REACTION_ADDED
+   * broadcast and the author notification — nothing changed, and re-emitting
+   * both spams every participant in the room and (once the anti-spam window
+   * has elapsed) double-notifies the author for a single logical reaction.
+   * Mirrors `removeReaction`'s `false` return, which every consumer already
+   * respects to avoid a no-op REACTION_REMOVED broadcast.
+   */
+  unchanged: boolean;
 }
 
 export class ReactionService {
@@ -80,6 +90,16 @@ export class ReactionService {
       throw new Error('Message not found');
     }
 
+    // A soft-deleted message (deletedAt set) still exists as a row, so !message
+    // does not catch it — but it is no longer reactable. Every sibling write
+    // path guards this identically (message edit/delete filter deletedAt: null);
+    // reactions were the outlier. Without this, the reaction would persist and
+    // the handler would broadcast REACTION_ADDED for a message clients have
+    // already rendered as deleted.
+    if (message.deletedAt) {
+      throw new Error('Cannot react to a deleted message');
+    }
+
     if (message.messageType === 'system') {
       throw new Error('Cannot react to a system message');
     }
@@ -99,7 +119,7 @@ export class ReactionService {
         where: { messageId, participantId, emoji: sanitized }
       });
       if (existingReaction) {
-        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [] };
+        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [], unchanged: true };
       }
     }
 
@@ -121,7 +141,7 @@ export class ReactionService {
 
     await this.updateMessageReactionSummary(messageId);
 
-    return { reaction: this.mapReactionToData(reaction), replacedEmojis };
+    return { reaction: this.mapReactionToData(reaction), replacedEmojis, unchanged: false };
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
@@ -274,6 +294,32 @@ export class ReactionService {
     return reactions.map(r => this.mapReactionToData(r));
   }
 
+  // A user has a distinct Participant.id per conversation, and reactions are
+  // keyed by Participant.id — never by User.id (they are ObjectIds from
+  // different collections and never collide). Resolving the user's reactions
+  // therefore requires expanding userId → their participant ids first, then
+  // filtering reactions across all of them. Passing a User.id straight into
+  // `getParticipantReactions` (the previous route behaviour) matched zero rows.
+  async getUserReactions(userId: string): Promise<ReactionData[]> {
+    const participants = await this.prisma.participant.findMany({
+      where: { userId },
+      select: { id: true }
+    });
+
+    const participantIds = participants.map(p => p.id);
+    if (participantIds.length === 0) {
+      return [];
+    }
+
+    const reactions = await this.prisma.reaction.findMany({
+      where: { participantId: { in: participantIds } },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    return reactions.map(r => this.mapReactionToData(r));
+  }
+
   async hasParticipantReacted(
     messageId: string,
     emoji: string,
@@ -316,7 +362,8 @@ export class ReactionService {
     emoji: string,
     action: 'add' | 'remove',
     participantId: string,
-    conversationId: string
+    conversationId: string,
+    userId: string
   ): Promise<ReactionUpdateEvent> {
     const aggregation = await this.getEmojiAggregation(
       messageId,
@@ -328,6 +375,7 @@ export class ReactionService {
       messageId,
       conversationId,
       participantId,
+      userId,
       emoji,
       action,
       aggregation,

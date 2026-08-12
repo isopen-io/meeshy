@@ -1,4 +1,6 @@
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { getUserPresenceStatus, presenceTone } from '@meeshy/shared/utils/user-presence';
+import { PRESENCE_TEXT_CLASS } from '@/lib/user-status';
 
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 
@@ -20,9 +22,16 @@ export type FormatPresenceLabelOptions = {
 export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
   const lastMs = new Date(o.lastActiveAt).getTime();
   const nowMs = o.now ?? Date.now();
-  const minutesAgo = (nowMs - lastMs) / 60_000;
 
-  if (minutesAgo < 1) return o.t('status.online');
+  // Le libellé « En ligne » suit la règle canonique (source de vérité partagée),
+  // pas un seuil local : ainsi il s'accorde toujours avec `presenceColorClass`.
+  // `isOnline === true` est autoritatif dans la fenêtre away (backend gardé contre
+  // les données périmées), sinon online = activité < 60 s.
+  if (getUserPresenceStatus({ isOnline: o.isOnline, lastActiveAt: o.lastActiveAt }, nowMs) === 'online') {
+    return o.t('status.online');
+  }
+
+  const minutesAgo = (nowMs - lastMs) / 60_000;
   if (minutesAgo < 60) return o.t('status.lastSeenMinutes', { count: Math.floor(minutesAgo) });
 
   const hoursAgo = minutesAgo / 60;
@@ -37,22 +46,61 @@ export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
   return o.t('status.lastSeenDateTime', { date, time });
 }
 
-const PRESENCE_COLORS = {
-  fresh: 'text-green-600 dark:text-green-400',
-  recent: 'text-orange-500 dark:text-orange-400',
-  stale: 'text-gray-500 dark:text-gray-400',
-} as const;
+export type FormatLastSeenLabelOptions = {
+  lastActiveAt?: Date | string | number | null;
+  isOnline?: boolean | null;
+  t: Translate;
+  locale?: string;
+  now?: number;
+};
 
 /**
- * Couleur du libellé selon l'ancienneté : vert < 5 min, orange < 30 min, gris sinon.
+ * Variante tolérante de `formatPresenceLabel` pour les surfaces liste (contacts)
+ * où `lastActiveAt` peut être absent ou illisible.
+ *
+ * - `lastActiveAt` absent (`null`/`undefined`) → `status.online` si la règle de
+ *   présence canonique classe l'utilisateur en ligne (backend `isOnline`
+ *   autoritatif), sinon `status.neverSeen`.
+ * - `lastActiveAt` illisible (`NaN`) → `status.offline`.
+ * - sinon → délègue à `formatPresenceLabel` (règle 1/3/5 partagée, math de jour
+ *   calendaire, heure exacte) — donc le libellé s'accorde toujours avec la
+ *   pastille de présence (`getUserPresenceStatus`).
+ *
+ * Remplace les copies locales divergentes qui testaient le `isOnline` brut et
+ * calculaient les jours en fenêtres de 24 h écoulées (off-by-one, DST-unsafe,
+ * heure perdue au-delà de 24 h).
+ */
+export function formatLastSeenLabel(o: FormatLastSeenLabelOptions): string {
+  if (o.lastActiveAt === null || o.lastActiveAt === undefined) {
+    const online =
+      getUserPresenceStatus({ isOnline: o.isOnline }, o.now ?? Date.now()) === 'online';
+    return o.t(online ? 'status.online' : 'status.neverSeen');
+  }
+
+  if (Number.isNaN(new Date(o.lastActiveAt).getTime())) {
+    return o.t('status.offline');
+  }
+
+  return formatPresenceLabel({
+    lastActiveAt: o.lastActiveAt,
+    isOnline: o.isOnline,
+    t: o.t,
+    locale: o.locale,
+    now: o.now,
+  });
+}
+
+/**
+ * Couleur du libellé selon la règle de présence canonique 1/3/5 : vert online,
+ * orange en absence courte (away), gris inactif (idle) et hors ligne. Délègue
+ * le calcul d'état à `getUserPresenceStatus` (source de vérité partagée) et
+ * le mapping couleur à `PRESENCE_TEXT_CLASS` (mapping central web).
  */
 export function presenceColorClass(
   lastActiveAt: Date | string | number,
-  _isOnline?: boolean | null,
+  isOnline?: boolean | null,
   now?: number,
 ): string {
-  const minutesAgo = ((now ?? Date.now()) - new Date(lastActiveAt).getTime()) / 60_000;
-  if (minutesAgo < 5) return PRESENCE_COLORS.fresh;
-  if (minutesAgo < 30) return PRESENCE_COLORS.recent;
-  return PRESENCE_COLORS.stale;
+  const status = getUserPresenceStatus({ isOnline, lastActiveAt }, now ?? Date.now());
+  return PRESENCE_TEXT_CLASS[presenceTone(status)];
 }

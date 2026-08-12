@@ -1,86 +1,20 @@
 /**
- * Tests pour la fonction normalizeMarkdown
- * Vérifie la préservation des retours chariot Windows/Linux
+ * Tests unitaires de `normalizeMarkdown`.
+ *
+ * Importe la VRAIE fonction de production depuis le module pur `../normalize-markdown`
+ * (aucune dépendance `react-markdown`, donc pas de souci ESM sous Jest) — et non une copie
+ * locale recréée, qui dérivait silencieusement du code réel.
  */
-
-// Import de la fonction à tester (vous devrez l'exporter depuis MarkdownMessage.tsx)
-// Pour ce test, nous allons recréer la fonction localement
-
-const normalizeMarkdown = (content: string): string => {
-  let normalized = content;
-
-  // ÉTAPE 1: Normaliser les retours chariot Windows → Linux
-  normalized = normalized.replace(/\r\n/g, '\n');
-  normalized = normalized.replace(/\r/g, '\n');
-
-  // ÉTAPE 2: Préserver les retours chariot multiples
-  const codeBlockRegex = /```[\s\S]*?```/g;
-  const codeBlocks: string[] = [];
-
-  // Sauvegarder les blocs de code
-  normalized = normalized.replace(codeBlockRegex, (match) => {
-    codeBlocks.push(match);
-    return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
-  });
-
-  // Normaliser les headers AVANT conversion
-  normalized = normalized.replace(/^(#{1,6})([^\s#])/gm, '$1 $2');
-  normalized = normalized.replace(/^(#{1,6}\s+.+?)\s+#{1,6}\s*$/gm, '$1');
-  normalized = normalized.replace(/^(#{1,6})\s{2,}/gm, '$1 ');
-
-  // Convertir les retours chariot multiples en <br/>
-  // MAIS préserver autour des séparateurs horizontaux
-  const lines = normalized.split('\n');
-  const processedLines: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    processedLines.push(lines[i]);
-  }
-  normalized = processedLines.join('\n');
-
-  normalized = normalized.replace(/\n{2,}/g, (match, offset) => {
-    const before = normalized.substring(Math.max(0, offset - 30), offset);
-    const after = normalized.substring(offset + match.length, offset + match.length + 30);
-    const hasHrBefore = /[-*_]{3,}\s*$/.test(before);
-    const hasHrAfter = /^[-*_]{3,}/.test(after);
-    const hasHeaderBefore = /#{1,6}\s+.+$/.test(before.split('\n').pop() || '');
-    const hasHeaderAfter = /^#{1,6}\s+/.test(after);
-    if (hasHrBefore || hasHrAfter || hasHeaderBefore || hasHeaderAfter) {
-      return '\n\n';
-    }
-    const count = match.length;
-    return '<br/>'.repeat(count);
-  });
-
-  // Restaurer les blocs de code
-  normalized = normalized.replace(/___CODE_BLOCK_(\d+)___/g, (_, index) => {
-    return codeBlocks[parseInt(index)];
-  });
-
-  // ÉTAPE 3: Corriger les espaces incorrects
-  normalized = normalized.replace(/\*\*([ \t]+)(?![\n\r])/g, '**\u00A0');
-  normalized = normalized.replace(/(?<![\n\r])([ \t]+)\*\*/g, '\u00A0**');
-  normalized = normalized.replace(/(?<![\n\r\*])\*([ \t]+)(?![\n\r])/g, '*\u00A0');
-  normalized = normalized.replace(/(?<![\n\r])([ \t]+)\*(?!\*)/g, '\u00A0*');
-  normalized = normalized.replace(/__([ \t]+)(?![\n\r])/g, '__\u00A0');
-  normalized = normalized.replace(/(?<![\n\r])([ \t]+)__/g, '\u00A0__');
-  normalized = normalized.replace(/(?<![\w\n\r])_([ \t]+)(?![\n\r])/g, '_\u00A0');
-  normalized = normalized.replace(/(?<![\n\r])([ \t]+)_(?!\w)/g, '\u00A0_');
-  normalized = normalized.replace(/\[[ \t]+/g, '[');
-  normalized = normalized.replace(/[ \t]+\]/g, ']');
-  normalized = normalized.replace(/\([ \t]+/g, '(');
-  normalized = normalized.replace(/[ \t]+\)/g, ')');
-  normalized = normalized.replace(/`[ \t]+/g, '`');
-  normalized = normalized.replace(/[ \t]+`/g, '`');
-
-  return normalized;
-};
+import { normalizeMarkdown } from '../normalize-markdown';
 
 describe('normalizeMarkdown - Line Break Handling', () => {
   describe('Windows line breaks (\\r\\n)', () => {
-    it('should normalize Windows line breaks to Unix', () => {
+    it('should normalize Windows line breaks and preserve each as <br/>', () => {
       const input = 'Line 1\r\nLine 2\r\nLine 3';
-      const expected = 'Line 1\nLine 2\nLine 3';
-      expect(normalizeMarkdown(input)).toBe(expected);
+      const output = normalizeMarkdown(input);
+      // \r\n → \n → <br/> : chaque retour à la ligne est préservé en messagerie, sans \r résiduel
+      expect(output).toBe('Line 1<br/>Line 2<br/>Line 3');
+      expect(output).not.toContain('\r');
     });
 
     it('should handle multiple Windows line breaks', () => {
@@ -92,17 +26,20 @@ describe('normalizeMarkdown - Line Break Handling', () => {
   });
 
   describe('Legacy Mac line breaks (\\r)', () => {
-    it('should normalize Mac line breaks to Unix', () => {
+    it('should normalize Mac line breaks and preserve each as <br/>', () => {
       const input = 'Line 1\rLine 2\rLine 3';
-      const expected = 'Line 1\nLine 2\nLine 3';
-      expect(normalizeMarkdown(input)).toBe(expected);
+      const output = normalizeMarkdown(input);
+      // \r → \n → <br/> : idem, sans \r résiduel
+      expect(output).toBe('Line 1<br/>Line 2<br/>Line 3');
+      expect(output).not.toContain('\r');
     });
   });
 
   describe('Unix line breaks (\\n)', () => {
-    it('should preserve single line breaks', () => {
+    it('should convert single line breaks to <br/> (messaging preserves every newline)', () => {
       const input = 'Line 1\nLine 2\nLine 3';
-      const expected = 'Line 1\nLine 2\nLine 3';
+      // En markdown standard un \n simple est ignoré ; en messagerie chaque \n devient un <br/>.
+      const expected = 'Line 1<br/>Line 2<br/>Line 3';
       expect(normalizeMarkdown(input)).toBe(expected);
     });
 

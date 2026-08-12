@@ -127,6 +127,20 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
         }
     }
 
+    /// Synchronously flushes the display layer from this renderer's own serial
+    /// `queue`, for callers detaching from a different thread (`PiPCallController.
+    /// detachRenderer()`, on MainActor). `remoteTrack.remove(renderer)` only stops
+    /// *future* frames — a `consume()` block already dispatched to `queue` can
+    /// still be mid-flight, so flushing directly from the caller's thread would
+    /// race that in-flight call on the shared `AVSampleBufferDisplayLayer` (not
+    /// safe for unsynchronized concurrent access). `queue.sync` guarantees the
+    /// flush runs strictly after anything already queued, and that this call
+    /// doesn't return until it has — so a fast re-attach that creates a new
+    /// renderer/queue on the same persistent surface can't race this flush either.
+    func flushOnQueue() {
+        queue.sync { flush() }
+    }
+
     private func flushIfFailed() {
         if #available(iOS 17.0, *) {
             if displayLayer.sampleBufferRenderer.status == .failed {

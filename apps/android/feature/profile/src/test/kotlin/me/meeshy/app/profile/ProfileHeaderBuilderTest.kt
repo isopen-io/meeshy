@@ -148,10 +148,77 @@ class ProfileHeaderBuilderTest {
     }
 
     @Test
-    fun `presence is away when online but idle past the window`() {
-        val stale = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
-        assertThat(ProfileHeaderBuilder.build(user(isOnline = true, lastActiveAt = stale), now).presence)
+    fun `presence is away when disconnected and idle two minutes`() {
+        // Canonical 1/3/5 rule (SSOT: packages/shared/utils/user-presence.ts,
+        // mirrored in Presence.kt UserPresence.state + iOS UserPresence.state):
+        // a disconnected user whose frozen lastActiveAt sits in the 60s..3min
+        // window resolves to AWAY (orange). isOnline=false here — a connected
+        // user would stay ONLINE up to the 5min anti-stale guard.
+        val awayAgo = java.time.Instant.ofEpochMilli(now - 120_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = awayAgo), now).presence)
             .isEqualTo(PresenceState.AWAY)
+    }
+
+    @Test
+    fun `presence is idle when disconnected and idle four minutes`() {
+        // 3min..5min -> IDLE (grey, still displayed) per the 1/3/5 rule.
+        val idleAgo = java.time.Instant.ofEpochMilli(now - 240_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = idleAgo), now).presence)
+            .isEqualTo(PresenceState.IDLE)
+    }
+
+    @Test
+    fun `presence is offline when disconnected past the five minute window`() {
+        // > 5min -> OFFLINE (no dot). A 10min-old frozen timestamp is offline,
+        // not away — there is no 30min window; the offline boundary is 5min.
+        val offlineAgo = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = offlineAgo), now).presence)
+            .isEqualTo(PresenceState.OFFLINE)
+    }
+
+    // ---- last seen -------------------------------------------------------
+
+    @Test
+    fun `last seen is null for an online user (the live dot speaks, not a stale line)`() {
+        val recent = java.time.Instant.ofEpochMilli(now - 60_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = true, lastActiveAt = recent), now).lastSeenEpochMillis)
+            .isNull()
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an away user`() {
+        val awayAgo = java.time.Instant.ofEpochMilli(now - 120_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = awayAgo), now)
+        assertThat(header.presence).isEqualTo(PresenceState.AWAY)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 120_000L)
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an idle user`() {
+        val idleAgo = java.time.Instant.ofEpochMilli(now - 240_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = idleAgo), now)
+        assertThat(header.presence).isEqualTo(PresenceState.IDLE)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 240_000L)
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an offline user`() {
+        val old = java.time.Instant.ofEpochMilli(now - 3 * 86_400_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = old), now)
+        assertThat(header.presence).isEqualTo(PresenceState.OFFLINE)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 3 * 86_400_000L)
+    }
+
+    @Test
+    fun `last seen is null when lastActiveAt is absent`() {
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = null), now).lastSeenEpochMillis)
+            .isNull()
+    }
+
+    @Test
+    fun `last seen is null when lastActiveAt is unparseable`() {
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = "not-a-date"), now).lastSeenEpochMillis)
+            .isNull()
     }
 
     // ---- completion ring -------------------------------------------------

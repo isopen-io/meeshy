@@ -62,7 +62,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
         content(availability) {
             downloader.start(attachment: attachment, onShare: nil)
         }
-        .task(id: attachment.fileUrl) {
+        .task(id: attachment.id) {
             resolvedAvailability = await Self.resolveStatic(attachment)
             if case .needsDownload = resolvedAvailability,
                !downloader.isDownloading,

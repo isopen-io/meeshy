@@ -12,6 +12,7 @@ import {
   updateUserProfileSchema,
   AuthSchemas,
   SignalProtocolLimits,
+  NotificationPreferenceSchemas,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -37,6 +38,34 @@ describe('CommonSchemas', () => {
     expect(result).toEqual({ limit: 20, offset: 0 });
   });
 
+  it('pagination parses valid numeric strings', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '50', offset: '10' })).toEqual({ limit: 50, offset: 10 });
+  });
+
+  it('pagination coerces non-numeric input to safe defaults', () => {
+    expect(CommonSchemas.pagination.parse({ limit: 'abc' })).toEqual({ limit: 20, offset: 0 });
+    expect(CommonSchemas.pagination.parse({ offset: 'xyz' })).toEqual({ limit: 20, offset: 0 });
+  });
+
+  it('pagination floors an explicit below-minimum limit to exactly 1', () => {
+    // Regression: `limit=0` must clamp to the floor of 1, NOT leak a full page
+    // of 20. The former `parseInt(...) || 20` conflated `0` (falsy) with
+    // "absent" — `limit=-5` floored to 1 but `limit=0` returned 20.
+    expect(CommonSchemas.pagination.parse({ limit: '0' }).limit).toBe(1);
+    expect(CommonSchemas.pagination.parse({ limit: '-5', offset: '-10' })).toEqual({ limit: 1, offset: 0 });
+  });
+
+  it('pagination caps limit at the maximum', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '9999' }).limit).toBe(100);
+  });
+
+  it('messagePagination coerces garbage/negative like pagination', () => {
+    const result = CommonSchemas.messagePagination.parse({ limit: 'abc', offset: '-3' });
+    expect(result.limit).toBe(20);
+    expect(result.offset).toBe(0);
+    expect(CommonSchemas.messagePagination.parse({ limit: '0' }).limit).toBe(1);
+  });
+
   it('mongoId should validate format', () => {
     expect(CommonSchemas.mongoId.safeParse('507f1f77bcf86cd799439011').success).toBe(true);
     expect(CommonSchemas.mongoId.safeParse('invalid').success).toBe(false);
@@ -59,6 +88,17 @@ describe('CommonSchemas', () => {
 
     it('accepts a BCP-47 region subtag', () => {
       expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
+    });
+
+    it('accepts a three-letter code WITH a region subtag', () => {
+      // `bas-CM` (639-3 body + ISO 3166-1 region) is 6 chars — the max the regex
+      // `[a-z]{2,3}(-[A-Z]{2})?` allows. The former `.max(5)` cap contradicted the
+      // regex and rejected these supported Cameroonian codes on sendMessage/edit
+      // (the same class of bug the {2}->{2,3} relax targeted, left open for the
+      // regionalized form).
+      for (const code of ['bas-CM', 'ewo-CM', 'ksf-CM']) {
+        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+      }
     });
 
     it('rejects malformed codes', () => {
@@ -176,6 +216,48 @@ describe('language-code normalization at the write boundary', () => {
     expect(parsed.customDestinationLanguage).toBe('de');
   });
 
+  it('updateUserProfileSchema accepts an empty regionalLanguage (clear secondary language)', () => {
+    const result = updateUserProfileSchema.safeParse({ regionalLanguage: '' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.regionalLanguage).toBe('');
+  });
+
+  it('updateUserProfileSchema still rejects an unsupported regionalLanguage code', () => {
+    expect(updateUserProfileSchema.safeParse({ regionalLanguage: 'zz' }).success).toBe(false);
+  });
+
+  // customDestinationLanguage is the one in-app language field NOT guarded by
+  // supportedLanguageCode (which strips region tags and validates support): its
+  // schema only lowercased, so a region/script-tagged platform locale ('fr-FR',
+  // 'en-US') was persisted verbatim as 'fr-fr' / 'en-us'. That matches no
+  // lowercase-keyed MessageTranslation.targetLanguage, forcing the Prisme onto
+  // the original message at resolution priority 3 (customDestinationLanguage).
+  // Canonicalize via the SSOT normalizeLanguageCode at the write boundary.
+  it('updateUserProfileSchema canonicalizes a region-tagged customDestinationLanguage (fr-FR -> fr)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'fr-FR' });
+    expect(parsed.customDestinationLanguage).toBe('fr');
+  });
+
+  it('updateUserProfileSchema canonicalizes an underscore locale customDestinationLanguage (en_US -> en)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'en_US' });
+    expect(parsed.customDestinationLanguage).toBe('en');
+  });
+
+  it('updateUserProfileSchema preserves a supported ISO 639-3 customDestinationLanguage (bas)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'bas' });
+    expect(parsed.customDestinationLanguage).toBe('bas');
+  });
+
+  it('updateUserProfileSchema still clears customDestinationLanguage on empty string / null', () => {
+    expect(updateUserProfileSchema.parse({ customDestinationLanguage: '' }).customDestinationLanguage).toBe('');
+    expect(updateUserProfileSchema.parse({ customDestinationLanguage: null }).customDestinationLanguage).toBeNull();
+  });
+
+  it('UserSchemas.update canonicalizes a region-tagged customDestinationLanguage (en-US -> en)', () => {
+    const parsed = UserSchemas.update.parse({ customDestinationLanguage: 'en-US' });
+    expect(parsed.customDestinationLanguage).toBe('en');
+  });
+
   it('AuthSchemas.register lowercases system/regional language', () => {
     const parsed = AuthSchemas.register.parse({
       username: 'alice',
@@ -242,5 +324,35 @@ describe('SignalValidation.validateMessageNumber — overflow branch', () => {
     const max = SignalProtocolLimits.MAX_MESSAGE_NUMBER;
     const result = SignalValidation.validateMessageNumber(max, max - 1, SignalProtocolLimits.MAX_SKIPPED_KEYS);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('NotificationPreferenceSchemas.update — DND time format', () => {
+  // The DND window is evaluated with a lexicographic "HH:MM" comparison in
+  // isWithinDnd, which only holds for zero-padded hours. This schema is a write
+  // boundary, so it must reject a single-digit hour ("9:00") rather than let it
+  // reach persistence — converging on the canonical /^([01]\d|2[0-3]):([0-5]\d)$/
+  // already enforced by the gateway (notification-schemas.ts, isValidDndTime) and
+  // the shared NotificationPreferenceSchema default schema.
+  it('rejects a single-digit start hour', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({ dndStartTime: '9:00' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a single-digit end hour', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({ dndEndTime: '8:30' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts zero-padded 24h times', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({
+      dndStartTime: '09:00',
+      dndEndTime: '23:59',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an out-of-range hour', () => {
+    expect(NotificationPreferenceSchemas.update.safeParse({ dndStartTime: '24:00' }).success).toBe(false);
   });
 });

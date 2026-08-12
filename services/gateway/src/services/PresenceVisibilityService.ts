@@ -74,8 +74,8 @@ export class PresenceVisibilityService {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return result;
 
-    if (viewer && isGlobalModerator(viewer.role)) {
-      for (const id of uniqueIds) result.set(id, FULL);
+    if (!viewer) {
+      for (const id of uniqueIds) result.set(id, HIDDEN);
       return result;
     }
 
@@ -87,8 +87,14 @@ export class PresenceVisibilityService {
       targetRows.filter((r: { deactivatedAt: Date | null }) => r.deactivatedAt != null).map((r: { id: string }) => r.id),
     );
 
-    if (!viewer) {
-      for (const id of uniqueIds) result.set(id, HIDDEN);
+    // Deactivation is resolved "en amont" of the moderator/self privilege bypass
+    // (design §8 + the pure policy's `targetIsDeactivated → HIDDEN` guard, which
+    // runs before privilege). resolveForTarget already hides a deactivated target
+    // from everyone; the batch list path MUST match it, else a moderator browsing
+    // a presence list leaks a deactivated user's online status / last-seen while
+    // their single profile view correctly hides it.
+    if (isGlobalModerator(viewer.role)) {
+      for (const id of uniqueIds) result.set(id, deactivated.has(id) ? HIDDEN : FULL);
       return result;
     }
     const viewerId = viewer.userId;

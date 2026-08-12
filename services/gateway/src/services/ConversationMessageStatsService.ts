@@ -16,12 +16,15 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+// Maps an attachment token (derived from a message's MIME types) to its
+// conversation-level counter. Location is NOT here: it is a `messageType`,
+// never an attachment token, so it is counted by `messageType === 'location'`
+// on both the incremental path AND recompute() — see isLocationMessageStat.
 const ATTACHMENT_TYPE_FIELDS: Record<string, string> = {
   image: 'imageCount',
   audio: 'audioCount',
   video: 'videoCount',
   file: 'fileCount',
-  location: 'locationCount',
 };
 
 function countWords(content: string): number {
@@ -31,16 +34,26 @@ function countWords(content: string): number {
 
 // A message counts as "text" for stats iff it has no attachments AND its
 // messageType is 'text'. This mirrors the authoritative recompute()
-// (`msgType === 'text' && attachments.length === 0`); the incremental path
-// MUST use the same rule or a non-text message (e.g. 'location', 'system')
-// with a caption inflates contentTypes.text until the next recompute.
+// (`msgType === 'text' && attachments.length === 0`) EXACTLY; the incremental
+// path MUST use the same rule or the two diverge. Content emptiness is
+// deliberately NOT checked: recompute counts a blank-content text message
+// (e.g. a whitespace-only `' '`, which the gateway's `min(1)` schema allows),
+// so adding a `content.trim()` gate here would undercount contentTypes.text
+// incrementally and let it jump up on the next periodic recompute.
 function isTextMessageStat(
   attachmentTypes: string[],
-  content: string,
   messageType?: string,
 ): boolean {
-  const hasTextContent = !!(content && content.trim().length > 0);
-  return attachmentTypes.length === 0 && hasTextContent && (messageType || 'text') === 'text';
+  return attachmentTypes.length === 0 && (messageType || 'text') === 'text';
+}
+
+// A message counts as "location" for stats iff its messageType is 'location'.
+// Location is a messageType dimension (like 'text'/'system'), NOT an attachment
+// token, so the incremental path MUST count it by messageType — exactly like
+// the authoritative recompute() (`msgType === 'location'`) — or locationCount
+// silently stays frozen at its seed value forever (no periodic recompute).
+function isLocationMessageStat(messageType?: string): boolean {
+  return messageType === 'location';
 }
 
 function countCharacters(content: string): number {
@@ -135,7 +148,8 @@ export class ConversationMessageStatsService {
       }
     }
 
-    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isTextMessage = isTextMessageStat(attachmentTypes, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const participantStats = (typeof existing.participantStats === 'string'
       ? JSON.parse(existing.participantStats)
@@ -189,6 +203,7 @@ export class ConversationMessageStatsService {
         totalWords: { increment: words },
         totalCharacters: { increment: chars },
         textMessages: isTextMessage ? { increment: 1 } : undefined,
+        locationCount: isLocationMessage ? { increment: 1 } : undefined,
         ...Object.fromEntries(
           Object.entries(attachmentIncrements).map(([field, count]) => [field, { increment: count }]),
         ),
@@ -213,10 +228,20 @@ export class ConversationMessageStatsService {
       where: { conversationId },
     });
 
-    if (!existing) {
-      await this.recompute(prisma, conversationId);
-      return;
-    }
+    // Pas de ligne, rien à corriger — et surtout PAS de `recompute()` ici.
+    // C'est la position d'`onMessageDeleted`, et l'édition a encore moins de
+    // raisons de s'en écarter : elle ne crée aucun message, donc l'absence de
+    // ligne ne rend rien périmé. La ligne sera bâtie, exacte, à la première
+    // lecture (`getStats` recalcule quand elle manque).
+    //
+    // La différence n'est pas théorique : `recompute()` balaie TOUS les
+    // messages vivants de la conversation, et les quatre transports d'édition
+    // l'attendent AVANT d'acquitter le client. Éditer un message dans une
+    // longue conversation dont personne n'a jamais lu les statistiques aurait
+    // bloqué l'accusé de réception derrière un scan complet. Le comptage à
+    // l'envoi peut se le permettre — il est fire-and-forget, hors du chemin de
+    // l'ACK ; l'ajustement d'édition, non.
+    if (!existing) return;
 
     const oldWords = countWords(oldContent);
     const newWords = countWords(newContent);
@@ -265,7 +290,8 @@ export class ConversationMessageStatsService {
 
     const words = countWords(content);
     const chars = countCharacters(content);
-    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isTextMessage = isTextMessageStat(attachmentTypes, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const decrements: Record<string, number> = {};
     for (const t of attachmentTypes) {
@@ -303,6 +329,10 @@ export class ConversationMessageStatsService {
       updateData.textMessages = { decrement: 1 };
     }
 
+    if (isLocationMessage) {
+      updateData.locationCount = { decrement: 1 };
+    }
+
     for (const [field, count] of Object.entries(decrements)) {
       updateData[field] = { decrement: count };
     }
@@ -333,6 +363,30 @@ export class ConversationMessageStatsService {
     const shaped = this.shapeResponse(row);
     this.setCache(conversationId, shaped);
     return shaped;
+  }
+
+  /**
+   * Le recalcul autoritatif, mais SEULEMENT pour une conversation dont les
+   * compteurs existent déjà.
+   *
+   * Le balayage des messages vides (`MaintenanceService`) est le quatrième
+   * écrivain de `deletedAt`, et le seul en LOT : il ne tient de ses messages
+   * que leur id et leur conversation, jamais le contenu ni l'auteur qu'un
+   * décrément demande. Recalculer une fois par conversation touchée est à la
+   * fois le seul geste possible et le plus juste — c'est aussi ce qui répare
+   * la dérive déjà accumulée.
+   *
+   * La garde d'existence est ce qui empêche le balayage de FABRIQUER des lignes
+   * de statistiques pour des conversations dont personne n'a jamais demandé
+   * les compteurs : `recompute()` fait un `upsert`, et un balayage nocturne ne
+   * doit pas se mettre à peupler une collection à la place des lecteurs.
+   */
+  async recomputeIfTracked(prisma: PrismaClient, conversationId: string): Promise<void> {
+    const existing = await prisma.conversationMessageStats.findUnique({
+      where: { conversationId },
+    });
+    if (!existing) return;
+    await this.recompute(prisma, conversationId);
   }
 
   async recompute(prisma: PrismaClient, conversationId: string): Promise<Record<string, unknown>> {
@@ -499,11 +553,35 @@ export class ConversationMessageStatsService {
   }
 }
 
-function resolveAttachmentType(mimeType: string): string {
+/**
+ * La table MIME → compteur, et la SEULE. `recompute()` — l'autorité, puisque
+ * c'est elle qui reconstruit la ligne depuis les messages — l'applique déjà ;
+ * les chemins incrémentaux en portaient chacun leur copie inline (handler
+ * socket, route de suppression), et une copie qui dérive fait diverger le
+ * compteur incrémental de son propre recalcul.
+ *
+ * Exportée pour que les deux unités partagées d'effets (`messagePostSaveEffects`,
+ * `messageRemovalEffects`) traduisent les MIME avec cette table-ci et pas une
+ * jumelle.
+ */
+export function resolveAttachmentType(mimeType: string): string {
+  if (!mimeType) return 'file';
   if (mimeType.startsWith('image/')) return 'image';
   if (mimeType.startsWith('audio/')) return 'audio';
   if (mimeType.startsWith('video/')) return 'video';
   return 'file';
+}
+
+/**
+ * La clé sous laquelle un message est crédité puis débité dans
+ * `participantStats` : l'utilisateur enregistré quand il y en a un, sinon le
+ * `Participant` anonyme. C'est la règle de `recompute()` (`msg.sender?.userId
+ * || msg.senderId`), nommée pour que les chemins incrémentaux ne puissent plus
+ * en écrire une variante — créditer l'utilisateur et débiter son Participant
+ * laisserait deux entrées, l'une gonflée, l'autre au plancher.
+ */
+export function statsAuthorKey(senderId: string, senderUserId?: string | null): string {
+  return senderUserId || senderId;
 }
 
 export const conversationMessageStatsService = ConversationMessageStatsService.getInstance();

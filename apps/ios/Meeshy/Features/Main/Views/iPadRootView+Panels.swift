@@ -33,7 +33,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
         case .communityDetail(let communityId):
             CommunityDetailView(
                 communityId: communityId,
@@ -54,7 +54,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
         case .communityCreate:
             CommunityCreateView(
                 onCreated: { community in
@@ -78,7 +78,7 @@ extension iPadRootView {
                 }
             )
         case .communityInvite(let communityId):
-            CommunityInviteView(communityId: communityId)
+            CommunityInviteView(communityId: communityId, onDone: { rightPanelRoute = nil })
         case .notifications:
             NotificationListView(
                 onNotificationTap: { notification in
@@ -87,7 +87,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
                         .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
             .onDisappear {
                 Task { await notificationManager.refreshUnreadCount() }
             }
@@ -113,20 +113,20 @@ extension iPadRootView {
                                 .navigationBarHidden(true)
         case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
             PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
-                        case .bookmarks:
+        case .hashtagResults(let tag):
+            HashtagResultsView(tag: tag)
+        case .bookmarks:
+            // Idem iPhone : la barre système porte le titre, et sur iPad le
+            // bouton retour du panneau droit y vit aussi.
             BookmarksView()
-                                .navigationBarHidden(true)
         case .starredMessages:
             StarredMessagesView()
         case .friendRequests:
             FriendRequestListView()
                                 .navigationBarHidden(true)
-        case .editProfile:
-            EditProfileView()
-                                .navigationBarHidden(true)
         case .conversation:
             EmptyView()
-        case .storyNotificationTarget(let storyId, let intent, let context):
+        case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
             // Mirrors iPhone (RootView) so that tapping a story-related
             // notification on iPad lands on the same Phase E/F screen
             // (loading → active → expired). The screen presents the viewer
@@ -134,7 +134,9 @@ extension iPadRootView {
             StoryNotificationTargetScreen(
                 storyId: storyId,
                 intent: intent,
-                context: context
+                context: context,
+                commentId: commentId,
+                parentCommentId: parentCommentId
             )
             .navigationBarHidden(true)
         }
@@ -202,12 +204,15 @@ struct iPadLeftColumnHeader: View {
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
-                            Text("\(min(notificationCount, 99))")
-                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
-                                .font(.system(size: 9, weight: .bold))
+                            Text(NotificationBadge.displayed(notificationCount))
+                                // Doctrine 86i : le compteur reste figé face au Dynamic
+                                // Type, mais la pastille s'élargit — « 99+ » entier.
+                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
-                                .frame(width: 16, height: 16)
-                                .background(Circle().fill(MeeshyColors.error))
+                                .lineLimit(1)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
                                 .accessibilityHidden(true)
                         }
@@ -277,5 +282,19 @@ struct iPadResizableHandle: View {
                 }
         )
         .ignoresSafeArea()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "root.ipad.resizable_handle.label", defaultValue: "Séparateur de colonnes", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_format", defaultValue: "%d pour cent", bundle: .main), Int(ratio * 100)))
+        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche de 30 à 50 pour cent", bundle: .main))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                ratio = min(maxRatio, ratio + 0.02)
+            case .decrement:
+                ratio = max(minRatio, ratio - 0.02)
+            @unknown default:
+                break
+            }
+        }
     }
 }

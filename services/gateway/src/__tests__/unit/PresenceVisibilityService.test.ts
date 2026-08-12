@@ -180,6 +180,16 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
     expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
   });
 
+  it('hides a deactivated target even from a moderator, matching resolveForTarget', async () => {
+    const { service } = makeBatchMocks({ deactivatedIds: ['stranger'] });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, IDS);
+    // Deactivation is "en amont" of the privilege bypass (design §8 + the pure
+    // policy's targetIsDeactivated guard) — the single-target path already hides
+    // it, so the batch list path must not leak the deactivated user's presence.
+    expect(map.get('stranger')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('friend')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
   it('resolves per-id visibility for a regular viewer', async () => {
     const { service } = makeBatchMocks({
       friendIds: ['friend'],

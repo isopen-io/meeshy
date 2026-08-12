@@ -37,14 +37,22 @@ const p2002 = () => {
   return err;
 };
 
+type MockedPost = {
+  id: string;
+  authorId: string;
+  repostOfId?: string | null;
+  originalRepostOfId?: string | null;
+};
+
 const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   const post = {
-    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string } | null>>()
+    findFirst: jest.fn<(arg?: unknown) => Promise<MockedPost | null>>()
       .mockResolvedValue({ id: POST_A, authorId: 'author' }),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
   const postView = {
-    findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>().mockResolvedValue(null),
+    findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string; duration?: number | null } | null>>()
+      .mockResolvedValue(null),
     create: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'v1' }),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
@@ -101,5 +109,179 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     expect(post.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { viewCount: { increment: 1 } },
     }));
+  });
+});
+
+describe('PostService.recordView — watch-time (duration) monotone sur ré-ouverture', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('ré-ouverture plus courte : NE rétrograde PAS la durée (aucune écriture)', async () => {
+    // L'utilisateur a regardé la story 30s (durée réelle), puis y retape et
+    // swipe immédiatement (0.5s). Le PostView est un singleton (postId,userId)
+    // — signal watch-time du moteur reco/monétisation (PostFeedService). Une
+    // durée plus courte ne doit JAMAIS écraser la plus longue déjà observée ;
+    // la valeur restant au max, aucune écriture Room redondante n'est émise.
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: 30_000 });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1', 500);
+
+    expect(counted).toBe(false);
+    expect(postView.update).not.toHaveBeenCalled();
+  });
+
+  it('ré-ouverture plus longue : promeut la durée persistée', async () => {
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: 5_000 });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1', 42_000);
+
+    expect(postView.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'v1' },
+      data: { duration: 42_000 },
+    }));
+  });
+
+  it('durée existante null : traite comme 0 et enregistre la nouvelle', async () => {
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: null });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1', 1_200);
+
+    expect(postView.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'v1' },
+      data: { duration: 1_200 },
+    }));
+  });
+});
+
+describe('PostService.recordView — crédit de la racine à travers un repost (chantier reposts cohérents, tâche 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const ROOT_ID = '507f1f77bcf86cd799439099';
+  const INTERMEDIATE_ID = '507f1f77bcf86cd799439055';
+
+  it('vue sur un repost direct : la racine reçoit +1 viewCount ET son propre PostView, le repost garde le sien', async () => {
+    const { prisma, post, postView } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'original-author' });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(postView.create).toHaveBeenCalledWith({ data: { postId: POST_A, userId: 'viewer-1', duration: undefined } });
+    expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it("chaîne repost-de-repost : la RACINE (originalRepostOfId) est créditée, jamais le parent intermédiaire", async () => {
+    const { prisma, post } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter-2', repostOfId: INTERMEDIATE_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'original-author' });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1');
+
+    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).not.toHaveBeenCalledWith({ where: { id: INTERMEDIATE_ID }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it("l'auteur de la racine visionnant un repost de son propre contenu ne gonfle pas son propre compteur (même garde que la ré-ouverture directe)", async () => {
+    const { prisma, post, postView } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'viewer-1' });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).not.toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: ROOT_ID }) }));
+  });
+
+  it('racine introuvable (supprimée entre-temps) : la vue du repost reste comptée, pas de crash', async () => {
+    const { prisma, post } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce(null);
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it('vue sur un post non-repost : comportement inchangé — une seule résolution, aucun crédit de racine', async () => {
+    const { prisma, post, postView } = buildPrisma();
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(counted).toBe(true);
+    expect(post.findFirst).toHaveBeenCalledTimes(1);
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(postView.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("le lookup de la racine reprend le MÊME filtre de visibilité que le post affiché — sinon un repost PUBLIC d'un original FRIENDS-only laisse un inconnu créditer/exposer l'original privé", async () => {
+    // Le post affiché est déjà interrogé avec `...visibilityFilter` (garde
+    // documentée juste au-dessus : anti-inflation + anti-disclosure via
+    // `/posts/:id/views`). La racine DOIT recevoir exactement le même
+    // filtre — un marqueur distinctif (≠ `{}`) prouve qu'il est bien
+    // propagé, pas juste tombé en {} par coïncidence.
+    const { prisma, post } = buildPrisma();
+    const svc = makeService(prisma);
+    const visibilityFilter = { OR: [{ visibility: 'PUBLIC' }, { authorId: 'viewer-1' }] };
+    (svc as unknown as { buildVisibilityFilter: () => Promise<object> }).buildVisibilityFilter =
+      async () => visibilityFilter;
+
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'reposter', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      // La racine est FRIENDS-only : filtrée par le visibilityFilter, comme
+      // le ferait réellement Mongo — absente du résultat.
+      .mockResolvedValueOnce(null);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    expect(post.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { id: ROOT_ID, deletedAt: { isSet: false }, ...visibilityFilter },
+      select: { id: true, authorId: true },
+    });
+    expect(counted).toBe(true);
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+  });
+
+  it("le reposteur qui revisionne SON PROPRE repost ne le gonfle pas, mais crédite bien la racine (garde évaluée PAR POST, pas un court-circuit global)", async () => {
+    const { prisma, post, postView } = buildPrisma();
+    post.findFirst
+      .mockResolvedValueOnce({ id: POST_A, authorId: 'viewer-1', repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID })
+      .mockResolvedValueOnce({ id: ROOT_ID, authorId: 'original-author' });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1');
+
+    // Le retour reste celui du post AFFICHÉ (pas crédité ici).
+    expect(counted).toBe(false);
+    expect(post.update).not.toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
+    expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: POST_A }) }));
   });
 });

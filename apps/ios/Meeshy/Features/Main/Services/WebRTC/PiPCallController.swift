@@ -253,16 +253,25 @@ extension PiPCallController {
     }
 
     func detachRenderer() {
-        if let renderer, let remoteTrack {
-            remoteTrack.remove(renderer)
+        guard let renderer else {
+            // Never attached (or already detached) — nothing can be mid-flight on
+            // a renderer queue, so a direct flush on MainActor is safe here.
+            flushSurface()
+            return
         }
-        renderer = nil
-        // Fuite — vider la file du layer (le surfaceView est un singleton
-        // persistant) pour ne pas retenir de CMSampleBuffer entre deux sessions.
-        // `renderer.reset()` (async, [weak self]) ne suffisait pas : le renderer
-        // est libéré avant que le flush ne tourne. On flush ici sur le main,
-        // sûr car plus aucun enqueue ne suivra (renderer détaché + nil).
-        flushSurface()
+        remoteTrack?.remove(renderer)
+        self.renderer = nil
+        // Vider la file du layer (le surfaceView est un singleton persistant) pour
+        // ne pas retenir de CMSampleBuffer entre deux sessions. `remoteTrack.
+        // remove(renderer)` n'arrête que les FUTURES frames — un bloc `consume()`
+        // déjà posté sur la serial queue du renderer peut encore être en vol. Un
+        // flush direct ici sur MainActor courrait donc ce bloc sur le même
+        // `AVSampleBufferDisplayLayer` partagé. `flushOnQueue()` route le flush à
+        // travers cette même serial queue (et attend qu'il tourne) : il s'exécute
+        // strictement après tout ce qui y était déjà posté, et un ré-attach rapide
+        // (qui crée un nouveau renderer/queue sur cette même surface persistante)
+        // ne peut pas non plus le courir.
+        renderer.flushOnQueue()
     }
 
     func flushSurface() {

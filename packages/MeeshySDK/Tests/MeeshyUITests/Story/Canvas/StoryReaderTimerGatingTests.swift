@@ -521,4 +521,71 @@ final class StoryReaderTimerGatingTests: XCTestCase {
         timer.reset()
         XCTAssertFalse(timer.isPlaybackStalled, "reset() must clear the stall latch")
     }
+
+    // MARK: - contentReadyFailsafe (anti-freeze) contracts
+
+    /// P5 — a slide whose canvas NEVER reports content-ready (a `Kind` the
+    /// per-layer evaluation doesn't cover, an eval that never re-triggers, a
+    /// canvas retained off-window) must NOT freeze the story forever. After
+    /// `contentReadyFailsafe` seconds of pending, the timer force-activates and
+    /// the story auto-advances.
+    func test_contentReadyFailsafe_forceActivates_whenReadyNeverArrives() {
+        var completed = false
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.onCompletion = { completed = true }
+        timer.setCurrentSlide(id: "slide-stuck", duration: 2)
+
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertFalse(timer.isActive, "Below the failsafe the slide stays pending")
+
+        timer._advanceClockForTesting(by: 1.5)   // total pending 3.5 > 3.0
+        XCTAssertTrue(timer.isActive,
+                      "Failsafe must force-activate a slide that never reports content-ready")
+
+        timer._advanceClockForTesting(by: 2.0)   // normal countdown completes
+        XCTAssertTrue(completed,
+                      "The story must auto-advance after the failsafe rescues a frozen slide")
+    }
+
+    /// Disabling the failsafe (0) preserves the pure gating semantics — the
+    /// timer stays pending forever without a content-ready signal.
+    func test_contentReadyFailsafe_disabledWithZero_neverForceActivates() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer._advanceClockForTesting(by: 100)
+        XCTAssertFalse(timer.isActive, "A disabled failsafe (0) must never force-activate")
+        XCTAssertEqual(timer.progress, 0)
+    }
+
+    /// A paused (backgrounded / long-pressed) pending slide must not trip the
+    /// failsafe — we never auto-advance while the user is holding the story.
+    func test_contentReadyFailsafe_notConsumedWhilePaused() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 10.0)
+        XCTAssertFalse(timer.isActive,
+                       "A paused pending slide must not trip the content-ready failsafe")
+
+        // Releasing resumes the failsafe countdown from where it froze (0).
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 3.5)
+        XCTAssertTrue(timer.isActive,
+                      "After release the failsafe resumes and eventually rescues the slide")
+    }
+
+    /// When content-ready arrives normally the failsafe is a no-op — no double
+    /// activation, the countdown runs exactly as gated.
+    func test_contentReadyFailsafe_noOp_whenReadyArrivesFirst() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        XCTAssertTrue(timer.isActive)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
+    }
 }

@@ -25,10 +25,18 @@ struct CallView: View {
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
     // l'ancienne instance locale orpheline ne transcrivait jamais rien et
     // était ré-allouée à chaque présentation du CallView.
-    @ObservedObject private var transcriptionService = CallManager.shared.transcriptionService
+    //
+    // 2026-07-10 — derived from the injected `callManager` in `init` (below)
+    // instead of defaulting to `CallManager.shared.transcriptionService` at
+    // declaration. Same P1-16 hazard as `callManager` above: a defaulted
+    // @ObservedObject is reassigned every time the parent reconstructs
+    // CallView (every call-duration/quality tick), tearing down and
+    // rebuilding this subscription mid-call.
+    @ObservedObject private var transcriptionService: CallTranscriptionService
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false
+    @State private var showOriginalText = false
     @State private var showEffectsToolbar = false
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
@@ -48,19 +56,21 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State private var sdpOfferSlow = false
     private let sdpOfferSlowSeconds: UInt64 = 6
-    // 2026-07-04 — les alertes qualité (« réseau faible chez votre contact »,
-    // « connexion au serveur perdue ») sont PONCTUELLES : la pill s'affiche
-    // quelques secondes à chaque bascule en dégradé puis se retire — l'état
-    // persistant est porté par le glyphe signal / les status pills, pas par
-    // une bannière permanente (retour user : la pill orange qui ne disparaît
-    // jamais est problématique en plein appel).
-    @State private var showRemoteQualityAlertPill = false
-    @State private var showSignalingAlertPill = false
-    private let qualityAlertPillSeconds: UInt64 = 5
+    // 2026-07-13 — les alertes qualité (« réseau faible chez votre contact »,
+    // « connexion au serveur perdue ») ne s'affichent plus en bannière pop-up
+    // (retour user : la pill était du bruit inutile en plein appel). L'état de
+    // faiblesse réseau vit UNIQUEMENT dans les indicateurs discrets déjà
+    // présents dans la vue : glyphe de signal près du chrono + status pills
+    // inline. VoiceOver reste notifié via les annonces a11y dans les onChange.
     // Profil du correspondant (avatar + bannière) — résolu cache-first dès que
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
     @State private var remoteProfile: MeeshyUser?
+
+    init(callManager: CallManager) {
+        self.callManager = callManager
+        self.transcriptionService = callManager.transcriptionService
+    }
 
     var body: some View {
         ZStack {
@@ -139,50 +149,21 @@ struct CallView: View {
             // `.padding(.horizontal, 56)` garde la capsule à droite du chevron
             // minimize (leading, 40 pt + marges) — le texte long wrappe sur 2
             // lignes au lieu de passer dessous.
-            let showsReconnectingBanner: Bool = {
-                if case .reconnecting = callManager.callState { return callManager.hasEstablishedMedia }
-                return false
-            }()
+            //
+            // §4.3 — l'ancien bandeau plein-écran "Reconnexion…" (IslandEmergingBanner
+            // + ProgressView) a été retiré (user-reported 2026-07-11 : l'indicateur
+            // jaune couvrait tout l'écran). L'état `.reconnecting` est maintenant
+            // porté UNIQUEMENT par une pill compacte dans la même "queue" que les
+            // autres indicateurs de statut (statusPill dans audioCallLayout, glyphe
+            // inline dans le badge durée de videoCallLayout) — jamais par un overlay
+            // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
 
-            // §4.3 — reconnecting banner over the frozen last frame while an ICE
-            // restart recovers. Même gate que le layout : pré-établissement,
-            // connectingView affiche déjà "Connexion…" — pas de bannière.
-            if showsReconnectingBanner {
-                // P2-iOS-9 / 2026-07-03 — le mouvement (émergence de l'île À
-                // L'INSERTION, retour dans l'île AU RETRAIT) est porté par la
-                // transition interne d'IslandEmergingBanner. Ne PAS reposer de
-                // .transition ici : une transition externe écrase l'interne et
-                // la capsule disparaîtrait en fondu sur place.
-                reconnectingBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-
-            // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
-            // when the remote end reports sustained poor stats; CallManager sets
-            // `isRemoteQualityDegraded`. La pill est TRANSITOIRE (auto-retrait
-            // après `qualityAlertPillSeconds`) — l'état qui persiste vit dans le
-            // glyphe signal + la status pill « Réseau faible (contact) ».
-            // Stacked below the reconnecting banner so both can coexist.
-            if showRemoteQualityAlertPill {
-                remoteQualityDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, showsReconnectingBanner ? 52 : 0)
-            }
-
-            // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
-            // appel établi. Le média P2P continue ; annonce ponctuelle, empilée
-            // sous les bannières reconnexion/qualité éventuelles — l'état
-            // persistant est porté par la status pill dédiée.
-            if showSignalingAlertPill {
-                let stackedOffset: CGFloat = (showsReconnectingBanner ? 52 : 0)
-                    + (showRemoteQualityAlertPill ? 44 : 0)
-                signalingDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, stackedOffset)
-            }
+            // §4.4 — la dégradation réseau du pair (`call:quality-alert`) et la
+            // perte du signaling (`isSignalingDegraded`) ne sont plus surfacées
+            // par une bannière pop-up : l'état persiste dans les indicateurs
+            // discrets de la vue (glyphe signal + status pills « Réseau faible
+            // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
+            // onChange plus bas.
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
@@ -225,6 +206,30 @@ struct CallView: View {
                         }
                         .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
                         .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
+
+                        // Ouvrir la conversation (DM) de l'interlocuteur tout en
+                        // gardant l'appel actif (minimisé en pilule). Masqué quand
+                        // la conversationId est inconnue (ex: appel entrant réveillé
+                        // par un push VoIP sans conversationId dans le payload).
+                        if callManager.conversationId != nil {
+                            Button {
+                                openConversationDuringCall()
+                            } label: {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    // Doctrine 82i : glyphe de chrome dans un cadre
+                                    // glass fixe (diameter 40) → taille figée.
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .callControlGlass(diameter: 40, isActive: false, tint: .white)
+                                    // Cercle glass 40pt (doctrine 82i) mais cible
+                                    // tactile HIG 44×44.
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .padding(.leading, 8)
+                            .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
+                            .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
+                        }
                         Spacer()
                     }
                     Spacer()
@@ -292,10 +297,9 @@ struct CallView: View {
             }
         }
         .adaptiveOnChange(of: callManager.isRemoteQualityDegraded) { _, isDegraded in
-            // Pill ponctuelle : levée à chaque bascule en dégradé, retirée
-            // sitôt le lien rétabli (le retrait anticipé est le comportement
-            // attendu — plus de « réseau faible » affiché sur un lien sain).
-            showRemoteQualityAlertPill = isDegraded
+            // Plus de bannière pop-up : l'état persiste dans la status pill
+            // discrète « Réseau faible (contact) ». On notifie seulement VoiceOver
+            // à la bascule en dégradé.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
@@ -304,27 +308,14 @@ struct CallView: View {
                                 bundle: .main))
         }
         .adaptiveOnChange(of: callManager.isSignalingDegraded) { _, isDegraded in
-            showSignalingAlertPill = isDegraded
+            // Idem : l'état vit dans la status pill « Serveur déconnecté » ;
+            // simple annonce VoiceOver à la bascule.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
                 argument: String(localized: "call.a11y.signaling.degraded",
                                 defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
-        }
-        // Auto-retrait des pills d'alerte : visibles `qualityAlertPillSeconds`
-        // puis retour dans l'île, MÊME si l'état reste dégradé (chaque nouvelle
-        // bascule false→true du flag les re-présente). SwiftUI annule le Task
-        // au retrait anticipé (lien rétabli) — pas de timer orphelin.
-        .task(id: showRemoteQualityAlertPill) {
-            guard showRemoteQualityAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showRemoteQualityAlertPill = false }
-        }
-        .task(id: showSignalingAlertPill) {
-            guard showSignalingAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showSignalingAlertPill = false }
         }
     }
 
@@ -467,6 +458,50 @@ struct CallView: View {
         (user.banner?.isEmpty == false) || (user.avatar?.isEmpty == false)
     }
 
+    // MARK: - Open Conversation During Call
+
+    /// Minimise l'appel en pilule flottante (PiP, exactement comme le chevron)
+    /// PUIS ouvre la conversation (DM) de l'interlocuteur — l'utilisateur peut
+    /// consulter/écrire dans le chat pendant l'appel, puis revenir au plein écran
+    /// via la pilule. Réutilise le canal de navigation `.navigateToConversation`
+    /// déjà observé par RootView (iPhone) et iPadRootView (iPad) — même point
+    /// d'entrée que la création de conversation et les deep links — plutôt que de
+    /// dépendre d'un Router injecté qui ne traverse pas la frontière du
+    /// `.fullScreenCover`.
+    private func openConversationDuringCall() {
+        guard let conversationId = callManager.conversationId else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
+            callManager.displayMode = .pip
+        }
+        HapticFeedback.medium()
+        Task { await resolveAndOpenConversation(conversationId: conversationId) }
+    }
+
+    /// Résout la conversation cache-first (Instant App : la conversation de
+    /// l'appel est quasi toujours déjà dans la liste en cache → navigation
+    /// immédiate), avec repli réseau — le socket d'appel étant vivant, le repli
+    /// `getById` aboutit. La `Conversation` résolue est postée sur le canal
+    /// `.navigateToConversation` que RootView/iPadRootView routent vers le DM.
+    private func resolveAndOpenConversation(conversationId: String) async {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        switch await CacheCoordinator.shared.conversations.load(for: "list") {
+        case .fresh(let list, _), .stale(let list, _):
+            if let conv = list.first(where: { $0.id == conversationId }) {
+                NotificationCenter.default.post(name: .navigateToConversation, object: conv)
+                return
+            }
+        case .expired, .empty:
+            break
+        }
+        do {
+            let apiConv = try await ConversationService.shared.getById(conversationId)
+            let conv = apiConv.toConversation(currentUserId: currentUserId)
+            NotificationCenter.default.post(name: .navigateToConversation, object: conv)
+        } catch {
+            Logger.calls.warning("CallView: conversation d'appel non résolue (\(conversationId)): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Outgoing Ringing
 
     private var outgoingRingingView: some View {
@@ -497,7 +532,7 @@ struct CallView: View {
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundColor(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
@@ -619,11 +654,26 @@ struct CallView: View {
 
             VStack(spacing: 0) {
                 if !callManager.isVideoUIActive {
+                    if showTranscript {
+                        // Captions active on an audio call: compact header at
+                        // the top, structural transcript panel filling the
+                        // freed space — replaces the old vertically-centered
+                        // avatar layout while captions are on.
+                        compactAudioCallHeader
+                            .padding(.top, 16)
+                        transcriptPanel
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        Spacer()
+                        audioCallLayout
+                        Spacer()
+                    }
+                } else {
                     Spacer()
-                    audioCallLayout
                 }
-
-                Spacer()
 
                 // §7.3 — auto-hiding control bar on iPhone video calls; always
                 // visible for audio and on Mac (and while the effects tray is
@@ -635,8 +685,39 @@ struct CallView: View {
                     .animation(.easeInOut(duration: 0.25), value: showControls)
             }
 
-            // Transcript overlay
-            transcriptOverlay
+            // Transcript overlay — video calls ONLY (transcriptOverlay's own doc
+            // comment). Audio calls use the structural transcriptPanel instead
+            // (rendered above, in the VStack). This call site used to run
+            // unconditionally, so on an audio call with captions on, the SAME
+            // transcriptSegmentsList rendered TWICE (once in transcriptPanel,
+            // once here) — user-reported 2026-07-11.
+            if callManager.isVideoUIActive {
+                transcriptOverlay
+            }
+
+            // Live captions toggle — floating vertical control on the trailing
+            // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
+            // the main horizontal row — mute/speaker/camera/video/PiP/end —
+            // must stay uncrowded). Mirrors controlBar's own auto-hide so it
+            // stays in sync with the rest of the chrome on video calls, but
+            // remains reachable on audio calls (shouldAutoHideControls is
+            // always false there, so showControls never flips off).
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    AdaptiveGlassContainer(spacing: 12) {
+                        VStack(spacing: 12) {
+                            captionsCycleButton
+                        }
+                    }
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 150)
+            .opacity(showControls ? 1 : 0)
+            .allowsHitTesting(showControls)
+            .animation(.easeInOut(duration: 0.25), value: showControls)
 
             // §7.2 — draggable, corner-snapping PiP showing the secondary
             // stream. Tap to swap it with the full-area primary (FaceTime).
@@ -660,6 +741,43 @@ struct CallView: View {
             }
         }
         .onDisappear { showControls = true }
+        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
+        // tap time (the start path is async — permission request + on-device
+        // recognizer/audio-engine checks all happen after the button already
+        // optimistically opened the transcript panel). Without this, a failed
+        // start (e.g. no on-device speech recognizer for the user's language —
+        // never falls back to Apple's server-side recognizer, privacy decision)
+        // left the panel open and empty with zero feedback — user-reported
+        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
+            guard let newError else { return }
+            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+        }
+        // First segment ever received this call (local OR remote) reveals the
+        // panel even if captionsCycleButton was never tapped — a device must
+        // never silently accumulate the other participant's words with
+        // nothing visible. See docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §4.
+        .adaptiveOnChange(of: transcriptionService.segments.isEmpty) { wasEmpty, isEmpty in
+            if wasEmpty, !isEmpty, !showTranscript {
+                showTranscript = true
+            }
+        }
+    }
+
+    /// User-facing translation of `TranscriptionError` — `errorDescription` on
+    /// the error type itself is an untranslated diagnostic string for logs,
+    /// never meant for display (see its own doc comment).
+    private func transcriptionErrorMessage(for error: TranscriptionError) -> String {
+        switch error {
+        case .permissionDenied:
+            return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
+        case .recognizerUnavailable, .onDeviceNotSupported:
+            return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
+        case .recognitionFailed, .audioEngineFailed:
+            return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
+        }
     }
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
@@ -727,6 +845,14 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
+                    // Without an explicit label the combined capsule announces a
+                    // context-free "1:23" (the signal glyph is invisible on a
+                    // healthy link) — VoiceOver users can't tell it is the call
+                    // timer. Static label + dynamic value mirror the video badge
+                    // (and FloatingCallPillView 211i): the label reads once, the
+                    // timer updates via .accessibilityValue under .updatesFrequently.
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -734,11 +860,24 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+            // previously announced a bare "0:34" with no context. Signal state is
+            // already surfaced by the separate statusPill row here (unlike the video
+            // badge), so this label carries only call-duration context — no double
+            // announcement. Reuses the existing `call.duration.a11y.label` key.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
             HStack(spacing: 12) {
+                // §4.3 — reconnexion ICE en cours : remplace l'ancien bandeau
+                // plein-écran (user-reported 2026-07-11) par une pill compacte,
+                // au même endroit que les autres indicateurs de statut.
+                if case .reconnecting = callManager.callState {
+                    statusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
+                }
                 if callManager.isMuted {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
                 }
@@ -767,6 +906,61 @@ struct CallView: View {
         }
     }
 
+    /// Compacted header shown INSTEAD of `audioCallLayout` while captions are
+    /// active — avatar shrunk (120 → 56), status pills dropped, no longer
+    /// vertically centered (sits at the top) so `transcriptPanel` gets the
+    /// freed vertical space. User-requested 2026-07-11.
+    private var compactAudioCallHeader: some View {
+        HStack(spacing: 12) {
+            callAvatarPair(size: 56)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    TransientCallSignalGlyph(strength: signalStrength)
+                    Text(callManager.formattedDuration)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundColor(durationColor)
+                        // Same context-free-timer fix as audioCallLayout: this
+                        // caption-mode header has no status-pill row, so the
+                        // labelled value is the only place the timer gains meaning.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
+                }
+                // Same naked-readout fix as audioCallLayout — captions-active
+                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.formattedDuration)
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Audio-call captions surface — a real layout element (NOT a floating
+    /// overlay) occupying the space between `compactAudioCallHeader` and
+    /// `controlBar`. Video calls use `transcriptOverlay` instead (a bottom
+    /// glass banner that doesn't shrink the video) — see that property's doc
+    /// comment. User-requested 2026-07-11: "la zone de transcription ne doit
+    /// pas être en overlay des autres points d'action".
+    private var transcriptPanel: some View {
+        ScrollView {
+            transcriptSegmentsList
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Connection Quality (P2-iOS-10 → glyphe signal 2026-07-04)
 
     /// Niveau du glyphe signal — priorité aux stats RTT+perte (mises à jour
@@ -779,80 +973,27 @@ struct CallView: View {
         )
     }
 
-    /// §4.3 — reconnecting banner shown over the frozen call layout while an
-    /// ICE restart recovers a dropped connection (warning-tinted capsule with a
-    /// spinner). The call is NOT torn down; the peer's last frame stays visible.
-    private var reconnectingBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.92), reduceMotion: reduceMotion) {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .scaleEffect(0.8)
-                Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+    /// The video duration badge (unlike the audio layout's separate
+    /// `statusPill` rows) is the ONLY place signal quality / peer-network state
+    /// surfaces in the video call chrome — so its composed VoiceOver label must
+    /// carry everything the badge visually shows (glyph + wifi-exclamation),
+    /// not just the duration. Applying `.accessibilityLabel`/`.accessibilityValue`
+    /// directly to the badge's `HStack` implicitly makes it one opaque
+    /// accessibility element (`children: .ignore`) that silently discards every
+    /// child's own `.accessibilityLabel` — this composes what would otherwise be
+    /// swallowed, mirroring exactly what the sighted layout renders.
+    private var videoDurationBadgeAccessibilityLabel: String {
+        var parts = [String(localized: "call.duration.a11y.label")]
+        if signalStrength.isDegraded {
+            parts.append(signalStrength.accessibilityLabel)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-    }
-
-    /// §4.4 — remote peer quality alert. Présentée PONCTUELLEMENT (flag
-    /// `showRemoteQualityAlertPill`, auto-expirant) quand `call:quality-alert`
-    /// fait basculer `isRemoteQualityDegraded` ; l'état persistant vit dans la
-    /// status pill « Réseau faible (contact) » + le glyphe du badge vidéo.
-    /// Mirrors FaceTime's "Contact has a poor connection" indicator.
-    private var remoteQualityDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.remote.quality.degraded",
-                            defaultValue: "Réseau faible chez votre contact",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+        if callManager.isRemoteQualityDegraded {
+            parts.append(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.remote.quality.degraded",
-                                   defaultValue: "Réseau faible chez votre contact",
-                                   bundle: .main))
-    }
-
-    /// EXIGENCE №1 — the signaling socket dropped while the call is connected.
-    /// The P2P media keeps flowing; annonce PONCTUELLE (flag
-    /// `showSignalingAlertPill` auto-expirant), l'état persistant vit dans la
-    /// status pill « Serveur déconnecté ». Never implies the call is at risk.
-    private var signalingDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.signaling.degraded",
-                            defaultValue: "Connexion au serveur perdue — l'appel continue",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+        if case .reconnecting = callManager.callState {
+            parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.signaling.degraded",
-                                   defaultValue: "Connexion au serveur perdue — l'appel continue",
-                                   bundle: .main))
+        return parts.joined(separator: ", ")
     }
 
     private var isConnectionDegraded: Bool {
@@ -880,11 +1021,12 @@ struct CallView: View {
             // phone/tablet. `.ignoresSafeArea()` is on the VIDEO only so the feed
             // reaches the screen edges while the duration badge stays inside the
             // safe area (never under the notch / Dynamic Island).
-            videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
+            videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .ignoresSafeArea()
 
             VStack {
                 HStack {
+                    Spacer()
                     // Durée + glyphe signal (visible pendant/30 s après une
                     // dégradation — TransientCallSignalGlyph) ; un
                     // `wifi.exclamationmark` ambre s'y ajoute tant que le
@@ -899,9 +1041,27 @@ struct CallView: View {
                             Image(systemName: "wifi.exclamationmark")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityLabel(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
+                        }
+                        // §4.3 — même remplacement pill-compacte qu'en audio
+                        // (voir audioCallLayout) : pas de bandeau plein-écran.
+                        // No per-icon .accessibilityLabel — the badge is one
+                        // opaque element (children: .ignore below); this
+                        // state is folded into videoDurationBadgeAccessibilityLabel.
+                        if case .reconnecting = callManager.callState {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(MeeshyColors.warning)
+                                .accessibilityHidden(true)
                         }
                     }
+                    // The parent's own .accessibilityLabel below already makes this
+                    // whole badge one opaque VoiceOver element (children: .ignore) —
+                    // every child label is discarded regardless, so hiding them here
+                    // is a no-op today. Kept explicit so a future removal of the
+                    // parent label doesn't silently re-expose fragmented per-child
+                    // announcements (glyph, then digits, then icon) instead of the
+                    // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+                    .accessibilityElement(children: .ignore)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     // iOS 26 Liquid Glass — floating duration badge over the
@@ -909,16 +1069,38 @@ struct CallView: View {
                     // the native effect / `.ultraThinMaterial` fallback).
                     .adaptiveGlass(in: Capsule())
                     .clipShape(Capsule())
-                    .padding(12)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    // Badge collé à DROITE sur la rangée de chrome top, centré
+                    // sur le même axe vertical que le chevron minimize et le
+                    // bouton conversation (leading, top 8 / hauteur 44 — il se
+                    // rendait DERRIÈRE eux en top-leading). Le PiP par défaut
+                    // (top-trailing) se pose dessous via `pipTopClearance`.
+                    .frame(height: 44)
+                    .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
                     .accessibilityValue(callManager.formattedDuration)
                     .accessibilityAddTraits(.updatesFrequently)
-                    Spacer()
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
                 Spacer()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Effective primary-stream selector — `swapStreams` gated on local-track
+    /// availability. `CallVideoView` has no fallback for a nil LOCAL track
+    /// (unlike the remote branch, which degrades to a camera-off/connecting
+    /// placeholder), so rendering it as the full-screen primary while the
+    /// survival controller has dropped the outbound track shows a broken
+    /// black "Video non disponible" placeholder over a perfectly healthy peer
+    /// feed, with no gesture available to swap back (the PiP that owns the
+    /// swap tap is itself replaced by the gesture-less suspended tile in that
+    /// state). Falling back to `false` here keeps the peer's video primary —
+    /// and the suspended-tile/PiP selector below already renders correctly
+    /// for `swapStreams == false` — until the local track returns, at which
+    /// point the user's swap choice is restored automatically.
+    private var effectiveSwapStreams: Bool {
+        swapStreams && callManager.hasLocalVideoTrack
     }
 
     /// §7.2 — renders one call stream. `local == true` shows the (mirrored)
@@ -959,7 +1141,7 @@ struct CallView: View {
                     if videoConnectSlow {
                         Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
                             .font(.caption2)
-                            .foregroundColor(.white.opacity(0.45))
+                            .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
                     }
                 }
@@ -1050,7 +1232,7 @@ struct CallView: View {
             let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
             // primary). Swap flips both with one tap.
-            videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
+            videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
                 .frame(width: Self.pipSize.width, height: Self.pipSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
@@ -1067,7 +1249,8 @@ struct CallView: View {
                         HStack(spacing: 8) {
                             pipFrameButton(
                                 icon: "arrow.triangle.2.circlepath.camera.fill",
-                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main),
+                                hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
                             ) {
                                 callManager.switchCamera()
                             }
@@ -1115,7 +1298,10 @@ struct CallView: View {
 
     /// Small circular control pinned to the local self-view frame (flip
     /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
-    /// and drag gestures, so they stay usable on the 100×140 tile.
+    /// and drag gestures, so they stay usable on the 100×140 tile. Uses the
+    /// same adaptiveGlass-backed callControlGlass as every other circular call
+    /// control (task #17) instead of a bespoke flat dark circle — diameter
+    /// stays 28 (unchanged), only the visual TREATMENT changes.
     private func pipFrameButton(icon: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
         Button {
             action()
@@ -1124,9 +1310,7 @@ struct CallView: View {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.95))
-                .frame(width: 28, height: 28)
-                .background(Color.black.opacity(0.45), in: Circle())
-                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                .callControlGlass(diameter: 28, isActive: false, tint: .white)
                 // Visual glyph stays a compact 28pt (the 100×140 tile has no
                 // room for a 44pt circle), but the hit target itself must meet
                 // the HIG 44×44 minimum — expand invisibly via contentShape.
@@ -1207,48 +1391,78 @@ struct CallView: View {
 
     // MARK: - Transcript Overlay
 
+    /// Video calls only — floating glass banner over the bottom of the video,
+    /// like traditional subtitles. Audio calls use `transcriptPanel` (structural,
+    /// non-overlay) instead — see that property's doc comment.
     private var transcriptOverlay: some View {
-        let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
-        return VStack(alignment: .leading, spacing: 6) {
+        transcriptSegmentsList
+            .padding(12)
+            // iOS 26 Liquid Glass — floating live-transcript panel over the video
+            // stream (same chrome-over-content family as the duration badge / effects
+            // toolbar). SDK Compatibility wrapper gates native effect / fallback.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 100)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .opacity(showTranscript ? 1 : 0)
+            .accessibilityHidden(!showTranscript)
+            .animation(.easeInOut(duration: 0.2), value: showTranscript)
+    }
+
+    /// Shared, reused by both the video banner (`transcriptOverlay`) and the
+    /// audio structural panel (`transcriptPanel`).
+    private var transcriptSegmentsList: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(transcriptionService.displayedSegments) { segment in
-                let isLocal = segment.speakerId == localUserId
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .accessibilityHidden(true)
-                    Text(segment.text)
-                        .font(.callout.weight(segment.isFinal ? .regular : .light))
-                        .foregroundColor(.white)
-                        .opacity(segment.isFinal ? 1.0 : 0.7)
-                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
-                }
-                .accessibilityElement(children: .combine)
+                transcriptSegmentRow(segment)
             }
         }
-        .padding(12)
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
-        // stream (same chrome-over-content family as the duration badge / effects
-        // toolbar). SDK Compatibility wrapper gates native effect / fallback.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 100)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .opacity(showTranscript ? 1 : 0)
-        .accessibilityHidden(!showTranscript)
-        .animation(.easeInOut(duration: 0.2), value: showTranscript)
-        // PERF-005: tell the transcription service when the panel is visible
-        // so it can skip per-frame partial-result work while hidden.
-        .adaptiveOnChange(of: showTranscript) { _, newValue in
-            transcriptionService.isShowingOverlay = newValue
+    }
+
+    /// One transcript line: visible speaker name (colored) + text. `<Moi>` in
+    /// `MeeshyColors.indigo400` (this codebase's established "secondary
+    /// elements" tone), the interlocutor's name in `MeeshyColors.brandPrimary`
+    /// (the signature brand color) — user-requested 2026-07-11, replaces the
+    /// previous colored-dot-only distinction.
+    /// My own speech is never translated for myself (`text` is already in my
+    /// language); the interlocutor's speech shows `translatedText ?? text` by
+    /// default, or `text` (original) when `showOriginalText` is on.
+    /// Each row also carries a small "since call start" timestamp (mm:ss)
+    /// above the text — user-requested 2026-07-11 — computed from
+    /// `segment.capturedAt` (wall clock) against `callManager.callStartDate`,
+    /// never from `startTime`/`endTime` (ASR-buffer-relative, see
+    /// `TranscriptionSegment.capturedAt` doc comment).
+    @ViewBuilder
+    private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
+        let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        let isLocal = segment.speakerId == localUserId
+        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        let speakerName = isLocal ? localName : remoteName
+        let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+        let elapsed = segment.capturedAt.timeIntervalSince(callManager.callStartDate ?? segment.capturedAt)
+        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
+
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(speakerName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(speakerColor)
+                Spacer()
+                Text(elapsedLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(.white.opacity(0.45))
+                    .accessibilityHidden(true)
+            }
+            Text(displayText)
+                .font(.callout.weight(segment.isFinal ? .regular : .light))
+                .foregroundColor(.white)
+                .opacity(segment.isFinal ? 1.0 : 0.7)
         }
-        .onAppear {
-            transcriptionService.isShowingOverlay = showTranscript
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(speakerName), \(elapsedLabel) : \(displayText)")
     }
 
     // MARK: - Ended
@@ -1273,6 +1487,29 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+                    // Final call-total duration: same naked-readout fix, static
+                    // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
+            }
+
+            if callManager.canRetryCall {
+                // Transient failure — offer a one-tap re-dial (parité web/Android).
+                Button {
+                    callManager.retryCall()
+                } label: {
+                    Label(
+                        String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main),
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.callout.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(MeeshyColors.success))
+                }
+                .padding(.top, 8)
+                .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
             }
 
             Spacer()
@@ -1283,8 +1520,12 @@ struct CallView: View {
 
     private var hasActiveEffects: Bool {
         // Voice effects are no longer settable from the UI (dead pipeline,
-        // entry removed) — only video filters light this up.
-        callManager.videoFilters.config.isEnabled
+        // entry removed) — only video filters light this up. `isEnabled`
+        // alone misses background blur/skin smoothing enabled without ever
+        // picking a colorimetry preset — same root cause as the pipeline's
+        // own gate (VideoFilterPipeline.process), mirrored here.
+        let config = callManager.videoFilters.config
+        return config.isEnabled || config.hasAdvancedFilters
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1293,21 +1534,6 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
-    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
-    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
-    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
-    private struct PiPSourceAnchor: UIViewRepresentable {
-        func makeUIView(context: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .clear
-            view.isUserInteractionEnabled = false
-            return view
-        }
-        func updateUIView(_ uiView: UIView, context: Context) {
-            CallManager.shared.attachSystemPiP(sourceView: uiView)
-        }
-    }
-
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
@@ -1332,6 +1558,7 @@ struct CallView: View {
                 isActive: callManager.isMuted,
                 caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
                 label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+                hint: String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main),
                 isToggle: true
             ) {
                 callManager.toggleMute()
@@ -1347,6 +1574,7 @@ struct CallView: View {
                     isActive: callManager.isSpeaker,
                     caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
                     label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main),
+                    hint: String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main),
                     isToggle: true
                 ) {
                     callManager.toggleSpeaker()
@@ -1620,6 +1848,90 @@ struct CallView: View {
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
         .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
+    }
+
+    /// Derived from `transcriptionService.isTranscribing` (authoritative on/off) and
+    /// `showOriginalText` (local display flag) — see CaptionsMode's own doc comment.
+    private var captionsMode: CaptionsMode {
+        CaptionsMode(isTranscribing: transcriptionService.isTranscribing, showOriginalText: showOriginalText)
+    }
+
+    /// Advances the 3-state cycle. `.translated`'s start path mirrors the old
+    /// transcriptionToggleButton exactly (read isTranscribing BEFORE calling
+    /// toggleTranscription(), since the start path is async — permission request
+    /// awaited inside a Task — so isTranscribing is still false right after the call
+    /// returns; reading it before, at tap time, is always accurate).
+    private func advanceCaptionsMode() {
+        switch captionsMode.next {
+        case .translated:
+            showOriginalText = false
+            let willStart = !transcriptionService.isTranscribing
+            showTranscript = willStart
+            // PERF-005: single authoritative place that flips this — the audio
+            // structural transcript panel and the video floating banner both key
+            // off it, so it must not depend on either view's own lifecycle
+            // (onAppear/onChange copies would drift).
+            transcriptionService.isShowingOverlay = willStart
+            callManager.toggleTranscription()
+        case .original:
+            showOriginalText = true
+        case .off:
+            showOriginalText = false
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+            callManager.toggleTranscription()
+        }
+    }
+
+    /// Live captions — cycles off → captions (translated) → captions (original) → off
+    /// on tap. Replaces the old transcriptionToggleButton + translationToggleButton pair
+    /// (2 buttons collapsed into 1 — task #17). Manual, per spec decision (never
+    /// auto-activates): the speaker controls when their voice is transcribed and sent
+    /// to the gateway. Floats on the trailing edge, not in controlButtonsRow — see the
+    /// call site's comment.
+    private var captionsCycleButton: some View {
+        let mode = captionsMode
+        let (icon, tint): (String, Color) = {
+            switch mode {
+            case .off: return ("captions.bubble", .white)
+            case .translated: return ("captions.bubble.fill", MeeshyColors.indigo400)
+            case .original: return ("character.bubble.fill", MeeshyColors.indigo400)
+            }
+        }()
+        let valueLabel: String = {
+            switch mode {
+            case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
+            case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
+            case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
+            }
+        }()
+
+        return Button(action: advanceCaptionsMode) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(mode == .off ? .white.opacity(0.9) : tint)
+                    .callControlGlass(diameter: 56, isActive: mode != .off, tint: tint)
+                Text(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 68)
+        }
+        .pressable()
+        // Constant label (the feature's name) + a live value (its current state) — NOT
+        // .callToggleAccessibility(isToggle: true, ...): that helper's .isToggle trait +
+        // on/off value is for binary toggles. This is a 3-state cycle, so VoiceOver hears
+        // "Sous-titres, Traduction" today and "Sous-titres, Texte original" after the next
+        // double-tap — the default Button action already IS the cycle-forward gesture, so
+        // no .accessibilityAdjustableAction is added: a 3-state cycle has no natural
+        // "backward", and mapping both increment AND decrement to the same forward step
+        // would teach a VoiceOver user that swiping down also advances — worse than not
+        // offering the swipe gesture at all.
+        .accessibilityLabel(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+        .accessibilityValue(valueLabel)
     }
 
     private var effectsToggleButton: some View {

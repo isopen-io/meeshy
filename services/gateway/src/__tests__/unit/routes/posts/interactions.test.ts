@@ -74,6 +74,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { ConflictError } from '../../../../errors/custom-errors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -111,6 +112,18 @@ async function buildApp(opts: {
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
+      // Audience déclarée PUBLIC : aimer consulte désormais `Post.visibility`
+      // via `loadPostAcl`. Le droit de voir est couvert par
+      // `interactions-audience.test.ts`.
+      findFirst: jest.fn<any>().mockResolvedValue({
+        authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      }),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1). Défaut :
+      // aucun repost dans le batch — même comportement qu'avant. L'unitaire
+      // replie sa résolution dans le `select` de `update` (Important #2,
+      // revue), aucun `findUnique` séparé n'est plus nécessaire.
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   };
 
@@ -184,6 +197,23 @@ describe('POST /posts/:id/like — service error', () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+describe('POST /posts/:id/like — reaction limit reached', () => {
+  it('returns 409 (not 500) when the reaction-limit guard trips on an emoji change', async () => {
+    // iOS reacts to a story/post via REST `POST /posts/:id/like` with an
+    // arbitrary emoji. Changing the emoji trips the deliberate max-1 domain
+    // guard, which throws a typed ConflictError. That reachable domain error
+    // must surface as 409, never as a 500 INTERNAL_ERROR.
+    mockLikePost.mockRejectedValueOnce(
+      new ConflictError('Maximum 1 different reactions per post reached', 'REACTION_LIMIT_REACHED'),
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: { emoji: '😂' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('REACTION_LIMIT_REACHED');
     await app.close();
   });
 });
@@ -391,6 +421,21 @@ describe('POST /posts/:id/view — STORY type broadcasts viewed', () => {
   });
 });
 
+describe('POST /posts/:id/view — refetches the post with the viewer for visibility', () => {
+  it('passes the viewer id to getPostById so non-PUBLIC stories resolve and broadcast', async () => {
+    // Régression : sans le viewer, getPostById applique le filtre PUBLIC-seul et
+    // retourne null pour une story FRIENDS → broadcastStoryViewed ne partait jamais
+    // alors que recordView (même filtre viewer) avait enregistré la vue.
+    mockGetPostById.mockClear();
+    mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: 'other-author', viewCount: 7 });
+    const app = await buildApp({ withSocialEvents: true, withNotifications: true });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/view`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
+    await app.close();
+  });
+});
+
 describe('POST /posts/:id/view — STORY type does not broadcast when author is viewer', () => {
   it('returns 200 and skips broadcast when story author views own story', async () => {
     mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: USER_ID, viewCount: 1 });
@@ -532,6 +577,54 @@ describe('POST /posts/:id/impression — detail source increments postOpenCount'
   });
 });
 
+describe('POST /posts/:id/impression — on a repost, credits the root impressionCount too', () => {
+  it('folds repostOfId/originalRepostOfId resolution into the update select (no standalone findUnique) and increments the root once', async () => {
+    const ROOT_ID = '507f1f77bcf86cd799439077';
+    const prisma = {
+      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      post: {
+        // Le `select` de `update` porte la résolution — pas de findUnique
+        // séparé sur ce chemin chaud (Important #2, revue chantier reposts).
+        update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn<any>(),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
+    expect(res.statusCode).toBe(200);
+    // Réduction de requêtes : plus de lecture dédiée avant l'écriture.
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: POST_ID },
+      data: { impressionCount: { increment: 1 } },
+      select: { repostOfId: true, originalRepostOfId: true },
+    });
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: ROOT_ID, deletedAt: { isSet: false } },
+      data: { impressionCount: { increment: 1 } },
+    });
+    await app.close();
+  });
+
+  it('non-repost post: no root credit attempted, no standalone findUnique either', async () => {
+    const prisma = {
+      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn<any>(),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
+    expect(prisma.post.updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
@@ -576,6 +669,46 @@ describe('POST /posts/impressions/batch — empty postIds returns 0', () => {
   });
 });
 
+describe('POST /posts/impressions/batch — 2 reposts of the same original credit it +2, not +1', () => {
+  it('resolves repostOf/originalRepostOfId in ONE findMany and groups root credits by occurrence count', async () => {
+    const ROOT_ID = '507f1f77bcf86cd799439077';
+    const REPOST_A = '507f1f77bcf86cd799439078';
+    const REPOST_B = '507f1f77bcf86cd799439079';
+    const prisma = {
+      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: REPOST_A, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
+          { id: REPOST_B, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
+        ]),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts/impressions/batch',
+      payload: { postIds: [REPOST_A, REPOST_B] },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // UNE requête pour résoudre repostOf/originalRepostOfId de tout le batch.
+    expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.post.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [REPOST_A, REPOST_B] }, repostOfId: { not: null } },
+      select: { id: true, repostOfId: true, originalRepostOfId: true },
+    });
+
+    // Chaque repost distinct du batch crédite la MÊME racine → +2, jamais +1
+    // (piège `in` dédupliqué, appliqué ici au crédit de racine).
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [ROOT_ID] }, deletedAt: { isSet: false } },
+      data: { impressionCount: { increment: 2 } },
+    });
+    await app.close();
+  });
+});
+
 describe('POST /posts/impressions/batch — caps at 50 entries', () => {
   it('returns 200 and caps batch at 50 entries', async () => {
     const postIds = Array.from({ length: 60 }, (_, i) => `507f1f77bcf86cd7994390${i.toString().padStart(2, '0')}`);
@@ -583,7 +716,10 @@ describe('POST /posts/impressions/batch — caps at 50 entries', () => {
       postImpression: {
         createMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
       },
-      post: { updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds } });
@@ -597,7 +733,10 @@ describe('POST /posts/impressions/batch — service error', () => {
   it('returns 500 when createMany throws', async () => {
     const prisma = {
       postImpression: { createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
-      post: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds: [POST_ID] } });
@@ -1099,7 +1238,14 @@ describe('POST /posts/:id/like — broadcastPostLiked rejects (line 97)', () => 
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', null as any);
@@ -1131,7 +1277,14 @@ describe('POST /posts/:id/like — createPostLikeNotification rejects (line 113)
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', {
@@ -1157,7 +1310,14 @@ describe('DELETE /posts/:id/like — broadcastPostUnliked rejects (line 185)', (
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', null as any);
@@ -1189,7 +1349,14 @@ describe('POST /posts/:id/repost — broadcastPostReposted rejects (line 698)', 
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', null as any);
@@ -1222,7 +1389,14 @@ describe('POST /posts/:id/repost — createPostRepostNotification rejects (line 
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', {
@@ -1323,7 +1497,14 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
     const app = Fastify({ logger: false });
     const prisma = {
       postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-      post: { update: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn<any>().mockResolvedValue({
+          authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        }),
+      },
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', {
