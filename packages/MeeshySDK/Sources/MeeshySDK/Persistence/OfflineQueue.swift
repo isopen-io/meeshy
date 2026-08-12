@@ -1198,11 +1198,12 @@ public actor OfflineQueue {
     /// latest one alone is equivalent to applying every intermediate one
     /// in sequence.
     ///
-    /// Currently includes only `.markAsRead`: reading up to message N
-    /// implicitly marks 1..N-1 as well, so a busy group conversation that
-    /// fires `markAsRead` on every inbound message can collapse 17 stacked
-    /// rows into a single one carrying the highest `upToMessageId` with
-    /// no observable difference server-side. Other latest-state kinds
+    /// Currently includes only `.markAsRead`: le curseur de lecture n'avance
+    /// que vers l'avant, si bien qu'une conversation de groupe animée qui
+    /// déclenche `markAsRead` à chaque message entrant peut réduire 17 rows
+    /// empilées à une seule — les identifiants lus des rows périmées étant
+    /// fusionnés dans la survivante par `mergeMarkAsReadPayloads`, aucune
+    /// lecture n'est perdue au passage. Other latest-state kinds
     /// (profile / settings / conversation updates) might be added later,
     /// but each needs a case-by-case audit to confirm intermediate states
     /// can be safely dropped.
@@ -1250,7 +1251,6 @@ public actor OfflineQueue {
         let merged = MarkAsReadPayload(
             clientMutationId: newestPayload.clientMutationId,
             conversationId: newestPayload.conversationId,
-            upToMessageId: newestPayload.upToMessageId,
             messageIds: mergedMessageIds,
             language: newestPayload.language,
             messageLanguages: mergedLanguages.isEmpty ? nil : mergedLanguages,

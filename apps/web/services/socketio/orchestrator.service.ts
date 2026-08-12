@@ -741,6 +741,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationUpdated(listener);
   }
 
+  onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantJoined(listener);
+  }
+
   onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
     return this.presenceService.onConversationParticipantLeft(listener);
   }

@@ -335,12 +335,23 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [clearMessageTranslatingState]
   );
 
+  // `useConversationTyping` a besoin des émetteurs `startTyping`/`stopTyping`
+  // que produit `useSocketIOMessaging`, lequel a besoin du récepteur
+  // `onUserTyping` : les deux hooks se précèdent mutuellement. Le ref casse ce
+  // cycle sans dupliquer de règle — le callback remis au socket est STABLE
+  // (aucune dépendance, donc plus de ré-abonnement à chaque changement de
+  // conversation) et se contente de relayer vers `handleUserTyping`, seul
+  // dépositaire des gardes (« pas mon propre écho », « pas une autre
+  // conversation ») et de l'état `typingUsers` que rend l'en-tête.
+  const handleUserTypingRef = useRef<
+    ((userId: string, username: string, isTyping: boolean, conversationId: string) => void) | null
+  >(null);
+
   const onUserTyping = useCallback(
-    (userId: string, _username: string, _isTyping: boolean, typingConversationId: string) => {
-      if (!user || userId === user.id) return;
-      if (typingConversationId !== selectedConversation?.id) return;
+    (userId: string, username: string, isTyping: boolean, typingConversationId: string) => {
+      handleUserTypingRef.current?.(userId, username, isTyping, typingConversationId);
     },
-    [user, selectedConversation?.id]
+    []
   );
 
   // Socket.IO messaging — cache mutations handled by useSocketCacheSync, only UI callbacks here
@@ -354,14 +365,25 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     });
 
   // Typing indicators
-  const { typingUsers, isTyping, handleTypingStop, handleTextInput: handleTypingTextInput } =
-    useConversationTyping({
-      conversationId: selectedConversation?.id || null,
-      currentUserId: user?.id || null,
-      participants,
-      startTyping,
-      stopTyping,
-    });
+  const {
+    typingUsers,
+    isTyping,
+    handleUserTyping,
+    handleTypingStop,
+    handleTextInput: handleTypingTextInput,
+  } = useConversationTyping({
+    conversationId: selectedConversation?.id || null,
+    currentUserId: user?.id || null,
+    participants,
+    startTyping,
+    stopTyping,
+  });
+
+  // Branche le récepteur déclaré plus haut. Un effet, pas une écriture en
+  // rendu : les événements typing arrivent du socket, jamais pendant un rendu.
+  useEffect(() => {
+    handleUserTypingRef.current = handleUserTyping;
+  }, [handleUserTyping]);
 
   // Sync volatile state ref after all hooks (#18)
   volatileStateRef.current = { newMessage, attachmentIds, attachmentMimeTypes, selectedLanguage, isTyping };

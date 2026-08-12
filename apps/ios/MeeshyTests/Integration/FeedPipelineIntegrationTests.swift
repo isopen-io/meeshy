@@ -286,7 +286,7 @@ private enum PostRecordFactory {
     }
 }
 
-private enum CommentRecordFactory {
+enum CommentRecordFactory {
     static func make(
         id: String = "comment_\(UUID().uuidString)",
         postId: String = "post_default",

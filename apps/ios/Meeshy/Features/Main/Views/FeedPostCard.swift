@@ -740,7 +740,7 @@ struct FeedPostCard: View {
                         post.primaryReelDisplayMedia != nil
                             ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: "bookmark"
+                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
                     )
                 }
                 if onPin != nil {
@@ -1224,6 +1224,7 @@ struct FeedPostCard: View {
                         CommentMediaView(
                             media: media,
                             accentColor: accentColor,
+                            commentId: comment.id,
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,

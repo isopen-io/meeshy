@@ -90,4 +90,44 @@ class MessageDaoTest {
         assertThat(dao.observeForConversation("c1").first()).isEmpty()
         assertThat(dao.observeForConversation("c2").first().map { it.id }).containsExactly("b")
     }
+
+    @Test
+    fun `recentForConversation returns the newest rows first, scoped to that conversation`() = runTest {
+        dao.upsertAll(
+            listOf(
+                messageRow("a", "c1", createdAt = 100),
+                messageRow("b", "c1", createdAt = 300),
+                messageRow("c", "c1", createdAt = 200),
+                messageRow("d", "c2", createdAt = 999),
+            ),
+        )
+
+        val rows = dao.recentForConversation("c1", limit = 5)
+
+        assertThat(rows.map { it.id }).containsExactly("b", "c", "a").inOrder()
+    }
+
+    @Test
+    fun `recentForConversation respects the limit`() = runTest {
+        dao.upsertAll(
+            listOf(
+                messageRow("a", "c1", createdAt = 100),
+                messageRow("b", "c1", createdAt = 200),
+                messageRow("c", "c1", createdAt = 300),
+            ),
+        )
+
+        val rows = dao.recentForConversation("c1", limit = 2)
+
+        assertThat(rows.map { it.id }).containsExactly("c", "b").inOrder()
+    }
+
+    @Test
+    fun `recentForConversation on an unknown conversation returns empty`() = runTest {
+        dao.upsertAll(listOf(messageRow("a", "c1")))
+
+        val rows = dao.recentForConversation("does-not-exist", limit = 5)
+
+        assertThat(rows).isEmpty()
+    }
 }

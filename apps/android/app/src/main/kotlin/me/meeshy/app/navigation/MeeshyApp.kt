@@ -82,9 +82,11 @@ import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AboutScreen
+import me.meeshy.app.settings.AccountContactScreen
 import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
+import me.meeshy.app.settings.TwoFactorScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.LegalDocumentScreen
@@ -143,6 +145,16 @@ object Routes {
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+
+    /**
+     * Same destination as [CONVERSATION_SINGULAR_DEEP_LINK] plus an optional
+     * `?draft=` query arg — e.g. a future Quick Reply widget/shortcut
+     * (`ChatViewModel.DRAFT_ARG`/`initialDraft`). Kept as its own pattern (rather
+     * than appended to every conversation deep link) since it is the one shape a
+     * canned-reply tap would actually construct.
+     */
+    const val CONVERSATION_DRAFT_DEEP_LINK =
+        "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatViewModel.DRAFT_ARG}={${ChatViewModel.DRAFT_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
@@ -152,6 +164,8 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val CHANGE_PASSWORD = "settings/change-password"
+    const val TWO_FACTOR = "settings/two-factor"
+    const val ACCOUNT_CONTACT = "settings/account-contact"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
@@ -559,12 +573,14 @@ fun MeeshyApp(
                 route = Routes.CHAT,
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
+                    navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                 ),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_DRAFT_DEEP_LINK },
                 ),
             ) { entry ->
                 val conversationId = entry.arguments
@@ -649,6 +665,8 @@ fun MeeshyApp(
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
                     onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
+                    onOpenTwoFactor = { navController.navigate(Routes.TWO_FACTOR) },
+                    onOpenAccountContact = { navController.navigate(Routes.ACCOUNT_CONTACT) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
@@ -670,6 +688,12 @@ fun MeeshyApp(
             }
             composable(Routes.CHANGE_PASSWORD) {
                 ChangePasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.TWO_FACTOR) {
+                TwoFactorScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACCOUNT_CONTACT) {
+                AccountContactScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.DELETE_ACCOUNT) {
                 AccountDeletionScreen(onBack = { navController.popBackStack() })

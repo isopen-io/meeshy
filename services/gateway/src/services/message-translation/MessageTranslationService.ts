@@ -3081,7 +3081,16 @@ export class MessageTranslationService extends EventEmitter {
 
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-        const translation = translations[targetLanguage];
+        // Les écrivains stockent sous la forme CANONIQUE du SSOT
+        // `normalizeLanguageCode` ('pt-BR' → 'pt', 'fil' rejeté plutôt que
+        // tronqué). Lire verbatim manquait donc la traduction présente une clé
+        // plus loin, et l'appelant rendait un repli fabriqué
+        // `[PT-BR] <texte original>` — violation directe du Prisme.
+        // Verbatim d'abord : un document legacy portant RÉELLEMENT une clé
+        // régionale reste servi tel quel, la normalisation ne fait que rattraper
+        // ce que la lecture stricte laissait tomber.
+        const normalizedTarget = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+        const translation = translations[targetLanguage] ?? translations[normalizedTarget];
 
         if (translation) {
           // SECURITY: Decrypt translation if encrypted

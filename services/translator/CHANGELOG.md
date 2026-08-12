@@ -1,5 +1,153 @@
 # @meeshy/translator
 
+## 1.24.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - une notification manquée l'était pour la session entière — le web ignorait `_seq` (#2844)
+  - deuxieme widget ecran d'accueil — conversations recentes (#2841)
+  - CallNotification no longer orphans the ringtone on fast unmount (#2843)
+  - déclare `userUpdated` sur `MessageSocketProviding` — main était rouge
+
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.22.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - après une édition, la ligne de liste affichait le texte d'avant (#2802)
+  - restore two-factor authentication (gateway route exists) (#2805)
+  - ravive la carte Now Playing après un vol de lecture transitoire + polis AirPlay
+  - traduit le bouton AirPlay du plein écran audio dans les 7 langues
+  - bouton AirPlay dans le plein écran audio
+  - per-post language override for the Feed post composer (#2804)
+  - useCallAnalyticsReporter's reconnection counter could never increment
+  - attach device location to a Feed post composer (#2801)
+  - migre 5 NavigationView vers NavigationStack (soft-dépréciée iOS 16+) (#2798)
+  - épingler un message traduit rendait la route d'épingles inexploitable
+  - enableVideo()/switchCamera() snapshot connected peers before getUserMedia, dropping late joiners
+  - addLocalMedia clones outgoing video track instead of sharing it across peers (#2790)
+  - TUS uploads resume from the last confirmed chunk on retry (feature-parity §Q) (#2795)
+  - OutboxFlushWorker never discovered per-conversation message lanes (#2794)
+  - l'aperçu de liste servi par socket pouvait afficher un cryptogramme (#2789)
+  - Feed post composer audio attachment (feature-parity §F) (#2791 follow-up) (#2792)
+  - real MediaRecorder capture for chat voice-recording pill (feature-parity §Q) (#2791)
+  - attribue l'audio d'un post cité au bon auteur sur la carte Now Playing
+  - feed, commentaires et posts audio passent par le coordinator Now Playing
+  - stabilise l'abonnement audio du bouton scroll-to-bottom
+  - le bouton scroll-to-audio démarre la file du coordinator
+  - playKeepingQueue préserve la file au swipe plein écran, playVariant survit à la reprise d'appel
+  - le plein écran audio fusionne dans le coordinator (carte + file + variantes)
+  - termine le background task d'avance de file bloquée par le garde CallKit
+  - fixture d'appel avec discriminant kind, mocks partagés du target, await GRDB async
+  - la greffe store se limite à userState+suppressions — un snapshot en retard réécrivait un rename frais
+  - l'avance de file audio est couverte par un background task
+  - résorbe les deux warnings d'intégration (await inutile, résultat de write ignoré)
+  - la file audio en pause garde sa carte Now Playing en background
+  - un instantane store VIDE est un teardown, pas N suppressions
+  - ne jamais confondre un avis d'appel avec une edition, armer aussi sur iPad
+  - patcher les traductions temps reel sous TOUTES les cles de cache
+  - persister les moods temps reel et abonner status:unreacted
+  - armer le pont de persistance app-wide et persister le media de commentaire
+  - route la tray vers la gestion pour les stories passées sans story active
+  - persister conversation:updated/deleted et les mutations de message hors conversation ouverte
+  - affiche la progression d'export en cours sur les cards « Mes stories »
+  - carte Now Playing avec date du vocal et position de file
+  - relance la lecture de la timeline après un export (fin/échec/annulation)
+  - allonge les interludes de lecture à 1,2 s et lie l'export à la SSOT
+  - corrige le flip vertical du fond dans StoryStaticSnapshot
+  - icone de telechargement media coherente avec la convention
+  - désarme la reprise d'interruption sur retrait AirPods et suspension d'appel
+  - seedMediaConsumption alimente les stores de reprise audio/video
+  - frappe hors conversation dans la pastille de synchronisation
+  - reprise de lecture video via VideoPlaybackPositionStore
+  - VideoPlaybackPositionStore, miroir strict d'AudioPlaybackPositionStore
+  - lecture instantanee a l ouverture, au bas atteint et au bouton
+  - pourcentage + barre de progression par participant dans mediaConsumptionCard
+  - promotion immediate de l accumulateur de lecture, retrait du code mort
+  - pause/reprise de l'audio de conversation sur interruption système
+  - decode position/pourcentage sur attachment-status:updated et alimente MediaConsumptionStore
+  - le moteur du coordinator audio devient Now Playing éligible (.content)
+  - profils de session audio avec pause/reprise et plomberie moteur
+  - l'écho REST de message:new ne portait pas le clientMessageId
+  - le chemin socket sérialisait les traductions dans une forme qu'iOS ne peut pas décoder (#2793)
+  - transporte position/durée/pourcentage sur attachment-status:updated
+
 ## 1.21.0
 
 ### Minor Changes

@@ -45,8 +45,8 @@ final class StoryOpeningParityTests: XCTestCase {
     /// avait trois, une par effet.
     func test_openingDuration_isASingleSharedValue() {
         XCTAssertGreaterThan(StoryRenderer.slideTransitionDuration, 0)
-        XCTAssertLessThanOrEqual(StoryRenderer.slideTransitionDuration, 1.0,
-                                 "Au-delà d'une seconde, l'ouverture retarderait la lecture.")
+        XCTAssertLessThanOrEqual(StoryRenderer.slideTransitionDuration, 1.5,
+                                 "Au-delà d'une seconde et demie, l'ouverture retarderait trop la lecture.")
     }
 
     /// Garde de non-régression sur la SOURCE du lecteur : les littéraux

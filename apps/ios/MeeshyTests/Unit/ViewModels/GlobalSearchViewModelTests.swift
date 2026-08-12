@@ -497,6 +497,97 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // MARK: - Prisme Linguistique de la ligne de resultat
+
+    /// `GET /conversations/search` sert `lastMessageTranslations` /
+    /// `lastMessageOriginalLanguage` au meme titre que `GET /conversations`.
+    /// La ligne de resultat de recherche EST une ligne de conversation : elle
+    /// doit rendre le meme texte que `ThemedConversationRow`, qui resout via
+    /// `resolvedLastMessagePreview`. Avant ce correctif elle rendait
+    /// `lastMessagePreview` brut — donc la langue de l'expediteur.
+    private func stubConversationSearch(
+        on mockAPI: MockAPIClientForApp,
+        translations: String,
+        originalLanguage: String
+    ) {
+        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{
+          "id":"conv-prisme-1","type":"group","title":"Prisme","createdAt":"2026-01-01T00:00:00Z",
+          "lastMessage":{"id":"msg-1","content":"Hello everyone","createdAt":"2026-01-01T00:00:00Z"},
+          "lastMessageTranslations":\(translations),
+          "lastMessageOriginalLanguage":"\(originalLanguage)"
+        }]}
+        """)
+        mockAPI.stub("/conversations/search", result: response)
+    }
+
+    func test_searchConversations_appliesPrismeToRemoteResultPreview() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(
+            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
+        )
+        mockUserService.searchUsersResult = .success([])
+        stubConversationSearch(
+            on: mockAPI,
+            translations: #"{"fr":"Bonjour tout le monde"}"#,
+            originalLanguage: "en"
+        )
+
+        await sut.performSearch(query: "prisme")
+
+        XCTAssertEqual(
+            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
+            "la ligne de resultat doit rendre la langue primaire du lecteur, pas l'original"
+        )
+    }
+
+    func test_searchConversations_keepsOriginalPreviewWhenNoPreferredTranslation() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(
+            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
+        )
+        mockUserService.searchUsersResult = .success([])
+        // `es` existe mais n'appartient pas au prisme du lecteur : regle #1 du
+        // Prisme — ne JAMAIS retomber sur une traduction quelconque.
+        stubConversationSearch(
+            on: mockAPI,
+            translations: #"{"es":"Hola a todos"}"#,
+            originalLanguage: "en"
+        )
+
+        await sut.performSearch(query: "prisme")
+
+        XCTAssertEqual(
+            sut.conversationResults.first?.lastMessagePreview, "Hello everyone",
+            "aucune traduction du prisme servie => l'original, jamais une langue tierce"
+        )
+    }
+
+    func test_searchConversations_originalLanguageCompetesAtItsOwnRank() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        // Prisme ["fr", "en"] : la langue d'origine (en) occupe le RANG 2. Elle
+        // ne doit jamais court-circuiter la langue primaire (regle #3, cycle 62).
+        mockAuthManager.simulateLoggedIn(
+            user: MeeshyUser(
+                id: "user-001", username: "testuser",
+                systemLanguage: "fr", regionalLanguage: "en"
+            )
+        )
+        mockUserService.searchUsersResult = .success([])
+        stubConversationSearch(
+            on: mockAPI,
+            translations: #"{"fr":"Bonjour tout le monde"}"#,
+            originalLanguage: "en"
+        )
+
+        await sut.performSearch(query: "prisme")
+
+        XCTAssertEqual(
+            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
+            "la langue d'origine au rang 2 ne retrograde pas la langue primaire"
+        )
+    }
+
     private func stubEmptyConversationSearch(on mockAPI: MockAPIClientForApp) {
         let emptyResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}

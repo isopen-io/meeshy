@@ -29,10 +29,10 @@ describe('useAudioEffects input stream swap', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const rawContext = (Tone.context as any).rawContext;
-    createMediaStreamSource = jest.fn(() => ({ channelCount: 2, connect: jest.fn() }));
+    createMediaStreamSource = jest.fn(() => ({ channelCount: 2, connect: jest.fn(), disconnect: jest.fn() }));
     rawContext.createMediaStreamSource = createMediaStreamSource;
-    rawContext.createChannelSplitter = jest.fn(() => ({ connect: jest.fn() }));
-    rawContext.createChannelMerger = jest.fn(() => ({ connect: jest.fn() }));
+    rawContext.createChannelSplitter = jest.fn(() => ({ connect: jest.fn(), disconnect: jest.fn() }));
+    rawContext.createChannelMerger = jest.fn(() => ({ connect: jest.fn(), disconnect: jest.fn() }));
     rawContext.createMediaStreamDestination = jest.fn(() => ({ stream: {} as MediaStream }));
   });
 
@@ -95,5 +95,81 @@ describe('useAudioEffects input stream swap', () => {
     expect(firstDestination.track.stop).toHaveBeenCalledTimes(1);
     expect(firstDestination.disconnect).toHaveBeenCalledTimes(1);
     expect(destinationNodes[1].track.stop).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `AudioNode.disconnect()` only severs a node's OUTGOING edges. The Vague 93
+   * fix disconnected `mediaStreamDestinationRef` (the tail of the graph) on
+   * teardown, but `source` — the `MediaStreamAudioSourceNode` built fresh in
+   * every `initializeAudioPipeline()` call and never stored in a ref — was
+   * never disconnected at all. Its upstream edge into the old (now-detached)
+   * Gain node stays wired into the shared, app-lifetime AudioContext forever,
+   * pinning a reference to the old stream/tracks on every mic/camera swap.
+   */
+  it('disconnects the previous MediaStreamAudioSourceNode when inputStream is swapped mid-call', async () => {
+    const streamA = makeFakeInputStream();
+    const streamB = makeFakeInputStream();
+    const sourceNodes: Array<{ disconnect: jest.Mock; connect: jest.Mock }> = [];
+    createMediaStreamSource = jest.fn(() => {
+      const node = { channelCount: 2, connect: jest.fn(), disconnect: jest.fn() };
+      sourceNodes.push(node);
+      return node;
+    });
+    (Tone.context as any).rawContext.createMediaStreamSource = createMediaStreamSource;
+
+    const { rerender } = renderHook(
+      ({ inputStream }) => useAudioEffects({ inputStream }),
+      { initialProps: { inputStream: streamA } }
+    );
+
+    await waitFor(() => expect(sourceNodes).toHaveLength(1));
+    const firstSource = sourceNodes[0];
+
+    rerender({ inputStream: streamB });
+
+    await waitFor(() => expect(sourceNodes).toHaveLength(2));
+    expect(firstSource.disconnect).toHaveBeenCalledTimes(1);
+    expect(sourceNodes[1].disconnect).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Same leak, mono path: a sub-stereo `inputStream` routes through an extra
+   * `ChannelSplitterNode` + `ChannelMergerNode` upmix pair (source → splitter
+   * → merger → Gain) that was equally never disconnected on teardown.
+   */
+  it('disconnects the previous channel splitter/merger upmix nodes when a mono inputStream is swapped mid-call', async () => {
+    const streamA = makeFakeInputStream();
+    const streamB = makeFakeInputStream();
+    const rawContext = (Tone.context as any).rawContext;
+    const splitterNodes: Array<{ disconnect: jest.Mock }> = [];
+    const mergerNodes: Array<{ disconnect: jest.Mock }> = [];
+    rawContext.createMediaStreamSource = jest.fn(() => ({ channelCount: 1, connect: jest.fn(), disconnect: jest.fn() }));
+    rawContext.createChannelSplitter = jest.fn(() => {
+      const node = { connect: jest.fn(), disconnect: jest.fn() };
+      splitterNodes.push(node);
+      return node;
+    });
+    rawContext.createChannelMerger = jest.fn(() => {
+      const node = { connect: jest.fn(), disconnect: jest.fn() };
+      mergerNodes.push(node);
+      return node;
+    });
+
+    const { rerender } = renderHook(
+      ({ inputStream }) => useAudioEffects({ inputStream }),
+      { initialProps: { inputStream: streamA } }
+    );
+
+    await waitFor(() => expect(splitterNodes).toHaveLength(1));
+    const [firstSplitter] = splitterNodes;
+    const [firstMerger] = mergerNodes;
+
+    rerender({ inputStream: streamB });
+
+    await waitFor(() => expect(splitterNodes).toHaveLength(2));
+    expect(firstSplitter.disconnect).toHaveBeenCalledTimes(1);
+    expect(firstMerger.disconnect).toHaveBeenCalledTimes(1);
+    expect(splitterNodes[1].disconnect).not.toHaveBeenCalled();
+    expect(mergerNodes[1].disconnect).not.toHaveBeenCalled();
   });
 });

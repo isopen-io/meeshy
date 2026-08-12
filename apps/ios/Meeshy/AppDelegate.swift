@@ -419,10 +419,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ diagnostics: DatabaseInitDiagnostics,
         reporter: CrashReporting
     ) {
-        guard diagnostics.recoveryAttempted || diagnostics.fellBackToInMemory else { return }
-        let summary = diagnostics.fellBackToInMemory
-            ? "DB init fell back to in-memory pool"
-            : "DB recovered from corruption"
+        guard diagnostics.recoveryAttempted
+            || diagnostics.fellBackToSecondaryPath
+            || diagnostics.fellBackToEphemeralStorage else { return }
+        let summary: String
+        if diagnostics.fellBackToEphemeralStorage {
+            summary = "DB init fell back to an ephemeral temp-file pool"
+        } else if diagnostics.fellBackToSecondaryPath {
+            summary = "DB init fell back to the Application Support path (app-group container unusable)"
+        } else {
+            summary = "DB recovered from corruption"
+        }
         reporter.log("[db-init] \(summary) — first-attempt-error=\(diagnostics.firstAttemptError ?? "nil") quarantined=\(diagnostics.quarantinedFilePath ?? "nil")")
     }
 

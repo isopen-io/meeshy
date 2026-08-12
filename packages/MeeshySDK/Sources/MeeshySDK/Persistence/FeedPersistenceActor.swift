@@ -204,6 +204,23 @@ public actor FeedPersistenceActor {
         postFeedStoreRefresh()
     }
 
+    /// Réécrit le blob média d'un commentaire (`comment:media-updated` : le
+    /// pipeline audio a produit la transcription et les variantes TTS).
+    /// No-op silencieux si le commentaire n'est pas en base — il arrivera
+    /// enrichi au prochain chargement REST.
+    public func updateCommentMedia(commentId: String, mediaJson: Data) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE feed_comments SET mediaJson = ?, changeVersion = changeVersion + 1
+                    WHERE id = ?
+                    """,
+                arguments: [mediaJson, commentId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
     public func updateCommentLikeCount(commentId: String, count: Int) throws {
         try dbWriter.write { db in
             try db.execute(

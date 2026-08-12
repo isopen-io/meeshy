@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { StoryViewer, useToast } from '@/components/v2';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
+import { useRepostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
@@ -12,6 +13,9 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
 import { useI18n } from '@/hooks/useI18n';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
+import { shareLink } from '@/lib/share-utils';
 
 /**
  * Immersive single-story viewer (`/story/:id`).
@@ -37,6 +41,7 @@ export default function StoryPage() {
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
+  const repostMutation = useRepostMutation();
 
   // Join the story room + consume its real-time events (reactions, comments)
   // broadcast to `ROOMS.post(postId)`. Mirrors the post detail page so a viewer
@@ -75,6 +80,52 @@ export default function StoryPage() {
     [toastCtx, t]
   );
 
+  const handleReport = useCallback(
+    (storyId: string) => {
+      if (!window.confirm(t('reportConfirm', 'Report this story?'))) return;
+      reportService
+        .reportStory(storyId, 'inappropriate', '')
+        .then(() => toastCtx.addToast(t('reported', 'Story reported'), 'success'))
+        .catch(() => toastCtx.addToast(t('reportError', "Couldn't report the story"), 'error'));
+    },
+    [toastCtx, t]
+  );
+
+  const handleShare = useCallback(
+    async (storyId: string) => {
+      const story = stories.find((s) => s.id === storyId);
+      const localUrl = `${window.location.origin}/story/${storyId}`;
+      const title = story?.author.name ?? 'Meeshy';
+      const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+      try {
+        const { shortUrl } = await postsService.sharePost(storyId, { generateLink: true });
+        const shared = await shareLink(shortUrl ?? localUrl, title, story?.content ?? '');
+        if (shared) {
+          toastCtx.addToast(t('shared', 'Shared!'), 'success');
+        } else if (!hasNativeShare) {
+          toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+        }
+        // else: native share sheet dismissed — nothing was copied, no toast
+      } catch {
+        toastCtx.addToast(t('shareError', "Couldn't share the story"), 'error');
+      }
+    },
+    [stories, toastCtx, t]
+  );
+
+  const handleRepost = useCallback(
+    (storyId: string) => {
+      repostMutation.mutate(
+        { postId: storyId, data: { isQuote: false } },
+        {
+          onSuccess: () => toastCtx.addToast(t('reposted', 'Reposted!'), 'success'),
+          onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [repostMutation, toastCtx, t]
+  );
+
   if (stories.length > 0) {
     return (
       <StoryViewer
@@ -86,6 +137,9 @@ export default function StoryPage() {
         onView={(id) => recordView(id)}
         onReply={handleReply}
         onDelete={handleDelete}
+        onReport={handleReport}
+        onShare={handleShare}
+        onRepost={post?.visibility === 'PUBLIC' ? handleRepost : undefined}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

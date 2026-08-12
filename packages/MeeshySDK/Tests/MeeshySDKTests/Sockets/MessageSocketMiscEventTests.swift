@@ -216,6 +216,56 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.updatedAt, "2026-04-09T10:00:00.000Z")
     }
 
+    // Le tri-état du Prisme. `Optional` confondrait « clé absente » (renommage :
+    // ne pas toucher la carte) et « clé nulle » (le serveur DIT que la carte est
+    // périmée après une édition). Ces trois témoins fixent la distinction sur le
+    // fil, là où elle est décidée.
+
+    func test_conversationUpdatedEvent_absentTranslationsKey_isUnchanged() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "title": "Renamed",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .unchanged)
+    }
+
+    func test_conversationUpdatedEvent_nullTranslations_isReplacedEmpty() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "lastMessagePreview": "Hello (edited)",
+            "lastMessageTranslations": null,
+            "lastMessageOriginalLanguage": "en",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .replaced([:]),
+                       "an explicit null expires the client map — it is a value, not an absence")
+        XCTAssertEqual(event.lastMessageOriginalLanguage, "en")
+    }
+
+    func test_conversationUpdatedEvent_translationsMap_isReplacedWithIt() throws {
+        let json = """
+        {
+            "conversationId": "conv3",
+            "lastMessagePreview": "Hello",
+            "lastMessageTranslations": {"fr": "Bonjour"},
+            "lastMessageOriginalLanguage": "en",
+            "updatedAt": "2026-04-09T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessageTranslations, .replaced(["fr": "Bonjour"]))
+    }
+
     func test_conversationUpdatedEvent_minimalFields() throws {
         let json = """
         {

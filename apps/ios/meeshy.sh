@@ -1497,6 +1497,50 @@ discover_test_classes() {
         | sort -u
 }
 
+# `discover_test_classes` lit les SOURCES, jamais le produit du build. Le projet
+# énumère ses fichiers explicitement (aucun PBXFileSystemSynchronizedRootGroup) :
+# un test créé sans être enregistré dans project.pbxproj entre quand même dans le
+# manifeste `-only-testing` alors qu'il n'est PAS compilé. xcodebuild ne dit rien
+# d'une classe sélectionnée qui n'existe pas, et le gate reste VERT avec des
+# tests morts (2026-08-11 : MessageMoreJumpsToViewsGuardTests, deux commits,
+# 0 symbole dans le bundle, 3 gardes promises jamais exécutées).
+#
+# Seule la présence du SYMBOLE dans MeeshyTests.xctest fait foi — on la vérifie
+# ici, après le build, et un orphelin rend le gate ROUGE. Remède côté dépôt :
+# `(cd apps/ios && xcodegen generate)`, puis committer les 4 lignes ajoutées au
+# pbxproj (référence légitime d'un fichier neuf, pas du churn).
+verify_test_classes_are_compiled() {
+    local binary="$DERIVED_DATA/Products/Debug-iphonesimulator/$APP_NAME.app/PlugIns/MeeshyTests.xctest/MeeshyTests"
+    if [ ! -f "$binary" ]; then
+        warn "Bundle de tests introuvable ($binary) — garde d'orphelins sautée"
+        return 0
+    fi
+
+    local declared_file compiled_file orphans
+    declared_file=$(mktemp) && compiled_file=$(mktemp)
+    discover_test_classes > "$declared_file"
+    if [ ! -s "$declared_file" ]; then
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    nm -a "$binary" 2>/dev/null | grep -oF -f "$declared_file" | sort -u > "$compiled_file" || true
+    if [ ! -s "$compiled_file" ]; then
+        warn "Aucun symbole de classe de test lisible dans $binary — garde d'orphelins sautée"
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    orphans=$(grep -vxF -f "$compiled_file" "$declared_file" || true)
+    rm -f "$declared_file" "$compiled_file"
+    [ -z "$orphans" ] && return 0
+
+    err "Classes de test ABSENTES du bundle compilé (non enregistrées dans $PROJECT) :"
+    printf '  • %s\n' $orphans
+    err "Leurs tests ne s'exécutent jamais. Corriger : (cd apps/ios && xcodegen generate) puis committer l'ajout de référence."
+    return 1
+}
+
 xcpretty_or_cat() {
     if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
 }
@@ -1546,6 +1590,11 @@ do_test() {
     log "Building for testing..."
     xcodebuild build-for-testing "${common_flags[@]}" \
         2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Le manifeste des phases 1/2 sort des sources : on le confronte au bundle
+    # compilé AVANT de lui faire confiance (cf. verify_test_classes_are_compiled).
+    local porphan=0
+    verify_test_classes_are_compiled || porphan=$?
 
     # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
     local phase1_skip=() phase2_only=() cls
@@ -1598,6 +1647,7 @@ do_test() {
         -only-testing:MeeshyTests/$END_STATE_SUITE \
         2>&1 | xcpretty_or_cat || p3=$?
 
+    [ "$porphan" -eq 0 ] && ok "Garde d'orphelins : toutes les classes de test sont dans le bundle compilé" || err "Garde d'orphelins : des classes de test ne sont PAS compilées (détail ci-dessus)"
     [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
@@ -1632,7 +1682,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────

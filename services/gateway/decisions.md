@@ -617,3 +617,204 @@ Quatre lectures étaient dans ce cas, et la première est une porte d'accès :
 - **Ce que la décision n'assure PAS** : les liens de tracking et les jetons déjà en base gardent leur colonne absente pour le passé (les nouvelles lectures les apparient, mais aucune attribution rétroactive n'est écrite) ; le balayage des pièces jointes orphelines reste inerte, délibérément ; les ~119 lectures de `Message.deletedAt` restent adossées à la discipline d'écriture du cycle précédent.
 
 **Tests** : 15 neufs — 6 sur la source (`utils/__tests__/prisma-unset.test.ts`), 5 sur l'accès conversation jugé sur documents, 3 sur la révocation des jetons, 1 sur le compteur du balayage, 1 sur le rattachement des liens ; 3 témoins pré-existants qui épinglaient la clause fautive réécrits en comportement. Sondes de fidélité en sept temps — chacun des quatre sites remis à `{ champ: null }` : 1 rouge chacun (2 pour le magic-link, qui avait deux copies du témoin) ; invariant vidé en `{}` : 8 rouges, dont le refus d'un banni resté actif — un prédicat trop permissif est attrapé comme tel, pas seulement comme une forme fausse ; branche `null` retirée : 3 rouges, dont l'admission du débanni, seul cas que cette branche protège. Gate complet : 646 suites / 16 300 tests verts, `tsc --noEmit` 0 erreur.
+
+## 2026-08-11 : L'aperçu de la ligne de liste est un GROUPE, et il voyage PAR DESTINATAIRE
+
+**Statut** : Accepté
+
+**Contexte** : `GET /conversations` hydrate la ligne de liste avec trois champs solidaires —
+`lastMessagePreview` (l'original tronqué), `lastMessageTranslations` (la carte du Prisme du lecteur)
+et `lastMessageOriginalLanguage`. Les résolveurs jumeaux des deux clients
+(`MeeshyConversation.resolvedLastMessagePreview`, `formatLastMessage`) **PRÉFÈRENT la traduction**
+à l'aperçu brut : c'est le Prisme, et c'est le cas nominal du produit.
+
+Les deux émetteurs de `conversation:updated` — `emitConversationPreviewUpdate` (édition/suppression)
+et `MeeshySocketIOManager._broadcastNewMessage` (envoi) — n'envoyaient que `lastMessagePreview`.
+Une édition périme pourtant `Message.translations` **dans la même écriture** que le nouveau contenu
+(`routes/messages.ts`, atomique et délibéré). Les clients n'écrasaient donc que l'aperçu et
+gardaient la carte de l'ANCIEN texte — **c'est elle qui restait affichée**, indéfiniment, jusqu'à un
+rechargement complet de la liste.
+
+**Décision** :
+- **Les trois champs voyagent ensemble.** `conversation:updated` porte désormais la paire de Prisme
+  à parité avec `GET /conversations`. Le contrat est déclaré sur `ConversationUpdatedEventData`
+  (`packages/shared`) plutôt que laissé à l'`index signature`.
+- **`null` est une VALEUR, jamais une omission.** Après une édition la carte reconstruite est vide,
+  et c'est ce vide REÇU qui périme proprement celle du client. Le client ne peut pas le déduire :
+  une édition garde le MÊME `lastMessageId`, donc « vider quand l'id change » laisse passer
+  exactement ce cas. Côté iOS, `Optional` ne suffit pas à porter le signal — d'où le tri-état
+  `LastMessagePreviewTranslations` (`.unchanged` = clé absente / `.replaced` = clé présente),
+  décodé par la PRÉSENCE de la clé.
+- **Le payload est construit PAR DESTINATAIRE.** La carte est filtrée aux langues du lecteur ; deux
+  participants de prismes différents n'ont pas la même. La question était portée « non tranchée »
+  par le backlog depuis le cycle 60 : **elle l'est par le code existant** — la boucle par
+  participant était déjà là, elle envoyait simplement le même objet à tout le monde.
+- **Les deux émetteurs sont traités ENSEMBLE**, via l'unité partagée
+  `socketio/utils/lastMessagePreviewPrism.ts`. Traiter le seul chemin d'édition aurait rendu
+  l'aperçu dépendant du transport : traduit après une édition, brut après un envoi.
+- **La règle de dédup `userId ?? id` reste dans UN seul endroit.** `participantUserRoomTargets`
+  rend `{ room, participant }` et `participantUserRooms` en devient une projection — c'est, selon
+  le doc-comment du fichier, « la seule ligne que chaque copie de ce code a ratée ».
+
+**Alternatives rejetées** :
+- **Vider la carte côté client dès qu'un nouvel aperçu arrive** : casse le cycle 65. Le chemin
+  d'envoi émet `conversation:updated` DERRIÈRE un `message:new` qui vient d'installer la carte ; un
+  vide inconditionnel échange un défaut contre un autre.
+- **Vider seulement si `lastMessageId` diffère** : une édition garde le même message, donc le même
+  id. C'est précisément le seul cas que ce raffinement laisse passer.
+- **Un payload unique partagé par la room**, quitte à envoyer les N traductions : multiplierait le
+  poids de chaque événement par le nombre de langues de la conversation pour un champ dont le
+  client n'affiche qu'UNE valeur — l'exclusion #1 que `buildLastMessagePreviewTranslations`
+  documente déjà.
+- **Réimplémenter l'ordre du Prisme dans les émetteurs** : `resolveUserLanguagesOrdered` est la
+  seule autorité du dépôt sur cet ordre.
+
+**Conséquences** :
+- **Une requête de plus par participant sur le fanout d'aperçu** — un `include` du `user` sur une
+  requête `participant.findMany` qui existait déjà. Aucune requête supplémentaire : le `select`
+  s'élargit, la requête ne se dédouble pas.
+- **Changement observable** : après une édition, la ligne de liste affiche enfin le NOUVEAU texte,
+  et le fait dans la langue du lecteur dès que la retraduction arrive.
+- **Ce que la décision n'assure PAS** : supprimer le DERNIER message ne met toujours pas la ligne à
+  jour côté iOS — le nouveau dernier message est plus ANCIEN, donc le garde monotone le rejette, à
+  raison selon sa règle. C'est un contrat distinct (« le dernier message recule »), qu'un seul
+  timestamp ne peut pas exprimer. Par ailleurs le chemin d'envoi porte toujours
+  `lastMessagePreview` NON tronqué, là où `GET /conversations` applique `truncateMessagePreview`.
+
+**Tests** : 12 neufs côté gateway/web — 5 sur `emitConversationPreviewUpdate` (prisme du lecteur,
+payload par destinataire, carte nulle après édition, colonnes sélectionnées, participant sans
+compte), 2 sur le jumeau d'envoi dont une garde anti-régression du cycle 65 (le
+`conversation:updated` d'envoi ne contredit jamais le `message:new` qui le précède, étant construit
+depuis le MÊME message), 5 sur `normalizeConversationPatch` (web).
+RED observé avant implémentation : 5 rouges côté gateway, 3 côté web. Gate complet : **650 suites /
+16 378 tests verts** (base : 650 / 16 371 — l'écart est exactement les 7 témoins gateway, aucun
+perdu), `tsc --noEmit` 0 erreur ; web 30 suites / 750 tests verts. Côté SDK iOS, 8 témoins écrits
+(5 sur `applyConversationUpdated`, 3 sur le décodage tri-état) — non gatables dans ce conteneur
+(aucune chaîne Swift), gate = `sdk-tests.yml` en CI. Total 20 témoins.
+
+## 2026-08-11 : Une traduction qui atterrit RESSERT l'aperçu — bornée par `PreviewUpdateScope`
+
+**Contexte** : `lastMessageTranslations` est posé sur la ligne de liste par les trois chemins REST
+et par les émetteurs temps réel de `conversation:updated`. Le câblage était juste, l'INSTANT ne
+l'était pas : l'aperçu est servi à l'ENVOI, quand `Message.translations` vaut encore `null` — la
+traduction NLLB arrive une à deux secondes plus tard par ZMQ. Rien ne repassait ensuite. Un lecteur
+francophone gardait « Hello » dans sa liste indéfiniment, et le comportement dépendait du parcours :
+ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait dans la langue de
+l'expéditeur.
+
+**Décision** : `_handleTextTranslationReady` devient le QUATRIÈME émetteur de `conversation:updated`,
+en réutilisant `emitConversationPreviewUpdate` — aucune copie du fan-out, du prisme par destinataire
+ni de la recomputation du dernier message. Mais une traduction n'est pas une mutation de contenu, et
+`PreviewUpdateScope` porte cette différence :
+
+- **`onlyIfLatestIs`** — le fan-out est abandonné si le message traduit n'est plus le dernier de la
+  conversation. Son propre chemin d'envoi a déjà servi l'aperçu ; ré-émettre l'ancien ferait
+  **reculer** la ligne de liste.
+- **`onlyIfPreviewCarriesLanguage`** — n'émet qu'aux destinataires dont la carte RÉSOLUE porte la
+  langue qui vient d'atterrir. Le test porte sur la carte SORTIE, donc il hérite gratuitement des
+  quatre exclusions de `buildLastMessagePreviewTranslations`.
+
+**Alternatives rejetées** :
+- **Faire patcher la ligne par les clients depuis `message:translation`** : l'événement arrive bien
+  (tout socket rejoint TOUTES ses rooms de conversation à l'authentification), mais il porte
+  `MessageTranslation` — un tableau — là où la ligne consomme une carte compacte `{ langue: aperçu }`
+  déjà tronquée et filtrée au prisme. Reconstruire la seconde depuis le premier ferait vivre la
+  règle de troncature et les quatre exclusions dans trois clients au lieu du serveur.
+- **Un débounce par conversation** pour fusionner la rafale multi-langues en un seul fan-out :
+  aurait introduit le PREMIER timer du manager, qui n'a aucun point de fermeture (pas de `shutdown`),
+  donc un timer capable de survivre à la suite de tests. `onlyIfPreviewCarriesLanguage` obtient le
+  même effet sans état — chaque langue ne touche que ses lecteurs.
+- **Émettre inconditionnellement à tous les participants** : une conversation à N langues paierait N
+  fan-outs complets par message, sur le chemin le plus chaud du service, dont N−1 strictement
+  identiques à l'octet près pour chaque lecteur.
+
+**Conséquences** :
+- **Deux requêtes Prisma par traduction du dernier message** (participants + dernier message), en
+  parallèle. Quand `onlyIfLatestIs` échoue elles sont toutes deux perdues. Sérialiser les
+  économiserait sur ce chemin mais ralentirait l'appelant DOMINANT (l'édition, où les deux sont
+  toujours nécessaires) : arbitrage assumé en faveur du chemin dominant.
+- **`updatedBy` porte l'auteur du message traduit.** Une traduction n'a pas d'acteur humain et le
+  champ est obligatoire ; c'est déjà le repli du chemin d'envoi (`senderUserId ?? message.senderId`),
+  et les deux clients ignorent le champ.
+- **Changement observable** : la ligne de liste se traduit toute seule, quelques secondes après
+  l'arrivée du message, sans que le lecteur ait à ouvrir la conversation.
+- **Ce que la décision n'assure PAS** : Android ne décode ni `lastMessageTranslations` ni
+  `lastMessageOriginalLanguage` — sa ligne de liste reste dans la langue d'origine, avant comme
+  après ce correctif. Le chemin AUDIO n'est pas touché non plus (l'aperçu d'un vocal est un libellé
+  de type, pas un texte).
+
+**Tests** : 10 neufs — 6 sur `emitConversationPreviewUpdate` (portée), 4 sur le manager (câblage).
+RED prouvé par mutation : gardes retirées ⇒ 3 témoins de portée rouges ; appel neutralisé ⇒ le
+témoin de câblage rouge. Deux témoins de portée sont non-discriminants seuls et le disent — ils
+verrouillent ce qui ne doit PAS changer.
+
+---
+
+## 2026-08-11 : Un enrichissement asynchrone doit TROIS audiences, pas la seule room de conversation
+
+**Contexte** : `message:attachment-updated` — le delta émis quand Whisper finit une transcription,
+puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — était diffusé dans la seule room
+`conversation:<id>`. Deux audiences le perdaient. (1) Le lecteur resté sur la liste : iOS n'émet
+`conversation:join` qu'à l'OUVERTURE du fil, donc au lancement de l'app un lecteur sur la liste n'est
+dans AUCUNE room de conversation. (2) Le lecteur hors ligne : le `message:new` mis en file à l'ENVOI
+porte la pièce jointe sans transcription ni audio traduit — ils n'existent pas encore — donc la copie
+rejouée à la reconnexion reste définitivement la non enrichie.
+
+**Décision** : l'émission chaîne la room de conversation ET les rooms personnelles de tous les
+participants (`emitToConversationParticipants` : une seule copie par socket), et l'enrichissement
+obtient sa PROPRE entrée de file sous `eventType: 'attachment-updated'`, rejouée en
+`message:attachment-updated` au drain. La clé de dédup est l'id de la PIÈCE JOINTE, pas celui du
+message : l'identité par défaut `(messageId, eventType)` ferait superséder l'enrichissement de la
+première pièce jointe par celui de la seconde sur un message à deux audios, alors que par pièce
+jointe la règle « le dernier payload gagne » est exactement la bonne (le payload porte l'état
+COMPLET).
+
+**Alternatives rejetées** :
+- **Laisser les clients rattraper au refetch d'ouverture** : c'est le comportement d'avant, et il
+  rend le Prisme fonction de la ROUTE du lecteur (avoir le fil ouvert quand Whisper a fini) plutôt
+  que de ses préférences de langue. Même défaut que l'aperçu de liste qui ne se retraduisait jamais.
+- **Filtrer le payload par langue du destinataire**, comme `message:new`
+  (`filterMessagePayloadForLanguages`) : les clients REMPLACENT la carte de traductions de la pièce
+  jointe (iOS `handleAttachmentUpdated`, web `use-socket-cache-sync`), donc un sous-ensemble par
+  lecteur EFFACERAIT les langues qu'un fetch REST antérieur avait mises en cache. Le filtrage
+  suppose d'abord un contrat de FUSION côté client.
+- **Émettre aux rooms personnelles seulement** (sans la room de conversation) : suffisant en théorie
+  — tout socket authentifié joint sa room personnelle — mais retirer une audience déjà servie n'était
+  pas nécessaire au correctif.
+
+**Conséquences** :
+- Une requête participants par delta d'enrichissement (réutilisée par la mise en file, jamais deux
+  fois). Une panne de cette requête dégrade vers la room de conversation seule, jamais vers le
+  silence.
+- Plus de sockets reçoivent chaque delta, non filtré par langue : une conversation à N langues paie
+  N diffusions complètes de la pièce jointe. Assumé jusqu'au contrat de fusion client.
+- Au plus UNE entrée de file par pièce jointe et par destinataire hors ligne, quel que soit le nombre
+  d'étapes d'enrichissement (supersede en place).
+
+## 2026-08-11 : Une page filtrée par curseur se trie PAR ce curseur — sinon sa troncature est une perte
+
+**Contexte** : `GET /conversations?updatedSince=` plafonne à 100 lignes et triait par `lastMessageAt`
+décroissant — l'ordre hérité de l'écran de liste, sans rapport avec le filtre. Les lignes coupées
+n'étaient donc pas « les moins récemment mises à jour », alors que les deux clients avancent leur
+watermark au max des `updatedAt` REÇUS : elles étaient enjambées jusqu'à la réconciliation complète
+(1×/24 h sur iOS), la liste affichant entre-temps des compteurs et des aperçus périmés sans signal.
+
+**Décision** : une page DELTA est triée par `updatedAt` croissant, `id` en départage. Les lignes
+coupées sont alors exactement celles d'`updatedAt` supérieur à la dernière rendue : le watermark
+pointe dessus et l'appel suivant les rend. La troncature devient une pagination, sans aucun
+changement client. Une page ordinaire garde `lastMessageAt` décroissant, et le curseur `before`
+(qui borne sur `lastMessageAt`) garde la main sur l'ordre.
+
+**Alternatives rejetées** :
+- **Câbler la détection côté client** (page pleine ⇒ relecture complète, ce que le web fait déjà) :
+  traite le symptôme, doit être réécrit sur chaque plateforme, et fait payer une relecture complète
+  là où l'ordre serveur rend la page suivante suffisante.
+- **Relever le plafond à 500** (ce que le client iOS demande déjà sans l'obtenir) : déplace le seuil
+  sans supprimer le cas, et alourdit une route déjà lourde.
+
+**Conséquences** :
+- Un client delta reçoit ses conversations de la moins récemment modifiée à la plus récente. Les deux
+  consommateurs fusionnent par id, aucun ne dépend de l'ordre.
+- Résidu assumé : plus de 100 conversations portant la MÊME milliseconde d'`updatedAt` débordent
+  d'une page que la borne stricte `gt` ne peut pas reprendre. La détection de page pleine reste donc
+  utile côté client — le web la garde, iOS ne l'a pas encore.

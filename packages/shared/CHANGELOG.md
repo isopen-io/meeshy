@@ -1,5 +1,243 @@
 # @meeshy/shared
 
+## 1.10.2
+
+### Patch Changes
+
+- ac3c088: L'enrichissement d'une pièce jointe (transcription, audio traduit) atteint enfin les lecteurs qui ne sont pas dans le fil
+
+  `message:attachment-updated` — le delta émis quand Whisper finit de transcrire une note
+  vocale, puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — n'était diffusé
+  que dans la room `conversation:<id>`. Deux audiences le perdaient :
+
+  - **Le lecteur resté sur la liste de conversations.** iOS ne rejoint une room de
+    conversation qu'à l'OUVERTURE du fil : au lancement de l'app, un lecteur sur la liste
+    n'est dans aucune room de conversation. Son SDK applique pourtant ce delta sans regarder
+    quel fil est ouvert (`ConversationSyncEngine.handleAttachmentUpdated` patche le message
+    en cache de n'importe quelle conversation) — la room personnelle n'est donc pas une
+    audience plus large pour le principe, c'est l'endroit où l'écriture atterrit vraiment.
+  - **Le lecteur hors ligne.** Le `message:new` mis en file à l'ENVOI porte la pièce jointe
+    telle qu'elle était alors : sans transcription, sans audio traduit, les deux arrivant une
+    à deux secondes plus tard. Sans rejeu de l'enrichissement, la copie rejouée à la
+    reconnexion reste définitivement celle-là.
+
+  Même classe de défaut que l'aperçu de liste qui ne se retraduisait jamais : le Prisme
+  (« il s'applique à TOUT le contenu, transcriptions audio comprises ») dépendait de la
+  ROUTE du lecteur — avoir le fil ouvert au moment où Whisper a fini — et non de ses
+  préférences de langue.
+
+  L'émission chaîne désormais la room de conversation et les rooms personnelles de tous les
+  participants (une seule copie par socket, `emitToConversationParticipants`), et met
+  l'enrichissement en file pour les participants hors ligne sous le nouveau
+  `eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` à la
+  reconnexion. La clé de dédup est l'id de la PIÈCE JOINTE : l'identité par défaut
+  `(messageId, eventType)` ferait superséder l'enrichissement de la première pièce jointe
+  par celui de la seconde sur un message à deux audios. Le payload n'est pas filtré par
+  langue du destinataire — les clients REMPLACENT la carte de traductions de la pièce
+  jointe, donc un sous-ensemble par lecteur effacerait les langues déjà en cache.
+
+  Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+  d'avant), jamais vers le silence.
+
+## 1.10.1
+
+### Patch Changes
+
+- 70a0e04: user:updated — les composants du nom voyagent en groupe, et iOS applique enfin l'événement
+
+  La gateway diffusait `user:updated` à tous les contacts depuis des mois ; le web
+  l'appliquait, iOS n'avait aucun listener. Un interlocuteur qui changeait d'avatar
+  ou de nom restait figé sur la ligne de liste, l'en-tête et le sélecteur de
+  transfert jusqu'au prochain refetch complet.
+
+  Le payload envoie désormais les quatre composants du nom ensemble
+  (`displayName`, `firstName`, `lastName`, `username`) dès que l'un change : un
+  delta partiel est irrecomposable chez un client qui ne stocke que le nom déjà
+  composé. `null` y signifie EFFACÉ, seule façon de faire retomber le nom sur le
+  composant suivant.
+
+## 1.10.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.8.13
+
+### Patch Changes
+
+- fcc82a6: Le web applique enfin le Prisme Linguistique à la ligne de liste, et la langue
+  d'origine cesse de rétrograder la langue primaire du lecteur.
+
+  Le cycle précédent a mis `lastMessageTranslations` et `lastMessageOriginalLanguage`
+  sur le fil de `GET /conversations`. Le web n'en voyait rien : le type `Conversation`
+  ne déclarait pas ces champs, `transformConversationData` — un objet construit à la
+  main — les jetait, et `formatLastMessage` rendait `lastMessage.content` brut. Quatre
+  couches, aucune donnée. Un lecteur francophone lisait « Hello » dans sa sidebar et
+  « Bonjour » une fois le fil ouvert, alors que la traduction était déjà arrivée.
+
+  `resolveLastMessagePreview` (`@meeshy/shared`) devient le jumeau TypeScript de
+  `MeeshyConversation.resolvedLastMessagePreview`, et la chaîne web est câblée de
+  bout en bout : type → transformer → résolveur → ligne.
+
+  **Correctif de règle, sur les deux plateformes.** Le résolveur iOS court-circuitait
+  dès que la langue d'origine apparaissait _quelque part_ dans le prisme du lecteur.
+  Cette formulation par appartenance rétrograde silencieusement la langue PRIMAIRE
+  dès que la langue d'origine occupe un rang inférieur — précisément ce que produit
+  la locale appareil, entrée en 4e priorité. Prisme `['fr', 'en']`, message anglais,
+  traduction française disponible : elle rendait « Hello ». `CLAUDE.md` dit l'inverse
+  noir sur blanc — « un utilisateur francophone avec un iPhone en anglais voit
+  TOUJOURS ses messages en français (priorité 1) » — et le chemin du CORPS des
+  messages appliquait déjà la bonne règle en ne comparant qu'à la langue de tête.
+
+  Le prisme est désormais parcouru par RANG : la langue d'origine y concourt à sa
+  place, et la première langue servie gagne — par traduction, ou parce que le message
+  est déjà écrit dedans. La règle #3 est inchangée : jamais de repli sur une
+  traduction quelconque.
+
+## 1.8.12
+
+### Patch Changes
+
+- 6df3fac: Un message envoyé par lien de partage n'arrivait en temps réel sur aucun client mobile.
+
+  `link:message:new` n'a jamais eu qu'un seul auditeur : le web. iOS
+  (`MeeshySDK/Sockets/MessageSocketManager.swift`) et Android
+  (`sdk-core/socket/MessageSocketManager.kt`) n'enregistrent qu'un listener de création,
+  `message:new`. Or l'envoi par lien est le **seul** transport d'envoi dont dispose un participant
+  anonyme : un invité qui écrivait dans une conversation partagée n'apparaissait donc chez aucun
+  membre iOS ou Android — ni en direct par la room, ni au reconnect par la file hors ligne, qui
+  rejouait ce même event unique. Le message ne surgissait qu'au prochain refetch complet, que rien
+  ne déclenchait.
+
+  Les deux diffuseurs — la room live (`broadcastLinkMessage`) et le rejeu hors ligne
+  (`MeeshySocketIOManager._drainPendingMessages`) — passent désormais par un seul point d'appel
+  public, `linkMessageEmissions`, qui met les **deux** events sur le fil, chacun dans sa forme :
+  `link:message:new` garde son enveloppe `{ message }`, `message:new` transporte le message
+  lui-même. Rejouer l'enveloppe sous `message:new` aurait donné aux clients mobiles un payload sans
+  `conversationId` au premier niveau, donc non routable.
+
+  Additif, jamais substitutif : le web continue de recevoir l'event qu'il écoute déjà. Les deux
+  copies portent le même `id` et les deux gestionnaires web dédupent dessus, donc le second arrivé
+  est un no-op quel que soit l'ordre ; la pastille de non-lus ne se déduit d'aucun des deux (valeur
+  absolue de `conversation:unread-updated`), il n'y a rien à double-compter.
+
 ## 1.8.11
 
 ### Patch Changes

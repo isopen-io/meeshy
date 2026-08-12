@@ -164,6 +164,10 @@ struct iPadRootView: View {
                 // personne n'est sink'é sur `socialSocket.storyCreated` → la
                 // story n'arrive jamais dans `storyGroups`.
                 storyViewModel.subscribeToSocketEvents()
+                // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+                // écrivain disque des posts, commentaires et réactions.
+                // `arm()` est idempotent — jamais désarmé (miroir de RootView).
+                DependencyContainer.shared.feedSocketHandler.arm()
                 await ConversationSyncEngine.shared.startSocketRelay()
 
                 Task.detached(priority: .background) {
@@ -235,6 +239,11 @@ struct iPadRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
                 guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
                 navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
+            }
+            // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
+            // ramène vers la conversation et le message audio en cours de lecture.
+            .nowPlayingReturnNavigation(router: router) { conversationId in
+                conversationViewModel.conversations.contains { $0.id == conversationId }
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)

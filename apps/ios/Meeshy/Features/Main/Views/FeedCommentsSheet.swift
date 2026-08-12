@@ -1956,6 +1956,7 @@ struct CommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: accentColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

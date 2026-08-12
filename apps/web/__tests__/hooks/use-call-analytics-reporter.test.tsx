@@ -21,6 +21,7 @@ function baseProps(overrides: Partial<Params> = {}): Params {
   return {
     callId: 'call-1',
     connectionState: 'connected',
+    isReconnecting: false,
     qualityStats: null,
     isVideo: false,
     ...overrides,
@@ -75,13 +76,17 @@ describe('useCallAnalyticsReporter', () => {
   });
 
   it('accumulates a reconnection and a quality sample into the payload', () => {
+    // isReconnecting — not connectionState — is the real stall signal:
+    // use-webrtc-p2p.ts's connectionState is a genuine RTCPeerConnectionState,
+    // which never carries the literal 'reconnecting' (Vague 98).
     const { rerender, unmount } = renderHook((p: Params) => useCallAnalyticsReporter(p), {
-      initialProps: baseProps({ connectionState: 'connected', qualityStats: null }),
+      initialProps: baseProps({ connectionState: 'connected', isReconnecting: false, qualityStats: null }),
     });
 
-    rerender(baseProps({ connectionState: 'reconnecting', qualityStats: null }));
+    rerender(baseProps({ connectionState: 'disconnected', isReconnecting: true, qualityStats: null }));
     rerender(baseProps({
       connectionState: 'connected',
+      isReconnecting: false,
       qualityStats: { level: 'good', rtt: 120, packetLoss: 2 } as never,
     }));
     unmount();
@@ -90,6 +95,19 @@ describe('useCallAnalyticsReporter', () => {
     expect(payload.reconnectionCount).toBe(1);
     expect(payload.averageRtt).toBe(120);
     expect(payload.qualityDistribution.good).toBe(1);
+  });
+
+  it('does not double-count a reconnection when isReconnecting stays true across renders', () => {
+    const { rerender, unmount } = renderHook((p: Params) => useCallAnalyticsReporter(p), {
+      initialProps: baseProps({ isReconnecting: false }),
+    });
+
+    rerender(baseProps({ isReconnecting: true }));
+    rerender(baseProps({ isReconnecting: true }));
+    rerender(baseProps({ isReconnecting: false }));
+    unmount();
+
+    expect(emit.mock.calls[0][1].reconnectionCount).toBe(1);
   });
 
   it('no socket = no throw', () => {

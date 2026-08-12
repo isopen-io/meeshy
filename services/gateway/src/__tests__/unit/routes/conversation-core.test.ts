@@ -49,6 +49,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  // `resolveCallerParticipant` reste REEL : c'est sa regle de precedence
+  // (`participantId` avant `userId`) que les tests d'invite anonyme verifient.
+  // La stubber rendrait ces tests tautologiques.
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as object),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
@@ -215,7 +219,13 @@ type Routes = Record<string, Record<string, Function>>;
 const createMockFastify = () => {
   const routes: Routes = {};
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+  // Le double CHAÎNE, comme le vrai `BroadcastOperator` de Socket.IO :
+  // `io.to(a).to(b).emit(...)` est la forme qui garantit « au plus une copie
+  // par socket », et un `to()` qui ne rendait qu'un `{ emit }` la rendait
+  // intestable — pire, il faisait planter tout appelant qui chaîne.
+  const broadcast: Record<string, unknown> = { emit: mockEmit };
+  const mockTo = jest.fn(() => broadcast);
+  broadcast.to = mockTo;
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockJoinRoom = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, joinUserToConversationRoom: mockJoinRoom });
@@ -379,7 +389,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {
@@ -411,6 +421,56 @@ describe('registerCoreRoutes', () => {
       await getListHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).toHaveBeenCalled();
+    });
+
+    // ── memberCount : compté par la base, jamais lu dans la colonne ──────────
+    // `Conversation.memberCount` est une colonne dénormalisée que RIEN n'écrit
+    // dans le gateway (seule `migrations/migrate-from-legacy.ts` la pose, une
+    // fois). La liste la servait telle quelle : `0` pour toute conversation
+    // créée depuis. `GET /conversations/:id` servait au même moment le `_count`
+    // filtré — deux valeurs sous un même nom de champ, et une ligne de liste
+    // iOS qui masque son badge de groupe (`memberCount > 1`) et calcule une
+    // couleur d'accent différente de celle du fil ouvert.
+    it('sert l\'effectif ACTIF compté par la base, pas la colonne dénormalisée', async () => {
+      const conv = makeConversation({ _count: { participants: 7 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+      prisma.conversation.count.mockResolvedValue(1);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(reply._body.data[0].memberCount).toBe(7);
+    });
+
+    it('demande à Prisma le compte filtré sur les participants ACTIFS', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const select = prisma.conversation.findMany.mock.calls[0][0].select;
+      expect(select._count).toEqual({
+        select: { participants: { where: { isActive: true } } }
+      });
+      // Un `select` qui garderait AUSSI la colonne rendrait le défaut
+      // réintroductible par un simple spread au retour.
+      expect('memberCount' in select).toBe(false);
+    });
+
+    it('ne laisse pas l\'agrégat `_count` fuiter dans la réponse', async () => {
+      const conv = makeConversation({ _count: { participants: 3 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect('_count' in reply._body.data[0]).toBe(false);
     });
 
     it('returns empty list with default pagination', async () => {
@@ -590,6 +650,75 @@ describe('registerCoreRoutes', () => {
         expect.objectContaining({
           where: expect.objectContaining({ updatedAt: expect.any(Object) }),
         })
+      );
+    });
+
+    it('orders a delta page by updatedAt ASC so a truncated page resumes instead of skipping', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // A delta window that touched more than `limit` conversations returns a
+      // TRUNCATED page. Sorted by `lastMessageAt desc`, the rows left out bear
+      // no relation to the filter, so a client advancing its watermark to the
+      // max `updatedAt` it received steps OVER them — permanently, until its
+      // next full reconcile (24h on iOS). Sorted by `updatedAt` ascending, the
+      // rows left out are exactly those with a HIGHER `updatedAt` than the
+      // page's last row: the same watermark that used to skip them now points
+      // right at them.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        })
+      );
+    });
+
+    it('keeps the recency order for a normal (non-delta) page', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // The list screen reads this route too, and it wants the most recent
+      // conversation first. Only the delta consumers trade recency for
+      // resumability.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('lets the before-cursor keep the recency order it bounds on', async () => {
+      const cursorDate = new Date('2024-01-01');
+      prisma.conversation.findFirst.mockResolvedValue({ lastMessageAt: cursorDate });
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: { before: CONV_ID, updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // `before` bounds on `lastMessageAt`; ordering that page by `updatedAt`
+      // would pair a cursor with a sort it has no relation to. No client
+      // combines the two — the guard is for the one that tries.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('keeps the recency order when updatedSince is unusable', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: 'not-a-date' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // No delta filter was applied, so this is a normal page: ordering it by
+      // `updatedAt` would hand the list screen its OLDEST conversations first.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
       );
     });
 
@@ -1180,6 +1309,44 @@ describe('registerCoreRoutes', () => {
       const sent = mockSendSuccess.mock.calls[0][1];
       expect(sent.participants[0].isOnline).toBe(false);
       expect(sent.participants[0].lastActiveAt).toBeNull();
+    });
+
+    it('counts unread for a shared-link guest, whose userId carries a Participant id', async () => {
+      // La branche anonyme d'`UnifiedAuthService` pose `userId: participant.id`.
+      // Le `where: { conversationId, userId, isActive: true }` ecrit a la main
+      // comparait donc un id de participant a la colonne `userId` : aucun match,
+      // `unreadCount` retombait a 0, et ce 0 ecrasait le badge que le socket
+      // venait de pousser juste. `resolveCallerParticipant` resout par
+      // `participantId` d'abord — c'est exactement le site pour lequel il existe.
+      const readStatusService = {
+        getUnreadCount: jest.fn<any>().mockResolvedValue(4),
+        getUnreadCountsForUser: jest.fn<any>().mockResolvedValue(new Map()),
+      };
+      const { MessageReadStatusService } = jest.requireMock('../../../services/MessageReadStatusService') as any;
+      MessageReadStatusService.mockImplementationOnce(() => readStatusService);
+      prisma.conversation.findFirst.mockResolvedValue(makeFullConversation());
+      // Le double de base de donnees ne repond QUE sur la colonne interrogee :
+      // une clause `{ userId: <participant id> }` ne matche rien, comme en base.
+      prisma.participant.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.id === PARTICIPANT_ID ? { id: PARTICIPANT_ID } : null)
+      );
+
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        authContext: {
+          isAuthenticated: true,
+          type: 'anonymous',
+          isAnonymous: true,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
+        },
+      });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(PARTICIPANT_ID, CONV_ID);
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ unreadCount: 4 }));
     });
 
     it('unreadCount silently fails when participant not found', async () => {
@@ -1821,7 +1988,9 @@ describe('registerCoreRoutes', () => {
 
     it('happy path: soft-deletes conversation and broadcasts CONVERSATION_CLOSED', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
-      prisma.conversation.update.mockResolvedValue({});
+      // La clôture ramène ses participants DANS son écriture : le fan-out
+      // nomme leurs rooms personnelles sans seconde requête.
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
 
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
@@ -2051,7 +2220,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {
@@ -2559,7 +2728,9 @@ describe('registerCoreRoutes', () => {
 
     it('socket io null in DELETE - no broadcast but delete succeeds', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
-      prisma.conversation.update.mockResolvedValue({});
+      // La clôture ramène ses participants DANS son écriture : le fan-out
+      // nomme leurs rooms personnelles sans seconde requête.
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
       fastify.socketIOHandler = { getManager: jest.fn().mockReturnValue(null) };
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
@@ -2584,7 +2755,7 @@ describe('registerCoreRoutes', () => {
         banner: null,
         avatar: null,
         communityId: null,
-        memberCount: 2,
+        _count: { participants: 2 },
         isAnnouncementChannel: false,
         participants: [],
         userPreferences: [],
@@ -2624,7 +2795,7 @@ describe('registerCoreRoutes', () => {
       banner: null,
       avatar: null,
       communityId: null,
-      memberCount: 2,
+      _count: { participants: 2 },
       isAnnouncementChannel: false,
       participants: [
         {

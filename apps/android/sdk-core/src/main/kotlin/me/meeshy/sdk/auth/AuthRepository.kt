@@ -84,6 +84,26 @@ class AuthRepository @Inject constructor(
     suspend fun revokeOtherSessions(): NetworkResult<Unit> =
         me.meeshy.sdk.net.apiCallUnit { authApi.revokeOtherSessions() }
 
+    /** Statut 2FA du compte (active/non, nombre de codes de secours restants). */
+    suspend fun getTwoFactorStatus(): NetworkResult<me.meeshy.sdk.net.api.TwoFactorStatusInfo> =
+        apiCall { authApi.getTwoFactorStatus() }
+
+    /** Demarre un enrolement 2FA — QR code + secret a confirmer via [enableTwoFactor]. */
+    suspend fun beginTwoFactorSetup(): NetworkResult<me.meeshy.sdk.net.api.TwoFactorSetupInfo> =
+        apiCall { authApi.beginTwoFactorSetup() }
+
+    /** Confirme l'enrolement avec le premier code TOTP — renvoie les codes de secours. */
+    suspend fun enableTwoFactor(code: String): NetworkResult<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo> =
+        apiCall { authApi.enableTwoFactor(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
+
+    /** Desactive le 2FA — mot de passe requis, code optionnel cote gateway. */
+    suspend fun disableTwoFactor(password: String, code: String?): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.disableTwoFactor(me.meeshy.sdk.net.api.TwoFactorDisableRequest(password, code)) }
+
+    /** Regenere les codes de secours (invalide les anciens) — code TOTP requis. */
+    suspend fun regenerateTwoFactorBackupCodes(code: String): NetworkResult<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo> =
+        apiCall { authApi.regenerateTwoFactorBackupCodes(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()

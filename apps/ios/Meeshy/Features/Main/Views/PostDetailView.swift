@@ -423,7 +423,7 @@ struct PostDetailView: View {
         if post.isStory {
             storyCanvasSection(post)
         } else if post.hasMedia, !isSharedStory {
-            detailMediaSection(post.media)
+            detailMediaSection(post.media, owner: DetailMediaAuthor(post: post))
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
         }
@@ -1026,7 +1026,9 @@ struct PostDetailView: View {
                     displayPost?.primaryReelDisplayMedia != nil
                         ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                         : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                    systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark"
+                    systemImage: displayPost?.primaryReelDisplayMedia != nil
+                        ? "arrow.down.to.line"
+                        : (isPostBookmarked ? "bookmark.fill" : "bookmark")
                 )
             }
             if displayPost?.authorId == AuthManager.shared.currentUser?.id {
@@ -1449,8 +1451,10 @@ struct PostDetailView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
-                // Standard media attachments
-                detailMediaSection(repost.media)
+                // Standard media attachments — owner is the CITED repost, not
+                // the outer post: its audio's Now Playing card must show the
+                // quoted author's name/avatar, not the outer post's.
+                detailMediaSection(repost.media, owner: DetailMediaAuthor(repost: repost))
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
             }
@@ -1477,14 +1481,34 @@ struct PostDetailView: View {
                     thumbnailColor: repost.authorColor
                 )
                 AudioAvailabilityResolver(attachment: repostAudio, autoDownload: true) { availability, onDownload in
-                    AudioPlayerView(
-                        attachment: repostAudio,
-                        context: .feedPost,
-                        accentColor: repost.authorColor,
-                        transcription: nil,
-                        availability: availability,
-                        onDownload: onDownload
-                    )
+                    CoordinatedAudioPlayer(
+                        attachmentId: repostAudio.id,
+                        nowPlayingName: repost.author,
+                        nowPlayingArtworkURL: repost.authorAvatarURL,
+                        makeQueuedAudio: {
+                            QueuedAudio(
+                                attachmentId: repostAudio.id,
+                                messageId: repost.id,
+                                conversationId: repost.id,
+                                fileUrl: repostAudio.fileUrl,
+                                durationMs: repostAudio.duration ?? 0,
+                                senderName: repost.author,
+                                senderAvatarURL: repost.authorAvatarURL,
+                                receivedAt: repost.timestamp
+                            )
+                        }
+                    ) { external, onPlay in
+                        AudioPlayerView(
+                            attachment: repostAudio,
+                            context: .feedPost,
+                            accentColor: repost.authorColor,
+                            transcription: nil,
+                            availability: availability,
+                            onDownload: onDownload,
+                            externalPlayer: external,
+                            onPlayRequest: onPlay
+                        )
+                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 12)
@@ -1757,8 +1781,34 @@ struct PostDetailView: View {
 
     // MARK: - Media Views
 
+    /// Auteur porteur d'un lot de médias affiché par `detailMediaSection` — le
+    /// post EXTÉRIEUR affiché OU le repost CITÉ qu'il embarque. `post.media`
+    /// et `repost.media` partagent le même rendu (`detailSingleMedia`) mais
+    /// n'ont pas le même auteur : `FeedPost` et `RepostContent` sont deux
+    /// types distincts sans protocole commun, d'où ce petit porteur minimal
+    /// plutôt qu'un générique. Sans lui, l'audio d'un post CITÉ attribuait ses
+    /// métadonnées Now Playing (nom/avatar/date/id) au post EXTÉRIEUR — même
+    /// famille de bug que le snapshot d'auteur figé côté citation (commit
+    /// `656d0b7e4`, "fix(gateway): fige l'auteur dans le snapshot d'un post cité").
+    private struct DetailMediaAuthor {
+        let id: String
+        let author: String
+        let authorAvatarURL: String?
+        let timestamp: Date
+
+        init(post: FeedPost) {
+            id = post.id; author = post.author
+            authorAvatarURL = post.authorAvatarURL; timestamp = post.timestamp
+        }
+
+        init(repost: RepostContent) {
+            id = repost.id; author = repost.author
+            authorAvatarURL = repost.authorAvatarURL; timestamp = repost.timestamp
+        }
+    }
+
     @ViewBuilder
-    private func detailMediaSection(_ mediaList: [FeedMedia]) -> some View {
+    private func detailMediaSection(_ mediaList: [FeedMedia], owner: DetailMediaAuthor?) -> some View {
         let visualMedia = mediaList.filter { $0.type == .image || $0.type == .video }
         let audioMedia = mediaList.filter { $0.type == .audio }
         let docMedia = mediaList.filter { $0.type == .document }
@@ -1766,7 +1816,7 @@ struct PostDetailView: View {
         VStack(spacing: 8) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
-                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
+                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId, owner: owner)
             } else {
                 // Visual grid (multi-media videos render as tap-to-play thumbnails
                 // here — they never autoplay).
@@ -1775,11 +1825,11 @@ struct PostDetailView: View {
                 }
                 // Audio players (never a video → never the primary autoplay video)
                 ForEach(audioMedia) { media in
-                    detailSingleMedia(media, isPrimaryVideo: false)
+                    detailSingleMedia(media, isPrimaryVideo: false, owner: owner)
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media, isPrimaryVideo: false)
+                    detailSingleMedia(media, isPrimaryVideo: false, owner: owner)
                 }
             }
         }
@@ -1799,7 +1849,7 @@ struct PostDetailView: View {
     }
 
     @ViewBuilder
-    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool) -> some View {
+    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool, owner: DetailMediaAuthor? = nil) -> some View {
         switch media.type {
         case .image:
             let aspectRatio: CGFloat? = {
@@ -1854,26 +1904,59 @@ struct PostDetailView: View {
 
         case .audio:
             let audioAttachment = media.toMessageAttachment()
+            // Le PORTEUR réel de CE média (repost cité si `owner` vient de
+            // `repostEmbed`, sinon le post extérieur) — jamais `displayPost`
+            // en dur : ce serait le bug corrigé ici (audio d'un post cité
+            // attribué au post extérieur sur la carte Now Playing).
+            // Fallback `displayPost` seulement si l'appelant n'a authentiquement
+            // rien fourni (défensif — les deux call sites actuels passent
+            // toujours un `owner`).
+            let resolvedOwner = owner ?? displayPost.map(DetailMediaAuthor.init(post:))
             AudioAvailabilityResolver(attachment: audioAttachment, autoDownload: true) { availability, onDownload in
-                AudioPlayerView(
-                    attachment: audioAttachment,
-                    context: .feedPost,
-                    accentColor: media.thumbnailColor,
-                    transcription: media.transcription,
-                    translatedAudios: media.translatedAudios,
-                    onFullscreen: {
-                        guard let post = displayPost else { return }
-                        audioFullscreen = .fromFeed(
-                            media: media,
-                            author: ProfileSheetUser.from(feedPost: post),
-                            originalLanguage: post.originalLanguage,
-                            caption: post.content,
-                            createdAt: post.timestamp
+                CoordinatedAudioPlayer(
+                    attachmentId: audioAttachment.id,
+                    nowPlayingName: resolvedOwner?.author ?? "",
+                    nowPlayingArtworkURL: resolvedOwner?.authorAvatarURL,
+                    makeQueuedAudio: {
+                        QueuedAudio(
+                            attachmentId: audioAttachment.id,
+                            messageId: resolvedOwner?.id ?? audioAttachment.id,
+                            conversationId: resolvedOwner?.id ?? audioAttachment.id,
+                            fileUrl: audioAttachment.fileUrl,
+                            durationMs: audioAttachment.duration ?? 0,
+                            senderName: resolvedOwner?.author ?? "",
+                            senderAvatarURL: resolvedOwner?.authorAvatarURL,
+                            receivedAt: resolvedOwner?.timestamp ?? audioAttachment.createdAt
                         )
-                    },
-                    availability: availability,
-                    onDownload: onDownload
-                )
+                    }
+                ) { external, onPlay in
+                    AudioPlayerView(
+                        attachment: audioAttachment,
+                        context: .feedPost,
+                        accentColor: media.thumbnailColor,
+                        transcription: media.transcription,
+                        translatedAudios: media.translatedAudios,
+                        onFullscreen: {
+                            guard let post = displayPost else { return }
+                            audioFullscreen = .fromFeed(
+                                media: media,
+                                author: ProfileSheetUser.from(feedPost: post),
+                                originalLanguage: post.originalLanguage,
+                                caption: post.content,
+                                createdAt: post.timestamp,
+                                // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                                // le plein écran de CETTE entité (repost cité
+                                // ou post extérieur) doit être vu comme la
+                                // même session coordinator.
+                                conversationId: resolvedOwner?.id ?? audioAttachment.id
+                            )
+                        },
+                        availability: availability,
+                        onDownload: onDownload,
+                        externalPlayer: external,
+                        onPlayRequest: onPlay
+                    )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
 

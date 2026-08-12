@@ -518,6 +518,50 @@ describe('MessageTranslationService', () => {
       expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
     });
 
+    it('resolves a regional target code against the normalized stored key', async () => {
+      // Les écrivains stockent sous la forme canonique du SSOT
+      // `normalizeLanguageCode` ('pt-BR' → 'pt'). Une lecture verbatim de
+      // `translations['pt-BR']` manquait donc la traduction pourtant présente
+      // une clé plus loin, et l'appelant rendait un repli fabriqué
+      // `[PT-BR] <texte original>` — le texte source affublé d'une étiquette,
+      // violation directe du Prisme Linguistique.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-regional',
+        originalLanguage: 'en',
+        translations: {
+          pt: {
+            text: 'Olá mundo',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá mundo');
+      // La cible RENDUE reste celle demandée : le client corrèle sa requête
+      // dessus, la normalisation est un détail de stockage.
+      expect(result?.targetLanguage).toBe('pt-BR');
+    });
+
+    it('prefers an exact verbatim key over its normalized form', async () => {
+      // Un document legacy qui porterait RÉELLEMENT une clé régionale ne doit
+      // pas se faire détourner vers la clé de base : le verbatim gagne.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-legacy-regional',
+        originalLanguage: 'en',
+        translations: {
+          'pt-BR': { text: 'Olá (BR)', translationModel: 'basic', confidenceScore: 0.9 },
+          pt: { text: 'Olá (base)', translationModel: 'basic', confidenceScore: 0.9 }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-legacy-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá (BR)');
+    });
+
     it('should return null if translation not found', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-not-found',
@@ -554,6 +598,27 @@ describe('MessageTranslationService', () => {
       const result = await translationService.getTranslation('msg-src', 'fr', 'en');
 
       expect(result).toBeDefined();
+      expect(result?.translatedText).toBe('Bonjour');
+    });
+
+    // Le cas CAPITALISÉ, que la couverture voisine ne porte pas : `Locale.current`
+    // rend aussi bien `'FR'` que `'pt-BR'`, et la lecture stricte manquait les
+    // deux. La normalisation en repli les rattrape l'un comme l'autre.
+    it('resolves an uppercase target against the normalized stored key', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-upper',
+        originalLanguage: 'en',
+        translations: {
+          fr: {
+            text: 'Bonjour',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-upper', 'FR');
+
       expect(result?.translatedText).toBe('Bonjour');
     });
   });

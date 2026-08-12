@@ -1047,13 +1047,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(attachment.message.conversationId);
+          const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0
+            ? Math.min(100, Math.round((playPositionMs / durationMs) * 100))
+            : undefined;
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,
             userId,
             action,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            ...(playPositionMs !== undefined && { playPositionMs }),
+            ...(durationMs !== undefined && { durationMs }),
+            ...(percentage !== undefined && { percentage })
           });
         }
       } catch (socketError) {

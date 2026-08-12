@@ -1272,6 +1272,129 @@ describe('MessageHandler', () => {
     });
   });
 
+  // ── La carte Mongo doit sortir sur le fil dans la MÊME forme que le
+  //    chemin REST/ZMQ (`transformTranslationsToArray`) ────────────────────
+  //
+  // `Message.translations` est une CARTE en base (`{ "en": { text, ... } }`).
+  // Le chemin REST/ZMQ la sérialise via `transformTranslationsToArray`, qui
+  // produit `id` / `messageId` / `translatedContent`. Ce handler en portait
+  // une seconde copie qui répandait l'entrée Mongo telle quelle
+  // (`{ targetLanguage, ...data }`) : il en sortait `text`, jamais
+  // `translatedContent`, et ni `id` ni `messageId`.
+  //
+  // Ces trois champs sont NON optionnels dans `APITextTranslation`
+  // (packages/MeeshySDK/.../MessageModels.swift), et `APIMessage.init(from:)`
+  // décode le tableau avec `try` et non `try?` : une seule entrée mal formée
+  // fait échouer le décodage du `message:new` ENTIER — le message n'apparaît
+  // pas du tout en temps réel sur iOS, il ne lui manque pas seulement ses
+  // traductions. Le même message rechargé par `GET /messages` s'affiche
+  // normalement : la visibilité dépendait du transport.
+  //
+  // Les témoins ci-dessous verrouillent la forme du fil, pas l'implémentation :
+  // ils passent avec n'importe quel sérialiseur qui respecte le contrat REST.
+  describe('_parseTranslations — parité de forme avec le chemin REST/ZMQ', () => {
+    const emittedTranslations = (): Record<string, unknown>[] => {
+      const payload = (deps.io.to as jest.Mock).mock.results
+        .flatMap((r: any) => (r.value?.emit?.mock?.calls ?? []) as [string, Record<string, unknown>][])
+        .find((c) => c[0] === 'message:new')?.[1];
+      return (payload?.translations ?? []) as Record<string, unknown>[];
+    };
+
+    const makeMongoTranslated = (overrides: Record<string, unknown> = {}) => ({
+      id: 'msg-1', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+      content: 'Bonjour', originalLanguage: 'fr', messageType: 'text',
+      createdAt: new Date(),
+      sender: { userId: USER_ID },
+      attachments: [],
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+    });
+
+    it('sérialise une carte Mongo en entrées `id`/`messageId`/`translatedContent` — la forme que le SDK iOS exige', async () => {
+      const msg = makeMongoTranslated({
+        translations: {
+          en: { text: 'Hello', translationModel: 'basic', confidenceScore: 0.9, createdAt: new Date() },
+        },
+      });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(emittedTranslations()).toEqual([
+        expect.objectContaining({
+          id: 'msg-1-en',
+          messageId: 'msg-1',
+          targetLanguage: 'en',
+          translatedContent: 'Hello',
+          translationModel: 'basic',
+          confidenceScore: 0.9,
+        }),
+      ]);
+    });
+
+    it('applique la même forme à la carte relue en base quand le message ne la porte pas', async () => {
+      (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue({
+        translations: { es: { text: 'Hola', translationModel: 'premium', createdAt: new Date() } },
+      });
+      const msg = makeMongoTranslated();
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(emittedTranslations()).toEqual([
+        expect.objectContaining({
+          id: 'msg-1-es',
+          messageId: 'msg-1',
+          targetLanguage: 'es',
+          translatedContent: 'Hola',
+          translationModel: 'premium',
+        }),
+      ]);
+    });
+
+    it("expose `isEncrypted` explicitement à false plutôt que de l'omettre — un client ne doit jamais avoir à deviner qu'un texte est en clair", async () => {
+      const msg = makeMongoTranslated({
+        translations: {
+          en: { text: 'Hello', translationModel: 'basic', createdAt: new Date() },
+          de: { text: 'Z2VoZWlt', translationModel: 'basic', isEncrypted: true, createdAt: new Date() },
+        },
+      });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const byLang = new Map(emittedTranslations().map((t) => [t.targetLanguage, t]));
+      expect(byLang.get('en')).toEqual(expect.objectContaining({ isEncrypted: false }));
+      expect(byLang.get('de')).toEqual(expect.objectContaining({ isEncrypted: true }));
+    });
+
+    it('laisse intact un tableau déjà au format API — le type partagé `Message.translations` en promet un, il ne doit pas être re-transformé', async () => {
+      const alreadyApiShaped = [{
+        id: 'msg-1-en', messageId: 'msg-1', targetLanguage: 'en',
+        translatedContent: 'Hello', translationModel: 'basic', isEncrypted: false,
+      }];
+      const msg = makeMongoTranslated({ translations: alreadyApiShaped });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(emittedTranslations()).toEqual(alreadyApiShaped);
+    });
+
+    it('rend un tableau vide pour une carte vide, `null` ou une valeur scalaire — jamais une entrée bâtarde', async () => {
+      for (const translations of [{}, null, 'not-an-object']) {
+        jest.clearAllMocks();
+        (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+        (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+        (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue({ translations: null });
+
+        await handler.broadcastNewMessage(makeMongoTranslated({ translations }) as any, VALID_CONV_ID, socket);
+
+        expect(emittedTranslations()).toEqual([]);
+      }
+    });
+  });
+
   // ── _buildMessagePayload (via broadcastNewMessage) ────────────────────────
 
   describe('_buildMessagePayload', () => {
