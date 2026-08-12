@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Appearance Effects (one-shot, play once on appear)
 
@@ -106,6 +107,7 @@ struct ConfettiOverlay: View {
             .onAppear { spawnConfetti(in: geo.size) }
         }
         .opacity(isAnimating ? 0 : 1)
+        .accessibilityHidden(true)
     }
 
     private func spawnConfetti(in size: CGSize) {
@@ -157,10 +159,13 @@ struct FireworksOverlay: View {
             .onAppear { spawnFireworks(center: center) }
         }
         .opacity(opacity)
+        .accessibilityHidden(true)
     }
 
     private func spawnFireworks(center: CGPoint) {
-        let colors: [Color] = [Color(hex: "#6366F1"), Color(hex: "#818CF8"), .yellow, .orange, .white]
+        // Brand-signature sparks tokenized to the Indigo palette (SSOT) so a brand
+        // recolor propagates here; .yellow/.orange/.white stay decorative highlights.
+        let colors: [Color] = [MeeshyColors.indigo500, MeeshyColors.indigo400, .yellow, .orange, .white]
         sparks = (0..<20).map { i in
             let angle = Double(i) * (360.0 / 20.0)
             return Spark(x: center.x, y: center.y, color: colors.randomElement() ?? .white, angle: angle, distance: CGFloat.random(in: 40...80))
@@ -183,11 +188,12 @@ struct ExplodeOverlay: View {
     var body: some View {
         Circle()
             .fill(
-                RadialGradient(colors: [Color(hex: "#6366F1").opacity(0.4), .clear], center: .center, startRadius: 0, endRadius: 60)
+                RadialGradient(colors: [MeeshyColors.indigo500.opacity(0.4), .clear], center: .center, startRadius: 0, endRadius: 60)
             )
             .scaleEffect(scale)
             .opacity(opacity)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
             .onAppear {
                 withAnimation(.easeOut(duration: 0.5)) { scale = 2.5 }
                 withAnimation(.easeIn(duration: 0.3).delay(0.3)) { opacity = 0 }
@@ -208,6 +214,7 @@ struct WaooOverlay: View {
             .scaleEffect(scale)
             .opacity(opacity)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
             .onAppear {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { scale = 1.5 }
                 withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
@@ -228,7 +235,7 @@ struct GlowEffect: ViewModifier {
     func body(content: Content) -> some View {
         content
             .shadow(
-                color: Color(hex: "#6366F1").opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
+                color: MeeshyColors.indigo500.opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
                 radius: active ? (glowing ? 12 : 4) : 0
             )
             .onAppear {

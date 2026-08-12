@@ -11,7 +11,7 @@ struct PrivacyPolicyView: View {
 
     @State private var selectedLanguage: String
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     private static let supportedLanguages: Set<String> = ["fr", "en"]
 
