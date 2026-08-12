@@ -120,6 +120,7 @@ struct RequestsTab: View {
             .padding(.top, 4)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+        .refreshable { await viewModel.loadReceived(forceNetwork: true) }
     }
 
     private func receivedRow(_ request: FriendRequest, index: Int) -> some View {
@@ -222,6 +223,7 @@ struct RequestsTab: View {
             .padding(.top, 4)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+        .refreshable { await viewModel.loadSent(forceNetwork: true) }
     }
 
     private func sentRow(_ request: FriendRequest, index: Int) -> some View {

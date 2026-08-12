@@ -85,6 +85,31 @@ final class ConversationPrismeResolutionTests: XCTestCase {
         XCTAssertEqual(conv.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "Bonjour")
     }
 
+    // MARK: - Rank-based resolution (Prisme rule #3, 2026-08-10)
+
+    func test_resolvedPreview_translationOutranksOriginal_returnsHigherRankTranslation() {
+        // Prisme ["en", "fr"], original "fr", "en" translation available:
+        // the "en" translation must win because it occupies rank 1 — the
+        // original must NEVER short-circuit ahead of the rank loop.
+        let conv = makeConversation(
+            lastMessagePreview: "Bonjour",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: ["en": "Hello"]
+        )
+        XCTAssertEqual(conv.resolvedLastMessagePreview(preferredLanguages: ["en", "fr"]), "Hello")
+    }
+
+    func test_resolvedPreview_originalOutranksTranslation_returnsOriginal() {
+        // Prisme ["fr", "en"], original "fr": the original wins because it
+        // occupies rank 0, even though an "en" translation also exists.
+        let conv = makeConversation(
+            lastMessagePreview: "Bonjour",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: ["en": "Hello"]
+        )
+        XCTAssertEqual(conv.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]), "Bonjour")
+    }
+
     // MARK: - No match → original preview (NOT translations.first)
 
     func test_resolvedPreview_noMatchInPreferred_returnsOriginalNotRandomTranslation() {

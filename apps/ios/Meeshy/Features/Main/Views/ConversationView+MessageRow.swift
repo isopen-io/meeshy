@@ -32,7 +32,7 @@ extension ConversationView {
     func scrollToAndHighlight(_ targetId: String, proxy: ScrollViewProxy) {
         let messageExists = viewModel.messages.contains { $0.id == targetId }
         guard messageExists else {
-            FeedbackToastManager.shared.show("Message non disponible", type: .error)
+            FeedbackToastManager.shared.show(String(localized: "conversation.message.unavailable", defaultValue: "Message non disponible", bundle: .main), type: .error)
             return
         }
         viewModel.markProgrammaticScroll()

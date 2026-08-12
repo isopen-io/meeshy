@@ -563,8 +563,8 @@ struct MessageViewsDetailView: View {
                 } else {
                     timelineBanner(
                         icon: "eye.slash.fill",
-                        text: "Pas encore vu",
-                        detail: "\(notSeen.count) participant\(notSeen.count > 1 ? "s" : "")",
+                        text: String(localized: "message-detail.views.not-seen.title", defaultValue: "Pas encore vu", bundle: .main),
+                        detail: String(localized: "message-detail.views.not-seen.count", defaultValue: "^[\(notSeen.count) participant](inflect: true)", bundle: .main),
                         count: "\(notSeen.count)/\(status.totalMembers)",
                         accent: accent
                     )

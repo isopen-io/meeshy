@@ -79,6 +79,9 @@ final class DiscoverViewModel: ObservableObject {
     /// suggestions list (`loadSuggestions`) goes through the cache-first
     /// pipeline.
     func performSearch() async {
+        // Une recherche tapée prend la main : toute revalidation de
+        // suggestions encore en vol écraserait ses résultats en atterrissant.
+        suggestionsRevalidationTask?.cancel()
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.count >= 2 else {
             searchResults = []
@@ -98,24 +101,32 @@ final class DiscoverViewModel: ObservableObject {
     /// `searchResults` from cache immediately when the user lands on the
     /// Discover tab without typing, and silently revalidates against the
     /// network in the background.
-    func loadSuggestions() async {
+    func loadSuggestions(forceNetwork: Bool = false) async {
         let userService = self.userService
         let store = await CacheCoordinator.shared.userSearch
         let loader = CacheFirstLoader(store: store, key: suggestionsKey)
         suggestionsRevalidationTask?.cancel()
-        suggestionsRevalidationTask = await loader.load(
-            fetch: {
-                // Empty query returns the gateway's "discover" suggestions
-                // (recent active, mutual friends, etc.).
-                try await userService.searchUsers(query: "", limit: 20, offset: 0)
-            },
-            setLoadState: { [weak self] state in
-                self?.loadState = state
-            },
-            apply: { [weak self] users in
-                self?.searchResults = users
-            }
-        )
+        let fetch: @Sendable () async throws -> [UserSearchResult] = {
+            // Empty query returns the gateway's "discover" suggestions
+            // (recent active, mutual friends, etc.).
+            try await userService.searchUsers(query: "", limit: 20, offset: 0)
+        }
+        let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
+            self?.loadState = state
+        }
+        // Suggestions et résultats de recherche partagent `searchResults` :
+        // si l'utilisateur a tapé une requête pendant que la revalidation
+        // était en vol, ses résultats ne doivent pas être écrasés par la
+        // liste de suggestions à requête vide.
+        let apply: @MainActor @Sendable ([UserSearchResult]) -> Void = { [weak self] users in
+            guard let self, self.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            self.searchResults = users
+        }
+        if forceNetwork {
+            await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return
+        }
+        suggestionsRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
     }
 
     /// Resolves the relationship state for a search result row. Combines
@@ -160,12 +171,12 @@ final class DiscoverViewModel: ObservableObject {
         let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: userId)
         do {
             try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
-            FeedbackToastManager.shared.showSuccess("Demande envoyee")
+            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.request.sent", defaultValue: "Demande envoyée", bundle: .main))
         } catch {
             cache.didCancelRequest(to: userId)
             objectWillChange.send()
             HapticFeedback.error()
-            FeedbackToastManager.shared.showError("Impossible d'envoyer")
+            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.request.error", defaultValue: "Impossible d'envoyer", bundle: .main))
         }
     }
 
@@ -184,7 +195,7 @@ final class DiscoverViewModel: ObservableObject {
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
-                    FeedbackToastManager.shared.showError("Impossible d'envoyer")
+                    FeedbackToastManager.shared.showError(String(localized: "contacts.discover.request.error", defaultValue: "Impossible d'envoyer", bundle: .main))
                     HapticFeedback.error()
                 }
             }
@@ -201,12 +212,12 @@ final class DiscoverViewModel: ObservableObject {
         HapticFeedback.success()
         do {
             _ = try await friendService.respond(requestId: requestId, accepted: true)
-            FeedbackToastManager.shared.showSuccess("Connexion acceptee")
+            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.accept.success", defaultValue: "Connexion acceptée", bundle: .main))
         } catch {
             cache.rollbackAccept(senderId: userId, requestId: requestId)
             objectWillChange.send()
             HapticFeedback.error()
-            FeedbackToastManager.shared.showError("Impossible d'accepter")
+            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.accept.error", defaultValue: "Impossible d'accepter", bundle: .main))
         }
     }
 
@@ -218,11 +229,11 @@ final class DiscoverViewModel: ObservableObject {
         isSendingInvite = true
         do {
             try await friendService.sendEmailInvitation(email: email)
-            FeedbackToastManager.shared.showSuccess("Invitation envoyee a \(email)")
+            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.invite.sent", defaultValue: "Invitation envoyée à \(email)", bundle: .main))
             emailText = ""
             HapticFeedback.success()
         } catch {
-            FeedbackToastManager.shared.showError("Impossible d'envoyer l'invitation")
+            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.invite.error", defaultValue: "Impossible d'envoyer l'invitation", bundle: .main))
             HapticFeedback.error()
         }
         isSendingInvite = false

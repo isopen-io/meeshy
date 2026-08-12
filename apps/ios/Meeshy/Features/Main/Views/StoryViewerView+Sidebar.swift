@@ -1039,6 +1039,7 @@ struct StoryHeaderView: View {
                                     Image(systemName: "arrow.2.squarepath")
                                         .font(MeeshyFont.relative(10, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.6))
+                                        .accessibilityHidden(true)
                                     if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
                                         Text("@\(handle)")
                                             .font(MeeshyFont.relative(12, weight: .regular))

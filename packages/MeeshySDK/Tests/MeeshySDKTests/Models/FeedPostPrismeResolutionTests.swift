@@ -69,6 +69,35 @@ final class FeedPostPrismeResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.displayContent, "Bonjour")
     }
 
+    // MARK: - Rank-based resolution (Prisme rule #3, 2026-08-10)
+
+    func test_resolved_translationOutranksOriginal_setsHigherRankTranslation() {
+        // Prisme ["en", "fr"], original "fr", "en" translation available:
+        // the "en" translation must win because it occupies rank 1 — the
+        // original must NEVER short-circuit ahead of the rank loop.
+        let post = makePost(
+            content: "Bonjour",
+            originalLanguage: "fr",
+            translations: ["en": makeTranslation("Hello")]
+        )
+        let resolved = post.resolved(preferredLanguages: ["en", "fr"])
+        XCTAssertEqual(resolved.translatedContent, "Hello")
+        XCTAssertEqual(resolved.displayContent, "Hello")
+    }
+
+    func test_resolved_originalOutranksTranslation_clearsTranslatedContent() {
+        // Prisme ["fr", "en"], original "fr": the original wins because it
+        // occupies rank 0, even though an "en" translation also exists.
+        let post = makePost(
+            content: "Bonjour",
+            originalLanguage: "fr",
+            translations: ["en": makeTranslation("Hello")]
+        )
+        let resolved = post.resolved(preferredLanguages: ["fr", "en"])
+        XCTAssertNil(resolved.translatedContent)
+        XCTAssertEqual(resolved.displayContent, "Bonjour")
+    }
+
     // MARK: - No match → clear translatedContent (NOT random translation)
 
     func test_resolved_noMatchInPreferred_clearsTranslatedContent() {
@@ -196,5 +225,23 @@ final class FeedPostPrismeResolutionTests: XCTestCase {
             translations: ["FR": makeTranslation("Bonjour")]
         )
         XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["fr"]), "fr")
+    }
+
+    // MARK: - Rank-based resolution (Prisme rule #3, 2026-08-10)
+
+    func test_resolvedLanguageCode_translationOutranksOriginal_returnsHigherRankLanguage() {
+        let post = makePost(
+            originalLanguage: "fr",
+            translations: ["en": makeTranslation("Hello")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["en", "fr"]), "en")
+    }
+
+    func test_resolvedLanguageCode_originalOutranksTranslation_returnsOriginal() {
+        let post = makePost(
+            originalLanguage: "fr",
+            translations: ["en": makeTranslation("Hello")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["fr", "en"]), "fr")
     }
 }

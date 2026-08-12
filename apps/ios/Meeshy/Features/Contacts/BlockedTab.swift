@@ -16,13 +16,7 @@ struct BlockedTab: View {
     var body: some View {
         Group {
             if viewModel.loadState == .loading && viewModel.blockedUsers.isEmpty {
-                VStack {
-                    Spacer()
-                    ProgressView().tint(MeeshyColors.indigo500)
-                    Spacer()
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
+                ContactsSkeletonList()
             } else if viewModel.blockedUsers.isEmpty {
                 emptyState
             } else {
@@ -61,6 +55,7 @@ struct BlockedTab: View {
             .padding(.top, 8)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+        .refreshable { await viewModel.loadBlocked(forceNetwork: true) }
     }
 
     private func blockedRow(_ user: BlockedUser, index: Int) -> some View {

@@ -38,6 +38,11 @@ struct CallView: View {
     @State private var showTranscript = false
     @State private var showOriginalText = false
     @State private var showEffectsToolbar = false
+    /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
+    /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
+    /// `onAppear` (expansion depuis la bannière) — voir le trio
+    /// scale/opacité/coins posé sur le ZStack racine.
+    @State private var pipMorphProgress: CGFloat = 0
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
     // tracks the in-flight drag; `pipCorner` is the resting corner.
@@ -188,10 +193,7 @@ struct CallView: View {
                 VStack {
                     HStack {
                         Button {
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
-                                callManager.displayMode = .pip
-                            }
-                            HapticFeedback.medium()
+                            collapseIntoPip()
                         } label: {
                             Image(systemName: "chevron.down")
                                 // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
@@ -246,6 +248,14 @@ struct CallView: View {
         // leurs `.ignoresSafeArea()` internes ; seul le bottom est ignoré ici
         // (barre de contrôles au ras du home indicator, comme avant).
         .ignoresSafeArea(edges: .bottom)
+        // Morph PiP (retour user 2026-08-12) : la réduction vers la bannière
+        // et l'agrandissement depuis elle sont portés par CE trio scale/
+        // opacité/coins — le fullScreenCover est basculé SANS animation
+        // système (withTransaction) pour que la contraction/expansion soit LA
+        // transition. Ancre .top : la bannière PiP vit en haut du viewport.
+        .scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)
+        .opacity(1 - 0.55 * Double(pipMorphProgress))
+        .clipShape(RoundedRectangle(cornerRadius: pipMorphProgress * 32, style: .continuous))
         .statusBarHidden(true)
         // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
         // On épingle aussi le colorScheme en .dark pour que le verre et les
@@ -255,6 +265,15 @@ struct CallView: View {
         .environment(\.colorScheme, .dark)
         .onAppear {
             startPulseAnimation()
+            // Expansion depuis la bannière PiP : le contenu démarre contracté
+            // vers le haut (là où vivait la bannière) puis s'étire en plein
+            // écran — mouvement inverse de collapseIntoPip(), même ressort.
+            if callManager.consumePendingPipExpansion(), !reduceMotion {
+                pipMorphProgress = 1
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    pipMorphProgress = 0
+                }
+            }
         }
         .onDisappear {
             stopPulseAnimation()
@@ -468,12 +487,34 @@ struct CallView: View {
     /// d'entrée que la création de conversation et les deep links — plutôt que de
     /// dépendre d'un Router injecté qui ne traverse pas la frontière du
     /// `.fullScreenCover`.
+    /// Réduction vers le cadre PiP (retour user 2026-08-12) : le flux plein
+    /// écran se CONTRACTE vers le haut — là où la bannière PiP va apparaître —
+    /// puis le fullScreenCover est retiré sans animation système : la
+    /// contraction est LA transition, la bannière glisse ensuite depuis le
+    /// haut (sa propre transition .move). Reduce Motion : bascule directe.
+    private func collapseIntoPip() {
+        HapticFeedback.medium()
+        guard !reduceMotion else {
+            callManager.displayMode = .pip
+            return
+        }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            pipMorphProgress = 1
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            var swap = Transaction()
+            swap.disablesAnimations = true
+            withTransaction(swap) {
+                callManager.displayMode = .pip
+            }
+            pipMorphProgress = 0
+        }
+    }
+
     private func openConversationDuringCall() {
         guard let conversationId = callManager.conversationId else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
-            callManager.displayMode = .pip
-        }
-        HapticFeedback.medium()
+        collapseIntoPip()
         Task { await resolveAndOpenConversation(conversationId: conversationId) }
     }
 
@@ -636,9 +677,7 @@ struct CallView: View {
                             .onEnded { value in
                                 guard !showEffectsToolbar else { return }
                                 if value.translation.height > 100 {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                        callManager.displayMode = .pip
-                                    }
+                                    collapseIntoPip()
                                 }
                             }
                     )

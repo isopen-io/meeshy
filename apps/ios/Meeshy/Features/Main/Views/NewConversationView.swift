@@ -433,6 +433,7 @@ struct NewConversationView: View {
         let isSelected = selectedUsers.contains { $0.id == user.id }
         let isBlocked = blockService.isBlocked(userId: user.id)
         let userColor = DynamicColorGenerator.colorForName(user.username)
+        let presence = PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
 
         return Button {
             HapticFeedback.light()
@@ -451,7 +452,7 @@ struct NewConversationView: View {
                     accentColor: userColor,
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
-                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                    presenceState: presence,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -476,12 +477,6 @@ struct NewConversationView: View {
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                         .accessibilityHidden(true)
                 } else {
-                    if user.isOnline == true {
-                        Circle()
-                            .fill(MeeshyColors.success)
-                            .frame(width: 8, height: 8)
-                    }
-
                     // Selection state is conveyed to VoiceOver by the row's
                     // `.isSelected` trait below; the glyph itself is decorative.
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -509,19 +504,20 @@ struct NewConversationView: View {
             )
         }
         .disabled(isBlocked)
-        .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked))
+        .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked, presence: presence))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // VoiceOver otherwise hears only "displayName, @username": the online dot
-    // (green Circle) and the "Bloqué" badge convey status by colour/shape alone
-    // (WCAG 1.4.1). Compose the status into the row label, mirroring the shipped
-    // ContactsListTab idiom and reusing its lowercase status key.
-    private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool) -> String {
+    // (rendered by MeeshyAvatar via resolvedState) and the "Bloqué" badge convey
+    // status by colour/shape alone (WCAG 1.4.1). Compose the status into the row
+    // label, mirroring the shipped ContactsListTab idiom and reusing its
+    // lowercase status key.
+    private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool, presence: PresenceState) -> String {
         var parts = [user.displayName ?? user.username, "@\(user.username)"]
         if isBlocked {
             parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqu\u{00E9}", bundle: .main))
-        } else if user.isOnline == true {
+        } else if presence == .online {
             parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
         }
         return parts.joined(separator: ", ")

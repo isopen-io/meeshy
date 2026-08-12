@@ -74,11 +74,7 @@ struct ContactsListTab: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.friends.isEmpty {
-            VStack {
-                Spacer()
-                ProgressView().tint(MeeshyColors.indigo500)
-                Spacer()
-            }
+            ContactsSkeletonList()
         } else if viewModel.filteredFriends.isEmpty {
             emptyState
         } else {
@@ -101,6 +97,7 @@ struct ContactsListTab: View {
                 .padding(.top, 4)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+            .refreshable { await viewModel.loadFriends(forceNetwork: true) }
         }
     }
 
@@ -144,7 +141,6 @@ struct ContactsListTab: View {
     private func contactRow(_ user: FriendRequestUser, index: Int) -> some View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
-        let isOnline = user.isOnline ?? false
         let presence = PresenceManager.shared.resolvedState(
             userId: user.id,
             isOnline: user.isOnline,
@@ -175,7 +171,7 @@ struct ContactsListTab: View {
                         .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
 
-                    if isOnline {
+                    if presence == .online {
                         Text(String(localized: "contacts.list.online", defaultValue: "En ligne", bundle: .main))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(MeeshyColors.success)
@@ -197,13 +193,13 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(contactRowAccessibilityLabel(user, isOnline: isOnline))
+        .accessibilityLabel(contactRowAccessibilityLabel(user, presence: presence))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
     }
 
-    private func contactRowAccessibilityLabel(_ user: FriendRequestUser, isOnline: Bool) -> String {
+    private func contactRowAccessibilityLabel(_ user: FriendRequestUser, presence: PresenceState) -> String {
         var parts = [user.name, "@\(user.username)"]
-        if isOnline {
+        if presence == .online {
             parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
         } else if let lastActive = user.lastActiveAt {
             parts.append(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))

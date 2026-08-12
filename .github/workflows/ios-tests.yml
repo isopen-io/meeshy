@@ -89,6 +89,9 @@ on:
   push:
     branches:
       - dev
+      # Temporaire — retiré avant merge : baseline + validation de la passe
+      # de corrections iOS (workflow_dispatch refusé à l'intégration, 403).
+      - claude/ios-analysis-corrections-1329ae
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'

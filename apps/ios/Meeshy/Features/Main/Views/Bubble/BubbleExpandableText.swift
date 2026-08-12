@@ -30,6 +30,12 @@ struct BubbleExpandableText: View, Equatable {
     let mentionTint: Color
     let hashtagTint: Color
     let linkTint: Color
+    /// Porte par les inputs (comme les voisins du dossier, cf.
+    /// `BubbleMetaBadges.swift:8-10`) pour forcer le re-render au bascule
+    /// clair/sombre : sans lui, `Equatable` juge la vue inchangee et `body`
+    /// n'est pas rappele, donc `MeeshyColors.textPrimary` garde son ancienne
+    /// valeur jusqu'a la reconstruction de la cellule.
+    let isDark: Bool
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
     var trackedLinks: [String: String] = [:]
@@ -47,12 +53,13 @@ struct BubbleExpandableText: View, Equatable {
         lhs.mentionTint == rhs.mentionTint &&
         lhs.hashtagTint == rhs.hashtagTint &&
         lhs.linkTint == rhs.linkTint &&
+        lhs.isDark == rhs.isDark &&
         lhs.trackedLinks == rhs.trackedLinks
     }
 
     var body: some View {
         let needsTruncation = !isExpanded && Self.exceeds(content, Self.truncateLimit)
-        let textColor = isMe ? Color.white : ThemeManager.shared.textPrimary
+        let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
 
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)

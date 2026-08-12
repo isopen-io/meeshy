@@ -65,12 +65,7 @@ struct CallsTab: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.calls.isEmpty {
-            VStack {
-                Spacer()
-                ProgressView().tint(MeeshyColors.indigo500)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ContactsSkeletonList()
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
                 icon: "phone.arrow.up.right",
@@ -95,6 +90,7 @@ struct CallsTab: View {
             .padding(.top, 4)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+        .refreshable { await viewModel.loadCalls(forceNetwork: true) }
     }
 }
 

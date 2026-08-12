@@ -135,6 +135,20 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
         }
     }
 
+    /// Rafraîchissement force-réseau pour les gestes explicites de
+    /// l'utilisateur (pull-to-refresh) : saute la lecture du cache, attend le
+    /// fetch, applique puis persiste. `load(...)` reste le chemin cold-start
+    /// cache-first — un `.refreshable` branché dessus ne déclenche AUCUN
+    /// réseau sur cache `.fresh` et rend la main avant la fin de la
+    /// revalidation sur `.stale`, ce qui vide le geste de son sens.
+    public func refresh(
+        fetch: @Sendable @escaping () async throws -> Items,
+        setLoadState: @MainActor @Sendable @escaping (LoadState) -> Void,
+        apply: @MainActor @Sendable @escaping (Items) -> Void
+    ) async {
+        await revalidate(fetch: fetch, setLoadState: setLoadState, apply: apply)
+    }
+
     /// cache-04 — revalidation inline partagée par `.expired`/`.empty`. Le
     /// `save` vit HORS du `do` du fetch : un échec de PERSISTANCE ne doit pas
     /// régresser un état déjà peint (`.loaded`) vers `.error`.

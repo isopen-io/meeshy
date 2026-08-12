@@ -136,6 +136,7 @@ struct KeypadTab: View {
     private func resultRow(_ user: UserSearchResult) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
+        let presence = PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline)
 
         return HStack(spacing: 14) {
             Button {
@@ -147,7 +148,7 @@ struct KeypadTab: View {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: user.avatar,
-                        presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline)
+                        presenceState: presence
                     )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(name)
@@ -163,7 +164,7 @@ struct KeypadTab: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name))
+            .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name, presence: presence))
             .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
 
             dialMenu(for: user, displayName: name)
@@ -175,14 +176,14 @@ struct KeypadTab: View {
     // `.accessibilityElement(children: .combine)` above would let VoiceOver read
     // the child Texts, but the explicit `.accessibilityLabel` replaces that
     // combined text — so a bare `name` dropped the visible `@username` and the
-    // avatar's online-presence dot (a green Circle drawn only when online), which
-    // convey identity/status by text/colour alone (WCAG 1.1.1 / 1.4.1). Compose
+    // avatar's online-presence dot (rendered via resolvedState), which convey
+    // identity/status by text/colour alone (WCAG 1.1.1 / 1.4.1). Compose
     // them into the label, mirroring the shipped NewConversationView (185i) /
     // ContactsListTab idiom and reusing its lowercase online key. Offline stays
     // silent, matching the visual (no dot is drawn when offline).
-    private func resultRowAccessibilityLabel(for user: UserSearchResult, name: String) -> String {
+    private func resultRowAccessibilityLabel(for user: UserSearchResult, name: String, presence: PresenceState) -> String {
         var parts = [name, "@\(user.username)"]
-        if user.isOnline == true {
+        if presence == .online {
             parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
         }
         return parts.joined(separator: ", ")

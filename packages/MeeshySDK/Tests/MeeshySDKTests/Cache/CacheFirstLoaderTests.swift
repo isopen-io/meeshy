@@ -328,6 +328,56 @@ final class CacheFirstLoaderTests: XCTestCase {
         let saveCount = await store.saveCallCount
         XCTAssertEqual(saveCount, 0)
     }
+
+    // MARK: - refresh (force-network, pull-to-refresh)
+
+    func test_refresh_freshCache_stillFetchesAppliesAndPersists() async {
+        let store = MockStore(loadResult: .fresh([TestItem(id: "1", name: "A")], age: 1))
+        let monitor = StubNetworkMonitor(isOnline: true)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+
+        var capturedState: LoadState?
+        var capturedItems: [TestItem]?
+        let fetchCallCount = AtomicCounter()
+        let fresh = [TestItem(id: "2", name: "B")]
+
+        await loader.refresh(
+            fetch: {
+                fetchCallCount.increment()
+                return fresh
+            },
+            setLoadState: { state in capturedState = state },
+            apply: { items in capturedItems = items }
+        )
+
+        XCTAssertEqual(fetchCallCount.value, 1, "refresh must hit the network even on fresh cache")
+        XCTAssertEqual(capturedState, .loaded)
+        XCTAssertEqual(capturedItems, fresh)
+        let saved = await store.savedItems["k"]
+        XCTAssertEqual(saved, fresh, "refresh must persist the fresh fetch")
+    }
+
+    func test_refresh_fetchFailureOnline_setsErrorState() async {
+        let store = MockStore(loadResult: .fresh([TestItem(id: "1", name: "A")], age: 1))
+        let monitor = StubNetworkMonitor(isOnline: true)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+
+        var capturedStates: [LoadState] = []
+        var applied = false
+
+        await loader.refresh(
+            fetch: { throw URLError(.timedOut) },
+            setLoadState: { state in capturedStates.append(state) },
+            apply: { _ in applied = true }
+        )
+
+        XCTAssertFalse(applied, "A failed refresh must not apply anything")
+        guard case .error = capturedStates.last else {
+            return XCTFail("Online fetch failure must surface .error, got \(String(describing: capturedStates.last))")
+        }
+        let saveCount = await store.saveCallCount
+        XCTAssertEqual(saveCount, 0)
+    }
 }
 
 

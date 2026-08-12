@@ -17,7 +17,8 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             highlightTerm: nil,
             mentionTint: .blue,
             hashtagTint: .purple,
-            linkTint: .blue
+            linkTint: .blue,
+            isDark: false
         )
 
         let text2 = BubbleExpandableText(
@@ -27,7 +28,8 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             highlightTerm: nil,
             mentionTint: .blue,
             hashtagTint: .purple,
-            linkTint: .blue
+            linkTint: .blue,
+            isDark: false
         )
 
         XCTAssertEqual(text1, text2)
@@ -41,7 +43,8 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             highlightTerm: nil,
             mentionTint: .blue,
             hashtagTint: .purple,
-            linkTint: .blue
+            linkTint: .blue,
+            isDark: false
         )
 
         let text2 = BubbleExpandableText(
@@ -51,7 +54,8 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             highlightTerm: nil,
             mentionTint: .blue,
             hashtagTint: .purple,
-            linkTint: .blue
+            linkTint: .blue,
+            isDark: false
         )
 
         XCTAssertNotEqual(text1, text2)

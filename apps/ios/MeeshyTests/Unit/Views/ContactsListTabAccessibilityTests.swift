@@ -24,15 +24,17 @@ final class ContactsListTabAccessibilityTests: XCTestCase {
     func test_contactRow_composesAccessibilityLabelViaHelper() throws {
         let source = try contactsListTabSource()
         XCTAssertTrue(
-            source.contains(".accessibilityLabel(contactRowAccessibilityLabel(user, isOnline: isOnline))"),
-            "The contact row must compose its VoiceOver label via contactRowAccessibilityLabel(_:isOnline:)."
+            source.contains(".accessibilityLabel(contactRowAccessibilityLabel(user, presence: presence))"),
+            "The contact row must compose its VoiceOver label via contactRowAccessibilityLabel(_:presence:), " +
+            "reusing the same resolved presence state (PresenceManager.resolvedState) as the avatar dot — " +
+            "never the raw user.isOnline flag, which would contradict the dot on the 1/3/5 boundary."
         )
     }
 
     func test_contactRowAccessibilityLabel_restatesHandleAndPresence() throws {
         let source = try contactsListTabSource()
         guard let range = source.range(of: "private func contactRowAccessibilityLabel(") else {
-            XCTFail("ContactsListTab.swift must define contactRowAccessibilityLabel(_:isOnline:)"); return
+            XCTFail("ContactsListTab.swift must define contactRowAccessibilityLabel(_:presence:)"); return
         }
         let vicinity = String(source[range.lowerBound...])
         XCTAssertTrue(

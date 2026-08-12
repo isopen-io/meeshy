@@ -1204,6 +1204,7 @@ struct BubbleStandardLayout: View {
             mentionTint: mentionTint,
             hashtagTint: hashtagTint,
             linkTint: linkTint,
+            isDark: isDark,
             trackedLinks: content.text?.trackedLinks ?? [:]
         )
     }

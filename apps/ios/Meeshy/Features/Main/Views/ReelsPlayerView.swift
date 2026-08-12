@@ -456,21 +456,25 @@ enum ReelWatchAttachmentPolicy {
 // MARK: - Reel Audio Language Resolver (Prisme, pure)
 
 /// Prisme Linguistique — pure resolution of the TTS language to auto-select for
-/// an audio reel, mirroring `FeedPost.resolved(preferredLanguages:)`: short-
-/// circuits when the audio's ORIGINAL language is already among the user's
-/// preferred languages (nothing to translate), otherwise returns the first
-/// preferred language — in PRIORITY order, not TTS-payload order — that has an
-/// available translated audio. Returns `nil` when nothing should be
-/// auto-selected (the original stays authoritative; the user can still pick a
-/// language via a flag).
+/// an audio reel, mirroring `FeedPost.resolved(preferredLanguages:)`: walks the
+/// user's preferred languages IN PRIORITY order and stops at the first rank
+/// that is served — either because the audio's ORIGINAL language occupies
+/// that rank (nothing to translate, returns `nil`), or because a translated
+/// audio is available for it (returns that language). The original language
+/// competes for ITS rank in the chain; it is never tested as a short-circuit
+/// ahead of the loop (Prisme rule 3, 2026-08-10) — with preferred languages
+/// `["en", "fr"]`, original `fr`, and an `en` translated audio available, the
+/// `en` translation wins because it occupies rank 1. Returns `nil` when
+/// nothing should be auto-selected (the original stays authoritative; the
+/// user can still pick a language via a flag).
 ///
 /// Extracted as a pure function (mirrors `ReelMediaAutostart`) so the
-/// short-circuit + priority-ordering rules are unit-testable without
-/// instantiating the view. Fixes the bug where `autoSelectPreferredAudioLanguage`
-/// iterated the TTS payload order first — a French audio for a French-preferring
-/// user was auto-switched to whichever TTS translation the payload listed first
-/// (e.g. English), because the original-language short-circuit didn't exist and
-/// the preferred-language priority order was never honored.
+/// rank-based resolution is unit-testable without instantiating the view.
+/// Fixes the bug where `autoSelectPreferredAudioLanguage` iterated the TTS
+/// payload order first — a French audio for a French-preferring user was
+/// auto-switched to whichever TTS translation the payload listed first
+/// (e.g. English), because the original-language short-circuit didn't exist
+/// and the preferred-language priority order was never honored.
 enum ReelAudioLanguageResolver {
     nonisolated static func preferredAudioLanguage(
         original: String?,
@@ -478,11 +482,13 @@ enum ReelAudioLanguageResolver {
         availableLanguages: [String]
     ) -> String? {
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        if let original = original?.lowercased(), preferred.contains(original) {
-            return nil
-        }
+        let origLang = original?.lowercased()
         let available = Set(availableLanguages.map { $0.lowercased() })
-        return preferred.first { available.contains($0) }
+        for lang in preferred {
+            if let origLang, origLang == lang { return nil }
+            if available.contains(lang) { return lang }
+        }
+        return nil
     }
 }
 

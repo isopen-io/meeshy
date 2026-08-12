@@ -555,21 +555,25 @@ public struct FeedPost: Identifiable, Sendable {
     /// `translations` dict is enough to flip the rendered language, no
     /// re-fetch needed.
     ///
-    /// Honours the Prisme rules:
-    /// - if `originalLanguage` is among `preferredLanguages`, the original
-    ///   content is canonical (translatedContent = nil);
-    /// - otherwise return the first translation matching a preferred
-    ///   language;
-    /// - never fall back to an arbitrary translation if none matches.
+    /// Honours the Prisme rules: walk `preferredLanguages` IN ORDER and stop
+    /// at the first rank that is served — either because the original is
+    /// already written in that language, or because a translation exists for
+    /// it. The original language competes for ITS rank in the chain; it is
+    /// never a short-circuit tested ahead of the loop (Prisme rule 3,
+    /// 2026-08-10) — with `preferredLanguages == ["en", "fr"]`, original
+    /// `fr`, and an `en` translation available, the `en` translation wins
+    /// because it occupies rank 1. Never fall back to an arbitrary
+    /// translation if no preferred language matches.
     public func resolved(preferredLanguages: [String]) -> FeedPost {
         guard let dict = translations, !dict.isEmpty else { return self }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        if let original = originalLanguage?.lowercased(), preferred.contains(original) {
-            var copy = self
-            copy.translatedContent = nil
-            return copy
-        }
+        let origLang = originalLanguage?.lowercased()
         for lang in preferred {
+            if let origLang, origLang == lang {
+                var copy = self
+                copy.translatedContent = nil
+                return copy
+            }
             if let hit = dict.first(where: { $0.key.lowercased() == lang }) {
                 var copy = self
                 copy.translatedContent = hit.value.text
@@ -583,24 +587,24 @@ public struct FeedPost: Identifiable, Sendable {
 
     /// Companion to `resolved(preferredLanguages:)`: returns the language code
     /// that `displayContent` is currently showing, using the exact same
-    /// deterministic Prisme algorithm (short-circuit on original ∈ preferred,
-    /// else the first preferred language with a matching translation, else
-    /// the original) — never `translations.keys.first` (dictionary iteration
+    /// deterministic Prisme algorithm — walk `preferredLanguages` IN ORDER,
+    /// the first rank served wins (original at that rank, else a matching
+    /// translation) — never `translations.keys.first` (dictionary iteration
     /// order is non-deterministic in Swift). Used by the feed card to know
     /// which language flag is "active" without re-deriving it unsafely.
     ///
     /// `originalLanguage == nil` does NOT short-circuit to `nil`: `resolved()`
     /// still matches `translations` against `preferredLanguages` in that case
-    /// (its `if let original = originalLanguage?.lowercased(), preferred.contains(original)`
-    /// simply fails and falls into the same preferred-language loop). This
-    /// mirrors that — `nil` only when there's truly no language to report
-    /// (no original AND no preferred-language translation matches).
+    /// (the per-rank `origLang == lang` test simply never fires, falling
+    /// through to the translation check at each rank). This mirrors that —
+    /// `nil` only when there's truly no language to report (no original AND
+    /// no preferred-language translation matches).
     public func resolvedLanguageCode(preferredLanguages: [String]) -> String? {
         let origLang = originalLanguage?.lowercased()
         guard let dict = translations, !dict.isEmpty else { return origLang }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        if let origLang, preferred.contains(origLang) { return origLang }
         for lang in preferred {
+            if let origLang, origLang == lang { return origLang }
             if dict.keys.contains(where: { $0.lowercased() == lang }) { return lang }
         }
         return origLang

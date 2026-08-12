@@ -893,8 +893,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // par un composer inline ici — la méthode était du code mort trompeur.
 
     func report(_ postId: String) async {
-        try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-        FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+        }
     }
 
     // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)

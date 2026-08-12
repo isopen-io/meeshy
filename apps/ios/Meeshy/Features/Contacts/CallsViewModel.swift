@@ -40,7 +40,7 @@ final class CallsViewModel: ObservableObject {
         revalidationTask?.cancel()
     }
 
-    func loadCalls() async {
+    func loadCalls(forceNetwork: Bool = false) async {
         loadGeneration += 1
         let generation = loadGeneration
         let service = self.service
@@ -48,12 +48,11 @@ final class CallsViewModel: ObservableObject {
         let store = await CacheCoordinator.shared.callHistory
         let loader = CacheFirstLoader(store: store, key: cacheKey, networkMonitor: networkMonitor)
         revalidationTask?.cancel()
-        revalidationTask = await loader.load(
-            fetch: {
+        let fetch: @Sendable () async throws -> [APICallRecord] = {
                 let page = try await service.history(limit: 30, cursor: nil, filter: filter)
                 return page.records
-            },
-            setLoadState: { [weak self] state in
+            }
+        let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
                 guard let self, self.loadGeneration == generation else { return }
                 switch state {
                 case .cachedFresh, .cachedStale, .loaded:
@@ -67,12 +66,16 @@ final class CallsViewModel: ObservableObject {
                 case .idle:
                     self.loadState = .idle
                 }
-            },
-            apply: { [weak self] records in
-                guard let self, self.loadGeneration == generation else { return }
-                self.calls = records
             }
-        )
+        let apply: @MainActor @Sendable ([APICallRecord]) -> Void = { [weak self] records in
+            guard let self, self.loadGeneration == generation else { return }
+            self.calls = records
+        }
+        if forceNetwork {
+            await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return
+        }
+        revalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
     }
 
     func setFilter(_ newFilter: CallHistoryFilter) {

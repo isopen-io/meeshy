@@ -21,70 +21,65 @@ final class CallBannerContrastTests: XCTestCase {
         XCTAssertEqual(a, b, accuracy: 0.001)
     }
 
-    // MARK: - scrimmed: composition alpha correcte
+    // MARK: - Aplat indigo calibré (retour user 2026-08-12, second passage) :
+    // AUCUN scrim noir — le contraste vient du choix des arrêts du dégradé
+    // (bannerTop/bannerBottom) et des teintes d'état recalibrées pour cette
+    // surface. Chaque élément est testé contre LES DEUX arrêts — le contenu
+    // peut se trouver n'importe où le long de la diagonale du dégradé.
 
-    func test_scrimmed_zeroOpacity_returnsSameColor() {
-        let result = CallBannerContrast.scrimmed(MeeshyColors.indigo500, scrimOpacity: 0)
-        XCTAssertEqual(result.luminance, MeeshyColors.indigo500.luminance, accuracy: 0.001)
+    private var bannerStops: [(name: String, color: Color)] {
+        [
+            ("bannerTop (indigo600)", CallBannerContrast.bannerTop),
+            ("bannerBottom (indigo800)", CallBannerContrast.bannerBottom),
+        ]
     }
 
-    func test_scrimmed_fullOpacity_returnsBlack() {
-        let result = CallBannerContrast.scrimmed(MeeshyColors.indigo500, scrimOpacity: 1)
-        XCTAssertEqual(result.luminance, Color.black.luminance, accuracy: 0.001)
+    func test_bannerStops_areTheDeepIndigoPair() {
+        XCTAssertEqual(CallBannerContrast.bannerTop.luminance, MeeshyColors.indigo600.luminance, accuracy: 0.0001,
+                       "l'arrêt haut de la bannière doit rester indigo600 — pleinement indigo, jamais noirci")
+        XCTAssertEqual(CallBannerContrast.bannerBottom.luminance, MeeshyColors.indigo800.luminance, accuracy: 0.0001,
+                       "l'arrêt bas de la bannière doit rester indigo800")
     }
 
-    func test_scrimmed_darkensProgressively() {
-        let light = CallBannerContrast.scrimmed(MeeshyColors.indigo500, scrimOpacity: 0.1)
-        let dark = CallBannerContrast.scrimmed(MeeshyColors.indigo500, scrimOpacity: 0.5)
-        XCTAssertLessThan(dark.luminance, light.luminance)
-    }
-
-    // MARK: - Le scrim calibré (CallBannerContrast.scrimOpacity) fait passer
-    // TOUS les éléments de la bannière d'appel, contre LES DEUX arrêts du
-    // dégradé (indigo500 clair, indigo700 foncé) — le texte peut se trouver
-    // n'importe où le long de la diagonale du dégradé.
-
-    private let backgrounds: [(name: String, color: Color)] = [
-        ("indigo500", MeeshyColors.indigo500),
-        ("indigo700", MeeshyColors.indigo700),
-    ]
-
-    private func scrimmedBackgrounds() -> [(name: String, color: Color)] {
-        backgrounds.map { ($0.name, CallBannerContrast.scrimmed($0.color, scrimOpacity: CallBannerContrast.scrimOpacity)) }
-    }
-
-    func test_scrimCalibration_whiteName_passesNormalTextThreshold() {
-        for bg in scrimmedBackgrounds() {
+    func test_whiteContent_passesNormalTextThreshold() {
+        // Nom du correspondant ET durée d'appel : tous deux blancs (la durée a
+        // quitté le vert `success`, 3.3:1 seulement contre l'arrêt haut).
+        for bg in bannerStops {
             let ratio = CallBannerContrast.contrastRatio(.white, bg.color)
-            XCTAssertGreaterThanOrEqual(ratio, 4.5, "nom (blanc) sur \(bg.name) scrimmé : \(ratio)")
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "texte blanc sur \(bg.name) : \(ratio)")
         }
     }
 
-    func test_scrimCalibration_callDuration_passesNormalTextThreshold() {
-        for bg in scrimmedBackgrounds() {
+    func test_connectedSignalGlyph_passesUIComponentThreshold() {
+        for bg in bannerStops {
             let ratio = CallBannerContrast.contrastRatio(MeeshyColors.success, bg.color)
-            XCTAssertGreaterThanOrEqual(ratio, 4.5, "durée (success) sur \(bg.name) scrimmé : \(ratio)")
+            XCTAssertGreaterThanOrEqual(ratio, 3.0, "glyphe signal sain (success) sur \(bg.name) : \(ratio)")
         }
     }
 
-    func test_scrimCalibration_ringingGlyph_passesUIComponentThreshold() {
-        for bg in scrimmedBackgrounds() {
+    func test_ringingGlyph_passesUIComponentThreshold() {
+        for bg in bannerStops {
             let ratio = CallBannerContrast.contrastRatio(MeeshyColors.warning, bg.color)
-            XCTAssertGreaterThanOrEqual(ratio, 3.0, "glyphe sonnerie (warning) sur \(bg.name) scrimmé : \(ratio)")
+            XCTAssertGreaterThanOrEqual(ratio, 3.0, "glyphe sonnerie (warning) sur \(bg.name) : \(ratio)")
         }
     }
 
-    func test_scrimCalibration_reconnectingGlyph_passesUIComponentThreshold() {
-        for bg in scrimmedBackgrounds() {
-            let ratio = CallBannerContrast.contrastRatio(MeeshyColors.error, bg.color)
-            XCTAssertGreaterThanOrEqual(ratio, 3.0, "glyphe reconnexion (error) sur \(bg.name) scrimmé : \(ratio)")
+    func test_errorStateTint_passesUIComponentThreshold() {
+        // Glyphe reconnexion, micro coupé, barres signal critiques : tous sur
+        // errorStateTint (errorSoft) — `MeeshyColors.error` ne tient que
+        // 2.27:1 contre l'arrêt haut, d'où la teinte adoucie de surface.
+        for bg in bannerStops {
+            let ratio = CallBannerContrast.contrastRatio(CallBannerContrast.errorStateTint, bg.color)
+            XCTAssertGreaterThanOrEqual(ratio, 3.0, "teinte d'état critique (errorSoft) sur \(bg.name) : \(ratio)")
         }
     }
 
-    func test_scrimCalibration_activeSpeaker_passesUIComponentThreshold() {
-        for bg in scrimmedBackgrounds() {
-            let ratio = CallBannerContrast.contrastRatio(MeeshyColors.indigo400, bg.color)
-            XCTAssertGreaterThanOrEqual(ratio, 3.0, "haut-parleur actif (indigo400) sur \(bg.name) scrimmé : \(ratio)")
+    func test_speakerActiveTint_passesUIComponentThreshold() {
+        // `indigo400` ne tient que 2.1:1 contre l'arrêt haut — la bannière
+        // utilise indigo200.
+        for bg in bannerStops {
+            let ratio = CallBannerContrast.contrastRatio(CallBannerContrast.speakerActiveTint, bg.color)
+            XCTAssertGreaterThanOrEqual(ratio, 3.0, "haut-parleur actif (indigo200) sur \(bg.name) : \(ratio)")
         }
     }
 }

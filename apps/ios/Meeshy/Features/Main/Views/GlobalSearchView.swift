@@ -594,7 +594,8 @@ struct GlobalSearchView: View {
     }
 
     private func userResultRow(_ result: GlobalSearchUserResult) -> some View {
-        let label = userResultAccessibilityLabel(result)
+        let presence = PresenceManager.shared.resolvedState(userId: result.id, isOnline: result.isOnline)
+        let label = userResultAccessibilityLabel(result, presence: presence)
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.displayName ?? result.username,
@@ -602,7 +603,7 @@ struct GlobalSearchView: View {
                 avatarURL: result.avatar,
                 storyState: storyViewModel.storyRingState(forUserId: result.id),
                 moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
-                presenceState: PresenceManager.shared.resolvedState(userId: result.id, isOnline: result.isOnline),
+                presenceState: presence,
                 onViewStory: {
                     storyViewerCoordinator.present(StoryViewerRequest(
                         id: result.id,
@@ -627,7 +628,7 @@ struct GlobalSearchView: View {
 
             Spacer()
 
-            if result.isOnline {
+            if presence == .online {
                 Text(String(localized: "status.online", defaultValue: "En ligne"))
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.success)
@@ -683,10 +684,10 @@ struct GlobalSearchView: View {
         return parts.joined(separator: ", ")
     }
 
-    private func userResultAccessibilityLabel(_ result: GlobalSearchUserResult) -> String {
+    private func userResultAccessibilityLabel(_ result: GlobalSearchUserResult, presence: PresenceState) -> String {
         let displayName = result.displayName ?? result.username
         var label = "\(displayName), @\(result.username)"
-        if result.isOnline {
+        if presence == .online {
             label += ", " + String(localized: "status.online", defaultValue: "En ligne").lowercased()
         }
         return label

@@ -160,7 +160,7 @@ final class UserProfileViewModel: ObservableObject {
                 self?.isBlocked = snapshot
                 self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
             },
-            toast: "Impossible de bloquer cet utilisateur"
+            toast: String(localized: "profile.block.error", defaultValue: "Impossible de bloquer cet utilisateur", bundle: .main)
         )
         let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
@@ -183,7 +183,7 @@ final class UserProfileViewModel: ObservableObject {
                 self?.isBlocked = snapshot
                 self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
             },
-            toast: "Impossible de debloquer cet utilisateur"
+            toast: String(localized: "profile.unblock.error", defaultValue: "Impossible de débloquer cet utilisateur", bundle: .main)
         )
         let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
