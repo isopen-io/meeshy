@@ -93,13 +93,18 @@ struct StatusComposerView: View {
             .navigationTitle(viaUsername != nil ? String(localized: "status.composer.title.repost", defaultValue: "Republier un status", bundle: .main) : String(localized: "status.composer.title", defaultValue: "Status", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                // Semantic placements, not `.navigationBarLeading`/`.navigationBarTrailing`
+                // (deprecated since iOS 17): a sheet's dismiss is a cancellation and its
+                // commit is a confirmation. The system then owns the sides — which is what
+                // makes the pair mirror correctly in RTL — and binds Escape / Return to
+                // them. Mirrors `EditPostSheet`, the structurally identical composer sheet.
+                ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
                     .foregroundColor(theme.textSecondary)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     publishToolbarButton
                 }
             }
