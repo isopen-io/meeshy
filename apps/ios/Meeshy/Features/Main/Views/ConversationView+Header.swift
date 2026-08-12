@@ -108,6 +108,7 @@ extension ConversationView {
                         HStack(spacing: 2) {
                             Image(systemName: section.icon)
                                 .font(MeeshyFont.relative(7, weight: .bold))
+                                .accessibilityHidden(true)
                             Text(section.name)
                                 .font(MeeshyFont.relative(8, weight: .bold))
                         }

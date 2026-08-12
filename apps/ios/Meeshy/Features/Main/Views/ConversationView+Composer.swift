@@ -841,6 +841,7 @@ extension ConversationView {
                     }
                     .frame(width: 56, height: 56)
                 }
+                .accessibilityLabel(String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(labelForAttachment(attachment))", bundle: .main))
 
                 // Delete button — top-right corner
                 Button {

@@ -1214,6 +1214,7 @@ struct FeedPostCard: View {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)
+                                .accessibilityHidden(true)
                         }
                     }
 
@@ -1259,6 +1260,7 @@ struct FeedPostCard: View {
                             Image(systemName: "heart.fill")
                                 .font(.caption)
                                 .foregroundColor(MeeshyColors.error)
+                                .accessibilityHidden(true)
                             Text("\(comment.likes)")
                                 .font(.caption.weight(.medium))
                                 .foregroundColor(theme.textMuted)
@@ -1270,6 +1272,7 @@ struct FeedPostCard: View {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.caption2)
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
+                                    .accessibilityHidden(true)
                                 Text(String(localized: "feed.post.comment.replies_count", defaultValue: "\(comment.replies) réponses", bundle: .main))
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textMuted)
