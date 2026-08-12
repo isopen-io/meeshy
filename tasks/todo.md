@@ -1,64 +1,57 @@
-# Tête instruite pour le cycle 87 — l'audit a rendu douze défauts prouvés ; en voici l'ordre
+# Tête instruite pour le cycle 88 — neuf défauts prouvés restent, et une question d'identité à trancher
 
-*Le cycle 86 a lancé trois audits parallèles (gateway temps réel, web sync, pipeline de traduction)
-et n'a livré qu'UN correctif. Ce n'est pas un manque : les onze autres candidats sont documentés
-ci-dessous avec leur site exact et leur scénario d'échec, prêts à être instruits. **Ne pas
-re-auditer — vérifier puis corriger.** Chacun a été établi par lecture de source, jamais par
-exécution : la vérification reste due.*
+*Le cycle 87 a livré trois correctifs sur les douze candidats légués par le 86. Les neuf restants
+sont inchangés et reproduits plus bas **tels que le cycle 86 les a établis** — site exact, scénario
+d'échec. **Ne pas re-auditer — vérifier puis corriger.** Chacun a été établi par lecture de source ;
+la vérification par exécution reste due pour tous.*
 
-## Priorité 1 — la moitié serveur du correctif du cycle 86
+## Priorité 0 — la leçon du cycle 87 : deux sessions ont écrit le même correctif
 
-`conversation:leave` **ne retracte pas la frappe** côté gateway
-(`ConversationHandler.handleConversationLeave`, `socketio/handlers/ConversationHandler.ts:181`) :
-seul `disconnecting` le fait (`StatusHandler.handleSocketDisconnecting`), et changer de conversation
-ne déconnecte pas le socket. Le cycle 86 a corrigé le symptôme **côté web uniquement** ; iOS et
-Android restent exposés au même indicateur fantôme (jusqu'à 8 s chez les pairs, à chaque changement
-de conversation).
+Le correctif de priorité 1 (retraction de frappe au `conversation:leave`) a été écrit **deux fois
+en parallèle**, par cette session et par `claude/keen-hamilton-8m3aqm`, qui l'a mergé sur main
+pendant que celle-ci le finissait. Les deux implémentations ont convergé au nom de méthode près
+(`retractTypingIn`, même signature à id déjà normalisé, même ordre). C'est du travail perdu, et le
+risque se reproduira tant que la tête instruite désignera une priorité 1 sans mécanisme d'exclusion.
 
-La machinerie existe déjà et n'a pas à être réécrite — `handleTypingStop` fait exactement le bon
-geste : identité tirée de `activeTypers` (donc juste même après un renommage), suppression du verrou
-de throttle, suppression multi-appareils, émission `socket.to(room)`. Deux pièges à ne pas manquer :
+**Avant de commencer un item ci-dessous, `git fetch origin main` et vérifier qu'aucun commit récent
+ne le porte déjà.** Le cycle 87 ne l'a découvert qu'au moment du merge final.
 
-1. **Le coût.** `handleTypingStop` valide puis appelle `normalizeConversationId` (un
-   `conversation.findUnique`) AVANT de regarder `activeTypers`. Le brancher naïvement sur
-   `CONVERSATION_LEAVE` ferait payer une seconde résolution à CHAQUE changement de conversation,
-   alors que `handleConversationLeave` normalise déjà. Extraire la partie post-normalisation
-   (`retractTypingIn(socket, normalizedId)`) et l'appeler depuis `handleConversationLeave` avec l'id
-   déjà résolu.
-2. **L'ordre.** Retracter AVANT `socket.leave(room)`. `socket.to(room)` fonctionne dans les deux
-   sens (il vise la room en s'excluant soi-même), mais retracter d'abord garde l'énoncé lisible :
-   « je retire ce que j'ai diffusé, puis je sors ».
+## Priorité 1 — le join anonyme : ce que le cycle 87 a instruit sans le corriger
 
-Test : `socketio/handlers/__tests__/` a déjà les doubles nécessaires. Affirmer qu'un socket tracké
-comme frappeur émet `typing:stop` sur `conversation:leave`, et qu'un socket non-frappeur n'émet rien
-et ne paie aucune résolution supplémentaire.
+**Un invité de lien partagé ne reçoit rien de `conversation:join`.**
+`ConversationHandler.ts` gate `conversation:joined`, le push de non-lus et les stats sur
+`connectedUser.userId` — `undefined` pour un anonyme — alors que le contrôle d'appartenance juste
+au-dessus l'a laissé passer et que le socket EST dans la room.
 
-## Priorité 2 — trois défauts d'identité et de compteur, tous testables en jest gateway
+Ce que le cycle 87 a **établi** en instruisant cet item (à ne pas refaire) :
 
-- **`POST /conversations/:id/mark-read` émet un `read-status:updated` amputé.**
-  `messages.ts:406-413` construit le payload sans `lastReadAt` ni `unreadCount`, alors que
-  `ReadStatusUpdatedEventData` (`packages/shared/types/socketio-events.ts:895-918`) les déclare
-  obligatoires sur `type: 'read'` et « voyageant en paire ». La route jumelle
-  (`message-read-status.ts:504-540`) les envoie correctement. Conséquence prouvée côté client :
-  `ConversationStoreSocketBridge.swift:119-121` fait `guard … let lastReadAt, let unreadCount else
-  { return }` — et c'est justement cette route que poste le transport de lecture primaire d'iOS
-  (`OutboxDispatcher.swift:329`). **La synchro de lecture multi-appareils d'iOS ne part donc
-  jamais.** Test : `src/__tests__/unit/routes/messages-routes.test.ts`.
-- **Un invité de lien partagé ne reçoit rien de `conversation:join`.**
-  `ConversationHandler.ts:142-167` gate `conversation:joined`, le push de non-lus et les stats sur
-  `connectedUser.userId`, `undefined` pour un anonyme — alors que le contrôle d'appartenance juste
-  au-dessus (`:89-103`) l'a laissé passer et que le socket EST dans la room. `getUnreadCount` accepte
-  déjà un `Participant.id` (`MessageReadStatusService.ts:213-216`). Attention : un test existant
-  (`ConversationHandler.test.ts:207`) **encode le défaut** (« … without CONVERSATION_JOINED ») ; le
-  corriger, c'est le retourner — vérifier d'abord qu'aucune décision datée ne le justifie
-  (leçon 125).
-- **`GET /conversations/:id` recalcule `unreadCount` avec un `where: { userId }` écrit à la main**
-  (`core.ts:895-905`) : pour un anonyme, `authContext.userId` porte un `Participant.id`, la clause ne
-  matche rien et le compteur retombe silencieusement à `0` — qui écrase ensuite le badge que le
-  socket avait poussé juste. C'est exactement le site pour lequel `resolveCallerParticipant` existe.
-  Site jumeau : `MeeshySocketIOManager._emitUnreadCountsSnapshot` (`:916-928`).
+1. **Aucune décision datée ne protège cette porte.** Le « gel » qui semblait la justifier
+   (`docs/superpowers/plans/2026-07-29-architecture-transport-services.md`, GEL §1.5 : *« le join
+   anonyme reste silencieux — aucun événement, aucune room, aucune notification »*) porte sur
+   `routes/anonymous.ts` — le **join REST par lien**, qui CRÉE le participant. Pas sur le handler
+   Socket.IO `conversation:join`, qui fait entrer un socket déjà authentifié dans une room. Fichiers
+   différents, geste différent. La leçon 125 est donc satisfaite : rien à annuler.
+2. Le seul artefact qui encode le défaut est le test `ConversationHandler.test.ts` *« allows an
+   anonymous member (owns participant) to join without CONVERSATION_JOINED »*. Son commentaire
+   **décrit l'implémentation** (« having no userId, does NOT emit ») et attribue le correctif de
+   sécurité `ccaa9311f` à la seule vérification d'appartenance — pas à une rétention volontaire de
+   l'accusé. Le retourner est légitime.
+3. **`getUnreadCount` accepte déjà un `Participant.id`** — c'est documenté explicitement dans son
+   en-tête (`MessageReadStatusService.ts` : *« Accepts either a `Participant.id` OR a `User.id` »*).
+   La moitié « pousser le compteur de non-lus à l'invité » n'a donc **aucun obstacle** et devrait
+   être faite en premier : elle est purement additive, et les sockets anonymes joignent déjà leur
+   room personnelle (`ROOMS.user(userId ?? id)`, via `AuthHandler`) où ces événements arrivent.
 
-## Priorité 3 — le pipeline de traduction (le Prisme y perd des lecteurs)
+**La question qui reste ouverte, et pourquoi le cycle 87 ne l'a pas tranchée seul :** quelle identité
+mettre dans `userId` de l'accusé `conversation:joined` pour un participant sans compte ? Le
+`SocketUser` anonyme porte `id` (le jeton de session) ET `participantId` (le `Participant.id`), et
+ces deux valeurs ne sont pas interchangeables côté client. Envoyer la mauvaise fait d'un accusé une
+désinformation d'identité. **Trancher demande de lire ce que les clients font de `conversation:joined`
+(SDK iOS, web) — pas seulement le gateway** ; le faire à l'aveugle depuis un environnement sans
+toolchain Swift, c'est exactement le pari que la leçon 43 déconseille. Découper : le compteur de
+non-lus d'abord (sans risque), l'accusé ensuite avec la lecture client à l'appui.
+
+## Priorité 2 — le pipeline de traduction (le Prisme y perd des lecteurs)
 
 - **`getTranslation()` lit la langue verbatim quand tous les écrivains la stockent normalisée**
   (`MessageTranslationService.ts:3084`). `POST /translate {target_language:"pt-BR"}` écrit
@@ -81,7 +74,7 @@ et ne paie aucune résolution supplémentaire.
   (`ZmqTranslationClient.ts:295-309`) : `removePendingRequest` désarme le deadman dès la première
   langue. Les langues 2..N n'ont plus ni timeout, ni retry, ni erreur.
 
-## Priorité 4 — web, gateway, translator : le reste
+## Priorité 3 — web, gateway, translator : le reste
 
 - **Monter `useSocketIOMessaging` détruit un socket sain** (`use-socketio-messaging.ts:60-69`) :
   `reconnect()` inconditionnel = `disconnect()` + reconnexion différée par backoff. Cinq composants
@@ -90,7 +83,9 @@ et ne paie aucune résolution supplémentaire.
 - **Les accusés ne sont jamais re-synchronisés après une coupure socket.** Le lot REST
   (`use-conversation-messages-rq.ts:261-307`) n'est relancé que lorsqu'on ENVOIE un message, et
   `conversation:join` ne re-émet pas de `read-status:updated`. Le cycle 85 a rendu ces compteurs
-  monotones : sans backfill, un événement manqué devient un gel permanent.
+  monotones : sans backfill, un événement manqué devient un gel permanent. *(Le cycle 87 a rendu le
+  `read-status:updated` de `mark-read` complet — ce backfill reste néanmoins dû : il traite la perte
+  d'événement, pas la forme du payload.)*
 - **Rien ne recalcule les non-lus après une suppression de message** (gateway) : aucun des sept sites
   d'émission de `conversation:unread-updated` n'est un chemin de suppression. Le badge compte des
   messages qui n'existent plus.
@@ -106,13 +101,98 @@ et ne paie aucune résolution supplémentaire.
 
 - **Les 242 « source guards » iOS** (tête instruite du cycle 86) : des tests qui `grep` le code au
   RUNTIME depuis un `#filePath` figé à la COMPILATION, donc capables de rendre un verdict sans
-  rapport avec le commit testé. **Le cycle 86 n'a rien pu en faire** : aucune toolchain Swift dans
-  l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents, Linux). Le point 1 du
-  dossier (reproduire sur macOS en logguant `url.path` et `source.count`) reste la première mesure à
-  prendre, et elle exige une machine que cette routine n'a pas.
+  rapport avec le commit testé. **Les cycles 86 et 87 n'ont rien pu en faire** : aucune toolchain
+  Swift dans l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents, Linux). Le
+  point 1 du dossier (reproduire sur macOS en logguant `url.path` et `source.count`) reste la
+  première mesure à prendre, et elle exige une machine que cette routine n'a pas.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
   toujours pas.
+- **`UploadProcessor.test.ts` › `uploadFile` › `should upload a valid file successfully` est flaky
+  sous charge** (relevé au cycle 87) : rouge sur une exécution de la suite complète où ce fichier a
+  mis 54 s, vert en isolation en 7 s et vert sur deux autres exécutions complètes du même commit.
+  Source figée, échec intermittent : par la leçon 126, c'est un ordonnancement, pas une régression —
+  et il n'a pas été instruit. À triager par qui possède la zone upload.
+
+---
+
+# Cycle 87 — Trois compteurs qui mentaient, et un correctif écrit deux fois
+
+*Branche `claude/keen-hamilton-tpltop`. Trois correctifs gateway, chacun RED-prouvé par
+réintroduction du défaut. Suite gateway complète verte.*
+
+## 1. `conversation:leave` ne retractait pas la frappe — livré par une AUTRE session
+
+Écrit ici, et simultanément sur `claude/keen-hamilton-8m3aqm` qui l'a mergé sur main en premier.
+Les deux implémentations ont convergé : même nom (`retractTypingIn`), même signature à id déjà
+normalisé, même ordre (retracter avant `socket.leave`), même refus de re-résoudre la conversation.
+
+**Résolution du merge, en faveur de main partout où les deux se touchent** — sa dépendance
+`retractTyping` est optionnelle là où la mienne était requise, et son `try/catch` vit au point
+d'appel plutôt que dans la retraction. Deux choix défendables, déjà mergés, non rejoués.
+
+Ce qui a survécu de cette branche :
+
+- **`StatusHandler.test.ts` : trois tests de `retractTypingIn`** — main n'en avait aucun, sa
+  couverture passait entièrement par `ConversationHandler`. Dont celui qui compte : *« costs nothing
+  for a socket that never typed »* (aucune résolution, aucune requête, aucune diffusion), soit
+  l'écrasante majorité des changements de conversation.
+- **Deux garanties ajoutées à `ConversationHandler.test.ts`** : la conversation n'est résolue
+  QU'UNE fois, et un payload refusé ne retracte rien.
+- Un test que j'avais écrit affirmait « la retraction ne rejette jamais » : c'était **mon** contrat,
+  pas celui de main, qui place le `try/catch` chez l'appelant. Réécrit pour affirmer ce que la
+  version de main garantit réellement — l'ordre untrack-avant-I/O, qui est ce qui évite un socket
+  éternellement « en train d'écrire » après une panne DB.
+
+## 2. `mark-read` diffusait un `read-status:updated` amputé — iOS ne synchronisait jamais ses lectures
+
+`POST /conversations/:id/mark-read` construisait son payload sans `lastReadAt` ni `unreadCount`.
+`ReadStatusUpdatedEventData` les déclare comme une **paire** sur `type: 'read'`, et le contrat dit
+qu'un consommateur les applique ensemble ou pas du tout. iOS le fait à la lettre
+(`ConversationStoreSocketBridge` : `guard … let lastReadAt, let unreadCount else { return }`), donc
+un payload amputé n'est pas appliqué partiellement — il est **jeté**.
+
+Et c'est cette route que poste `ConversationService.markRead`, le transport de lecture primaire
+d'iOS. **Chaîne vérifiée de bout en bout** (Swift → route → payload → garde client) : la synchro de
+lecture multi-appareils d'iOS ne partait jamais. Lire sur son iPhone ne descendait pas le badge sur
+son iPad. La route jumelle `message-read-status.ts` envoyait le couple correctement depuis toujours.
+
+Le couple est désormais résolu une fois et utilisé deux fois — il accompagne la diffusion ET
+alimente la remise à zéro du badge, qui faisait jusqu'ici son propre `getUnreadCount` : **une
+requête de moins par marquage**. Payload typé `ReadStatusUpdatedEventData`.
+
+## 3. `GET /conversations/:id` rendait toujours `unreadCount: 0` à un invité de lien partagé
+
+Clause `where: { conversationId, userId, isActive: true }` écrite à la main. Pour un invité,
+`authContext.userId` PORTE un `Participant.id` : la clause comparait un id de participant à la
+colonne `userId`, ne matchait rien, et le `0` obtenu **écrasait le badge que le socket venait de
+pousser juste**. Le badge d'un invité ne pouvait que disparaître à chaque ouverture.
+
+`resolveCallerParticipant` existe exactement pour ce site — son en-tête décrit ce défaut mot pour
+mot pour les autres routes. Sa précédence (`participantId` avant `userId`) est celle de
+`canAccessConversation` : accès et comptage ne peuvent plus diverger sur l'identité de l'appelant.
+Le helper exclut en plus les bannis, ce que la clause manuelle ne faisait pas.
+
+**Le site jumeau signalé par le cycle 86 n'en est pas un** : `_emitUnreadCountsSnapshot`
+(`MeeshySocketIOManager`) est gardé par un `if (!isAnonymous)` explicite. Il ne produit pas une
+valeur fausse, il n'en produit aucune — c'est une omission délibérée, pas le même défaut. L'étendre
+aux anonymes est une évolution, pas un correctif, et rejoint la question d'identité de la
+priorité 1 ci-dessus.
+
+## Méthode
+
+Chaque correctif RED-prouvé **en réintroduisant le défaut** dans le code de production, pas en
+supposant le rouge : retraction débranchée → 1 rouge ; couple retiré du payload → 2 rouges ; clause
+manuelle restaurée → 1 rouge. Restaurés, re-vérifiés verts à chaque fois.
+
+Un test écrit pour le n°3 partait d'une prémisse fausse — il posait un compteur pré-marquage à 0,
+or la route court-circuite légitimement quand il n'y a rien à marquer. **C'était le test qui avait
+tort, pas la route** : corrigé pour distinguer le compteur d'avant et celui d'après le marquage.
+
+Le double de base de données du test d'invité ne répond **que sur la colonne interrogée** — une
+clause `{ userId: <participant id> }` n'y matche rien, comme en base. Et le module d'access-control
+n'y est plus stubbé que sur `canAccessConversation` : c'est la vraie règle de précédence qui est
+exercée, pas un mock qui la répète.
 
 ---
 
