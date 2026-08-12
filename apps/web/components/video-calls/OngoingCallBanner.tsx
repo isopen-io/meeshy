@@ -35,7 +35,7 @@ export function OngoingCallBanner({
   const formatDuration = (seconds: number): string => formatClock(seconds);
 
   const participantLabel = t(
-    participantCount === 1 ? 'calls.banner.participant' : 'calls.banner.participants',
+    participantCount === 1 ? 'banner.participant' : 'banner.participants',
     { count: String(participantCount) }
   );
 
@@ -61,7 +61,7 @@ export function OngoingCallBanner({
 
           <div className="flex flex-col">
             <p className="text-white font-semibold text-sm">
-              {t('calls.banner.inProgress')}
+              {t('banner.inProgress')}
             </p>
             <p className="text-white/80 text-xs">
               {participantLabel} • {formatDuration(duration)}
@@ -77,7 +77,7 @@ export function OngoingCallBanner({
             className="bg-white/90 dark:bg-white/10 text-green-700 dark:text-white hover:bg-white/80 dark:hover:bg-white/20 font-semibold"
           >
             <Phone className="w-4 h-4 mr-1" />
-            {t('calls.banner.join')}
+            {t('banner.join')}
           </Button>
 
           <Button
@@ -85,7 +85,7 @@ export function OngoingCallBanner({
             variant="ghost"
             onClick={onDismiss}
             className="text-white hover:bg-white/10 w-8 h-8"
-            aria-label={t('calls.banner.dismiss')}
+            aria-label={t('banner.dismiss')}
           >
             <X className="w-4 h-4" />
           </Button>

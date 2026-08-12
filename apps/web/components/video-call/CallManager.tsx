@@ -815,7 +815,7 @@ export function CallManager() {
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
       logger.error('[CallManager]', 'Failed to accept call: ' + ((error as Error)?.message || 'Unknown error'));
-      toast.error(t('calls.toasts.joinFailed'));
+      toast.error(t('toasts.joinFailed'));
       setIncomingCall(null);
     } finally {
       acceptingCallIdRef.current = null;
@@ -862,7 +862,7 @@ export function CallManager() {
       });
     } catch (error: unknown) {
       logger.error('[CallManager]', 'End & answer failed to join waiting call: ' + ((error as Error)?.message || 'Unknown error'));
-      toast.error(t('calls.toasts.joinFailed'));
+      toast.error(t('toasts.joinFailed'));
     }
   }, [waitingCall, clearWaitingTimeout, reset, acceptOrJoinCall, t]);
 
@@ -968,7 +968,7 @@ export function CallManager() {
           && session.id === request.callId
           && !CALL_TERMINAL_STATUSES.includes(session.status);
         if (!isJoinable) {
-          toast.info(t('calls.toasts.callAlreadyEnded'));
+          toast.info(t('toasts.callAlreadyEnded'));
           return;
         }
 
@@ -983,7 +983,7 @@ export function CallManager() {
         });
       } catch (error: unknown) {
         logger.error('[CallManager]', 'Failed to join ongoing call from bubble: ' + ((error as Error)?.message || 'Unknown error'));
-        toast.error(t('calls.toasts.joinFailed'));
+        toast.error(t('toasts.joinFailed'));
       }
     })();
   }, [joinRequest, clearJoinRequest, acceptOrJoinCall, t]);

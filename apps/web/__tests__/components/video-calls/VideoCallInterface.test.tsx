@@ -275,7 +275,7 @@ describe('VideoCallInterface (container)', () => {
     storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
     try {
       render(<VideoCallInterface callId="call1" />);
-      const button = screen.getByRole('button', { name: 'calls.stream.fullscreen' });
+      const button = screen.getByRole('button', { name: 'stream.fullscreen' });
       expect(button).toHaveAttribute('tabIndex', '0');
       // Enter/Space must not throw and must be intercepted (preventDefault) by the handler.
       fireEvent.keyDown(button, { key: 'Enter' });
@@ -305,13 +305,13 @@ describe('VideoCallInterface (container)', () => {
 
     it('mutes the remote video element when the speaker is toggled off', () => {
       render(<VideoCallInterface callId="call1" />);
-      fireEvent.click(screen.getByRole('button', { name: 'calls.controls.speakerOff' }));
+      fireEvent.click(screen.getByRole('button', { name: 'controls.speakerOff' }));
       expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'true');
     });
 
     it('unmutes again on a second toggle', () => {
       render(<VideoCallInterface callId="call1" />);
-      const button = () => screen.getByRole('button', { name: /calls\.controls\.speaker(On|Off)/ });
+      const button = () => screen.getByRole('button', { name: /controls\.speaker(On|Off)/ });
       fireEvent.click(button());
       fireEvent.click(button());
       expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'false');
@@ -557,7 +557,7 @@ describe('VideoCallInterface (container)', () => {
     });
 
     const clickSwitchCamera = async () => {
-      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      const button = await screen.findByRole('button', { name: 'controls.switchCamera' });
       fireEvent.click(button);
     };
 
@@ -572,7 +572,7 @@ describe('VideoCallInterface (container)', () => {
       await clickSwitchCamera();
 
       await waitFor(() => expect(webrtc.switchCamera).toHaveBeenCalledWith('environment'));
-      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('calls.toasts.cameraSwitched'));
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('toasts.cameraSwitched'));
     });
 
     it('derives "user" from an environment-facing current track', async () => {
@@ -599,8 +599,8 @@ describe('VideoCallInterface (container)', () => {
       render(<VideoCallInterface callId="call1" />);
       await clickSwitchCamera();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.cameraSwitchFailed'));
-      expect(toast.success).not.toHaveBeenCalledWith('calls.toasts.cameraSwitched');
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('toasts.cameraSwitchFailed'));
+      expect(toast.success).not.toHaveBeenCalledWith('toasts.cameraSwitched');
     });
 
     it('no-ops without calling switchCamera when there is no local video track', async () => {
@@ -822,7 +822,7 @@ describe('VideoCallInterface (container)', () => {
       );
 
       render(<VideoCallInterface callId="call1" />);
-      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      const button = await screen.findByRole('button', { name: 'controls.switchCamera' });
 
       fireEvent.click(button);
       fireEvent.click(button);
@@ -862,7 +862,7 @@ describe('VideoCallInterface (container)', () => {
       const button = screen.getByTestId('toggle-video');
       fireEvent.click(button);
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.videoSwitchFailed'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('toasts.videoSwitchFailed'));
 
       expect(storeState.setControls).not.toHaveBeenCalled();
       expect(fakeSocket.emit).not.toHaveBeenCalledWith(
@@ -977,7 +977,7 @@ describe('VideoCallInterface (container)', () => {
     };
 
     const clickSwitchCamera = async () => {
-      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      const button = await screen.findByRole('button', { name: 'controls.switchCamera' });
       fireEvent.click(button);
     };
 

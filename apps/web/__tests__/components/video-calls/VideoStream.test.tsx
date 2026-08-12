@@ -23,18 +23,18 @@ describe('VideoStream — disconnected overlay tracks isDisconnected both ways',
 
   it('shows the disconnected overlay while isDisconnected is true', () => {
     render(<VideoStream stream={null} isDisconnected participantName="Alice" />);
-    expect(screen.getByText('calls.stream.disconnected')).toBeInTheDocument();
+    expect(screen.getByText('stream.disconnected')).toBeInTheDocument();
   });
 
   it('hides the disconnected overlay again once isDisconnected flips back to false', () => {
     const { rerender } = render(
       <VideoStream stream={null} isDisconnected participantName="Alice" />
     );
-    expect(screen.getByText('calls.stream.disconnected')).toBeInTheDocument();
+    expect(screen.getByText('stream.disconnected')).toBeInTheDocument();
 
     rerender(<VideoStream stream={null} isDisconnected={false} participantName="Alice" />);
 
-    expect(screen.queryByText('calls.stream.disconnected')).not.toBeInTheDocument();
+    expect(screen.queryByText('stream.disconnected')).not.toBeInTheDocument();
   });
 
   it('un-hides the video element once reconnected', () => {

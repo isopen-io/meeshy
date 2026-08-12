@@ -4,7 +4,7 @@
  *
  * `call.type` is 'audio' | 'video' (CallInitiatedEvent, already correctly
  * consumed by CallManager's media-constraint gate) but the banner hardcoded
- * a Video icon + the 'calls.incoming.videoCall' string regardless of type —
+ * a Video icon + the 'incoming.videoCall' string regardless of type —
  * a callee receiving a pure audio call saw a pulsing video icon and "Video
  * Call", misleading them about what they're about to join.
  */
@@ -34,8 +34,8 @@ const baseCall: CallInitiatedEvent = {
 describe('CallNotification — media type label', () => {
   it('shows the video label/icon for a video call', () => {
     render(<CallNotification call={baseCall} onAccept={jest.fn()} onReject={jest.fn()} />);
-    expect(screen.getByText('calls.incoming.videoCall')).toBeInTheDocument();
-    expect(screen.queryByText('calls.incoming.audioCall')).not.toBeInTheDocument();
+    expect(screen.getByText('incoming.videoCall')).toBeInTheDocument();
+    expect(screen.queryByText('incoming.audioCall')).not.toBeInTheDocument();
   });
 
   it('shows the audio label, not the video label, for an audio-only call', () => {
@@ -46,7 +46,7 @@ describe('CallNotification — media type label', () => {
         onReject={jest.fn()}
       />
     );
-    expect(screen.getByText('calls.incoming.audioCall')).toBeInTheDocument();
-    expect(screen.queryByText('calls.incoming.videoCall')).not.toBeInTheDocument();
+    expect(screen.getByText('incoming.audioCall')).toBeInTheDocument();
+    expect(screen.queryByText('incoming.videoCall')).not.toBeInTheDocument();
   });
 });

@@ -53,7 +53,7 @@ export function CallWaitingBanner({ call, onReject, onEndAndAnswer }: CallWaitin
           <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
             {call.type === 'video' ? <Video className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
             <span id="call-waiting-title" className="text-xs font-semibold uppercase tracking-wide">
-              {t('calls.callWaiting.title')}
+              {t('callWaiting.title')}
             </span>
           </div>
           <p className="font-bold text-gray-900 dark:text-white truncate">
@@ -68,20 +68,20 @@ export function CallWaitingBanner({ call, onReject, onEndAndAnswer }: CallWaitin
           size="sm"
           className="flex-1 gap-1.5 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
           onClick={onReject}
-          aria-label={t('calls.callWaiting.rejectLabel')}
+          aria-label={t('callWaiting.rejectLabel')}
         >
           <PhoneOff className="w-4 h-4" />
-          {t('calls.callWaiting.reject')}
+          {t('callWaiting.reject')}
         </Button>
         <Button
           variant="default"
           size="sm"
           className="flex-1 gap-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white"
           onClick={onEndAndAnswer}
-          aria-label={t('calls.callWaiting.endAndAnswerLabel')}
+          aria-label={t('callWaiting.endAndAnswerLabel')}
         >
           <PhoneForwarded className="w-4 h-4" />
-          {t('calls.callWaiting.endAndAnswer')}
+          {t('callWaiting.endAndAnswer')}
         </Button>
       </div>
     </div>

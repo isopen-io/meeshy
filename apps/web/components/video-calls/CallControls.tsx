@@ -73,7 +73,7 @@ export function CallControls({
         'border border-white/10'
       )}
       role="toolbar"
-      aria-label={t('calls.controls.controls')}
+      aria-label={t('controls.controls')}
     >
       {/* Mute/Unmute Audio */}
       <Button
@@ -86,8 +86,8 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
         )}
-        aria-label={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
-        title={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
+        aria-label={audioEnabled ? t('controls.mute') : t('controls.unmute')}
+        title={audioEnabled ? t('controls.mute') : t('controls.unmute')}
       >
         {audioEnabled ? (
           <Mic className="w-5 h-5 md:w-6 md:h-6" />
@@ -113,17 +113,17 @@ export function CallControls({
         )}
         aria-label={
           videoAutoPaused
-            ? t('calls.controls.videoPausedWeak')
+            ? t('controls.videoPausedWeak')
             : videoEnabled
-              ? t('calls.controls.videoOff')
-              : t('calls.controls.videoOn')
+              ? t('controls.videoOff')
+              : t('controls.videoOn')
         }
         title={
           videoAutoPaused
-            ? t('calls.controls.videoPausedWeak')
+            ? t('controls.videoPausedWeak')
             : videoEnabled
-              ? t('calls.controls.videoOff')
-              : t('calls.controls.videoOn')
+              ? t('controls.videoOff')
+              : t('controls.videoOn')
         }
       >
         {videoEnabled && !videoAutoPaused ? (
@@ -147,8 +147,8 @@ export function CallControls({
           variant="default"
           onClick={onSwitchCamera}
           className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors touch-manipulation"
-          aria-label={t('calls.controls.switchCamera')}
-          title={t('calls.controls.switchCamera')}
+          aria-label={t('controls.switchCamera')}
+          title={t('controls.switchCamera')}
         >
           <SwitchCamera className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -165,8 +165,8 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-gray-800 hover:bg-gray-700 text-white'
         )}
-        aria-label={speakerEnabled ? t('calls.controls.speakerOff') : t('calls.controls.speakerOn')}
-        title={speakerEnabled ? t('calls.controls.speakerOnLabel') : t('calls.controls.speakerOffLabel')}
+        aria-label={speakerEnabled ? t('controls.speakerOff') : t('controls.speakerOn')}
+        title={speakerEnabled ? t('controls.speakerOnLabel') : t('controls.speakerOffLabel')}
       >
         {speakerEnabled ? (
           <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
@@ -187,8 +187,8 @@ export function CallControls({
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label={t('calls.controls.audioEffects')}
-          title={t('calls.controls.audioEffectsTitle')}
+          aria-label={t('controls.audioEffects')}
+          title={t('controls.audioEffectsTitle')}
         >
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -206,8 +206,8 @@ export function CallControls({
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label={t('calls.controls.connectionStats')}
-          title={t('calls.controls.connectionStatsTitle')}
+          aria-label={t('controls.connectionStats')}
+          title={t('controls.connectionStatsTitle')}
         >
           <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -219,8 +219,8 @@ export function CallControls({
         variant="destructive"
         onClick={onHangUp}
         className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors touch-manipulation"
-        aria-label={t('calls.controls.endCall')}
-        title={t('calls.controls.endCall')}
+        aria-label={t('controls.endCall')}
+        title={t('controls.endCall')}
       >
         <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
       </Button>

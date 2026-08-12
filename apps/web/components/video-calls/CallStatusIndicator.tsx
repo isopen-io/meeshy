@@ -95,22 +95,22 @@ function getQualityIcon(quality: string) {
 }
 
 function getQualityLabel(quality: string, state: RTCPeerConnectionState, t: (key: string) => string): string {
-  if (state === 'connecting') return t('calls.status.connecting');
-  if (state === 'new') return t('calls.status.starting');
-  if (state === 'disconnected') return t('calls.status.reconnecting');
-  if (state === 'failed') return t('calls.status.failed');
-  if (state === 'closed') return t('calls.status.disconnected');
+  if (state === 'connecting') return t('status.connecting');
+  if (state === 'new') return t('status.starting');
+  if (state === 'disconnected') return t('status.reconnecting');
+  if (state === 'failed') return t('status.failed');
+  if (state === 'closed') return t('status.disconnected');
 
   switch (quality) {
     case 'excellent':
-      return t('calls.status.quality.excellent');
+      return t('status.quality.excellent');
     case 'good':
-      return t('calls.status.quality.good');
+      return t('status.quality.good');
     case 'poor':
-      return t('calls.status.quality.poor');
+      return t('status.quality.poor');
     case 'offline':
-      return t('calls.status.quality.offline');
+      return t('status.quality.offline');
     default:
-      return t('calls.status.connected');
+      return t('status.connected');
   }
 }

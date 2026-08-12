@@ -87,7 +87,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
             <Mic className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
           )}
           <span className="text-sm font-medium text-green-600 dark:text-green-400">
-            {call.type === 'video' ? t('calls.incoming.videoCall') : t('calls.incoming.audioCall')}
+            {call.type === 'video' ? t('incoming.videoCall') : t('incoming.audioCall')}
           </span>
         </div>
 
@@ -103,7 +103,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"
           >
-            {t('calls.incoming.subtitle')}
+            {t('incoming.subtitle')}
           </p>
         </div>
 
@@ -114,21 +114,21 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
             size="lg"
             className="flex-1 gap-2 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
             onClick={onReject}
-            aria-label={t('calls.incoming.declineLabel')}
+            aria-label={t('incoming.declineLabel')}
           >
             <PhoneOff className="w-5 h-5" />
-            {t('calls.incoming.decline')}
+            {t('incoming.decline')}
           </Button>
           <Button
             variant="default"
             size="lg"
             className="flex-1 gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white shadow-lg shadow-green-500/50"
             onClick={onAccept}
-            aria-label={t('calls.incoming.acceptLabel')}
+            aria-label={t('incoming.acceptLabel')}
             autoFocus
           >
             <Phone className="w-5 h-5" />
-            {t('calls.incoming.accept')}
+            {t('incoming.accept')}
           </Button>
         </div>
       </div>

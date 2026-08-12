@@ -4,7 +4,7 @@ jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
     // The remoteAlerts labels carry a {name} placeholder in the real catalog —
     // mirror it so the interpolation test below actually proves substitution.
-    t: (k: string) => (k.startsWith('calls.remoteAlerts.') ? `${k} {name}` : k),
+    t: (k: string) => (k.startsWith('remoteAlerts.') ? `${k} {name}` : k),
     isLoading: false,
   }),
 }));

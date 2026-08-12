@@ -31,10 +31,10 @@ function CallErrorDisplay({ error, onReset }: { error: Error; onReset: () => voi
           <AlertCircle className="w-8 h-8 text-white" />
         </div>
 
-        <h1 className="text-white text-2xl font-bold mb-2">{t('calls.error.title')}</h1>
+        <h1 className="text-white text-2xl font-bold mb-2">{t('error.title')}</h1>
 
         <p className="text-gray-300 mb-6">
-          {error.message || t('calls.error.message')}
+          {error.message || t('error.message')}
         </p>
 
         <div className="flex gap-3 justify-center">
@@ -44,24 +44,24 @@ function CallErrorDisplay({ error, onReset }: { error: Error; onReset: () => voi
             className="flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />
-            {t('calls.error.tryAgain')}
+            {t('error.tryAgain')}
           </Button>
 
           <Button
             onClick={() => { window.location.href = '/'; }}
             variant="outline"
           >
-            {t('calls.error.returnHome')}
+            {t('error.returnHome')}
           </Button>
         </div>
 
         <div className="mt-6 text-left text-sm text-gray-400">
-          <p className="font-semibold mb-2">{t('calls.error.troubleshooting.title')}</p>
+          <p className="font-semibold mb-2">{t('error.troubleshooting.title')}</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>{t('calls.error.troubleshooting.permissions')}</li>
-            <li>{t('calls.error.troubleshooting.browser')}</li>
-            <li>{t('calls.error.troubleshooting.https')}</li>
-            <li>{t('calls.error.troubleshooting.refresh')}</li>
+            <li>{t('error.troubleshooting.permissions')}</li>
+            <li>{t('error.troubleshooting.browser')}</li>
+            <li>{t('error.troubleshooting.https')}</li>
+            <li>{t('error.troubleshooting.refresh')}</li>
           </ul>
         </div>
       </div>
