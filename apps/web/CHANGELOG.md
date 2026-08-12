@@ -1,5 +1,78 @@
 # @meeshy/web
 
+## 1.25.4
+
+### Patch Changes
+
+- 2079119: Une page delta qui laisse du reste ne fait plus avancer le curseur iOS, et le web arrête d'escalader pour rien
+
+  `ConversationSyncEngine.deltaSyncCore` (SDK iOS) demandait `limit=500` à
+  `GET /conversations?updatedSince=`, que la route plafonne à 100 — puis avançait
+  `lastSyncTimestamp` au max des `updatedAt` REÇUS, sans jamais regarder si la page avait été
+  coupée. Le tri par `updatedAt` croissant (cycle 77) fait pointer le curseur sur les lignes
+  coupées dans le cas général, mais pas quand plus de 100 conversations partagent la MÊME
+  milliseconde : la borne serveur est stricte (`gt`), donc le débordement était enjambé
+  DÉFINITIVEMENT — jusqu'à la réconciliation complète, bornée à 1× par 24 h. Entre les deux, la
+  liste iOS affichait des compteurs de non-lus et des aperçus périmés sans aucun signal.
+
+  iOS lit désormais le `pagination.hasMore` de la réponse. Quand le serveur annonce du reste :
+  le curseur NE BOUGE PAS, puis `fullSync()` est enchaîné. L'ordre est le correctif — c'est
+  parce que le curseur est resté en arrière qu'une escalade échouée (offline, panne gateway)
+  laisse la fenêtre entière rejouable au prochain delta au lieu d'un trou permanent. La fusion
+  de la page reçue, elle, est conservée dans tous les cas.
+
+  Côté web, la même escalade se déclenchait sur `conversations.length >= DELTA_PAGE_LIMIT`.
+  `hasMore` est autoritaire sur une page delta — elle part toujours d'`offset=0`, ce qui fait
+  compter au serveur toutes les lignes de la même clause `updatedAt > since` — donc une fenêtre
+  de très exactement 100 conversations est COMPLÈTE. Le web relisait toutes ses pages chargées
+  pour rien dans ce cas ; il lit maintenant le même signal qu'iOS.
+
+- c51cebe: Une réaction n'invalide plus la liste de conversations
+
+  Les deux handlers socket de réaction (`use-reactions-query.ts`) faisaient
+  `invalidateQueries({ queryKey: conversations.lists() })`, commentaire à l'appui : « réaction
+  ajoutée = conversation modifiée ». Deux défauts dans le même geste.
+
+  `lists()` valait `['conversations','list']` ; la sidebar lit `infinite()` =
+  `['conversations','infinite']`. Les deux préfixes étaient DISJOINTS : l'intention écrite n'était
+  jamais exécutée. Panne silencieuse, pas code mort — le commentaire faisait foi pour le prochain
+  lecteur.
+
+  Et l'intention elle-même est fausse : une ligne de liste ne porte rien qui dérive des réactions
+  (aperçu du dernier message, non-lus, horodatage). L'emoji `reaction` rendu par `ConversationList`
+  est la PRÉFÉRENCE de conversation, sans rapport avec les réactions de message. Rediriger vers
+  `infinite()` aurait donc relu toutes les pages chargées à chaque réaction — exactement le
+  refetch que le cycle 77 venait de retirer du chemin de focus.
+
+  Le seul cache concerné par une réaction reste celui du message, déjà mis à jour juste en dessous
+  par `updateReactionSummaryInMessageCache`. Le commentaire qui reste sur le site dit pourquoi il
+  n'y a PAS d'invalidation : un retrait silencieux inviterait le prochain lecteur à « réparer
+  l'invalidation manquante ».
+
+- 0ca31f1: Un seul cache de liste de conversations — la forme plate sans lecteur est retirée
+
+  `queryKeys.conversations` exposait `lists()` / `list(filters)` (`['conversations','list', …]`) à
+  côté de `infinite()` (`['conversations','infinite']`). Les deux préfixes sont DISJOINTS, et aucun
+  écran ne lisait le premier : la sidebar passe par `useConversationsPaginationRQ` →
+  `useInfiniteConversationsQuery`. Une dizaine d'écrivains l'alimentaient quand même, à chaque
+  événement — autant de no-ops silencieux, et un code qui se lisait comme si deux caches étaient
+  tenus en phase alors qu'un seul existait.
+
+  Retirés : la clé plate, ses écrivains, les hooks sans consommateur (`useConversationsQuery`,
+  `useConversationsWithPagination`, les mutations create/delete de conversation) et tout
+  `use-send-message-mutation.ts`, dont les quatre mutations n'avaient elles non plus aucun appelant —
+  l'envoi réel passe par l'orchestrateur Socket.IO.
+
+  Deux corrections de comportement au passage : les `invalidateQueries` déclenchées par une réaction
+  ciblaient la clé plate et ne s'exécutaient donc jamais (supprimées — la ligne de liste ne dépend
+  d'aucune réaction de message), et `useInfiniteConversationsQuery` acceptait un `filters` que sa clé
+  de requête n'incluait pas, donc silencieusement ignoré.
+
+  Les témoins de `use-socket-cache-sync` qui n'assertaient que la forme plate — « déplacer la
+  conversation en tête », « avancer l'aperçu sur suppression », « purger la conversation refusée » —
+  ont été rebranchés sur le cache réellement lu, et vérifiés rouges contre une écriture cassée avant
+  tout retrait : le chemin que la sidebar emprunte n'avait jusqu'ici aucune couverture.
+
 ## 1.25.3
 
 ### Patch Changes
