@@ -225,6 +225,28 @@ delay = min(
 }
 ```
 
+### Une requête multi-langues se solde LANGUE PAR LANGUE
+
+Une requête de traduction porte N langues, et le translator les rend une à une :
+`translationCompleted` arrive N fois pour un même `taskId`.
+
+`ZmqRequestSender` mémorise donc, par requête, le jeu des langues encore
+attendues (`pendingLanguages`, en forme canonique `normalizeLanguageCode` — le
+translator peut rendre `en` là où l'appelant demandait `EN`). Chaque résultat
+solde SA langue via `settleTranslationLanguage()` ; la requête n'est retirée — et
+son deadman annulé — qu'avec la dernière.
+
+Solder la requête entière au premier résultat (ce que faisait
+`removePendingRequest` sur `translationCompleted`) désarmait d'un coup deadman,
+retry et `translationError` pour les langues 2..N : si le translator mourait
+après avoir rendu la première, les autres ne revenaient jamais, personne ne
+l'apprenait, et rien ne les retentait. Ces lecteurs restaient sur le contenu
+original définitivement.
+
+Corollaire sur le retry : le renvoi porte le MÊME `taskId` mais ne redemande que
+les langues encore manquantes — re-pousser une langue déjà rendue duplique le
+travail du worker pool ML pour rien.
+
 ## Types d'Événements
 
 ### Translation
