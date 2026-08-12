@@ -600,6 +600,27 @@ describe('MessageTranslationService', () => {
       expect(result).toBeDefined();
       expect(result?.translatedText).toBe('Bonjour');
     });
+
+    // Le cas CAPITALISÉ, que la couverture voisine ne porte pas : `Locale.current`
+    // rend aussi bien `'FR'` que `'pt-BR'`, et la lecture stricte manquait les
+    // deux. La normalisation en repli les rattrape l'un comme l'autre.
+    it('resolves an uppercase target against the normalized stored key', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-upper',
+        originalLanguage: 'en',
+        translations: {
+          fr: {
+            text: 'Bonjour',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-upper', 'FR');
+
+      expect(result?.translatedText).toBe('Bonjour');
+    });
   });
 
   describe('translateTextDirectly', () => {

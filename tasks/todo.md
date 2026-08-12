@@ -7,6 +7,25 @@ re-auditer — vérifier puis corriger.***
 **Avant de commencer un item, `git fetch origin main` et vérifier qu'aucun commit récent ne le porte
 déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en parallèle).
 
+> **Et cette consigne n'est pas assez forte — elle vient d'échouer une seconde fois.** Une session
+> parallèle (`claude/keen-hamilton-r0rdv1`) a mené le cycle 88 de bout en bout en même temps que
+> celle-ci : mêmes trois premiers correctifs, RED-prouvés, suite complète verte, PR #2886 ouverte et
+> CI passée — le tout déjà sur `main` quand sa CI s'est terminée. Elle avait bien fait son
+> `git fetch` d'ouverture ; à cet instant `origin/main` valait exactement HEAD. **Le `fetch`
+> d'ouverture ne protège de rien** : il atteste du passé, pas de l'avenir, et un cycle dure des
+> heures.
+>
+> La règle praticable, à appliquer littéralement :
+>
+> ```bash
+> git fetch origin main && git log --oneline -15 origin/main   # AVANT d'écrire CHAQUE item
+> git fetch origin main                                        # ET juste avant d'ouvrir la PR
+> ```
+>
+> Ce qui a survécu de la session doublon, après salvage test par test : **un seul test** (le cas
+> capitalisé `'FR'` de `getTranslation`, que la couverture retenue ne portait pas) et deux leçons.
+> Détail du salvage et des arbitrages non rejoués : leçon 137.
+
 ## Livré au cycle 88
 
 1. **L'invité anonyme n'est plus traité en silence par `conversation:join`** (ancienne priorité 1,
@@ -1160,6 +1179,23 @@ registre. Elle est marquée LIVRÉ, avec la mention du défaut voisin qu'elle ne
   peut apparaître deux fois (la borne keyset porte sur `createdAt`, pas sur ce qui a changé).
   `toStoryGroups` + `insertOrMergeStoryGroups` dédupliquent par id en aval, donc l'effet est nul
   aujourd'hui — mais c'est une propriété du consommateur, pas du drain.
+
+## Suite livrée après coup — les tombstones scopent la FENÊTRE, pas la page
+
+Le drain fait jusqu'à 6 requêtes pour une même fenêtre delta. La requête de tombstones, elle, ne
+dépend PAS du curseur : sa clause est `deletedAt != null AND updatedAt > since`, identique d'une
+page à l'autre. Elle repartait donc à CHAQUE page — jusqu'à 6 lectures de 501 lignes sous filtre de
+visibilité, pour un résultat que le client tenait déjà depuis la première.
+
+Elle ne court plus que sur la page qui OUVRE la fenêtre (`options.updatedSince && !cursorData`).
+Sûr **parce que** le drain fusionne par union (`formUnion`) et par `||`, jamais par écrasement : une
+page suivante sans tombstone ne peut pas effacer ceux de la première. Deux témoins encadrent la
+règle — pas de requête sur une page cursorée, et la requête TOUJOURS présente sur la page
+d'ouverture (sans ce second témoin, l'optimisation pourrait supprimer les tombstones du produit).
+
+Trouvé en instruisant le même cycle 80 depuis une session concurrente, qui a livré le reste du
+correctif (PR #2867). Les deux sessions ont convergé sur le drain, la ligne sonde et le drapeau ;
+seul ce point les distinguait.
 
 ---
 

@@ -91,6 +91,15 @@ describe('useSocketIOMessaging', () => {
     jest.clearAllMocks();
 
     // Default mock implementations
+    // Socle froid : aucun socket, aucune connexion en vol. `jest.clearAllMocks()`
+    // n'efface PAS les `mockReturnValue`, donc sans ce socle un test qui déclare
+    // une connexion saine la léguait à tous les suivants — et l'ordre des tests
+    // décidait alors du verdict des effets de montage.
+    mockGetConnectionDiagnostics.mockReturnValue({
+      isConnected: false,
+      hasSocket: false,
+      isConnecting: false,
+    });
     mockSendMessage.mockResolvedValue({ success: true, messageId: 'server-msg-1' });
     mockEditMessage.mockResolvedValue(true);
     mockDeleteMessage.mockResolvedValue(true);
@@ -170,6 +179,46 @@ describe('useSocketIOMessaging', () => {
       await waitFor(() => {
         expect(mockReconnect).toHaveBeenCalled();
       });
+    });
+
+    // `reconnect()` n'est PAS « connecte si besoin » : c'est `disconnect()` suivi
+    // d'un `connect()` différé par backoff exponentiel
+    // (`ConnectionService.reconnect`, délai 1 000–2 000 ms au premier essai).
+    // L'appeler au montage sur une connexion SAINE coupe donc le socket une à
+    // deux secondes — et cinq composants montent ce hook, si bien qu'ouvrir un
+    // profil suffisait à couper le temps réel de tout le monde à l'écran.
+    // L'étape 1C juste en dessous fait exactement le même geste, correctement
+    // gardé ; c'est la même garde qui manquait ici.
+    it('does NOT reconnect on mount when the socket is already connected', async () => {
+      mockGetAuthToken.mockReturnValue('token-123');
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: true,
+        hasSocket: true,
+        isConnecting: false,
+      });
+
+      renderHook(() => useSocketIOMessaging());
+
+      await waitFor(() => {
+        expect(mockGetConnectionDiagnostics).toHaveBeenCalled();
+      });
+      expect(mockReconnect).not.toHaveBeenCalled();
+    });
+
+    it('does NOT reconnect on mount while a connection is already in flight', async () => {
+      mockGetAuthToken.mockReturnValue('token-123');
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: false,
+        hasSocket: true,
+        isConnecting: true,
+      });
+
+      renderHook(() => useSocketIOMessaging());
+
+      await waitFor(() => {
+        expect(mockGetConnectionDiagnostics).toHaveBeenCalled();
+      });
+      expect(mockReconnect).not.toHaveBeenCalled();
     });
   });
 
