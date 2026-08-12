@@ -1142,6 +1142,10 @@ struct ConversationView: View {
                 accentColor: accentColor,
                 isDirect: isDirect,
                 bottomInset: composerHeight + 16,
+                // 0 en preview : la vue y est hébergée dans une `.sheet` à
+                // détentes, dont le bord haut est déjà sous la status bar —
+                // réserver la bande îlot y décalerait le flux dans le vide.
+                topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -1341,6 +1345,17 @@ struct ConversationView: View {
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                 }
             )
+            // Le flux traverse la zone status bar / Dynamic Island jusqu'au bord
+            // haut de l'écran (retour user 2026-08-12) : sans ça, SwiftUI pose le
+            // représentable DANS la safe area, la liste s'arrête sous l'îlot et
+            // cette bande ne montre plus que le dégradé de fond — lu comme une
+            // « couleur unie » derrière l'îlot, là où les autres écrans laissent
+            // leur contenu défiler sous le header jusqu'au bord. Le repos du flux
+            // est inchangé : le contrôleur réserve la hauteur de la bande en
+            // inset (`applyTopInset`), le contenu ne fait qu'y transiter au
+            // défilement. Le header flottant, lui, reste dans la safe area
+            // (zIndex 100, au-dessus).
+            .ignoresSafeArea(.container, edges: .top)
 
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par

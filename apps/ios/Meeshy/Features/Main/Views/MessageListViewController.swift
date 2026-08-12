@@ -257,11 +257,44 @@ final class MessageListViewController: UIViewController {
         }
     }
 
+    /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre
+    /// depuis que le parent SwiftUI l'étend sous la safe area haute
+    /// (`ignoresSafeArea(.container, edges: .top)`, retour user 2026-08-12 :
+    /// « de la transparence jusqu'en bordure d'écran »). Fournie par le parent
+    /// (`DeviceLayout.safeAreaTop`) et JAMAIS lue via `view.safeAreaInsets` :
+    /// sous `ignoresSafeArea`, SwiftUI ne propage plus l'inset au contrôleur
+    /// hébergé, la vue croirait la bande inexistante et poserait la pill de
+    /// jour sous l'îlot.
+    private var topInset: CGFloat = 0
+
+    /// Réserve, AU REPOS, la hauteur de cette bande. Liste inversée : le HAUT
+    /// visuel est `contentInset.bottom`. Le contenu la TRAVERSE au défilement
+    /// — c'est tout l'objet du changement — il s'y arrête simplement quand le
+    /// flux est déroulé jusqu'au message le plus ancien. Recale aussi l'ancre
+    /// de la pill de jour, qui reste sous la rangée du header flottant.
+    func applyTopInset(_ inset: CGFloat) {
+        topInset = inset
+        applyTopInsetToViews()
+    }
+
+    private func applyTopInsetToViews() {
+        guard collectionView != nil else { return }
+        if collectionView.contentInset.bottom != topInset {
+            collectionView.contentInset.bottom = topInset
+            collectionView.verticalScrollIndicatorInsets.bottom = topInset
+        }
+        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
+    }
+
     /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
     /// top du collectionView. Mis à jour à chaque `scrollViewDidScroll` et
     /// après `applySnapshot` pour que le label suive le message en haut visible.
     private let stickyDayState = MessageDayStickyState()
     private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
+    /// Ancre verticale de la pill, recalculée par `applyTopInset` : la vue
+    /// s'étendant sous la safe area haute, l'offset produit est
+    /// `topInset + MessageDayStickyPlacement.topOffset`.
+    private var stickyDayTopConstraint: NSLayoutConstraint?
     /// Dernier item de tête pour lequel la sticky pill a été calculée. Permet
     /// d'éviter le recalcul (résolution `store.message` + `toMessage`) à chaque
     /// frame de `scrollViewDidScroll` tant que la cellule de tête ne change pas.
@@ -271,6 +304,7 @@ final class MessageListViewController: UIViewController {
         super.viewDidLoad()
         configureCollectionView()
         configureStickyDayOverlay()
+        applyTopInsetToViews()
         configureDataSource()
         observeStore()
         startSeenTracking()
@@ -303,14 +337,20 @@ final class MessageListViewController: UIViewController {
         view.addSubview(host.view)
         host.didMove(toParent: self)
         host.view.translatesAutoresizingMaskIntoConstraints = false
+        // Ancrée au bord HAUT DE LA VUE (qui court désormais jusqu'au bord de
+        // l'écran) + `topInset` : la position à l'écran est identique à
+        // l'ancrage safe-area d'avant, mais elle ne dépend plus de ce que
+        // SwiftUI propage comme safe area au contrôleur hébergé.
+        let stickyTop = host.view.topAnchor.constraint(
+            equalTo: view.topAnchor,
+            constant: topInset + MessageDayStickyPlacement.topOffset
+        )
         NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor,
-                constant: MessageDayStickyPlacement.topOffset
-            ),
+            stickyTop,
             host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
+        stickyDayTopConstraint = stickyTop
         stickyDayHost = host
     }
 
@@ -400,6 +440,12 @@ final class MessageListViewController: UIViewController {
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.backgroundColor = .clear
+        // La liste est inversée (transform ci-dessous) : l'ajustement
+        // automatique poserait la safe area du mauvais côté du flux. Les deux
+        // gardes sont donc explicites — `applyBottomInset` (composer, côté
+        // `contentInset.top`) et `applyTopInset` (bande îlot, côté
+        // `contentInset.bottom`).
+        collectionView.contentInsetAdjustmentBehavior = .never
         collectionView.keyboardDismissMode = .interactive
         // Inverted axis: newest messages appear at the bottom while data flows
         // from top of the array. The cell's contentView is counter-flipped in

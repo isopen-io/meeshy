@@ -357,6 +357,12 @@ struct MessageListView: UIViewControllerRepresentable {
     /// message is never hidden behind the composer/keyboard.
     /// Pass the composer height here.
     var bottomInset: CGFloat = 0
+    /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre :
+    /// le parent l'étend sous la safe area haute pour que les bulles défilent
+    /// jusqu'au bord de l'écran, et lui passe ici l'inset réel de la fenêtre
+    /// (`DeviceLayout.safeAreaTop`) — sous `ignoresSafeArea`, ni le
+    /// `GeometryReader` ni le contrôleur hébergé ne le connaissent.
+    var topInset: CGFloat = 0
     /// Incremented from the parent SwiftUI view when the "scroll to latest"
     /// button is tapped. The bridge compares old vs. new to fire scrollToBottom.
     var scrollToBottomTrigger: Int = 0
@@ -498,6 +504,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
+        vc.applyTopInset(topInset)
         return vc
     }
 
@@ -558,6 +565,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
+        vc.applyTopInset(topInset)
     }
 
     // Filet de sécurité au démontage SwiftUI : coupe le CADisplayLink du
