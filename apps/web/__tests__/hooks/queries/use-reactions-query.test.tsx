@@ -781,6 +781,37 @@ describe('useReactionsQuery', () => {
       });
     });
 
+    it('rolls back the fabricated state when the cache was empty', async () => {
+      // Cache vide : `onMutate` FABRIQUE l'état optimiste à partir de rien
+      // (`if (!old) return { reactions: [], userReactions: [emoji] }`), donc
+      // `previousData` est `undefined`. Un rollback gardé par
+      // `if (context?.previousData)` refuse alors de défaire ce qu'il vient de
+      // fabriquer : la réaction fantôme reste affichée pour toujours, alors
+      // même que le serveur l'a refusée.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      // Le sync initial ne rappelle jamais → le cache reste vide.
+      mockSocketEmit.mockImplementation((event, _payload, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_ADD) {
+          callback({ success: false, error: 'Server error' });
+        }
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.addReaction('👍');
+      });
+
+      await waitFor(() => {
+        const data = queryClient.getQueryData<{ userReactions: string[] }>(['reactions', '507f1f77bcf86cd799439011']);
+        expect(data?.userReactions ?? []).not.toContain('👍');
+      });
+    });
+
     it('shows maxReactionsReached toast when server returns maximum error', async () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
@@ -930,6 +961,33 @@ describe('useReactionsQuery', () => {
         const data = queryClient.getQueryData<{ reactions: { emoji: string }[] }>(['reactions', '507f1f77bcf86cd799439011']);
         // After rollback, '❤️' should be restored
         expect(data?.reactions.some(r => r.emoji === '❤️')).toBe(true);
+      });
+    });
+
+    it('rolls back to no-data when the cache was empty', async () => {
+      // Même défaut côté retrait : `onMutate` matérialise un état vide là où il
+      // n'y avait AUCUNE donnée. Un rollback gardé sur `previousData` laisse
+      // cette entrée fabriquée en place, et le cache ment ensuite sur le fait
+      // qu'il a été chargé.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      mockSocketEmit.mockImplementation((event, _payload, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REMOVE) {
+          callback({ success: false, error: 'Server error' });
+        }
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.removeReaction('❤️');
+      });
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(['reactions', '507f1f77bcf86cd799439011'])).toBeUndefined();
       });
     });
   });

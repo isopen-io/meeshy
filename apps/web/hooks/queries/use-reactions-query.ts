@@ -133,6 +133,20 @@ export function useReactionsQuery({
   const queryClient = useQueryClient();
   const MAX_REACTIONS_PER_USER = 3;
 
+  // Restaure EXACTEMENT l'état d'avant la mise à jour optimiste, y compris
+  // l'absence d'état. `setQueryData(key, undefined)` ne suffit pas : React Query
+  // interprète `undefined` comme « ne rien changer » et laisserait en place ce
+  // que `onMutate` a fabriqué sur un cache vide. Le retrait de l'entrée est la
+  // seule façon de revenir à « pas de donnée », et laisse les observateurs
+  // montés re-demander la vérité au serveur.
+  const restoreReactionSnapshot = useCallback((previousData: ReactionState | undefined) => {
+    if (previousData === undefined) {
+      queryClient.removeQueries({ queryKey: reactionKeys.message(messageId), exact: true });
+      return;
+    }
+    queryClient.setQueryData(reactionKeys.message(messageId), previousData);
+  }, [queryClient, messageId]);
+
   // An optimistic (not-yet-persisted) message carries a client id (`cid_<uuid>`,
   // see optimistic-message.ts) until the server ACK/broadcast replaces it with a
   // Mongo ObjectId. The gateway rejects any non-ObjectId messageId ("Prisma
@@ -255,11 +269,11 @@ export function useReactionsQuery({
       return { previousData };
     },
     onError: (err, _emoji, context) => {
-      // Rollback on error
-      /* istanbul ignore next -- onMutate cannot throw before returning { previousData } under normal conditions */
-      if (context?.previousData) {
-        queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
-      }
+      // Rollback INCONDITIONNEL. Gardé sur `context.previousData`, il refusait
+      // de défaire le cas où `onMutate` a FABRIQUÉ l'état à partir d'un cache
+      // vide : `previousData` vaut alors `undefined`, et la réaction fantôme
+      // survivait au refus du serveur.
+      restoreReactionSnapshot(context?.previousData);
 
       const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
       if (errorMessage.includes('Maximum') && errorMessage.includes('different reactions')) {
@@ -324,10 +338,10 @@ export function useReactionsQuery({
       return { previousData };
     },
     onError: (_err, _emoji, context) => {
-      /* istanbul ignore next -- onMutate cannot throw before returning { previousData } under normal conditions */
-      if (context?.previousData) {
-        queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
-      }
+      // Rollback inconditionnel, même raison qu'à l'ajout : sur cache vide,
+      // `onMutate` matérialise un état que le garde `if (previousData)`
+      // laissait ensuite en place.
+      restoreReactionSnapshot(context?.previousData);
       toast.error('Failed to remove reaction');
     },
   });

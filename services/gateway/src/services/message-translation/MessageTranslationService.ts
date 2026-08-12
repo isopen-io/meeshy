@@ -3059,22 +3059,8 @@ export class MessageTranslationService extends EventEmitter {
     prefetched?: { originalLanguage: string | null; translations: unknown } | null,
   ): Promise<TranslationResult | null> {
     try {
-      // Prisme Linguistique — parité écriture/lecture de la clé de langue.
-      // TOUT écrivain de `Message.translations` canonicalise sa clé via le SSOT
-      // `normalizeLanguageCode` (`_resolveTargetLanguages`) : la cible `'pt-BR'`
-      // est stockée sous `translations.pt`. Lire la clé VERBATIM manquait donc
-      // sa propre traduction dès que l'appelant passait le code brut du client
-      // (`Locale.current` iOS : `'pt-BR'`, `'FR'`, `'de-DE'`) — `POST /translate`
-      // relisait 20 fois sur 10 s puis rendait un repli FABRIQUÉ
-      // `[PT-BR] <texte original>`, le texte source étiqueté, alors que la vraie
-      // traduction était en base une clé plus loin.
-      //
-      // La forme canonique sert aussi de clé de cache mémoire : sans elle,
-      // `'FR'` et `'fr'` dupliquent la ligne et la seconde lecture repart en base.
-      const canonicalTargetLanguage = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
-
       // Vérifier d'abord le cache mémoire
-      const cacheKey = TranslationCache.generateKey(messageId, canonicalTargetLanguage, sourceLanguage);
+      const cacheKey = TranslationCache.generateKey(messageId, targetLanguage, sourceLanguage);
       const cachedResult = this.translationCache.get(cacheKey);
 
       if (cachedResult) {
@@ -3095,10 +3081,16 @@ export class MessageTranslationService extends EventEmitter {
 
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-        // Le repli verbatim couvre les documents écrits AVANT la normalisation
-        // des cibles : les canonicaliser ne doit pas rendre leurs lignes
-        // illisibles.
-        const translation = translations[canonicalTargetLanguage] ?? translations[targetLanguage];
+        // Les écrivains stockent sous la forme CANONIQUE du SSOT
+        // `normalizeLanguageCode` ('pt-BR' → 'pt', 'fil' rejeté plutôt que
+        // tronqué). Lire verbatim manquait donc la traduction présente une clé
+        // plus loin, et l'appelant rendait un repli fabriqué
+        // `[PT-BR] <texte original>` — violation directe du Prisme.
+        // Verbatim d'abord : un document legacy portant RÉELLEMENT une clé
+        // régionale reste servi tel quel, la normalisation ne fait que rattraper
+        // ce que la lecture stricte laissait tomber.
+        const normalizedTarget = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+        const translation = translations[targetLanguage] ?? translations[normalizedTarget];
 
         if (translation) {
           // SECURITY: Decrypt translation if encrypted
@@ -3134,10 +3126,7 @@ export class MessageTranslationService extends EventEmitter {
           const result: TranslationResult = {
             messageId: messageId,
             sourceLanguage: message.originalLanguage,
-            // La langue RÉELLEMENT servie — la forme canonique, celle de la clé
-            // de stockage et de la clé de cache. `POST /translate` la renvoie
-            // telle quelle dans `target_language`.
-            targetLanguage: canonicalTargetLanguage,
+            targetLanguage: targetLanguage,
             translatedText: translatedText,
             translatorModel: translation.translationModel,
             confidenceScore: translation.confidenceScore || 0.9,

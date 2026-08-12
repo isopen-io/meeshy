@@ -1,33 +1,76 @@
-# Tête instruite pour le cycle 89 — six défauts prouvés restent, la question d'identité est close
+# Tête instruite pour le cycle 89 — six défauts livrés, cinq restent
 
-*Le cycle 88 a livré trois correctifs sur les neuf candidats légués par le 87. Les six restants sont
-inchangés et reproduits plus bas **tels que les cycles 86-87 les ont établis** — site exact, scénario
-d'échec. **Ne pas re-auditer — vérifier puis corriger.** Chacun a été établi par lecture de source ;
-la vérification par exécution reste due pour tous.*
+*Le cycle 88 a livré SIX des neuf défauts légués par le 86/87. Les restants sont reproduits plus
+bas **tels que les cycles précédents les ont établis** — site exact, scénario d'échec. **Ne pas
+re-auditer — vérifier puis corriger.***
 
-## Rappel de procédure — la tête ne réserve rien (leçon 132)
+**Avant de commencer un item, `git fetch origin main` et vérifier qu'aucun commit récent ne le porte
+déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en parallèle).
 
-**Avant de commencer un item ci-dessous, `git fetch origin main` et vérifier qu'aucun commit récent
-ne le porte déjà.** Deux sessions ont écrit le même correctif en parallèle au cycle 87 ; rien n'a
-changé au mécanisme depuis, et l'ordre de priorité reste un aimant à collisions.
+> **Et cette consigne n'est pas assez forte — elle vient d'échouer une seconde fois.** Une session
+> parallèle (`claude/keen-hamilton-r0rdv1`) a mené le cycle 88 de bout en bout en même temps que
+> celle-ci : mêmes trois premiers correctifs, RED-prouvés, suite complète verte, PR #2886 ouverte et
+> CI passée — le tout déjà sur `main` quand sa CI s'est terminée. Elle avait bien fait son
+> `git fetch` d'ouverture ; à cet instant `origin/main` valait exactement HEAD. **Le `fetch`
+> d'ouverture ne protège de rien** : il atteste du passé, pas de l'avenir, et un cycle dure des
+> heures.
+>
+> La règle praticable, à appliquer littéralement :
+>
+> ```bash
+> git fetch origin main && git log --oneline -15 origin/main   # AVANT d'écrire CHAQUE item
+> git fetch origin main                                        # ET juste avant d'ouvrir la PR
+> ```
+>
+> Ce qui a survécu de la session doublon, après salvage test par test : **un seul test** (le cas
+> capitalisé `'FR'` de `getTranslation`, que la couverture retenue ne portait pas) et deux leçons.
+> Détail du salvage et des arbitrages non rejoués : leçon 137.
 
-## Livré au cycle 88 — l'ancienne priorité 1 et deux items de la liste
+## Livré au cycle 88
 
-1. **Le join anonyme est réparé, et la question d'identité qui bloquait le cycle 87 est close.**
-   `conversation:joined`, le push de non-lus et les stats ne sont plus gatés sur `userId` mais sur
-   `userId ?? participantId ?? id`. La « lecture client » que le cycle 87 réclamait a été faite et a
-   répondu en deux minutes : **aucun client ne lit ce champ** (web n'invalide que sur
-   `conversationId`, iOS de même dans `ConversationSyncEngine` et `ParticipantsView`), et le
-   handler JUMEAU `handleConversationLeave` envoyait DÉJÀ `participant.id` dans le `userId` de
-   `conversation:left`. Voir leçon 133.
-2. **`getTranslation()` canonicalise sa clé de langue** — la moitié « lecture » de la parité que le
-   pipeline tenait déjà côté écriture.
-3. **Monter `useSocketIOMessaging` ne coupe plus un socket sain** (web) — la garde de l'étape 1C
-   appliquée à l'étape 1A.
+1. **L'invité anonyme n'est plus traité en silence par `conversation:join`** (ancienne priorité 1,
+   **les deux moitiés**) — ni le compteur de non-lus ni l'accusé `conversation:joined` ne se gatent
+   plus sur `userId`. Les deux portent le `Participant.id`, verrouillés par test. La lecture des
+   cinq consommateurs clients qui bloquait la seconde moitié a été faite (détail ci-dessous).
+2. **`getTranslation()` lit sous la clé normalisée** (ancienne priorité 2, item 1) — verbatim
+   d'abord, forme canonique en repli. Le repli fabriqué `[PT-BR] <original>` ne peut plus se
+   produire par manque de clé.
+3. **Monter `useSocketIOMessaging` ne coupe plus un socket sain** (ancienne priorité 3, item 1) —
+   même garde que l'étape 1C.
+4. **Rollback inconditionnel des réactions optimistes** (ancienne priorité 3, item 4).
+5. **Le translator n'envoie plus deux fois chaque audio traduit** (ancienne priorité 3, item 5).
 
-## Priorité 1 — le pipeline de traduction : les trois défauts qui restent
+## Priorité 1 — LIVRÉE au cycle 88 : l'accusé anonyme, et la lecture client qui l'a débloquée
 
-*Le quatrième (la clé verbatim à la lecture) est livré. Ces trois-ci sont intacts.*
+L'item était bloqué par une question d'identité que le cycle 87 n'avait pas voulu trancher à
+l'aveugle. **La lecture client due a été faite** — et elle renverse la difficulté supposée.
+
+**Les cinq consommateurs de `conversation:joined` n'exploitent QUE `conversationId`. Aucun ne lit
+`userId` :**
+
+| Site | Ce qu'il fait du payload |
+|---|---|
+| web `use-socket-cache-sync.ts` | `invalidateQueries(participants(conversationId))` |
+| web `use-stream-socket.ts` | mémorise l'ObjectId normalisé |
+| web `orchestrator.service.ts` | résout l'identifiant (`meeshy`) → ObjectId |
+| iOS `ConversationSyncEngine.swift` | `cache.participants.invalidate(for: conversationId)` |
+| iOS `ParticipantsView.swift` | filtre sur `conversationId`, jette le payload (`{ _ in }`) |
+
+**La seule contrainte dure est un contrainte de DÉCODAGE, pas de sémantique** :
+`ConversationParticipationEvent.userId` est un `String` **non optionnel** (MessageSocketManager.swift
+:552). Omettre le champ ferait échouer le décodage Swift — l'accusé serait silencieusement jeté sur
+iOS. Le champ doit donc être présent ; sa valeur, elle, n'est lue par personne.
+
+D'où la décision livrée : `participationId = userId ?? participantId`. Le `Participant.id` est
+l'identité que le contrôle d'appartenance vient précisément de résoudre. **Jamais
+`connectedUser.id`** — c'est le jeton de SESSION, un credential, qui n'a rien à faire dans un
+payload d'événement (et qui ne résout aucune ligne Participant).
+
+Sous-question annexe **toujours** non instruite : les **stats de conversation** restent gatées sur
+`userId`. Contrairement à l'accusé, ce n'est pas un pur additif — c'est diffuser un effectif et une
+liste de présents à un invité de lien. Décision produit, pas correctif.
+
+## Priorité 2 — le pipeline de traduction (trois défauts restants sur quatre)
 
 - **Le garde « traduction périmée » jette des résultats VALIDES**
   (`MessageTranslationService.ts:975` → `_isStaleTranslationResult`, `:781-784`). La carte
@@ -44,157 +87,168 @@ changé au mécanisme depuis, et l'ordre de priorité reste un aimant à collisi
   (`ZmqTranslationClient.ts:295-309`) : `removePendingRequest` désarme le deadman dès la première
   langue. Les langues 2..N n'ont plus ni timeout, ni retry, ni erreur.
 
-## Priorité 2 — les accusés et les compteurs
+## Priorité 3 — web et gateway (deux défauts restants sur cinq)
 
 - **Les accusés ne sont jamais re-synchronisés après une coupure socket.** Le lot REST
   (`use-conversation-messages-rq.ts:261-307`) n'est relancé que lorsqu'on ENVOIE un message, et
   `conversation:join` ne re-émet pas de `read-status:updated`. Le cycle 85 a rendu ces compteurs
-  monotones : sans backfill, un événement manqué devient un gel permanent. *(Les cycles 87 et 88 ont
-  rendu complets le `read-status:updated` de `mark-read` puis le push de non-lus au join — ce
-  backfill reste dû : il traite la perte d'événement, pas la forme du payload. À noter : depuis le
-  cycle 88, le join POUSSE un `conversation:unread-updated` à tout membre, invité compris — c'est un
-  demi-backfill gratuit sur le compteur, mais PAS sur `read-status:updated`.)*
+  monotones : sans backfill, un événement manqué devient un gel permanent.
 - **Rien ne recalcule les non-lus après une suppression de message** (gateway) : aucun des sept sites
   d'émission de `conversation:unread-updated` n'est un chemin de suppression. Le badge compte des
   messages qui n'existent plus.
-- **Réaction optimiste sans rollback quand le cache était vide**
-  (`use-reactions-query.ts:257-262`) : `onMutate` fabrique l'état à partir de rien, `onError` refuse
-  de le défaire (`if (context?.previousData)`). Rollback inconditionnel.
-
-## Priorité 3 — le gaspillage pur
-
-- **Le translator envoie deux fois chaque audio traduit** (`zmq_audio_handler.py:468-491`, bloc
-  `if audio_bytes:` dupliqué verbatim) : 2× la charge ZMQ par message vocal multilingue. Rien ne
-  casse — l'extraction résout la seconde copie — mais c'est du gaspillage pur. Confirmer avec
-  `git log -L468,491:services/translator/src/services/zmq_audio_handler.py` avant de retirer.
 
 ## Ce qui reste ouvert des cycles précédents
 
-- **Les 242 « source guards » iOS** (tête instruite du cycle 86) : des tests qui `grep` le code au
-  RUNTIME depuis un `#filePath` figé à la COMPILATION, donc capables de rendre un verdict sans
-  rapport avec le commit testé. **Les cycles 86 à 88 n'ont rien pu en faire** : aucune toolchain
-  Swift dans l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents, Linux). Le
-  point 1 du dossier (reproduire sur macOS en logguant `url.path` et `source.count`) reste la
-  première mesure à prendre, et elle exige une machine que cette routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
+  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de la
+  routine** — inchangé aux cycles 86, 87 et 88. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
   toujours pas.
-- **`UploadProcessor.test.ts` › `uploadFile` › `should upload a valid file successfully` est flaky
-  sous charge** (relevé au cycle 87) : rouge sur une exécution de la suite complète où ce fichier a
-  mis 54 s, vert en isolation en 7 s et vert sur deux autres exécutions complètes du même commit.
-  Source figée, échec intermittent : par la leçon 126, c'est un ordonnancement, pas une régression —
-  et il n'a pas été instruit. À triager par qui possède la zone upload.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). **Non reproduit au cycle 88** : la suite gateway complète est passée 654/654 suites,
+  16 504/16 504 tests, sans un seul échec. Reste donc un ordonnancement intermittent, non instruit.
 
-## Piège d'environnement relevé au cycle 88 — à ne pas repayer
+## Fragilité CI relevée au cycle 88 — le build web dépend du réseau Google Fonts
 
-`bun install` **échoue** dans ce conteneur : le postinstall de `grpc-tools` tente un téléchargement
-S3 refusé par le proxy, et bun s'arrête AVANT de lier les binaires. Les paquets sont pourtant
-présents. Conséquences et contournements :
+Le job `Build (bun)` de `ci.yml` a échoué une fois sur ce cycle, à l'étape « Build web frontend »,
+avec :
 
-- `node_modules/.bin/` est quasi vide → `npx prisma`, `npx jest` répondent `not found`. Appeler les
-  CLI par leur chemin : `node node_modules/jest/bin/jest.js --config=jest.config.json` (gateway),
-  `node packages/shared/node_modules/prisma/build/index.js generate --generator client`.
-- **Piper `prisma generate` dans `tail` masque son échec** : `sh: prisma: not found` sort en tête,
-  `tail -5` ne montre que les avis npm, et le `&&` suivant s'exécute quand même. Le cycle 88 a cru
-  la génération faite pendant une heure. Vérifier `ls packages/shared/prisma/client/`, jamais le
-  code de sortie d'un pipeline.
-- Sans ce client généré, `tsc --noEmit` du gateway rend ~10 `TS2307` sur
-  `@meeshy/shared/prisma/client` qui n'ont RIEN à voir avec le travail en cours.
+```
+Failed to fetch font file from `https://fonts.gstatic.com/s/roboto/v51/...woff2`  (×3 retries)
+lib/fonts.ts  `next/font` error: Failed to fetch `Roboto` from Google Fonts.
+> Build failed because of webpack errors
+```
+
+**C'est un défaut d'infrastructure, pas de code.** Le run précédent du MÊME code web (`74eee6a1`,
+run 9640) avait passé `Build` vingt minutes plus tôt ; le commit incriminé (`eb7ceb4c`) ne touche
+que du TypeScript gateway et des `.md`. Tous les autres jobs sont verts sur les deux runs.
+
+**Cause structurelle** : `apps/web/lib/fonts.ts` utilise `next/font/google`, qui télécharge les
+fichiers de police **au moment du build**. Chaque build web exige donc un accès sortant à
+`fonts.gstatic.com` — huit familles environ. Une seule indisponibilité réseau côté runner casse le
+build entier, sans rapport avec le diff.
+
+**Piste de correction, non faite ici** (hors périmètre d'un cycle de correctifs temps réel) :
+vendoriser les `.woff2` et passer à `next/font/local`. Le build devient alors hermétique, plus
+rapide, et cesse d'exposer l'adresse des runners à un tiers à chaque build. À chiffrer par qui
+possède la zone build web.
+
+**À savoir en attendant** : la porte `actions: write` étant close pour la routine (cycle 82),
+`rerun_failed_jobs` renvoie `403 Resource not accessible by integration`. Le seul moyen de relancer
+est de pousser un commit.
+
+## Contraintes d'environnement de la routine (à jour au cycle 88)
+
+Trois zones du dépôt sont **non exécutables** depuis cet environnement — le savoir évite d'y perdre
+un cycle :
+
+| Zone | État | Cause |
+|---|---|---|
+| iOS / SDK Swift | ✗ | ni `swift`, ni `swiftc`, ni `xcodebuild` (Linux) |
+| translator (pytest) | ✗ | `numpy`/`torch` s'installent depuis l'index PyTorch, **bloqué par le proxy** |
+| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
+
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
+interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
 
 ---
 
-# Cycle 88 — Trois silences du temps réel, et une question d'identité qui était déjà tranchée
+# Cycle 88 — Cinq défauts prouvés, cinq correctifs, et une porte laissée fermée exprès
 
-*Branche `claude/keen-hamilton-r0rdv1`. Deux correctifs gateway, un correctif web, chacun RED-prouvé
-(tests écrits avant, vus rouges, verts sans autre changement). Suite gateway complète verte,
-`tsc --noEmit` gateway : 0 diagnostic.*
+*Branche `claude/keen-hamilton-blazrp`. Cinq correctifs (2 gateway, 2 web, 1 translator), chacun
+RED-prouvé avant correction. Suites complètes vertes des deux côtés : **gateway 654/654 suites,
+16 504/16 504 tests** ; **web 563/563 suites, 12 089 tests passés, 21 ignorés, 0 échec**.*
 
-## 1. Un invité de lien partagé ne recevait rien de son `conversation:join`
+## 1. L'invité de lien partagé rejoignait en silence — accusé ET badge
 
-`handleConversationJoin` gatait l'accusé `conversation:joined`, le push du compteur de non-lus **et**
-les stats sur `connectedUser.userId` — `undefined` pour un participant sans compte. Le contrôle
-d'appartenance juste au-dessus l'avait pourtant laissé passer, et `socket.join(room)` avait déjà eu
-lieu : le socket était DANS la room, sans recevoir aucun des trois événements que tout autre membre
-reçoit.
+`conversation:join` gatait TOUTES ses émissions post-join sur `connectedUser.userId` — `undefined`
+pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a laissé passer et que le
+socket EST dans la room.
 
-**La question que le cycle 87 avait laissée ouverte — quelle identité mettre dans `userId` — n'en
-était pas une.** Trois sites du dépôt la tranchaient déjà, tous dans le même sens :
+**Le compteur.** `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` (son
+en-tête nomme même le chemin anonyme comme le cas courant). Piège évité : passer `connectedUser.id`
+(le jeton de session) aurait rendu `0` en silence — un badge « correct » et faux. Un test verrouille
+l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
 
-| Site | Ce qu'il envoie pour un anonyme |
-|---|---|
-| `handleConversationLeave` (le handler JUMEAU) | la clé de `socketToUser`, soit `participant.id` |
-| `AuthHandler` (room personnelle) | `ROOMS.user(socketUser.id)`, et `socketUser.id === participant.id` |
-| `getUnreadCount` | accepte `Participant.id` OU `User.id`, documenté dans son en-tête |
+**L'accusé.** Le cycle 87 l'avait laissé fermé faute d'avoir lu les clients. **Cette lecture a été
+faite ici**, et elle renverse la difficulté : les cinq consommateurs
+(web `use-socket-cache-sync` / `use-stream-socket` / `orchestrator`, iOS `ConversationSyncEngine` /
+`ParticipantsView`) n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
 
-Et la « lecture client » que le cycle 87 réclamait avant de trancher a répondu en deux minutes :
-**aucun client ne lit ce champ.** Le web n'invalide que sur `conversationId`
-(`use-socket-cache-sync.ts`, dont le commentaire dit déjà que `conversation:joined` est un ack de
-room et non une adhésion) ; iOS fait de même dans `ConversationSyncEngine` et `ParticipantsView`. Le
-seul contrat client est que le champ SOIT présent — `ConversationParticipationEvent.userId` est un
-`String` non optionnel côté Swift, donc un payload sans lui échouerait au décodage.
+La seule contrainte dure est de DÉCODAGE : `ConversationParticipationEvent.userId` est un `String`
+**non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé serait
+silencieusement jeté sur iOS. Le champ doit exister ; sa valeur n'est lue par personne. D'où
+`participationId = userId ?? participantId`, une seule résolution d'identité pour les deux
+émissions.
 
-Le test qui encodait le défaut (« joins room … without emitting conversation:joined ») attribuait la
-rétention au correctif de sécurité `ccaa9311f`. Celui-ci n'a ajouté que la vérification
-d'appartenance. Retourné, et remplacé par trois tests : l'accusé porte le `Participant.id`, le
-compteur est résolu PAR ce même id, les stats partent comme pour tout autre membre.
+**Ce qui reste fermé, et pourquoi.** Les stats de conversation restent gatées sur `userId` :
+diffuser un effectif et une liste de présents à un invité de lien est une décision produit, pas un
+correctif.
 
-**Il y en avait DEUX.** `ConversationHandler` possède deux suites unitaires, dans deux répertoires —
-`src/__tests__/unit/handlers/ConversationHandler.test.ts` et
-`src/socketio/handlers/__tests__/ConversationHandler.test.ts` — et toutes deux affirmaient le
-silence du join anonyme, dans des harnais différents. Seule la première apparaissait dans le dossier
-légué ; la seconde n'est tombée qu'à l'exécution de la suite COMPLÈTE (1 rouge sur 16 507). Deux
-enseignements : `grep` sur le NOM du test n'aurait pas suffi (les libellés diffèrent), et une suite
-partielle ne solde pas un correctif qui retourne un contrat. **Dette laissée ouverte** : ces deux
-fichiers testent le même handler et se recouvrent largement ; les fusionner est un chantier propre,
-hors périmètre ici.
+## 2. `getTranslation()` lisait une clé que personne n'écrit
 
-## 2. `getTranslation()` lisait la clé de langue verbatim quand tous les écrivains la normalisent
+Lecture verbatim de `translations[targetLanguage]` alors que tous les écrivains stockent sous la
+forme canonique de `normalizeLanguageCode` (`'pt-BR'` → `'pt'`). Une demande `pt-BR` sondait donc
+une clé absente pendant que la traduction attendait une clé plus loin — puis l'appelant rendait un
+repli **fabriqué** `[PT-BR] <texte original>` après 10 s. La pire forme de violation du Prisme : du
+contenu non traduit présenté comme traduit.
 
-Parité écriture/lecture rompue. `_resolveTargetLanguages` canonicalise chaque cible via le SSOT
-`normalizeLanguageCode` avant l'envoi ZMQ, et le seul écrivain de `Message.translations` range le
-résultat sous cette clé : `'pt-BR'` devient `translations.pt`. La lecture, elle, indexait le code
-tel qu'on le lui passait — c'est-à-dire le code brut du client, iOS transmettant `Locale.current`.
+Verbatim d'abord, normalisé en repli — aucune traduction ne change de gagnant, seules celles qu'on
+ne trouvait pas deviennent trouvables. La cible RENDUE reste celle demandée (`'pt-BR'`) : le client
+corrèle sa requête dessus, la normalisation est un détail de stockage.
 
-`POST /translate` relit toutes les 500 ms pendant 10 s puis fabrique un repli
-`[PT-BR] <texte original>`. Le lecteur recevait donc, après dix secondes, **le texte source affublé
-d'une étiquette de langue** — la traduction était en base, une clé plus loin. Violation directe du
-Prisme : le contenu traduit doit s'afficher comme du contenu natif.
+## 3. Ouvrir un profil coupait la connexion temps réel
 
-Trois effets du correctif, au-delà de la résolution :
+`useSocketIOMessaging` appelait `reconnect()` sans condition au montage. Or `reconnect()` n'est pas
+un « connecte si besoin » : c'est `disconnect()` + reconnexion différée par backoff (1 à 2,5 s au
+premier essai, `connection.service.ts:141`). Cinq composants montent ce hook — ouvrir un profil
+coupait donc un socket parfaitement sain. L'étape 1C, quinze lignes plus bas, fait le même geste
+correctement gardé ; c'est cette garde qui a été appliquée.
 
-- la clé de cache mémoire devient canonique, donc `'FR'` et `'fr'` partagent une entrée au lieu d'en
-  dupliquer deux (la seconde lecture ne repart plus en base) ;
-- un repli sur la clé verbatim garde lisibles les documents écrits AVANT la normalisation des
-  cibles — canonicaliser la lecture ne doit pas rendre ces lignes-là invisibles ;
-- la `targetLanguage` rendue est celle réellement servie (la canonique), qui est aussi celle que
-  `POST /translate` renvoie dans `target_language`.
+**Ce que le RED a révélé au passage** : les deux tests de montage existants ne passaient que parce
+que le code ignorait les diagnostics. Ils héritaient par FUITE d'un `isConnected: true` posé par un
+test « Initial State » plus haut — `jest.clearAllMocks()` remet les appels à zéro mais **pas les
+implémentations**. Leur précondition est désormais explicite.
 
-## 3. Monter `useSocketIOMessaging` coupait un socket sain (web)
+## 4. Une réaction refusée par le serveur restait affichée pour toujours
 
-L'étape 1A appelait `meeshySocketIOService.reconnect()` **sans condition** au montage. Or
-`reconnect()` n'est pas « connecte si besoin » : c'est `disconnect()` puis un `connect()` différé par
-backoff exponentiel (`ConnectionService.reconnect`, `min(1000·2^n, 30000) + random·1000`, soit
-1 000–2 000 ms au premier essai). Monter le hook sur une connexion établie coupait donc le temps
-réel une à deux secondes — et cinq composants montent ce hook : ouvrir un profil suspendait la
-réception de tout ce qui était à l'écran.
+Les deux mutations gardaient leur rollback derrière `if (context?.previousData)`. Or `onMutate`
+FABRIQUE l'état quand le cache est vide — `previousData` vaut alors `undefined`, et le garde refusait
+précisément de défaire ce qui venait d'être inventé.
 
-L'étape 1C, quinze lignes plus bas, fait le même geste correctement gardé. C'est cette garde qui
-manquait.
+**Le rollback inconditionnel ne suffisait pas** : `setQueryData(key, undefined)` est un **no-op** en
+React Query (`undefined` = « ne rien changer »), et les tests sont restés ROUGES après le premier
+correctif. Restaurer l'absence de donnée exige `removeQueries`. D'où `restoreReactionSnapshot`, qui
+retire l'entrée quand il n'y avait rien et la réécrit sinon.
 
-**Trouvaille annexe, dans le harnais de test.** Les deux tests historiques de l'étape 1A ne
-passaient qu'en héritant du `mockReturnValue` d'un test précédent : `jest.clearAllMocks()` efface
-les appels, pas les implémentations. `getConnectionDiagnostics` n'ayant aucun socle dans
-`beforeEach`, **l'ordre des tests décidait du verdict des effets de montage**. Un socle froid a été
-posé.
+## 5. Chaque audio traduit partait en double
 
-## Ce que le cycle 88 n'a PAS fait
+Bloc `if audio_bytes:` dupliqué VERBATIM dans le sender multipart : 2× la charge ZMQ par message
+vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son propre index — celle-ci
+désignait le doublon, et la première copie restait un frame orphelin.
 
-- Les six autres défauts de la liste léguée sont intacts et repris dans la tête ci-dessus.
-- Aucun travail iOS : toolchain Swift toujours absente (cf. les 242 source guards).
-- Le `tsc --noEmit` du **web** rend ~1 224 diagnostics, tous dans `__tests__/` et tous
-  préexistants (`TS7031` sur des mocks non typés, `TS2556` sur des spreads). Aucun ne porte sur les
-  fichiers de ce cycle, et la CI ne lance pas `tsc` sur le web — elle lance Jest puis
-  `next build`. Constat, pas régression.
+**Pourquoi ça n'avait rien cassé, et donc survécu** : le gateway résout les frames STRICTEMENT par
+`info.index` (`extractAudioBinaryFrames`, bornes vérifiées, aucune hypothèse de position). Origine
+sans ambiguïté au `git log -L` : un hunk de conflit résolu en double dans un commit de merge.
+
+**Réserve d'honnêteté** : la suite pytest du translator n'a PAS pu être exécutée — `numpy`/`torch`
+s'installent depuis l'index PyTorch, bloqué par le proxy. La sûreté du retrait est établie par
+lecture des deux côtés du contrat, **pas par exécution**. C'est le seul des cinq correctifs qui ne
+soit pas couvert par un test vert.
+
+## Ce que le cycle 88 a mesuré au passage
+
+- **La suite gateway a plus que doublé depuis la dernière note du dossier** : 654 suites / 16 504
+  tests, contre les « 249 suites » que `CLAUDE.md` annonce encore. Durée : 8 min 06.
+- **`npx tsc --noEmit` sur `apps/web` remonte 1 757 erreurs pré-existantes**, toutes dans des
+  fichiers de test (`TS7031` implicit any sur des mocks, `TS2345` sur des littéraux
+  `ReactionUpdateEvent`). Le CI ne s'en émeut pas : l'étape `Type-check` de `ci.yml` porte
+  `continue-on-error: true`. Aucune n'est imputable à ce cycle — les lignes écrites ici n'en
+  produisent aucune. À traiter comme une dette déclarée, pas comme une régression.
+- **`bun install` échoue sans `--ignore-scripts`** : le postinstall de `grpc-tools` sort en erreur
+  et interrompt l'installation entière (`node_modules` racine à 8 entrées, aucun workspace servi).
+
 
 ---
 

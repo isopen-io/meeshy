@@ -518,6 +518,50 @@ describe('MessageTranslationService', () => {
       expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
     });
 
+    it('resolves a regional target code against the normalized stored key', async () => {
+      // Les écrivains stockent sous la forme canonique du SSOT
+      // `normalizeLanguageCode` ('pt-BR' → 'pt'). Une lecture verbatim de
+      // `translations['pt-BR']` manquait donc la traduction pourtant présente
+      // une clé plus loin, et l'appelant rendait un repli fabriqué
+      // `[PT-BR] <texte original>` — le texte source affublé d'une étiquette,
+      // violation directe du Prisme Linguistique.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-regional',
+        originalLanguage: 'en',
+        translations: {
+          pt: {
+            text: 'Olá mundo',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá mundo');
+      // La cible RENDUE reste celle demandée : le client corrèle sa requête
+      // dessus, la normalisation est un détail de stockage.
+      expect(result?.targetLanguage).toBe('pt-BR');
+    });
+
+    it('prefers an exact verbatim key over its normalized form', async () => {
+      // Un document legacy qui porterait RÉELLEMENT une clé régionale ne doit
+      // pas se faire détourner vers la clé de base : le verbatim gagne.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-legacy-regional',
+        originalLanguage: 'en',
+        translations: {
+          'pt-BR': { text: 'Olá (BR)', translationModel: 'basic', confidenceScore: 0.9 },
+          pt: { text: 'Olá (base)', translationModel: 'basic', confidenceScore: 0.9 }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-legacy-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá (BR)');
+    });
+
     it('should return null if translation not found', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-not-found',
@@ -557,37 +601,10 @@ describe('MessageTranslationService', () => {
       expect(result?.translatedText).toBe('Bonjour');
     });
 
-    // ─── Prisme Linguistique : parité écriture/lecture de la clé de langue ────
-    //
-    // Le SEUL écrivain de `Message.translations` canonicalise sa clé
-    // (`_resolveTargetLanguages` → SSOT `normalizeLanguageCode`) : une cible
-    // `'pt-BR'` est stockée sous `translations.pt`. La lecture, elle, indexait
-    // la clé VERBATIM — donc toute cible région-taggée ou capitalisée
-    // (`Locale.current` iOS : `'pt-BR'`, `'FR'`, `'de-DE'`) manquait sa propre
-    // traduction, pourtant en base une clé plus loin.
-    //
-    // Conséquence mesurée sur `POST /translate` : 20 relectures sur 10 s, puis
-    // un repli FABRIQUÉ `[PT-BR] <texte original>` rendu au lecteur — le texte
-    // source affublé d'une étiquette de langue. Violation directe du Prisme.
-    it('resolves a region-tagged target against the canonical stored key', async () => {
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: 'msg-regional',
-        originalLanguage: 'fr',
-        translations: {
-          pt: {
-            text: 'Ola mundo',
-            translationModel: 'basic',
-            confidenceScore: 0.9
-          }
-        }
-      });
-
-      const result = await translationService.getTranslation('msg-regional', 'pt-BR');
-
-      expect(result?.translatedText).toBe('Ola mundo');
-    });
-
-    it('resolves an uppercase target against the canonical stored key', async () => {
+    // Le cas CAPITALISÉ, que la couverture voisine ne porte pas : `Locale.current`
+    // rend aussi bien `'FR'` que `'pt-BR'`, et la lecture stricte manquait les
+    // deux. La normalisation en repli les rattrape l'un comme l'autre.
+    it('resolves an uppercase target against the normalized stored key', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-upper',
         originalLanguage: 'en',
@@ -603,66 +620,6 @@ describe('MessageTranslationService', () => {
       const result = await translationService.getTranslation('msg-upper', 'FR');
 
       expect(result?.translatedText).toBe('Bonjour');
-    });
-
-    // La langue rendue est celle qui a RÉELLEMENT été trouvée en base — la
-    // forme canonique, la même que celle qu'utilisent la clé de stockage, la
-    // clé de cache mémoire et tout le reste du pipeline. `POST /translate`
-    // renvoie ce champ tel quel dans `target_language`.
-    it('reports the canonical code as the resolved target language', async () => {
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: 'msg-canon',
-        originalLanguage: 'fr',
-        translations: {
-          pt: { text: 'Ola', translationModel: 'basic', confidenceScore: 0.9 }
-        }
-      });
-
-      const result = await translationService.getTranslation('msg-canon', 'pt-BR');
-
-      expect(result?.targetLanguage).toBe('pt');
-    });
-
-    // Les documents écrits AVANT la normalisation des cibles portent encore des
-    // clés verbatim. Les perdre au nom de la canonicalisation échangerait un
-    // défaut contre un autre : la lecture retombe sur la clé brute.
-    it('still resolves a legacy verbatim key when no canonical key exists', async () => {
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: 'msg-legacy',
-        originalLanguage: 'fr',
-        translations: {
-          'pt-BR': {
-            text: 'Ola legado',
-            translationModel: 'basic',
-            confidenceScore: 0.9
-          }
-        }
-      });
-
-      const result = await translationService.getTranslation('msg-legacy', 'pt-BR');
-
-      expect(result?.translatedText).toBe('Ola legado');
-    });
-
-    // Deux graphies de la MÊME langue partagent une entrée de cache mémoire :
-    // sans cela, `'FR'` et `'fr'` dupliquent la ligne, et la seconde lecture
-    // repart en base alors que la traduction est déjà chaude.
-    it('shares one memory-cache entry across spellings of the same language', async () => {
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: 'msg-shared',
-        originalLanguage: 'en',
-        translations: {
-          fr: { text: 'Bonjour', translationModel: 'basic', confidenceScore: 0.9 }
-        }
-      });
-
-      await translationService.getTranslation('msg-shared', 'fr', 'en');
-      mockPrisma.message.findUnique.mockClear();
-
-      const second = await translationService.getTranslation('msg-shared', 'FR', 'en');
-
-      expect(second?.translatedText).toBe('Bonjour');
-      expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
     });
   });
 
