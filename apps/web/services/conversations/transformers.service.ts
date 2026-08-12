@@ -417,10 +417,6 @@ export class TransformersService {
     return transformedMessage;
   }
 
-  private extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
-    return extractPreviewTranslations(raw);
-  }
-
   /**
    * Valide la carte `{ langue: aperçu traduit }` du dernier message.
    *
@@ -429,13 +425,11 @@ export class TransformersService {
    * une carte matérialisée en objet vide lui ferait croire qu'il y a quelque
    * chose à résoudre. Un tableau est un `object` en JavaScript, d'où le rejet
    * explicite — sans lui, `['Bonjour']` traverserait comme une carte dont les
-   * clés sont des indices.
+   * clés sont des indices. Délègue à la fonction module (forme unique
+   * REST + socket).
    */
   private extractPreviewTranslations(raw: unknown): Record<string, string> | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const entries = Object.entries(raw as Record<string, unknown>)
-      .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+    return extractPreviewTranslations(raw);
   }
 
   /**
