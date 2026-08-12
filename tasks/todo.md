@@ -25,6 +25,9 @@ corriger.***
    le deadman ne tombe qu'avec la dernière langue, et le retry ne redemande que ce qui manque.
 4. **La pastille de non-lus est repoussée après une suppression** (WS) — première moitié de
    l'ancienne priorité 3, item 2.
+5. **Les 8 suites gateway qui tenaient `main` en rouge sont réparées** (35 tests) — voir la section
+   dédiée plus bas. Ce n'était pas au programme : c'était le prérequis pour que quoi que ce soit
+   puisse être mergé.
 
 ## Priorité 1 — les accusés ne sont jamais re-synchronisés après une coupure socket
 
@@ -49,26 +52,33 @@ La règle est écrite dans `src/socketio/README.md` § « La pastille de non-lus
 existe et est partagée : `emitUnreadCountsToRecipients`, en excluant l'AUTEUR (`message.senderId`),
 jamais l'acteur.
 
-## Dette d'intégration relevée au cycle 89 — huit suites gateway sont rouges SUR `main`
+## Dette d'intégration relevée ET SOLDÉE au cycle 89 — `main` était rouge
 
-Mesuré au cycle 89, `origin/main` à `f96478ff` : **8 suites, 35 tests en échec**, identiques à
-l'octet près sur `main` et sur la branche du cycle (vérifié en checkout détaché, même
-`node_modules`). Elles proviennent du lot `b7fc5dcf` (« integrate 48 net-new unit test files onto
-updated main ») : des tests qui appellent des méthodes que la production ne porte pas — p. ex.
-`handler.sendNotificationToUser is not a function`.
+`origin/main` à `f96478ff` rendait **8 suites gateway / 35 tests en échec** — le job `Test gateway`
+de la CI était rouge sur `main` depuis ~11:49, donc AUCUNE PR ne pouvait passer au vert. Vérifié en
+checkout détaché, même `node_modules` : liste et comptes identiques sur `main` et sur la branche.
 
-```
-unit/socketio/MeeshySocketIOHandler.methods    unit/services/PostService
-unit/services/PhonePasswordResetService        unit/handlers/AuthHandler
-unit/services/AffiliateTrackingService         unit/socketio/participant-resolver
-unit/services/ExpiredStoriesCleanupService     unit/socketio/AgentAdminRelay
-```
+Origine : le lot `b7fc5dcf` (« integrate 48 net-new unit test files onto updated main »). **Aucun de
+ces 35 échecs n'était un défaut de production.** Toutes ces suites décrivent une version ANTÉRIEURE
+(ou imaginée) de l'API — et, dans les cas les plus parlants, décrivent exactement le DÉFAUT qu'un
+correctif ultérieur a fermé :
 
-**Conséquence pour la routine** : « suite gateway verte » n'est plus un critère utilisable tel quel.
-Tant que cette dette vit, la seule mesure honnête est le DELTA branche↔`main` sur la même liste de
-suites. Le passage qui la solde doit trancher, test par test, entre « le test décrit une méthode
-qui aurait dû exister » (écrire la production) et « le test décrit une API qui n'a jamais existé »
-(supprimer le test) — c'est exactement l'arbitrage de la leçon 139 appliqué à 35 cas.
+| Suite | Ce que le test exigeait | Ce que la production fait, et pourquoi elle a raison |
+|---|---|---|
+| `AuthHandler` | authentifier par `userId` nu | exige un JWT — un identifiant revendiqué n'est pas un credential |
+| `participant-resolver` | « pas de requête DB » pour un anonyme | la requête EST le contrôle qui empêche de diffuser dans un salon étranger |
+| `ExpiredStoriesCleanupService` | `deletedAt: null`, `type: 'STORY'` | `NOT_DELETED` (`isSet`) + les deux types éphémères — le `null` n'appariait AUCUN post sur Mongo |
+| `AffiliateTrackingService` | `currentUses: 4` | `$inc` atomique — la version lue-puis-écrite est une course documentée |
+| `PhonePasswordResetService` | double sans `updateMany` | consommation ATOMIQUE du plafond de tentatives (anti-TOCTOU) |
+| `PostService` | `deletePost(id, actor)` | prend le rôle de l'acteur : un modérateur retire le post d'un autre |
+| `AgentAdminRelay` | double sans `connect()` | subscriber `lazyConnect` — sans `connect()`, la socket n'est pas écrivable |
+| `MeeshySocketIOHandler.methods` | `sendNotificationToUser` | **n'a jamais existé**, nulle part ; bloc retiré |
+
+**La règle d'arbitrage, à réutiliser telle quelle** : un test rouge sur du code que personne n'a
+touché ne prouve pas un défaut — il prouve un DÉSACCORD. Trancher en lisant ce que la production
+justifie d'elle-même : ici, six des huit portaient un commentaire expliquant pourquoi la forme
+attendue par le test était précisément celle qu'on avait corrigée. Et ne JAMAIS écrire de production
+pour satisfaire un test imaginé : `sendNotificationToUser` aurait été du code mort sous garantie.
 
 ## Ce qui reste ouvert des cycles précédents
 
