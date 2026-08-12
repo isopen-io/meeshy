@@ -4800,6 +4800,115 @@ Deux bornes à écrire noir sur blanc :
 - **L'ordre est conditionnel au filtre.** Une page ordinaire garde la récence : la même
   route sert deux besoins, et trier par `updatedAt` un écran de liste lui rendrait ses
   conversations les plus vieilles en tête.
+
+## Leçon 122 — une page PLEINE n'est jamais une preuve de fin ; demander plus que le plafond détruit la preuve (2026-08-11, routine messaging, cycle 78)
+
+`deltaSyncCore` (iOS) demandait `limit=500` à une route plafonnée à 100. On lit ça comme de
+l'hygiène — « le serveur cappe, tant pis ». C'en est l'inverse : **la seule façon de savoir
+qu'une page a été coupée est de la comparer au plafond, et demander plus que le plafond rend
+cette comparaison impossible**. Une page à 100 devenait indistinguable d'une fenêtre épuisée.
+
+Trois règles à reprendre partout où un curseur pagine :
+
+1. **Demander EXACTEMENT le plafond serveur** — ou mieux, **lire ce que le serveur ANNONCE**.
+   La version retenue sur `main` (PR #2863) fait `pagination?.hasMore ?? (count >= limit)` : le
+   comptage n'est que le repli. Une preuve déclarée par la source bat une preuve déduite ; ne
+   déduire que lorsque la source se tait.
+2. **Sur une page qui laisse du reste, NE PAS AVANCER LE CURSEUR** — puis escalader. L'ordre est
+   le contenu du correctif : une escalade partant d'un curseur déjà trop haut hérite du trou
+   qu'elle existe pour fermer. Et c'est parce que le curseur n'a pas bougé qu'une escalade
+   ÉCHOUÉE (offline) laisse la fenêtre entière rejouable au lieu d'un trou définitif.
+3. **Si on choisit de paginer plutôt que d'escalader, reprendre au max de la page est FAUX.**
+   La coupure peut tomber au milieu d'un groupe partageant la même valeur de curseur ; une borne
+   stricte `gt` posée sur le max enjambe les survivantes du groupe. Le seul curseur sûr est la
+   plus haute valeur STRICTEMENT inférieure au max de la page. Et il reste un cas qu'aucun
+   curseur ne franchit — toute la page à une seule valeur — où l'escalade est la seule réponse.
+
+Distinction qui vaut au-delà de ce cas : **une borne de fréquence sur un entretien PÉRIODIQUE ne
+doit jamais throttler une RÉPARATION.** `fullReconcileInterval` (24 h) borne la purge des
+fantômes ; il n'a rien à dire à un `fullSync` que le delta vient de réclamer parce qu'il sait sa
+fenêtre incomplète.
+
+Côté test : une pagination ne se teste pas contre un mock qui rend la MÊME page à chaque appel —
+la boucle passe au vert quoi qu'elle fasse. Il faut une file de réponses.
+
+## Leçon 122b — arriver deuxième sur la même tête ne donne aucun droit de réécriture (2026-08-11, routine messaging, cycle 78)
+
+Ce cycle a écrit, testé et fait passer la CI sur une correction de la page delta tronquée.
+Pendant la CI, une session parallèle a mergé la PR #2863 : même défaut, correction plus simple et
+mieux instrumentée. Le merge a conflité sur les quatre fichiers.
+
+La tentation est de « fusionner intelligemment » — garder sa propre mécanique en résolution de
+conflit. C'est un piège à trois détentes :
+
+1. **Deux mécanismes pour une règle ne se superposent pas.** Leur contrat testé disait « le
+   curseur n'avance pas » ; le mien avançait pour paginer. Garder les deux, c'est faire échouer
+   leurs témoins — donc les retirer — donc écraser leur travail en prétendant l'intégrer.
+2. **Le code déjà mergé a une propriété que le mien n'a pas : il est sur `main`.** Il a été revu,
+   il a passé sa CI, d'autres branches partent déjà de lui. Le remplacer par une variante lors
+   d'une résolution de merge est une décision d'architecture prise dans le pire endroit possible.
+3. **Ce qu'on jette, on le documente.** Le récit, les deux bornes trouvées (reprise sous le
+   groupe du haut, résidu des égalités) et le coût mesuré de l'escalade systématique valent plus
+   que le code retiré : ils deviennent une tête instruite CONTRE le comportement en place.
+
+Règle : quand `main` a déjà fermé la tête qu'on instruit, on prend `main`, on retire sa propre
+plomberie devenue sans consommateur, et on convertit son travail en instruction. On ne se sert
+pas d'un conflit comme d'un droit de veto.
+
+Corollaire de cadence : **relire `main` avant d'OUVRIR une tête, pas seulement avant de merger.**
+Une tête écrite dans `todo.md` n'est pas une réservation ; trois routines lisent la même liste.
+
+
+## Leçon 123 — une invalidation qui ne matche aucun cache est une PANNE, et sa correction n'est pas de la rebrancher (2026-08-11, routine messaging, cycle 78)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` sur chaque réaction, commentaire
+explicite à l'appui (« réaction ajoutée = conversation modifiée »). La sidebar lit
+`conversations.infinite()` : préfixes disjoints, donc **l'intention déclarée n'a jamais été
+exécutée**. C'est pire que du code mort : le commentaire fait foi pour le prochain lecteur.
+
+Le réflexe est de rebrancher sur la bonne clé. Deux questions AVANT :
+
+1. **L'intention est-elle vraie ?** Ici non : une ligne de liste ne porte rien qui dérive des
+   réactions. Le piège était un homonyme — `ConversationList` rend bien un `reaction`, mais
+   c'est l'emoji de PRÉFÉRENCE de conversation, sans aucun rapport. Vérifier ce que la vue
+   AFFICHE, pas ce que le nom suggère.
+2. **Que coûterait la version qui marche ?** Sur un cache `infinite`, une invalidation relit
+   TOUTES les pages chargées. Rebrancher aurait réintroduit, sur chaque réaction, le refetch que
+   le cycle précédent venait de retirer du chemin de focus.
+
+Quand les deux réponses sont « non » et « cher », le correctif est la SUPPRESSION. Une
+invalidation morte qu'on répare sans rouvrir son intention devient une régression de perf
+présentée comme un correctif.
+
+Corollaire de test : une `invalidateQueries` ne refetch que les requêtes ACTIVES. Un témoin qui
+pose son cache à la main (`setQueryData`, `fetchQuery`) reste muet et passe au vert sans rien
+prouver. Il faut monter de VRAIS observateurs — et sur les DEUX formes de clé, pour que le
+témoin échoue aussi bien sur l'invalidation morte que sur sa « correction » coûteuse.
+
+## Leçon 124 — un fichier d'état PARTAGÉ entre routines ne s'écrit que par la routine qui le possède (2026-08-11, routine messaging, cycle 78)
+
+Ce cycle a écrit `tasks/lane-cursor.md` en finalisation, par mimétisme avec les cycles
+précédents. Ce fichier est l'état de la routine **Android** (`lane=…`, `android_streak=…`,
+sa source de vérité déclarée dans `tasks/android-parity-ios-debt-agent-prompt.md`). Pendant le
+même run, cette routine l'a avancé de `streak 2` à `streak 3` : le merge de `main` a conflité,
+et une résolution distraite (« garder HEAD ») aurait effacé le compteur d'une autre routine.
+
+Deux règles :
+
+1. **Avant d'écrire un fichier de tâches, chercher qui le DÉCLARE comme sa source de vérité.**
+   Un `rg` sur le nom du fichier dans `tasks/` répond en une commande. Écrire dedans « parce
+   que le cycle précédent l'a fait » n'est pas une raison — il faut vérifier que le cycle
+   précédent était la même routine.
+2. **Sur conflit dans un fichier qu'on ne possède pas : prendre `--theirs`, sans discussion**,
+   et retirer sa propre écriture plutôt que tenter une fusion des deux états. Un compteur de
+   streak n'a pas de fusion sensée.
+
+Corollaire, valable au-delà des fichiers d'état : quand plusieurs routines tournent en
+parallèle sur le même dépôt, `git merge origin/main` en fin de cycle n'est pas une formalité —
+c'est le moment où l'on découvre ce que les autres ont fait. Ce cycle y a découvert que la PR
+#2860 avait livré, en parallèle, la moitié du lot qu'il documentait comme « reste ouvert » :
+il a fallu corriger la note AVANT de merger, sinon `todo.md` sortait du cycle avec une
+affirmation fausse.
 ## Leçon 120 — un fichier de test non enregistré au pbxproj ne s'exécute pas, et rien dans le gate ne le dit (2026-08-11, plan message-more-jumps-to-views, Task 3)
 
 Un plan a livré `MessageMoreJumpsToViewsGuardTests.swift` avec ses trois gardes, deux

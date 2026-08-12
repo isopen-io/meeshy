@@ -340,6 +340,125 @@ Une liste filtrée, le jour où elle existera, devra naître avec sa propre clé
 
 ---
 
+# Cycle 78 — Une réaction n'est pas une ligne de liste (et D1 a été livré par une autre session)
+
+Ce cycle a instruit et corrigé les DEUX têtes ouvertes pour le cycle 78. Il n'en livre qu'une.
+Le récit de la seconde est conservé ici parce qu'il vaut plus que le code retiré.
+
+## D2 — deux invalidations de réaction ne matchaient aucun cache (LIVRÉ)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` (`['conversations','list']`) sur
+réaction ajoutée / retirée, commentaire à l'appui : « réaction ajoutée = conversation modifiée ».
+La sidebar lit `conversations.infinite()` : **préfixes disjoints, intention jamais exécutée.**
+Panne silencieuse, pas code mort — le commentaire faisait foi pour le prochain lecteur.
+
+Le geste juste n'était PAS de rediriger vers `infinite()` : ça aurait relu toutes les pages
+chargées à chaque réaction, exactement le refetch que le cycle 77 venait de retirer du chemin de
+focus. Vérifié avant de trancher : **une ligne de liste ne porte rien qui dérive des réactions**
+(aperçu, non-lus, horodatage). Le `reaction` rendu par `ConversationList` est l'emoji de
+PRÉFÉRENCE de conversation — homonyme, sans rapport.
+
+Convergence : la PR #2860 (session parallèle, entrée ci-dessus) a supprimé les mêmes deux lignes
+en retirant la forme plate. Ce qui reste ici est donc le **commentaire** qui dit pourquoi il n'y
+a pas d'invalidation, plus les deux témoins. Un retrait silencieux invite le prochain lecteur à
+« réparer l'invalidation manquante » ; c'est le seul piège encore ouvert sur ce site.
+
+## D1 — la page delta tronquée : LIVRÉ PAR LA PR #2863, pas par ce cycle
+
+Ce cycle avait écrit, testé et fait passer la CI (SDK Tests verts, runs #965/#967/#971) sur une
+marche de pages : `limit=100` demandé, page courte = fin de fenêtre, page pleine = reprise SOUS
+son groupe d'`updatedAt` le plus haut (`SyncWatermark.resumeAfterFullPage`), escalade vers
+`fullSync` sur le seul résidu (page pleine à une milliseconde unique, ou au-delà de 5 pages).
+
+Pendant la CI, la PR #2863 (« une page delta qui laisse du reste ne fait plus avancer le
+curseur ») a été mergée sur `main` par une session parallèle. Elle corrige le MÊME défaut, plus
+simplement : `advancedAfterDeltaPage(previous:receivedUpdatedAt:pageMayHaveMore:)` — si la page
+laisse du reste, **le curseur ne bouge pas du tout**, et l'appelant escalade vers `fullSync`.
+
+**Le merge a été résolu en faveur de `main`, intégralement.** Trois raisons, dans cet ordre :
+
+1. **Leur détection est MEILLEURE que la mienne.** `mayHaveMore = pagination?.hasMore ??
+   (data.count >= deltaPageLimit)` : le serveur ANNONCE le reste, et le comptage n'est que le
+   repli. Ma version ne connaissait que le repli.
+2. **Les deux mécanismes sont incompatibles, pas superposables.** Leur contrat testé dit « le
+   curseur n'avance pas sur une page qui laisse du reste » ; ma marche, elle, AVANCE (sous le
+   groupe du haut) pour paginer. Garder les deux, c'est faire échouer leurs témoins.
+3. **Réécrire en résolution de merge un correctif déjà mergé et testé n'est pas un droit qu'on
+   se donne.** L'instruction de la routine est explicite : gérer le merge à la main pour ne rien
+   écraser. Le fait d'être arrivé deuxième ne rend pas ma version prioritaire.
+
+Ce qui est retiré avec elle : `SyncWatermark.resumeAfterFullPage`, la boucle de pages,
+`maxDeltaPages`, `DeltaSyncOutcome`, `MockAPIClient.stubSequence` et 10 témoins. Aucun n'a de
+consommateur une fois `main` adopté ; les garder aurait été exactement la « plomberie
+mensongère » que ce cycle dénonce par ailleurs.
+
+### Ce qui reste vrai et non couvert par `main` — tête instruite pour un prochain cycle
+
+`main` escalade vers `fullSync` sur **CHAQUE** page qui laisse du reste. C'est correct et
+prudent, et c'est cher : dès que plus de 100 conversations bougent dans la fenêtre (reconnexion
+après une longue coupure, compte à gros volume), le client relit sa liste ENTIÈRE au lieu de
+tirer une deuxième page.
+
+La marche paginée reste donc une amélioration réelle, mais elle doit être instruite CONTRE le
+comportement désormais en place, pas contre l'ancien défaut. Deux bornes qui ne se devinent pas,
+payées par ce cycle :
+
+1. **Sur une page pleine, reprendre au max des `updatedAt` reçus est FAUX.** La coupure peut
+   tomber au milieu d'un groupe partageant une milliseconde ; la borne stricte `gt` enjamberait
+   ses survivantes. Le seul curseur sûr est le plus haut `updatedAt` STRICTEMENT inférieur au
+   max de la page — le groupe du haut est alors relu entier (upsert idempotent).
+2. **Il reste un résidu qu'aucun curseur ne franchit** : une page pleine dont toutes les lignes
+   portent la même milliseconde. Là, et là seulement, l'escalade de `main` est la seule réponse.
+   Une marche qui l'oublierait bouclerait à l'infini.
+
+Fermer proprement demanderait plutôt un curseur composite `(updatedAt, id)` côté route —
+chantier de contrat serveur, pas garde de client.
+
+## Vérification
+
+- **D2** : 2 témoins neufs, **RED observé** avant correctif (`flatFetch` appelé 2× au lieu de
+  1×). Ils montent de VRAIS observateurs sur les deux formes de clé — une `invalidateQueries` ne
+  refetch que les requêtes ACTIVES, donc un cache posé à la main (`setQueryData`/`fetchQuery`)
+  serait resté muet et le témoin serait passé au vert sans rien prouver.
+- Suite web complète : **561 suites / 12 057 tests verts** en local (bun/jest) après le merge de
+  `main`.
+- CI complète verte sur la tête (13 jobs) + SDK Tests verts.
+- **D1 : la vérification de ce cycle a bien eu lieu et est verte** (SDK Tests #965, #967, #971
+  sur la marche de pages) — elle ne prouve plus rien d'utile, puisque le code qu'elle couvrait
+  a été retiré au profit de celui de `main`. C'est dit franchement plutôt qu'effacé : le coût
+  d'un cycle est aussi ce qu'il jette.
+
+## Addendum — trois sessions, un cycle, deux collisions
+
+Ce cycle a collisionné DEUX fois avec des sessions parallèles :
+
+| Tête | Session parallèle | Issue |
+|---|---|---|
+| D2 (invalidations mortes) | PR #2860 | convergence — les deux ont retiré les mêmes lignes ; ce cycle garde le commentaire |
+| D1 (page delta tronquée) | PR #2863 | **collision** — leur version, mergée d'abord et mieux instrumentée, l'emporte intégralement |
+
+Plus un troisième conflit, sans rapport avec le fond : `tasks/lane-cursor.md`, avancé par la
+routine Android pendant le run. Résolu en faveur de `main` sans discussion — ce fichier est
+l'état d'une AUTRE routine, et ce cycle n'avait aucune raison d'y écrire.
+
+Trois collisions sur un cycle, ce n'est plus de la malchance : c'est le régime normal quand
+plusieurs routines instruisent la MÊME liste de têtes ouvertes. La parade n'est pas de merger
+plus vite — c'est de **relire `main` avant d'ouvrir une tête, pas seulement avant de merger**.
+Une tête instruite dans `todo.md` n'est pas une réservation.
+
+## Reste ouvert après ce cycle
+
+- **La marche paginée** (ci-dessus), à instruire contre le comportement de `main`, avec ses deux
+  bornes déjà payées.
+- **Le résidu des égalités** — plus de 100 conversations à la même milliseconde — reste ouvert
+  sur les deux plateformes ; il demande un curseur composite `(updatedAt, id)` côté route.
+- **`apps/web` porte 1224 erreurs `tsc --noEmit` préexistantes** sous son propre tsconfig
+  (aucune introduite ici ; le fichier de tests touché en portait déjà 20 de la même forme). Ce
+  n'est pas un gate CI aujourd'hui, et c'est précisément pourquoi ça mérite d'être écrit.
+
+---
+
+
 # Cycle 77 — L'enrichissement audio n'atteignait que les lecteurs déjà dans le fil, et une page delta tronquée sautait des lignes
 
 Deux défauts de la même famille, tous deux côté gateway, tous deux du type « la convergence

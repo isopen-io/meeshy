@@ -423,6 +423,14 @@ export function useReactionsQuery({
         return { reactions: newReactions, userReactions: newUserReactions };
       });
 
+      // Aucune invalidation de la liste de conversations, et c'est délibéré :
+      // une réaction ne change rien de ce qu'une ligne de liste porte (aperçu,
+      // non-lus, horodatage). Il y avait ici une `invalidateQueries` sur la
+      // forme PLATE, désormais supprimée du dépôt — elle ne matchait donc
+      // aucun cache. Ne pas la « réparer » vers `conversations.infinite()` :
+      // ça relirait toutes les pages chargées à chaque réaction. Le seul cache
+      // concerné est celui du message, juste en dessous.
+
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
     };
@@ -452,6 +460,9 @@ export function useReactionsQuery({
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
+
+      // Pas d'invalidation de la liste de conversations — même raison qu'à
+      // l'ajout (cf. `handleReactionAdded`).
 
       // W4: Update reactionSummary on the message object in messages.infinite cache
       updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
