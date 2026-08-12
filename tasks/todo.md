@@ -1,9 +1,20 @@
-# Tête instruite pour le cycle 91 — les deux compteurs restants sont soldés, la file est vide
+# Tête instruite pour le cycle 92 — le rattrapage des accusés couvre les trois clients, la file reste vide
 
-*Le cycle 90 a livré les DEUX derniers défauts que les cycles 86/87 avaient légués et que le cycle
-89 n'avait pas pris : la pastille de non-lus sur les transports REST de suppression, et le
-rattrapage des accusés après une coupure socket. **La file héritée est vide** — le cycle 91 doit
-donc AUDITER pour se donner du travail, ce qui n'était plus arrivé depuis le cycle 86.*
+*Le cycle 91 a étendu aux TROIS clients le rattrapage des accusés que le cycle 90 n'avait livré que
+pour le web : iOS et Android n'en avaient aucun. Il n'y a toujours rien de légué avec site et
+scénario — le cycle 92 doit AUDITER, et les pistes du cycle 90 (reproduites plus bas) restent les
+meilleures.*
+
+> ## Corollaire de la leçon 143, à lire avec celle qui suit
+>
+> Le cycle 91 est tombé sur le doublon que la leçon 142 décrit — mais **à moitié seulement**, et
+> c'est ce qui compte. La session parallèle avait corrigé le même défaut d'accusés **côté web** ;
+> le cycle 91 l'avait corrigé **côté gateway**, donc pour les trois clients. Le doublon portait sur
+> le DÉFAUT, pas sur la COUVERTURE.
+>
+> **Avant de jeter un travail doublonné, comparer la couverture, pas l'intitulé.** Le salvage du
+> cycle 90 était intégralement négatif ; celui du cycle 91 valait la moitié du cycle, et cette
+> moitié était la seule chose qui réparait iOS et Android.
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
 >
@@ -23,6 +34,17 @@ donc AUDITER pour se donner du travail, ce qui n'était plus arrivé depuis le c
 > **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
 > depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
 > contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+
+## Livré au cycle 91
+
+1. **Le rattrapage des accusés sert désormais iOS et Android, pas seulement le web.** Le cycle 90
+   avait posé le rattrapage dans `use-conversation-messages-rq.ts` — un fichier web. Les deux
+   clients mobiles restaient donc sous le gel PERMANENT décrit ci-dessous, sans aucun rattrapage.
+   `ConversationHandler._resyncReadStatusToSocket` renvoie le résumé d'accusés courant au socket
+   qui rejoint : `conversation:join` est le point de rattachement de CHAQUE reconnexion des trois
+   clients, et le payload est celui qu'ils traitent déjà — aucun changement client. Les deux
+   rattrapages ne font pas double emploi : celui-ci pousse le résumé de conversation vers les
+   trois, celui du web détaille message par message pour un seul.
 
 ## Livré au cycle 90
 
@@ -93,6 +115,71 @@ apparente — **à confirmer par lecture avant tout code** :
 
 `bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
 interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+---
+
+# Cycle 91 — Le rattrapage des accusés n'existait que pour un client sur trois
+
+*Branche `claude/keen-hamilton-6o1jgj`. Un correctif gateway, RED-prouvé avant correction. Et le
+doublon de la leçon 142 rencontré une quatrième fois — mais à moitié seulement, ce qui a changé la
+conclusion.*
+
+## 0. Le doublon, et pourquoi le salvage a été POSITIF cette fois
+
+Le cycle a ouvert sur la tête du cycle 90 et implémenté ses DEUX priorités : la pastille de non-lus
+sur les transports REST de suppression, et le rattrapage des accusés. Le `fetch` d'avant-PR a
+rapporté `8ee058fa` — une session parallèle avait livré le cycle 90 pendant ce temps.
+
+Le verdict n'est pas le même sur les deux moitiés, et c'est tout l'enseignement :
+
+| Moitié | Verdict | Pourquoi |
+|---|---|---|
+| pastille sur suppression REST | **jetée** | même défaut, même site, et leur `MessageMutationParams` en union discriminée est meilleur que le champ optionnel écrit ici — le type interdit l'oubli au lieu de le rattraper |
+| rattrapage des accusés | **conservée** | même défaut, **couverture disjointe** : leur correctif est web-only (`use-conversation-messages-rq.ts`), celui-ci est gateway et sert les trois clients |
+
+La leçon 142 dit de fetcher au grain de l'ÉDIT. Elle reste juste et n'a, ici encore, pas été
+appliquée. Mais elle ne dit pas quoi faire APRÈS la collision, et la réponse du cycle 90
+(« salvage intégralement négatif ») n'est pas généralisable : **un doublon de défaut n'est pas un
+doublon de correctif**. Ce qu'il faut comparer, c'est la surface réparée — ici, deux clients sur
+trois n'étaient réparés par personne.
+
+## 1. `read-status:updated` manqué pendant une coupure n'était rejoué nulle part, sauf sur le web
+
+`read-status:updated` n'est émis que par une ACTION d'accusé : un pair qui lit, une remise
+automatique. Un socket coupé à cet instant ne le reçoit jamais et **rien ne le lui rejoue** — la
+file de livraison hors ligne ne porte que des messages et leurs mutations. La coche de l'expéditeur
+reste figée sur sa valeur d'avant la coupure ; les compteurs étant monotones côté client depuis le
+cycle 85, un événement manqué n'est pas un retard qu'un suivant corrigerait, c'est un **gel
+permanent**.
+
+Le cycle 90 a réparé le web en relançant son lot REST sur le front montant de la reconnexion. iOS
+et Android n'ont pas de lot REST équivalent : ils n'avaient **aucun** rattrapage.
+
+**Site** : `ConversationHandler._resyncReadStatusToSocket`, appelé depuis `handleConversationJoin`
+après l'émission du badge. `conversation:join` est le point de rattachement de chaque reconnexion
+des trois clients — web `_autoJoinLastConversation`, iOS et Android re-joignent après
+authentification (vérifié sur les trois). Le payload est celui qu'ils traitent déjà.
+
+**`type: 'received'`, jamais `'read'`** — et ce n'est pas un détail de forme. iOS
+(`ConversationSyncEngine.handleReadStatusUpdated`, `NotificationCoordinator.handleReadStatusUpdated`)
+et Android ne remettent le compteur de non-lus à zéro que sur un `'read'` émis par SOI-MÊME. Un
+rattrapage estampillé `read` aurait vidé la pastille du rejoignant à **chaque ouverture de
+conversation** — le correctif aurait fabriqué un défaut pire que celui qu'il ferme. `received` ne
+porte que le `summary` agrégé : même contrat que la remise automatique en lot
+(`MessageHandler.autoDeliverToOnlineRecipients`), qui est le précédent de cette forme.
+
+**Le rattrapage ne peut pas faire reculer une coche.** Vérifié sur les trois clients avant d'écrire
+la ligne, parce que c'était le seul moyen que ce correctif nuise : `isStaleReceipt` (web,
+`conversation-ui-store.ts`), `if newStatus.isBetterThan(current)` (iOS, `applyReadReceipt`),
+`deliveryRank` (Android, `MessageRepository.applyReadReceipt`). Les trois n'appliquent le résumé
+que vers le haut.
+
+Un résumé entièrement à zéro (conversation sans message) n'est pas émis : il n'y a rien à
+rattraper, et les trois clients l'ignoreraient de toute façon.
+
+**Tests** (5, tous RED d'abord) : le résumé courant part au socket qui rejoint ; il part aussi sous
+le nom canonique `message:read-status-updated` ; il n'est JAMAIS estampillé `read` ; rien ne part
+d'une conversation vide ; un résumé en échec ne fait pas échouer le join.
 
 ---
 

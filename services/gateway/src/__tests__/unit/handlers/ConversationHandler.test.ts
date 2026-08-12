@@ -11,6 +11,8 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_JOIN_ERROR: 'conversation:join-error',
     CONVERSATION_STATS: 'conversation:stats',
     CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
+    READ_STATUS_UPDATED: 'read-status:updated',
+    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     ERROR: 'error',
   },
   ROOMS: {
@@ -102,8 +104,13 @@ function makeSocketToUser() {
   return map;
 }
 
-function makeReadStatusService(unreadCount = 0) {
-  return { getUnreadCount: jest.fn().mockResolvedValue(unreadCount) };
+const SUMMARY = { totalMembers: 3, deliveredCount: 2, readCount: 1 };
+
+function makeReadStatusService(unreadCount = 0, summary = SUMMARY) {
+  return {
+    getUnreadCount: jest.fn().mockResolvedValue(unreadCount),
+    getLatestMessageSummary: jest.fn().mockResolvedValue(summary),
+  };
 }
 
 function makeDeps(overrides: Partial<{
@@ -327,10 +334,98 @@ describe('ConversationHandler', () => {
     });
 
     it('does not throw when unread count fetch fails on join', async () => {
-      const readStatusService = { getUnreadCount: jest.fn().mockRejectedValue(new Error('DB error')) };
+      const readStatusService = {
+        getUnreadCount: jest.fn().mockRejectedValue(new Error('DB error')),
+        getLatestMessageSummary: jest.fn().mockResolvedValue(SUMMARY),
+      };
       const deps = makeDeps({ readStatusService: readStatusService as any });
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
+      await expect(handler.handleConversationJoin(socket as any, JOIN_PAYLOAD)).resolves.toBeUndefined();
+      expect(socket.emit).toHaveBeenCalledWith('conversation:joined', expect.anything());
+    });
+  });
+
+  // ─── handleConversationJoin: re-synchronisation des accusés ───────────────
+  //
+  // `read-status:updated` n'est émis QUE par les actions d'accusé. Un socket
+  // coupé pendant qu'un pair lit ne rattrape jamais l'événement manqué : la
+  // coche de l'expéditeur reste sur son ancienne valeur, et le seul rattrapage
+  // web (le lot REST de `use-conversation-messages-rq`) est mémoïsé sur le
+  // dernier message PROPRE — il ne se relance donc qu'en ENVOYANT un message.
+  // Le join est le point de rattachement de CHAQUE reconnexion (web
+  // `_autoJoinLastConversation`, iOS `ConversationSyncEngine`), donc le seul
+  // endroit qui répare les trois clients d'un coup, sans changement client.
+  describe('handleConversationJoin — re-synchronisation des accusés', () => {
+    it('renvoie au socket qui rejoint le résumé d\'accusés courant', async () => {
+      const readStatusService = makeReadStatusService(0);
+      const deps = makeDeps({ readStatusService });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+
+      expect(readStatusService.getLatestMessageSummary).toHaveBeenCalledWith(CONV_ID);
+      expect(socket.emit).toHaveBeenCalledWith('read-status:updated', expect.objectContaining({
+        conversationId: CONV_ID,
+        type: 'received',
+        summary: SUMMARY,
+      }));
+    });
+
+    // Le nom canonique voyage en parallèle depuis ~3 mois — un client migré
+    // n'écoute plus que celui-là, et le rattrapage doit le servir aussi.
+    it('émet AUSSI sous le nom canonique `message:read-status-updated`', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+
+      expect(socket.emit).toHaveBeenCalledWith('message:read-status-updated', expect.objectContaining({
+        summary: SUMMARY,
+      }));
+    });
+
+    // `type: 'received'` n'est pas un détail de forme : iOS et Android ne
+    // remettent le compteur de non-lus à zéro que sur `type: 'read'` émis par
+    // SOI-MÊME. Un rattrapage estampillé `read` viderait donc la pastille du
+    // rejoignant à chaque ouverture de conversation.
+    it('n\'estampille JAMAIS le rattrapage en `read`', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+
+      const calls = socket.emit.mock.calls.filter(([event]) => event === 'read-status:updated');
+      expect(calls).toHaveLength(1);
+      expect((calls[0][1] as { type: string }).type).not.toBe('read');
+    });
+
+    // Rien à rattraper dans une conversation vide : le résumé est nul et
+    // l'appliquer ne dirait rien de plus qu'un silence.
+    it('ne renvoie rien quand la conversation n\'a aucun message', async () => {
+      const readStatusService = makeReadStatusService(0, { totalMembers: 0, deliveredCount: 0, readCount: 0 });
+      const deps = makeDeps({ readStatusService });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+
+      expect(socket.emit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+    });
+
+    // Canal best-effort : le join a déjà réussi, la room est déjà rejointe.
+    it('ne fait pas échouer le join quand le résumé échoue', async () => {
+      const readStatusService = {
+        getUnreadCount: jest.fn().mockResolvedValue(0),
+        getLatestMessageSummary: jest.fn().mockRejectedValue(new Error('DB error')),
+      };
+      const deps = makeDeps({ readStatusService: readStatusService as any });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
       await expect(handler.handleConversationJoin(socket as any, JOIN_PAYLOAD)).resolves.toBeUndefined();
       expect(socket.emit).toHaveBeenCalledWith('conversation:joined', expect.anything());
     });

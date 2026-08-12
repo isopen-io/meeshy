@@ -516,6 +516,42 @@ suppression ne compile pas sans nommer l'auteur.
 
 ---
 
+## `read-status:updated` — l'evenement manque pendant une coupure n'est rejoue nulle part
+
+`read-status:updated` n'est emis que par une ACTION d'accuse : un pair qui lit,
+une remise automatique. Un socket coupe a cet instant ne le recoit jamais, et
+rien ne le lui rejoue — la file de livraison hors ligne ne porte que des
+messages et leurs mutations. La coche de l'expediteur reste donc figee sur sa
+valeur d'avant la coupure, et les compteurs etant monotones cote client
+(cycle 85), elle ne se repare pas toute seule : c'est un gel PERMANENT, pas un
+retard.
+
+Le rattrapage vit sur `conversation:join`
+(`ConversationHandler._resyncReadStatusToSocket`), point de rattachement de
+CHAQUE reconnexion des trois clients — web `_autoJoinLastConversation`, iOS et
+Android re-joignent apres authentification. Le payload est celui qu'ils
+traitent deja : **aucun changement client**.
+
+Le web a EN PLUS son propre rattrapage REST (`use-conversation-messages-rq`,
+relance sur le front montant `reconnectEpoch`), qui reconcilie les statuts PAR
+MESSAGE. Les deux ne font pas double emploi et ne se contredisent pas : celui-ci
+pousse le resume de la conversation vers les trois clients, celui-la detaille
+message par message pour un seul. iOS et Android n'ont que celui-ci.
+
+**`type: 'received'`, jamais `'read'`.** iOS (`ConversationSyncEngine`,
+`NotificationCoordinator`) et Android ne remettent le compteur de non-lus a zero
+que sur un `'read'` emis par SOI-MEME ; un rattrapage estampille `read` viderait
+la pastille du rejoignant a chaque ouverture de conversation. `received` ne porte
+que le `summary` agrege — meme contrat que la remise automatique en lot
+(`MessageHandler.autoDeliverToOnlineRecipients`), qui est le precedent de cette
+forme.
+
+Le rattrapage ne peut pas faire RECULER une coche : les trois clients appliquent
+le resume de facon monotone (`isStaleReceipt` web, `isBetterThan` iOS,
+`deliveryRank` Android).
+
+---
+
 ## `message:attachment-updated` — l'enrichissement asynchrone doit TROIS audiences
 
 Whisper finit de transcrire une note vocale une a deux secondes apres l'envoi ;
