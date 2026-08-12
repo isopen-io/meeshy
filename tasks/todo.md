@@ -9443,3 +9443,61 @@ vérifie que `config.isEnabled`, pas `config.hasAdvancedFilters`. Fichier derni�
 `7b8f7e33d` (PR #2859, "calls: updateCallStatus duration anchor + video filter silent no-op"),
 totalement étranger aux 3 chantiers ci-dessus. Poussé sur `main` tel quel (pré-existant, pas
 introduit par ce travail) — à triager par qui possède la zone calls/effets vidéo.
+
+---
+
+## Cycle 84 — mesure du gate iOS (réponse aux items 1 et 2 de la tête de cycle)
+
+Les trois seuls runs `pull_request` d'`ios-tests.yml` existants au 2026-08-12 06:00 UTC (tous sur
+`claude/keen-hamilton-ghcir8`, la branche qui a câblé le gate au cycle 83), relevés par l'API
+Actions :
+
+| Run | `Restore DerivedData` | `Resolve SPM` | **`Build for testing`** | `Save DerivedData` | Total job |
+|---|---|---|---|---|---|
+| `31564979638` | **1 s** (miss) | 122 s | **393 s** (6m33) | 32 s | **606 s** (10m06) |
+| `31565952871` | 14 s (hit) | 23 s | **199 s** (3m19) | 17 s | **298 s** (4m58) |
+| `31566561699` | 15 s (hit) | 41 s | **295 s** (4m55) | 25 s | **432 s** (7m12) |
+
+### Item 1 — le « régime permanent à 4m54 » était le meilleur des deux points, pas la moyenne
+
+Le cycle 83 disposait de DEUX points (10m02 à froid, 4m54) et a retenu le second comme régime
+permanent. Le troisième point tombe à **7m12** : le régime chaud lui-même varie, `Build for testing`
+allant de **3m19 à 4m55** d'un run chaud à l'autre. Moyenne des trois : **7m25**.
+
+**Correction à porter au dossier** : la projection n'est pas 340 poussées × ~5 min ≈ 1 700 min, mais
+340 × ~7,4 min ≈ **2 500 min de runner macOS/mois**. Cela reste très en-dessous de l'estimation
+~18 min qui accompagnait le câblage — **le gate demeure justifié**, et aucune coupe n'est requise ;
+c'est le chiffre consigné qui doit être corrigé, pas la décision.
+
+Réserve d'honnêteté : les trois runs portent sur des commits quasi identiques de la même branche
+(deux d'entre eux ne touchent que des `.md` et le YAML). Les builds chauds mesurés sont donc un
+**meilleur cas** ; une PR qui remue vraiment du Swift reconstruira davantage. Trois points restent
+trois points — à re-mesurer quand la population de runs `pull_request` aura grossi.
+
+### Item 2 — le cache DerivedData profite bien aux PR (hypothèse confirmée, à une réserve près)
+
+L'étape `Restore DerivedData build cache` répond en **1 s au premier run** (rien à restaurer, clé
+neuve) puis en **14 s et 15 s** aux deux suivants : ce sont de vraies restaurations, pas des miss.
+Et l'effet est visible là où il compte — `Build for testing` passe de **393 s à froid** à
+**199 s / 295 s à chaud**, soit **25 à 49 % de moins**.
+
+Les deux modes ne se piétinent donc **pas** le cache : la première hypothèse du cycle 83 (les
+produits d'un build `generic/platform=iOS Simulator` se réutilisent) est **soutenue par la mesure**.
+
+**Ce qui reste non vérifié** : les trois runs sont tous des runs de PR. La question croisée —
+un build de PR (`generic/…`, arm64 épinglé) réutilise-t-il ce qu'un build de `dev` (`id=<sim>`) a
+écrit, et réciproquement — demande de comparer un run de PR à un run de `dev` consécutifs sous la
+même lignée de clés. Aucun couple de ce genre n'existe encore.
+
+### Observation annexe, hors périmètre du gate
+
+La suite complète sur `dev` (`push`, 28 à 54 min) est **rouge très fréquemment** : sur les 20
+derniers runs `push dev` d'`ios-tests.yml`, on relève des `failure` les 08-11 (×3), 08-10 (×2),
+08-09 (×2), 08-07, 08-06 et 08-04. Le gate de PR ne voit rien de tout cela — il est compile seule,
+et c'est le compromis assumé — mais une suite de référence durablement rouge prive le dépôt du
+signal que le gate ne prétend pas donner. À triager par qui possède la suite iOS.
+
+### Ce que le cycle 84 n'a PAS instruit
+
+L'item 3 (porte `actions: write` close, pas de `workflow_dispatch` pour la routine) est inchangé et
+n'a pas été retesté — rien n'indiquait un changement côté intégration GitHub App.
