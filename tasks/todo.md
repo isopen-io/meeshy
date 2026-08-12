@@ -1,4 +1,201 @@
-# Tête instruite pour le cycle 86 — la suite iOS rend des verdicts que le code ne justifie pas
+# Tête instruite pour le cycle 87 — l'audit a rendu douze défauts prouvés ; en voici l'ordre
+
+*Le cycle 86 a lancé trois audits parallèles (gateway temps réel, web sync, pipeline de traduction)
+et n'a livré qu'UN correctif. Ce n'est pas un manque : les onze autres candidats sont documentés
+ci-dessous avec leur site exact et leur scénario d'échec, prêts à être instruits. **Ne pas
+re-auditer — vérifier puis corriger.** Chacun a été établi par lecture de source, jamais par
+exécution : la vérification reste due.*
+
+## Priorité 1 — la moitié serveur du correctif du cycle 86
+
+`conversation:leave` **ne retracte pas la frappe** côté gateway
+(`ConversationHandler.handleConversationLeave`, `socketio/handlers/ConversationHandler.ts:181`) :
+seul `disconnecting` le fait (`StatusHandler.handleSocketDisconnecting`), et changer de conversation
+ne déconnecte pas le socket. Le cycle 86 a corrigé le symptôme **côté web uniquement** ; iOS et
+Android restent exposés au même indicateur fantôme (jusqu'à 8 s chez les pairs, à chaque changement
+de conversation).
+
+La machinerie existe déjà et n'a pas à être réécrite — `handleTypingStop` fait exactement le bon
+geste : identité tirée de `activeTypers` (donc juste même après un renommage), suppression du verrou
+de throttle, suppression multi-appareils, émission `socket.to(room)`. Deux pièges à ne pas manquer :
+
+1. **Le coût.** `handleTypingStop` valide puis appelle `normalizeConversationId` (un
+   `conversation.findUnique`) AVANT de regarder `activeTypers`. Le brancher naïvement sur
+   `CONVERSATION_LEAVE` ferait payer une seconde résolution à CHAQUE changement de conversation,
+   alors que `handleConversationLeave` normalise déjà. Extraire la partie post-normalisation
+   (`retractTypingIn(socket, normalizedId)`) et l'appeler depuis `handleConversationLeave` avec l'id
+   déjà résolu.
+2. **L'ordre.** Retracter AVANT `socket.leave(room)`. `socket.to(room)` fonctionne dans les deux
+   sens (il vise la room en s'excluant soi-même), mais retracter d'abord garde l'énoncé lisible :
+   « je retire ce que j'ai diffusé, puis je sors ».
+
+Test : `socketio/handlers/__tests__/` a déjà les doubles nécessaires. Affirmer qu'un socket tracké
+comme frappeur émet `typing:stop` sur `conversation:leave`, et qu'un socket non-frappeur n'émet rien
+et ne paie aucune résolution supplémentaire.
+
+## Priorité 2 — trois défauts d'identité et de compteur, tous testables en jest gateway
+
+- **`POST /conversations/:id/mark-read` émet un `read-status:updated` amputé.**
+  `messages.ts:406-413` construit le payload sans `lastReadAt` ni `unreadCount`, alors que
+  `ReadStatusUpdatedEventData` (`packages/shared/types/socketio-events.ts:895-918`) les déclare
+  obligatoires sur `type: 'read'` et « voyageant en paire ». La route jumelle
+  (`message-read-status.ts:504-540`) les envoie correctement. Conséquence prouvée côté client :
+  `ConversationStoreSocketBridge.swift:119-121` fait `guard … let lastReadAt, let unreadCount else
+  { return }` — et c'est justement cette route que poste le transport de lecture primaire d'iOS
+  (`OutboxDispatcher.swift:329`). **La synchro de lecture multi-appareils d'iOS ne part donc
+  jamais.** Test : `src/__tests__/unit/routes/messages-routes.test.ts`.
+- **Un invité de lien partagé ne reçoit rien de `conversation:join`.**
+  `ConversationHandler.ts:142-167` gate `conversation:joined`, le push de non-lus et les stats sur
+  `connectedUser.userId`, `undefined` pour un anonyme — alors que le contrôle d'appartenance juste
+  au-dessus (`:89-103`) l'a laissé passer et que le socket EST dans la room. `getUnreadCount` accepte
+  déjà un `Participant.id` (`MessageReadStatusService.ts:213-216`). Attention : un test existant
+  (`ConversationHandler.test.ts:207`) **encode le défaut** (« … without CONVERSATION_JOINED ») ; le
+  corriger, c'est le retourner — vérifier d'abord qu'aucune décision datée ne le justifie
+  (leçon 125).
+- **`GET /conversations/:id` recalcule `unreadCount` avec un `where: { userId }` écrit à la main**
+  (`core.ts:895-905`) : pour un anonyme, `authContext.userId` porte un `Participant.id`, la clause ne
+  matche rien et le compteur retombe silencieusement à `0` — qui écrase ensuite le badge que le
+  socket avait poussé juste. C'est exactement le site pour lequel `resolveCallerParticipant` existe.
+  Site jumeau : `MeeshySocketIOManager._emitUnreadCountsSnapshot` (`:916-928`).
+
+## Priorité 3 — le pipeline de traduction (le Prisme y perd des lecteurs)
+
+- **`getTranslation()` lit la langue verbatim quand tous les écrivains la stockent normalisée**
+  (`MessageTranslationService.ts:3084`). `POST /translate {target_language:"pt-BR"}` écrit
+  `translations.pt` puis relit `translations['pt-BR']` 20 fois sur 10 s et rend un **repli fabriqué**
+  `[PT-BR] <texte original>` — le texte source affublé d'une étiquette, après 10 s d'attente, alors
+  que la vraie traduction est en base une clé plus loin. Violation directe du Prisme. Correctif :
+  `normalizeLanguageCode` au point de lecture. Testable purement.
+- **Le garde « traduction périmée » jette des résultats VALIDES**
+  (`:975` → `_isStaleTranslationResult`, `:781-784`). La carte `latestRetranslationTask` n'est
+  écrite que par `_processRetranslationAsync` — qui sert AUSSI la traduction à la demande, où le
+  contenu n'a pas changé. Une demande « traduis en italien » pendant que les traductions initiales
+  volent encore fait tomber `en` et `es` : ces lecteurs voient l'original pour toujours, et rien ne
+  retente.
+- **La traduction à la demande SUPPRIME avant de confirmer** (`:697-724`) : les entrées visées sont
+  retirées de `Message.translations` et persistées avant l'envoi ZMQ, sans rollback. Si le
+  remplacement se perd, la traduction correcte est perdue définitivement. Ce chemin viole en plus la
+  règle du `socketio/README.md` : il écrit `Message.translations` sans jamais se demander si le
+  message est le DERNIER de sa conversation, donc sans `emitConversationPreviewUpdate`.
+- **Une requête multi-langues est réputée soldée par son PREMIER résultat**
+  (`ZmqTranslationClient.ts:295-309`) : `removePendingRequest` désarme le deadman dès la première
+  langue. Les langues 2..N n'ont plus ni timeout, ni retry, ni erreur.
+
+## Priorité 4 — web, gateway, translator : le reste
+
+- **Monter `useSocketIOMessaging` détruit un socket sain** (`use-socketio-messaging.ts:60-69`) :
+  `reconnect()` inconditionnel = `disconnect()` + reconnexion différée par backoff. Cinq composants
+  montent ce hook ; ouvrir un profil coupe donc la connexion 1-2,5 s. L'étape 1C juste en dessous
+  fait la MÊME chose correctement gardée (`!isConnected && !isConnecting`) — appliquer la même garde.
+- **Les accusés ne sont jamais re-synchronisés après une coupure socket.** Le lot REST
+  (`use-conversation-messages-rq.ts:261-307`) n'est relancé que lorsqu'on ENVOIE un message, et
+  `conversation:join` ne re-émet pas de `read-status:updated`. Le cycle 85 a rendu ces compteurs
+  monotones : sans backfill, un événement manqué devient un gel permanent.
+- **Rien ne recalcule les non-lus après une suppression de message** (gateway) : aucun des sept sites
+  d'émission de `conversation:unread-updated` n'est un chemin de suppression. Le badge compte des
+  messages qui n'existent plus.
+- **Réaction optimiste sans rollback quand le cache était vide**
+  (`use-reactions-query.ts:257-262`) : `onMutate` fabrique l'état à partir de rien, `onError` refuse
+  de le défaire (`if (context?.previousData)`). Rollback inconditionnel.
+- **Le translator envoie deux fois chaque audio traduit** (`zmq_audio_handler.py:468-491`, bloc
+  `if audio_bytes:` dupliqué verbatim) : 2× la charge ZMQ par message vocal multilingue. Rien ne
+  casse — l'extraction résout la seconde copie — mais c'est du gaspillage pur. Confirmer avec
+  `git log -L468,491:services/translator/src/services/zmq_audio_handler.py` avant de retirer.
+
+## Ce qui reste ouvert des cycles précédents
+
+- **Les 242 « source guards » iOS** (tête instruite du cycle 86) : des tests qui `grep` le code au
+  RUNTIME depuis un `#filePath` figé à la COMPILATION, donc capables de rendre un verdict sans
+  rapport avec le commit testé. **Le cycle 86 n'a rien pu en faire** : aucune toolchain Swift dans
+  l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents, Linux). Le point 1 du
+  dossier (reproduire sur macOS en logguant `url.path` et `source.count`) reste la première mesure à
+  prendre, et elle exige une machine que cette routine n'a pas.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+
+---
+
+# Cycle 86 — Les indicateurs de saisie du web : morts à la réception, fantômes à l'émission
+
+## Le correctif livré (PR #2879)
+
+Sur le web, la **vue conversation** n'a jamais affiché « X est en train d'écrire… », et n'a jamais
+retracté ce qu'elle faisait afficher aux autres. Deux défauts indépendants sur la même
+fonctionnalité.
+
+**Réception.** `ConversationLayout.onUserTyping` — le callback que la vue confie au socket — se
+réduisait à deux gardes suivies de rien :
+
+```ts
+const onUserTyping = useCallback((userId, _username, _isTyping, typingConversationId) => {
+  if (!user || userId === user.id) return;
+  if (typingConversationId !== selectedConversation?.id) return;
+}, [user, selectedConversation?.id]);        // ← la fonction se termine ici
+```
+
+`useConversationTyping.handleUserTyping` — **seul écrivain** de `typingUsers` — n'était ni
+déstructuré ni appelé. Chaque `typing:start`/`typing:stop` était reçu, filtré, jeté. L'en-tête rend
+pourtant bien cet état (`ConversationView.mapTypingUsers` → `ConversationHeader` →
+`ParticipantsDisplay` → `TypingIndicator`) : il n'a simplement jamais rien eu à rendre.
+
+Ce qui a caché la panne : le **flux d'accueil** (`use-stream-socket.ts:128,306`) tient sa PROPRE
+copie du handler et la câble correctement. La fonctionnalité marchait sur une surface et pas sur
+l'autre.
+
+**Émission.** Le nettoyage de `useConversationTyping` est une fermeture créée au rendu où
+`conversationId` a changé pour la dernière fois : elle y capture un `isTyping` qui vaut toujours
+`false`, donc `if (isTyping) stopTyping()` était **inatteignable** — et le même nettoyage annule le
+timer d'auto-stop (3 s), si bien qu'aucun des deux chemins d'arrêt ne partait. Rien en aval ne
+rattrapait (cf. priorité 1 ci-dessus). Changer de conversation sans vider le composeur laissait donc
+un fantôme chez tous les pairs jusqu'à leur filet de 8 s.
+
+Trois décisions :
+
+- **Le layout délègue, il ne recopie pas.** Les deux gardes du callback existaient déjà dans
+  `handleUserTyping` ; les rebrancher aurait dupliqué la règle. Le callback relaie, point.
+- **Un ref pour casser le cycle.** `useConversationTyping` a besoin de `startTyping`/`stopTyping` que
+  produit `useSocketIOMessaging`, qui a besoin du récepteur : la dépendance est réellement
+  bidirectionnelle. Le ref la casse, et rend le callback STABLE — l'abonnement socket cesse de se
+  refaire à chaque changement de conversation.
+- **Un miroir de `isTyping` écrit à la main, pas synchronisé par effet.** React exécute tous les
+  nettoyages avant tous les effets : un ref synchronisé par `useEffect` serait juste par accident
+  d'ordonnancement. Écrit aux trois mêmes endroits que l'état, il est juste par construction.
+
+### Vérification
+
+- **RED prouvé avant le correctif** : 4 rouges (2 hook, 2 vue). Les 4 gardes négatives (écho de soi,
+  autre conversation, pas de stop si on ne tapait pas, pas de double stop) passaient déjà — elles
+  verrouillent le correctif contre une sur-émission.
+- **Mutation appliquée et vérifiée — 6 réversions, 6 rouges** : relais neutralisé (2), branchement du
+  ref retiré (2), nettoyage relisant l'état périmé (2), miroir non armé par `handleTypingStart` (2),
+  non désarmé par `handleTypingStop` (1), non désarmé par l'auto-stop (1). Restauré, re-vérifié vert.
+- **Suite web complète : 563/563 fichiers, 12 084 tests verts** (21 skipped).
+- `tsc --noEmit` : **1 224 diagnostics avant comme après**, aucun dans les fichiers touchés.
+- Baseline gateway relevée au même commit, non touchée : **654/654 suites, 16 486 tests verts**.
+
+### Deux tests qui ne prouvaient rien
+
+Le défaut d'émission a traversé une suite verte parce que deux tests le DOCUMENTAIENT au lieu de
+l'affirmer — « The cleanup effect may or may not call stopTyping depending on React's cleanup
+timing » — et n'assertaient donc rien sur `stopTyping`. Le défaut de réception, lui, était hors de
+portée de tout test de la vue : `useConversationTyping` y était doublé en ENTIER, ce qui figeait
+`typingUsers: []` et rendait `undefined` tout export nouvellement consommé (leçon 128, corollaire).
+Le double est retiré ; le hook réel tourne désormais sous le test de la vue.
+
+### Réserve d'honnêteté
+
+Le dépôt est arrivé en **clone superficiel** (`--depth`, 24 greffes) : `origin/main` pointait sur un
+commit vieux de trois jours et `git merge-base` ne trouvait AUCUN ancêtre commun avec la branche de
+travail, ce qui affichait « 334 en avance / 340 en retard » pour deux références en réalité
+identiques. Diagnostic établi par `git ls-remote` (main = `4fd18273` = HEAD), pas par déduction.
+Toute conclusion de divergence tirée d'un `git log` dans cet environnement doit d'abord vérifier
+`git rev-parse --is-shallow-repository`.
+
+
+---
+
+# (Reporté — non exécuté au cycle 86, faute de toolchain Swift) Dossier iOS : la suite rend des verdicts que le code ne justifie pas
 
 *Le cycle 85 est allé chercher pourquoi la suite de référence iOS est rouge un run sur trois. La
 réponse n'est pas « des tests flaky » : au moins un verdict est DÉMONTRABLEMENT faux.*
