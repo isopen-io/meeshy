@@ -42,8 +42,17 @@ jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (k: string) => k, isLoading: false }),
 }));
 // VideoStream carries heavy WebRTC/ref machinery — stub it for the fullscreen-region test.
+// `data-muted` mirrors the real `muted` prop so tests can assert speaker-toggle wiring
+// without reaching into an actual <video> element's audio output. The testid is keyed
+// off `isLocal` — LocalVideoTile renders this same component (always muted, self-view)
+// and would otherwise collide with the remote instance under the same fixed testid.
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: () => <div data-testid="remote-video-stream" />,
+  VideoStream: (props: { muted?: boolean; isLocal?: boolean }) => (
+    <div
+      data-testid={props.isLocal ? 'local-video-stream' : 'remote-video-stream'}
+      data-muted={String(props.muted)}
+    />
+  ),
 }));
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
@@ -275,6 +284,38 @@ describe('VideoCallInterface (container)', () => {
     } finally {
       storeState.remoteStreams = new Map();
     }
+  });
+
+  // Regression guard — the speaker button used to flip a `useState` local to
+  // `CallControls` that nothing downstream ever read: clicking it changed the
+  // icon but never muted/unmuted a single <video> element, on any surface
+  // (fullscreen main participant or draggable overlay tiles).
+  describe('speaker toggle actually mutes/unmutes remote audio', () => {
+    beforeEach(() => {
+      storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
+    });
+    afterEach(() => {
+      storeState.remoteStreams = new Map();
+    });
+
+    it('plays remote audio (unmuted) by default', () => {
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'false');
+    });
+
+    it('mutes the remote video element when the speaker is toggled off', () => {
+      render(<VideoCallInterface callId="call1" />);
+      fireEvent.click(screen.getByRole('button', { name: 'calls.controls.speakerOff' }));
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'true');
+    });
+
+    it('unmutes again on a second toggle', () => {
+      render(<VideoCallInterface callId="call1" />);
+      const button = () => screen.getByRole('button', { name: /calls\.controls\.speaker(On|Off)/ });
+      fireEvent.click(button());
+      fireEvent.click(button());
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-muted', 'false');
+    });
   });
 
   // Sibling-drift fix: `offersCreatedFor` used to be populated on offer
