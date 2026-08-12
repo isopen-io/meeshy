@@ -1,5 +1,167 @@
 # @meeshy/web
 
+## 1.25.8
+
+### Patch Changes
+
+- 74eee6a: Cinq défauts temps réel : un invité qui rejoignait en silence, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
+
+  ## 1. Gateway — l'invité de lien partagé rejoignait en silence
+
+  Le handler gatait **toutes** ses émissions post-join sur `connectedUser.userId`,
+  `undefined` pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a
+  laissé passer et que le socket EST dans la room. Résultat : un invité rejoignait en
+  silence, badge de non-lus vide, et rien pour le remplir.
+
+  `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` — son en-tête
+  nomme même le chemin anonyme comme le cas courant. Le compteur sort donc du garde et
+  reçoit `participantId`. **Pas `connectedUser.id`** (le jeton de session) : il ne résout
+  aucune ligne Participant et aurait rendu `0` en silence, un badge « correct » et faux. Un
+  test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+
+  **L'accusé `conversation:joined` part lui aussi**, sous la même identité. Le blocage annoncé
+  — « quelle identité mettre dans `userId` pour un participant sans compte ? » — s'est dissous à
+  la lecture des clients : les cinq consommateurs (web `use-socket-cache-sync`,
+  `use-stream-socket`, `orchestrator` ; iOS `ConversationSyncEngine`, `ParticipantsView`)
+  n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+  La seule contrainte dure est de **décodage** : `ConversationParticipationEvent.userId` est un
+  `String` **non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé
+  serait silencieusement jeté sur iOS. Le champ doit donc être présent ; sa valeur n'est lue par
+  personne. D'où `participationId = userId ?? participantId`, une seule résolution d'identité
+  pour les deux émissions.
+
+  ## 2. Gateway — une traduction présentée comme telle, mais jamais traduite
+
+  `getTranslation()` lisait `translations[targetLanguage]` **verbatim** quand tous les
+  écrivains stockent sous la forme canonique de `normalizeLanguageCode` (`'pt-BR'` →
+  `'pt'`). Une demande `pt-BR` interrogeait donc une clé absente pendant que la traduction
+  attendait une clé plus loin ; l'appelant sondait 20 fois sur 10 s, puis rendait un repli
+  **fabriqué** `[PT-BR] <texte original>` — le texte source affublé d'une étiquette de
+  langue. Violation directe du Prisme Linguistique, et dans sa pire forme : du contenu non
+  traduit présenté comme traduit.
+
+  Verbatim d'abord, forme normalisée en repli : un document legacy portant réellement une
+  clé régionale reste servi tel quel. Aucune traduction ne change de gagnant — seules
+  celles qu'on ne trouvait pas deviennent trouvables. La cible **rendue** reste celle
+  demandée (`'pt-BR'`), le client corrèle sa requête dessus.
+
+  ## 3. Web — ouvrir un profil coupait la connexion temps réel
+
+  `useSocketIOMessaging` appelait `meeshySocketIOService.reconnect()` **sans condition** au
+  montage. Or `reconnect()` n'est pas un « connecte si besoin » : c'est `disconnect()` suivi
+  d'une reconnexion différée par backoff, 1 à 2,5 s au premier essai. Cinq composants
+  montent ce hook — ouvrir un profil coupait donc un socket parfaitement sain, messages
+  temps réel compris.
+
+  L'étape 1C, quinze lignes plus bas, fait exactement le même geste correctement gardé
+  (`!isConnected && !isConnecting`) ; c'est cette garde qui est appliquée au montage.
+
+  ## 4. Web — une réaction refusée par le serveur restait affichée pour toujours
+
+  Les deux mutations de réaction gardaient leur rollback derrière
+  `if (context?.previousData)`. Or `onMutate` **fabrique** l'état optimiste quand le cache
+  est vide : `previousData` vaut alors `undefined`, et le garde refusait précisément de
+  défaire ce qui venait d'être inventé.
+
+  Le rollback devient inconditionnel — mais `setQueryData(key, undefined)` n'y suffit pas :
+  React Query traite `undefined` comme « ne rien changer ». Restaurer l'absence de donnée
+  exige `removeQueries`. `restoreReactionSnapshot` retire donc l'entrée quand il n'y avait
+  rien, et la réécrit sinon.
+
+  ## 5. Translator — chaque audio traduit partait en double
+
+  Bloc `if audio_bytes:` dupliqué verbatim dans le sender multipart : 2× la charge ZMQ par
+  message vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son
+  propre index, si bien qu'elle désignait le doublon et que la première copie restait un
+  frame orphelin. Rien ne cassait — le gateway résout les frames strictement par
+  `info.index`, bornes vérifiées — ce qui explique la survie du défaut. Origine sans
+  ambiguïté au `git log -L` : un hunk de conflit résolu en double.
+
+  ## Vérification
+
+  - **RED prouvé pour chacun des quatre correctifs TypeScript** avant correction ; le
+    rollback de réaction est resté rouge après un premier correctif « évident »
+    (`setQueryData(key, undefined)`, no-op), ce que seul le test a révélé.
+  - **Suite gateway complète verte** : 654/654 suites, 16 504/16 504 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 563/563 suites, 12 089 tests passés, 21 ignorés,
+    0 échec.
+  - **Réserve sur le translator** : sa suite pytest n'a pas pu être exécutée dans cet
+    environnement (`numpy`/`torch` s'installent depuis l'index PyTorch, bloqué par le
+    proxy). La sûreté du retrait est établie par lecture des deux côtés du contrat —
+    producteur, et consommateur `extractAudioBinaryFrames` — **pas par exécution**.
+
+- 2111603: Deux compteurs qui mentaient sans jamais se corriger : la pastille après une suppression REST, et les accusés après une coupure socket
+
+  ## 1. Gateway — les deux transports REST de suppression ne repoussaient pas la pastille de non-lus
+
+  Le cycle 89 a câblé le recalcul du badge sur le transport WebSocket
+  (`MessageHandler.handleMessageDelete`). Les deux transports REST — `DELETE /messages/:id`
+  (celui d'Android) et `DELETE /conversations/:id/messages/:messageId` (celui du SDK iOS) —
+  ne le faisaient pas : le lecteur voyait le message disparaître pendant que sa pastille
+  continuait de le compter. La liste de conversations du web tourne en `staleTime: Infinity`,
+  donc sans poussée la valeur ne vieillit pas — **elle ment, indéfiniment**.
+
+  Le décompte lui-même était déjà juste (`getUnreadCountsForParticipants` filtre
+  `deletedAt: null`) : il ne manquait que de le **redemander**.
+
+  La poussée vit dans `broadcastMessageMutation`, l'unique broadcaster des cinq routes de
+  mutation REST — donc écrite **une seule fois** pour les deux suppressions. Les trois autres
+  appelants sont des éditions, et une édition ne change aucun compte : le badge n'y est pas
+  touché, ce qui aurait coûté deux requêtes par frappe validée pour zéro delta.
+
+  **L'exclusion porte sur l'AUTEUR (`authorId`), jamais sur l'acteur** : un modérateur qui
+  retire le message d'un autre est lui-même un destinataire dont la pastille doit bouger.
+  C'est le contraire de la file hors ligne, dix lignes plus bas, qui exclut bien l'acteur.
+
+  **C'est le TYPE qui tient la règle**, pas la vigilance : `MessageMutationParams` est une
+  union discriminée où `authorId` est **requis** sur `eventType: 'deleted'` et **absent** de
+  `'edited'`. Un sixième transport de suppression ne compile pas sans nommer l'auteur — les
+  deux callsites REST ont d'ailleurs été trouvés par `tsc`, pas par lecture.
+
+  La table du § « La pastille de non-lus » de `socketio/README.md` annonçait TROIS transports
+  REST de suppression, et les disait dépourvus d'aperçu de liste. Vérification faite : il y en
+  a **deux**, et ils émettent bien `emitConversationPreviewUpdate` depuis qu'ils passent par
+  `broadcastMessageMutation`. Le document est corrigé.
+
+  ## 2. Web — les accusés de lecture n'étaient jamais re-synchronisés après une coupure socket
+
+  Le lot REST `messagesService.getReadStatuses` est gardé par une clé
+  `${conversationId}:${dernier message à soi}` : il ne se relance donc que lorsqu'on **ENVOIE**
+  un nouveau message. Et `conversation:join` ne re-émet aucun `read-status:updated`.
+
+  Depuis que le cycle 85 a rendu ces compteurs **monotones** (`isStaleReceipt` rejette tout
+  résumé qui recule à `totalMembers` inchangé), un `read-status:updated` manqué pendant une
+  coupure n'est plus une valeur en retard qu'un événement suivant corrigerait : c'est un **gel
+  permanent**. L'expéditeur regarde une coche « remis » sur un message que tout le monde a lu,
+  jusqu'à ce qu'il en envoie un autre.
+
+  Le hook rattrapait déjà les MESSAGES manqués sur le front montant de la reconnexion
+  (« Trigger 1 » → `syncNewerMessages`). Ce front est désormais compté **une seule fois**
+  (`reconnectEpoch`, en tête du hook) et sert les deux dettes du même instant : les messages
+  manqués et les accusés manqués. La détection de front, qui était dupliquée pour le premier
+  et absente pour le second, n'existe plus qu'en un endroit.
+
+  ## Vérification
+
+  - **RED prouvé avant chaque correctif** : la pastille au niveau de l'unité partagée ET des
+    deux routes (le type impose de passer _une_ identité ; seuls les tests de route disent
+    LAQUELLE) ; le rattrapage des accusés par un cycle connecté → coupé → reconnecté sans
+    envoi de message.
+  - **Suite gateway complète verte** : 680/680 suites, 16 847/16 847 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 564/564 suites, 12 122 tests passés, 21 ignorés.
+  - **Réserve honnête sur le typecheck web** : `tsc --noEmit -p tsconfig.json` rend **1 224
+    diagnostics, tous situés dans `**tests**/**`, et strictement PRÉ-EXISTANTS\*\* — le même
+    compte exactement, mesuré sur l'arbre stashé. Ce travail n'en ajoute aucun, et aucun ne
+    porte sur un fichier qu'il touche. Le décompte n'a pas été assaini (hors périmètre) mais
+    il est consigné ici pour que le prochain cycle ne le découvre pas comme une nouveauté.
+  - Le test de rattrapage a d'abord été écrit avec `waitFor` et s'est révélé **flaky sous la
+    suite complète** (564 suites en parallèle, délai par défaut d'une seconde dépassé). Il
+    asserte désormais directement après `rerender` — le front monté relance le lot de façon
+    synchrone, il n'y avait rien à attendre. RED/GREEN re-prouvé sous cette forme.
+
 ## 1.25.7
 
 ### Patch Changes
