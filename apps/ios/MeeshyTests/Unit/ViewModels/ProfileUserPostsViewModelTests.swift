@@ -29,6 +29,7 @@ final class ProfileUserPostsViewModelTests: XCTestCase {
         let sut = ProfileUserPostsViewModel(
             userId: Self.userId,
             postService: postService,
+            userService: MockUserService(),
             languageProvider: MockLanguageProvider(preferredLanguages: [])
         )
         return (sut, postService)

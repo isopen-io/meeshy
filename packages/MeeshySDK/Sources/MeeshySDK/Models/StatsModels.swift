@@ -10,6 +10,13 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
     public let friendRequestsReceived: Int
     public let languagesUsed: Int
     public let memberDays: Int
+    /// Compteurs de contenu du profil (bandeau Postes/Réels/Stories) — `nil`
+    /// tant que le gateway ne les fournit pas (vieux serveur). `storiesCount`
+    /// compte TOUTES les stories non supprimées de l'auteur, expirées comprises
+    /// (archive) — la valeur dérivée côté client était structurellement 0.
+    public let postsCount: Int?
+    public let reelsCount: Int?
+    public let storiesCount: Int?
     public let languages: [String]
     public let achievements: [Achievement]
 
@@ -17,11 +24,13 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
         totalMessages: Int = 0, totalConversations: Int = 0,
         totalTranslations: Int = 0, friendRequestsReceived: Int = 0,
         languagesUsed: Int = 0, memberDays: Int = 0,
+        postsCount: Int? = nil, reelsCount: Int? = nil, storiesCount: Int? = nil,
         languages: [String] = [], achievements: [Achievement] = []
     ) {
         self.totalMessages = totalMessages; self.totalConversations = totalConversations
         self.totalTranslations = totalTranslations; self.friendRequestsReceived = friendRequestsReceived
         self.languagesUsed = languagesUsed; self.memberDays = memberDays
+        self.postsCount = postsCount; self.reelsCount = reelsCount; self.storiesCount = storiesCount
         self.languages = languages; self.achievements = achievements
     }
 
@@ -33,6 +42,9 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
         friendRequestsReceived = (try? container.decode(Int.self, forKey: .friendRequestsReceived)) ?? 0
         languagesUsed = (try? container.decode(Int.self, forKey: .languagesUsed)) ?? 0
         memberDays = (try? container.decode(Int.self, forKey: .memberDays)) ?? 0
+        postsCount = try? container.decode(Int.self, forKey: .postsCount)
+        reelsCount = try? container.decode(Int.self, forKey: .reelsCount)
+        storiesCount = try? container.decode(Int.self, forKey: .storiesCount)
         languages = (try? container.decode([String].self, forKey: .languages)) ?? []
         achievements = (try? container.decode([Achievement].self, forKey: .achievements)) ?? []
     }
@@ -40,6 +52,7 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
     enum CodingKeys: String, CodingKey {
         case totalMessages, totalConversations, totalTranslations
         case friendRequestsReceived, languagesUsed, memberDays
+        case postsCount, reelsCount, storiesCount
         case languages, achievements
     }
 }

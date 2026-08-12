@@ -51,17 +51,49 @@ struct ProfilePostsCounts: Equatable {
         )
     }
 
+    /// Phase 2 (backend) : totaux exacts issus de `GET /users/:id/stats`.
+    /// `nil` sur un champ (vieux gateway) → repli sur la valeur dérivée.
+    /// Le compteur de stories DÉRIVÉ vaut structurellement 0 (le listing
+    /// exclut le type STORY) — seule la valeur backend est signifiante.
+    static func merging(derived: ProfilePostsCounts, stats: UserStats?) -> ProfilePostsCounts {
+        guard let stats, stats.postsCount != nil || stats.reelsCount != nil || stats.storiesCount != nil else {
+            return derived
+        }
+        return ProfilePostsCounts(
+            posts: stats.postsCount ?? derived.posts,
+            reels: stats.reelsCount ?? derived.reels,
+            stories: stats.storiesCount ?? derived.stories,
+            isApproximate: false
+        )
+    }
+
     /// « N+ » quand le compteur est une borne basse strictement positive, « N » sinon.
     static func displayValue(_ value: Int, isApproximate: Bool) -> String {
         (isApproximate && value > 0) ? "\(value)+" : "\(value)"
     }
 }
 
+/// Filtre du listing piloté par les tuiles du bandeau : tap « Postes » →
+/// postes uniquement, tap « Réels » → réels uniquement, re-tap → tout.
+enum ProfilePostsFilter: Equatable {
+    case all, posts, reels
+
+    /// Toggle : sélectionner la tuile déjà active revient à « tout ».
+    func toggled(with tapped: ProfilePostsFilter) -> ProfilePostsFilter {
+        self == tapped ? .all : tapped
+    }
+}
+
 /// Bande horizontale de 3 mini-stats (Postes / Réels / Stories) affichée en tête
 /// du listing. Style aligné sur `miniStatChip` (icône + valeur arrondie + label).
 /// Valeurs opaques : agnostique de leur provenance (phase 1 dérivée / phase 2 backend).
+/// Tuiles TAPPABLES : Postes/Réels filtrent le listing, Stories ouvre la page
+/// des stories en cours et passées (profil propre).
 private struct ProfilePostsStatsBand: View {
     let counts: ProfilePostsCounts
+    var selectedFilter: ProfilePostsFilter = .all
+    var onSelectFilter: ((ProfilePostsFilter) -> Void)? = nil
+    var onStoriesTap: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     /// Profil non lié à une conversation → accent de marque (indigo500).
@@ -70,38 +102,56 @@ private struct ProfilePostsStatsBand: View {
     var body: some View {
         HStack(spacing: 8) {
             chip(icon: "square.grid.2x2.fill", value: counts.posts,
-                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main))
+                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main),
+                 isSelected: selectedFilter == .posts,
+                 action: { onSelectFilter?(.posts) })
             chip(icon: "play.rectangle.fill", value: counts.reels,
-                 label: String(localized: "profile.posts.stat.reels", defaultValue: "Réels", bundle: .main))
+                 label: String(localized: "profile.posts.stat.reels", defaultValue: "Réels", bundle: .main),
+                 isSelected: selectedFilter == .reels,
+                 action: { onSelectFilter?(.reels) })
             chip(icon: "circle.dashed", value: counts.stories,
-                 label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main))
+                 label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main),
+                 isSelected: false,
+                 action: { onStoriesTap?() })
         }
     }
 
-    private func chip(icon: String, value: Int, label: String) -> some View {
+    private func chip(icon: String, value: Int, label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         let display = ProfilePostsCounts.displayValue(value, isApproximate: counts.isApproximate)
-        return VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-            Text(display)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(theme.textMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+        return Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(MeeshyColors.indigo500)
+                Text(display)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(theme.surfaceGradient(tint: accentHex))
+            .glassCard(cornerRadius: 14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(theme.surfaceGradient(tint: accentHex))
-        .glassCard(cornerRadius: 14)
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("\(display) \(label)"))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -123,6 +173,7 @@ struct ProfileUserPostsList: View {
     /// profil : le bouton commentaire ne répondait plus, et celui d'un réel
     /// fermait carrément la feuille de profil (openReel).
     @State private var commentingPost: FeedPost?
+    @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
 
@@ -154,9 +205,20 @@ struct ProfileUserPostsList: View {
                     emptyState
                 }
             } else {
-                ProfilePostsStatsBand(counts: viewModel.postsCounts)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 4)
+                ProfilePostsStatsBand(
+                    counts: viewModel.postsCounts,
+                    selectedFilter: viewModel.filter,
+                    onSelectFilter: { tapped in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            viewModel.filter = viewModel.filter.toggled(with: tapped)
+                        }
+                    },
+                    onStoriesTap: {
+                        openStories()
+                    }
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
 
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
@@ -321,6 +383,25 @@ struct ProfileUserPostsList: View {
         } else {
             onOpenPost?(post)
         }
+    }
+
+    /// Tap sur la tuile « Stories » : sur SON PROPRE profil, ouvre la page des
+    /// stories en cours et passées (`MyStoriesView`, hébergée par le tray qui
+    /// possède le StoryViewModel et le coordinator du viewer). La feuille de
+    /// profil est fermée d'abord — le même motif différé que
+    /// `ProfilePostsOpener` (une sheet présentée par-dessus une sheet en cours
+    /// de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la tuile
+    /// reste informative (ses stories passées ne nous sont pas accessibles).
+    private func openStories() {
+        guard userId == AuthManager.shared.currentUser?.id else { return }
+        dismissHost()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+        }
+    }
+
+    private func dismissHost() {
+        dismiss()
     }
 
     /// Counts ONE post view (open or "voir plus") through the persistent 1-hour
@@ -489,6 +570,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// so the nested LazyVStack never builds the whole cached list at once.
     @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow
 
+    /// Filtre piloté par les tuiles du bandeau (Postes/Réels ; re-tap = tout).
+    @Published var filter: ProfilePostsFilter = .all
+    /// Stats backend du profil (compteurs de contenu exacts) — `nil` tant que
+    /// `GET /users/:id/stats` n'a pas répondu.
+    @Published private(set) var userStats: UserStats?
+
     /// Optimistic engagement overrides keyed by postId (nil = use server flag).
     @Published var likedOverrides: [String: Bool] = [:]
     @Published var bookmarkedOverrides: [String: Bool] = [:]
@@ -503,6 +590,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let cacheKey: String
     private var nextCursor: String?
     private let postService: PostServiceProviding
+    private let userService: UserServiceProviding
     private let languageProvider: LanguageProviding
 
     /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
@@ -514,11 +602,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
     init(
         userId: String,
         postService: PostServiceProviding = PostService.shared,
+        userService: UserServiceProviding = UserService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider()
     ) {
         self.userId = userId
         self.cacheKey = "user:\(userId)"
         self.postService = postService
+        self.userService = userService
         self.languageProvider = languageProvider
         subscribeToTranslationUpdates()
     }
@@ -527,12 +617,26 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
     // MARK: - Derived render state
 
-    var visiblePosts: [FeedPost] { Array(posts.prefix(renderWindow)) }
-    var hasMoreToRender: Bool { renderWindow < posts.count }
+    /// Liste après application du filtre des tuiles. La fenêtre de rendu
+    /// s'applique APRÈS le filtre — appliquée avant, un profil à 90 % de réels
+    /// afficherait une liste vide en mode « Postes ».
+    var filteredPosts: [FeedPost] {
+        switch filter {
+        case .all: return posts
+        case .posts: return posts.filter { !$0.isReel && !$0.isStory }
+        case .reels: return posts.filter(\.isReel)
+        }
+    }
+
+    var visiblePosts: [FeedPost] { Array(filteredPosts.prefix(renderWindow)) }
+    var hasMoreToRender: Bool { renderWindow < filteredPosts.count }
     var reels: [FeedPost] { posts.filter(\.isReel) }
 
-    /// Compteurs du bandeau de stats (phase 1 : dérivés des postes chargés).
-    var postsCounts: ProfilePostsCounts { .compute(from: posts, hasMore: hasMore) }
+    /// Compteurs du bandeau : totaux backend exacts quand `GET /users/:id/stats`
+    /// les fournit (phase 2), sinon dérivés des postes chargés (phase 1).
+    var postsCounts: ProfilePostsCounts {
+        .merging(derived: .compute(from: posts, hasMore: hasMore), stats: userStats)
+    }
 
     // MARK: - Derived engagement state
 
@@ -556,6 +660,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
     func loadInitial() async {
         guard posts.isEmpty, !isLoading else { return }
+
+        // Compteurs exacts du bandeau (fire-and-forget, silencieux — le
+        // bandeau retombe sur les valeurs dérivées si la requête échoue).
+        Task { [weak self] in await self?.loadStatsCounts() }
 
         // Restaure le curseur persisté AVANT de servir la page cachée (ordre
         // imposé — cf. ConversationListViewModel) : sans lui, un cache `.fresh`
@@ -593,6 +701,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         _ = await fetchFromNetwork()
+    }
+
+    /// Charge les stats backend du profil pour les compteurs exacts du bandeau
+    /// (dont le compteur de stories, structurellement 0 côté dérivé).
+    private func loadStatsCounts() async {
+        guard userStats == nil else { return }
+        userStats = try? await userService.getUserStats(userId: userId)
     }
 
     /// Prefetch anticipé par carte : déclenche la révélation/chargement dès
