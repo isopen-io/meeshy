@@ -5027,3 +5027,61 @@ passe aussi bien avec une clause juste qu'avec une clause fausse ».
    une seule résolution, et le refus tombe PLUS TÔT (`participant.findFirst` appelé une fois,
    `message.findFirst` jamais).
 
+
+## Leçon 129 — un callback dont le corps n'est que des gardes est un défaut, pas un no-op délibéré (2026-08-12, routine messaging, cycle 86)
+
+`ConversationLayout.onUserTyping` filtrait l'écho de soi, filtrait les autres conversations… puis se
+terminait. Rien n'écrivait. La forme est traître parce qu'elle a l'air FINIE : deux `return` gardés,
+des paramètres préfixés `_` qui signalent « volontairement inutilisés », des deps cohérentes. Le
+hook d'à côté exposait pourtant `handleUserTyping`, seul écrivain de l'état que l'en-tête rend — et
+personne ne l'avait déstructuré.
+
+1. **Un `useCallback` remis à une couche transport et dont AUCUNE branche n'écrit ni n'appelle est
+   presque toujours une moitié de câblage perdue.** Le test bon marché : « ce callback produit-il un
+   effet observable dans au moins un chemin ? ». Si la réponse est non, chercher la fonction qu'il
+   aurait dû appeler — elle est en général exportée par un hook du même fichier.
+2. **Un préfixe `_` sur un paramètre est une AFFIRMATION, pas une preuve.** Ici `_username` et
+   `_isTyping` — les deux valeurs qui portent toute l'information — étaient marqués inutilisés par
+   la personne qui venait justement d'oublier de les utiliser.
+3. **Une fonctionnalité qui marche sur une surface et pas sur l'autre masque la panne au test
+   manuel.** `use-stream-socket.ts` tient sa PROPRE copie du handler typing et la câble juste : les
+   indicateurs marchaient sur l'accueil, donc « les indicateurs marchent ». Quand deux surfaces
+   réimplémentent le même câblage, vérifier les DEUX, ou n'en garder qu'une.
+
+## Leçon 130 — un test qui écrit « may or may not » n'est pas un test, c'est la note de son auteur (2026-08-12, routine messaging, cycle 86)
+
+Deux tests de `useConversationTyping` s'appelaient « should stop typing on conversation change if
+active » et « should stop typing on unmount if active ». Ni l'un ni l'autre n'assertait quoi que ce
+soit sur `stopTyping` ; tous deux portaient un commentaire du type « The cleanup effect may or may
+not call stopTyping depending on React's cleanup timing ». Ils étaient verts, comptés dans la suite,
+et nommaient exactement le comportement cassé.
+
+1. **Un titre qui promet un comportement et un corps qui n'affirme rien, c'est pire qu'un test
+   absent** : le nom occupe la place, et une recherche « est-ce testé ? » répond oui.
+2. **« Ça dépend du timing de React » est la formulation d'une hypothèse non instruite.**
+   L'ordonnancement des nettoyages et des effets est déterministe et documenté (tous les nettoyages
+   avant tous les effets) : il se raisonne, il ne s'invoque pas comme une incertitude.
+3. **Le repérage est mécanique** : `rg -l "may or may not|peut ou non" __tests__/` et, plus large, un
+   `it(...)` dont le corps ne contient aucun `expect`. Les deux se cherchent en une commande.
+4. Corollaire de la leçon 128 sous un autre angle : là-bas le double validait les deux versions du
+   code ; ici c'est l'ABSENCE d'assertion qui les validait toutes les deux.
+
+## Leçon 131 — dans un clone superficiel, « en avance / en retard » est une fiction, et `merge-base` le dit (2026-08-12, routine messaging, cycle 86)
+
+Au démarrage, `git log --oneline origin/main..HEAD` annonçait 334 commits d'avance et 340 de retard,
+avec un `origin/main` daté de trois jours plus tôt portant des numéros de PR INFÉRIEURS à ceux de la
+branche. Tout invitait à conclure à une divergence à réconcilier — et donc à un merge inutile et
+risqué. La branche et `main` étaient en réalité **le même commit**.
+
+1. **Le signal qui tranche est `git merge-base HEAD origin/main` qui ÉCHOUE** (aucun ancêtre commun).
+   Deux branches d'un même dépôt en ont toujours un : son absence ne dit pas « divergence », elle dit
+   « historique tronqué ». Confirmer avec `git rev-parse --is-shallow-repository` et
+   `wc -l .git/shallow`.
+2. **Le piège d'écriture** : `git merge-base A B | xargs git log -1` sur une sortie VIDE exécute
+   `git log -1` sans révision, donc affiche HEAD — et fabrique la preuve rassurante que HEAD est
+   l'ancêtre commun. Ne jamais piper un `merge-base` dans `xargs` sans garde.
+3. **L'autorité est le distant, pas le ref local.** `git ls-remote --heads origin main` a répondu en
+   une commande que `main` valait exactement HEAD. Un `git fetch` ordinaire n'avait pas corrigé le
+   ref local greffé ; `git update-ref` sur le sha du distant, si.
+4. Corollaire : une routine qui commence par « où en est ma branche ? » doit poser cette question au
+   DISTANT tant qu'elle n'a pas vérifié la profondeur du clone.
