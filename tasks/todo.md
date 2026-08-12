@@ -17,9 +17,10 @@ Le gate est **compile seule**, délibérément. Il ne dit RIEN de :
 
 ## Ce que le cycle 84 devrait instruire
 
-1. **Relever le coût réel du gate après un mois.** L'estimation est de 340 runs/mois × ~10-18 min
-   ≈ 3 200-5 400 min de runner macOS. C'est une projection à partir des horodatages de commits, pas
-   un relevé de facturation. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
+1. **Relever le coût réel du gate après un mois.** Avec le premier point de mesure réel (10m02 à
+   froid, cf. rapport du cycle 83), la projection se resserre à 340 runs/mois × ~10 min
+   ≈ **3 400 min de runner macOS**, borne haute — les runs suivants profitent du cache SPM. Cela
+   reste une projection à partir des horodatages de commits, pas un relevé de facturation. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
    est le filtre de chemins (aujourd'hui `apps/ios/**` entier, y compris les ressources et les
    `.md`, qui ne changent rien à la compilation).
 2. **Vérifier que le cache DerivedData profite bien aux PR.** Les runs de PR écrivent maintenant
@@ -109,9 +110,26 @@ reste le plafond de la suite complète — une compilation qui déborde 30 min e
 - **Les deux branches du script bash exécutées** : `COMPILE_ONLY=true` →
   `generic/platform=iOS Simulator` + `ARCHS=arm64` ; `false` → `platform=iOS Simulator,id=<sim>` +
   `ONLY_ACTIVE_ARCH=YES`. `bash -n` propre.
-- **Le gate se prouve sur sa propre PR** : `.github/workflows/ios-tests.yml` fait partie du filtre de
-  chemins, donc cette PR-ci déclenche le job compile qu'elle introduit. C'est la seule vérification
-  que cette session ne pouvait pas simuler — aucune toolchain macOS ici.
+- **Le gate s'est prouvé sur sa propre PR** (PR #2875, run #31564979638, job 94014846909) :
+  `.github/workflows/ios-tests.yml` fait partie du filtre de chemins, donc cette PR-là a déclenché le
+  job compile qu'elle introduisait. **Vert en 10m02**, cache SPM ET DerivedData froids, contre les
+  35 min de la baseline `dev` :
+
+  | étape | baseline `dev` | gate de PR |
+  |---|---|---|
+  | provision du runtime iOS 18.2 | 7m01 | **sautée (0 s)** |
+  | résolution SPM (froide dans les deux cas) | 8m07 | 2m02 |
+  | `build-for-testing` | 8m58 | **6m33** |
+  | sauvegarde DerivedData | 40 s | 32 s |
+  | `test-without-building` | 8m20 | **sautée (0 s)** |
+  | **total** | **~35 min** | **10m02** |
+
+  L'estimation d'avant câblage disait « ~18 min à froid, ~10 min à chaud » : le run FROID a fait le
+  temps prédit pour un run CHAUD. Et le compile est **plus rapide** que celui de la baseline, pas
+  plus lent — c'est la preuve observable que le pin `ARCHS=arm64` prend effet. Sa perte se verrait
+  ici comme un compile environ double, jamais comme un échec.
+- **Les 16 checks de la PR verts** (Quality, Security, Build, shared, web, gateway, agent, Prisma,
+  Python, audio, TTS, Voice API ; Trivy `neutral`, son état habituel).
 
 ## Où vit le garde, et pourquoi là
 

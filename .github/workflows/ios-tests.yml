@@ -44,8 +44,23 @@ name: iOS Tests
 # So the PR run does the half that is cheap and catches what actually breaks —
 # the compile, app AND test targets — and skips the two network/CPU posts that
 # cost the most and gate the least at PR time: the 7-min iOS 18.2 runtime
-# download and the 8-min test execution. ~18 min cold, ~10 min on a warm SPM
-# cache, on this same standard runner. One job, one set of steps: `COMPILE_ONLY`
+# download and the 8-min test execution.
+#
+# MEASURED on the first run of this gate (#31564979638, job 94014846909, the PR
+# that introduced it — cold SPM cache, cold DerivedData), against the 35-min dev
+# baseline decomposed above:
+#     0s     provision the iOS 18.2 runtime     ← skipped   (was 7m01)
+#     2m02   resolve SPM (cache miss)                       (was 8m07)
+#     6m33   build-for-testing                              (was 8m58)
+#     32s    save DerivedData
+#     0s     test-without-building              ← skipped   (was 8m20)
+#   =10m02 total. The pre-wiring estimate was "~18 min cold, ~10 min warm"; the
+# cold run came in at what was predicted for a WARM one. Note the compile is
+# FASTER than the dev baseline's, not slower — which is the observable proof
+# that the ARCHS=arm64 pin below is taking effect. Losing that pin would show up
+# here as a compile roughly double this, not as a failure.
+#
+# One job, one set of steps: `COMPILE_ONLY`
 # gates steps 10 and 12 (already separate since forever), so there is no second
 # copy of the toolchain to drift. Guarded by
 # `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`, which runs on every
@@ -129,8 +144,11 @@ jobs:
     # is what closed the door in July. That measurement now exists — see
     # "PR GATE RESTORED" in the header — and it is what wired the gate below.
     #
-    # 30 covers the ~18-min cold compile with margin; 50 stays the cap for the
-    # full suite. A compile that overruns 30 min is hung, not slow.
+    # 30 stays the PR cap; 50 stays the cap for the full suite. The first
+    # measured gate run took 10m02 end to end (see the header), so 30 is ~3x the
+    # observed cost — deliberately loose, because the two variable posts it
+    # keeps (SPM resolve, compile) are network- and contention-sensitive. A
+    # compile that overruns 30 min is hung, not slow.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 50 }}
     steps:
       - uses: actions/checkout@v7
