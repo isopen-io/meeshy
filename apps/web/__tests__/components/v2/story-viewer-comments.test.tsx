@@ -22,8 +22,22 @@ jest.mock('@/components/v2/TranslationToggle', () => ({
 }));
 
 jest.mock('@/components/v2/CommentList', () => ({
-  CommentList: ({ postId }: { postId: string }) => (
-    <div data-testid={`comment-list-${postId}`}>CommentList for {postId}</div>
+  CommentList: ({
+    postId,
+    targetCommentId,
+    targetParentCommentId,
+  }: {
+    postId: string;
+    targetCommentId?: string | null;
+    targetParentCommentId?: string | null;
+  }) => (
+    <div
+      data-testid={`comment-list-${postId}`}
+      data-target-comment={targetCommentId ?? ''}
+      data-target-parent={targetParentCommentId ?? ''}
+    >
+      CommentList for {postId}
+    </div>
   ),
 }));
 
@@ -50,6 +64,10 @@ jest.mock('@/hooks/queries/use-comment-mutations', () => ({
 jest.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
     selector({ user: { id: 'user-1', username: 'alice', avatar: null } }),
+}));
+
+jest.mock('@/hooks/social/use-stories', () => ({
+  useReactToStoryMutation: () => ({ mutate: jest.fn() }),
 }));
 
 import { StoryViewer } from '@/components/v2/StoryViewer';
@@ -175,5 +193,73 @@ describe('StoryViewer — comments wiring (D1)', () => {
     expect(mockUseCommentsInfiniteQuery).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false }),
     );
+  });
+});
+
+describe('StoryViewer — notification comment targeting', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseCommentsInfiniteQuery.mockReturnValue({
+      isLoading: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: jest.fn(),
+    });
+  });
+
+  it('auto-opens the comments panel when a target comment is set', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-tgt')]}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        targetCommentId="c-42"
+      />,
+    );
+
+    // Panneau ouvert SANS clic sur le bouton commentaires.
+    expect(screen.getByTestId('comment-list-story-tgt')).toBeInTheDocument();
+  });
+
+  it('forwards targetCommentId and targetParentCommentId to CommentList', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-fwd')]}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        targetCommentId="r-7"
+        targetParentCommentId="c-3"
+      />,
+    );
+
+    const list = screen.getByTestId('comment-list-story-fwd');
+    expect(list).toHaveAttribute('data-target-comment', 'r-7');
+    expect(list).toHaveAttribute('data-target-parent', 'c-3');
+  });
+
+  it('does not auto-open the panel when comments are disabled', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-off')]}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+        enableComments={false}
+        targetCommentId="c-42"
+      />,
+    );
+
+    expect(screen.queryByTestId('comment-list-story-off')).not.toBeInTheDocument();
+  });
+
+  it('does not open the panel without a target', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-none')]}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('comment-list-story-none')).not.toBeInTheDocument();
   });
 });

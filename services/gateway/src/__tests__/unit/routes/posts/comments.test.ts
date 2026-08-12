@@ -107,8 +107,29 @@ function makePreValidationAuth(authenticated: boolean) {
   };
 }
 
-function makeDefaultPrisma() {
+const PUBLIC_ACL = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
+
+/**
+ * Déclare l'audience d'un double Prisma ad-hoc. Toutes les routes du fil
+ * consultent désormais `Post.visibility` avant de lire ou d'écrire
+ * (`loadPostAcl` / `loadCommentPostAcl`) ; les cas de ce fichier portent sur le
+ * contenu, la pagination, les mentions, les notifications et les broadcasts —
+ * jamais sur le droit de voir, couvert par `comments-audience.test.ts`. D'où
+ * une audience PUBLIC déclarée en un seul endroit.
+ */
+function withPublicAcl<T extends Record<string, any>>(prisma: T): T {
   return {
+    ...prisma,
+    post: { ...prisma['post'], findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL) },
+    postComment: {
+      ...prisma['postComment'],
+      findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
+    },
+  };
+}
+
+function makeDefaultPrisma() {
+  return withPublicAcl({
     post: {
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1',
@@ -124,7 +145,7 @@ function makeDefaultPrisma() {
     postComment: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'Nice comment', authorId: 'author-1' }),
     },
-  };
+  });
 }
 
 async function buildApp(opts: {
@@ -377,10 +398,10 @@ describe('POST /posts/:postId/comments — onDuplicate path (idempotent replay)'
     mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
       return onDuplicate(COMMENT_ID);
     });
-    const prisma = {
+    const prisma = withPublicAcl({
       post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(existingComment) },
-    };
+    });
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -393,7 +414,7 @@ describe('POST /posts/:postId/comments — onDuplicate path (idempotent replay)'
 
 describe('POST /posts/:postId/comments — story type skips post_comment notification', () => {
   it('returns 201 on story post without double notification', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1',
@@ -407,7 +428,7 @@ describe('POST /posts/:postId/comments — story type skips post_comment notific
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withNotificationService: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -497,10 +518,10 @@ describe('POST /posts/:postId/comments/:commentId/like — service error', () =>
 
 describe('POST /posts/:postId/comments/:commentId/like — with social events and notification', () => {
   it('returns 200 and fires broadcast plus notification', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue({ content: 'Comment content' }) },
-    };
+    });
     const app = await buildApp({ withSocialEvents: true, withNotificationService: true, prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`, payload: { emoji: '😂' } });
     expect(res.statusCode).toBe(200);
@@ -663,7 +684,7 @@ describe('POST /posts/:postId/comments — reply with mentioned parent author sk
   it('returns 201 and skips reply notification when parent author was already mentioned', async () => {
     mockExtractMentions.mockReturnValueOnce(['parentAuthor']);
     mockResolveUsernames.mockResolvedValueOnce(new Map([['parentAuthor', { id: 'author-1' }]]));
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'post-author',
@@ -679,7 +700,7 @@ describe('POST /posts/:postId/comments — reply with mentioned parent author sk
       postComment: {
         findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'Parent comment', authorId: 'author-1' }),
       },
-    };
+    });
     const app = await buildApp({ withNotificationService: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -761,6 +782,110 @@ describe('POST /posts/:postId/comments — createCommentMentionNotificationsBatc
   });
 });
 
+// ─── Entity discriminant propagation ─────────────────────────────────────────
+//
+// The type of the entity carrying the comment is what decides WHICH surface the
+// tap opens client-side (reel player / ephemeral viewer / post detail). When the
+// route drops it, the client falls back to a cache heuristic and can open the
+// wrong surface — the "comment on a réel opens an unrelated story" bug.
+
+describe('POST /posts/:postId/comments — entity discriminant reaches the notifications', () => {
+  function makeReelPrisma() {
+    const prisma = makeDefaultPrisma();
+    prisma.post.findUnique = jest.fn<any>().mockResolvedValue({
+      authorId: 'author-1',
+      commentCount: 5,
+      type: 'REEL',
+      content: 'Reel caption',
+      createdAt: new Date(),
+      expiresAt: null,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+    });
+    return prisma;
+  }
+
+  it('forwards postType REEL to createPostCommentNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Nice reel' },
+    });
+    expect(res.statusCode).toBe(201);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createPostCommentNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to the comment fan-out batch', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Nice reel' },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createStoryCommentNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to createCommentReplyNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Replying', parentId: COMMENT_ID },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentReplyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to createCommentLikeNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
+      payload: { emoji: '🔥' },
+    });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentLikeNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to the comment mention batch', async () => {
+    mockExtractMentions.mockReturnValueOnce(['alice']);
+    mockResolveUsernames.mockResolvedValueOnce(new Map([['alice', { id: 'mentioned-1' }]]));
+
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Hey @alice look' },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+});
+
 describe('POST /posts/:postId/comments — createCommentReplyNotification rejects (line 222)', () => {
   it('returns 201 and swallows reply notification rejection', async () => {
     const replyApp = Fastify({ logger: false });
@@ -814,7 +939,7 @@ describe('POST /posts/:postId/comments — createPostCommentNotification rejects
 describe('POST /posts/:postId/comments — createStoryCommentNotificationsBatch rejects (line 257)', () => {
   it('returns 201 and swallows story fan-out rejection', async () => {
     const storyApp = Fastify({ logger: false });
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'story-author',
@@ -828,7 +953,7 @@ describe('POST /posts/:postId/comments — createStoryCommentNotificationsBatch 
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     storyApp.decorate('prisma', prisma);
     storyApp.decorate('notificationService', {
       createCommentMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(undefined),
@@ -889,10 +1014,10 @@ describe('POST /posts/:postId/comments — processPostAudio rejects (line 291)',
 describe('POST /posts/:postId/comments/:commentId/like — createCommentLikeNotification rejects (line 357)', () => {
   it('returns 200 and swallows like notification rejection', async () => {
     const likeApp = Fastify({ logger: false });
-    const prisma = {
+    const prisma = withPublicAcl({
       post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue({ content: 'A comment' }) },
-    };
+    });
     likeApp.decorate('prisma', prisma);
     likeApp.decorate('socialEvents', {
       broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
@@ -939,6 +1064,79 @@ describe('DELETE /posts/:postId/comments/:commentId — broadcastCommentDeleted 
   });
 });
 
+// ─── Le broadcast annonce le SOUS-ARBRE retiré, pas la seule cible ───────────
+//
+// `deleteComment` soft-delete le fil entier (cible + descendants) et décompte
+// `commentCount` d'autant. Le broadcast, lui, ne portait que `commentId` : un
+// client qui avait déplié les réponses gardait à l'écran des lignes que le
+// serveur venait de retirer, et aucun refetch ne les enlevait (`getComments`
+// filtre `parentId: null`, donc `getReplies` n'est plus appelé pour un parent
+// supprimé). Le fil ne se nettoyait qu'au rechargement complet de la page.
+// ────────────────────────────────────────────────────────────────────────────
+
+function buildDeleteApp(broadcastCommentDeleted: any) {
+  const delApp = Fastify({ logger: false });
+  const prisma = makeDefaultPrisma();
+  delApp.decorate('prisma', prisma);
+  delApp.decorate('socialEvents', {
+    broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentDeleted,
+  });
+  registerCommentRoutes(delApp, prisma as any, makePreValidationAuth(true));
+  return delApp;
+}
+
+describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', () => {
+  it('annonce tous les ids retirés quand le commentaire portait des réponses', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true,
+      deletedCommentIds: [COMMENT_ID, 'reply-1', 'reply-1a'],
+    });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        deletedCommentIds: [COMMENT_ID, 'reply-1', 'reply-1a'],
+      }),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+    await app.close();
+  });
+
+  /**
+   * Le rejeu idempotent (`onDuplicate`) ne rend qu'un `{ id }` : la suppression
+   * a déjà eu lieu, son sous-arbre est soft-deleté et n'est plus reconstructible
+   * par une lecture vivante. Le repli sur la seule cible reproduit EXACTEMENT le
+   * comportement d'avant ce correctif — jamais une liste vide, qui ferait
+   * survivre la cible elle-même à l'écran.
+   */
+  it('se replie sur la seule cible quand le service ne rend aucune liste (rejeu)', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({ id: COMMENT_ID });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: COMMENT_ID, deletedCommentIds: [COMMENT_ID] }),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+    await app.close();
+  });
+});
+
 // ─── Branch coverage: FeedQuerySchema false branches (lines 44, 76-79) ────────
 
 describe('GET /posts/:postId/comments — invalid limit query uses default (line 44)', () => {
@@ -970,10 +1168,10 @@ describe('POST /posts/:postId/comments — onDuplicate with null findUnique resu
     mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
       return onDuplicate(COMMENT_ID);
     });
-    const prisma = {
+    const prisma = withPublicAcl({
       post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -989,7 +1187,7 @@ describe('POST /posts/:postId/comments — onDuplicate with null findUnique resu
 
 describe('POST /posts/:postId/comments — null visibilityUserIds falls back to [] (line 164)', () => {
   it('returns 201 when post has null visibilityUserIds', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1',
@@ -1003,7 +1201,7 @@ describe('POST /posts/:postId/comments — null visibilityUserIds falls back to 
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withSocialEvents: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -1034,7 +1232,7 @@ describe('POST /posts/:postId/comments — mentions extracted but none resolve (
 
 describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 238, 254)', () => {
   it('returns 201 when post.createdAt is null for reply notification', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1',
@@ -1050,7 +1248,7 @@ describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 
       postComment: {
         findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'Parent', authorId: 'other-user' }),
       },
-    };
+    });
     const app = await buildApp({ withNotificationService: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -1061,7 +1259,7 @@ describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 
   });
 
   it('returns 201 when post.createdAt is null for top-level comment', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1',
@@ -1075,7 +1273,7 @@ describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withNotificationService: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -1086,7 +1284,7 @@ describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 
   });
 
   it('returns 201 when story post has null createdAt (line 254)', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'story-author',
@@ -1100,7 +1298,7 @@ describe('POST /posts/:postId/comments — post with null createdAt (lines 220, 
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withNotificationService: true, prisma });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
@@ -1176,7 +1374,7 @@ describe('DELETE /posts/:postId/comments/:commentId — deleteComment returns nu
 
 describe('DELETE /posts/:postId/comments/:commentId — null visibilityUserIds falls back to [] (lines 434-439)', () => {
   it('returns 200 when deleted comment post has null visibilityUserIds', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: {
         findUnique: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1',
@@ -1186,7 +1384,7 @@ describe('DELETE /posts/:postId/comments/:commentId — null visibilityUserIds f
         }),
       },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withSocialEvents: true, prisma });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
     expect(res.statusCode).toBe(200);
@@ -1198,10 +1396,10 @@ describe('DELETE /posts/:postId/comments/:commentId — null visibilityUserIds f
 
 describe('DELETE /posts/:postId/comments/:commentId — post lookup returns null, no broadcast (line 434)', () => {
   it('returns 200 when socialEvents present but post.findUnique returns null', async () => {
-    const prisma = {
+    const prisma = withPublicAcl({
       post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    };
+    });
     const app = await buildApp({ withSocialEvents: true, prisma });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
     expect(res.statusCode).toBe(200);

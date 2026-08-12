@@ -1,6 +1,6 @@
 /**
  * Unit tests for LocationHandler
- * Covers: handleLocationShare, handleLiveLocationStart, handleLiveLocationUpdate,
+ * Covers: handleLiveLocationStart, handleLiveLocationUpdate,
  *         handleLiveLocationStop — all auth/validation/broadcast branches
  *
  * @jest-environment node
@@ -42,9 +42,14 @@ const PARTICIPANT_ID = 'participant-loc-001';
 const VALID_COORDINATES = { latitude: 48.8566, longitude: 2.3522 };
 
 function makeSocket(): Socket {
+  const toRoom = { emit: jest.fn() };
   return {
     id: SOCKET_ID,
     emit: jest.fn(),
+    // `socket.to(room)` excludes the emitter — the sharer must never receive
+    // its own LOCATION_LIVE_* echo (see LocationHandler broadcast comments).
+    to: jest.fn<any>().mockReturnValue(toRoom),
+    _toRoom: toRoom,
   } as unknown as Socket;
 }
 
@@ -108,239 +113,6 @@ describe('LocationHandler', () => {
     });
   });
 
-  // ── handleLocationShare ────────────────────────────────────────────────────
-
-  describe('handleLocationShare', () => {
-    it('broadcasts LOCATION_SHARED and calls callback success', async () => {
-      const cb = jest.fn();
-      const { handler, io } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, {
-        ...VALID_COORDINATES,
-        conversationId: CONV_ID,
-        altitude: 50,
-        accuracy: 10,
-        placeName: 'Paris',
-        address: '1 Rue de Rivoli',
-      }, cb);
-
-      expect(io.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
-      expect(io._toRoom.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.LOCATION_SHARED,
-        expect.objectContaining({
-          conversationId: NORMALIZED_CONV_ID,
-          userId: USER_ID,
-          latitude: VALID_COORDINATES.latitude,
-          longitude: VALID_COORDINATES.longitude,
-          placeName: 'Paris',
-          address: '1 Rue de Rivoli',
-        })
-      );
-      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('messageId in response is a temp loc_ prefixed string', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      const eventData = (cb as jest.Mock).mock.calls[0][0] as any;
-      expect(eventData.data.messageId).toMatch(/^loc_\d+_.+$/);
-    });
-
-    it('returns error when socket is not authenticated', async () => {
-      mockGetConnectedUser.mockReturnValue(null);
-      const socketToUser = new Map<string, string>();
-      const cb = jest.fn();
-      const { handler } = makeHandler({ socketToUser });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'User not authenticated' });
-    });
-
-    it('returns error for invalid latitude (out of range)', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: 91, longitude: 0, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
-    });
-
-    it('returns error for invalid longitude (out of range)', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: 0, longitude: 181, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
-    });
-
-    it('returns error for non-number coordinate', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(
-        socket,
-        { latitude: 'bad' as any, longitude: 0, conversationId: CONV_ID },
-        cb
-      );
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
-    });
-
-    it('returns error when user is not a participant (registered)', async () => {
-      const prisma = makePrisma(null);
-      const cb = jest.fn();
-      const { handler } = makeHandler({ prisma });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not a participant in this conversation' });
-    });
-
-    it('verifies anonymous participant belongs to the target conversation before broadcasting', async () => {
-      mockGetConnectedUser.mockReturnValue({
-        user: {
-          id: USER_ID, isAnonymous: true, participantId: PARTICIPANT_ID,
-          language: 'fr', resolvedLanguages: [], displayName: 'Anon',
-        },
-        realUserId: USER_ID,
-      });
-      const prisma = makePrisma({ id: PARTICIPANT_ID });
-      const cb = jest.fn();
-      const { handler, io } = makeHandler({ prisma });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      // Anonymous membership is scoped to THIS conversation (id + conversationId + isActive)
-      expect(prisma.participant.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            id: PARTICIPANT_ID,
-            conversationId: NORMALIZED_CONV_ID,
-            isActive: true,
-          }),
-        })
-      );
-      expect(io._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_SHARED, expect.anything());
-    });
-
-    it('rejects anonymous participant that does not belong to the target conversation', async () => {
-      // Security: an anonymous socket whose participant belongs to conversation A
-      // must NOT be able to broadcast into conversation B. findFirst returns null
-      // because the participant is not a member of the requested conversation.
-      mockGetConnectedUser.mockReturnValue({
-        user: {
-          id: USER_ID, isAnonymous: true, participantId: PARTICIPANT_ID,
-          language: 'fr', resolvedLanguages: [], displayName: 'Anon',
-        },
-        realUserId: USER_ID,
-      });
-      const prisma = makePrisma(null);
-      const cb = jest.fn();
-      const { handler, io } = makeHandler({ prisma });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      expect(prisma.participant.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            id: PARTICIPANT_ID,
-            conversationId: NORMALIZED_CONV_ID,
-            isActive: true,
-          }),
-        })
-      );
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not a participant in this conversation' });
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
-    });
-
-    it('passes error message from thrown Error to callback', async () => {
-      mockNormalize.mockRejectedValue(new Error('normalizeConv failed'));
-      const prisma = makePrisma({ id: PARTICIPANT_ID });
-      const cb = jest.fn();
-      const { handler } = makeHandler({ prisma });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'normalizeConv failed' });
-    });
-
-    it('passes generic error string on non-Error exception', async () => {
-      mockNormalize.mockRejectedValue('raw string error');
-      const prisma = makePrisma({ id: PARTICIPANT_ID });
-      const cb = jest.fn();
-      const { handler } = makeHandler({ prisma });
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Failed to share location' });
-    });
-
-    it('handles no callback (undefined) without crashing', async () => {
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await expect(
-        handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, undefined)
-      ).resolves.toBeUndefined();
-    });
-
-    it('accepts boundary latitude = -90', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: -90, longitude: 0, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('accepts boundary latitude = 90', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: 90, longitude: 0, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('accepts boundary longitude = -180', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: 0, longitude: -180, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('rejects latitude = -90.001 (just past boundary)', async () => {
-      const cb = jest.fn();
-      const { handler } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { latitude: -90.001, longitude: 0, conversationId: CONV_ID }, cb);
-
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
-    });
-  });
-
   // ── handleLiveLocationStart ────────────────────────────────────────────────
 
   describe('handleLiveLocationStart', () => {
@@ -355,8 +127,8 @@ describe('LocationHandler', () => {
         durationMinutes: 30,
       }, cb);
 
-      expect(io.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
-      expect(io._toRoom.emit).toHaveBeenCalledWith(
+      expect((socket as any).to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STARTED,
         expect.objectContaining({
           conversationId: NORMALIZED_CONV_ID,
@@ -364,6 +136,8 @@ describe('LocationHandler', () => {
           durationMinutes: 30,
         })
       );
+      // Regression: NEVER broadcast to the whole room (would self-echo the sharer).
+      expect(io.to).not.toHaveBeenCalled();
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
@@ -473,14 +247,14 @@ describe('LocationHandler', () => {
 
     it('includes username as displayName in emitted event', async () => {
       const cb = jest.fn();
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleLiveLocationStart(socket, {
         ...VALID_COORDINATES, conversationId: CONV_ID, durationMinutes: 5,
       }, cb);
 
-      const toRoom = io._toRoom;
+      const toRoom = (socket as any)._toRoom;
       const emittedData = (toRoom.emit as jest.Mock).mock.calls[0][1] as any;
       expect(emittedData.username).toBe('Alice Loc');
     });
@@ -516,8 +290,8 @@ describe('LocationHandler', () => {
         heading: 90,
       });
 
-      expect(io.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
-      expect(io._toRoom.emit).toHaveBeenCalledWith(
+      expect((socket as any).to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_UPDATED,
         expect.objectContaining({
           conversationId: NORMALIZED_CONV_ID,
@@ -530,42 +304,44 @@ describe('LocationHandler', () => {
           heading: 90,
         })
       );
+      // Regression: never broadcast to the whole room (would self-echo the sharer).
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('returns early when socket is not authenticated', async () => {
       mockGetConnectedUser.mockReturnValue(null);
       const socketToUser = new Map<string, string>();
-      const { handler, io } = makeHandler({ socketToUser });
+      const { handler } = makeHandler({ socketToUser });
       const socket = makeSocket();
 
       await handler.handleLiveLocationUpdate(socket, {
         ...VALID_COORDINATES, conversationId: CONV_ID,
       });
 
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('returns early for invalid coordinates', async () => {
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleLiveLocationUpdate(socket, {
         latitude: 999, longitude: 0, conversationId: CONV_ID,
       });
 
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('returns early when user is not a participant', async () => {
       const prisma = makePrisma(null);
-      const { handler, io } = makeHandler({ prisma });
+      const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
       await handler.handleLiveLocationUpdate(socket, {
         ...VALID_COORDINATES, conversationId: CONV_ID,
       });
 
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('catches errors without propagating', async () => {
@@ -579,13 +355,13 @@ describe('LocationHandler', () => {
     });
 
     it('includes timestamp in emitted event', async () => {
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
       const before = Date.now();
 
       await handler.handleLiveLocationUpdate(socket, { ...VALID_COORDINATES, conversationId: CONV_ID });
 
-      const emittedData = (io._toRoom.emit as jest.Mock).mock.calls[0][1] as any;
+      const emittedData = ((socket as any)._toRoom.emit as jest.Mock).mock.calls[0][1] as any;
       expect(emittedData.timestamp).toBeInstanceOf(Date);
       expect(emittedData.timestamp.getTime()).toBeGreaterThanOrEqual(before);
     });
@@ -600,24 +376,26 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
-      expect(io.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
-      expect(io._toRoom.emit).toHaveBeenCalledWith(
+      expect((socket as any).to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_CONV_ID));
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STOPPED,
         expect.objectContaining({
           conversationId: NORMALIZED_CONV_ID,
           userId: USER_ID,
         })
       );
+      // Regression: never broadcast to the whole room (would self-echo the sharer).
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('includes stoppedAt Date in emitted event', async () => {
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
       const before = Date.now();
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
-      const emittedData = (io._toRoom.emit as jest.Mock).mock.calls[0][1] as any;
+      const emittedData = ((socket as any)._toRoom.emit as jest.Mock).mock.calls[0][1] as any;
       expect(emittedData.stoppedAt).toBeInstanceOf(Date);
       expect(emittedData.stoppedAt.getTime()).toBeGreaterThanOrEqual(before);
     });
@@ -625,22 +403,22 @@ describe('LocationHandler', () => {
     it('returns early when socket is not authenticated', async () => {
       mockGetConnectedUser.mockReturnValue(null);
       const socketToUser = new Map<string, string>();
-      const { handler, io } = makeHandler({ socketToUser });
+      const { handler } = makeHandler({ socketToUser });
       const socket = makeSocket();
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('returns early when user is not a participant', async () => {
       const prisma = makePrisma(null);
-      const { handler, io } = makeHandler({ prisma });
+      const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('catches errors without propagating', async () => {
@@ -666,39 +444,21 @@ describe('LocationHandler', () => {
     });
 
     it('handleLiveLocationUpdate succeeds for anonymous user using session participantId', async () => {
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleLiveLocationUpdate(socket, { ...VALID_COORDINATES, conversationId: CONV_ID });
 
-      expect(io._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_UPDATED, expect.anything());
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_UPDATED, expect.anything());
     });
 
     it('handleLiveLocationStop succeeds for anonymous user using session participantId', async () => {
-      const { handler, io } = makeHandler();
+      const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
-      expect(io._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_STOPPED, expect.anything());
-    });
-
-    it('returns early when anonymous user has no participantId in session', async () => {
-      mockGetConnectedUser.mockReturnValue({
-        user: {
-          id: USER_ID, isAnonymous: true, participantId: undefined,
-          language: 'fr', resolvedLanguages: [], displayName: 'AnonUser',
-        },
-        realUserId: USER_ID,
-      });
-      const { handler, io } = makeHandler();
-      const socket = makeSocket();
-
-      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, jest.fn());
-
-      // participantId is undefined → _resolveParticipantId returns undefined
-      // That triggers the "Not a participant" error
-      expect(io._toRoom.emit).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_STOPPED, expect.anything());
     });
   });
 });

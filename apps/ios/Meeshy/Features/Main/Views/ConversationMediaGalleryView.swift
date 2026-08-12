@@ -23,7 +23,13 @@ struct ConversationMediaGalleryView: View {
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
-    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
+    // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
+    // drive this root's rendering (`videoTransportLayer`) — the manager also
+    // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
+    // gallery root continuously. Scoped via onReceive($activeURL/$player).
+    private let videoManager = SharedAVPlayerManager.shared
+    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var videoManagerPlayer: AVPlayer?
 
     /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
     private var saveStateAccessibilityValue: String {
@@ -94,6 +100,8 @@ struct ConversationMediaGalleryView: View {
             cacheAttachment(allAttachments.first(where: { $0.id == startAttachmentId }))
         }
         .animation(.easeInOut(duration: 0.2), value: showControls)
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
     }
 
     // MARK: - Pager
@@ -396,8 +404,8 @@ struct ConversationMediaGalleryView: View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             if att.type == .video,
-               videoManager.activeURL == att.fileUrl,
-               videoManager.player != nil {
+               videoManagerActiveURL == att.fileUrl,
+               videoManagerPlayer != nil {
                 VideoTransportControls(
                     manager: videoManager,
                     accentColor: accentColor,
@@ -546,7 +554,14 @@ private struct GalleryVideoPage: View {
     let accentColor: String
     var onCacheActivation: () -> Void
 
-    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
+    // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
+    // `isPlaying` drive this page's rendering — the manager also publishes
+    // `currentTime` at 5-10Hz, which used to re-render EVERY gallery page
+    // continuously. Scoped via onReceive($activeURL/$player/$isPlaying).
+    private let videoManager = SharedAVPlayerManager.shared
+    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var videoManagerPlayer: AVPlayer?
+    @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
     @StateObject private var downloader = AttachmentDownloader()
 
@@ -561,11 +576,11 @@ private struct GalleryVideoPage: View {
     }
 
     private var isPlayerActive: Bool {
-        videoManager.activeURL == attachment.fileUrl && videoManager.isPlaying
+        videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
     }
 
     private var isPlayerAttached: Bool {
-        videoManager.activeURL == attachment.fileUrl
+        videoManagerActiveURL == attachment.fileUrl
     }
 
     private func resolveAvailability() async {
@@ -593,7 +608,7 @@ private struct GalleryVideoPage: View {
             }
 
             if isPlayerActive || isPlayerAttached {
-                if let player = videoManager.player {
+                if let player = videoManagerPlayer {
                     FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
                         .ignoresSafeArea()
                 }
@@ -623,6 +638,9 @@ private struct GalleryVideoPage: View {
                 }
             }
         }
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
     }
 
     @ViewBuilder
@@ -645,7 +663,12 @@ private struct GalleryVideoPage: View {
         Button {
             switch availability {
             case .ready:
-                videoManager.load(urlString: attachment.fileUrl)
+                // Défense en profondeur : la galerie n'exprime jamais de mute
+                // forcé — si une autre surface (le feed) a laissé `isForceMuted`
+                // activé (elle le relâche normalement d'elle-même en perdant
+                // l'activité), on ne veut jamais en hériter silencieusement ici.
+                videoManager.isForceMuted = false
+                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
                 videoManager.play()
                 onCacheActivation()
                 HapticFeedback.light()

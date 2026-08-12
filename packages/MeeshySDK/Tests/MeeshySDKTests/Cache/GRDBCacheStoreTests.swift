@@ -484,4 +484,51 @@ final class GRDBCacheStoreTests: XCTestCase {
         let result = await store.load(for: "shared")
         XCTAssertNotNil(result.value)
     }
+
+    // MARK: - stores-08 — savePreservingFreshness et update() L1-miss
+
+    func test_savePreservingFreshness_existingEntry_keepsLastFetchedAt() async throws {
+        let store = try makeStore()
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+
+        try await store.savePreservingFreshness([CacheTestItem(id: "1", name: "A-updated")], for: "k")
+
+        let result = await store.load(for: "k")
+        guard case .stale(let items, _) = result else {
+            return XCTFail("une mutation LOCALE ne doit pas rajeunir l'horloge SWR — attendu .stale (600s > staleTTL 300s), got \(result)")
+        }
+        XCTAssertEqual(items.first?.name, "A-updated", "le contenu muté est bien persisté")
+    }
+
+    func test_savePreservingFreshness_noExistingMeta_fallsBackToNow() async throws {
+        let store = try makeStore()
+
+        try await store.savePreservingFreshness([CacheTestItem(id: "1", name: "A")], for: "new-key")
+
+        let result = await store.load(for: "new-key")
+        guard case .fresh = result else {
+            return XCTFail("clé neuve : repli sur now, .fresh attendu, got \(result)")
+        }
+    }
+
+    func test_update_l1MissWithEvictedEntry_preservesL2LastFetchedAt() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+        // Simuler une éviction L1 (le miroir mémoire part, L2 reste).
+        await store.evictL1()
+
+        await store.update(for: "k") { items in
+            items.map { CacheTestItem(id: $0.id, name: "B") }
+        }
+
+        let result = await store.load(for: "k")
+        guard case .stale(let items, _) = result else {
+            return XCTFail("le chemin L1-miss d'update() fabriquait un loadedAt=now — attendu .stale, got \(result)")
+        }
+        XCTAssertEqual(items.first?.name, "B")
+    }
+
 }

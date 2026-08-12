@@ -250,6 +250,52 @@ describe('PostReactionService', () => {
       expect(mockPrisma.postReaction.create).not.toHaveBeenCalled();
     });
 
+    // The handler relies on `unchanged` to decide whether to re-broadcast
+    // `post:liked` and re-notify the author. A re-fire (existing row) MUST report
+    // unchanged: true so the handler skips both. Mirrors ReactionService.
+    it('should report unchanged: true when the reaction already exists', async () => {
+      const existingReaction = createMockPostReaction();
+      mockPrisma.postReaction.findFirst.mockResolvedValue(existingReaction);
+
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+      expect(mockPrisma.postReaction.create).not.toHaveBeenCalled();
+    });
+
+    it('should report unchanged: false on a fresh insert', async () => {
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(false);
+      expect(mockPrisma.postReaction.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should report unchanged: true on a concurrent-insert race (P2002)', async () => {
+      const existingReaction = createMockPostReaction();
+      // First findFirst (pre-check) misses, create races and hits the unique
+      // constraint, the P2002 branch re-reads and finds the winner's row.
+      mockPrisma.postReaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.postReaction.create.mockRejectedValue({ code: 'P2002' });
+
+      const result = await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+    });
+
     it('should throw error when max reactions per user reached', async () => {
       // User has already 1 different emoji (MAX_REACTIONS_PER_USER = 1)
       mockPrisma.postReaction.findMany.mockResolvedValue([

@@ -6,7 +6,7 @@
  * - Swift app  : ConversationLanguagePreferences.normalize (apps/ios)
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeLanguageCode } from '../utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '../utils/language-normalize';
 
 describe('normalizeLanguageCode', () => {
   it('returns ISO 639-1 for plain code', () => {
@@ -124,5 +124,56 @@ describe('normalizeLanguageCode', () => {
   it('rejects primary subtag containing digits or punctuation', () => {
     expect(normalizeLanguageCode('fr2')).toBeUndefined();
     expect(normalizeLanguageCode('fr!')).toBeUndefined();
+  });
+
+  it('reduces deprecated ISO 639-1 aliases to their canonical code', () => {
+    // `iw`/`in`/`ji` are the DEPRECATED ISO 639-1 codes for Hebrew/Indonesian/
+    // Yiddish. The JVM `java.util.Locale.getLanguage()` still normalizes
+    // `he→iw`, `id→in`, `yi→ji` for backward compat, so an Android client (a
+    // Meeshy mirror platform) reporting a Hebrew device locale emits `iw`.
+    // Left verbatim, `iw` matches ZERO `MessageTranslation` rows (keyed `he`)
+    // and the reader silently falls back to the untranslated original —
+    // a direct Prisme Linguistique violation. Same collision class the 3-letter
+    // reduction map already eliminates for `fil`/`swe`.
+    expect(normalizeLanguageCode('iw')).toBe('he');
+    expect(normalizeLanguageCode('in')).toBe('id');
+  });
+
+  it('strips region tag from a deprecated 639-1 alias before reducing', () => {
+    // Android `iw_IL` / `in_ID` device locales.
+    expect(normalizeLanguageCode('iw-IL')).toBe('he');
+    expect(normalizeLanguageCode('IN_ID')).toBe('id');
+  });
+
+  it('rejects a deprecated alias whose canonical target is unsupported', () => {
+    // `ji` → `yi` (Yiddish), but `yi` is not a supported Meeshy target. The
+    // reduced code is re-validated against SUPPORTED_CODES exactly like the
+    // 3-letter path, so it resolves to undefined rather than a verbatim `ji`
+    // (or a `yi` that matches no translation) — the caller applies its fallback.
+    expect(normalizeLanguageCode('ji')).toBeUndefined();
+  });
+
+  it('still returns an unknown non-deprecated 2-letter code verbatim', () => {
+    // Only the three deprecated aliases are remapped; other unknown 2-letter
+    // codes keep their historical verbatim behavior (caller applies fallback).
+    expect(normalizeLanguageCode('zz')).toBe('zz');
+  });
+});
+
+describe('normalizeLanguageForDedup', () => {
+  it('collapses casing and region tags to one canonical dedup key', () => {
+    // The whole point: 'en', 'EN' and 'en-US' must hash to the same Set entry.
+    expect(normalizeLanguageForDedup('en')).toBe('en');
+    expect(normalizeLanguageForDedup('EN')).toBe('en');
+    expect(normalizeLanguageForDedup('en-US')).toBe('en');
+    expect(normalizeLanguageForDedup('fr_FR')).toBe('fr');
+    expect(normalizeLanguageForDedup('zh-Hant-HK')).toBe('zh');
+  });
+
+  it('keeps irreducible unknown codes lowercased instead of dropping them', () => {
+    // normalizeLanguageCode returns undefined here; the dedup helper must NOT
+    // lose the datum — it lowercases so a list/counter still reflects it.
+    expect(normalizeLanguageForDedup('xyz')).toBe('xyz');
+    expect(normalizeLanguageForDedup('QW')).toBe('qw');
   });
 });

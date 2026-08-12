@@ -15,6 +15,41 @@ function log(...args) {
   console.log('[FCM-SW]', ...args);
 }
 
+// ----------------------------------------------------------------------------
+// Construction de l'URL de clic depuis le bloc `data` du push.
+// Miroir de `resolveContentRoute` / `getNotificationLink`
+// (apps/web/utils/notification-helpers.ts) : un Service Worker ne peut pas
+// importer les helpers applicatifs, on duplique donc le mapping minimal
+// postType → route. Toute évolution doit toucher les DEUX SW + le helper.
+// ----------------------------------------------------------------------------
+
+function resolveContentRouteFromPostType(postType) {
+  if (postType === 'STORY') return '/story';
+  if (postType === 'MOOD' || postType === 'STATUS') return '/mood';
+  if (postType === 'REEL') return '/reel';
+  return '/post';
+}
+
+function buildNotificationTargetUrl(data) {
+  if (data.url) return data.url;
+  if (data.conversationId) {
+    return data.messageId
+      ? '/conversations/' + data.conversationId + '?messageId=' + encodeURIComponent(data.messageId)
+      : '/conversations/' + data.conversationId;
+  }
+  if (data.postId) {
+    const route = resolveContentRouteFromPostType(data.postType);
+    const parentQuery = data.commentId && data.parentCommentId
+      ? '?parent=' + encodeURIComponent(data.parentCommentId)
+      : '';
+    const anchor = data.commentId
+      ? '#comment-' + encodeURIComponent(data.commentId)
+      : '';
+    return route + '/' + data.postId + parentQuery + anchor;
+  }
+  return '/notifications';
+}
+
 log('Firebase Messaging Service Worker loading...');
 
 // Import Firebase scripts (CDN) avec gestion d'erreur
@@ -150,13 +185,9 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  // Construire l'URL de destination
-  let targetUrl = '/';
-  if (data.url) {
-    targetUrl = data.url;
-  } else if (data.conversationId) {
-    targetUrl = `/chat/${data.conversationId}`;
-  }
+  // Construire l'URL de destination depuis le bloc data
+  // (conversation → post/story/mood/reel + ancre commentaire → /notifications)
+  const targetUrl = buildNotificationTargetUrl(data);
 
   const urlToOpen = new URL(targetUrl, self.location.origin).href;
 

@@ -26,13 +26,34 @@ final class CallDetailRoutingTests: XCTestCase {
         )
     }
 
+    /// Extrait le corps d'une closure en équilibrant ses accolades.
+    ///
+    /// La version précédente coupait à 700 caractères après l'ouverture. Des
+    /// commentaires ajoutés en tête de closure ont fini par occuper toute la
+    /// fenêtre : le test dénonçait une régression de routage alors que le code
+    /// cherché se trouvait juste après la limite. Une closure se délimite par
+    /// ses accolades, pas par un nombre de caractères arbitraire.
+    private func closureBody(after marker: String, in source: String) -> String? {
+        guard let open = source.range(of: marker) else { return nil }
+        var depth = 1
+        var index = open.upperBound
+        while index < source.endIndex {
+            let ch = source[index]
+            if ch == "{" { depth += 1 }
+            if ch == "}" {
+                depth -= 1
+                if depth == 0 { return String(source[open.upperBound..<index]) }
+            }
+            index = source.index(after: index)
+        }
+        return nil
+    }
+
     func test_conversationView_onLongPress_branchesOnCallSummary_notMessageSourceSystem() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
-        guard let range = view.range(of: "onLongPress: { messageId in") else {
+        guard let body = closureBody(after: "onLongPress: { messageId in", in: view) else {
             XCTFail("ConversationView must define the onLongPress closure"); return
         }
-        let end = view.index(range.lowerBound, offsetBy: 700, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound..<end])
         XCTAssertTrue(
             body.contains("msg.callSummary != nil"),
             "onLongPress must route call messages via callSummary != nil, not the old blanket " +

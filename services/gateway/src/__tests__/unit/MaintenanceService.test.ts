@@ -330,4 +330,64 @@ describe('MaintenanceService - Offline User Detection', () => {
       await prisma.conversation.delete({ where: { id: conversation.id } });
     });
   });
+
+  describe('Orphaned Attachment Cleanup', () => {
+    it('should NOT delete orphaned attachments referenced by a user avatar or banner', async () => {
+      const ts = Date.now();
+      const oldTime = new Date();
+      oldTime.setHours(oldTime.getHours() - 25);
+
+      const avatarFileUrl = `/api/v1/attachments/file/2026%2F07%2Ftestuser%2Favatar_ref_${ts}.jpg`;
+      const bannerFileUrl = `/api/v1/attachments/file/2026%2F07%2Ftestuser%2Fbanner_ref_${ts}.jpg`;
+      const strayFileUrl = `/api/v1/attachments/file/2026%2F07%2Ftestuser%2Fstray_${ts}.jpg`;
+
+      const user = await prisma.user.create({
+        data: {
+          username: 'avatar-owner-' + ts,
+          email: `avatar-owner-${ts}@example.com`,
+          password: 'hashed-password',
+          systemLanguage: 'fr',
+          regionalLanguage: 'fr',
+          avatar: avatarFileUrl,
+          banner: `https://gate.meeshy.me${bannerFileUrl}`
+        }
+      });
+
+      const makeOrphan = (name: string, fileUrl: string) =>
+        prisma.messageAttachment.create({
+          data: {
+            messageId: null,
+            fileName: name,
+            originalName: name,
+            mimeType: 'image/jpeg',
+            fileSize: 1000,
+            filePath: `2026/07/testuser/${name}`,
+            fileUrl,
+            uploadedBy: user.id,
+            createdAt: oldTime
+          }
+        });
+
+      const avatarAttachment = await makeOrphan(`avatar_ref_${ts}.jpg`, avatarFileUrl);
+      const bannerAttachment = await makeOrphan(`banner_ref_${ts}.jpg`, bannerFileUrl);
+      const strayAttachment = await makeOrphan(`stray_${ts}.jpg`, strayFileUrl);
+
+      const cleanupOrphanedAttachments = (maintenanceService as any).cleanupOrphanedAttachments.bind(maintenanceService);
+      await cleanupOrphanedAttachments();
+
+      const keptAvatar = await prisma.messageAttachment.findUnique({ where: { id: avatarAttachment.id } });
+      const keptBanner = await prisma.messageAttachment.findUnique({ where: { id: bannerAttachment.id } });
+      const deletedStray = await prisma.messageAttachment.findUnique({ where: { id: strayAttachment.id } });
+
+      expect(keptAvatar).not.toBeNull();
+      expect(keptBanner).not.toBeNull();
+      expect(deletedStray).toBeNull();
+
+      // Cleanup
+      await prisma.messageAttachment.deleteMany({
+        where: { id: { in: [avatarAttachment.id, bannerAttachment.id] } }
+      });
+      await prisma.user.delete({ where: { id: user.id } });
+    });
+  });
 });

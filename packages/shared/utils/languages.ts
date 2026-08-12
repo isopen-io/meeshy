@@ -427,10 +427,10 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
   {
     code: 'hy',
     name: 'Armenian',
-    nativeName: 'Հdelays',
+    nativeName: 'Հայերեն',
     flag: '🇦🇲',
     color: 'bg-red-500',
-    translateText: 'Թdelays delays այdelays delays delays delays հdelays',
+    translateText: 'Թարգմանել այս հաղորդագրությունը հայերեն',
     supportsTTS: true,
     supportsSTT: true,
     supportsVoiceCloning: false,
@@ -1157,11 +1157,12 @@ function initializeLanguageCache() {
 export function getLanguageInfo(code: string | undefined): SupportedLanguageInfo {
   initializeLanguageCache();
 
-  if (!code || code.trim() === '' || code === 'unknown') {
+  const normalizedCode = code?.toLowerCase().trim() ?? '';
+
+  if (normalizedCode === '' || normalizedCode === 'unknown') {
     return languageCache.get('fr')!;
   }
 
-  const normalizedCode = code.toLowerCase().trim();
   const found = languageCache.get(normalizedCode);
 
   if (found) {

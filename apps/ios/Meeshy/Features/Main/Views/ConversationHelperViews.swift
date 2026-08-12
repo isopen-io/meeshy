@@ -20,8 +20,13 @@ struct ThemedBackButton: View {
 
     // MARK: - Pure formatting helpers (exposed for unit tests)
 
+    /// Délègue à la source de vérité du SDK : deux implémentations du même
+    /// seuil finissent toujours par diverger, et c'est exactement ce qui a
+    /// produit sept pastilles affichant « 99 » pour 4 312 notifications.
+    /// Conserve `0` → `"0"` : ce badge-ci se masque en amont via `showsUnread`,
+    /// et ses tests figent ce contrat.
     static func displayedUnread(_ count: Int) -> String {
-        count >= 100 ? "99+" : "\(count)"
+        count <= 0 ? "\(count)" : NotificationBadge.displayed(count)
     }
 
     static func showsUnread(unreadCount: Int, compactMode: Bool) -> Bool {
@@ -65,7 +70,7 @@ struct ThemedBackButton: View {
             HStack(spacing: 0) {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)
@@ -93,7 +98,7 @@ struct ThemedBackButton: View {
                         // capsule and push it out of the back-button glass.
                         // VoiceOver reads the count from the button label
                         // (`a11y.back.with_unread`), so the glyph is hidden.
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: 12, weight: NotificationBadge.fontWeight, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)

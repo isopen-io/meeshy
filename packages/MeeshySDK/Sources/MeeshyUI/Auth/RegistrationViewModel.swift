@@ -19,35 +19,35 @@ public enum RegistrationStep: Int, CaseIterable, Identifiable {
 
     public var funHeader: String {
         switch self {
-        case .pseudo: return "Un pseudo unique, comme toi"
-        case .phone: return "Ton numéro, ta clé de secours"
-        case .email: return "Ton email, ton filet de sécurité"
-        case .identity: return "Dis-nous qui tu es"
-        case .password: return "Mets un code béton!"
-        case .language: return "Parle ta langue, on traduit"
-        case .profile: return "Montre-toi sous ton plus beau jour"
-        case .recap: return "Le monde t'attend!"
+        case .pseudo: return String(localized: "auth.registration.header.pseudo", defaultValue: "Un pseudo unique, comme toi", bundle: .module)
+        case .phone: return String(localized: "auth.registration.header.phone", defaultValue: "Ton numéro, ta clé de secours", bundle: .module)
+        case .email: return String(localized: "auth.registration.header.email", defaultValue: "Ton email, ton filet de sécurité", bundle: .module)
+        case .identity: return String(localized: "auth.registration.header.identity", defaultValue: "Dis-nous qui tu es", bundle: .module)
+        case .password: return String(localized: "auth.registration.header.password", defaultValue: "Mets un code béton!", bundle: .module)
+        case .language: return String(localized: "auth.registration.header.language", defaultValue: "Parle ta langue, on traduit", bundle: .module)
+        case .profile: return String(localized: "auth.registration.header.profile", defaultValue: "Montre-toi sous ton plus beau jour", bundle: .module)
+        case .recap: return String(localized: "auth.registration.header.recap", defaultValue: "Le monde t'attend!", bundle: .module)
         }
     }
 
     public var funSubtitle: String {
         switch self {
         case .pseudo:
-            return "Choisis le nom que le monde va retenir — de Douala à Paris, de São Paulo à Tokyo. Sois créatif!"
+            return String(localized: "auth.registration.subtitle.pseudo", defaultValue: "Choisis le nom que le monde va retenir — de Douala à Paris, de São Paulo à Tokyo. Sois créatif!", bundle: .module)
         case .phone:
-            return "Il vérifie que ton compte est unique, sécurise tes engagements et te le rend si tu perds l'accès. Jamais affiché publiquement."
+            return String(localized: "auth.registration.subtitle.phone", defaultValue: "Il vérifie que ton compte est unique, sécurise tes engagements et te le rend si tu perds l'accès. Jamais affiché publiquement.", bundle: .module)
         case .email:
-            return "Indispensable pour récupérer ton compte et confirmer tes engagements. Zéro spam, promis!"
+            return String(localized: "auth.registration.subtitle.email", defaultValue: "Indispensable pour récupérer ton compte et confirmer tes engagements. Zéro spam, promis!", bundle: .module)
         case .identity:
-            return "Ton vrai nom, c'est ce qui permet à tes proches de te retrouver — et de prouver que ton compte est bien à toi."
+            return String(localized: "auth.registration.subtitle.identity", defaultValue: "Ton vrai nom, c'est ce qui permet à tes proches de te retrouver — et de prouver que ton compte est bien à toi.", bundle: .module)
         case .password:
-            return "Faut que ce soit fort comme le ndolé de maman! Minimum 8 caractères!"
+            return String(localized: "auth.registration.subtitle.password", defaultValue: "Faut que ce soit fort comme le ndolé de maman! Minimum 8 caractères!", bundle: .module)
         case .language:
-            return "Choisis ta langue, Meeshy traduit tout: tes amis du Sénégal, du Canada, du Brésil, du Japon ou d'Australie te liront dans la leur."
+            return String(localized: "auth.registration.subtitle.language", defaultValue: "Choisis ta langue, Meeshy traduit tout: tes amis du Sénégal, du Canada, du Brésil, du Japon ou d'Australie te liront dans la leur.", bundle: .module)
         case .profile:
-            return "Une belle photo et une bannière soignée ouvrent toutes les portes: c'est comme ça qu'on rencontre la crème de la crème, ici et sur les 5 continents."
+            return String(localized: "auth.registration.subtitle.profile", defaultValue: "Une belle photo et une bannière soignée ouvrent toutes les portes: c'est comme ça qu'on rencontre la crème de la crème, ici et sur les 5 continents.", bundle: .module)
         case .recap:
-            return "Tu y es! Des rencontres t'attendent sur les 5 continents. Bienvenue dans la famille Meeshy!"
+            return String(localized: "auth.registration.subtitle.recap", defaultValue: "Tu y es! Des rencontres t'attendent sur les 5 continents. Bienvenue dans la famille Meeshy!", bundle: .module)
         }
     }
 
@@ -295,11 +295,11 @@ public final class RegistrationViewModel: ObservableObject {
 
                 usernameAvailable = result.available
                 usernameSuggestions = result.suggestions ?? []
-                usernameError = result.available ? nil : "Ce pseudo est deja pris!"
+                usernameError = result.available ? nil : String(localized: "auth.registration.usernameTaken", defaultValue: "Ce pseudo est deja pris!", bundle: .module)
             } catch {
                 guard !Task.isCancelled else { return }
                 usernameAvailable = true
-                usernameError = "Verification non effectuee"
+                usernameError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
             }
         }
     }
@@ -317,11 +317,11 @@ public final class RegistrationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
 
                 emailAvailable = result.available
-                emailError = result.available ? nil : "Cet email est deja utilise!"
+                emailError = result.available ? nil : String(localized: "auth.registration.emailTaken", defaultValue: "Cet email est deja utilise!", bundle: .module)
             } catch {
                 guard !Task.isCancelled else { return }
                 emailAvailable = true
-                emailError = "Verification non effectuee"
+                emailError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
             }
         }
     }
@@ -344,10 +344,10 @@ public final class RegistrationViewModel: ObservableObject {
                 phoneNumberValid = result.phoneNumberValid
                 phoneAvailable = result.available
                 if result.phoneNumberValid == false {
-                    phoneError = "Ce numero semble invalide"
+                    phoneError = String(localized: "auth.registration.phoneInvalid", defaultValue: "Ce numero semble invalide", bundle: .module)
                     phoneOwnership = nil
                 } else if !result.available {
-                    phoneError = "Ce numero est deja utilise!"
+                    phoneError = String(localized: "auth.registration.phoneTaken", defaultValue: "Ce numero est deja utilise!", bundle: .module)
                     // Numéro pris : sonde le compte propriétaire pour proposer une
                     // récupération si c'est un compte dormant à l'identité proche.
                     await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
@@ -359,7 +359,7 @@ public final class RegistrationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 phoneAvailable = true
                 phoneNumberValid = nil
-                phoneError = "Verification non effectuee"
+                phoneError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
                 phoneOwnership = nil
             }
         }
@@ -493,7 +493,7 @@ public final class RegistrationViewModel: ObservableObject {
         isLoading = false
 
         if !AuthManager.shared.isAuthenticated {
-            errorMessage = AuthManager.shared.errorMessage ?? "Erreur lors de l'inscription"
+            errorMessage = AuthManager.shared.errorMessage ?? String(localized: "auth.registration.registrationFailed", defaultValue: "Erreur lors de l'inscription", bundle: .module)
         }
     }
 

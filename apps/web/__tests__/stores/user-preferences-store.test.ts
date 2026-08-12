@@ -78,6 +78,11 @@ function resetStore() {
         defaultVisibility: 'FRIENDS',
         storyNotificationsEnabled: true,
       },
+      encryptionKeys: {
+        hasSignalKeys: false,
+        signalRegistrationId: null,
+        lastKeyRotation: null,
+      },
       isLoading: false,
       isInitialized: false,
       lastSyncedAt: null,
@@ -500,6 +505,82 @@ describe('useUserPreferencesStore', () => {
       expect(encryption.encryptionPreference).toBe('always');
       expect(encryption.autoEncryptNewConversations).toBe(true);
       expect(encryption.warnOnUnencrypted).toBe(true);
+    });
+  });
+
+  // ─── syncEncryptionKeys ───────────────────────────────────────────────────────
+
+  describe('syncEncryptionKeys', () => {
+    it('does nothing when no auth token', async () => {
+      mockGetAuthToken.mockReturnValue(null);
+      await act(async () => {
+        await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('reads key status from the encryption endpoint, not from the user object', async () => {
+      // `GET /auth/me` cannot carry these: `userSchema` (the response schema
+      // fast-json-stringify serializes through) declares no signal field, so any
+      // the handler puts there is stripped before the body is written.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeOkResponse({
+        encryptionPreference: 'always',
+        hasSignalKeys: true,
+        signalRegistrationId: 4242,
+        lastKeyRotation: '2026-03-04T05:06:07.000Z',
+      }));
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.meeshy.test/api/v1/me/preferences/encryption',
+        expect.anything(),
+      );
+      const { encryptionKeys } = useUserPreferencesStore.getState();
+      expect(encryptionKeys.hasSignalKeys).toBe(true);
+      expect(encryptionKeys.signalRegistrationId).toBe(4242);
+      expect(encryptionKeys.lastKeyRotation).toBe('2026-03-04T05:06:07.000Z');
+    });
+
+    it('reports no keys when the server says so', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      useUserPreferencesStore.setState({
+        encryptionKeys: { hasSignalKeys: true, signalRegistrationId: 1, lastKeyRotation: 'x' },
+      });
+      mockFetch.mockResolvedValue(makeOkResponse({
+        encryptionPreference: 'optional',
+        hasSignalKeys: false,
+        signalRegistrationId: null,
+        lastKeyRotation: null,
+      }));
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+
+      expect(useUserPreferencesStore.getState().encryptionKeys).toEqual({
+        hasSignalKeys: false,
+        signalRegistrationId: null,
+        lastKeyRotation: null,
+      });
+    });
+
+    it('leaves the last known status untouched when the request fails', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      useUserPreferencesStore.setState({
+        encryptionKeys: { hasSignalKeys: true, signalRegistrationId: 7, lastKeyRotation: null },
+      });
+      mockFetch.mockRejectedValue(new Error('offline'));
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+
+      expect(useUserPreferencesStore.getState().encryptionKeys.hasSignalKeys).toBe(true);
+      expect(useUserPreferencesStore.getState().encryptionKeys.signalRegistrationId).toBe(7);
     });
   });
 

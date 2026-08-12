@@ -131,10 +131,10 @@ struct OnboardingFlowView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.previousStep()
                     }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(15, weight: .semibold))
                         Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                             .font(MeeshyFont.relative(14, weight: .medium))
@@ -148,7 +148,7 @@ struct OnboardingFlowView: View {
             } else {
                 Button(action: {
                     dismiss()
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     Image(systemName: "xmark")
                         // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 38×38 →
@@ -242,14 +242,14 @@ struct OnboardingFlowView: View {
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant !", bundle: .main)
         }
     }
 
     private var buttonIcon: String? {
         switch viewModel.currentStep {
         case .recap: return "sparkles"
-        default: return "arrow.right"
+        default: return "arrow.forward"
         }
     }
 

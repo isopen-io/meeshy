@@ -31,6 +31,24 @@ describe('compareFullNames — exact', () => {
     )).toBe('exact');
   });
 
+  it('returns exact for identical Cyrillic names', () => {
+    expect(compareFullNames(
+      { firstName: 'Иван', lastName: 'Петров' },
+      { firstName: 'Иван', lastName: 'Петров' }
+    )).toBe('exact');
+  });
+
+  it('returns exact for identical CJK / Arabic names', () => {
+    expect(compareFullNames(
+      { firstName: '明', lastName: '李' },
+      { firstName: '明', lastName: '李' }
+    )).toBe('exact');
+    expect(compareFullNames(
+      { firstName: 'محمد', lastName: 'علي' },
+      { firstName: 'محمد', lastName: 'علي' }
+    )).toBe('exact');
+  });
+
   it('treats swapped first/last name as exact', () => {
     expect(compareFullNames(
       { firstName: 'Dupont', lastName: 'Jean' },
@@ -82,5 +100,12 @@ describe('compareFullNames — different', () => {
       { firstName: '', lastName: '' },
       { firstName: 'Jean', lastName: 'Dupont' }
     )).toBe('different');
+  });
+
+  it('does not collapse different Cyrillic surnames to exact via a shared Latin first name', () => {
+    expect(compareFullNames(
+      { firstName: 'Jean', lastName: 'Петров' },
+      { firstName: 'Jean', lastName: 'Иванов' }
+    )).not.toBe('exact');
   });
 });

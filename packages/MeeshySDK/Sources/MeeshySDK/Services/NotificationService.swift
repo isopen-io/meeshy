@@ -52,6 +52,20 @@ public final class NotificationService: @unchecked Sendable {
         return response.count ?? 0
     }
 
+    /// Marque comme lues toutes les notifications liées à un post — story,
+    /// statut ou post de feed. Appelé à l'ouverture du contenu : le contenu
+    /// étant consommé, ses notifications (« X a publié une story », mais aussi
+    /// les commentaires et réactions dessus) ne doivent plus apparaître comme
+    /// non lues. Retourne le nombre de notifications marquées.
+    @discardableResult
+    public func markPostRead(postId: String) async throws -> Int {
+        let response: MarkReadResponse = try await api.request(
+            endpoint: "/notifications/post/\(postId)/read",
+            method: "POST"
+        )
+        return response.count ?? 0
+    }
+
     /// Marque comme lues toutes les notifications dont le type est dans `types`.
     /// Appelé quand un écran consomme une catégorie entière (ex : l'écran des
     /// demandes d'ajout consomme `friend_request` / `contact_request` /

@@ -56,11 +56,13 @@ struct ThemedActionButton: View {
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
-                    Text("\(min(badge, 99))")
-                        .font(MeeshyFont.relative(9, weight: .bold))
+                    Text(NotificationBadge.displayed(badge))
+                        .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(Color.white))
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
                         .pulse(intensity: 0.08)
                 }
@@ -280,14 +282,14 @@ struct ThemedFeedOverlay: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
             } else {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
                 }
                 FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
-                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
+                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
             }
         }
     }
@@ -365,6 +367,10 @@ struct ThemedFeedOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Même garde-fou que « Meeshy Chats » : rétrécir plutôt que
+                    // tronquer quand le volet (iPad) est étroit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
             },
             trailing: {
                 Button {
@@ -403,7 +409,8 @@ struct ThemedFeedOverlay: View {
     /// handoff (clear + pause du moteur feed) avant de présenter. Identique au
     /// chemin iPad (`FeedView.reelFeedCardView`).
     private func reelFeedCardView(for post: FeedPost) -> some View {
-        ReelFeedCardContainer(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
             coordinator: reelAutoplay,
             post: post,
             isDark: isDark,
@@ -452,7 +459,19 @@ struct ThemedFeedOverlay: View {
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": authorId, "username": post.authorUsername ?? post.author]
                 )
-            }
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
         )
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
@@ -491,9 +510,6 @@ struct ThemedFeedOverlay: View {
             onBookmark: { postId in
                 togglePostBookmark(postId: postId)
             },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-            },
             onTapPost: { post in
                 router.push(.postDetail(post.id, post))
             },
@@ -505,6 +521,9 @@ struct ThemedFeedOverlay: View {
             } : nil,
             onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
+                Task { await viewModel.pinPost(postId) }
             } : nil,
             onEdit: post.authorId == AuthManager.shared.currentUser?.id ? { post in
                 editingPost = post
@@ -730,11 +749,11 @@ struct ThemedFeedOverlay: View {
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
-                canBeReel: post.hasMedia,
                 media: post.media.map { EditablePostMedia($0) },
+                originalLocation: post.location,
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -744,7 +763,11 @@ struct ThemedFeedOverlay: View {
         // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                // `.large` is not decoration: the composer's labels scale with
+                // Dynamic Type while its emoji grid does not, so at accessibility
+                // sizes the content outgrows `.medium`. Offering the larger detent
+                // gives the user somewhere to go instead of a dead end.
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {

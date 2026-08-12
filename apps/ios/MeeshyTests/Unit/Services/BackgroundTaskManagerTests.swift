@@ -91,3 +91,37 @@ final class BackgroundTaskManagerTests: XCTestCase {
         XCTAssertEqual(flushCount, 0, "online→online transitions must not wake the outbox")
     }
 }
+
+/// startup-08 — gate de session des handlers + annulation au logout.
+extension BackgroundTaskManagerTests {
+
+    func test_hasLiveSession_noAuthToken_returnsFalse() {
+        let sut = BackgroundTaskManager(authTokenProvider: { nil }, taskCanceller: MockBGTaskCanceller())
+        XCTAssertFalse(sut.hasLiveSession())
+    }
+
+    func test_hasLiveSession_withAuthToken_returnsTrue() {
+        let sut = BackgroundTaskManager(authTokenProvider: { "tok-123" }, taskCanceller: MockBGTaskCanceller())
+        XCTAssertTrue(sut.hasLiveSession())
+    }
+
+    func test_cancelAllScheduled_cancelsBothIdentifiers_preservesCacheFlush() {
+        let mock = MockBGTaskCanceller()
+        let sut = BackgroundTaskManager(authTokenProvider: { "tok" }, taskCanceller: mock)
+
+        sut.cancelAllScheduled()
+
+        XCTAssertEqual(
+            Set(mock.cancelledIdentifiers),
+            [BackgroundTaskManager.conversationSyncTaskId, BackgroundTaskManager.messagePrefetchTaskId],
+            "les deux BGTasks app doivent être annulées — et RIEN d'autre (le flush cache SDK reste)"
+        )
+    }
+}
+
+private final class MockBGTaskCanceller: BGTaskCancelling {
+    private(set) var cancelledIdentifiers: [String] = []
+    func cancel(taskRequestWithIdentifier identifier: String) {
+        cancelledIdentifiers.append(identifier)
+    }
+}

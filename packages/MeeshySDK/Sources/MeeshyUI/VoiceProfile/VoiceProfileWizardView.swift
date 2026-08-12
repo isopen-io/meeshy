@@ -14,7 +14,7 @@ public struct VoiceProfileWizardView: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -197,7 +197,7 @@ public struct VoiceProfileWizardView: View {
             Text(String(localized: "voiceProfile.recording.title", defaultValue: "Enregistrez votre voix", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
 
-            Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun.", bundle: .module))
+            Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Trois enregistrements de dix secondes suffisent.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -207,6 +207,10 @@ public struct VoiceProfileWizardView: View {
                 accentColor: accentColor,
                 minimumSamples: 3,
                 minimumDurationSeconds: 10,
+                // La langue PARLÉE, pas celle de l'interface : on part de celle
+                // de l'utilisateur, il peut en changer avant le premier
+                // enregistrement.
+                initialLanguage: AuthManager.shared.currentUser?.systemLanguage,
                 onSamplesReady: { samples in
                     viewModel.voiceSamples = samples
                     viewModel.advanceFromRecording()
