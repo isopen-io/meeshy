@@ -32,8 +32,15 @@ struct ConversationInfoSheet: View {
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
     @State private var isCreatingShareLink = false
-    @State private var createdShareLinkId: String?
-    @State private var showShareSheet = false
+
+    /// Freshly minted join link awaiting the system share sheet. Presenting it
+    /// through `.sheet(item:)` lets SwiftUI own the presentation — the previous
+    /// hand-rolled `UIActivityViewController` + window-hierarchy walk anchored
+    /// the iPad popover at `CGRect.zero` (top-left corner) and picked a scene
+    /// out of the *unordered* `connectedScenes` set. Replaces the former
+    /// `createdShareLinkId` / `showShareSheet` pair, which was written but
+    /// never read.
+    @State private var shareableLink: ShareableLink?
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
     @State private var showEncryptionDetail = false
@@ -120,7 +127,7 @@ struct ConversationInfoSheet: View {
                 blockOtherUser()
             }
         } message: {
-            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le debloquer dans les reglages.", bundle: .main), conversation.name))
+            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le débloquer dans les réglages.", bundle: .main), conversation.name))
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -143,6 +150,9 @@ struct ConversationInfoSheet: View {
         }
         .sheet(isPresented: $showAllPinnedMessages) {
             allPinnedMessagesSheet
+        }
+        .sheet(item: $shareableLink) { link in
+            ShareSheet(activityItems: [link.url])
         }
         .withStatusBubble()
     }
@@ -307,9 +317,12 @@ struct ConversationInfoSheet: View {
             // CachedAsyncImage (vs raw AsyncImage) caches the banner so reopening
             // the info sheet doesn't re-download it, and decodes it at the 140-pt
             // banner size rather than full resolution.
+            // showsStatusOverlays: false — echec silencieux vers le gradient
+            // deja fourni ; pas de bouton retry sur une banniere decorative.
             CachedAsyncImage(
                 url: bannerURL,
-                targetSize: CGSize(width: 400, height: 140)
+                targetSize: CGSize(width: 400, height: 140),
+                showsStatusOverlays: false
             ) {
                 heroBannerPlaceholder
             }
@@ -413,6 +426,11 @@ struct ConversationInfoSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // Selected tab is otherwise signalled by weight/color + the
+                // underline bar alone — expose it to VoiceOver via the trait so
+                // non-sighted users know which tab is active (HIG: never rely on
+                // color to convey state; WCAG 1.4.1). Localised by iOS, 0 key.
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
         .padding(.horizontal, 20)
@@ -493,6 +511,7 @@ struct ConversationInfoSheet: View {
                             .foregroundColor(theme.textMuted)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(10)
@@ -544,10 +563,10 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "person.2.badge.gearshape")
                     .font(MeeshyFont.relative(13, weight: .semibold))
-                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gerer les membres", bundle: .main))
+                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gérer les membres", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
@@ -561,7 +580,7 @@ struct ConversationInfoSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
-        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gerer les membres du groupe", bundle: .main))
+        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gérer les membres du groupe", bundle: .main))
     }
 
     private func memberRow(_ participant: PaginatedParticipant) -> some View {
@@ -719,7 +738,7 @@ struct ConversationInfoSheet: View {
                             Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages epingles", bundle: .main), pinned.count))
                                 .font(MeeshyFont.relative(11, weight: .semibold))
                                 .foregroundColor(accent)
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.forward")
                                 .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(accent)
                         }
@@ -806,6 +825,7 @@ struct ConversationInfoSheet: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(theme.textMuted.opacity(0.12)))
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
             }
         }
@@ -941,7 +961,7 @@ struct ConversationInfoSheet: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -991,7 +1011,7 @@ struct ConversationInfoSheet: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -1057,24 +1077,12 @@ struct ConversationInfoSheet: View {
                 allowAnonymousMessages: true
             )
             let result = try await ShareLinkService.shared.createShareLink(request: request)
-            createdShareLinkId = result.linkId
-
-            let shareURL = "https://meeshy.me/join/\(result.linkId)"
-            await MainActor.run {
-                let activityVC = UIActivityViewController(
-                    activityItems: [shareURL],
-                    applicationActivities: nil
-                )
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    var topVC = rootVC
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    activityVC.popoverPresentationController?.sourceView = topVC.view
-                    topVC.present(activityVC, animated: true)
-                }
+            guard let shareURL = URL(string: "https://meeshy.me/join/\(result.linkId)") else {
+                throw URLError(.badURL)
             }
+            await MainActor.run { shareableLink = ShareableLink(url: shareURL) }
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la création du lien", bundle: .main))
         }
     }
 
@@ -1083,7 +1091,7 @@ struct ConversationInfoSheet: View {
             try await ConversationService.shared.leave(conversationId: conversation.id)
             dismiss()
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du depart de la conversation", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du départ de la conversation", bundle: .main))
         }
     }
 

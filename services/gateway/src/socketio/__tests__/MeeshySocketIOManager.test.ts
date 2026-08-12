@@ -189,7 +189,6 @@ jest.mock('../handlers/SocialEventsHandler', () => ({
 
 jest.mock('../handlers/LocationHandler', () => ({
   LocationHandler: jest.fn().mockImplementation(() => ({
-    handleLocationShare: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
@@ -203,6 +202,7 @@ jest.mock('../handlers/AuthHandler', () => ({
       handleTokenAuthentication: jest.fn(),
       handleManualAuthentication: jest.fn().mockResolvedValue(undefined),
       handleHeartbeat: jest.fn().mockResolvedValue(undefined),
+      handleEnginePong: jest.fn(),
       handleDisconnection: jest.fn().mockResolvedValue(undefined),
     };
     return mockAuthHandlerInstance;
@@ -375,6 +375,11 @@ jest.mock('../emitAttachmentUpdated', () => ({
 }));
 
 jest.mock('../utils/message-payload-filter', () => ({
+  // Keep the REAL `groupSocketsByLanguage` (which normalizes BCP-47 recipient
+  // languages via the shared source of truth) so the manager's per-language
+  // grouping is exercised against real normalization; only the pure trimming is
+  // spied on so tests can assert exactly which languages were requested.
+  ...jest.requireActual('../utils/message-payload-filter'),
   filterMessagePayloadForLanguages: jest.fn().mockImplementation((payload: unknown) => payload),
 }));
 
@@ -403,6 +408,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { filterMessagePayloadForLanguages as filterMessagePayloadForLanguagesSpy } from '../utils/message-payload-filter';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -442,15 +448,22 @@ function makePrisma(): any {
 
 function makeSocket(id = 'socket-1', rooms = new Set<string>()) {
   const handlers: Record<string, any> = {};
+  const connHandlers: Record<string, any> = {};
   const socket = {
     id,
     rooms,
     on: jest.fn((event: string, handler: any) => {
       handlers[event] = handler;
     }),
+    conn: {
+      on: jest.fn((event: string, handler: any) => {
+        connHandlers[event] = handler;
+      }),
+    },
     emit: jest.fn(),
     disconnect: jest.fn(),
     _handlers: handlers,
+    _connHandlers: connHandlers,
   };
   return socket;
 }
@@ -489,6 +502,32 @@ describe('MeeshySocketIOManager', () => {
   let manager: MeeshySocketIOManager;
   let prisma: ReturnType<typeof makePrisma>;
   let translationService: ReturnType<typeof makeTranslationService>;
+  /**
+   * The module-level `io` double funnels every chain into ONE `emit` mock, so
+   * `expect(ioState.to).toHaveBeenCalledWith(room)` proves only that some
+   * emitter addressed that room — never which event landed there. This swaps in
+   * a chain that keeps rooms and event together, and restores the shared double
+   * afterwards so no later test inherits the override.
+   */
+  function recordEmitChains(state: ReturnType<typeof getIoState>) {
+    const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+    const chain = (rooms: string[]): any => ({
+      to: (room: string) => chain([...rooms, room]),
+      except: () => chain(rooms),
+      emit: (event: string, payload: unknown) => { sent.push({ rooms, event, payload }); },
+    });
+    state.to.mockImplementation(((room: string) => chain([room])) as never);
+    return {
+      roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+      // Le payload est capturé PAR room : `conversation:updated` en construit un
+      // par destinataire (Prisme du lecteur), donc l'assertion doit pouvoir les
+      // distinguer plutôt que de constater qu'« un » emit a eu lieu.
+      payloadFor: (event: string, room: string) =>
+        sent.find((s) => s.event === event && s.rooms.includes(room))?.payload,
+      restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
+    };
+  }
+
   let ioState: ReturnType<typeof getIoState>;
 
   beforeEach(async () => {
@@ -659,14 +698,12 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('Socket operations', () => {
-    it('isUserInConversationRoom returns false when user not in connectedUsers', () => {
+    it('isUserInConversationRoom returns false when user has no tracked sockets', () => {
       expect(manager.isUserInConversationRoom('ghost', 'conv-1')).toBe(false);
     });
 
     it('isUserInConversationRoom returns false when socket not found', () => {
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
     });
 
@@ -674,9 +711,7 @@ describe('MeeshySocketIOManager', () => {
       const rooms = new Set(['conversation:conv-1']);
       const fakeSocket = { rooms };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
     });
 
@@ -684,10 +719,19 @@ describe('MeeshySocketIOManager', () => {
       const rooms = new Set(['conversation:other']);
       const fakeSocket = { rooms };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
+    });
+
+    it('isUserInConversationRoom returns true when ANY device is in the room (multi-device)', () => {
+      // The latest-promoted socket (sock-web) is NOT in the room, but the phone is.
+      ioState.sockets.sockets.set('sock-phone', { rooms: new Set(['conversation:conv-1']) });
+      ioState.sockets.sockets.set('sock-web', { rooms: new Set(['conversation:other']) });
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
     });
 
     it('disconnectUser returns false for unknown user', () => {
@@ -695,20 +739,30 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('disconnectUser returns false when socket not found', () => {
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
       expect(manager.disconnectUser('user-1')).toBe(false);
     });
 
     it('disconnectUser calls socket.disconnect and returns true', () => {
       const fakeSocket = { disconnect: jest.fn() };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.disconnectUser('user-1')).toBe(true);
       expect(fakeSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('disconnectUser closes EVERY device of a multi-device user (force-logout)', () => {
+      const phone = { disconnect: jest.fn() };
+      const web = { disconnect: jest.fn() };
+      ioState.sockets.sockets.set('sock-phone', phone);
+      ioState.sockets.sockets.set('sock-web', web);
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.disconnectUser('user-1')).toBe(true);
+      expect(phone.disconnect).toHaveBeenCalledWith(true);
+      expect(web.disconnect).toHaveBeenCalledWith(true);
     });
 
     it('sendToUser returns false for unknown user', () => {
@@ -718,12 +772,22 @@ describe('MeeshySocketIOManager', () => {
     it('sendToUser emits event to socket and returns true', () => {
       const fakeSocket = { emit: jest.fn() };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
       expect(result).toBe(true);
       expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+    });
+
+    it('sendToUser emits to EVERY device of a multi-device user', () => {
+      const phone = { emit: jest.fn() };
+      const web = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-phone', phone);
+      ioState.sockets.sockets.set('sock-web', web);
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
+      expect(result).toBe(true);
+      expect(phone.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+      expect(web.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
     });
 
     it('broadcast emits to all connected sockets', () => {
@@ -922,8 +986,25 @@ describe('MeeshySocketIOManager', () => {
       expect(registeredEvents).toContain(CLIENT_EVENTS.HEARTBEAT);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_ADD);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_REMOVE);
-      expect(registeredEvents).toContain(CLIENT_EVENTS.LOCATION_SHARE);
       expect(registeredEvents).toContain('disconnect');
+    });
+
+    it('routes engine-level pongs to authHandler.handleEnginePong (clients with no applicative heartbeat)', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+
+      socket._connHandlers['packet']({ type: 'pong' });
+
+      expect(mockAuthHandlerInstance.handleEnginePong).toHaveBeenCalledWith(socket);
+    });
+
+    it('ignores non-pong engine packets', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+
+      socket._connHandlers['packet']({ type: 'message' });
+
+      expect(mockAuthHandlerInstance.handleEnginePong).not.toHaveBeenCalled();
     });
 
     it('calls callEventsHandler.setupCallEvents on each connection', () => {
@@ -1415,6 +1496,104 @@ describe('MeeshySocketIOManager', () => {
       // Should not throw
       await expect((manager as any)._handleTextTranslationReady(baseData)).resolves.not.toThrow();
     });
+
+    // Cycle 73 — LE défaut. `message:translation` ne porte que la room de
+    // CONVERSATION. Un lecteur resté sur l'écran de liste n'y est pas ; sa ligne
+    // garde l'aperçu servi à l'ENVOI, quand aucune traduction n'existait encore.
+    // Rien ne repassait ensuite : le Prisme de la ligne de liste dépendait donc
+    // de l'ordre d'arrivée, et un francophone gardait « Hello » indéfiniment.
+    describe('preview refresh on the conversation list (cycle 73)', () => {
+      const FR_READER = {
+        id: 'p-fr',
+        userId: 'user-fr',
+        user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+      };
+
+      function armPreview(latest: unknown) {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockResolvedValue([FR_READER]);
+        prisma.message.findFirst.mockResolvedValue(latest);
+      }
+
+      const frData = { ...baseData, targetLanguage: 'fr', result: { ...baseData.result, translatedText: 'Bonjour' } };
+
+      it('fans conversation:updated with the freshly translated preview to the reader personal room', async () => {
+        armPreview({
+          id: 'msg-txt-1',
+          content: 'Hello',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:00:00Z'),
+          originalLanguage: 'en',
+          translations: { fr: { text: 'Bonjour', targetLanguage: 'fr' } },
+        });
+
+        await (manager as any)._handleTextTranslationReady(frData);
+
+        expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-fr'));
+        expect(ioState.toEmit).toHaveBeenCalledWith(
+          SERVER_EVENTS.CONVERSATION_UPDATED,
+          expect.objectContaining({
+            conversationId: 'conv-prisme-0001',
+            lastMessageId: 'msg-txt-1',
+            lastMessageTranslations: { fr: 'Bonjour' },
+            lastMessageOriginalLanguage: 'en',
+            updatedBy: { id: 'part-author' },
+          }),
+        );
+      });
+
+      // Un message plus récent est arrivé pendant que la traduction volait : son
+      // propre chemin d'envoi a déjà servi l'aperçu. Re-servir l'ancien ferait
+      // RECULER la ligne de liste — pire que le défaut corrigé.
+      it('stays silent when the translated message is no longer the conversation latest', async () => {
+        armPreview({
+          id: 'msg-newer',
+          content: 'Une autre chose',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:05:00Z'),
+          originalLanguage: 'fr',
+          translations: null,
+        });
+
+        await (manager as any)._handleTextTranslationReady(frData);
+
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UPDATED, expect.anything());
+      });
+
+      // La traduction espagnole n'apprend rien au lecteur français : sa carte est
+      // filtrée à SON prisme, donc identique à l'octet près. Une conversation à
+      // N langues émettrait sinon N fan-outs complets par message.
+      it('stays silent for a reader whose prism does not carry the language that landed', async () => {
+        armPreview({
+          id: 'msg-txt-1',
+          content: 'Hello',
+          senderId: 'part-author',
+          createdAt: new Date('2026-08-11T10:00:00Z'),
+          originalLanguage: 'en',
+          translations: { es: { text: 'Hola', targetLanguage: 'es' } },
+        });
+
+        await (manager as any)._handleTextTranslationReady({ ...baseData, targetLanguage: 'es' });
+
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UPDATED, expect.anything());
+      });
+
+      // Canal latéral best-effort : la traduction elle-même est déjà partie dans
+      // la room de conversation et ne doit pas tomber avec le rafraîchissement.
+      it('still broadcasts the translation when the preview refresh query fails', async () => {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockRejectedValue(new Error('DB down'));
+
+        await expect((manager as any)._handleTextTranslationReady(frData)).resolves.not.toThrow();
+
+        expect(ioState.toEmit).toHaveBeenCalledWith(
+          SERVER_EVENTS.MESSAGE_TRANSLATION,
+          expect.objectContaining({ messageId: 'msg-txt-1' }),
+        );
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1819,12 +1998,16 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findMany.mockResolvedValue([
         { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
         { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+        { id: 'part-anon', userId: null, joinedAt: new Date() },
       ]);
 
       await manager.broadcastMessage(msg, 'conv-123456789012');
 
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-recipient'));
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-sender'));
+      // Parité avec le chemin socket : un participant sans compte est adressé
+      // par son `Participant.id`, la seule room qu'il ait jamais rejointe.
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('part-anon'));
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_UPDATED,
         expect.objectContaining({
@@ -1833,6 +2016,112 @@ describe('MeeshySocketIOManager', () => {
           lastMessagePreview: 'hello list',
         })
       );
+    });
+
+    it('addresses an accountless participant by its participant id in CONVERSATION_UPDATED', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'hello link guest',
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      // A conversation opened through a share link: the guest has no `User` row,
+      // and `AuthHandler` joins its socket to `user:<Participant.id>`.
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-anonymous', userId: null, joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      // Bound to the EVENT, not merely to `io.to`: `conversation:unread-updated`
+      // already reaches this room with the right key, and would mask the defect.
+      expect(sent.roomsFor(SERVER_EVENTS.CONVERSATION_UPDATED)).toContain(ROOMS.user('part-anonymous'));
+    });
+
+    // Jumeau du chemin édition/suppression (`emitConversationPreviewUpdate`) :
+    // l'aperçu de ligne de liste ne doit PAS dépendre du transport. Si seul le
+    // chemin d'édition portait le Prisme, la ligne serait traduite après une
+    // édition et brute après un envoi.
+    it('carries each recipient OWN preview prism in CONVERSATION_UPDATED (twin of the edit path)', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = {
+        fr: { text: 'Bonjour', targetLanguage: 'fr' },
+        es: { text: 'Hola', targetLanguage: 'es' },
+      };
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+        {
+          id: 'part-es',
+          userId: 'user-es',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'es', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      const es = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-es'));
+      expect(fr.lastMessageTranslations).toEqual({ fr: 'Bonjour' });
+      expect(es.lastMessageTranslations).toEqual({ es: 'Hola' });
+      expect(fr.lastMessageOriginalLanguage).toBe('en');
+    });
+
+    // Garde anti-régression du cycle 65 : le `conversation:updated` jumeau ne
+    // doit pas arriver derrière `message:new` pour EFFACER la carte que ce
+    // dernier vient d'installer. Il est construit depuis le MÊME message, donc
+    // un message sans traduction produit une carte nulle des deux côtés — jamais
+    // un vide qui contredirait `message:new`.
+    it('does not contradict message:new when the fresh message has no translations yet', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+      });
+      (msg as any).originalLanguage = 'en';
+      (msg as any).translations = null;
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'part-fr',
+          userId: 'user-fr',
+          joinedAt: new Date(),
+          user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+        },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
+      expect(fr.lastMessageTranslations).toBeNull();
+      expect(fr.lastMessagePreview).toBe('Hello');
     });
 
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {
@@ -2020,6 +2309,67 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-drain-pins', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_PINNED, { messageId: 'msg-pin', pinnedBy: 'u1' });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
+    });
+
+    it('routes attachment entries: attachment-updated → MESSAGE_ATTACHMENT_UPDATED', async () => {
+      // The `message:new` queued at SEND time carries the voice note WITHOUT
+      // its transcription (Whisper finishes a second later). Without this
+      // replay, a peer who was offline at that instant keeps the un-enriched
+      // attachment for as long as their cache lives.
+      const enriched = {
+        conversationId: 'conv-a',
+        messageId: 'msg-audio',
+        attachment: { id: 'att-1', transcription: { text: 'Bonjour' } },
+      };
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: enriched, eventType: 'attachment-updated', dedupKey: 'att-1' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-attachments', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, enriched);
+    });
+
+    // A share-link message is a CREATION replayed under BOTH wire events, each
+    // in the shape that event carries: `link:message:new` keeps its `{ message }`
+    // envelope (the web reads it), `message:new` gets the message object itself
+    // (iOS and Android only ever listen to that one — replaying the envelope
+    // under it would hand them a payload with no `conversationId` to route on).
+    // Replaying only `link:message:new`, as this did, left a mobile recipient
+    // who was offline at send time with nothing to converge on at reconnect.
+    it('replays link-message entries under BOTH events, each in its own shape', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-link', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
+        message: { id: 'msg-link', conversationId: 'conv-link' },
+      });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-link',
+        conversationId: 'conv-link',
+      });
+    });
+
+    // The envelope is what every writer of this eventType produces, but a drain
+    // must never blast `message:new` with `undefined` if one ever drifts: the
+    // recipient would take a message it cannot route for a real one.
+    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { messageId: 'msg-shapeless' }, eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
+        messageId: 'msg-shapeless',
+      });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
 
     it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {
@@ -2212,6 +2562,22 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-ps5');
       prisma.participant.findMany.mockRejectedValue(new Error('DB fail'));
       await expect((manager as any)._emitPresenceSnapshot(socket, 'user-err', false)).resolves.not.toThrow();
+    });
+
+    it('still replays the offline delivery queue when the presence-snapshot build throws (delivery must not depend on the cosmetic snapshot)', async () => {
+      // A transient Mongo hiccup on the presence-snapshot contacts query must NOT
+      // skip the offline-queue replay: _drainPendingMessages is the sole reconnect
+      // trigger that redelivers queued messages + their delivered receipts. Gating
+      // it behind the snapshot build stranded them until the next clean reconnect.
+      const socket = makeSocket('sock-ps-drain-onerror');
+      prisma.participant.findMany.mockRejectedValue(new Error('transient Mongo hiccup'));
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-drain-onerror', false);
+
+      expect(drainSpy).toHaveBeenCalledWith('user-drain-onerror', false);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror');
     });
   });
 
@@ -2945,7 +3311,8 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('sendToUser - edge cases', () => {
-    it('returns false when connectedUser exists but socket is missing from sockets map', () => {
+    it('returns false when a socket is tracked but missing from the sockets map', () => {
+      (manager as any).userSockets.set('user-no-socket', new Set(['missing-sock']));
       (manager as any).connectedUsers.set('user-no-socket', {
         id: 'user-no-socket', socketId: 'missing-sock', isAnonymous: false, language: 'fr', resolvedLanguages: [],
       });
@@ -3189,13 +3556,6 @@ describe('MeeshySocketIOManager', () => {
   });
 
   describe('LOCATION event handlers', () => {
-    it('LOCATION_SHARE invokes locationHandler.handleLocationShare', async () => {
-      const socket = makeSocket('sock-ls1');
-      triggerConnection(socket);
-      const cb = jest.fn();
-      await socket._handlers[CLIENT_EVENTS.LOCATION_SHARE]({ lat: 1, lon: 2 }, cb);
-    });
-
     it('LOCATION_LIVE_START invokes locationHandler.handleLiveLocationStart', async () => {
       const socket = makeSocket('sock-lls1');
       triggerConnection(socket);
@@ -4009,6 +4369,50 @@ describe('MeeshySocketIOManager', () => {
       // Both sockets should be in one bucket → chained emit
       expect(ioState.to).toHaveBeenCalled();
     });
+
+    it('normalizes an anonymous pt-BR recipient to the 2-letter pt key (BCP-47 — Prisme)', () => {
+      // Prisme Linguistique: an anonymous participant carries a raw, verbatim
+      // `language` ('pt-BR') and has NO resolvedLanguages. The message stores its
+      // translation under the 2-letter key 'pt'. If the per-language grouping only
+      // lowercases ('pt-br') instead of stripping the region subtag, the trimming
+      // step receives 'pt-br', the stored 'pt' translation never matches, it is
+      // pruned from that recipient's payload, and the reader falls back to the
+      // untranslated original — the exact violation the shared
+      // `groupSocketsByLanguage` helper was built (and unit-tested) to prevent.
+      // The manager MUST delegate to that helper, exactly like MessageHandler does,
+      // rather than re-implement the grouping with a raw `.toLowerCase()`.
+      const room = 'conversation:ptbr-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-ptbr']));
+      (manager as any).socketToUser.set('sock-ptbr', 'anon-ptbr');
+      (manager as any).connectedUsers.set('anon-ptbr', {
+        id: 'anon-ptbr', socketId: 'sock-ptbr', isAnonymous: true,
+        language: 'pt-BR', resolvedLanguages: [],
+      });
+      (filterMessagePayloadForLanguagesSpy as jest.Mock).mockClear();
+
+      const payload = {
+        id: 'msg-ptbr',
+        originalLanguage: 'fr',
+        content: 'Bonjour',
+        translations: [
+          { targetLanguage: 'pt', translatedContent: 'Olá' },
+          { targetLanguage: 'en', translatedContent: 'Hello' },
+        ],
+      };
+      (manager as any)._emitMessageNewByLanguage(room, payload);
+
+      const languageCalls = (filterMessagePayloadForLanguagesSpy as jest.Mock).mock.calls.map(
+        (c: unknown[]) => c[1] as string[]
+      );
+      expect(languageCalls.length).toBeGreaterThan(0);
+      // The pt-BR recipient's group must request the normalized 'pt' key, never
+      // the region-tagged 'pt-br' (which matches no stored translation).
+      const ptGroup = languageCalls.find((langs) => langs.includes('pt'));
+      expect(ptGroup).toBeDefined();
+      for (const langs of languageCalls) {
+        expect(langs).not.toContain('pt-br');
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -4382,6 +4786,31 @@ describe('MeeshySocketIOManager', () => {
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
 
+    it('chains an accountless peer by its participant id so a link guest sees the checkmark advance', async () => {
+      const userId = 'user-drain-anon-peer';
+      const convId = '507f1f77bcf86cd799439213';
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = makeReadStatusSvc();
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-self', conversationId: convId, userId },
+        { id: 'part-anonymous', conversationId: convId, userId: null },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await (manager as any)._emitDeliveryForDrainedMessages(userId, [
+          { messageId: 'msg-a', conversationId: convId, payload: {}, enqueuedAt: 1 },
+        ]);
+      } finally {
+        sent.restore();
+      }
+
+      // The accountless peer may well be the message AUTHOR waiting on the
+      // sent→delivered tick; its personal room is `user:<Participant.id>`.
+      expect(sent.roomsFor(SERVER_EVENTS.READ_STATUS_UPDATED)).toContain(ROOMS.user('part-anonymous'));
+    });
+
     it('marks received and emits READ_STATUS_UPDATED per conversation when showReadReceipts is true', async () => {
       const userId = 'user-drain-receipts';
       const convId1 = '507f1f77bcf86cd799439211';
@@ -4460,6 +4889,34 @@ describe('MeeshySocketIOManager', () => {
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId, userId, type: 'received' })
       );
+    });
+
+    it('reaches an accountless sender by its participant id, the only room it is in', async () => {
+      const userId = 'user-drain-anon-peer';
+      const convId = '507f1f77bcf86cd799439231';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      // L'expéditeur du message rejoué est un invité de lien partagé : pas de
+      // ligne `User`, donc `AuthHandler` nomme sa room d'après son
+      // `Participant.id`. Le filtre `if (row.userId)` que ceci couvre le
+      // laissait bloqué sur un unique tic « envoyé », pour toujours.
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', conversationId: convId, userId },
+        { id: 'part-anon-sender', conversationId: convId, userId: null },
+      ]);
+
+      ioState.to.mockClear();
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, [
+        { messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 },
+      ]);
+
+      expect(ioState.to).toHaveBeenCalledWith('user:part-anon-sender');
+      expect(ioState.to).toHaveBeenCalledWith(`user:${userId}`);
+      expect(ioState.to).toHaveBeenCalledWith(`conversation:${convId}`);
     });
 
     it('keeps only the latest messageId when same conversationId appears multiple times', async () => {
@@ -4948,6 +5405,142 @@ describe('MeeshySocketIOManager', () => {
       // do NOT add 'stale-sock-gone' to ioState.sockets.sockets
 
       await expect(manager.joinUserToConversationRoom('user-stale', 'conv-new-1234')).resolves.toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // _broadcastNewMessage — contrat `clientMessageId` (Phase 4 §6.2)
+  // -------------------------------------------------------------------------
+
+  /**
+   * `recordEmitChains` ne retient que (rooms, event) : il ne peut pas dire ce
+   * qu'un emit TRANSPORTE, ni quelles rooms une chaîne a exclues. Les deux sont
+   * précisément l'objet de ce groupe — la moitié « cid porté » et la moitié
+   * « cid retiré » du contrat vivent dans le payload, et la garde anti-doublon
+   * vit dans le `.except()`.
+   */
+  function recordEmitPayloads(state: ReturnType<typeof getIoState>) {
+    const sent: Array<{ rooms: string[]; excepted: string[]; event: string; payload: any }> = [];
+    const chain = (rooms: string[], excepted: string[]): any => ({
+      to: (room: string) => chain([...rooms, room], excepted),
+      except: (arg: string | string[]) =>
+        chain(rooms, [...excepted, ...(Array.isArray(arg) ? arg : [arg])]),
+      emit: (event: string, payload: any) => { sent.push({ rooms, excepted, event, payload }); },
+    });
+    state.to.mockImplementation(((room: string) => chain([room], [])) as never);
+    return {
+      forEvent: (event: string) => sent.filter((s) => s.event === event),
+      restore: () => { state.to.mockImplementation((() => state.toChain) as never); },
+    };
+  }
+
+  describe('_broadcastNewMessage — clientMessageId reconciliation contract', () => {
+    const CONV = 'conv-123456789012';
+    const SENDER = {
+      id: 'part-sender',
+      userId: 'user-sender',
+      displayName: 'Alice',
+      nickname: null,
+      avatar: null,
+      type: 'registered',
+      user: null,
+    };
+
+    function makeCidMessage(overrides: Record<string, unknown> = {}) {
+      return makeMessage({
+        conversationId: CONV,
+        senderId: 'part-sender',
+        sender: SENDER,
+        clientMessageId: 'cid_abc123',
+        ...overrides,
+      });
+    }
+
+    async function broadcast(msg: any) {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      const sent = recordEmitPayloads(ioState);
+      try {
+        await manager.broadcastMessage(msg, CONV);
+      } finally {
+        sent.restore();
+      }
+      return sent;
+    }
+
+    it("carries clientMessageId to the sender's own user room so an optimistic row can promote by cid", async () => {
+      // Le chemin REST est celui que prend iOS pour TOUT envoi non éligible au
+      // socket-first (pièce jointe, E2EE, vue-unique, éphémère, effets) — cf.
+      // `socketFirstEligible`, ConversationViewModel. Sans cid sur le fil, la
+      // seule promotion possible reste la réponse HTTP ; perdue (app en fond,
+      // réseau coupé), le renvoi de l'outbox est dédupliqué par la route
+      // (`!isDuplicate`) qui ne rebroadcaste PAS — la bulle optimiste reste
+      // bloquée en `.sending` jusqu'à un rechargement complet.
+      const sent = await broadcast(makeCidMessage());
+
+      const toSender = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.user('user-sender')));
+
+      expect(toSender).toHaveLength(1);
+      expect(toSender[0].payload).toEqual(expect.objectContaining({ clientMessageId: 'cid_abc123' }));
+    });
+
+    it('strips clientMessageId from the copy every peer receives', async () => {
+      // Invariant #2 de `message-ack-shaping` : un pair ne doit jamais apprendre
+      // l'espace d'ids optimistes de l'expéditeur.
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom).toHaveLength(1);
+      expect(toRoom[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it("excepts the sender's user room from the conversation-room emit so their devices get exactly one copy", async () => {
+      const sent = await broadcast(makeCidMessage());
+
+      const toRoom = sent
+        .forEvent(SERVER_EVENTS.MESSAGE_NEW)
+        .filter((s) => s.rooms.includes(ROOMS.conversation(CONV)));
+
+      expect(toRoom[0].excepted).toContain(ROOMS.user('user-sender'));
+    });
+
+    it('falls back to a single cid-stripped room-wide emit when the sender has no account', async () => {
+      // Invité de lien partagé : aucune `ROOMS.user(User.id)` à adresser. Le
+      // chemin doit rester exactement celui d'avant — une seule émission, sans
+      // cid — plutôt que d'adresser `user:undefined`.
+      const sent = await broadcast(makeCidMessage({ sender: { ...SENDER, userId: null } }));
+
+      const news = sent.forEvent(SERVER_EVENTS.MESSAGE_NEW);
+      expect(news).toHaveLength(1);
+      expect(news[0].rooms).toEqual([ROOMS.conversation(CONV)]);
+      expect(news[0].excepted).toEqual([]);
+      expect(news[0].payload).not.toHaveProperty('clientMessageId');
+    });
+
+    it('enqueues the cid-stripped payload for an offline recipient', async () => {
+      // Même règle que `enqueueOfflineLinkMessage` : « payload must be the
+      // peer-facing (cid-stripped) body, identical to the live emit ».
+      const fakeQueue = { enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-offline', userId: 'user-offline', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(makeCidMessage(), CONV);
+
+      expect(fakeQueue.enqueue).toHaveBeenCalledWith(
+        'user-offline',
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+      const [, entry] = fakeQueue.enqueue.mock.calls[0];
+      expect(entry.payload).not.toHaveProperty('clientMessageId');
     });
   });
 });

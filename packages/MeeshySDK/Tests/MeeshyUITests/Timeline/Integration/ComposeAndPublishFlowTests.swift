@@ -55,13 +55,19 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         throw NSError(domain: "mock", code: -1)
     }
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        throw NSError(domain: "mock", code: -1)
+    }
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag] {
+        throw NSError(domain: "mock", code: -1)
+    }
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
                 mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?,
                 repostOfId: String?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }
-    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost {
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }
     func delete(postId: String) async throws {}
@@ -84,7 +90,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func likeComment(postId: String, commentId: String) async throws {}
     func unlikeComment(postId: String, commentId: String) async throws {}
     func deleteComment(postId: String, commentId: String) async throws {}
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }
     func share(postId: String) async throws {}

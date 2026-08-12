@@ -131,6 +131,24 @@ class StatusRepositoryTest {
     }
 
     @Test
+    fun create_republish_carriesRepostAttributionInTheBody() = runTest {
+        val body = slot<CreatePostRequest>()
+        coEvery { api.create(capture(body)) } returns ApiResponse(success = true, data = status("s2", emoji = "🎉"))
+
+        repo.create(
+            moodEmoji = "🎉",
+            content = "party time",
+            audioUrl = "https://cdn/mood.m4a",
+            repostOfId = "src-1",
+            viaUsername = "alice",
+        ).success()
+
+        assertThat(body.captured.repostOfId).isEqualTo("src-1")
+        assertThat(body.captured.viaUsername).isEqualTo("alice")
+        assertThat(body.captured.audioUrl).isEqualTo("https://cdn/mood.m4a")
+    }
+
+    @Test
     fun create_nonStatusResponse_becomesParseFailure() = runTest {
         coEvery { api.create(any()) } returns ApiResponse(success = true, data = plainPost("p1"))
 

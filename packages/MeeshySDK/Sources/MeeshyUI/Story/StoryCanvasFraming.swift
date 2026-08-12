@@ -13,9 +13,10 @@ public nonisolated enum StoryCanvasFraming {
     /// Alignement vertical de la carte DANS la région libre quand elle ne la
     /// remplit pas (contrainte largeur active). `.center` = historique ;
     /// `.top` = flush sous le header, le mou entier en bas (directive user
-    /// 2026-07-04 : « la story se place directement en bas de la date
-    /// d'expiration — l'espace entre les deux est trop grand »).
-    public enum VerticalAlignment: Equatable, Sendable { case center, top }
+    /// 2026-07-04) ; `.bottom` = collée juste au-dessus du sheet, le mou entier
+    /// en haut — une carte PAYSAGE (courte) reste ainsi au ras du sheet et
+    /// « remonte » avec lui quand il grandit (directive user 2026-07-20).
+    public enum VerticalAlignment: Equatable, Sendable { case center, top, bottom }
 
     public struct Input: Equatable, Sendable {
         public let viewport: CGSize
@@ -68,8 +69,14 @@ public nonisolated enum StoryCanvasFraming {
     /// panel est présenté sans passer par le state machine) — `timelineActive`
     /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
     /// Default `false` keeps pre-existing call sites source-compatible.
+    /// L'édition texte court-circuite tout : le canvas reste plein écran, les
+    /// contrôles flottent par-dessus. Ce n'est pas un terme de la disjonction
+    /// mais une sortie anticipée — quand l'éditeur s'ouvre depuis la tuile
+    /// Texte, la band n'est pas `.hidden` (elle est seulement masquée et
+    /// non-interactive), et `bandPresent` seul relancerait le carding.
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
-        bandPresent || textActive || timelineActive
+        guard !textActive else { return false }
+        return bandPresent || timelineActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.
@@ -113,6 +120,7 @@ public nonisolated enum StoryCanvasFraming {
             switch input.verticalAlignment {
             case .center: return regionTop + regionHeight / 2
             case .top:    return regionTop + scaledHeight / 2
+            case .bottom: return regionBottom - scaledHeight / 2
             }
         }()
         let offsetY = cardCenterY - input.viewport.height / 2

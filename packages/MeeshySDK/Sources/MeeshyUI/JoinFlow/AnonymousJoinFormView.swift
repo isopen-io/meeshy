@@ -42,7 +42,7 @@ public struct AnonymousJoinFormView: View {
             HStack {
                 Button(action: onBack) {
                     HStack(spacing: MeeshySpacing.xs + 2) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(13, weight: .semibold))
                         Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
                             .font(MeeshyFont.relative(14, weight: .medium))
@@ -235,20 +235,23 @@ public struct AnonymousJoinFormView: View {
             Spacer()
 
             Picker(String(localized: "joinFlow.form.language", defaultValue: "Langue", bundle: .module), selection: $viewModel.language) {
-                Text("Francais").tag("fr")
-                Text("English").tag("en")
-                Text("Espanol").tag("es")
-                Text("Deutsch").tag("de")
-                Text("Italiano").tag("it")
-                Text("Portugues").tag("pt")
-                Text("Nederlands").tag("nl")
-                Text("Polski").tag("pl")
-                Text("Turkce").tag("tr")
-                Text("Русский").tag("ru")
-                Text("العربية").tag("ar")
-                Text("中文").tag("zh")
-                Text("日本語").tag("ja")
-                Text("한국어").tag("ko")
+                // Endonyms — a language is always listed in its own name, so these
+                // are `verbatim` on purpose: they must never be localized, and
+                // must never land in Localizable.xcstrings as translatable keys.
+                Text(verbatim: "Français").tag("fr")
+                Text(verbatim: "English").tag("en")
+                Text(verbatim: "Español").tag("es")
+                Text(verbatim: "Deutsch").tag("de")
+                Text(verbatim: "Italiano").tag("it")
+                Text(verbatim: "Português").tag("pt")
+                Text(verbatim: "Nederlands").tag("nl")
+                Text(verbatim: "Polski").tag("pl")
+                Text(verbatim: "Türkçe").tag("tr")
+                Text(verbatim: "Русский").tag("ru")
+                Text(verbatim: "العربية").tag("ar")
+                Text(verbatim: "中文").tag("zh")
+                Text(verbatim: "日本語").tag("ja")
+                Text(verbatim: "한국어").tag("ko")
             }
             .tint(MeeshyColors.indigo400)
         }
@@ -292,7 +295,7 @@ public struct AnonymousJoinFormView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Image(systemName: "arrow.right.circle.fill")
+                    Image(systemName: "arrow.forward.circle.fill")
                         .font(MeeshyFont.relative(18))
                     Text(String(localized: "joinFlow.form.submit", defaultValue: "Rejoindre", bundle: .module))
                         .font(MeeshyFont.relative(16, weight: .bold))

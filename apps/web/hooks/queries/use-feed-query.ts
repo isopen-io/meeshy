@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
@@ -24,6 +24,29 @@ export function useFeedQuery(options: UseFeedQueryOptions = {}) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
     enabled,
+  });
+}
+
+export function useHashtagFeedQuery(tag: string, options: UseFeedQueryOptions = {}) {
+  const { limit = 20, enabled = true } = options;
+
+  return useInfiniteQuery({
+    queryKey: queryKeys.posts.infinite(`hashtag:${tag}`),
+    queryFn: ({ pageParam }) =>
+      postsService.getPostsByHashtag(tag, {
+        cursor: pageParam as string | undefined,
+        limit,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
+    enabled: enabled && tag.length > 0,
+  });
+}
+
+export function useTrendingHashtagsQuery(limit: number = 20) {
+  return useQuery({
+    queryKey: queryKeys.posts.hashtagsTrending(limit),
+    queryFn: () => postsService.getTrendingHashtags(limit),
   });
 }
 

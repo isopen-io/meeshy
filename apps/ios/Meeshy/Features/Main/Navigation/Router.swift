@@ -25,10 +25,10 @@ enum Route: Hashable {
     case communityLinks
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
+    case hashtagResults(tag: String)
     case bookmarks
     case starredMessages
     case friendRequests
-    case editProfile
     /// Phase G — destination for story-related notifications. The screen
     /// resolves the underlying story (cache-first, network-revalidate) and
     /// dispatches to the active-story bridge or the expired empty state.
@@ -38,7 +38,9 @@ enum Route: Hashable {
     case storyNotificationTarget(
         storyId: String,
         intent: StoryIntent,
-        context: StoryNotificationContext
+        context: StoryNotificationContext,
+        commentId: String?,
+        parentCommentId: String?
     )
 }
 
@@ -94,14 +96,14 @@ extension Route {
             return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
         case .postDetail(_, let post, _, _, _):
             return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
+        case .hashtagResults(let tag):
+            return "#\(tag)"
         case .bookmarks:
             return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
         case .starredMessages:
             return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
         case .friendRequests:
             return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
-        case .editProfile:
-            return String(localized: "route.title.edit_profile", defaultValue: "Edit profile", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
         }
@@ -205,6 +207,12 @@ final class Router: ObservableObject {
 
     @Published var pendingHighlightMessageId: String?
 
+    /// Conversation à laquelle `pendingHighlightMessageId` s'applique. Sans ce
+    /// scoping, un highlight posé pour la conversation A pouvait être consommé
+    /// par la prochaine conversation B ouverte (scroll/fetch vers un message
+    /// étranger). `nil` = non scopé (compat entrées legacy).
+    @Published var pendingHighlightConversationId: String?
+
     /// Quand true, la prochaine `ConversationView` ouverte active directement sa
     /// vue recherche (bouton Recherche de l'aperçu long-press). Consommé + remis
     /// à false par `ConversationView` à l'ouverture.
@@ -212,6 +220,7 @@ final class Router: ObservableObject {
 
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
+        pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
         // iPad deux colonnes : les routes sont forwardees via `onRouteRequested`
         // (pas de NavigationStack `path`) — comportement inchange.
@@ -311,6 +320,9 @@ final class Router: ObservableObject {
                 // reserved for cold launch / push notification dispatch.
                 push(.postDetail(postId))
 
+            case .hashtag(let tag):
+                push(.hashtagResults(tag: tag))
+
             case .external:
                 break
             }
@@ -335,6 +347,17 @@ final class Router: ObservableObject {
     // MARK: - Magic Link Validation
 
     private func handleMagicLinkToken(_ token: String) async {
+        // P0 — this path only runs while `RootView`/`iPadRootView` are
+        // mounted, i.e. while ALREADY authenticated (as a possibly DIFFERENT
+        // account — e.g. a magic-link URL rendered as an in-app tappable
+        // `Link` and routed here via the `openURL` environment override).
+        // Applying a new session on top of the current one without a full
+        // teardown would leak account A's caches, sockets, and E2EE session
+        // keys into account B's session. See `MeeshyApp.validateMagicLinkToken`
+        // for the mirrored fix on the cold/warm system-URL path.
+        if AuthManager.shared.isAuthenticated {
+            await AuthManager.shared.logout()
+        }
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {
@@ -359,4 +382,13 @@ final class Router: ObservableObject {
             Self.logger.error("Share deep link received with no content")
         }
     }
+}
+
+extension Notification.Name {
+    /// Demande de navigation vers une conversation par id, émise par des vues
+    /// qui n'ont pas accès aux helpers de résolution des root views (ex :
+    /// StarredMessagesView). `object` = conversationId (String). Observée par
+    /// RootView (iPhone) et iPadRootView — sans observateur, le tap étoilé
+    /// était un no-op silencieux.
+    static let meeshyNavigateToConversation = Notification.Name("navigateToConversationById")
 }

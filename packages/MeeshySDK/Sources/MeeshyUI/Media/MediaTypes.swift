@@ -110,20 +110,41 @@ public enum ComposerMode: Equatable {
 
 // MARK: - Attachment Status Body
 
-public struct AttachmentStatusBody: Encodable, Sendable {
+/// `nonisolated` : un simple corps de requête. `MeeshyUI` isole tout sur le
+/// main actor par défaut (SE-0466), ce qui interdirait au dispatcher d'outbox —
+/// qui tourne hors du main actor — de reconstruire ce corps pour rejouer un
+/// rapport différé.
+public nonisolated struct AttachmentStatusBody: Encodable, Sendable {
     public let action: String
     public let playPositionMs: Int
     public let durationMs: Int
     public let complete: Bool
     public var wasZoomed: Bool?
 
+    /// Écoutes RÉELLEMENT continues depuis le dernier rapport, dans l'ordre où
+    /// elles ont eu lieu, chacune avec ce qui y a mis fin.
+    ///
+    /// `playPositionMs` ne dit que le point d'arrêt : celui qui saute au
+    /// générique y est indistinguable de celui qui a tout écouté.
+    public var stretches: [PlaybackStretch]?
+
+    /// Version linguistique consommée — piste traduite, sous-titres,
+    /// transcription affichée. Omise quand le lecteur ne peut pas la déterminer :
+    /// mieux vaut ne rien déclarer qu'inventer une langue.
+    public var language: String?
+
     public init(action: String, playPositionMs: Int, durationMs: Int,
-                complete: Bool, wasZoomed: Bool? = nil) {
+                complete: Bool, wasZoomed: Bool? = nil,
+                stretches: [PlaybackStretch]? = nil, language: String? = nil) {
         self.action = action
         self.playPositionMs = playPositionMs
         self.durationMs = durationMs
         self.complete = complete
         self.wasZoomed = wasZoomed
+        // Un tableau vide n'apprend rien au serveur et ferait voyager une clé
+        // pour rien : on ne transmet que ce qui a été observé.
+        self.stretches = (stretches?.isEmpty ?? true) ? nil : stretches
+        self.language = language
     }
 }
 
@@ -570,4 +591,16 @@ public func formatMediaDuration(_ seconds: TimeInterval) -> String {
 
 public func formatMediaDurationMs(_ ms: Int) -> String {
     formatMediaDuration(Double(ms) / 1000.0)
+}
+
+/// Single source of truth for human-readable file sizes across the app —
+/// download badges (image/video), audio play-button labels and upload
+/// progress all render through this one helper so a "870 KB" reads
+/// identically everywhere. Previously the SDK's audio label used a binary
+/// (1024-based) `ByteCountFormatter` while the app's download badge and
+/// upload progress each hand-rolled a decimal (1000-based)
+/// `.formatted(.byteCount(style: .file))` — two divergent algorithms behind
+/// a comment claiming parity. `.file` matches Finder's decimal convention.
+nonisolated public func formatMediaFileSize(_ bytes: Int64) -> String {
+    bytes.formatted(.byteCount(style: .file))
 }

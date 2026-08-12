@@ -68,7 +68,7 @@ public protocol OfflineQueueProviding: Sendable {
 ///
 /// The legacy disk file is drained on cold start by `StoryQueueMigrator` —
 /// callers that still rely on the snapshot semantics (`pendingItems`,
-/// `dequeue`, `flush`, `setOnPublish`, `purge`) keep working unchanged.
+/// `dequeue`, `flush`, `purge`) keep working unchanged.
 public actor StoryOfflineQueue: OfflineQueueProviding {
     public static let shared = StoryOfflineQueue()
 
@@ -104,21 +104,12 @@ public actor StoryOfflineQueue: OfflineQueueProviding {
         }
     }
 
-    /// Replaces the legacy publish handler. The handler keeps the historical
-    /// `Bool` signature ; the adapter translates `false` into a retryable
-    /// error and `true` into a synthetic published id so `StoryPublishQueue`
-    /// can drive its retry loop. The adapter wraps the handler before
-    /// forwarding so the publish queue sees the typed signature.
-    public func setOnPublish(_ handler: @escaping @Sendable (StoryOfflineQueueItem) async -> Bool) async {
-        await publishQueue.setPublishHandler { item in
-            let legacyItem = StoryQueueItemConverter.reverse(item)
-            let succeeded = await handler(legacyItem)
-            if succeeded {
-                return item.tempStoryId
-            }
-            throw StoryOfflineRetryableError.handlerReportedFailure
-        }
-    }
+    // `setOnPublish` a été SUPPRIMÉ. Il permettait d'écraser le gestionnaire de
+    // publication de `StoryPublishQueue` depuis l'extérieur, et son unique
+    // appelant (`StoryOfflineQueueBootstrap`) y installait un pont qui
+    // ré-enfilait l'item dans la MÊME file — une boucle sur elle-même qui ne
+    // survivait que parce que `StoryPublishService.setExecutor` repassait
+    // derrière. Le gestionnaire n'a qu'un propriétaire légitime : ce service.
 
     /// Drains the queue by triggering the unified processor.
     public func flush() async {
@@ -145,9 +136,6 @@ public actor StoryOfflineQueue: OfflineQueueProviding {
 /// Adapter-internal error thrown when the legacy `Bool` handler reports a
 /// retryable failure. `StoryPublishQueue` treats any non-`StoryPublishUnrecoverableError`
 /// throw as retryable, which is exactly the legacy `false`-return semantic.
-private struct StoryOfflineRetryableError: Error, Sendable {
-    static let handlerReportedFailure = StoryOfflineRetryableError()
-}
 
 // MARK: - Reverse converter
 
@@ -172,7 +160,7 @@ extension StoryQueueItemConverter {
         // d'unicité (corruption, schéma futur, ou bug producteur). De plus `mediaPairs`
         // fusionne image+video (`mediaType != "audio"`), donc un `elementId` partagé
         // entre une ref image et une ref video collisionnerait. `Dictionary(uniqueKeysWithValues:)`
-        // TRAPPE sur clé dupliquée → crash du chemin publish (setOnPublish appelle `reverse`
+        // TRAPPE sur clé dupliquée → crash du chemin publish (`reverse` est appelé
         // par item) et de `pendingItems`. Last-wins défensif au franchissement du trust boundary.
         let mediaPaths = Dictionary(mediaPairs, uniquingKeysWith: { _, last in last })
         let audioPaths = Dictionary(audioPairs, uniquingKeysWith: { _, last in last })
@@ -193,8 +181,14 @@ extension StoryQueueItemConverter {
     /// `[{"id":...}]` array — both are accepted. Returns `[]` when the payload
     /// cannot be parsed.
     private static func extractSlideIds(fromPayload payloadString: String) -> [String] {
-        guard let data = payloadString.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) else {
+        guard let data = payloadString.data(using: .utf8) else { return [] }
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            // Sans ids de slides, les médias associés ne seront pas réclamés.
+            Logger(subsystem: "com.meeshy.sdk", category: "story-offline-queue")
+                .error("Story payload is not valid JSON, slide ids not extracted: \(error.localizedDescription, privacy: .public)")
             return []
         }
         let slideObjects: [[String: Any]]

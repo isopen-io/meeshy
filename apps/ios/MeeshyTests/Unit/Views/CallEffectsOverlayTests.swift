@@ -76,4 +76,27 @@ final class CallEffectsOverlayTests: XCTestCase {
             ".accessibilityValue so VoiceOver announces on/off, not just the static label."
         )
     }
+
+    // MARK: - Video filters toolbar chip — advanced filters without a preset
+
+    func test_videoFiltersToolbarButton_isActive_alsoChecksAdvancedFilters() throws {
+        // Regression guard — the "Filtres" chip's `isActive` used to read
+        // `config.isEnabled` alone, same root cause as CallView's
+        // `hasActiveEffects` and VideoFilterPipeline.process's own gate: a
+        // user who enables background blur/skin smoothing WITHOUT ever
+        // picking a colorimetry preset left `isEnabled` false, so the chip
+        // never lit up despite a filter being silently active.
+        let source = try overlaySource()
+        guard let range = source.range(of: "icon: \"camera.filters\",") else {
+            XCTFail("CallEffectsOverlay must declare the video-filters toolbar button")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let block = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains("hasAdvancedFilters"),
+            "The video-filters toolbar button's isActive must also check " +
+            "config.hasAdvancedFilters, not just config.isEnabled."
+        )
+    }
 }

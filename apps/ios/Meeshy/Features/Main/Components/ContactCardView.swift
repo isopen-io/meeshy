@@ -36,7 +36,7 @@ struct ContactCardView: View {
                             .frame(width: 36, height: 36)
 
                         Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(MeeshyFont.relative(18, weight: .medium))
                             .foregroundColor(.white)
                     }
 
@@ -56,7 +56,7 @@ struct ContactCardView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }

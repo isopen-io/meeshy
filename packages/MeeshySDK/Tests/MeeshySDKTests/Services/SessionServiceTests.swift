@@ -27,7 +27,8 @@ final class SessionServiceTests: XCTestCase {
 
     func test_listSessions_callsCorrectEndpoint() async throws {
         let sessions = [makeSession()]
-        let response = APIResponse<[UserSession]>(success: true, data: sessions, error: nil)
+        let listData = SessionsListData(sessions: sessions, totalCount: 1)
+        let response = APIResponse<SessionsListData>(success: true, data: listData, error: nil)
         mock.stub("/auth/sessions", result: response)
 
         _ = try await service.listSessions()
@@ -42,7 +43,8 @@ final class SessionServiceTests: XCTestCase {
             makeSession(id: "s1", isCurrent: true),
             makeSession(id: "s2", isCurrent: false)
         ]
-        let response = APIResponse<[UserSession]>(success: true, data: sessions, error: nil)
+        let listData = SessionsListData(sessions: sessions, totalCount: 2)
+        let response = APIResponse<SessionsListData>(success: true, data: listData, error: nil)
         mock.stub("/auth/sessions", result: response)
 
         let result = try await service.listSessions()
@@ -55,7 +57,8 @@ final class SessionServiceTests: XCTestCase {
     }
 
     func test_listSessions_emptyList() async throws {
-        let response = APIResponse<[UserSession]>(success: true, data: [], error: nil)
+        let listData = SessionsListData(sessions: [], totalCount: 0)
+        let response = APIResponse<SessionsListData>(success: true, data: listData, error: nil)
         mock.stub("/auth/sessions", result: response)
 
         let result = try await service.listSessions()

@@ -34,6 +34,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     notificationPreference: { findUnique: jest.fn() },
     userPreferences: { findUnique: jest.fn() },
+    userConversationPreferences: { findMany: jest.fn().mockResolvedValue([]) },
     user: { findUnique: jest.fn() },
     conversation: { findUnique: jest.fn() },
     // Race-condition guard in createMessageNotification refetches the live message.
@@ -42,10 +43,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({

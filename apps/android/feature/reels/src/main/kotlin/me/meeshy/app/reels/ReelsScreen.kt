@@ -40,6 +40,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import me.meeshy.feature.reels.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -55,9 +65,13 @@ import me.meeshy.ui.theme.MeeshySpacing
 fun ReelsScreen(
     seed: String? = null,
     onClose: () -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
+    var muted by rememberSaveable { mutableStateOf(true) }
+    val shareContext = LocalContext.current
 
     LaunchedEffect(seed) { viewModel.load(seed) }
 
@@ -94,9 +108,21 @@ fun ReelsScreen(
                             mediaUrl = reel.videoUrl,
                             isActive = page == pagerState.currentPage,
                             modifier = Modifier.fillMaxSize(),
+                            muted = muted,
                         )
                         ReelOverlay(
                             reel = reel,
+                            onLike = { viewModel.toggleLike(reel.id) },
+                            onComments = { onOpenPost(reel.id) },
+                            onRepost = { viewModel.repost(reel.id) },
+                            onShare = {
+                                viewModel.recordShare(reel.id)
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, "https://meeshy.me/post/${'$'}{reel.id}")
+                                }
+                                shareContext.startActivity(Intent.createChooser(send, null))
+                            },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .navigationBarsPadding(),
@@ -113,13 +139,36 @@ fun ReelsScreen(
                 .statusBarsPadding()
                 .padding(MeeshySpacing.sm),
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Close", tint = MeeshyPalette.White)
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.reels_close), tint = MeeshyPalette.White)
+        }
+
+        // Toggle son : les reels DEMARRENT muets, ce bouton est le seul chemin
+        // pour entendre la piste — il doit donc etre visible en permanence.
+        IconButton(
+            onClick = { muted = !muted },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                contentDescription = stringResource(if (muted) R.string.reels_unmute else R.string.reels_mute),
+                tint = MeeshyPalette.White,
+            )
         }
     }
 }
 
 @Composable
-private fun ReelOverlay(reel: ReelPresentation, modifier: Modifier = Modifier) {
+private fun ReelOverlay(
+    reel: ReelPresentation,
+    onLike: () -> Unit,
+    onComments: () -> Unit,
+    onRepost: () -> Unit,
+    onShare: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier.padding(MeeshySpacing.lg)) {
         // Author + caption, bottom-left.
         Column(
@@ -157,18 +206,46 @@ private fun ReelOverlay(reel: ReelPresentation, modifier: Modifier = Modifier) {
                 icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                 tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
                 count = reel.likeCount,
+                contentDescription = stringResource(R.string.reels_like),
+                onClick = onLike,
             )
-            ReelAction(Icons.AutoMirrored.Filled.Comment, MeeshyPalette.White, reel.commentCount)
-            ReelAction(Icons.Filled.Repeat, MeeshyPalette.White, reel.repostCount)
-            ReelAction(Icons.Filled.Share, MeeshyPalette.White, null)
+            ReelAction(
+                icon = Icons.AutoMirrored.Filled.Comment,
+                tint = MeeshyPalette.White,
+                count = reel.commentCount,
+                contentDescription = stringResource(R.string.reels_comments),
+                onClick = onComments,
+            )
+            ReelAction(
+                icon = Icons.Filled.Repeat,
+                tint = MeeshyPalette.White,
+                count = reel.repostCount,
+                contentDescription = stringResource(R.string.reels_repost),
+                onClick = onRepost,
+            )
+            ReelAction(
+                icon = Icons.Filled.Share,
+                tint = MeeshyPalette.White,
+                count = null,
+                contentDescription = stringResource(R.string.reels_share),
+                onClick = onShare,
+            )
         }
     }
 }
 
 @Composable
-private fun ReelAction(icon: ImageVector, tint: Color, count: Int?) {
+private fun ReelAction(
+    icon: ImageVector,
+    tint: Color,
+    count: Int?,
+    contentDescription: String? = null,
+    onClick: () -> Unit = {},
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))
+        IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(30.dp))
+        }
         if (count != null) {
             Text(
                 text = count.toString(),

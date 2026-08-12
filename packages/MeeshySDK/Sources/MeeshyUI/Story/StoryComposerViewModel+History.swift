@@ -78,7 +78,10 @@ extension StoryComposerViewModel {
             }
             for media in slide.effects.mediaObjects ?? [] {
                 if let img = retiredImages.removeValue(forKey: media.id) {
-                    loadedImages[media.id] = img
+                    // Passe par `registerLoadedImage` pour bumper `loadedImagesVersion` :
+                    // un undo/redo qui ressuscite un média doit rafraîchir le canvas
+                    // reader, sinon le média restauré reste noir (même cause 2026-07-20).
+                    registerLoadedImage(img, for: media.id)
                 }
                 if let url = retiredVideoURLs.removeValue(forKey: media.id) {
                     loadedVideoURLs[media.id] = url

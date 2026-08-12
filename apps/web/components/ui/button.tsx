@@ -1,3 +1,11 @@
+// `@radix-ui/react-slot` appelle `React.createContext` au chargement du module
+// depuis la 1.3.1 (22/07/2026). Or l'export `react-server` de React n'expose PAS
+// `createContext` : sans cette directive, toute page SERVEUR important ce
+// composant (/contact, /privacy, /terms…) faisait échouer le build sur
+// `TypeError: createContext is not a function`. Un composant bâti sur Slot
+// appartient au graphe client — la directive l'y ancre explicitement.
+'use client';
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"

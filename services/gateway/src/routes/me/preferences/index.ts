@@ -164,6 +164,107 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // GET /me/preferences/encryption - Préférence de chiffrement + état des clés
+  //
+  // Pas une catégorie de la factory : `encryptionPreference` vit dans le blob
+  // `privacy` (PrivacyPreferenceSchema), et l'état des clés n'est pas une
+  // préférence du tout — c'est l'existence d'une ligne `SignalPreKeyBundle`,
+  // écrite par `POST /signal/keys` à chaque authentification du client.
+  //
+  // Cette ligne est la SEULE source de vérité de « cet utilisateur a des clés ».
+  // Les colonnes `User.signalIdentityKeyPublic` / `signalRegistrationId` /
+  // `signalPreKeyBundleVersion` / `lastKeyRotation` du schéma Prisma sont un
+  // miroir qu'aucun chemin d'écriture n'alimente : les lire rendrait « pas de
+  // clés » pour l'utilisateur dont le bundle est à une ligne de là.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  fastify.get(
+    '/encryption',
+    {
+      schema: {
+        description: 'Récupérer la préférence de chiffrement et l\'état des clés Signal de l\'utilisateur',
+        tags: ['preferences', 'encryption'],
+        summary: 'Get encryption preference and Signal key status',
+        response: {
+          200: {
+            description: 'Préférence de chiffrement et état des clés',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  encryptionPreference: {
+                    type: 'string',
+                    enum: ['disabled', 'optional', 'always'],
+                    description: 'Préférence stockée dans le blob privacy'
+                  },
+                  hasSignalKeys: {
+                    type: 'boolean',
+                    description: 'Un bundle de pré-clés actif existe pour cet utilisateur'
+                  },
+                  signalRegistrationId: {
+                    type: 'number',
+                    nullable: true,
+                    description: 'Registration ID du bundle actif, null sans bundle'
+                  },
+                  lastKeyRotation: {
+                    type: 'string',
+                    format: 'date-time',
+                    nullable: true,
+                    description: 'Dernier téléversement du bundle, null sans bundle'
+                  }
+                }
+              }
+            }
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
+    async (request, reply) => {
+      const userId = request.auth?.userId;
+
+      if (!userId) {
+        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
+      }
+
+      try {
+        const [prefs, bundle] = await Promise.all([
+          prisma.userPreferences.findUnique({
+            where: { userId },
+            select: { privacy: true }
+          }),
+          prisma.signalPreKeyBundle.findUnique({
+            where: { userId },
+            select: { registrationId: true, isActive: true, lastRotatedAt: true }
+          })
+        ]);
+
+        const privacy = (prefs?.privacy ?? {}) as Record<string, unknown>;
+        const parsedPreference = PrivacyPreferenceSchema.shape.encryptionPreference.safeParse(
+          privacy.encryptionPreference
+        );
+
+        const activeBundle = bundle?.isActive ? bundle : null;
+
+        return sendSuccess(reply, {
+          encryptionPreference: parsedPreference.success
+            ? parsedPreference.data
+            : PRIVACY_PREFERENCE_DEFAULTS.encryptionPreference,
+          hasSignalKeys: activeBundle !== null,
+          signalRegistrationId: activeBundle?.registrationId ?? null,
+          lastKeyRotation: activeBundle?.lastRotatedAt ?? null
+        });
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Error fetching encryption preferences');
+        return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch encryption preferences' });
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // SOUS-ROUTES PAR CATÉGORIE (factory pattern)
   // ═══════════════════════════════════════════════════════════════════════════
 

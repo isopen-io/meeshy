@@ -108,7 +108,8 @@ export class ConsentValidationService {
     // ci-dessous étaient TOUJOURS faux hors dev et le pipeline audio
     // (transcription/traduction) restait bloqué même consentement accordé.
     // Le timestamp legacy garde priorité s'il existe ; le booléen absent
-    // retombe sur le défaut du schema (transcription: true, le reste: false).
+    // retombe sur le défaut du schema (2026-08-09 : tous à true, aligné sur
+    // le texte — un consentement voix manquant reste le seul verrou réel).
     const boolPref = (value: unknown, defaultValue: boolean): boolean =>
       typeof value === 'boolean' ? value : defaultValue;
     const audioTranscriptionEnabled =
@@ -118,9 +119,9 @@ export class ConsentValidationService {
     const textTranslationEnabled =
       !!audioPrefs.textTranslationEnabledAt || boolPref(audioPrefs.textTranslationEnabled, true);
     const audioTranslationEnabled =
-      !!audioPrefs.audioTranslationEnabledAt || boolPref(audioPrefs.audioTranslationEnabled, false);
+      !!audioPrefs.audioTranslationEnabledAt || boolPref(audioPrefs.audioTranslationEnabled, true);
     const translatedAudioGenerationEnabled =
-      !!audioPrefs.translatedAudioGenerationEnabledAt || boolPref(audioPrefs.ttsEnabled, false);
+      !!audioPrefs.translatedAudioGenerationEnabledAt || boolPref(audioPrefs.ttsEnabled, true);
 
     // Consentements avancés dans UserPreferences.application. Le consentement
     // clonage est aussi porté par `User.voiceCloningEnabledAt` — c'est le champ

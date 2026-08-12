@@ -526,6 +526,12 @@ describe('useConversationTyping', () => {
       expect(result.current.isTyping).toBe(false);
     });
 
+    // Quitter une conversation en cours de frappe DOIT retracter l'indicateur
+    // chez les pairs. Rien d'autre ne le fera : `conversation:leave` ne retracte
+    // pas côté gateway (seul `disconnecting` le fait), et le timer d'auto-stop
+    // local (3 s) est justement annulé par ce même nettoyage. Sans cette
+    // émission, les pairs gardent « X est en train d'écrire… » jusqu'au filet de
+    // sécurité de 8 s, à CHAQUE changement de conversation.
     it('should stop typing on conversation change if active', () => {
       const { result, rerender } = renderHook(
         ({ conversationId }) =>
@@ -547,9 +553,82 @@ describe('useConversationTyping', () => {
 
       rerender({ conversationId: 'conv-2' });
 
-      // Note: The cleanup effect may or may not call stopTyping depending on
-      // React's cleanup timing. The important behavior is that isTyping resets.
+      expect(mockStopTyping).toHaveBeenCalledTimes(1);
       expect(result.current.isTyping).toBe(false);
+    });
+
+    it('should not emit a stop on conversation change when not typing', () => {
+      const { rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
+    });
+
+    it('should not re-emit a stop on conversation change after an explicit stop', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleTypingStart();
+      });
+      act(() => {
+        result.current.handleTypingStop();
+      });
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
+    });
+
+    it('should not re-emit a stop on conversation change after the auto-stop fired', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleTypingStart();
+      });
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      mockStopTyping.mockClear();
+
+      rerender({ conversationId: 'conv-2' });
+
+      expect(mockStopTyping).not.toHaveBeenCalled();
     });
   });
 
@@ -580,9 +659,10 @@ describe('useConversationTyping', () => {
 
       unmount();
 
-      // Note: The cleanup effect runs on unmount
-      // Due to how the hook is structured, it may or may not call stopTyping
-      // depending on the exact cleanup logic
+      // Fermer l'onglet / démonter la vue pendant une frappe doit retracter
+      // l'indicateur comme un changement de conversation : le socket, lui, reste
+      // ouvert, donc la retraction de `disconnecting` côté gateway n'arrivera pas.
+      expect(mockStopTyping).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -137,4 +137,38 @@ final class CachePolicyTests: XCTestCase {
         XCTAssertEqual(p.staleTTL, TimeInterval.minutes(2))
         XCTAssertEqual(p.maxItemCount, 200)
     }
+
+    // MARK: - Stories — le cache porte les TRADUCTIONS
+    //
+    // Directive user 2026-07-27 : préférer le cache tant que le statut est
+    // actif, invalider au bout de 72 heures.
+    //
+    // L'entrée du tray transporte, pour chaque story, la traduction de son
+    // contenu ET celle de chaque texte du canvas — la charge la plus coûteuse à
+    // reconstituer (un aller ZMQ et une passe modèle par overlay et par
+    // langue). Un TTL de 24 h la jetait au premier cold start du lendemain,
+    // spinner compris, alors que `purgeStoryTray` retire déjà les stories
+    // sorties de leur propre fenêtre de visibilité. La validité d'une story et
+    // la durée de vie du conteneur sont deux choses distinctes.
+
+    func test_predefined_stories_keepsTranslationsForSeventyTwoHours() {
+        XCTAssertEqual(CachePolicy.stories.ttl, TimeInterval.hours(72))
+    }
+
+    func test_predefined_stories_revalidatesQuicklyWhileStayingInstant() {
+        // Fenêtre « fraîche » courte : le tray se resynchronise vite en delta,
+        // mais l'affichage reste instantané entre-temps (SWR).
+        XCTAssertEqual(CachePolicy.stories.staleTTL, TimeInterval.minutes(5))
+    }
+
+    func test_predefined_stories_servesCacheWellBeyondAStoryLifetime() {
+        // 25 h : au-delà de la fenêtre de visibilité d'une story, mais toujours
+        // servi depuis le cache. Les stories mortes sont retirées par la purge
+        // du tray, pas par l'expiration du conteneur.
+        XCTAssertEqual(CachePolicy.stories.freshness(age: .hours(25)), .stale)
+    }
+
+    func test_predefined_stories_expireAfterSeventyTwoHours() {
+        XCTAssertEqual(CachePolicy.stories.freshness(age: .hours(73)), .expired)
+    }
 }
