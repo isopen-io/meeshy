@@ -398,10 +398,22 @@ struct FloatingCallPillView: View {
     // MARK: - Actions
 
     private func expandToFullScreen() {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75)) {
+        HapticFeedback.medium()
+        guard !reduceMotion else {
+            callManager.displayMode = .fullScreen
+            return
+        }
+        // Agrandissement depuis la bannière (retour user 2026-08-12) : le
+        // fullScreenCover est présenté SANS animation système ; CallView
+        // consomme l'indice et joue l'expansion depuis le haut (mouvement
+        // inverse de collapseIntoPip) — la bannière se retire par sa propre
+        // transition .move(.top).
+        callManager.requestPipExpansionMorph()
+        var swap = Transaction()
+        swap.disablesAnimations = true
+        withTransaction(swap) {
             callManager.displayMode = .fullScreen
         }
-        HapticFeedback.medium()
     }
 
     // MARK: - Formatting

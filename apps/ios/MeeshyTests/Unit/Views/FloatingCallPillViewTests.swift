@@ -157,6 +157,67 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Morph PiP (retour user 2026-08-12)
+
+    // La réduction/expansion entre le plein écran et la bannière est un MORPH
+    // interne (contraction/étirement vers le haut), pas l'animation système du
+    // fullScreenCover : les deux bascules de displayMode passent par
+    // withTransaction(disablesAnimations) et CallView porte le trio
+    // scale/opacité/coins (pipMorphProgress).
+
+    func test_expandToFullScreen_usesMorphNotSystemCoverAnimation() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("callManager.requestPipExpansionMorph()"),
+            "expandToFullScreen() must arm the one-shot expansion hint so " +
+            "CallView plays the grow-from-banner morph on appear."
+        )
+        guard let fnRange = source.range(of: "private func expandToFullScreen()") else {
+            XCTFail("expandToFullScreen not found"); return
+        }
+        let body = String(source[fnRange.lowerBound...].prefix(900))
+        XCTAssertTrue(
+            body.contains("disablesAnimations = true"),
+            "expandToFullScreen() must present the fullScreenCover without the " +
+            "system slide animation — the CallView morph IS the transition."
+        )
+    }
+
+    func test_callView_carriesPipMorphTrioAndCollapseHelper() throws {
+        let viewsDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let source = try String(
+            contentsOf: viewsDir.appendingPathComponent("CallView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            source.contains("pipMorphProgress, anchor: .top") ||
+            source.contains("scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)"),
+            "CallView must scale its root content toward .top during the PiP " +
+            "morph — the banner lives at the top of the viewport."
+        )
+        XCTAssertTrue(
+            source.contains("private func collapseIntoPip()"),
+            "All collapse paths (chevron, swipe-down, open-conversation) must " +
+            "route through collapseIntoPip() so the shrink morph plays before " +
+            "the cover swap."
+        )
+        XCTAssertTrue(
+            source.contains("consumePendingPipExpansion()"),
+            "CallView.onAppear must consume the expansion hint and play the " +
+            "grow morph when returning from the banner."
+        )
+        XCTAssertFalse(
+            source.contains("withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {\n                                        callManager.displayMode = .pip"),
+            "No direct animated displayMode flips left behind — they would " +
+            "stack the system cover animation on top of the morph."
+        )
+    }
+
     // MARK: - Accessibility labels on controls
 
     func test_muteButton_hasAccessibilityLabel() throws {

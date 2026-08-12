@@ -255,6 +255,25 @@ final class CallManager: ObservableObject {
     /// Persisted to UserDefaults at call teardown for post-call diagnostics.
     private(set) var lastKnownStats: CallStats?
     @Published var displayMode: CallDisplayMode = .fullScreen
+    /// Indice one-shot posé par la bannière PiP juste avant de repasser en
+    /// `.fullScreen` : CallView le consomme à son apparition pour jouer
+    /// l'animation d'AGRANDISSEMENT depuis la bannière (le fullScreenCover
+    /// est présenté sans animation système — le morph interne est LA
+    /// transition). Pas `@Published` : lu une fois, jamais rendu.
+    private var pendingPipExpansion = false
+
+    /// Pose l'indice d'expansion — appelé par `FloatingCallPillView` avant de
+    /// basculer `displayMode` vers `.fullScreen`.
+    func requestPipExpansionMorph() {
+        pendingPipExpansion = true
+    }
+
+    /// Consomme l'indice d'expansion (one-shot) — appelé par `CallView.onAppear`.
+    func consumePendingPipExpansion() -> Bool {
+        defer { pendingPipExpansion = false }
+        return pendingPipExpansion
+    }
+
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
