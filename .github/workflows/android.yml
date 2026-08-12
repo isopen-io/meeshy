@@ -90,7 +90,21 @@ jobs:
             exit 1
           fi
           echo "compileSdk = $compile_sdk"
-          sdkmanager --install "platforms;android-${compile_sdk}"
+          # A platform that is still in preview is absent from the default
+          # (stable) channel, so a plain --install reports "Failed to find
+          # package" for an API level that does exist. Retry on the canary
+          # channel before concluding anything.
+          if sdkmanager --install "platforms;android-${compile_sdk}"; then
+            exit 0
+          fi
+          echo "::warning::platforms;android-${compile_sdk} not on the stable channel; retrying on canary"
+          if sdkmanager --channel=3 --install "platforms;android-${compile_sdk}"; then
+            exit 0
+          fi
+          echo "::error::no SDK platform published for compileSdk=${compile_sdk} on either channel"
+          echo "Platforms actually available:"
+          sdkmanager --list 2>/dev/null | grep -E '^\s+platforms;android-' | sort -u
+          exit 1
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
