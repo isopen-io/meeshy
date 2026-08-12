@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isExpired } from '@/utils/time-remaining';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -119,10 +120,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
     }
   };
 
-  const isLinkExpired = (link: ShareLink) => {
-    if (!link.expiresAt) return false;
-    return new Date(link.expiresAt) < new Date();
-  };
+  const isLinkExpired = (link: ShareLink) => isExpired(link.expiresAt);
 
   const isLinkActive = (link: ShareLink) => {
     return link.isActive && !isLinkExpired(link);

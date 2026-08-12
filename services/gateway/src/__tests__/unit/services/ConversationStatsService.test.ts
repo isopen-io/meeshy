@@ -785,8 +785,9 @@ describe('ConversationStatsService', () => {
         createMockUser(testUserId1),
         createMockUser(testUserId2)
       ]);
-      // computeOnlineUsers will check members since the conversationId passed is the real ID
-      // not "meeshy", so it goes through the member check path
+      // computeOnlineUsers takes the GLOBAL branch (it receives the raw "meeshy" identifier,
+      // like the updateOnNewMessage sibling), so it never filters by Participant records —
+      // this mock is intentionally irrelevant here.
       mockPrisma.participant.findMany.mockResolvedValue([
         { userId: testUserId1 },
         { userId: testUserId2 }
@@ -795,9 +796,40 @@ describe('ConversationStatsService', () => {
       const getConnectedUserIds = () => [testUserId1, testUserId2];
       const stats = await service.getOrCompute(mockPrisma as PrismaClient, 'meeshy', getConnectedUserIds);
 
-      // Since the code passes realConversationId to computeOnlineUsers,
-      // it will go through member check path and find both users
+      // Global branch => allowedIds = connected users (unfiltered), user.findMany resolves both.
       expect(stats.onlineUsers.length).toBe(2);
+    });
+
+    it('should include connected users for the global conversation even when it has no Participant records', async () => {
+      const globalConvId = '507f1f77bcf86cd799439099';
+
+      // The global "meeshy" conversation has NO Participant rows — computeStats itself counts
+      // its membership via user.findMany({ isActive: true }), never participant.findMany. So
+      // computeOnlineUsers must take the same global branch, which requires the raw "meeshy"
+      // identifier (not the resolved ObjectId) so its `=== "meeshy"` check fires. Passing the
+      // resolved ObjectId sent it down the participant-filter branch, which finds nothing and
+      // returned [] on every full recompute.
+      mockPrisma.conversation.findFirst.mockImplementation((args: any) => {
+        if (args.where?.identifier === 'meeshy') {
+          return Promise.resolve({ id: globalConvId, identifier: 'meeshy' });
+        }
+        if (args.where?.id === globalConvId) {
+          return Promise.resolve({ id: globalConvId, identifier: 'meeshy' });
+        }
+        return Promise.resolve(null);
+      });
+      mockPrisma.message.groupBy.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([
+        createMockUser(testUserId1),
+        createMockUser(testUserId2)
+      ]);
+      // Production reality: the global conversation has zero Participant rows.
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const getConnectedUserIds = () => [testUserId1, testUserId2];
+      const stats = await service.getOrCompute(mockPrisma as PrismaClient, 'meeshy', getConnectedUserIds);
+
+      expect(stats.onlineUsers.map(u => u.id).sort()).toEqual([testUserId1, testUserId2].sort());
     });
   });
 
@@ -1096,6 +1128,30 @@ describe('ConversationStatsService', () => {
       results.forEach(stats => {
         expect(stats.messagesPerLanguage).toEqual({ en: 10 });
       });
+    });
+
+    it('should not lose an increment when two updateOnNewMessage calls race for the same conversation', async () => {
+      // Seed the cache with a known base count
+      mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 10 } }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const getConnectedUserIds = () => [];
+      await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+
+      // Two messages in the same language land for the same conversation at
+      // (near) the same time — both calls read the cache before either write
+      // lands unless updates are serialized per conversation.
+      await Promise.all([
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds),
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds)
+      ]);
+
+      const finalStats = await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+      expect(finalStats.messagesPerLanguage['en']).toBe(12);
     });
 
     it('should handle multiple different conversations concurrently', async () => {

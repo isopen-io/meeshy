@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -86,7 +87,7 @@ const ConnectedContactsTab = React.memo<ConnectedContactsTabProps>(({
                   <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-white shadow-lg">
                     <AvatarImage src={otherUser.avatar} alt={getUserDisplayName(otherUser)} />
                     <AvatarFallback className="text-sm sm:text-lg font-bold">
-                      {getUserDisplayName(otherUser).slice(0, 2).toUpperCase()}
+                      {getUserInitials(otherUser)}
                     </AvatarFallback>
                   </Avatar>
                   <ParticipantPresenceIndicator

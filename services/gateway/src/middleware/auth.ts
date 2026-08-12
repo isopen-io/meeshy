@@ -29,7 +29,10 @@ export type RegisteredUser = {
   readonly firstName?: string;
   readonly lastName?: string;
   readonly displayName?: string;
+  readonly bio?: string;
   readonly avatar?: string;
+  readonly banner?: string;
+  readonly phoneNumber?: string;
   readonly role: string;
   readonly systemLanguage: string;
   readonly regionalLanguage: string;
@@ -37,6 +40,7 @@ export type RegisteredUser = {
   readonly isOnline: boolean;
   readonly lastActiveAt: Date;
   readonly emailVerifiedAt?: Date | null;
+  readonly profileCompletionRate?: number;
 }
 
 export type UnifiedAuthContext = {
@@ -176,7 +180,10 @@ export class AuthMiddleware {
         firstName: string | null;
         lastName: string | null;
         displayName: string | null;
+        bio: string | null;
         avatar: string | null;
+        banner: string | null;
+        phoneNumber: string | null;
         role: string;
         isActive: boolean;
         systemLanguage: string;
@@ -188,6 +195,7 @@ export class AuthMiddleware {
         createdAt: string;
         updatedAt: string;
         deviceLocale: string | null;
+        profileCompletionRate: number | null;
       };
 
       type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'createdAt' | 'updatedAt'> & {
@@ -195,6 +203,7 @@ export class AuthMiddleware {
         emailVerifiedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        isActive: boolean;
       };
 
       const deserializeCachedUser = (cached: CachedUserRow): FullUserRow => ({
@@ -235,7 +244,10 @@ export class AuthMiddleware {
             firstName: true,
             lastName: true,
             displayName: true,
+            bio: true,
             avatar: true,
+            banner: true,
+            phoneNumber: true,
             role: true,
             systemLanguage: true,
             regionalLanguage: true,
@@ -247,6 +259,7 @@ export class AuthMiddleware {
             createdAt: true,
             updatedAt: true,
             deviceLocale: true,
+            profileCompletionRate: true,
           },
         }) as FullUserRow | null;
 
@@ -260,7 +273,10 @@ export class AuthMiddleware {
             firstName: user.firstName,
             lastName: user.lastName,
             displayName: user.displayName,
+            bio: user.bio,
             avatar: user.avatar,
+            banner: user.banner,
+            phoneNumber: user.phoneNumber,
             role: user.role,
             isActive: user.isActive,
             systemLanguage: user.systemLanguage,
@@ -272,6 +288,7 @@ export class AuthMiddleware {
             createdAt: user.createdAt.toISOString(),
             updatedAt: user.updatedAt.toISOString(),
             deviceLocale: user.deviceLocale,
+            profileCompletionRate: user.profileCompletionRate,
           };
           try {
             await cache.set(cacheKey, JSON.stringify(toCache), AUTH_USER_CACHE_TTL);
@@ -302,7 +319,7 @@ export class AuthMiddleware {
         });
       }
 
-      const userLanguage = resolveUserLanguage(user);
+      const userLanguage = resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
 
       return {
         type: 'user',

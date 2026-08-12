@@ -121,6 +121,115 @@ class OutboxRepositoryTest {
     }
 
     @Test
+    fun `discard removes a row outright`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        repository.discard("m1")
+
+        assertThat(repository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `discard of an unknown cmid is a no-op`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        repository.discard("missing")
+
+        assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
+    }
+
+    private fun rowDependingOn(cmid: String, prereq: String, payload: String) = OutboxMutation(
+        kind = OutboxKind.SEND_MESSAGE,
+        lane = "lane-$cmid",
+        targetId = "t-$cmid",
+        payload = payload,
+        dependsOn = setOf(prereq),
+        cmid = cmid,
+    )
+
+    private fun rowDependingOnAll(cmid: String, prereqs: Set<String>, payload: String) = OutboxMutation(
+        kind = OutboxKind.SEND_MESSAGE,
+        lane = "lane-$cmid",
+        targetId = "t-$cmid",
+        payload = payload,
+        dependsOn = prereqs,
+        cmid = cmid,
+    )
+
+    private suspend fun payloadOf(cmid: String): String? =
+        repository.observeAll().first().firstOrNull { it.cmid == cmid }?.payload
+
+    @Test
+    fun `rewriteDependents rewrites every pending dependent and returns the count`() = runTest {
+        repository.enqueue(OutboxMutation(OutboxKind.SEND_MESSAGE, "lane-u", "t-u", "{}", cmid = "u"))
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.enqueue(rowDependingOn("p2", "u", "old2"))
+
+        val changed = repository.rewriteDependents("u") { "new:$it" }
+
+        assertThat(changed).isEqualTo(2)
+        assertThat(payloadOf("p1")).isEqualTo("new:old1")
+        assertThat(payloadOf("p2")).isEqualTo("new:old2")
+    }
+
+    @Test
+    fun `rewriteDependents leaves a dependent whose rewrite returns null untouched`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+
+        val changed = repository.rewriteDependents("u") { null }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
+    }
+
+    @Test
+    fun `rewriteDependents ignores rows depending on a different prerequisite`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.enqueue(rowDependingOn("p2", "other", "old2"))
+
+        val changed = repository.rewriteDependents("u") { "new" }
+
+        assertThat(changed).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("new")
+        assertThat(payloadOf("p2")).isEqualTo("old2")
+    }
+
+    @Test
+    fun `rewriteDependents finds a dependent gated on several prerequisites by any one of them`() = runTest {
+        repository.enqueue(rowDependingOnAll("p1", setOf("u", "v"), "old1"))
+
+        assertThat(repository.rewriteDependents("u") { "via-u" }).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("via-u")
+        assertThat(repository.rewriteDependents("v") { "via-v" }).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("via-v")
+    }
+
+    @Test
+    fun `rewriteDependents does not match a prerequisite that is only a substring of a member`() = runTest {
+        repository.enqueue(rowDependingOnAll("p1", setOf("upload"), "old1"))
+
+        val changed = repository.rewriteDependents("up") { "new" }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
+    }
+
+    @Test
+    fun `rewriteDependents skips a non-pending dependent`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.markInflight("p1")
+
+        val changed = repository.rewriteDependents("u") { "new" }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
+    }
+
+    @Test
     fun `recoverInflight returns inflight rows to pending`() = runTest {
         repository.enqueue(
             OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
@@ -132,5 +241,63 @@ class OutboxRepositoryTest {
         assertThat(recovered).isEqualTo(1)
         assertThat(repository.deliverable(OutboxLanes.forMessage("c1")).single().stateEnum)
             .isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `activeMessageLanes discovers a per-conversation lane holding a pending send`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        assertThat(repository.activeMessageLanes()).containsExactly(OutboxLanes.forMessage("c1"))
+    }
+
+    @Test
+    fun `activeMessageLanes discovers every distinct conversation lane, oldest lane first`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c2"), "cid_2", "{}", cmid = "m2"),
+        )
+        // A second message on c1's lane must not duplicate the discovered lane.
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m3"),
+        )
+
+        assertThat(repository.activeMessageLanes())
+            .containsExactly(OutboxLanes.forMessage("c1"), OutboxLanes.forMessage("c2"))
+    }
+
+    @Test
+    fun `activeMessageLanes omits a lane whose only row is exhausted`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+        repository.markExhausted("m1", "gave up")
+
+        assertThat(repository.activeMessageLanes()).isEmpty()
+    }
+
+    @Test
+    fun `activeMessageLanes is empty when the queue holds only shared-lane rows`() = runTest {
+        repository.enqueue(reaction(OutboxKind.ADD_REACTION, "add"))
+
+        assertThat(repository.activeMessageLanes()).isEmpty()
+    }
+
+    @Test
+    fun `deliverable of forMessage empty string never finds a real per-conversation lane`() = runTest {
+        // Regression guard: OutboxFlushWorker used to discover message lanes via
+        // `deliverable(OutboxLanes.forMessage(""))`, i.e. an exact-match query for the literal
+        // lane "message:" — which no real row (always enqueued with a non-blank conversation id)
+        // ever matches. This silently meant SEND_MESSAGE/EDIT_MESSAGE/DELETE_MESSAGE rows were
+        // NEVER drained by the worker; activeMessageLanes() (a distinct-lane discovery query) is
+        // the fix. This test pins the old call pattern's brokenness so nobody reintroduces it.
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        assertThat(repository.deliverable(OutboxLanes.forMessage(""))).isEmpty()
     }
 }

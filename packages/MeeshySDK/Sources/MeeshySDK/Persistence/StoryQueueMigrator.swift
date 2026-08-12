@@ -165,18 +165,25 @@ public enum StoryQueueItemConverter {
             slidesPayload: payload,
             repostOfId: nil,
             mediaReferences: references,
-            tempStoryId: legacy.id
+            tempStoryId: legacy.id,
+            originalLanguage: legacy.originalLanguage
         )
     }
 
     /// Flattens the legacy `mediaURLPaths` + `audioURLPaths` dictionaries
     /// into a deterministic array of `StoryMediaReference` (sorted by
-    /// elementId so tests can compare results stably).
+    /// elementId so tests can compare results stably). Visual media keep their
+    /// real kind (video vs image) inferred from the file extension so a queued
+    /// `.mp4` replays as video, not a corrupt image.
     private static func mediaReferences(from legacy: StoryOfflineQueueItem) -> [StoryMediaReference] {
         let mediaRefs = legacy.mediaURLPaths
             .sorted { $0.key < $1.key }
             .map { key, path in
-                StoryMediaReference(elementId: key, mediaType: "image", localFilePath: path)
+                StoryMediaReference(
+                    elementId: key,
+                    mediaType: StoryMediaReference.inferVisualMediaType(forPath: path),
+                    localFilePath: path
+                )
             }
         let audioRefs = legacy.audioURLPaths
             .sorted { $0.key < $1.key }

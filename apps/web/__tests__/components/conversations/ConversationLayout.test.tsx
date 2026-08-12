@@ -1,12 +1,29 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConversationLayout } from '../../../components/conversations/ConversationLayout';
+
+// ConversationLayout consomme désormais useQueryClient() directement (reset
+// optimiste du badge + marquage des notifications à l'ouverture) : chaque
+// render doit fournir un QueryClientProvider.
+const render: typeof rtlRender = ((ui: React.ReactElement, options?: Parameters<typeof rtlRender>[1]) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+    ...options,
+  });
+}) as typeof rtlRender;
 import { useUser, useIsAuthChecking } from '@/stores';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
+import { useSocketCacheSync } from '@/hooks/queries';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 // Mock next/dynamic to return components directly without lazy loading
@@ -192,15 +209,11 @@ jest.mock('@/hooks/conversations/useConversationUI', () => ({
   })),
 }));
 
-jest.mock('@/hooks/conversations/useConversationTyping', () => ({
-  useConversationTyping: jest.fn(() => ({
-    typingUsers: [],
-    isTyping: false,
-    handleTypingStart: jest.fn(),
-    handleTypingStop: jest.fn(),
-    handleTextInput: jest.fn(),
-  })),
-}));
+// `useConversationTyping` n'est PAS doublé : c'est lui qui porte la règle
+// (gardes écho/conversation, table des frappeurs distants). Le doubler figeait
+// `typingUsers: []` et rendait `undefined` tout export nouvellement consommé —
+// aucun test de cette vue ne pouvait alors constater que le récepteur socket
+// n'était relié à rien.
 
 jest.mock('@/hooks/conversations/useComposerDrafts', () => ({
   useComposerDrafts: jest.fn(() => ({
@@ -265,8 +278,16 @@ jest.mock('../../../components/conversations/ConversationList', () => ({
   ),
 }));
 
+// Le stub expose `typingUsers` : c'est la seule sortie observable du chemin
+// « événement typing reçu du socket → état du hook → en-tête ». ConversationView
+// n'est pas doublé, donc la prop traverse réellement `mapTypingUsers`.
 jest.mock('../../../components/conversations/ConversationHeader', () => ({
-  ConversationHeader: () => <div data-testid="conversation-header">Header</div>,
+  ConversationHeader: ({ typingUsers }: { typingUsers?: Array<{ userId: string; username: string }> }) => (
+    <div data-testid="conversation-header">
+      Header
+      <span data-testid="typing-users">{(typingUsers ?? []).map((u) => u.username).join(',')}</span>
+    </div>
+  ),
 }));
 
 jest.mock('../../../components/conversations/ConversationMessages', () => ({
@@ -443,6 +464,12 @@ describe('ConversationLayout', () => {
 
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
+
+    it('should keep socket cache sync enabled on the list view (no conversation selected)', () => {
+      render(<ConversationLayout />);
+
+      expect(useSocketCacheSync).toHaveBeenCalledWith({ conversationId: null, enabled: true });
+    });
   });
 
   describe('With Selected Conversation', () => {
@@ -463,6 +490,12 @@ describe('ConversationLayout', () => {
       expect(screen.getByTestId('conversation-header')).toBeInTheDocument();
     });
 
+    it('should keep socket cache sync enabled with the selected conversation id', () => {
+      render(<ConversationLayout />);
+
+      expect(useSocketCacheSync).toHaveBeenCalledWith({ conversationId: 'conv-1', enabled: true });
+    });
+
     it('should render conversation messages when conversation selected', () => {
       render(<ConversationLayout />);
 
@@ -479,6 +512,95 @@ describe('ConversationLayout', () => {
       render(<ConversationLayout />);
 
       expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Typing indicators', () => {
+    beforeEach(() => {
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
+      (useConversationSelection as jest.Mock).mockReturnValue({
+        effectiveSelectedId: 'conv-1',
+        selectedConversation: mockConversation,
+        handleSelectConversation: jest.fn(),
+        handleBackToList: jest.fn(),
+        setLocalSelectedConversationId: jest.fn(),
+      });
+    });
+
+    /**
+     * Capture le `onUserTyping` que ConversationLayout confie à
+     * useSocketIOMessaging — c'est par là, et uniquement par là, que les
+     * `typing:start` / `typing:stop` des pairs entrent dans la vue.
+     */
+    const renderCapturingTypingCallback = () => {
+      let onUserTyping:
+        | ((userId: string, username: string, isTyping: boolean, conversationId: string) => void)
+        | undefined;
+
+      (useSocketIOMessaging as jest.Mock).mockImplementation((options: any) => {
+        onUserTyping = options?.onUserTyping;
+        return {
+          sendMessage: jest.fn(),
+          connectionStatus: { isConnected: true, hasSocket: true },
+          startTyping: jest.fn(),
+          stopTyping: jest.fn(),
+        };
+      });
+
+      render(<ConversationLayout />);
+
+      return {
+        emitTyping: (userId: string, username: string, isTyping: boolean, conversationId: string) => {
+          act(() => {
+            onUserTyping?.(userId, username, isTyping, conversationId);
+          });
+        },
+      };
+    };
+
+    it('should surface a peer typing:start in the header', async () => {
+      const { emitTyping } = renderCapturingTypingCallback();
+
+      emitTyping('user-456', 'Other User', true, 'conv-1');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('typing-users')).toHaveTextContent('Other User');
+      });
+    });
+
+    it('should clear the indicator when the peer sends typing:stop', async () => {
+      const { emitTyping } = renderCapturingTypingCallback();
+
+      emitTyping('user-456', 'Other User', true, 'conv-1');
+      await waitFor(() => {
+        expect(screen.getByTestId('typing-users')).toHaveTextContent('Other User');
+      });
+
+      emitTyping('user-456', 'Other User', false, 'conv-1');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('typing-users')).toHaveTextContent('');
+      });
+    });
+
+    it('should ignore the current user own typing echo', async () => {
+      const { emitTyping } = renderCapturingTypingCallback();
+
+      emitTyping(mockUser.id, 'Test User', true, 'conv-1');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('typing-users')).toHaveTextContent('');
+      });
+    });
+
+    it('should ignore typing coming from another conversation', async () => {
+      const { emitTyping } = renderCapturingTypingCallback();
+
+      emitTyping('user-456', 'Other User', true, 'conv-other');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('typing-users')).toHaveTextContent('');
+      });
     });
   });
 

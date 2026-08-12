@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { messageSchema } from '../../types/api-schemas'
+import { messageSchema, conversationMinimalSchema } from '../../types/api-schemas'
 
 /**
  * `clientMessageId` is the optimistic-send reconciliation key. The iOS
@@ -38,5 +38,52 @@ describe('messageSchema — postReplyTo cited-post snapshot', () => {
     ]) {
       expect(prop.properties).toHaveProperty(field)
     }
+  })
+})
+
+describe('conversationMinimalSchema — contrat wire des userPreferences (liste)', () => {
+  const prefProperties = (conversationMinimalSchema.properties.userPreferences as {
+    items: { properties: Record<string, unknown> }
+  }).items.properties
+
+  it('déclare customName — il pilote le nom affiché des DM ; strippé par fast-json-stringify, la liste froide perdait le surnom et le titre flip-floppait au premier pin/mute', () => {
+    expect(prefProperties.customName).toBeDefined()
+  })
+
+  it('déclare reaction — sélectionné par le gateway depuis toujours mais silencieusement strippé du wire jusqu’à ce fix', () => {
+    expect(prefProperties.reaction).toBeDefined()
+  })
+})
+
+/**
+ * Prisme Linguistique de la ligne de liste.
+ *
+ * Le gateway calcule désormais l'aperçu traduit du dernier message, restreint
+ * aux langues du prisme du lecteur. Ce calcul ne vaut RIEN si le schéma ne
+ * déclare pas les deux champs : `fast-json-stringify` les retirerait en
+ * silence, exactement comme il l'a fait pour `customName`, `reaction` et
+ * `_count`. Le témoin de route (`conversation-core.test.ts`) ne peut pas voir
+ * ce trou — il lit l'objet AVANT sérialisation.
+ */
+describe('conversationMinimalSchema — prisme de l’aperçu du dernier message', () => {
+  const properties = conversationMinimalSchema.properties as Record<
+    string,
+    { type?: string; nullable?: boolean; additionalProperties?: unknown }
+  >
+
+  it('déclare lastMessageOriginalLanguage, sans quoi le client ne peut pas distinguer « pas de traduction » de « déjà dans ma langue »', () => {
+    expect(properties.lastMessageOriginalLanguage).toBeDefined()
+    expect(properties.lastMessageOriginalLanguage.type).toBe('string')
+    expect(properties.lastMessageOriginalLanguage.nullable).toBe(true)
+  })
+
+  it('déclare lastMessageTranslations en objet à clés dynamiques (une par langue du lecteur)', () => {
+    expect(properties.lastMessageTranslations).toBeDefined()
+    expect(properties.lastMessageTranslations.type).toBe('object')
+    expect(properties.lastMessageTranslations.nullable).toBe(true)
+    // Sans `additionalProperties`, un schéma objet sans `properties` sérialise
+    // `{}` : la carte serait vidée langue par langue au lieu d'être strippée,
+    // panne plus discrète encore.
+    expect(properties.lastMessageTranslations.additionalProperties).toEqual({ type: 'string' })
   })
 })

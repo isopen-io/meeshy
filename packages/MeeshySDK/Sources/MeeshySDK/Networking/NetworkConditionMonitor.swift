@@ -10,42 +10,53 @@ public enum NetworkCondition: String, Equatable, Sendable, Codable {
     case wifi
 }
 
-/// Singleton qui observe le réseau via `NWPathMonitor` et publie l'état
-/// résolu. Consommé par `MediaDownloadPolicyEngine` pour décider de
-/// l'auto-download des médias.
+/// Lecture QUALITATIVE du réseau — consommée par `MediaDownloadPolicyEngine`
+/// pour décider de l'auto-téléchargement des médias, et par le gate réseau du
+/// videur d'outbox.
+///
+/// Observe `NetworkPathSource`, la source unique du SDK. Il démarrait
+/// auparavant SON PROPRE `NWPathMonitor`, en concurrence avec celui de
+/// `NetworkMonitor` : deux vérités pour une seule question, qui ont fini par
+/// diverger à l'écran. Cf. `NetworkPathSource` pour l'historique.
 @MainActor
 public final class NetworkConditionMonitor: ObservableObject {
     @MainActor public static let shared = NetworkConditionMonitor()
 
-    @Published public private(set) var condition: NetworkCondition = .offline
+    /// Amorcé depuis la photo COURANTE du chemin, jamais fabriqué.
+    ///
+    /// Ce champ valait `.offline` à la construction et le restait jusqu'au
+    /// premier rappel du système. Le gate réseau du videur d'outbox lit cette
+    /// valeur : toute mutation enfilée pendant cette fenêtre était rejetée, et
+    /// comme le videur ne différait rien, aucune reprise n'était armée. Naître
+    /// « hors ligne » suffisait à bloquer la file pour la session entière.
+    @Published public private(set) var condition: NetworkCondition
 
-    // `nonisolated(unsafe)` requis pour Swift 6 strict concurrency :
-    // `NWPathMonitor` est configuré une fois à l'init et jamais muté ensuite.
-    // Le `pathUpdateHandler` s'exécute sur la `queue` non-main qui hop ensuite
-    // sur MainActor via Task pour publier `condition`.
-    nonisolated(unsafe) private let monitor = NWPathMonitor()
-    nonisolated(unsafe) private let queue = DispatchQueue(
-        label: "me.meeshy.network-condition", qos: .utility
-    )
+    private var pathCancellable: AnyCancellable?
 
-    private init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            let resolved = Self.resolve(path: path)
-            Task { @MainActor in self?.condition = resolved }
-        }
-        monitor.start(queue: queue)
+    init(source: NetworkPathSource = .shared) {
+        condition = Self.resolve(snapshot: source.current)
+        pathCancellable = source.publisher
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.condition = Self.resolve(snapshot: snapshot)
+            }
     }
 
     public var isOnline: Bool { condition != .offline }
 
-    nonisolated public static func resolve(path: NWPath) -> NetworkCondition {
+    nonisolated public static func resolve(snapshot: NetworkPathSnapshot) -> NetworkCondition {
         resolveFromFlags(
-            isSatisfied: path.status == .satisfied,
-            isConstrained: path.isConstrained,
-            isExpensive: path.isExpensive,
-            usesWiFi: path.usesInterfaceType(.wifi),
-            usesCellular: path.usesInterfaceType(.cellular)
+            isSatisfied: snapshot.isSatisfied,
+            isConstrained: snapshot.isConstrained,
+            isExpensive: snapshot.isExpensive,
+            usesWiFi: snapshot.usesWiFi,
+            usesCellular: snapshot.usesCellular
         )
+    }
+
+    nonisolated public static func resolve(path: NWPath) -> NetworkCondition {
+        resolve(snapshot: NetworkPathSnapshot(path: path))
     }
 
     /// Pure resolution depuis les flags. Testable sans dépendre de `NWPath`

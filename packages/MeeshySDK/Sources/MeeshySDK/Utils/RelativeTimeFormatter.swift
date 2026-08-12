@@ -93,6 +93,36 @@ public enum RelativeTimeFormatter {
         return absoluteDate(date, now: now, calendar: calendar)
     }
 
+    // MARK: - Last seen — "En ligne" / "Vu il y a 5 min" / "Vu hier à 14:12"
+
+    /// Presence label shown after a username on the profile card. Adds the exact
+    /// clock time (`HH:mm`) to every absolute (>24h) format, per product decision
+    /// 2026-06-30. Under one minute reads "En ligne"; the relative frame (<24h)
+    /// carries no clock. Mirrors the web `formatPresenceLabel` contract.
+    public static func lastSeenString(
+        for date: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
+        let seconds = Int(now.timeIntervalSince(date))
+        if seconds < 60 { return lastSeenOnlineLabel }
+        if seconds < 3_600 { return seen(ago(minutesLabel(seconds / 60))) }
+
+        let dayDelta = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: date),
+            to: calendar.startOfDay(for: now)
+        ).day ?? 0
+
+        if dayDelta <= 0 { return seen(ago(hoursLabel(seconds / 3_600))) }
+
+        let time = absoluteFormatters.timeString(from: date, timeZone: calendar.timeZone)
+        if dayDelta == 1 { return String(format: lastSeenYesterdayAtFormat, time) }
+        if dayDelta == 2 { return String(format: lastSeenBeforeYesterdayAtFormat, time) }
+        let dateStr = absoluteDate(date, now: now, calendar: calendar)
+        return String(format: lastSeenDateAtFormat, dateStr, time)
+    }
+
     // MARK: - Localized unit labels (app catalog, Bundle.main)
 
     private static var nowLabel: String {
@@ -114,6 +144,24 @@ public enum RelativeTimeFormatter {
     }
     private static func ago(_ label: String) -> String {
         String(format: String(localized: "time.long.ago", defaultValue: "il y a %@", bundle: .main), label)
+    }
+
+    // MARK: - Last seen labels (app catalog, Bundle.main)
+
+    private static var lastSeenOnlineLabel: String {
+        String(localized: "time.lastSeen.online", defaultValue: "En ligne", bundle: .main)
+    }
+    private static func seen(_ label: String) -> String {
+        String(format: String(localized: "time.lastSeen.seen", defaultValue: "Vu %@", bundle: .main), label)
+    }
+    private static var lastSeenYesterdayAtFormat: String {
+        String(localized: "time.lastSeen.yesterdayAt", defaultValue: "Vu hier à %@", bundle: .main)
+    }
+    private static var lastSeenBeforeYesterdayAtFormat: String {
+        String(localized: "time.lastSeen.beforeYesterdayAt", defaultValue: "Vu avant-hier à %@", bundle: .main)
+    }
+    private static var lastSeenDateAtFormat: String {
+        String(localized: "time.lastSeen.dateAt", defaultValue: "Vu le %@ à %@", bundle: .main)
     }
 
     // MARK: - Absolute fallback — "4 nov." / "4 nov. 2024" (Locale.current)
@@ -138,6 +186,7 @@ private final class AbsoluteDateFormatterBox: @unchecked Sendable {
     private let lock = NSLock()
     private let dayMonth: DateFormatter
     private let dayMonthYear: DateFormatter
+    private let clock: DateFormatter
 
     init() {
         // Locale.current → the absolute date follows the user's regional format
@@ -151,6 +200,9 @@ private final class AbsoluteDateFormatterBox: @unchecked Sendable {
         dayMonthYear = DateFormatter()
         dayMonthYear.locale = locale
         dayMonthYear.setLocalizedDateFormatFromTemplate("d MMM yyyy")
+        clock = DateFormatter()
+        clock.locale = locale
+        clock.setLocalizedDateFormatFromTemplate("jmm")
     }
 
     func string(from date: Date, includingYear: Bool, timeZone: TimeZone) -> String {
@@ -159,5 +211,12 @@ private final class AbsoluteDateFormatterBox: @unchecked Sendable {
         let formatter = includingYear ? dayMonthYear : dayMonth
         formatter.timeZone = timeZone
         return formatter.string(from: date)
+    }
+
+    func timeString(from date: Date, timeZone: TimeZone) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        clock.timeZone = timeZone
+        return clock.string(from: date)
     }
 }

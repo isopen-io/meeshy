@@ -258,23 +258,23 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
     setLocalPhoneNumber('');
   };
 
-  // Translate error code using i18n with French fallbacks
+  // Translate error code using i18n (native English fallbacks for anti-flash)
   const translateErrorCode = (errorCode: string): string => {
     const errorMap: Record<string, string> = {
-      rate_limited: t('phoneReset.errors.rateLimited') || 'Trop de tentatives. Veuillez réessayer plus tard.',
-      invalid_phone: t('phoneReset.errors.invalidPhone') || 'Numéro de téléphone invalide.',
-      user_not_found: t('phoneReset.errors.userNotFound') || 'Aucun compte trouvé avec ce numéro.',
-      phone_not_verified: t('phoneReset.errors.phoneNotVerified') || 'Le numéro de téléphone n\'est pas vérifié.',
-      invalid_token: t('phoneReset.errors.invalidToken') || 'Session expirée. Veuillez recommencer.',
-      token_expired: t('phoneReset.errors.tokenExpired') || 'Session expirée. Veuillez recommencer.',
-      invalid_step: t('phoneReset.errors.invalidStep') || 'Action invalide. Veuillez recommencer.',
-      max_attempts_exceeded: t('phoneReset.errors.maxAttemptsExceeded') || 'Trop de tentatives échouées. Veuillez réessayer plus tard.',
-      identity_mismatch: t('phoneReset.errors.identityMismatch') || 'L\'identifiant ou l\'email ne correspond pas.',
-      sms_send_failed: t('phoneReset.errors.smsSendFailed') || 'Impossible d\'envoyer le SMS. Veuillez réessayer.',
-      code_expired: t('phoneReset.errors.codeExpired') || 'Le code a expiré. Veuillez en demander un nouveau.',
-      invalid_code: t('phoneReset.errors.invalidCode') || 'Code invalide. Vérifiez et réessayez.',
-      validation_error: t('phoneReset.errors.validationError') || 'Données invalides.',
-      internal_error: t('phoneReset.errors.internalError') || 'Une erreur est survenue. Veuillez réessayer.',
+      rate_limited: t('phoneReset.errors.rateLimited', 'Too many attempts. Please try again later.'),
+      invalid_phone: t('phoneReset.errors.invalidPhone', 'Invalid phone number'),
+      user_not_found: t('phoneReset.errors.userNotFound', 'No account found with this number'),
+      phone_not_verified: t('phoneReset.errors.phoneNotVerified', 'This number is not verified on your account'),
+      invalid_token: t('phoneReset.errors.invalidToken', 'Session expired. Please start over.'),
+      token_expired: t('phoneReset.errors.tokenExpired', 'Session expired. Please start over.'),
+      invalid_step: t('phoneReset.errors.invalidStep', 'Invalid action. Please start over.'),
+      max_attempts_exceeded: t('phoneReset.errors.maxAttemptsExceeded', 'Too many failed attempts. Please try again later.'),
+      identity_mismatch: t('phoneReset.errors.identityMismatch', 'Username or email does not match'),
+      sms_send_failed: t('phoneReset.errors.smsSendFailed', 'Failed to send SMS. Please try again.'),
+      code_expired: t('phoneReset.errors.codeExpired', 'The code has expired. Please request a new one.'),
+      invalid_code: t('phoneReset.errors.invalidCode', 'Invalid code. Please check and try again.'),
+      validation_error: t('phoneReset.errors.validationError', 'Invalid data.'),
+      internal_error: t('phoneReset.errors.internalError', 'An error occurred. Please try again.'),
     };
     return errorMap[errorCode] || errorMap['internal_error'];
   };
@@ -288,7 +288,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
       : selectedCountry.dial + trimmedPhone.replace(/\D/g, ''); // Add country code
 
     if (!localPhoneNumber.trim()) {
-      setError(t('phoneReset.errors.phoneRequired') || 'Veuillez entrer votre numéro de téléphone');
+      setError(t('phoneReset.errors.phoneRequired', 'Please enter your phone number'));
       return;
     }
 
@@ -298,7 +298,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
       : trimmedPhone.replace(/\D/g, '');
 
     if (!validatePhoneNumber(digitsOnly)) {
-      setError(t('phoneReset.errors.phoneInvalid') || 'Format de numéro de téléphone invalide (6-15 chiffres)');
+      setError(t('phoneReset.errors.phoneInvalid', 'Invalid phone number format'));
       return;
     }
 
@@ -319,10 +319,10 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         setPhoneResetStep('identity_verification');
       } else {
         // Translate error code from service
-        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.lookupFailed') || 'Recherche échouée');
+        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.lookupFailed', 'Lookup failed. Please try again.'));
       }
     } catch (_err) {
-      setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
+      setError(t('phoneReset.errors.networkError', 'Connection error'));
     } finally {
       setIsPhoneLookupLoading(false);
     }
@@ -331,17 +331,17 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
   // Handle identity verification
   const handleVerifyIdentity = async () => {
     if (!username.trim() || !email.trim()) {
-      setError(t('phoneReset.errors.identityRequired') || 'Veuillez remplir tous les champs');
+      setError(t('phoneReset.errors.identityRequired', 'Please fill in all fields'));
       return;
     }
 
     if (!validateUsername(username)) {
-      setError(t('phoneReset.errors.usernameInvalid') || 'Le nom d\'utilisateur doit contenir entre 2 et 30 caractères');
+      setError(t('phoneReset.errors.usernameInvalid', 'Username must be between 2 and 30 characters'));
       return;
     }
 
     if (!validateEmail(email)) {
-      setError(t('phoneReset.errors.emailInvalid') || 'Format d\'email invalide');
+      setError(t('phoneReset.errors.emailInvalid', 'Invalid email format'));
       return;
     }
 
@@ -358,7 +358,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
       if (result.success && result.codeSent) {
         setPhoneResetStep('code_entry');
         setResendCooldown(60);
-        toast.success(t('phoneReset.codeSent') || 'Code SMS envoyé !');
+        toast.success(t('phoneReset.codeSent', 'SMS code sent!'));
       } else {
         // Check if session expired - reset flow
         if (result.error && isSessionExpiredError(result.error)) {
@@ -367,13 +367,13 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
           return;
         }
         // Translate error code from service
-        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.identityFailed') || 'Vérification échouée');
+        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.identityFailed', 'Verification failed'));
         if (result.attemptsRemaining !== undefined) {
           setIdentityAttemptsRemaining(result.attemptsRemaining);
         }
       }
     } catch (_err) {
-      setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
+      setError(t('phoneReset.errors.networkError', 'Connection error'));
     } finally {
       setIsIdentityVerifying(false);
     }
@@ -382,7 +382,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
   // Handle code verification
   const handleVerifyCode = async () => {
     if (code.length !== 6) {
-      setError(t('phoneReset.errors.codeRequired') || 'Veuillez entrer le code \u00e0 6 chiffres');
+      setError(t('phoneReset.errors.codeRequired', 'Please enter the 6-digit code'));
       return;
     }
 
@@ -398,7 +398,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
       if (result.success && result.resetToken) {
         // Store the token and redirect to reset password page
         setToken(result.resetToken);
-        toast.success(t('phoneReset.success') || 'Vérification réussie !');
+        toast.success(t('phoneReset.success', 'Verification successful!'));
         router.push(`/reset-password?token=${result.resetToken}`);
       } else {
         // Check if session expired - reset flow
@@ -408,11 +408,11 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
           return;
         }
         // Translate error code from service
-        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.codeFailed') || 'Code invalide');
+        setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.codeFailed', 'Invalid code'));
         setCode('');
       }
     } catch (_err) {
-      setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
+      setError(t('phoneReset.errors.networkError', 'Connection error'));
     } finally {
       setIsCodeVerifying(false);
     }
@@ -429,7 +429,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
 
       if (result.success) {
         setResendCooldown(60);
-        toast.success(t('phoneReset.codeResent') || 'Nouveau code envoyé !');
+        toast.success(t('phoneReset.codeResent', 'New code sent!'));
         setCode('');
       } else {
         // Check if session expired - reset flow
@@ -439,10 +439,10 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
           return;
         }
         // Translate error code from service
-        toast.error(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.resendFailed') || 'Impossible de renvoyer');
+        toast.error(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.resendFailed', 'Failed to resend code'));
       }
     } catch (_err) {
-      toast.error(t('phoneReset.errors.networkError') || 'Erreur de connexion');
+      toast.error(t('phoneReset.errors.networkError', 'Connection error'));
     }
   };
 
@@ -477,16 +477,16 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 </div>
               </div>
               <CardTitle className="text-xl">
-                {t('phoneReset.title') || 'R\u00e9initialiser par t\u00e9l\u00e9phone'}
+                {t('phoneReset.title', 'Reset by Phone')}
               </CardTitle>
               <CardDescription>
-                {t('phoneReset.description') || 'Entrez votre num\u00e9ro de t\u00e9l\u00e9phone associ\u00e9 \u00e0 votre compte'}
+                {t('phoneReset.description', 'Enter your phone number associated with your account')}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="phone-reset-number">{t('phoneReset.phoneLabel') || 'Numéro de téléphone'}</Label>
+                <Label htmlFor="phone-reset-number">{t('phoneReset.phoneLabel', 'Phone Number')}</Label>
                 <div className="flex gap-2">
                   <label htmlFor="phone-reset-country" className="sr-only">{t('phoneReset.selectCountry', 'Select country')}</label>
                   <select
@@ -533,19 +533,19 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 {isPhoneLookupLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t('phoneReset.searching') || 'Recherche...'}
+                    {t('phoneReset.searching', 'Searching...')}
                   </>
                 ) : (
                   <>
                     <Send className="mr-2 h-4 w-4" />
-                    {t('phoneReset.searchButton') || 'Rechercher mon compte'}
+                    {t('phoneReset.searchButton', 'Find my account')}
                   </>
                 )}
               </Button>
 
               <Button variant="ghost" onClick={onClose} className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t('phoneReset.back') || 'Retour'}
+                {t('phoneReset.back', 'Back')}
               </Button>
             </CardContent>
           </>
@@ -561,13 +561,13 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 </div>
               </div>
               <CardTitle className="text-xl">
-                {t('phoneReset.identityTitle') || 'V\u00e9rifiez votre identit\u00e9'}
+                {t('phoneReset.identityTitle', 'Verify Your Identity')}
               </CardTitle>
               <CardDescription className="space-y-1">
-                <span>{t('phoneReset.identityDescription') || 'Confirmez votre identité pour recevoir un code SMS'}</span>
+                <span>{t('phoneReset.identityDescription', 'Confirm your identity to receive an SMS code')}</span>
                 <br />
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('phoneReset.identityHint') || 'en complétant les caractères manquants (remplacez les * et ...)'}
+                  {t('phoneReset.identityHint', 'by filling in the missing characters (replace the * and ...)')}
                 </span>
               </CardDescription>
             </CardHeader>
@@ -577,14 +577,14 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
 
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="phone-reset-username">{t('phoneReset.usernameLabel') || 'Nom d\'utilisateur complet'}</Label>
+                  <Label htmlFor="phone-reset-username">{t('phoneReset.usernameLabel', 'Full Username')}</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                     <Input
                       id="phone-reset-username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder={t('phoneReset.usernamePlaceholder') || 'Entrez votre pseudo complet'}
+                      placeholder={t('phoneReset.usernamePlaceholder', 'Enter your full username')}
                       className="pl-10"
                       disabled={isIdentityVerifying}
                       autoComplete="username"
@@ -593,7 +593,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone-reset-email">{t('phoneReset.emailLabel') || 'Adresse email complète'}</Label>
+                  <Label htmlFor="phone-reset-email">{t('phoneReset.emailLabel', 'Full Email Address')}</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                     <Input
@@ -601,7 +601,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder={t('phoneReset.emailPlaceholder') || 'Entrez votre email complet'}
+                      placeholder={t('phoneReset.emailPlaceholder', 'Enter your full email address')}
                       className="pl-10"
                       disabled={isIdentityVerifying}
                       autoComplete="email"
@@ -615,7 +615,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    {t('phoneReset.attemptsRemaining') || 'Tentatives restantes'}: {identityAttemptsRemaining}
+                    {t('phoneReset.attemptsRemaining', 'Attempts remaining')}: {identityAttemptsRemaining}
                   </AlertDescription>
                 </Alert>
               )}
@@ -635,19 +635,19 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 {isIdentityVerifying ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t('phoneReset.verifying') || 'V\u00e9rification...'}
+                    {t('phoneReset.verifying', 'Verifying...')}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {t('phoneReset.verifyButton') || 'V\u00e9rifier et envoyer le code'}
+                    {t('phoneReset.verifyButton', 'Verify and send code')}
                   </>
                 )}
               </Button>
 
               <Button variant="ghost" onClick={handleBack} className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t('phoneReset.cancel') || 'Annuler'}
+                {t('phoneReset.cancel', 'Cancel')}
               </Button>
             </CardContent>
           </>
@@ -663,10 +663,10 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 </div>
               </div>
               <CardTitle className="text-xl">
-                {t('phoneReset.codeTitle') || 'Entrez le code SMS'}
+                {t('phoneReset.codeTitle', 'Enter SMS Code')}
               </CardTitle>
               <CardDescription>
-                {t('phoneReset.codeDescription') || 'Un code \u00e0 6 chiffres a \u00e9t\u00e9 envoy\u00e9 au'}
+                {t('phoneReset.codeDescription', 'A 6-digit code was sent to')}
                 <br />
                 <span className="font-semibold text-blue-600 dark:text-blue-400">{phoneNumber}</span>
               </CardDescription>
@@ -677,7 +677,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
 
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                 <Clock className="h-4 w-4" />
-                <span>{t('phoneReset.expiresIn') || 'Expire dans 10 minutes'}</span>
+                <span>{t('phoneReset.expiresIn', 'Expires in 10 minutes')}</span>
               </div>
 
               {error && (
@@ -695,12 +695,12 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 {isCodeVerifying ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t('phoneReset.verifyingCode') || 'V\u00e9rification...'}
+                    {t('phoneReset.verifyingCode', 'Verifying code...')}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {t('phoneReset.verifyCodeButton') || 'V\u00e9rifier le code'}
+                    {t('phoneReset.verifyCodeButton', 'Verify Code')}
                   </>
                 )}
               </Button>
@@ -709,7 +709,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
               <div className="text-center">
                 {resendCooldown > 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('phoneReset.resendIn') || 'Renvoyer dans'} {resendCooldown}s
+                    {t('phoneReset.resendIn', 'Resend in')} {resendCooldown}s
                   </p>
                 ) : (
                   <button
@@ -717,14 +717,14 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center justify-center gap-1 mx-auto rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                    {t('phoneReset.resendCode') || 'Renvoyer le code'}
+                    {t('phoneReset.resendCode', 'Resend Code')}
                   </button>
                 )}
               </div>
 
               <Button variant="ghost" onClick={handleBack} className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t('phoneReset.back') || 'Retour'}
+                {t('phoneReset.back', 'Back')}
               </Button>
             </CardContent>
           </>

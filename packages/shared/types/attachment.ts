@@ -760,13 +760,25 @@ const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
 export type FileSizeUnit = typeof FILE_SIZE_UNITS[number];
 
 /**
- * Formate une taille de fichier pour l'affichage
+ * Options de formatage d'une taille de fichier
  */
-export function formatFileSize(bytes: number): string {
+export type FormatFileSizeOptions = {
+  /** Nombre de décimales significatives (défaut : 2). Les zéros de fin sont retirés. */
+  readonly decimals?: number;
+};
+
+/**
+ * Formate une taille de fichier pour l'affichage.
+ *
+ * Source unique de vérité pour la conversion octets → chaîne lisible (B/KB/MB/GB/TB)
+ * dans tout le monorepo. `decimals` permet d'ajuster la précision sans réimplémenter.
+ */
+export function formatFileSize(bytes: number, options?: FormatFileSizeOptions): string {
   if (bytes === 0) return '0 B';
+  const decimals = options?.decimals ?? 2;
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   const sizeIndex = Math.min(i, FILE_SIZE_UNITS.length - 1);
-  return `${parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(2))} ${FILE_SIZE_UNITS[sizeIndex]}`;
+  return `${parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(decimals))} ${FILE_SIZE_UNITS[sizeIndex]}`;
 }
 

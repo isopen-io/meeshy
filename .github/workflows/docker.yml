@@ -111,7 +111,7 @@ jobs:
       has_changes: ${{ steps.services.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -237,7 +237,7 @@ jobs:
           swap-storage: true
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (for ARM64 emulation if needed)
         if: contains(github.event.inputs.platforms || env.PLATFORMS, 'arm64')
@@ -261,6 +261,12 @@ jobs:
           TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
           echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
           echo "Build timestamp: $TIMESTAMP"
+          # Forme ISO-8601 pour BUILD_DATE (label OCI image.created + /health).
+          # L'ancienne valeur, `github.event.repository.updated_at`, datait la
+          # dernière modification du DÉPÔT — pas le build : deux images
+          # construites à des heures différentes portaient la même date.
+          ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "iso=$ISO" >> $GITHUB_OUTPUT
 
       - name: Extract metadata
         id: meta
@@ -309,7 +315,7 @@ jobs:
           provenance: true
           sbom: true
           build-args: |
-            BUILD_DATE=${{ github.event.repository.updated_at }}
+            BUILD_DATE=${{ steps.timestamp.outputs.iso }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
             PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
@@ -367,7 +373,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         continue-on-error: true
         with:
           sarif_file: 'trivy-${{ matrix.service }}.sarif'

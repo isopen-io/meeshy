@@ -172,3 +172,21 @@ final class TusUploadCheckpointStoreTests: XCTestCase {
         )
     }
 }
+
+/// media-08 — purge de logout (tous les checkpoints, même récents).
+extension TusUploadCheckpointStoreTests {
+
+    func test_purgeAll_deletesAllCheckpointsRegardlessOfAge() async throws {
+        let pool = try makePool()
+        let store = TusUploadCheckpointStore(pool: pool)
+        await store.save(makeCheckpoint(key: "fresh-1", offset: 100))
+        await store.save(makeCheckpoint(key: "fresh-2", offset: 200))
+
+        await store.purgeAll()
+
+        let one = await store.find(checkpointKey: "fresh-1")
+        let two = await store.find(checkpointKey: "fresh-2")
+        XCTAssertNil(one, "un checkpoint récent doit aussi partir au logout — session d'upload du compte sortant")
+        XCTAssertNil(two)
+    }
+}

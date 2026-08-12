@@ -87,7 +87,10 @@ function mapResponseToParticipant(
       displayName: response.displayName,
       avatar: response.avatar ?? undefined,
       isOnline: response.isOnline,
-      lastActiveAt: new Date(response.lastActiveAt || Date.now()),
+      // A missing lastActiveAt must stay absent — never fabricate now(),
+      // which would make getUserStatus decay to 'online' for an offline
+      // co-participant whose "last seen" is hidden by privacy prefs.
+      lastActiveAt: response.lastActiveAt ? new Date(response.lastActiveAt) : undefined,
       systemLanguage: response.systemLanguage,
       role: response.role,
     },

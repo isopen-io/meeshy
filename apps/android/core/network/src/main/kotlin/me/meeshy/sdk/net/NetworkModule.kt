@@ -7,16 +7,27 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.network.BuildConfig
+import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
+import me.meeshy.sdk.net.api.ActiveCallApi
 import me.meeshy.sdk.net.api.AuthApi
+import me.meeshy.sdk.net.api.BlockApi
+import me.meeshy.sdk.net.api.CallHistoryApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.DataExportApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.LinkApi
+import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
+import me.meeshy.sdk.net.api.ReportApi
+import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
 import javax.inject.Singleton
 
@@ -30,8 +41,31 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesMeeshyConfig(): MeeshyConfig =
-        MeeshyConfig(enableLogging = BuildConfig.DEBUG)
+    fun providesServerEnvironmentStore(
+        @ApplicationContext context: Context,
+    ): ServerEnvironmentStore = SharedPrefsServerEnvironmentStore(context)
+
+    /**
+     * Derives [MeeshyConfig] from the persisted developer/QA environment selection —
+     * the Android equivalent of iOS `MeeshyConfig.restoreEnvironment()` "at app
+     * launch": both re-derive the API/socket URLs from a persisted selection once,
+     * before the first network call. Unlike iOS's mutable singleton (re-read per
+     * request), Android's [MeeshyApi] bakes `apiBaseUrl` into a `Retrofit.Builder`
+     * at Hilt-graph construction, so a selection made on the login screen
+     * ([ServerEnvironmentStore]) takes effect on the next app launch, not
+     * mid-session — a deliberate, called-out simplification (see
+     * `feature-parity.md`), not an oversight.
+     */
+    @Provides
+    @Singleton
+    fun providesMeeshyConfig(store: ServerEnvironmentStore): MeeshyConfig {
+        val apiBaseUrl = ServerEnvironmentResolver.apiBaseUrl(store.selectedEnvironment, store.customHost)
+        return MeeshyConfig(
+            apiBaseUrl = "$apiBaseUrl/",
+            socketUrl = ServerEnvironmentResolver.serverOrigin(apiBaseUrl),
+            enableLogging = BuildConfig.DEBUG,
+        )
+    }
 
     @Provides
     @Singleton
@@ -40,8 +74,16 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesMeeshyApi(config: MeeshyConfig, tokenStore: TokenStore): MeeshyApi =
-        MeeshyApi.create(config, tokenStore)
+    fun providesSessionExpiryNotifier(): SessionExpiryNotifier = SessionExpiryNotifier()
+
+    @Provides
+    @Singleton
+    fun providesMeeshyApi(
+        config: MeeshyConfig,
+        tokenStore: TokenStore,
+        sessionExpiry: SessionExpiryNotifier,
+    ): MeeshyApi =
+        MeeshyApi.create(config, tokenStore, onSessionExpired = sessionExpiry::notifyExpired)
 
     @Provides
     fun providesAuthApi(api: MeeshyApi): AuthApi = api.auth
@@ -65,6 +107,9 @@ internal object NetworkModule {
     fun providesFriendApi(api: MeeshyApi): FriendApi = api.friends
 
     @Provides
+    fun providesBlockApi(api: MeeshyApi): BlockApi = api.blocks
+
+    @Provides
     fun providesNotificationApi(api: MeeshyApi): NotificationApi = api.notifications
 
     @Provides
@@ -74,5 +119,32 @@ internal object NetworkModule {
     fun providesStoryApi(api: MeeshyApi): StoryApi = api.stories
 
     @Provides
+    fun providesCallHistoryApi(api: MeeshyApi): CallHistoryApi = api.callHistory
+
+    @Provides
+    fun providesActiveCallApi(api: MeeshyApi): ActiveCallApi = api.activeCall
+
+    @Provides
     fun providesTranslationApi(api: MeeshyApi): TranslationApi = api.translation
+
+    @Provides
+    fun providesMediaApi(api: MeeshyApi): MediaApi = api.media
+
+    @Provides
+    fun providesTusApi(api: MeeshyApi): TusApi = api.tus
+
+    @Provides
+    fun providesPreferencesApi(api: MeeshyApi): PreferencesApi = api.preferences
+
+    @Provides
+    fun providesReportApi(api: MeeshyApi): ReportApi = api.reports
+
+    @Provides
+    fun providesDataExportApi(api: MeeshyApi): DataExportApi = api.dataExport
+
+    @Provides
+    fun providesShareLinkApi(api: MeeshyApi): ShareLinkApi = api.shareLinks
+
+    @Provides
+    fun providesLinkApi(api: MeeshyApi): LinkApi = api.links
 }

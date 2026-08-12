@@ -244,4 +244,95 @@ final class FriendshipCacheTests: XCTestCase {
     private func yieldMainActor() async {
         for _ in 0..<3 { await Task.yield() }
     }
+
+    // MARK: - cache-08 — seed hors-ligne depuis les stores persistés
+
+    private func makeRequest(id: String, senderId: String, receiverId: String, status: String) -> FriendRequest {
+        FriendRequest(
+            id: id, senderId: senderId, receiverId: receiverId, message: nil,
+            status: status, sender: nil, receiver: nil,
+            respondedAt: nil, createdAt: Date(), updatedAt: nil
+        )
+    }
+
+    func test_hydrate_serviceThrowsAndSeedSourcePopulated_servesSeededStatuses() async {
+        let sut = makeSUT()
+        let service = ThrowingFriendService()
+
+        let seedRequest = makeRequest(id: "req-1", senderId: "bob", receiverId: "me", status: "pending")
+        await sut.hydrate(friendService: service, seedSource: { @Sendable in
+            (
+                friends: [FriendRequestUser(id: "friend-1", username: "f1", firstName: nil, lastName: nil, displayName: nil, avatar: nil, isOnline: nil, lastActiveAt: nil)],
+                received: [seedRequest],
+                sent: []
+            )
+        })
+
+        XCTAssertEqual(sut.status(for: "friend-1"), .friend,
+                       "cold start offline : un vrai ami ne doit plus afficher .none (bouton Ajouter)")
+        XCTAssertEqual(sut.status(for: "bob"), .pendingReceived(requestId: "req-1"))
+        XCTAssertEqual(sut.pendingReceivedCount, 1)
+    }
+
+    func test_hydrate_serviceThrows_doesNotMarkHydrated() async {
+        let sut = makeSUT()
+        let service = ThrowingFriendService()
+
+        await sut.hydrate(friendService: service, seedSource: { @Sendable in nil })
+
+        XCTAssertFalse(sut.isHydrated, "le seed ne pose jamais _isHydrated — le réseau doit rester tenté")
+    }
+
+    func test_hydrate_serviceSucceeds_networkResultOverwritesSeed() async {
+        let sut = makeSUT()
+        let service = ThrowingFriendService()
+        service.receivedResult = .success([makeRequest(id: "req-net", senderId: "carol", receiverId: "me", status: "pending")])
+        service.sentResult = .success([])
+
+        await sut.hydrate(friendService: service, seedSource: { @Sendable in
+            (
+                friends: [FriendRequestUser(id: "ghost", username: "g", firstName: nil, lastName: nil, displayName: nil, avatar: nil, isOnline: nil, lastActiveAt: nil)],
+                received: [], sent: []
+            )
+        })
+
+        XCTAssertEqual(sut.status(for: "ghost"), .none,
+                       "le réseau écrase le seed dès qu'il répond (applyHydration removeAll)")
+        XCTAssertEqual(sut.status(for: "carol"), .pendingReceived(requestId: "req-net"))
+        XCTAssertTrue(sut.isHydrated)
+    }
+
+}
+
+
+/// Stub service : échec par défaut sur les 2 fetchs d'hydratation,
+/// stubbable par test ; le reste du protocole échoue bruyamment.
+private final class ThrowingFriendService: FriendServiceProviding, @unchecked Sendable {
+    var receivedResult: Result<[FriendRequest], Error> = .failure(MeeshyError.network(.noConnection))
+    var sentResult: Result<[FriendRequest], Error> = .failure(MeeshyError.network(.noConnection))
+
+    func receivedRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        let items = try receivedResult.get()
+        return OffsetPaginatedAPIResponse(
+            success: true, data: items,
+            pagination: OffsetPagination(total: items.count, hasMore: false, limit: limit, offset: 0),
+            error: nil
+        )
+    }
+    func sentRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        let items = try sentResult.get()
+        return OffsetPaginatedAPIResponse(
+            success: true, data: items,
+            pagination: OffsetPagination(total: items.count, hasMore: false, limit: limit, offset: 0),
+            error: nil
+        )
+    }
+    func sendFriendRequest(receiverId: String, message: String?) async throws -> FriendRequest {
+        throw MeeshyError.network(.noConnection)
+    }
+    func respond(requestId: String, accepted: Bool) async throws -> FriendRequest {
+        throw MeeshyError.network(.noConnection)
+    }
+    func deleteRequest(requestId: String) async throws {}
+    func sendEmailInvitation(email: String) async throws {}
 }

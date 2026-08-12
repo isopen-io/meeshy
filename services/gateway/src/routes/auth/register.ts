@@ -11,7 +11,7 @@ import { getRequestContext } from '../../services/GeoIPService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -67,6 +67,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     try {
       const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         phoneTransferToken?: string;
+        skipPhoneConflictCheck?: boolean;
       };
 
       const requestContext = await getRequestContext(request);
@@ -83,7 +84,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
         logger.info('Phone transfer token valid');
         phoneTransferValidated = true;
-        (validatedData as any).skipPhoneConflictCheck = true;
+        validatedData.skipPhoneConflictCheck = true;
       }
 
       const result = await authService.register(validatedData as RegisterData, requestContext);
@@ -140,7 +141,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       const token = authService.generateToken(user);
-      const permissions = authService.getUserPermissions(user as any);
+      const permissions = authService.getUserPermissions(user);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
@@ -173,12 +174,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Erreur générique avec détails en dev
       const isDev = process.env.NODE_ENV !== 'production';
-      reply.status(500).send({
-        success: false,
-        error: isDev ? errorMessage : 'Erreur lors de la création du compte',
-        code: 'REGISTRATION_ERROR',
-        ...(isDev && { details: errorStack })
-      });
+      sendError(reply, 500, isDev ? errorMessage : 'Erreur lors de la création du compte', { code: 'REGISTRATION_ERROR' });
     }
   });
 
@@ -302,17 +298,16 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /force-init - Force database initialization (temporary)
-  fastify.post('/force-init', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { InitService } = await import('../../services/InitService');
-      const initService = new InitService(fastify.prisma);
-      await initService.initializeDatabase();
-
-      return sendSuccess(reply, { message: 'Database initialized successfully' });
-    } catch (error) {
-      logger.error('Error during forced initialization', error as Error);
-      return sendInternalError(reply, 'Failed to initialize database');
-    }
-  });
+  // `POST /force-init` a été retirée.
+  //
+  // Elle était publique et déclenchait `InitService.initializeDatabase()`, qui
+  // crée un compte BIGBOSS dont le mot de passe retombe sur une valeur écrite
+  // dans le code source quand la variable d'environnement n'est pas posée.
+  // N'importe qui pouvait donc s'octroyer — ou réactiver — un compte de plus
+  // haut privilège dont le mot de passe est public, sur un service joignable
+  // depuis l'Internet.
+  //
+  // Rien n'est perdu : `initializeDatabase()` s'exécute déjà à chaque démarrage
+  // du serveur (`server.ts`), et aucun appelant de cette route n'existait dans
+  // le dépôt. Un redémarrage fait exactement le même travail.
 }

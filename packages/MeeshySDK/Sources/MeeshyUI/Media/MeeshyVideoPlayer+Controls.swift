@@ -16,7 +16,11 @@ internal struct _InlineOverlayControls: View {
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
 
-    @State private var isSeeking = false
+    /// `@GestureState` (pas `@State`) : remis à `false` automatiquement par
+    /// SwiftUI si le drag est interrompu, même sans `.onEnded` — voir la
+    /// même règle documentée sur `AudioPlayerView.isUserScrubbing`, qui
+    /// publie dans la même `MediaScrubbingPreferenceKey`.
+    @GestureState private var isSeeking = false
     @State private var seekValue: Double = 0
 
     private var accent: Color { Color(hex: accentColor) }
@@ -24,6 +28,16 @@ internal struct _InlineOverlayControls: View {
     private var progress: Double {
         guard manager.duration > 0 else { return 0 }
         return isSeeking ? seekValue : manager.currentTime / manager.duration
+    }
+
+    /// Décision pure extraite pour la testabilité — `_InlineOverlayControls`
+    /// est une `View` SwiftUI, pas un point d'entrée décidable en soi. Même
+    /// pattern que `_InlineRenderer.shouldAutoplayOnAppear`. `isPipSupported`
+    /// est injecté : le body passe
+    /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
+    /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
+    nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
+        controls.contains(.pip) && isPipSupported
     }
 
     var body: some View {
@@ -42,6 +56,10 @@ internal struct _InlineOverlayControls: View {
         }
         .buttonStyle(BouncyControlButtonStyle())
         .allowsHitTesting(true)
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la seek bar.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isSeeking)
     }
 
     // MARK: - Scrim
@@ -63,51 +81,90 @@ internal struct _InlineOverlayControls: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Top Bar (expand + speed)
+    // MARK: - Top Bar (plein écran + PiP + AirPlay + vitesse)
+    //
+    // Lifting Liquid Glass 2026-08-11 (§ B) : un unique `AdaptiveGlassContainer`
+    // regroupe jusqu'à 4 boutons circulaires 28×28 (taille INCHANGÉE — c'est la
+    // taille inline réelle, pas celle du plein écran 36×36). Budget :
+    // 4 × 28 + 3 × 10 = 142pt, tient sur iPhone SE. Le PiP est MASQUÉ (pas
+    // désactivé) hors support device — cf. `showsPipButton`. Cluster centrée
+    // horizontalement via `.frame(maxWidth: .infinity)`, comme avant.
 
     private var topBar: some View {
-        HStack {
-            if controls.contains(.expand), let onExpand {
-                Button {
-                    onExpand()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+        AdaptiveGlassContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if controls.contains(.expand), let onExpand {
+                    Button {
+                        onExpand()
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
                 }
-            }
-            Spacer()
-            if controls.contains(.speed) {
-                Button {
-                    manager.cycleSpeed()
-                    HapticFeedback.light()
-                } label: {
-                    Text(manager.playbackSpeed.label)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(accent))
+                if Self.showsPipButton(controls: controls, isPipSupported: AVPictureInPictureController.isPictureInPictureSupported()) {
+                    Button {
+                        if manager.isPipActive {
+                            manager.stopPip()
+                        } else {
+                            manager.startPip()
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: manager.isPipActive ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
+                    .accessibilityLabel(manager.isPipActive
+                        ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
+                        : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module))
+                }
+                if controls.contains(.airplay) {
+                    AirPlayRoutePicker(tintColor: .white)
+                        .frame(width: 28, height: 28)
+                        .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
+                }
+                if controls.contains(.speed) {
+                    Button {
+                        manager.cycleSpeed()
+                        HapticFeedback.light()
+                    } label: {
+                        Text(manager.playbackSpeed.label)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .adaptiveGlass(in: Capsule())
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Center Controls (skip + play/pause)
     //
-    // Hierarchy visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
-    // clairement. Glass UI + accent tinté homogène à 0.3 sur tous les
-    // boutons. Le play porte une teinte d'accent plus marquée (0.55) pour
-    // tirer l'œil dessus.
+    // Hiérarchie visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
+    // clairement, tailles INCHANGÉES (l'inline reste plus compact que le
+    // plein écran 52/64pt, `VideoTransportControls.swift:87/105`). Lifting
+    // Liquid Glass 2026-08-11 (§ C) : migré vers
+    // `.adaptiveGlass`/`.adaptiveGlassProminent` sous `AdaptiveGlassContainer`
+    // — le double-fill `ultraThinMaterial` + `accent.opacity` + le stroke
+    // manuel disparaissent au profit des deux primitives partagées, comme
+    // `VideoTransportControls.centerControls`.
 
     private var centerControls: some View {
-        HStack(spacing: 24) {
-            skipButton(systemName: "gobackward.10", seconds: -10)
-            playPauseButton
-            skipButton(systemName: "goforward.10", seconds: 10)
+        AdaptiveGlassContainer(spacing: 24) {
+            HStack(spacing: 24) {
+                skipButton(systemName: "gobackward.10", seconds: -10)
+                playPauseButton
+                skipButton(systemName: "goforward.10", seconds: 10)
+            }
         }
     }
 
@@ -120,13 +177,7 @@ internal struct _InlineOverlayControls: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
-                .background(
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial)
-                        Circle().fill(accent.opacity(0.30))
-                    }
-                )
-                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
+                .adaptiveGlass(in: Circle(), interactive: true)
         }
     }
 
@@ -135,16 +186,13 @@ internal struct _InlineOverlayControls: View {
             manager.togglePlayPause()
             HapticFeedback.light()
         } label: {
-            ZStack {
-                Circle().fill(.ultraThinMaterial)
-                Circle().fill(accent.opacity(0.55))
-                playPauseIcon
-            }
-            .frame(width: 54, height: 54)
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
-            .shadow(color: accent.opacity(0.35), radius: 10, y: 3)
+            playPauseIcon
+                .frame(width: 54, height: 54)
+                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
-        .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(manager.isPlaying
+            ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
+            : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
     }
 
     /// Cross-fade entre `play.fill` et `pause.fill`. Gestion versionnée
@@ -205,14 +253,15 @@ internal struct _InlineOverlayControls: View {
             // réagit dès le touch pour un positionnement libre immédiat.
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($isSeeking) { _, state, _ in
+                        state = true
+                    }
                     .onChanged { value in
-                        isSeeking = true
                         seekValue = max(0, min(1, value.location.x / geo.size.width))
                     }
                     .onEnded { value in
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         manager.seek(to: fraction * manager.duration)
-                        isSeeking = false
                         seekValue = 0
                     }
             )
@@ -277,7 +326,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if let fileName, !fileName.isEmpty {
@@ -297,7 +346,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if controls.contains(.save) {
@@ -315,7 +364,7 @@ internal struct _FullscreenOverlayControls: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
+                    .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .disabled(saveState == .saving || saveState == .saved)
             }

@@ -16,6 +16,19 @@ struct MentionSuggestionPanel: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    /// Top-rounded surface: the panel is pinned to the top edge of the composer,
+    /// so only the leading/trailing top corners are rounded — it reads as a card
+    /// rising above the input rather than a detached pill.
+    private var panelShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 16,
+            style: .continuous
+        )
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
@@ -36,10 +49,10 @@ struct MentionSuggestionPanel: View {
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(MeeshyFont.relative(14, weight: .semibold))
                                         .foregroundColor(theme.textPrimary)
                                     Text("@\(candidate.username)")
-                                        .font(.system(size: 12))
+                                        .font(MeeshyFont.relative(12))
                                         .foregroundColor(theme.textSecondary)
                                 }
                                 Spacer()
@@ -59,10 +72,17 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .background(.ultraThinMaterial)
+        // Neutral Liquid Glass (no accent tint): an autocomplete bar floating
+        // above the composer is input-assistance chrome (like the QuickType
+        // bar), not conversation content — an accent tint would read as content.
+        // Accent tint stays reserved for message-content surfaces (e.g. the
+        // long-press MessageActionsMenu).
+        .adaptiveGlass(in: Rectangle())
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
+    /// Decorative — hidden from VoiceOver so the rotor never stops on empty
+    /// shimmer shapes while results stream in.
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
@@ -88,5 +108,7 @@ struct MentionSuggestionPanel: View {
                 .frame(minHeight: 44)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Loading mentions", bundle: .main))
     }
 }

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { memo } from 'react';
+import { getUserStatus } from '@/lib/user-status';
+import { presenceDotClassV2 } from './Avatar';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
@@ -84,6 +86,7 @@ export const ConversationItem = memo(function ConversationItem({
 }: ConversationItemProps): React.JSX.Element {
   const { t } = useI18n('conversations');
   const displayName = conversation.customName || conversation.name;
+  const presence = getUserStatus({ isOnline: conversation.isOnline });
 
   const noop = () => {};
 
@@ -268,11 +271,14 @@ export const ConversationItem = memo(function ConversationItem({
             <LanguageOrb code={conversation.languageCode} size="md" pulse={false} />
           )}
 
-          {/* Indicateur en ligne (conversations directes uniquement) */}
-          {!conversation.isGroup && conversation.isOnline && (
+          {/* Indicateur en ligne (conversations directes uniquement).
+              Règle 1/3/5 : offline (>5min) = aucun dot — vert online, orange
+              away, gris idle. Ici seul isOnline est disponible (pas de
+              lastActiveAt) : chemin binaire online/offline, vert-ou-rien. */}
+          {!conversation.isGroup && presence !== 'offline' && (
             <div
-              className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300"
-              style={{ background: 'var(--gp-jade-green)', borderColor: 'var(--gp-surface)' }}
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300 ${presenceDotClassV2[presence]}`}
+              style={{ borderColor: 'var(--gp-surface)' }}
             />
           )}
 

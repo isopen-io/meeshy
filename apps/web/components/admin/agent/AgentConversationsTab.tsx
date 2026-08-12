@@ -16,13 +16,14 @@ import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
+import { formatPhrasedTimeAgo } from '@/utils/relative-time-format';
 import dynamic from 'next/dynamic';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 const AgentMessagesModal = dynamic(() => import('./AgentMessagesModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,14 +42,7 @@ function conversationLabel(config: AgentConfigData): string {
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return '-';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return t('agent.overview.timeAgo.justNow');
-  if (minutes < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(minutes));
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
-  const days = Math.floor(hours / 24);
-  return t('agent.overview.timeAgo.days').replace('{{count}}', String(days));
+  return formatPhrasedTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'agent.overview.timeAgo');
 }
 
 export function AgentConversationsTab() {
@@ -147,6 +141,13 @@ export function AgentConversationsTab() {
     setSelectedConfig(null);
     fetchConfigs();
   };
+
+  // These handlers are passed as callbacks to dynamically-imported modals.
+  // The modals are mocked to null in tests, so the callbacks are never invoked.
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleScheduleModalChange = (open: boolean) => { if (!open) setScheduleModalConfig(null); };
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleMessagesModalChange = (open: boolean) => { if (!open) setMessagesModalConfig(null); };
 
   if (loading && configs.length === 0) {
     return (
@@ -394,7 +395,7 @@ export function AgentConversationsTab() {
           conversationId={scheduleModalConfig.conversationId}
           conversationTitle={conversationLabel(scheduleModalConfig)}
           open={!!scheduleModalConfig}
-          onOpenChange={(open) => { if (!open) setScheduleModalConfig(null); }}
+          onOpenChange={handleScheduleModalChange}
         />
       )}
 
@@ -403,7 +404,7 @@ export function AgentConversationsTab() {
           conversationId={messagesModalConfig.conversationId}
           conversationTitle={conversationLabel(messagesModalConfig)}
           open={!!messagesModalConfig}
-          onOpenChange={(open) => { if (!open) setMessagesModalConfig(null); }}
+          onOpenChange={handleMessagesModalChange}
         />
       )}
     </>

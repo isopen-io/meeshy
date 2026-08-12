@@ -221,10 +221,16 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
+      # Volume DÉDIÉ à la bibliothèque de sons — même règle qu'en prod :
+      # surtout PAS sous UPLOAD_PATH (servi sans authentification par nginx).
+      # Sans UPLOAD_DIR ni volume, l'image écrirait les sons dans un
+      # /app/sounds éphémère et les perdrait à chaque recréation du conteneur.
+      - UPLOAD_DIR=/app/sounds
+      - SOUND_LIBRARY_ENABLED=true
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-}
-      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-600}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
@@ -252,6 +258,7 @@ services:
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
     volumes:
       - gateway_staging_uploads:/app/uploads
+      - gateway_staging_sounds:/app/sounds
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro
     depends_on:
       mongo-init-staging:
@@ -413,6 +420,8 @@ volumes:
     name: meeshy-staging-models-data
   gateway_staging_uploads:
     name: meeshy-staging-gateway-uploads
+  gateway_staging_sounds:
+    name: meeshy-staging-gateway-sounds
   frontend_staging_uploads:
     name: meeshy-staging-web-uploads
 

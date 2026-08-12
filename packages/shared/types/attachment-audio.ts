@@ -343,6 +343,7 @@ export function toSocketIOTranslations(
   return getAvailableLanguages(translations)
     .map(lang => {
       const translation = translations[lang];
+      /* istanbul ignore next -- getAvailableLanguages already filters undefined entries */
       if (!translation) {
         return null;
       }

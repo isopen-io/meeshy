@@ -1,7 +1,12 @@
 import { renderHook } from '@testing-library/react';
 import { usePostTranslation, usePreferredLanguage } from '@/hooks/use-post-translation';
 
-const mockConfig = {
+const mockConfig: {
+  systemLanguage: string;
+  regionalLanguage: string;
+  customDestinationLanguage: string | undefined;
+  autoTranslateEnabled: boolean;
+} = {
   systemLanguage: 'fr',
   regionalLanguage: 'en',
   customDestinationLanguage: undefined,
@@ -91,9 +96,15 @@ describe('usePreferredLanguage', () => {
 
 describe('resolvePreferredLanguage fallbacks', () => {
   const saved = { ...mockConfig };
+  const originalLanguage = navigator.language;
+
+  function setNavigatorLanguage(value: string) {
+    Object.defineProperty(navigator, 'language', { value, configurable: true });
+  }
 
   afterEach(() => {
     Object.assign(mockConfig, saved);
+    setNavigatorLanguage(originalLanguage);
   });
 
   it('uses regionalLanguage when systemLanguage is empty', () => {
@@ -116,10 +127,34 @@ describe('resolvePreferredLanguage fallbacks', () => {
     expect(result.current.preferredLanguage).toBe('pt');
   });
 
-  it('falls back to fr when all language preferences are empty', () => {
+  // Prisme étendu 2026-05-26 — deviceLocale intervient en 4e priorité, jamais
+  // en remplacement des préférences in-app. Aligné sur la résolution des
+  // messages (resolveUserPreferredLanguage) via la source de vérité partagée.
+  it('uses the device locale (4th priority) when no in-app preference is set', () => {
     mockConfig.systemLanguage = '';
     mockConfig.regionalLanguage = '';
     mockConfig.customDestinationLanguage = undefined;
+    setNavigatorLanguage('pt-BR');
+
+    const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
+
+    expect(result.current.preferredLanguage).toBe('pt');
+  });
+
+  it('never lets the device locale override an in-app systemLanguage', () => {
+    mockConfig.systemLanguage = 'fr';
+    setNavigatorLanguage('en-US');
+
+    const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
+
+    expect(result.current.preferredLanguage).toBe('fr');
+  });
+
+  it('falls back to fr when all preferences and the device locale are absent', () => {
+    mockConfig.systemLanguage = '';
+    mockConfig.regionalLanguage = '';
+    mockConfig.customDestinationLanguage = undefined;
+    setNavigatorLanguage('');
 
     const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
 

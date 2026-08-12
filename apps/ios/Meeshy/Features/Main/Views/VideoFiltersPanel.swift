@@ -3,9 +3,22 @@ import Combine
 import MeeshyUI
 
 struct VideoFiltersPanel: View {
-    @ObservedObject private var callManager = CallManager.shared
+    // Received from CallEffectsOverlay, NOT instantiated here (`= CallManager.shared`
+    // would re-create the @ObservedObject subscription on every parent body
+    // re-evaluation — CallEffectsOverlay/CallView re-evaluate often mid-call.
+    // Same P1-16 hazard already fixed on CallView, FloatingCallPillView,
+    // CallBubbleView and CallParticipantVisual; this panel was missed.
+    @ObservedObject var callManager: CallManager
     @State private var filterConfig = VideoFilterConfig()
-    @State private var activePreset: VideoFilterPreset? = .natural
+
+    // Derived, not stored: a separate `@State` here could drift from
+    // `filterConfig` (e.g. stale on panel reopen, or left pointing at a
+    // preset the user has since hand-tuned away from via `VideoFilterControlView`'s
+    // sliders). Deriving it every render from the single source of truth
+    // (`filterConfig`) makes that whole class of staleness impossible.
+    private var activePreset: VideoFilterPreset? {
+        VideoFilterPreset.matching(filterConfig)
+    }
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
@@ -17,7 +30,10 @@ struct VideoFiltersPanel: View {
             performanceIndicator
         }
         .padding(MeeshySpacing.lg)
-        .background(.ultraThinMaterial)
+        // Liquid Glass natif (iOS 26+) sur la surface flottante neutre. La
+        // sous-section `VideoFilterControlView` reste en `.ultraThinMaterial`
+        // (matériau SUR verre = HIG ; jamais verre-dans-verre).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .padding(.horizontal, MeeshySpacing.lg)
         .onAppear {
@@ -35,6 +51,7 @@ struct VideoFiltersPanel: View {
             Image(systemName: "camera.filters")
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
+                .accessibilityHidden(true)
             Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
@@ -43,7 +60,6 @@ struct VideoFiltersPanel: View {
                 Button {
                     filterConfig = VideoFilterPreset.natural.config
                     filterConfig.isEnabled = false
-                    activePreset = .natural
                 } label: {
                     Text(String(localized: "video.filter.reset", defaultValue: "Reset", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
@@ -69,7 +85,6 @@ struct VideoFiltersPanel: View {
     private func presetChip(_ preset: VideoFilterPreset) -> some View {
         let isActive = activePreset == preset
         return Button {
-            activePreset = preset
             var config = preset.config
             config.backgroundBlurEnabled = filterConfig.backgroundBlurEnabled
             config.backgroundBlurRadius = filterConfig.backgroundBlurRadius
@@ -93,6 +108,7 @@ struct VideoFiltersPanel: View {
         }
         .meeshyTapTarget()
         .pressable()
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     private func presetLabel(_ preset: VideoFilterPreset) -> String {
@@ -122,6 +138,7 @@ struct VideoFiltersPanel: View {
                 Toggle("", isOn: $filterConfig.backgroundBlurEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
             }
 
             if filterConfig.backgroundBlurEnabled {
@@ -132,6 +149,7 @@ struct VideoFiltersPanel: View {
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.backgroundBlurRadius, in: 5...20)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
                         .accessibilityValue(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                     Text(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
@@ -153,6 +171,7 @@ struct VideoFiltersPanel: View {
                 Toggle("", isOn: $filterConfig.skinSmoothingEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
             }
 
             if filterConfig.skinSmoothingEnabled {
@@ -163,6 +182,7 @@ struct VideoFiltersPanel: View {
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.skinSmoothingIntensity, in: 0...1)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
                         .accessibilityValue(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                     Text(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))

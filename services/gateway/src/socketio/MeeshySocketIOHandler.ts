@@ -3,13 +3,13 @@
  * Point d'entrée pour configurer Socket.IO sur le serveur Fastify
  */
 
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Server as HTTPServer } from 'http';
 import { MeeshySocketIOManager } from './MeeshySocketIOManager';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { requireAdmin } from '../middleware/auth';
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -33,8 +33,13 @@ export class MeeshySocketIOHandler {
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
 
-    // Ajouter une route pour les statistiques Socket.IO
-    fastify.get('/api/socketio/stats', async (request, reply) => {
+    // Ajouter une route pour les statistiques Socket.IO (admin seulement)
+    fastify.get('/api/socketio/stats', {
+      preHandler: [
+        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
+        requireAdmin
+      ]
+    }, async (request, reply) => {
       try {
         const stats = this.socketIOManager.getStats();
         reply.send({
@@ -54,22 +59,21 @@ export class MeeshySocketIOHandler {
     });
 
     // Route pour forcer la déconnexion d'un utilisateur (admin seulement)
-    fastify.post('/api/socketio/disconnect-user', async (request, reply) => {
+    fastify.post('/api/socketio/disconnect-user', {
+      preHandler: [
+        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
+        requireAdmin
+      ]
+    }, async (request, reply) => {
       try {
         const { userId } = request.body as { userId: string };
-        
+
         if (!userId) {
           return reply.status(400).send({
             success: false,
             error: 'userId requis'
           });
         }
-
-        // TODO: Vérifier les permissions admin
-        // const userRole = await this.checkUserRole(request);
-        // if (userRole !== 'ADMIN') {
-        //   return reply.status(403).send({ success: false, error: 'Permission refusée' });
-        // }
 
         if (this.socketIOManager) {
           const disconnected = this.socketIOManager.disconnectUser(userId);
@@ -107,24 +111,6 @@ export class MeeshySocketIOHandler {
    */
   public getManager(): MeeshySocketIOManager | null {
     return this.socketIOManager;
-  }
-
-  /**
-   * Méthode pour envoyer des notifications push via Socket.IO
-   */
-  public async sendNotificationToUser(userId: string, notification: any): Promise<void> {
-    try {
-      if (this.socketIOManager) {
-        const sent = this.socketIOManager.sendToUser(userId, SERVER_EVENTS.NOTIFICATION, notification);
-        if (sent) {
-          logger.info(`📱 Notification envoyée à l'utilisateur ${userId}`, notification);
-        } else {
-          logger.warn(`⚠️ Utilisateur ${userId} non connecté pour notification`);
-        }
-      }
-    } catch (error) {
-      logger.error('Erreur envoi notification:', error);
-    }
   }
 
   /**

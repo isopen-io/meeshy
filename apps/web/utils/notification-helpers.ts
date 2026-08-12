@@ -11,6 +11,8 @@ import {
   type NotificationIcon
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -160,7 +162,10 @@ function resolveContentRoute(notification: Notification): '/post' | '/story' | '
   const type = notification.type;
   if (typeof type === 'string') {
     if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
-    if (type === NotificationTypeEnum.FRIEND_NEW_STORY || type.startsWith('story')) return '/story';
+    // Tous les types portant `story` visent une story — y compris les variantes
+    // préfixées (`friend_story_comment`) que `startsWith('story')` manquait,
+    // ce qui les routait par erreur vers `/post`.
+    if (type.includes('story')) return '/story';
   }
   return '/post';
 }
@@ -187,8 +192,13 @@ export function getNotificationLink(notification: Notification): string | null {
   const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
   if (postId) {
     const commentId = context?.commentId ?? metadata?.commentId;
+    // Quand la cible est une RÉPONSE, le parent top-level voyage en query
+    // (`?parent=<id>`) : la page de destination chasse le parent dans les
+    // pages top-level, déplie son thread puis cible la réponse via l'ancre.
+    const parentCommentId = context?.parentCommentId ?? metadata?.parentCommentId;
+    const parentQuery = commentId && parentCommentId ? `?parent=${parentCommentId}` : '';
     const anchor = commentId ? `#comment-${commentId}` : '';
-    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+    return `${resolveContentRoute(notification)}/${postId}${parentQuery}${anchor}`;
   }
 
   // 3. Amis / contacts
@@ -214,33 +224,106 @@ export function formatNotificationTimeAgo(
   const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
   if (isNaN(date.getTime())) return '';
 
-  const diffMinutes = Math.floor((Date.now() - date.getTime()) / (1000 * 60));
+  const bucket = classifyRelativeTime(date.getTime(), Date.now());
+
+  switch (bucket.unit) {
+    case 'now':
+      return t('timeAgo.now');
+    case 'minutes':
+      return t('timeAgo.minute').replace('{count}', String(bucket.value));
+    case 'hours':
+      return t('timeAgo.hour').replace('{count}', String(bucket.value));
+    case 'days':
+      return t('timeAgo.day').replace('{count}', String(bucket.value));
+    case 'beyond':
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  }
+}
+
+/**
+ * Formate la date de publication d'un contenu social en libellé « intelligent » :
+ * relatif quand récent (« à l'instant » / « il y a 6 min » / « il y a 2h »),
+ * « hier 14:30 » la veille, puis date + heure absolues locales au-delà
+ * (« 23/06/2026 14:30 »). Locale et fuseau gérés par le navigateur — aucun
+ * format en dur. Utilisé pour décorer le sous-titre serveur côté appareil.
+ */
+export function formatContentPublishedAt(
+  iso: string | null | undefined,
+  t: TranslateFunction,
+  locale?: string
+): string {
+  if (!iso) return '';
+
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+  if (diffMinutes < 0) {
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }) + ' ' + date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  }
 
   if (diffMinutes < 1) return t('timeAgo.now');
   if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
 
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return t('timeAgo.hour').replace('{count}', String(diffHours));
+  // DST-safe : compter les jours calendaires locaux plutôt qu'un delta fixe de
+  // 24 h. Un jour de transition heure d'été/hiver dure 23 h ou 25 h, donc
+  // `startOfToday − 86_400_000` ne retombe pas sur le minuit local d'hier. On
+  // réutilise la SSOT `calendarDayDiff`, déjà employée par groupNotificationsByDate.
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return t('timeAgo.day').replace('{count}', String(diffDays));
+  if (dayDiff === 0) {
+    return t('timeAgo.hour').replace('{count}', String(diffHours));
+  }
 
-  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  if (dayDiff === 1) {
+    return t('timeAgo.yesterdayAt').replace('{time}', time);
+  }
+
+  const absoluteDate = date.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `${absoluteDate} ${time}`;
 }
 
 /**
  * Groups notifications by date period.
  * Returns entries in order: today, yesterday, this week, this month, older.
+ *
+ * Le découpage jour-à-jour (today / yesterday / this week) s'appuie sur
+ * {@link calendarDayDiff} — la SSOT DST-safe déjà utilisée par
+ * `formatContentPublishedAt` dans ce fichier — plutôt que sur une soustraction
+ * de millisecondes ancrée à un jour calendaire de la semaine.
+ *
+ * « This week » est une fenêtre glissante de 7 jours (jours J-2 à J-6), pas une
+ * semaine calendaire ancrée au dimanche. L'ancien calcul
+ * `startOfToday - getDay()*jour` s'effondrait le jour d'ancrage : `getDay()`
+ * valant 0 le dimanche, `startOfWeek` retombait sur `startOfToday`, rendant le
+ * bucket « This week » structurellement inatteignable ce jour-là et renvoyant
+ * toute notification vieille de 2 à 6 jours dans « This month ». La fenêtre
+ * glissante supprime cet effet de bord et rend le regroupement cohérent quel
+ * que soit le jour de la semaine et la locale (dimanche vs lundi).
+ *
+ * Le « maintenant » est injectable (`now`) pour rendre le regroupement
+ * déterministe en test — même convention que `calendarDayDiff(nowMs)`.
  */
 export function groupNotificationsByDate(
   notifications: Notification[],
-  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string }
+  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string },
+  now: Date = new Date()
 ): Array<{ label: string; notifications: Notification[] }> {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getDay() * 86400000);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nowMs = now.getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const groups = new Map<string, Notification[]>([
     [labels.today, []],
@@ -256,14 +339,15 @@ export function groupNotificationsByDate(
       : new Date(notification.state.createdAt);
 
     const time = createdAt.getTime();
+    const dayDiff = calendarDayDiff(time, nowMs);
 
-    if (time >= startOfToday.getTime()) {
+    if (dayDiff <= 0) {
       groups.get(labels.today)!.push(notification);
-    } else if (time >= startOfYesterday.getTime()) {
+    } else if (dayDiff === 1) {
       groups.get(labels.yesterday)!.push(notification);
-    } else if (time >= startOfWeek.getTime()) {
+    } else if (dayDiff <= 6) {
       groups.get(labels.thisWeek)!.push(notification);
-    } else if (time >= startOfMonth.getTime()) {
+    } else if (time >= startOfMonth) {
       groups.get(labels.thisMonth)!.push(notification);
     } else {
       groups.get(labels.older)!.push(notification);
@@ -307,6 +391,14 @@ export function buildNotificationTitle(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Le serveur est la source unique : `title` est déjà localisé et conscient de
+  // l'entité. On le retourne tel quel, ne tombant sur le repli client que
+  // lorsqu'il est null/vide (types non gérés par le builder serveur).
+  const serverTitle = notification.title;
+  if (typeof serverTitle === 'string' && serverTitle.trim().length > 0) {
+    return serverTitle;
+  }
+
   const actorName = getActorDisplayName(notification.actor);
   const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
 
@@ -409,6 +501,62 @@ export function buildNotificationTitle(
     default:
       return t('titles.default');
   }
+}
+
+/**
+ * Types de notifications « sociales » (post/story/réel/mood/commentaire) pour
+ * lesquels on affiche le sous-titre serveur enrichi de la date de publication.
+ */
+const SOCIAL_NOTIFICATION_TYPES = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_COMMENT,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REPLY,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+  NotificationTypeEnum.STORY_NEW_COMMENT,
+  NotificationTypeEnum.FRIEND_STORY_COMMENT,
+  NotificationTypeEnum.STORY_THREAD_REPLY,
+  NotificationTypeEnum.FRIEND_NEW_STORY,
+  NotificationTypeEnum.FRIEND_NEW_POST,
+  NotificationTypeEnum.FRIEND_NEW_MOOD,
+]);
+
+/**
+ * Construit la ligne « contexte » secondaire pour une notification sociale :
+ * le sous-titre serveur (entité/contexte localisé, sans date) décoré de la date
+ * de publication locale (`context.postCreatedAt`). Retourne `null` quand il n'y
+ * a pas de sous-titre serveur ou que le type n'est pas social — le client
+ * conserve alors son rendu existant.
+ */
+export function buildNotificationContextLine(
+  notification: Notification,
+  t: TranslateFunction,
+  locale?: string
+): string | null {
+  if (typeof notification.type !== 'string' || !SOCIAL_NOTIFICATION_TYPES.has(notification.type)) {
+    return null;
+  }
+
+  const subtitle = notification.subtitle;
+  if (typeof subtitle !== 'string' || subtitle.trim().length === 0) {
+    return null;
+  }
+
+  const publishedAt = formatContentPublishedAt(notification.context?.postCreatedAt, t, locale);
+
+  // Marqueur d'expiration (parité iOS) : une story/statut éphémère dont la date
+  // d'expiration est dépassée affiche « · expirée » → l'utilisateur comprend la
+  // perte d'accès au contenu lié.
+  const expiresAt = notification.context?.postExpiresAt;
+  const expired = typeof expiresAt === 'string' && !Number.isNaN(Date.parse(expiresAt))
+    && Date.parse(expiresAt) <= Date.now();
+
+  return [subtitle, publishedAt || null, expired ? t('context.expired') : null]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' · ');
 }
 
 /**

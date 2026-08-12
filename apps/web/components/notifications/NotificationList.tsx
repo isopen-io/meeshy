@@ -20,6 +20,8 @@ type NotificationListProps = {
   onClick: (notification: Notification) => void;
   formatTimeAgo: (date: Date | string | null) => string;
   t: TranslateFunction;
+  /** Locale de l'appareil — propagée pour la date locale du contexte social. */
+  locale?: string;
   searchQuery?: string;
   compact?: boolean;
   grouped?: boolean;
@@ -35,6 +37,7 @@ export const NotificationList = memo(function NotificationList({
   onClick,
   formatTimeAgo,
   t,
+  locale,
   searchQuery = '',
   compact = false,
   grouped = true,
@@ -92,6 +95,7 @@ export const NotificationList = memo(function NotificationList({
               onClick={onClick}
               formatTimeAgo={formatTimeAgo}
               t={t}
+              locale={locale}
               compact={compact}
               index={index}
             />
@@ -127,6 +131,7 @@ export const NotificationList = memo(function NotificationList({
                     onClick={onClick}
                     formatTimeAgo={formatTimeAgo}
                     t={t}
+                    locale={locale}
                     compact={compact}
                     index={idx}
                   />

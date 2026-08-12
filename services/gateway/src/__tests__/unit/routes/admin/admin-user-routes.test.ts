@@ -983,7 +983,9 @@ describe('GET /admin/users/:userId/conversations', () => {
   });
 
   it('returns 200 with conversations', async () => {
-    const conv = { id: 'c1', identifier: 'conv1', title: 'Test', participants: [] };
+    // `_count` et non la colonne `memberCount` : celle-ci n'est écrite par
+    // personne, l'écran admin affichait « 0 membres » partout.
+    const conv = { id: 'c1', identifier: 'conv1', title: 'Test', participants: [], _count: { participants: 0 } };
     mockPrisma.conversation.findMany.mockResolvedValue([conv]);
     mockPrisma.conversation.count.mockResolvedValue(1);
     const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
@@ -1005,7 +1007,8 @@ describe('GET /admin/users/:userId/conversations', () => {
       participants: [
         { userId: 'user123', role: 'MEMBER', joinedAt: new Date() },
         { userId: 'other456', role: 'MEMBER', joinedAt: new Date() }
-      ]
+      ],
+      _count: { participants: 2 }
     };
     mockPrisma.conversation.findMany.mockResolvedValue([conv]);
     mockPrisma.conversation.count.mockResolvedValue(1);

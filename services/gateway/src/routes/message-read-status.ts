@@ -3,11 +3,16 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
+import { MarkReadBodySchema } from '../validation/messages-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
+import { resolveCallerParticipant } from './conversations/utils/access-control.js';
+import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
 
 interface MessageParams {
@@ -32,10 +37,42 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   const readStatusService = new MessageReadStatusService(prisma);
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
-  // Middleware d'authentification
+  // Middleware d'authentification.
+  //
+  // `allowAnonymous: true` — un invité de lien partagé est un participant de
+  // plein droit : il lit, il envoie (`POST /conversations/:id/messages`,
+  // `optionalAuth`) et il réagit (`routes/reactions.ts`, « Les anonymes peuvent
+  // aussi réagir »). Le serveur COMPTE d'ailleurs ses non-lus — `getUnreadCount`
+  // résout `Participant.id` autant que `User.id`, et `emitUnreadCountsToRecipients`
+  // adresse `ROOMS.user(userId ?? id)`, la room que `AuthHandler` fait rejoindre
+  // aux sockets anonymes précisément « because joining anything else had already
+  // left anonymous participants without their unread badge ».
+  //
+  // Il ne lui manquait que la moitié qui REMET À ZÉRO : cette porte, fermée par
+  // `allowAnonymous: false`, renvoyait 403 avant même de regarder la
+  // conversation. Le badge d'un invité ne pouvait donc que monter — la webapp
+  // avait fini par débrancher son propre suivi de lecture pour les sessions
+  // anonymes (`bubble-stream-page.tsx`, « la route mark-as-read est JWT-only »)
+  // plutôt que d'encaisser un 403 par flush.
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
-    allowAnonymous: false
+    allowAnonymous: true
+  });
+
+  // Rate limiter for write operations that broadcast to conversation rooms.
+  // 30 req/min per user — generous enough for normal tab-switching / reconnect
+  // patterns while blocking tight loops that would spam read-receipt broadcasts.
+  const readReceiptWriteLimiter = createCustomRateLimiter({
+    max: 30,
+    windowMs: 60 * 1000,
+    keyPrefix: 'read-receipt',
+    message: 'Too many read-receipt updates. Please slow down.',
+    keyGenerator: (request: FastifyRequest) => {
+      /* istanbul ignore next -- keyGenerator is called by rate-limiter middleware; mocked in tests, never invoked directly */
+      const authRequest = request as UnifiedAuthRequest;
+      /* istanbul ignore next */
+      return `user:${authRequest.authContext?.userId ?? request.ip ?? 'unknown'}`;
+    }
   });
 
   /**
@@ -51,31 +88,28 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     try {
       const { messageId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
 
       // Vérifier que le message existe
       const message = await prisma.message.findUnique({
         where: { id: messageId },
-        select: {
-          id: true,
-          conversationId: true,
-          conversation: {
-            include: {
-              participants: {
-                where: { userId: userId },
-                select: { userId: true }
-              }
-            }
-          }
-        }
+        select: { id: true, conversationId: true }
       });
 
       if (!message) {
         return sendNotFound(reply, 'Message non trouvé');
       }
 
-      // Vérifier que l'utilisateur a accès à cette conversation
-      if (!message.conversation.participants.length) {
+      // Vérifier que l'utilisateur a accès à cette conversation.
+      //
+      // L'appartenance était filtrée EN RELATION (`conversation.participants`,
+      // `where: { userId, isActive }`) — une cinquième copie de la règle, et la
+      // seule que `resolveCallerParticipant` ne pouvait pas couvrir sans
+      // détacher la lecture du message. Elle est détachée : `isActive: true` y
+      // survit intacte, et un invité de lien partagé cesse d'être invisible à sa
+      // propre conversation.
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, message.conversationId);
+
+      if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à ce message');
       }
 
@@ -118,13 +152,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       }
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.participant.findFirst({
-        where: {
-          conversationId,
-          userId: userId,
-          isActive: true
-        }
-      });
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
@@ -163,12 +191,16 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-read', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+      // Un invité de lien partagé n'a pas de ligne `User` : ses préférences de
+      // confidentialité sont les valeurs par défaut, pas une lecture en base
+      // indexée sur un `Participant.id` pris pour un `User.id`.
+      const isAnonymous = authRequest.authContext.isAnonymous === true;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
@@ -177,17 +209,28 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       }
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.participant.findFirst({
-        where: {
-          conversationId,
-          userId: userId,
-          isActive: true
-        },
-        select: { id: true }
-      });
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
+      }
+
+      // Suivi de lecture exact. La webapp appelle CE point d'entrée, pas
+      // /conversations/:id/mark-read : n'en doter qu'un laisserait le web sur le
+      // chemin par fenêtre. Corps absent = client non mis à jour → repli fenêtre.
+      let reportedMessageIds: readonly string[] | undefined;
+      let reportedLanguage: string | undefined;
+      let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
+      let caughtUpToMessageId: string | undefined;
+      if (request.body !== undefined && request.body !== null) {
+        const bodyResult = MarkReadBodySchema.safeParse(request.body);
+        if (!bodyResult.success) {
+          return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
+        }
+        reportedMessageIds = bodyResult.data.messageIds;
+        reportedLanguage = bodyResult.data.language;
+        reportedMessageLanguages = bodyResult.data.messageLanguages;
+        caughtUpToMessageId = bodyResult.data.caughtUpToMessageId;
       }
 
       // Compteur AVANT marquage — nombre de messages marqués comme lus,
@@ -195,16 +238,31 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
 
       // Marquer comme lu (participantId, pas userId)
-      await readStatusService.markMessagesAsRead(membership.id, conversationId);
+      // Même sémantique que /conversations/:id/mark-read : en mode exact,
+      // `markedCount` est le nombre d'entrées réellement figées.
+      const frozenCount = await readStatusService.markMessagesAsRead(
+        membership.id,
+        conversationId,
+        undefined,
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages || caughtUpToMessageId
+          ? {
+              messageIds: reportedMessageIds,
+              language: reportedLanguage,
+              messageLanguages: reportedMessageLanguages,
+              caughtUpToMessageId
+            }
+          : undefined
+      );
+      const effectiveMarkedCount = reportedMessageIds ? frozenCount : markedCount;
 
       // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
         userId,
-        false // Les utilisateurs authentifiés ne sont pas anonymes ici
+        isAnonymous
       );
 
-      // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
+        // READ_STATUS_UPDATED (peer disclosure) + CONVERSATION_UNREAD_UPDATED (badge reset)
         try {
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
@@ -214,11 +272,25 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           });
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-          // Ne pas faire échouer la requête si Socket.IO échoue
+        }
+      } else {
+        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        // Emit the REAL post-mark remaining unread (mirrors the shouldShowReadReceipts
+        // path, message-read-status.ts:554-558), never a hardcoded 0: an exact/partial
+        // read (`messageIds` without `caughtUpToMessageId`) advances the cursor only over
+        // the contiguous read prefix, so messages legitimately remain unread. A hardcoded
+        // 0 would wrongly clear the reader's badge across ALL their devices.
+        const manager = fastify.socketIOHandler?.getManager?.();
+        if (manager) {
+          const remainingUnread = await readStatusService.getUnreadCount(membership.id, conversationId);
+          manager.getIO().to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId,
+            unreadCount: remainingUnread,
+          });
         }
       }
 
-      return sendSuccess(reply, { markedCount });
+      return sendSuccess(reply, { markedCount: effectiveMarkedCount });
 
     } catch (error) {
       logger.error('Error marking messages as read', error as Error);
@@ -235,12 +307,16 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-received', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+      // Un invité de lien partagé n'a pas de ligne `User` : ses préférences de
+      // confidentialité sont les valeurs par défaut, pas une lecture en base
+      // indexée sur un `Participant.id` pris pour un `User.id`.
+      const isAnonymous = authRequest.authContext.isAnonymous === true;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
@@ -249,14 +325,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       }
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.participant.findFirst({
-        where: {
-          conversationId,
-          userId: userId,
-          isActive: true
-        },
-        select: { id: true }
-      });
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
@@ -272,7 +341,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Note: Les "received" (delivery receipts) suivent aussi la préférence showReadReceipts
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
         userId,
-        false // Les utilisateurs authentifiés ne sont pas anonymes ici
+        isAnonymous
       );
 
       // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
@@ -303,7 +372,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
    * Push-driven delivery acknowledgement. Called by the iOS Notification
    * Service Extension when an OFFLINE recipient receives a `new_message`
    * push: the extension holds no socket, so the gateway's online
-   * auto-delivery path (`MessageHandler._autoDeliverToOnlineRecipients`)
+   * auto-delivery path (`MessageHandler.autoDeliverToOnlineRecipients`)
    * never fires for that recipient and the author stays stuck on a single
    * checkmark. This endpoint marks the message delivered for the
    * authenticated recipient and broadcasts `read-status:updated` so the
@@ -318,12 +387,16 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: DeliveryReceiptRouteParams;
   }>('/conversations/:conversationId/messages/:messageId/delivery-receipt', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(DeliveryReceiptParamsSchema)]
+    preHandler: [validateParams(DeliveryReceiptParamsSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId, messageId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+      // Un invité de lien partagé n'a pas de ligne `User` : ses préférences de
+      // confidentialité sont les valeurs par défaut, pas une lecture en base
+      // indexée sur un `Participant.id` pris pour un `User.id`.
+      const isAnonymous = authRequest.authContext.isAnonymous === true;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
@@ -332,14 +405,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       }
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.participant.findFirst({
-        where: {
-          conversationId,
-          userId: userId,
-          isActive: true
-        },
-        select: { id: true }
-      });
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
@@ -372,7 +438,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // autorise les read receipts. Le curseur est avancé dans tous les cas.
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
         userId,
-        false
+        isAnonymous
       );
 
       if (shouldShowReadReceipts) {
@@ -427,37 +493,69 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  const [summary, activeParticipants] = await Promise.all([
+  // Read frontier + unread count of the ACTOR (args.userId), scoped to their
+  // participant row, let the actor's OTHER devices sync their own read cursor
+  // without a refetch (multi-device read sync). They travel ONLY on a 'read':
+  // that is the sole action advancing the read cursor. A 'received' (delivery)
+  // never moves lastReadAt, so it carries the aggregate summary only (peers
+  // use it for checkmarks) and omits these per-user fields — which the client
+  // would drop anyway, and which would needlessly disclose the actor's backlog
+  // to every peer in the room.
+  const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
+    args.type === 'read'
+      ? Promise.all([
+          prisma.conversationReadCursor.findUnique({
+            where: {
+              conversation_participant_cursor: {
+                participantId: args.participantId,
+                conversationId: args.conversationId
+              }
+            },
+            select: { lastReadAt: true }
+          }),
+          readStatusService.getUnreadCount(args.participantId, args.conversationId)
+        ]).then(([cursor, unreadCount]) => ({
+          lastReadAt: cursor?.lastReadAt ?? null,
+          unreadCount
+        }))
+      : Promise.resolve(undefined);
+
+  const [summary, activeParticipants, actorReadSync] = await Promise.all([
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
-      select: { userId: true }
-    })
+      select: { id: true, userId: true }
+    }),
+    actorReadSyncP
   ]);
 
-  const payload = {
+  const payload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
     userId: args.userId,
     type: args.type,
     updatedAt: new Date(),
-    summary
+    summary,
+    ...(actorReadSync ?? {})
   };
 
   const io = socketIOManager.getIO();
-  const convRoom = ROOMS.conversation(args.conversationId);
 
-  // Chain rooms so Socket.IO delivers the event at most once per socket,
-  // even if a socket belongs to both the conversation room and a user room.
-  let emitter: any = io.to(convRoom);
-  const seenRooms = new Set<string>([convRoom]);
-  for (const p of activeParticipants) {
-    if (!p.userId) continue;
-    const userRoom = ROOMS.user(p.userId);
-    if (seenRooms.has(userRoom)) continue;
-    seenRooms.add(userRoom);
-    emitter = emitter.to(userRoom);
+  // Single chained fan-out — see `emitToConversationParticipants`. The loop this
+  // replaces skipped every participant without a `User` row, so an anonymous
+  // participant never learned that a peer had read anything.
+  emitToConversationParticipants({
+    io,
+    conversationId: args.conversationId,
+    participants: activeParticipants,
+    events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+    payload
+  });
+
+  if (args.type === 'read') {
+    io.to(ROOMS.user(args.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+      conversationId: args.conversationId,
+      unreadCount: actorReadSync?.unreadCount ?? 0,
+    });
   }
-
-  emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
 }

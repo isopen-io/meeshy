@@ -13,6 +13,30 @@ final class StoryBackgroundLayerTests: XCTestCase {
         XCTAssertEqual(layer.backgroundColor, UIColor.red.cgColor)
     }
 
+    // MARK: - P3 — directURLIfAny normalizes relative media URLs
+
+    /// A server-relative background URL (getAttachmentPath / forward / repost)
+    /// must resolve to an absolute URL via the SSRF-guarded resolver instead of
+    /// returning nil — otherwise the background drops to the solid-color
+    /// fallback (black bg on another user's story). Was nil before the fix.
+    func test_directURLIfAny_relativePath_resolvesToAbsoluteURL() {
+        let resolved = StoryBackgroundLayer.directURLIfAny(from: "/api/v1/attachments/file/bg.jpg")
+        XCTAssertNotNil(resolved, "A relative media path must be normalized to an absolute URL")
+        XCTAssertFalse(resolved?.isFileURL ?? true)
+        XCTAssertTrue(["http", "https"].contains(resolved?.scheme ?? ""),
+                      "A resolved relative media URL must carry a network scheme")
+    }
+
+    func test_directURLIfAny_fileURL_returnedVerbatim() {
+        let resolved = StoryBackgroundLayer.directURLIfAny(from: "file:///tmp/ABC.jpg")
+        XCTAssertEqual(resolved?.isFileURL, true)
+    }
+
+    func test_directURLIfAny_schemelessToken_staysNil() {
+        XCTAssertNil(StoryBackgroundLayer.directURLIfAny(from: "not-a-url-token"))
+        XCTAssertNil(StoryBackgroundLayer.directURLIfAny(from: ""))
+    }
+
     func test_configure_gradient_addsGradientSublayer() {
         let layer = StoryBackgroundLayer()
         let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))

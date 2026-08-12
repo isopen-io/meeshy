@@ -53,6 +53,15 @@ export interface ReactionUpdateEvent {
   readonly messageId: string;
   readonly conversationId: string;
   readonly participantId: string;
+  /**
+   * User.id du réacteur (distinct de `participantId`, qui est un Participant.id
+   * scopé à la conversation). Permet à un autre appareil du MÊME utilisateur de
+   * reconnaître sa propre réaction dans l'écho temps-réel : comparer
+   * `participantId` à un User.id échoue toujours (ObjectIds de collections
+   * différentes, jamais égaux). Toujours émis par la gateway ; optionnel dans le
+   * type pour la compat descendante des payloads persistés/rejoués hors-ligne.
+   */
+  readonly userId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
   readonly aggregation: ReactionAggregation;

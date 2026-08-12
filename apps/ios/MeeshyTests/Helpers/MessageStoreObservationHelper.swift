@@ -52,7 +52,8 @@ enum MessageStoreObservationHelper {
         isEdited: Bool = false,
         editedAt: Date? = nil,
         deletedAt: Date? = nil,
-        expiresAt: Date? = nil
+        expiresAt: Date? = nil,
+        messageSource: String = "user"
     ) -> MessageRecord {
         let reactionsJson: Data? = reactions.isEmpty ? nil : try? JSONEncoder().encode(reactions)
         return MessageRecord(
@@ -63,7 +64,7 @@ enum MessageStoreObservationHelper {
             content: content,
             originalLanguage: "fr",
             messageType: "text",
-            messageSource: "user",
+            messageSource: messageSource,
             contentType: "text",
             state: state,
             retryCount: 0,

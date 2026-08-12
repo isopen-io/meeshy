@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NotificationDigestJob } from '../../../jobs/notification-digest';
+import { matchesNotificationWhere } from '../../helpers/notification-where';
 
 const unread = (overrides: Record<string, unknown> = {}) => ({
   id: 'n1',
@@ -30,7 +31,7 @@ function makeMocks() {
   const prisma = {
     notification: {
       findMany: jest.fn() as jest.Mock<any>,
-      updateMany: jest.fn() as jest.Mock<any>,
+      update: jest.fn() as jest.Mock<any>,
     },
     userPreferences: { findFirst: jest.fn() as jest.Mock<any> },
     user: { findUnique: jest.fn() as jest.Mock<any> },
@@ -57,9 +58,15 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
       if (args?.select?.userId && args?.select?.delivery && !args?.orderBy) {
         return Promise.resolve([{ userId: 'user-1', delivery: { emailSent: false } }]);
       }
-      // Second call (processUser): full notifications for the user
+      // Second call (processUser): full notifications for the user.
+      // n1 was already push-delivered — the digest must NOT reset that flag.
       return Promise.resolve([
-        unread({ id: 'n1', context: { conversationId: 'conv-abc' }, createdAt: new Date('2026-05-30T12:00:00Z') }),
+        unread({
+          id: 'n1',
+          context: { conversationId: 'conv-abc' },
+          createdAt: new Date('2026-05-30T12:00:00Z'),
+          delivery: { emailSent: false, pushSent: true },
+        }),
         unread({ id: 'n2', context: { conversationId: 'conv-xyz' }, createdAt: new Date('2026-05-30T09:00:00Z') }),
       ]);
     });
@@ -67,7 +74,7 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     prisma.user.findUnique.mockResolvedValue({
       email: 'alice@example.com', displayName: 'Alice', username: 'alice', systemLanguage: 'fr', isActive: true,
     });
-    prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+    prisma.notification.update.mockResolvedValue({});
 
     magicLinkService.issueLoginTokenForUser.mockResolvedValue('RAWTOKEN123');
     emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
@@ -96,10 +103,23 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(JSON.stringify(data)).not.toContain('secret');
   });
 
-  it('marks notifications as emailed after a successful send', async () => {
+  it('marks notifications as emailed while PRESERVING each existing delivery state', async () => {
     await job.runNow();
-    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: ['n1', 'n2'] } } })
+
+    const updates = prisma.notification.update.mock.calls.map((c: any[]) => c[0]);
+    expect(updates.map((u: any) => u.where.id).sort()).toEqual(['n1', 'n2']);
+
+    // n1 had pushSent:true (flipped by a delivered push) — a blanket
+    // { emailSent, pushSent: false } write would corrupt the multi-channel
+    // tracking. The digest must spread the document's real delivery.
+    const n1 = updates.find((u: any) => u.where.id === 'n1');
+    expect(n1.data.delivery).toEqual(
+      expect.objectContaining({ emailSent: true, pushSent: true, emailSentAt: expect.any(String) })
+    );
+
+    const n2 = updates.find((u: any) => u.where.id === 'n2');
+    expect(n2.data.delivery).toEqual(
+      expect.objectContaining({ emailSent: true, pushSent: false })
     );
   });
 
@@ -128,5 +148,211 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(data.magicUrl).not.toContain('/auth/magic-link/validate');
     expect(data.magicUrl).toMatch(/\/conversations\/conv-abc$/);
     expect(emailService.sendNotificationDigestEmail).toHaveBeenCalled();
+  });
+});
+
+// ─── doWork edge cases ────────────────────────────────────────────────────────
+
+describe('NotificationDigestJob — doWork edge cases', () => {
+  it('exits early when there are no unread notifications', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    await job.runNow();
+
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('ne relance personne pour une notification dont le message éphémère a expiré', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    const rows = [
+      {
+        userId: 'user-1',
+        isRead: false,
+        expiresAt: new Date(Date.now() - 60_000),
+        delivery: { emailSent: false },
+      },
+    ];
+    prisma.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(rows.filter((r) => matchesNotificationWhere(r as any, args?.where)))
+    );
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    await job.runNow();
+
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('does not throw on a fatal DB error inside doWork', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockRejectedValue(new Error('DB connection lost'));
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    await expect(job.runNow()).resolves.toBeUndefined();
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+  });
+
+  it('logs warn and skips the delivery updates when email send returns success=false', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockImplementation((args: any) => {
+      if (!args?.orderBy) return Promise.resolve([{ userId: 'u1', delivery: { emailSent: false } }]);
+      return Promise.resolve([unread()]);
+    });
+    prisma.userPreferences.findFirst.mockResolvedValue({ notification: {} });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'a@b.com', displayName: 'A', username: 'a', systemLanguage: 'en', isActive: true,
+    });
+    magicLinkService.issueLoginTokenForUser.mockResolvedValue('tok');
+    emailService.sendNotificationDigestEmail.mockResolvedValue({ success: false, error: 'SMTP down' });
+
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+    await job.runNow();
+
+    expect(prisma.notification.update).not.toHaveBeenCalled();
+  });
+
+  it('catches per-user error and continues processing remaining users', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockImplementation((args: any) => {
+      if (!args?.orderBy) {
+        return Promise.resolve([
+          { userId: 'u1', delivery: { emailSent: false } },
+          { userId: 'u2', delivery: { emailSent: false } },
+        ]);
+      }
+      return Promise.resolve([unread()]);
+    });
+    prisma.userPreferences.findFirst
+      .mockRejectedValueOnce(new Error('DB timeout'))
+      .mockResolvedValue({ notification: {} });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'b@c.com', displayName: 'B', username: 'b', systemLanguage: 'en', isActive: true,
+    });
+    prisma.notification.update.mockResolvedValue({});
+    magicLinkService.issueLoginTokenForUser.mockResolvedValue('tok');
+    emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
+
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+    await job.runNow();
+
+    // u1 errored (caught), u2 succeeded → exactly one email sent
+    expect(emailService.sendNotificationDigestEmail).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── start()/stop() lifecycle ─────────────────────────────────────────────────
+
+describe('NotificationDigestJob — start()/stop() lifecycle', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // At 10:00 UTC the next 18:00 UTC is 8 h = 28_800_000 ms away
+    jest.setSystemTime(new Date('2026-01-01T10:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  it('stop() before timeout fires cancels the scheduled run', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    job.start();
+    job.stop();
+
+    await jest.advanceTimersByTimeAsync(30 * 60 * 60 * 1000);
+    expect(prisma.notification.findMany).not.toHaveBeenCalled();
+  });
+
+  it('calling start() twice logs a warning instead of duplicating the timer', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    job.start();
+    job.start(); // second call hits the "already running" guard
+    job.stop();
+  });
+
+  it('schedules for the NEXT day when start() is called after 18:00 UTC', () => {
+    // At 20:00 UTC, 18:00 UTC was 2 h ago → next run is tomorrow at 18:00
+    jest.setSystemTime(new Date('2026-01-01T20:00:00.000Z'));
+
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    job.start(); // calls getMillisecondsUntilNextRun → next.setUTCDate(+1)
+    job.stop();
+  });
+
+  it('timeout fires doWork and sets up the 24 h repeat interval', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    job.start();
+
+    await jest.advanceTimersByTimeAsync(28_800_001);
+
+    expect(prisma.notification.findMany).toHaveBeenCalled();
+    job.stop();
+  });
+
+  it('stop() after interval is set clears it so no further runs occur', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    prisma.notification.findMany.mockResolvedValue([]);
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    job.start();
+    await jest.advanceTimersByTimeAsync(28_800_001); // fire initial timeout → interval set
+
+    const callsBefore = (prisma.notification.findMany as jest.Mock<any>).mock.calls.length;
+
+    job.stop(); // clears the interval
+
+    await jest.advanceTimersByTimeAsync(25 * 60 * 60 * 1000); // advance another 25 h
+    expect((prisma.notification.findMany as jest.Mock<any>).mock.calls.length).toBe(callsBefore);
+  });
+});
+
+// ─── batch processing — sleep between batches ─────────────────────────────────
+
+describe('NotificationDigestJob — batch sleep (> BATCH_SIZE users)', () => {
+  it('sleeps BATCH_DELAY_MS between batches so all 51 users are processed', async () => {
+    jest.useFakeTimers();
+    try {
+      const { prisma, emailService, magicLinkService } = makeMocks();
+      const users = Array.from({ length: 51 }, (_, i) => ({
+        userId: `u${i}`,
+        delivery: { emailSent: false },
+      }));
+
+      prisma.notification.findMany.mockImplementation((args: any) => {
+        if (!args?.orderBy) return Promise.resolve(users);
+        return Promise.resolve([unread()]);
+      });
+      prisma.userPreferences.findFirst.mockResolvedValue({ notification: {} });
+      prisma.user.findUnique.mockResolvedValue({
+        email: 'x@y.com', displayName: 'X', username: 'x', systemLanguage: 'en', isActive: true,
+      });
+      prisma.notification.update.mockResolvedValue({});
+      magicLinkService.issueLoginTokenForUser.mockResolvedValue('tok');
+      emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
+
+      const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+      const runPromise = job.runNow();
+
+      await jest.runAllTimersAsync();
+      await runPromise;
+
+      expect(emailService.sendNotificationDigestEmail).toHaveBeenCalledTimes(51);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

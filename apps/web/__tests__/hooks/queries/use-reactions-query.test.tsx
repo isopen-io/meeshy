@@ -11,7 +11,7 @@
  */
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { ReactionAggregation, ReactionUpdateEvent } from '@meeshy/shared/types/reaction';
@@ -131,7 +131,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
           initialReactionSummary,
           initialCurrentUserReactions,
@@ -156,7 +156,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper: createWrapper() }
@@ -188,7 +188,7 @@ describe('useReactionsQuery', () => {
     it('should not fetch when enabled is false', () => {
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
           enabled: false,
         }),
@@ -207,7 +207,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper: createWrapper() }
@@ -219,7 +219,7 @@ describe('useReactionsQuery', () => {
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
         CLIENT_EVENTS.REACTION_REQUEST_SYNC,
-        'msg-1',
+        '507f1f77bcf86cd799439011',
         expect.any(Function)
       );
     });
@@ -230,7 +230,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper: createWrapper() }
@@ -242,6 +242,93 @@ describe('useReactionsQuery', () => {
 
       // Should return empty state when socket not connected
       expect(result.current.reactions).toEqual([]);
+    });
+  });
+
+  describe('Optimistic message guard', () => {
+    // An optimistic (not-yet-persisted) message carries a client id
+    // (`cid_<uuid>` from generateClientMessageId) until the server ACK/
+    // broadcast replaces it with a Mongo ObjectId (24 hex). Emitting a
+    // reaction sync/add/remove for a `cid_...` id makes the gateway reject a
+    // non-ObjectId ("Prisma ObjectID error"), so this hook — the one the
+    // reactions UI actually renders (message-reactions.tsx via
+    // BubbleMessageNormalView) — must stay disabled until the id is a real
+    // 24-hex ObjectId, exactly like the (unused in production)
+    // useMessageReactions hook already does.
+    const optimisticId = 'cid_123e4567-e89b-42d3-a456-426614174000';
+
+    it('does not fetch/sync for an optimistic (cid_) message id', () => {
+      renderHook(
+        () => useReactionsQuery({
+          messageId: optimisticId,
+          currentUserId: 'user-1',
+        }),
+        { wrapper: createWrapper() }
+      );
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('addReaction returns false and does not emit for an optimistic (cid_) message id', async () => {
+      const { result } = renderHook(
+        () => useReactionsQuery({
+          messageId: optimisticId,
+          currentUserId: 'user-1',
+        }),
+        { wrapper: createWrapper() }
+      );
+
+      const success = await act(async () => result.current.addReaction('👍'));
+
+      expect(success).toBe(false);
+      expect(mockSocketEmit).not.toHaveBeenCalledWith(
+        CLIENT_EVENTS.REACTION_ADD,
+        expect.anything(),
+        expect.any(Function)
+      );
+    });
+
+    it('removeReaction returns false and does not emit for an optimistic (cid_) message id', async () => {
+      const { result } = renderHook(
+        () => useReactionsQuery({
+          messageId: optimisticId,
+          currentUserId: 'user-1',
+        }),
+        { wrapper: createWrapper() }
+      );
+
+      const success = await act(async () => result.current.removeReaction('👍'));
+
+      expect(success).toBe(false);
+      expect(mockSocketEmit).not.toHaveBeenCalledWith(
+        CLIENT_EVENTS.REACTION_REMOVE,
+        expect.anything(),
+        expect.any(Function)
+      );
+    });
+
+    it('fetches/syncs once the message id is a real 24-hex ObjectId', async () => {
+      mockSocketEmit.mockImplementation((event, messageId, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
+          callback({ success: true, data: mockReactionState });
+        }
+      });
+
+      renderHook(
+        () => useReactionsQuery({
+          messageId: '507f1f77bcf86cd799439011',
+          currentUserId: 'user-1',
+        }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(mockSocketEmit).toHaveBeenCalledWith(
+          CLIENT_EVENTS.REACTION_REQUEST_SYNC,
+          '507f1f77bcf86cd799439011',
+          expect.any(Function)
+        );
+      });
     });
   });
 
@@ -258,11 +345,11 @@ describe('useReactionsQuery', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
       // Pre-populate cache
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -279,7 +366,7 @@ describe('useReactionsQuery', () => {
       // Should have added the reaction
       expect(mockSocketEmit).toHaveBeenCalledWith(
         CLIENT_EVENTS.REACTION_ADD,
-        { messageId: 'msg-1', emoji: '🎉' },
+        { messageId: '507f1f77bcf86cd799439011', emoji: '🎉' },
         expect.any(Function)
       );
     });
@@ -287,11 +374,11 @@ describe('useReactionsQuery', () => {
     it('should not add reaction if already reacted', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -327,11 +414,11 @@ describe('useReactionsQuery', () => {
 
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -347,7 +434,7 @@ describe('useReactionsQuery', () => {
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
         CLIENT_EVENTS.REACTION_REMOVE,
-        { messageId: 'msg-1', emoji: '❤️' },
+        { messageId: '507f1f77bcf86cd799439011', emoji: '❤️' },
         expect.any(Function)
       );
     });
@@ -365,11 +452,11 @@ describe('useReactionsQuery', () => {
 
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -401,11 +488,11 @@ describe('useReactionsQuery', () => {
 
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -431,11 +518,11 @@ describe('useReactionsQuery', () => {
     it('should return correct reaction count', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -453,11 +540,11 @@ describe('useReactionsQuery', () => {
     it('should calculate total count correctly', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -473,11 +560,11 @@ describe('useReactionsQuery', () => {
     it('should check hasReacted correctly', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], mockReactionState);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], mockReactionState);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -503,11 +590,11 @@ describe('useReactionsQuery', () => {
 
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], stateWithMaxReactions);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], stateWithMaxReactions);
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper }
@@ -530,7 +617,7 @@ describe('useReactionsQuery', () => {
     it('should register socket event handlers on mount', async () => {
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper: createWrapper() }
@@ -553,7 +640,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
         }),
         { wrapper: createWrapper() }
@@ -582,7 +669,7 @@ describe('useReactionsQuery', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
       // Pre-seed cache with existing reaction
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '👍', count: 2, participantIds: ['user-2'], hasCurrentUser: false }],
         userReactions: [],
       });
@@ -594,7 +681,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -618,7 +705,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -628,7 +715,7 @@ describe('useReactionsQuery', () => {
 
       // The optimistic update should have set something even with no prior cache
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ userReactions: string[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ userReactions: string[] }>(['reactions', '507f1f77bcf86cd799439011']);
         expect(data?.userReactions).toContain('❤️');
       });
 
@@ -638,7 +725,7 @@ describe('useReactionsQuery', () => {
     it('does not duplicate emoji in userReactions during optimistic update', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
@@ -650,7 +737,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -667,7 +754,7 @@ describe('useReactionsQuery', () => {
     it('rolls back on addMutation error', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '👍', count: 3, participantIds: [], hasCurrentUser: false }],
         userReactions: [],
       });
@@ -679,7 +766,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -689,8 +776,39 @@ describe('useReactionsQuery', () => {
 
       // After rollback, data should be restored
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: { count: number }[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: { count: number }[] }>(['reactions', '507f1f77bcf86cd799439011']);
         expect(data?.reactions[0].count).toBe(3);
+      });
+    });
+
+    it('rolls back the fabricated state when the cache was empty', async () => {
+      // Cache vide : `onMutate` FABRIQUE l'état optimiste à partir de rien
+      // (`if (!old) return { reactions: [], userReactions: [emoji] }`), donc
+      // `previousData` est `undefined`. Un rollback gardé par
+      // `if (context?.previousData)` refuse alors de défaire ce qu'il vient de
+      // fabriquer : la réaction fantôme reste affichée pour toujours, alors
+      // même que le serveur l'a refusée.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      // Le sync initial ne rappelle jamais → le cache reste vide.
+      mockSocketEmit.mockImplementation((event, _payload, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_ADD) {
+          callback({ success: false, error: 'Server error' });
+        }
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.addReaction('👍');
+      });
+
+      await waitFor(() => {
+        const data = queryClient.getQueryData<{ userReactions: string[] }>(['reactions', '507f1f77bcf86cd799439011']);
+        expect(data?.userReactions ?? []).not.toContain('👍');
       });
     });
 
@@ -698,7 +816,7 @@ describe('useReactionsQuery', () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [],
         userReactions: [],
       });
@@ -710,7 +828,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -728,7 +846,7 @@ describe('useReactionsQuery', () => {
     it('maps reaction with count > 1 (decrement without removal)', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '👍', count: 5, participantIds: ['user-1', 'user-2'], hasCurrentUser: true }],
         userReactions: ['👍'],
       });
@@ -740,7 +858,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -750,7 +868,7 @@ describe('useReactionsQuery', () => {
 
       // count was 5 > 1, so it should decrement by 1 (optimistic)
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: { emoji: string; count: number }[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: { emoji: string; count: number }[] }>(['reactions', '507f1f77bcf86cd799439011']);
         // After server confirms, data may be restored, but at minimum optimistic showed decrement
         expect(data).toBeDefined();
       });
@@ -759,7 +877,7 @@ describe('useReactionsQuery', () => {
     it('returns old when emoji not found in reactions (early return)', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '👍', count: 1, participantIds: [], hasCurrentUser: false }],
         userReactions: ['👍'],
       });
@@ -771,7 +889,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -782,7 +900,7 @@ describe('useReactionsQuery', () => {
 
       // '❤️' not found - the onMutate returns old unchanged
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: { emoji: string }[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: { emoji: string }[] }>(['reactions', '507f1f77bcf86cd799439011']);
         expect(data?.reactions.some(r => r.emoji === '👍')).toBe(true);
       });
     });
@@ -799,7 +917,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -808,7 +926,7 @@ describe('useReactionsQuery', () => {
       });
 
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: unknown[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: unknown[] }>(['reactions', '507f1f77bcf86cd799439011']);
         // Should have been set to { reactions: [], userReactions: [] }
         expect(data?.reactions).toEqual([]);
       });
@@ -819,7 +937,7 @@ describe('useReactionsQuery', () => {
     it('rolls back on removeMutation error', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
@@ -831,7 +949,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -840,9 +958,36 @@ describe('useReactionsQuery', () => {
       });
 
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: { emoji: string }[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: { emoji: string }[] }>(['reactions', '507f1f77bcf86cd799439011']);
         // After rollback, '❤️' should be restored
         expect(data?.reactions.some(r => r.emoji === '❤️')).toBe(true);
+      });
+    });
+
+    it('rolls back to no-data when the cache was empty', async () => {
+      // Même défaut côté retrait : `onMutate` matérialise un état vide là où il
+      // n'y avait AUCUNE donnée. Un rollback gardé sur `previousData` laisse
+      // cette entrée fabriquée en place, et le cache ment ensuite sur le fait
+      // qu'il a été chargé.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      mockSocketEmit.mockImplementation((event, _payload, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REMOVE) {
+          callback({ success: false, error: 'Server error' });
+        }
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.removeReaction('❤️');
+      });
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(['reactions', '507f1f77bcf86cd799439011'])).toBeUndefined();
       });
     });
   });
@@ -852,13 +997,13 @@ describe('useReactionsQuery', () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       // Temporarily disconnect socket
       mockSocketConnected = false;
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -880,7 +1025,7 @@ describe('useReactionsQuery', () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
@@ -889,7 +1034,7 @@ describe('useReactionsQuery', () => {
       mockSocketConnected = false;
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -909,7 +1054,7 @@ describe('useReactionsQuery', () => {
   describe('addReaction - disabled / no messageId', () => {
     it('returns false when enabled=false', async () => {
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1', enabled: false }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1', enabled: false }),
         { wrapper: createWrapper() }
       );
 
@@ -931,7 +1076,7 @@ describe('useReactionsQuery', () => {
   describe('removeReaction - disabled / no messageId', () => {
     it('returns false when enabled=false', async () => {
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1', enabled: false }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1', enabled: false }),
         { wrapper: createWrapper() }
       );
 
@@ -950,18 +1095,112 @@ describe('useReactionsQuery', () => {
     });
   });
 
+  describe('Socket handlers - conversation list is not a reaction surface', () => {
+    /**
+     * Une reaction ne change RIEN de ce que porte une ligne de liste : ni
+     * l'apercu du dernier message, ni le compteur de non-lus, ni l'horodatage.
+     * Le seul cache concerne est celui du message, mis a jour juste a cote par
+     * `updateReactionSummaryInMessageCache`.
+     *
+     * L'invalidation retiree visait `conversations.lists()` (['conversations',
+     * 'list']) alors que la sidebar lit `conversations.infinite()`
+     * (['conversations','infinite']) : prefixes DISJOINTS, donc l'intention
+     * ecrite en commentaire n'etait jamais executee. La rediriger vers
+     * `infinite()` aurait relu TOUTES les pages chargees a chaque reaction —
+     * exactement le refetch que le cycle 77 a retire du chemin de focus.
+     *
+     * Le temoin arme les DEUX formes de cle et exige zero refetch sur chacune :
+     * il echoue aussi bien sur l'invalidation morte que sur sa « correction »
+     * couteuse.
+     */
+    /**
+     * Les deux listes sont montees avec de VRAIS observateurs : une
+     * `invalidateQueries` ne refetch que les requetes ACTIVES, donc un cache
+     * pose a la main (`setQueryData`/`fetchQuery`) resterait muet et le temoin
+     * passerait au vert sans rien prouver.
+     */
+    const renderWithConversationLists = (queryClient: QueryClient, wrapper: React.ComponentType<{ children: React.ReactNode }>) => {
+      const flatFetch = jest.fn().mockResolvedValue([]);
+      const infiniteFetch = jest.fn().mockResolvedValue({ conversations: [] });
+
+      const rendered = renderHook(
+        () => ({
+          reactions: useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+          flat: useQuery({ queryKey: ['conversations', 'list'], queryFn: flatFetch, staleTime: Infinity }),
+          infinite: useQuery({ queryKey: ['conversations', 'infinite'], queryFn: infiniteFetch, staleTime: Infinity }),
+        }),
+        { wrapper }
+      );
+
+      return { flatFetch, infiniteFetch, rendered, queryClient };
+    };
+
+    it('handleReactionAdded: refetches no conversation list', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
+      const { flatFetch, infiniteFetch } = renderWithConversationLists(queryClient, wrapper);
+
+      await waitFor(() => expect(flatFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(infiniteFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
+          participantId: 'user-1',
+          userId: 'user-1',
+          action: 'add',
+        });
+      });
+
+      expect(flatFetch).toHaveBeenCalledTimes(1);
+      expect(infiniteFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('handleReactionRemoved: refetches no conversation list', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
+        userReactions: ['❤️'],
+      });
+      const { flatFetch, infiniteFetch } = renderWithConversationLists(queryClient, wrapper);
+
+      await waitFor(() => expect(flatFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(infiniteFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockOnReactionRemoved).toHaveBeenCalled());
+      const capturedRemoved = mockOnReactionRemoved.mock.calls[mockOnReactionRemoved.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedRemoved({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          participantId: 'user-1',
+          userId: 'user-1',
+          action: 'remove',
+        });
+      });
+
+      expect(flatFetch).toHaveBeenCalledTimes(1);
+      expect(infiniteFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Socket handlers - handleReactionAdded and handleReactionRemoved', () => {
     it('handleReactionAdded: adds new reaction and updates userReactions for current user', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [],
         userReactions: [],
       });
 
       // Capture the handler
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -971,10 +1210,11 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'add',
         });
       });
@@ -985,16 +1225,23 @@ describe('useReactionsQuery', () => {
       });
     });
 
-    it('handleReactionAdded: updates existing reaction count', async () => {
+    it('handleReactionAdded: highlights own reaction on a second device (userId matches, participantId does not)', async () => {
+      // Multi-device: the current user (User.id 'user-1') reacts on device A.
+      // Device B receives the echo. On the wire the reactor is identified by
+      // Participant.id ('participant-abc'), which is NOT the User.id — the two
+      // are ObjectIds from different collections and never collide. Device B
+      // must still recognise the reaction as "mine" via the event's userId and
+      // add the emoji to userReactions, otherwise the emoji renders un-highlighted
+      // and a tap re-adds instead of toggling off.
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
-        reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-2'], hasCurrentUser: false }],
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
         userReactions: [],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1004,7 +1251,109 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-abc'], hasCurrentUser: true },
+          participantId: 'participant-abc',
+          userId: 'user-1',
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.userReactions).toContain('❤️');
+      });
+    });
+
+    it('handleReactionRemoved: clears own reaction on a second device (userId matches, participantId does not)', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 1, participantIds: ['participant-abc'], hasCurrentUser: true }],
+        userReactions: ['❤️'],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionRemoved).toHaveBeenCalled());
+
+      const capturedRemoved = mockOnReactionRemoved.mock.calls[mockOnReactionRemoved.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedRemoved({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          participantId: 'participant-abc',
+          userId: 'user-1',
+          action: 'remove',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.userReactions).not.toContain('❤️');
+      });
+    });
+
+    it('handleReactionAdded: does NOT highlight when another user reacts (userId differs)', async () => {
+      // Guard against over-matching: a different user's reaction must never land
+      // in the current user's userReactions.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '👍',
+          aggregation: { emoji: '👍', count: 1, participantIds: ['participant-xyz'], hasCurrentUser: false },
+          participantId: 'participant-xyz',
+          userId: 'user-2',
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.reactions.find(r => r.emoji === '👍')).toBeDefined();
+      });
+      expect(result.current.userReactions).not.toContain('👍');
+    });
+
+    it('handleReactionAdded: updates existing reaction count', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-2'], hasCurrentUser: false }],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 2, participantIds: ['user-2', 'user-3'], hasCurrentUser: false },
           participantId: 'user-3',
@@ -1020,13 +1369,13 @@ describe('useReactionsQuery', () => {
     it('handleReactionAdded: ignores event for different messageId', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [],
         userReactions: [],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1053,7 +1402,7 @@ describe('useReactionsQuery', () => {
       // No pre-seeded cache
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-empty', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439012', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1063,7 +1412,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-empty',
+          messageId: '507f1f77bcf86cd799439012',
           emoji: '👍',
           aggregation: { emoji: '👍', count: 1, participantIds: ['user-2'], hasCurrentUser: false },
           participantId: 'user-2',
@@ -1079,13 +1428,13 @@ describe('useReactionsQuery', () => {
     it('handleReactionAdded: does NOT duplicate emoji in userReactions', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 2, participantIds: ['user-1', 'user-2'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1095,10 +1444,11 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: true },
           participantId: 'user-1', // same as currentUserId - already in userReactions
+          userId: 'user-1',
           action: 'add',
         });
       });
@@ -1112,13 +1462,13 @@ describe('useReactionsQuery', () => {
     it('handleReactionRemoved: removes reaction when count = 0', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1128,10 +1478,11 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedRemoved({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1145,13 +1496,13 @@ describe('useReactionsQuery', () => {
     it('handleReactionRemoved: decrements reaction when count > 0', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '👍', count: 3, participantIds: ['u1', 'u2', 'u3'], hasCurrentUser: false }],
         userReactions: [],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1161,7 +1512,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedRemoved({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '👍',
           aggregation: { emoji: '👍', count: 2, participantIds: ['u1', 'u2'], hasCurrentUser: false },
           participantId: 'u3',
@@ -1177,13 +1528,13 @@ describe('useReactionsQuery', () => {
     it('handleReactionRemoved: ignores event for different messageId', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 2, participantIds: [], hasCurrentUser: false }],
         userReactions: [],
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1197,6 +1548,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1210,7 +1562,7 @@ describe('useReactionsQuery', () => {
       // No pre-seeded cache for this messageId
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-new', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439013', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1220,15 +1572,16 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedRemoved({
-          messageId: 'msg-new',
+          messageId: '507f1f77bcf86cd799439013',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
 
-      const data = queryClient.getQueryData<{ reactions: unknown[]; userReactions: unknown[] }>(['reactions', 'msg-new']);
+      const data = queryClient.getQueryData<{ reactions: unknown[]; userReactions: unknown[] }>(['reactions', '507f1f77bcf86cd799439013']);
       expect(data?.reactions).toEqual([]);
       expect(data?.userReactions).toEqual([]);
     });
@@ -1248,14 +1601,14 @@ describe('useReactionsQuery', () => {
 
       const msgCacheKey = ['messages', 'list', 'conv-1', 'infinite'];
       qc.setQueryData(msgCacheKey, {
-        pages: [{ messages: [{ id: 'msg-1', content: 'Hello', reactionSummary: { '👍': 1 } }] }],
+        pages: [{ messages: [{ id: '507f1f77bcf86cd799439011', content: 'Hello', reactionSummary: { '👍': 1 } }] }],
         pageParams: [undefined],
       });
 
-      qc.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      qc.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper: wrapperFn }
       );
 
@@ -1265,7 +1618,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: false },
           participantId: 'user-2',
@@ -1274,7 +1627,7 @@ describe('useReactionsQuery', () => {
       });
 
       const msgData = qc.getQueryData<{ pages: { messages: { id: string; reactionSummary?: Record<string, number> }[] }[] }>(msgCacheKey);
-      const msg = msgData?.pages[0].messages.find(m => m.id === 'msg-1');
+      const msg = msgData?.pages[0].messages.find(m => m.id === '507f1f77bcf86cd799439011');
       expect(msg?.reactionSummary?.['❤️']).toBe(3);
     });
 
@@ -1288,17 +1641,17 @@ describe('useReactionsQuery', () => {
 
       const msgCacheKey = ['messages', 'list', 'conv-1', 'infinite'];
       qc.setQueryData(msgCacheKey, {
-        pages: [{ messages: [{ id: 'msg-1', content: 'Hello', reactionSummary: { '❤️': 1 } }] }],
+        pages: [{ messages: [{ id: '507f1f77bcf86cd799439011', content: 'Hello', reactionSummary: { '❤️': 1 } }] }],
         pageParams: [undefined],
       });
 
-      qc.setQueryData(['reactions', 'msg-1'], {
+      qc.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false }],
         userReactions: [],
       });
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper: wrapperFn }
       );
 
@@ -1308,10 +1661,11 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedRemoved({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1334,7 +1688,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-noerr', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439014', currentUserId: 'user-1' }),
         { wrapper: createWrapper() }
       );
 
@@ -1348,7 +1702,7 @@ describe('useReactionsQuery', () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       mockSocketEmit.mockImplementation((event, _payload, callback) => {
         if (event === CLIENT_EVENTS.REACTION_ADD) {
@@ -1357,7 +1711,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1374,7 +1728,7 @@ describe('useReactionsQuery', () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [{ emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true }],
         userReactions: ['❤️'],
       });
@@ -1386,7 +1740,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1404,7 +1758,7 @@ describe('useReactionsQuery', () => {
     it('only initialCurrentUserReactions provided — covers initialReactionSummary || {} right branch', async () => {
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
           initialCurrentUserReactions: ['❤️'],
           // no initialReactionSummary → Object.entries(initialReactionSummary || {}) uses {}
@@ -1419,7 +1773,7 @@ describe('useReactionsQuery', () => {
     it('only initialReactionSummary provided — covers initialCurrentUserReactions || [] right branch', async () => {
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           currentUserId: 'user-1',
           initialReactionSummary: { '❤️': 5 },
           // no initialCurrentUserReactions → new Set(initialCurrentUserReactions || []) uses []
@@ -1438,7 +1792,7 @@ describe('useReactionsQuery', () => {
     it('handleReactionAdded: maps non-matching reactions unchanged (false branch of r.emoji === emoji)', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [
           { emoji: '❤️', count: 2, participantIds: ['user-2', 'user-3'], hasCurrentUser: false },
           { emoji: '👍', count: 1, participantIds: ['user-4'], hasCurrentUser: false },
@@ -1447,7 +1801,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1457,7 +1811,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️', // matches first; '👍' goes through the ternary false branch `: r`
           aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: false },
           participantId: 'user-5',
@@ -1474,7 +1828,7 @@ describe('useReactionsQuery', () => {
     it('handleReactionRemoved: maps non-matching reactions unchanged (false branch)', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [
           { emoji: '❤️', count: 2, participantIds: ['user-1', 'user-2'], hasCurrentUser: true },
           { emoji: '👍', count: 3, participantIds: ['user-3', 'user-4', 'user-5'], hasCurrentUser: false },
@@ -1483,7 +1837,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1493,10 +1847,11 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedRemoved({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️', // count > 0 → map path; '👍' goes through false branch `: r`
           aggregation: { emoji: '❤️', count: 1, participantIds: ['user-2'], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1512,7 +1867,7 @@ describe('useReactionsQuery', () => {
     it('new emoji without currentUserId: uses empty participantIds array (false branch)', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       mockSocketEmit.mockImplementation((event, _payload, callback) => {
         if (event === CLIENT_EVENTS.REACTION_ADD) {
@@ -1522,7 +1877,7 @@ describe('useReactionsQuery', () => {
 
       const { result } = renderHook(
         () => useReactionsQuery({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           // no currentUserId → participantIds: currentUserId ? [...] : [] uses []
         }),
         { wrapper }
@@ -1533,7 +1888,7 @@ describe('useReactionsQuery', () => {
       });
 
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: ReactionAggregation[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: ReactionAggregation[] }>(['reactions', '507f1f77bcf86cd799439011']);
         const reaction = data?.reactions.find(r => r.emoji === '🎉');
         expect(reaction?.participantIds).toEqual([]);
       });
@@ -1542,7 +1897,7 @@ describe('useReactionsQuery', () => {
     it('existing emoji in cache with multiple reactions: non-matching map entry goes through false branch', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', 'msg-1'], {
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
         reactions: [
           { emoji: '👍', count: 2, participantIds: ['user-2'], hasCurrentUser: false },
           { emoji: '❤️', count: 1, participantIds: ['user-3'], hasCurrentUser: false },
@@ -1557,7 +1912,7 @@ describe('useReactionsQuery', () => {
       });
 
       const { result } = renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper }
       );
 
@@ -1566,7 +1921,7 @@ describe('useReactionsQuery', () => {
       });
 
       await waitFor(() => {
-        const data = queryClient.getQueryData<{ reactions: ReactionAggregation[] }>(['reactions', 'msg-1']);
+        const data = queryClient.getQueryData<{ reactions: ReactionAggregation[] }>(['reactions', '507f1f77bcf86cd799439011']);
         expect(data?.reactions.find(r => r.emoji === '❤️')?.count).toBe(1); // unchanged via false branch
       });
     });
@@ -1583,10 +1938,10 @@ describe('useReactionsQuery', () => {
 
       // Store a messages.* entry WITHOUT pages → triggers !data?.pages continue
       qc.setQueryData(['messages', 'status-details', 'msg-x'], { notPages: true });
-      qc.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      qc.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper: wrapperFn }
       );
 
@@ -1596,7 +1951,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
           participantId: 'user-2',
@@ -1621,10 +1976,10 @@ describe('useReactionsQuery', () => {
         pages: [{ messages: [{ id: 'msg-OTHER', content: 'hello', reactionSummary: {} }] }],
         pageParams: [undefined],
       });
-      qc.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      qc.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper: wrapperFn }
       );
 
@@ -1635,7 +1990,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1', // NOT present in pages → found stays false
+          messageId: '507f1f77bcf86cd799439011', // NOT present in pages → found stays false
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
           participantId: 'user-2',
@@ -1656,13 +2011,13 @@ describe('useReactionsQuery', () => {
 
       const msgCacheKey = ['messages', 'list', 'conv-2', 'infinite'];
       qc.setQueryData(msgCacheKey, {
-        pages: [{ messages: [{ id: 'msg-1', content: 'hello' /* no reactionSummary */ }] }],
+        pages: [{ messages: [{ id: '507f1f77bcf86cd799439011', content: 'hello' /* no reactionSummary */ }] }],
         pageParams: [undefined],
       });
-      qc.setQueryData(['reactions', 'msg-1'], { reactions: [], userReactions: [] });
+      qc.setQueryData(['reactions', '507f1f77bcf86cd799439011'], { reactions: [], userReactions: [] });
 
       renderHook(
-        () => useReactionsQuery({ messageId: 'msg-1', currentUserId: 'user-1' }),
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
         { wrapper: wrapperFn }
       );
 
@@ -1672,7 +2027,7 @@ describe('useReactionsQuery', () => {
 
       act(() => {
         capturedAdded({
-          messageId: 'msg-1',
+          messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
           participantId: 'user-2',
@@ -1683,7 +2038,7 @@ describe('useReactionsQuery', () => {
       const msgData = qc.getQueryData<{
         pages: { messages: { id: string; reactionSummary?: Record<string, number> }[] }[];
       }>(msgCacheKey);
-      const msg = msgData?.pages[0].messages.find(m => m.id === 'msg-1');
+      const msg = msgData?.pages[0].messages.find(m => m.id === '507f1f77bcf86cd799439011');
       expect(msg?.reactionSummary?.['❤️']).toBe(1);
     });
   });

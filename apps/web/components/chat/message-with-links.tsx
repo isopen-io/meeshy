@@ -9,6 +9,7 @@ import {
   generateDeviceFingerprint,
 } from '@/lib/utils/link-parser';
 import type { ParsedLink } from '@/lib/utils/link-parser';
+import { openExternalUrl } from '@/utils/safe-redirect';
 
 export interface MessageWithLinksProps {
   content: string;
@@ -53,30 +54,21 @@ export function MessageWithLinks({
             deviceFingerprint,
           });
 
-          if (result.success && result.originalUrl) {
-            // Essayer d'ouvrir dans un nouvel onglet, sinon naviguer directement
-            const newWindow = window.open(result.originalUrl, '_blank', 'noopener,noreferrer');
-            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-              // Si l'ouverture d'un nouvel onglet échoue, naviguer directement
-              window.location.href = result.originalUrl;
-            }
-          } else {
+          // La destination vient du créateur du lien : elle doit être validée
+          // avant d'atteindre window.open / location.href, sinon un
+          // `javascript:` s'exécute sur notre origine. Une destination refusée
+          // retombe sur le lien de suivi lui-même.
+          if (!result.success || !openExternalUrl(result.originalUrl)) {
             console.error('Failed to record tracking link click:', result.error);
             // Fallback: ouvrir le lien de tracking directement
             const fallbackUrl = part.type === 'mshy-link' ? part.trackingUrl! : part.content;
-            const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-              window.location.href = fallbackUrl;
-            }
+            openExternalUrl(fallbackUrl);
           }
         } catch (error) {
           console.error('Error handling tracking link click:', error);
           // Fallback: ouvrir le lien de tracking directement
           const fallbackUrl = part.type === 'mshy-link' ? part.trackingUrl! : part.content;
-          const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-            window.location.href = fallbackUrl;
-          }
+          openExternalUrl(fallbackUrl);
         }
       }
 
@@ -215,27 +207,17 @@ export function TrackingLink({
           deviceFingerprint,
         });
 
-        if (result.success && result.originalUrl) {
-          const newWindow = window.open(result.originalUrl, '_blank', 'noopener,noreferrer');
-          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-            window.location.href = result.originalUrl;
-          }
+        if (result.success && openExternalUrl(result.originalUrl)) {
           onClickTracked?.();
         } else {
           console.error('Failed to record tracking link click:', result.error);
           const fallbackUrl = `https://meeshy.me/l/${token}`;
-          const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-            window.location.href = fallbackUrl;
-          }
+          openExternalUrl(fallbackUrl);
         }
       } catch (error) {
         console.error('Error handling tracking link click:', error);
         const fallbackUrl = `https://meeshy.me/l/${token}`;
-        const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-          window.location.href = fallbackUrl;
-        }
+        openExternalUrl(fallbackUrl);
       }
     },
     [token, onClickTracked]

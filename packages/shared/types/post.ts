@@ -45,6 +45,13 @@ export interface PostAuthor {
   readonly username: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
+  /**
+   * Présence — servie UNIQUEMENT sur le chemin stories (`storyAuthorSelect`
+   * gateway) pour que l'interstitiel d'identité du viewer résolve l'état de
+   * présence au moment du switch de groupe. Absent des payloads posts/feed.
+   */
+  readonly isOnline?: boolean;
+  readonly lastActiveAt?: Date | string | null;
 }
 
 export interface PostMedia {
@@ -132,6 +139,14 @@ export interface Post {
   readonly shareCount: number;
   readonly isPinned: boolean;
   readonly isEdited: boolean;
+  /**
+   * Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+   * médias) — distinct de `updatedAt` qui bouge sur chaque écriture
+   * (compteurs inclus). null/absent = jamais édité en contenu. Les clients
+   * s'en servent pour céder la garde « viewed monotone » après une édition
+   * de story (reset d'engagement).
+   */
+  readonly contentEditedAt?: string | Date | null;
   readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
@@ -222,6 +237,13 @@ export interface StoryCreatedEventData {
 
 export interface StoryUpdatedEventData {
   readonly story: Post;
+  /**
+   * true when the edit was a CONTENT edit that wiped the story's engagement
+   * (views, reactions, impressions) server-side — clients must mark the story
+   * unseen again for every viewer. Absent/false on metadata-only updates
+   * (visibility changes). The publication date (createdAt) never moves.
+   */
+  readonly engagementReset?: boolean;
 }
 
 export interface StoryDeletedEventData {
@@ -282,6 +304,17 @@ export interface CommentAddedEventData {
 export interface CommentDeletedEventData {
   readonly postId: string;
   readonly commentId: string;
+  /**
+   * Le fil ENTIER retiré — la cible et tous ses descendants — car supprimer un
+   * commentaire soft-delete tout son sous-arbre de réponses côté serveur.
+   * Toujours non vide et toujours préfixé par `commentId` quand il est présent.
+   *
+   * Optionnel pour rester additif : les clients qui ne le lisent pas encore
+   * gardent le comportement d'avant (retirer la seule cible). Un client qui le
+   * lit DOIT se replier sur `[commentId]` quand il est absent — le rejeu
+   * idempotent d'une suppression ne peut plus reconstruire le sous-arbre.
+   */
+  readonly deletedCommentIds?: readonly string[];
   readonly commentCount: number;
 }
 
@@ -346,6 +379,12 @@ export interface CommentReactionUpdateEventData {
 
 export interface CommentReactionSyncEventData {
   readonly commentId: string;
+  /**
+   * Owning post id. Required so a client can locate the comment in the
+   * post-scoped comment caches (`comments(postId)` → both the top-level list
+   * and any `replies` sub-caches). The comment id alone is NOT a cache key.
+   */
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregation[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];

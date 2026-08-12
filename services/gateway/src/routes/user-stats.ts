@@ -58,14 +58,23 @@ export async function computeUserStats(
     prisma.message.count({
       where: { sender: { userId }, deletedAt: null },
     }),
+    // Only conversations the user is CURRENTLY in. Leaving, being banned, or
+    // "delete for me" soft-deactivates the Participant row (isActive: false,
+    // leftAt) — it is never hard-deleted — so a bare `{ userId }` count would
+    // include every conversation ever joined and inflate `totalConversations`
+    // (and falsely unlock the `connecteur` achievement). Mirrors the
+    // `isActive: true` membership filter used everywhere else in the codebase.
     prisma.participant.count({
-      where: { userId },
+      where: { userId, isActive: true },
     }),
     prisma.message.count({
       where: {
         sender: { userId },
         deletedAt: null,
-        NOT: [{ translations: null }],
+        // Json?+Mongo : seule la forme not:{equals:null} passe le moteur Prisma
+        // (null brut, Prisma.JsonNull et isSet sont tous rejetés à l'exécution
+        // — vérifié contre la base réelle ; même forme que admin/dashboard.ts).
+        translations: { not: { equals: null } },
       },
     }),
     prisma.friendRequest.count({
@@ -178,6 +187,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
+        /* istanbul ignore next -- AJV useDefaults:true always injects the default; destructuring fallback is unreachable */
         const { days = 30 } = request.query as { days?: number };
 
         const startDate = new Date();
@@ -268,6 +278,7 @@ function computeAchievements(
 
   return (Object.entries(ACHIEVEMENT_THRESHOLDS) as [AchievementKey, typeof ACHIEVEMENT_THRESHOLDS[AchievementKey]][]).map(
     ([key, config]) => {
+      /* istanbul ignore next -- ACHIEVEMENT_THRESHOLDS.field always matches numericStats keys; ?? 0 is unreachable */
       const current = stats[config.field] ?? 0;
       const progress = Math.min(current / config.threshold, 1);
       return {

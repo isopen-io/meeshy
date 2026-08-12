@@ -16,13 +16,13 @@ import {
   Sparkles,
   Building2,
   GraduationCap,
-  Youtube,
-  Twitter,
-  Linkedin,
-  Instagram,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useI18n } from '@/hooks/useI18n';
+// lucide-react 1.x dropped brand/social icons entirely — importing the
+// removed Youtube/Twitter/Linkedin/Instagram names crashed this page
+// (React error #130, "invalid element type").
+import { YoutubeIcon, XIcon, LinkedinIcon, InstagramIcon } from '@/components/icons/brand-icons';
 
 export function LandingContent() {
   const { t } = useI18n('landing');
@@ -188,10 +188,10 @@ export function LandingContent() {
 
               <div className="flex justify-center md:justify-end space-x-4">
                 {[
-                  { href: 'https://youtube.com/@meeshy', icon: Youtube, label: 'YouTube', hoverColor: 'hover:text-red-500' },
-                  { href: 'https://x.com/meeshy', icon: Twitter, label: 'X', hoverColor: 'hover:text-white' },
-                  { href: 'https://linkedin.com/company/meeshy', icon: Linkedin, label: 'LinkedIn', hoverColor: 'hover:text-blue-400' },
-                  { href: 'https://instagram.com/meeshy', icon: Instagram, label: 'Instagram', hoverColor: 'hover:text-pink-500' },
+                  { href: 'https://youtube.com/@meeshy', icon: YoutubeIcon, label: 'YouTube', hoverColor: 'hover:text-red-500' },
+                  { href: 'https://x.com/meeshy', icon: XIcon, label: 'X', hoverColor: 'hover:text-white' },
+                  { href: 'https://linkedin.com/company/meeshy', icon: LinkedinIcon, label: 'LinkedIn', hoverColor: 'hover:text-blue-400' },
+                  { href: 'https://instagram.com/meeshy', icon: InstagramIcon, label: 'Instagram', hoverColor: 'hover:text-pink-500' },
                 ].map(({ href, icon: SocialIcon, label, hoverColor }) => (
                   <a
                     key={label}

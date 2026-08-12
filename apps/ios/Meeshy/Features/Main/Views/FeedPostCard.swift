@@ -36,7 +36,6 @@ struct FeedPostCard: View {
     var onQuote: ((String) -> Void)? = nil
     var onShare: ((String) -> Void)? = nil
     var onBookmark: ((String) -> Void)? = nil
-    var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
@@ -60,6 +59,12 @@ struct FeedPostCard: View {
     var authorStoryRing: StoryRingState = .none
     var onViewAuthorStory: (() -> Void)? = nil
 
+    /// Feed autoplay coordinator (RF2). Passed as a plain `let` — NOT observed —
+    /// so election changes never invalidate this leaf card; the inner
+    /// `ReelRepostEmbedContainer` observes it. `nil` keeps the static-poster
+    /// fallback (e.g. profile lists with no feed-level autoplay).
+    var reelAutoplay: ReelFeedAutoplayCoordinator? = nil
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -67,11 +72,17 @@ struct FeedPostCard: View {
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State var audioFullscreen: AudioFullscreenSource?
     @State private var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
+    /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
+    /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -89,6 +100,31 @@ struct FeedPostCard: View {
         if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
         return "\(value)"
     }
+
+    /// Compact preview descriptor for the media carried by a reposted POST/STATUS
+    /// (RF1). Holds the first media (rendered as a thumbnail) and the total count
+    /// (drives a "+N" badge).
+    struct RepostMediaPreview: Equatable {
+        let primary: FeedMedia
+        let count: Int
+        static func == (lhs: RepostMediaPreview, rhs: RepostMediaPreview) -> Bool {
+            lhs.primary.id == rhs.primary.id && lhs.count == rhs.count
+        }
+    }
+
+    /// Resolver for the reposted POST/STATUS quote-block media preview. Returns
+    /// `nil` when the repost carries no media — text-only reposts then keep their
+    /// byte-identical layout (the preview block is skipped). Otherwise the first
+    /// media + total count. Pure; unit-tested.
+    static func repostMediaPreviewModel(for repost: RepostContent) -> RepostMediaPreview? {
+        guard let primary = repost.media.first else { return nil }
+        return RepostMediaPreview(primary: primary, count: repost.media.count)
+    }
+
+    /// Tap target for the reposted quote block (incl. its media preview): ALWAYS
+    /// the original reposted post (`repost.id`), never the reposter's outer card
+    /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
+    static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
@@ -128,18 +164,34 @@ struct FeedPostCard: View {
 
     // MARK: - Prisme Linguistique
 
+    /// Language code the main text is currently showing. Defaults to the
+    /// deterministic Prisme resolution (`FeedPost.resolvedLanguageCode`,
+    /// same algorithm as `resolved()`/`displayContent`) — NEVER
+    /// `translations.keys.first` (non-deterministic dictionary order, the
+    /// root cause of a FR post rendering as EN for a francophone). A manual
+    /// flag tap (`activeDisplayLangCode`) always overrides the auto-resolution.
     private var currentDisplayLangCode: String {
-        activeDisplayLangCode ?? post.translations?.keys.first(where: { lang in
-            AuthManager.shared.currentUser?.preferredContentLanguages.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
-        })?.lowercased() ?? post.originalLanguage?.lowercased() ?? "fr"
+        activeDisplayLangCode
+            ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            ?? "fr"
+    }
+
+    /// Post « position seule » : aucun média visuel, aucun repost — la carte
+    /// devient le visuel principal et le texte part en overlay dessus.
+    private var isLocationOnlyPost: Bool {
+        post.location != nil && !post.hasMedia && post.repost == nil
     }
 
     private var effectiveContent: String {
-        let code = currentDisplayLangCode
-        if code == post.originalLanguage?.lowercased() { return post.content }
-        if let translation = post.translations?[code] ?? post.translations?.first(where: { $0.key.lowercased() == code })?.value {
-            return translation.text
+        if let active = activeDisplayLangCode {
+            if active == post.originalLanguage?.lowercased() { return post.content }
+            if let translation = post.translations?.first(where: { $0.key.lowercased() == active })?.value {
+                return translation.text
+            }
         }
+        // No manual override — `post.displayContent` already carries the
+        // correctly Prisme-resolved translation (set by `toFeedPost`/`resolved()`
+        // upstream in the ViewModel), so it's the correct default.
         return post.displayContent
     }
 
@@ -218,6 +270,12 @@ struct FeedPostCard: View {
     /// Teinte des liens cliquables dans le corps du post.
     private var postLinkTint: Color { Color(hex: accentColor) }
 
+    /// Les entités inline gardent l'identité produit (indigo thématisé), jamais
+    /// la couleur de l'auteur : avant, faute de `mentionColor:`, la mention
+    /// héritait du `.tint()` d'accent — donc une teinte différente par post.
+    private var mentionTint: Color { MeeshyColors.mentionColor(isDark: theme.mode.isDark) }
+    private var hashtagTint: Color { MeeshyColors.hashtagColor(isDark: theme.mode.isDark) }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -239,9 +297,14 @@ struct FeedPostCard: View {
                     // Le corps passe par `MessageTextRenderer` pour rendre les URLs
                     // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
                     // sur le texte non-lien (priorité au lien = défaut SwiftUI).
+                    // Post « position seule » : le texte part EN OVERLAY sur la
+                    // carte (`FeedPostLocationMapCard` plus bas) — le bloc texte
+                    // standard serait un doublon (directive user 2026-07-30).
                     let truncation = truncatedContent
-                    if isTextExpanded {
-                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                    if isLocationOnlyPost {
+                        EmptyView()
+                    } else if isTextExpanded {
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -258,7 +321,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -268,9 +331,15 @@ struct FeedPostCard: View {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
-                                // Cible de touche 44pt (HIG) sans gonfler le texte visuellement.
-                                .frame(minHeight: 44)
-                                .contentShape(Rectangle())
+                                // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
+                                // creusait ~14pt de vide au-dessus et en dessous du libellé
+                                // avant la rangée d'actions (même correctif que le « Voir
+                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // un contentShape étendu UNIQUEMENT vers le bas
+                                // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
+                                // au-dessus, jamais.
+                                .frame(minHeight: 24)
+                                .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                                 .textSelection(.disabled)
                                 .highPriorityGesture(
                                     TapGesture()
@@ -351,11 +420,21 @@ struct FeedPostCard: View {
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
                     // in `content`, so the legacy quote block rendered blank (and the
-                    // POST card drops the reel badge). Render a rich reel preview.
-                    ReelRepostEmbedCell(
-                        post: post,
-                        onTap: { post.repost.map { onTapRepost?($0.id) } }
-                    )
+                    // POST card drops the reel badge). Render a rich reel preview with
+                    // inline muted autoplay (RF2) when a feed coordinator is provided;
+                    // otherwise the static-poster cell.
+                    if let reelAutoplay {
+                        ReelRepostEmbedContainer(
+                            coordinator: reelAutoplay,
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    } else {
+                        ReelRepostEmbedCell(
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    }
                 } else {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
@@ -368,6 +447,23 @@ struct FeedPostCard: View {
                     // Reposted content (outside parent tap target so its own Button works)
                     if let repost = post.repost {
                         repostView(repost)
+                    }
+                }
+
+                // Lieu attaché au post (constat user 2026-07-30) : carte pleine
+                // largeur + texte en overlay quand la position est le seul
+                // contenu visuel, sinon sticker compact — cliquables tous deux.
+                if let place = post.location {
+                    if isLocationOnlyPost {
+                        FeedPostLocationMapCard(
+                            place: place,
+                            overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
+                            onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
+                        )
+                    } else {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
                     }
                 }
 
@@ -391,7 +487,7 @@ struct FeedPostCard: View {
         )
         .padding(.horizontal, 16)
         .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment)
+            CommentsSheetView(post: post, accentColor: accentColor)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(
@@ -418,6 +514,7 @@ struct FeedPostCard: View {
                 user: user,
                 moodEmoji: mood?.emoji,
                 onMoodTap: mood?.tapHandler,
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 // L'état réel n'est connu que pour l'auteur du post (la card
                 // est une leaf sans accès au StoryViewModel) ; les autres
                 // profils gardent l'anneau décoratif legacy (nil).
@@ -437,6 +534,18 @@ struct FeedPostCard: View {
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(item: $fullscreenPlace) { item in
+            // Même surface plein écran que la bulle de message : carte +
+            // « Ouvrir dans Plans » / « Itinéraire » (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: post.author
+            )
+        }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             let attachments = post.media
                 .filter { $0.type == .image || $0.type == .video }
@@ -455,7 +564,28 @@ struct FeedPostCard: View {
                 senderInfoMap: senderMap
             )
         }
-        .withStatusBubble()
+        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
+        .mediaSaveFlow(mediaSaveCoordinator)
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
+    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
+    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
+    private func requestSaveMedia() {
+        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     // MARK: - Author Header
@@ -488,14 +618,24 @@ struct FeedPostCard: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
-                    // Repost indicator inline
+                    // Repost indicator inline — compact source attribution right
+                    // after the author pseudo ("a republié de @handle"), so the
+                    // embedded story/quote cell no longer needs a verbose
+                    // "Reposté de @handle" block.
                     if post.repostAuthor != nil {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                                 .accessibilityHidden(true)
-                            Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
-                                .font(.caption)
+                            if let handle = post.repost?.authorUsername ?? post.repostAuthor {
+                                Text(String(format: String(localized: "feed.post.reposted_from", defaultValue: "a republié de @%@", bundle: .main), handle))
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            } else {
+                                Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
+                                    .font(.caption)
+                            }
                         }
                         .foregroundColor(theme.textMuted)
                     }
@@ -507,7 +647,7 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(accentColor))
 
                     let flags = buildAvailableFlags()
-                    if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                    if !flags.isEmpty || post.translations?.isEmpty == false {
                         Text("·")
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -531,7 +671,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                         }
 
-                        if post.translations != nil, !post.translations!.isEmpty {
+                        if post.translations?.isEmpty == false {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)
@@ -555,12 +695,12 @@ struct FeedPostCard: View {
                             Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
                             Text("·").font(.caption2)
                             Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
                         }
                         .foregroundColor(theme.textMuted)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.postOpenCount)")
+                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }
@@ -568,6 +708,14 @@ struct FeedPostCard: View {
             Spacer()
 
             Menu {
+                if let onTapPost {
+                    Button {
+                        onTapPost(post)
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = post.content
                     HapticFeedback.success()
@@ -581,10 +729,19 @@ struct FeedPostCard: View {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    onBookmark?(post.id)
-                    HapticFeedback.light()
+                    if post.primaryReelDisplayMedia != nil {
+                        requestSaveMedia()
+                    } else {
+                        onBookmark?(post.id)
+                        HapticFeedback.light()
+                    }
                 } label: {
-                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                    Label(
+                        post.primaryReelDisplayMedia != nil
+                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
+                    )
                 }
                 if onPin != nil {
                     Button {
@@ -622,7 +779,7 @@ struct FeedPostCard: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
@@ -635,7 +792,7 @@ struct FeedPostCard: View {
     private func repostView(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
-            onTapRepost?(repost.id)
+            onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 // Original author
@@ -671,6 +828,23 @@ struct FeedPostCard: View {
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
+                }
+
+                // Reposted media (RF1) — a reposted POST/STATUS carrying images or
+                // video rendered text-only before this; show a compact thumbnail
+                // preview reusing the own-media building blocks. No AVPlayer: the
+                // surrounding Button routes the tap to the ORIGINAL reposted post.
+                if let mediaModel = Self.repostMediaPreviewModel(for: repost) {
+                    repostMediaPreview(mediaModel)
+                }
+
+                // Lieu du post SOURCE — le sticker (Button) gagne sur le Button
+                // englobant du quote block, donc le tap ouvre la carte et non
+                // l'original (même règle que le sticker de la card réel).
+                if let place = repost.location {
+                    FeedPostLocationSticker(place: place) {
+                        fullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
                 }
 
                 // Original stats
@@ -740,7 +914,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -748,7 +922,7 @@ struct FeedPostCard: View {
                         // Accent BORDER on the glyph when the current user liked.
                         if effectiveIsLiked {
                             Image(systemName: "heart")
-                                .font(.system(size: 18))
+                                .font(MeeshyFont.relative(18))
                                 .foregroundColor(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -761,6 +935,11 @@ struct FeedPostCard: View {
                         .contentTransition(.numericText())
                 }
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
@@ -776,7 +955,7 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right")
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
 
                     if post.commentCount > 0 {
                         Text("\(post.commentCount)")
@@ -785,6 +964,11 @@ struct FeedPostCard: View {
                 }
                 .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
 
@@ -798,12 +982,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user reposted.
                         if isReposted {
                             Image(systemName: "arrow.2.squarepath.circle")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -818,12 +1002,17 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
             .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
             .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -839,12 +1028,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user bookmarked.
                         if isBookmarked {
                             Image(systemName: "bookmark")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -859,6 +1048,11 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
@@ -875,7 +1069,7 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .opacity(isShareInFlight ? 0 : 1)
                         if isShareInFlight {
                             ProgressView()
@@ -893,6 +1087,11 @@ struct FeedPostCard: View {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
@@ -946,7 +1145,7 @@ struct FeedPostCard: View {
 
                         Spacer()
 
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textMuted)
                             .accessibilityHidden(true)
@@ -1008,11 +1207,40 @@ struct FeedPostCard: View {
                         }
                     }
 
-                    // Content (Prisme Linguistique)
-                    Text(comment.displayContent)
-                        .font(.footnote)
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(2)
+                    // Content (Prisme Linguistique) — masqué pour un commentaire
+                    // média-seul (displayContent vide) : évite une ligne fantôme.
+                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(comment.displayContent)
+                            .font(.footnote)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(2)
+                    }
+
+                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
+                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
+                    // ainsi lisible/arrêtable directement (le player porte son propre
+                    // bouton, qui capte le tap sans ouvrir la sheet).
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            commentId: comment.id,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
+
+                    // Lieu attaché au commentaire — sticker cliquable (même
+                    // véhicule SharedPlace que le post porteur).
+                    if let place = comment.location {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
+                        .padding(.top, 2)
+                    }
 
                     // Stats row: likes and replies
                     HStack(spacing: 16) {

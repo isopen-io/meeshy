@@ -49,12 +49,17 @@ type PresenceRestResponse = {
 };
 
 const toMinimalUser = (entry: PresenceSnapshotUser): User => {
+  // A missing lastActiveAt must stay absent — never fabricate Date.now(), which
+  // would make getUserStatus decay to 'online' and paint an orange pulsing dot
+  // for an offline contact whose "last seen" is hidden (gateway nulls it in
+  // MeeshySocketIOManager._applyPresencePrefs). Mirrors the onUserStatus / REST
+  // resync paths, which already pass `undefined` when the timestamp is absent.
   const lastActiveAt =
     entry.lastActiveAt instanceof Date
       ? entry.lastActiveAt
       : entry.lastActiveAt
         ? new Date(entry.lastActiveAt)
-        : new Date();
+        : undefined;
 
   return {
     id: entry.userId,

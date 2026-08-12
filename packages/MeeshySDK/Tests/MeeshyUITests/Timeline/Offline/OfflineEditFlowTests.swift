@@ -3,14 +3,19 @@ import XCTest
 @testable import MeeshySDK
 
 /// End-to-end offline edit flow tests (Task 70).
-/// Verifies that editing actions work without network, and that publish
-/// enqueues to `StoryOfflineQueue` instead of failing (Task 72).
+/// Verifies that editing actions work without network.
+///
+/// S6 — the `handlePublishTap`-only tests (Task 72: online/offline publish
+/// orchestration, `StubOnlinePublisher` fallback) were removed alongside
+/// `handlePublishTap` itself (dead code, zero production call sites).
+/// `test_dismissOfflineQueuedConfirmation_resetsFlag` survives, adapted to
+/// pose `showOfflineQueuedConfirmation` directly instead of routing through
+/// the deleted orchestration — it now tests EXACTLY the surviving function,
+/// not an artefact of its former vehicle.
 ///
 /// Pragmatic deviations from plan:
 /// - `TimelineViewModel.addPhoto/addVideo/addAudio` are not part of the Plan 4
-///   API (they exist in `StoryComposerViewModel`). These tests focus on the
-///   ACTUAL offline-publish contract that was implemented: `handlePublishTap`
-///   with injected `MockNetworkMonitor` and `MockOfflineQueue`.
+///   API (they exist in `StoryComposerViewModel`).
 /// - `saveDraft`/`exportDraftSnapshot`/`loadDraftSnapshot` are not yet in
 ///   `TimelineViewModel` (wired in follow-up). Draft round-trip is exercised
 ///   via `TimelineProject` value semantics.
@@ -86,145 +91,19 @@ final class OfflineEditFlowTests: XCTestCase {
                      "Offline editing must not set errorMessage")
     }
 
-    // MARK: - Task 72: Offline publish — enqueues without error
-
-    func test_publish_offline_queuesWithoutError() async {
-        let (vm, _, network, queue) = makeSUT(isOnline: false)
-        XCTAssertFalse(network.isOnline)
-
-        await vm.handlePublishTap(visibility: .friends,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
-
-        let enqueued = await queue.enqueueCallCount
-        XCTAssertEqual(enqueued, 1, "Offline publish must enqueue exactly one job")
-        XCTAssertNil(vm.errorMessage,
-                     "Offline publish must NOT set errorMessage — it is success, not failure")
-        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
-                      "ViewModel must signal the confirmation snackbar after offline enqueue")
-    }
-
-    func test_publish_offline_doesNotSetErrorMessage() async {
-        let (vm, _, network, queue) = makeSUT(isOnline: false)
-        // Simulate a pre-existing error message (e.g. from a previous operation)
-        vm.errorMessage = "Previous error"
-
-        await vm.handlePublishTap(visibility: .public,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
-
-        XCTAssertNil(vm.errorMessage,
-                     "Offline enqueue must clear errorMessage — publish is a success, not failure")
-    }
-
-    func test_publish_online_stubThrows_fallsBackToOfflineQueue() async {
-        // The default StubOnlinePublisher always throws — online publish falls
-        // back to the offline queue until the real pipeline is wired.
-        let (vm, _, network, queue) = makeSUT(isOnline: true)
-        network.isOnline = true
-
-        await vm.handlePublishTap(visibility: .friends,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
-
-        let enqueued = await queue.enqueueCallCount
-        XCTAssertEqual(enqueued, 1,
-                       "Online publish with stub must fall back to offline queue (got \(enqueued))")
-        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
-                      "Fallback to offline queue must set showOfflineQueuedConfirmation")
-    }
-
     // MARK: - Task 72: dismissOfflineQueuedConfirmation
 
+    /// Poses the flag directly instead of routing through the deleted
+    /// `handlePublishTap` — this now tests EXACTLY the surviving function
+    /// (`dismissOfflineQueuedConfirmation`), not an artefact of its former
+    /// vehicle.
     func test_dismissOfflineQueuedConfirmation_resetsFlag() async {
-        let (vm, _, network, queue) = makeSUT(isOnline: false)
-        await vm.handlePublishTap(visibility: .friends,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
-        XCTAssertTrue(vm.showOfflineQueuedConfirmation)
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        vm.showOfflineQueuedConfirmation = true
 
         vm.dismissOfflineQueuedConfirmation()
         XCTAssertFalse(vm.showOfflineQueuedConfirmation,
                        "dismissOfflineQueuedConfirmation must reset the flag")
-    }
-
-    // MARK: - Task 72: mediaURLPaths correctness (HIGH 2 fix)
-
-    func test_handlePublishTap_offline_includesMediaURLPathsFromPendingURLs() async {
-        let testURL = URL(fileURLWithPath: "/tmp/test-clip.mp4")
-        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "media-1", startTime: 0, duration: 5)
-        let engine = MockStoryTimelineEngine()
-        let network = MockNetworkMonitor()
-        network.isOnline = false
-        let queue = MockOfflineQueue()
-        let vm = TimelineViewModel(
-            engine: engine,
-            commandStack: CommandStack(),
-            snapEngine: SnapEngine(toleranceSeconds: 0.06)
-        )
-        vm.bootstrap(project: project, mediaURLs: ["media-1": testURL], images: [:])
-        await vm.awaitConfigured()
-
-        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
-
-        let enqueued = await queue.enqueuedItems
-        XCTAssertEqual(enqueued.count, 1,
-                       "Offline publish must enqueue exactly one item")
-        XCTAssertEqual(enqueued.first?.mediaURLPaths.count, 1,
-                       "Enqueued item must carry the pending media URL path")
-        XCTAssertEqual(enqueued.first?.mediaURLPaths["media-1"], testURL.path,
-                       "mediaURLPaths[clipId] must match the URL passed to bootstrap")
-    }
-
-    // MARK: - Phase 1 items 1+2: real serialization + online publish fallback
-
-    func test_handlePublishTap_offline_payloadIsRealJSON_notEmpty() async {
-        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
-        let engine = MockStoryTimelineEngine()
-        let network = MockNetworkMonitor()
-        network.isOnline = false
-        let queue = MockOfflineQueue()
-        let vm = TimelineViewModel(
-            engine: engine,
-            commandStack: CommandStack(),
-            snapEngine: SnapEngine(toleranceSeconds: 0.06)
-        )
-        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
-        await vm.awaitConfigured()
-
-        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
-
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(items.count, 1)
-        let payload = items.first?.slidePayloadJSON ?? ""
-        XCTAssertNotEqual(payload, "{}", "slidePayloadJSON must contain real serialised project, not empty object")
-        XCTAssertTrue(payload.contains("\"slideId\""),
-                      "JSON must include TimelineProject fields — got: \(payload.prefix(200))")
-        XCTAssertTrue(payload.contains("\"mediaObjects\""),
-                      "JSON must include mediaObjects array — got: \(payload.prefix(200))")
-    }
-
-    func test_handlePublishTap_online_attemptsOnlinePublish_fallsBackOnFailure() async {
-        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
-        let engine = MockStoryTimelineEngine()
-        let network = MockNetworkMonitor()
-        network.isOnline = true
-        let queue = MockOfflineQueue()
-        let vm = TimelineViewModel(
-            engine: engine,
-            commandStack: CommandStack(),
-            snapEngine: SnapEngine(toleranceSeconds: 0.06)
-        )
-        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
-        await vm.awaitConfigured()
-
-        // Default StubOnlinePublisher always throws → fallback path must run
-        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
-
-        let enqueued = await queue.enqueueCallCount
-        XCTAssertEqual(enqueued, 1, "Online failure must fall back to offline queue (got \(enqueued))")
-        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
-                      "Fallback must set showOfflineQueuedConfirmation so the UI confirms to the user")
     }
 
     // MARK: - Offline project snapshot (draft round-trip via value semantics)

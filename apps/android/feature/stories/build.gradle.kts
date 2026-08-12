@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.feature.stories"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig { minSdk = 26 }
 
@@ -34,6 +34,7 @@ dependencies {
     implementation(project(":sdk-ui"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -43,6 +44,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.work.runtime)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

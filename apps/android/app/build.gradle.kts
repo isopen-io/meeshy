@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "me.meeshy.app"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "me.meeshy.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -53,10 +53,14 @@ dependencies {
     implementation(project(":feature:settings"))
     implementation(project(":feature:contacts"))
     implementation(project(":feature:stories"))
+    implementation(project(":feature:calls"))
+    implementation(project(":feature:reels"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
@@ -71,11 +75,13 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.glance.appwidget)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)

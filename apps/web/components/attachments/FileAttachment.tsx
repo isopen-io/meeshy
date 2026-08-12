@@ -30,7 +30,7 @@ export const FileAttachment = React.memo(function FileAttachment({
 }: FileAttachmentProps) {
   const { t } = useI18n('attachments');
   const handleFileClick = useCallback((_event: React.MouseEvent) => {
-    window.open(attachment.fileUrl, '_blank');
+    window.open(attachment.fileUrl, '_blank', 'noopener,noreferrer');
   }, [attachment.fileUrl]);
 
   const handleDeleteClick = useCallback((event: React.MouseEvent) => {

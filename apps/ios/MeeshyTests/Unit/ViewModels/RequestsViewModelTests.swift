@@ -30,8 +30,20 @@ final class RequestsViewModelTests: XCTestCase {
     private func makeSUT(
         friendService: MockFriendService = MockFriendService()
     ) -> (sut: RequestsViewModel, friendService: MockFriendService) {
-        let sut = RequestsViewModel(friendService: friendService)
+        // Inject a mock outbox so accept/reject never touch the real
+        // OfflineQueue.shared actor (which would throw `poolNotConfigured` in
+        // the unit environment). Tests that assert on the queue use
+        // `makeSUTWithQueue` below.
+        let sut = RequestsViewModel(friendService: friendService, offlineQueue: MockOfflineQueue())
         return (sut, friendService)
+    }
+
+    private func makeSUTWithQueue(
+        friendService: MockFriendService = MockFriendService(),
+        offlineQueue: MockOfflineQueue = MockOfflineQueue()
+    ) -> (sut: RequestsViewModel, friendService: MockFriendService, offlineQueue: MockOfflineQueue) {
+        let sut = RequestsViewModel(friendService: friendService, offlineQueue: offlineQueue)
+        return (sut, friendService, offlineQueue)
     }
 
     // MARK: - accept
@@ -159,7 +171,7 @@ final class RequestsViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         let cached = await CacheCoordinator.shared.friends.load(for: FriendshipCache.PersistenceKeys.friendsList)
-        let ids = (cached.value ?? []).map(\.id)
+        let ids = (cached.snapshot() ?? []).map(\.id)
         XCTAssertTrue(
             ids.contains("eve"),
             "Accepted sender must be merged into the friends_list GRDB cache so it survives an app relaunch"
@@ -240,22 +252,29 @@ final class RequestsViewModelTests: XCTestCase {
     // MARK: - Accept
 
     func test_accept_optimisticallyRemovesRow() async {
-        let (sut, mock) = makeSUT()
+        let (sut, _, queue) = makeSUTWithQueue()
         let request = FriendRequestFixture.make(id: "r1", senderId: "s1", status: "pending")
-        mock.respondResult = .success(request)
         sut.receivedRequests = [request]
 
         await sut.accept(requestId: "r1")
 
+        // New contract (Wave 1 Phase B): accept removes the row optimistically
+        // and enqueues a `.respondFriendRequest(.accept)` outbox mutation — it no
+        // longer calls FriendService.respond directly.
         XCTAssertTrue(sut.receivedRequests.isEmpty)
-        XCTAssertEqual(mock.respondCallCount, 1)
-        XCTAssertEqual(mock.lastRespondAccepted, true)
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        let payload = queue.lastPayload as? RespondFriendRequestPayload
+        XCTAssertEqual(payload?.friendRequestId, "r1")
+        XCTAssertEqual(payload?.action, .accept)
     }
 
     func test_accept_failure_rollsBack() async {
-        let (sut, mock) = makeSUT()
+        // A synchronous enqueue failure (e.g. queue not configured / disk full)
+        // must restore the optimistically-removed row via the catch path.
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, _, _) = makeSUTWithQueue(offlineQueue: queue)
         let request = FriendRequestFixture.make(id: "r1", senderId: "s1", status: "pending")
-        mock.respondResult = .failure(NSError(domain: "test", code: 500))
         sut.receivedRequests = [request]
 
         await sut.accept(requestId: "r1")
@@ -267,15 +286,17 @@ final class RequestsViewModelTests: XCTestCase {
     // MARK: - Reject
 
     func test_reject_optimisticallyRemovesRow() async {
-        let (sut, mock) = makeSUT()
+        let (sut, _, queue) = makeSUTWithQueue()
         let request = FriendRequestFixture.make(id: "r1", senderId: "s1", status: "pending")
-        mock.respondResult = .success(request)
         sut.receivedRequests = [request]
 
         await sut.reject(requestId: "r1")
 
         XCTAssertTrue(sut.receivedRequests.isEmpty)
-        XCTAssertEqual(mock.lastRespondAccepted, false)
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        let payload = queue.lastPayload as? RespondFriendRequestPayload
+        XCTAssertEqual(payload?.friendRequestId, "r1")
+        XCTAssertEqual(payload?.action, .reject)
     }
 
     // MARK: - Cancel
@@ -327,19 +348,22 @@ final class RequestsViewModelTests: XCTestCase {
     // MARK: - Pagination
 
     func test_loadMoreReceived_appendsResults() async {
-        let (sut, mock) = makeSUT()
+        let (sut, mock, _) = makeSUTWithQueue()
         let first = FriendRequestFixture.make(id: "r1", status: "pending")
         let second = FriendRequestFixture.make(id: "r2", status: "pending")
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [first], hasMore: true))
-
-        await sut.loadReceived()
-        XCTAssertEqual(sut.receivedRequests.count, 1)
+        // `loadMoreReceived` only fires when the previous page filled
+        // (`receivedHasMore`). Seed that state directly instead of via
+        // `loadReceived`, which is cache-first through CacheCoordinator.shared
+        // and derives `hasMore` from page-fill (a 1-item first page would set
+        // hasMore=false and short-circuit loadMore).
+        sut.receivedRequests = [first]
+        sut.receivedHasMore = true
 
         mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [second], hasMore: false))
         await sut.loadMoreReceived()
 
-        XCTAssertEqual(sut.receivedRequests.count, 2)
-        XCTAssertEqual(mock.lastReceivedOffset, 1)
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1", "r2"])
+        XCTAssertFalse(sut.receivedHasMore, "hasMore must reflect the last page's pagination flag")
     }
 
     // MARK: - Cache-First Behavior
@@ -348,7 +372,7 @@ final class RequestsViewModelTests: XCTestCase {
     /// "No spinner when cache has data" from the architecture bible.
     func test_loadReceived_withCachedFreshData_skipsNetworkAndAppliesCache() async {
         let cached = [FriendRequestFixture.make(id: "cached-1", status: "pending")]
-        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:received")
+        try? await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:received")
 
         let (sut, mock) = makeSUT()
         mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [
@@ -375,8 +399,24 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1"])
         XCTAssertEqual(mock.receivedRequestsCallCount, 1)
 
-        let cacheValue = await CacheCoordinator.shared.friendRequests.load(for: "requests:received").value
+        let cacheValue = await CacheCoordinator.shared.friendRequests.load(for: "requests:received").snapshot()
         XCTAssertEqual(cacheValue?.map(\.id), ["r1"])
+    }
+
+    /// cache-04 — offline au-delà du TTL : la dernière donnée persistée est
+    /// peinte au lieu d'un écran vide (récupération .expired du
+    /// CacheFirstLoader, verrou d'intégration bout-en-bout).
+    func test_loadReceived_expiredCacheAndNetworkFailure_paintsPersistedRequests() async throws {
+        let (sut, mock) = makeSUT()
+        let request = FriendRequestFixture.make(id: "req-expired", status: "pending")
+        try await CacheCoordinator.shared.friendRequests.save([request], for: "requests:received")
+        await CacheCoordinator.shared.friendRequests.debugRewindFetchTimestamp(by: 25 * 3600, for: "requests:received")
+        mock.receivedRequestsResult = .failure(MeeshyError.network(.noConnection))
+
+        await sut.loadReceived()
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["req-expired"],
+                       "après TTL + réseau KO, la donnée disque doit être servie — jamais un écran vide")
     }
 
     /// `loadSent` follows the same cache-first pipeline; pending-only filter
@@ -384,7 +424,7 @@ final class RequestsViewModelTests: XCTestCase {
     /// items.
     func test_loadSent_withCachedFreshData_skipsNetworkAndAppliesCache() async {
         let cached = [FriendRequestFixture.make(id: "sent-cached", status: "pending")]
-        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:sent")
+        try? await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:sent")
 
         let (sut, mock) = makeSUT()
         mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [

@@ -118,77 +118,132 @@ struct MiniAudioPlayerBar: View {
     @ViewBuilder
     private func content(for context: ActiveAudioContext) -> some View {
         HStack(spacing: 10) {
-            // Avatar conv (fallback indigo gradient placeholder)
-            Circle()
-                .fill(LinearGradient(
-                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 36, height: 36)
-                .overlay(
-                    Text(String(context.senderName.prefix(1)).uppercased())
-                        .font(.footnote.weight(.bold))
-                        .foregroundColor(.white))
+            // Now-playing cluster (avatar + track meta + progress). Tapping it
+            // opens the source conversation — so VoiceOver exposes it as a single
+            // button rather than as disconnected monogram / name / percent
+            // fragments, and the whole-card tap action stays reachable non-visually.
+            HStack(spacing: 10) {
+                // Avatar conv (fallback indigo gradient placeholder)
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Text(String(context.senderName.prefix(1)).uppercased())
+                            .font(.footnote.weight(.bold))
+                            .foregroundColor(.white))
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(context.senderName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(context.conversationName)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                ProgressView(value: max(0, min(1, coordinator.progress)))
-                    .progressViewStyle(.linear)
-                    .tint(MeeshyColors.indigo500)
-                    .frame(height: 2)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(context.senderName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text(context.conversationName)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    ProgressView(value: max(0, min(1, coordinator.progress)))
+                        .progressViewStyle(.linear)
+                        .tint(MeeshyColors.indigo500)
+                        .frame(height: 2)
+                }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(nowPlayingAccessibilityLabel(for: context))
+            .accessibilityValue(progressAccessibilityValue)
+            .accessibilityHint(openConversationAccessibilityHint)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(coordinator.isPlaying ? .updatesFrequently : [])
+            .accessibilityAction { openConversation(for: context) }
 
             Spacer(minLength: 4)
 
-            Button(action: { coordinator.togglePlayPause() }) {
-                Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.body.weight(.bold))
-                    .foregroundColor(.primary)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                coordinator.isPlaying
-                    ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
-                    : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
-            )
+            // Transport controls. `.buttonStyle(.plain)` adds no padding of its
+            // own, so each label's frame IS its tappable region — hence the
+            // 44×44 floor (Apple HIG), matching the floating call pill this bar
+            // mirrors. The glyphs stay font-sized; only the hit area grew.
+            //
+            // spacing: 0 because the 44 pt boxes already separate the glyphs: a
+            // ~14 pt symbol centred in 44 pt leaves ~15 pt each side, so the gap
+            // reads as it did with the old 10 pt spacing around smaller frames.
+            // Keeping both would cost the single-line, truncating track title
+            // another 20 pt of width for no visual gain.
+            HStack(spacing: 0) {
+                Button(action: { coordinator.togglePlayPause() }) {
+                    Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.body.weight(.bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    coordinator.isPlaying
+                        ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
+                        : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
+                )
 
-            Button(action: { coordinator.playNext() }) {
-                Image(systemName: "forward.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "mini_player.next", defaultValue: "Suivant", bundle: .main))
+                Button(action: { coordinator.playNext() }) {
+                    Image(systemName: "forward.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "mini_player.next", defaultValue: "Suivant", bundle: .main))
 
-            Button(action: { coordinator.close() }) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 24, height: 24)
+                Button(action: { coordinator.close() }) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass capsule — the SDK Compatibility wrapper owns the
+        // gating + the `.ultraThinMaterial` fallback. Inner controls stay as
+        // vibrancy fills ON the glass (Apple HIG: don't nest glass in glass).
+        // Same atom + pattern as the floating call pill.
+        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if let router = routerForTesting {
-                router(context.conversationId)
-            } else {
-                onTapBody()
-            }
+        .onTapGesture { openConversation(for: context) }
+    }
+
+    /// Opens the conversation driving the active audio. Wired to BOTH the
+    /// whole-card tap gesture and the VoiceOver activation of the now-playing
+    /// cluster, so the sighted and non-visual paths share one implementation.
+    private func openConversation(for context: ActiveAudioContext) {
+        if let router = routerForTesting {
+            router(context.conversationId)
+        } else {
+            onTapBody()
         }
+    }
+
+    private func nowPlayingAccessibilityLabel(for context: ActiveAudioContext) -> String {
+        String(
+            localized: "mini_player.a11y.now-playing",
+            defaultValue: "Lecture audio de \(context.senderName), \(context.conversationName)",
+            bundle: .main
+        )
+    }
+
+    private var progressAccessibilityValue: String {
+        max(0, min(1, coordinator.progress))
+            .formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var openConversationAccessibilityHint: String {
+        String(
+            localized: "mini_player.a11y.open-hint",
+            defaultValue: "Ouvrir la conversation",
+            bundle: .main
+        )
     }
 
     // MARK: - Test helpers
@@ -197,10 +252,6 @@ struct MiniAudioPlayerBar: View {
     func simulateTapCloseForTesting() { coordinator.close() }
     func simulateTapBodyForTesting() {
         guard let context = displayedContext else { return }
-        if let router = routerForTesting {
-            router(context.conversationId)
-        } else {
-            onTapBody()
-        }
+        openConversation(for: context)
     }
 }

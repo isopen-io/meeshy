@@ -56,7 +56,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 }));
 
 describe('useMessageReactions', () => {
-  const mockMessageId = 'msg-123';
+  // A persisted message id is a 24-char Mongo ObjectId. The reactions hook
+  // gates gateway emits on this format (optimistic `cid_...` ids are skipped),
+  // so the fixture MUST be a valid ObjectId to exercise the enabled path.
+  const mockMessageId = '507f1f77bcf86cd799439011';
   const mockCurrentUserId = 'user-456';
 
   const mockSocket = {
@@ -620,6 +623,69 @@ describe('useMessageReactions', () => {
       });
 
       expect(result.current.reactions[0].participantIds).toContain('anon-123');
+    });
+  });
+
+  describe('Optimistic message guard', () => {
+    // Optimistic messages carry a client id (`cid_<uuid>` from
+    // generateClientMessageId) until the server ACK/broadcast replaces it with a
+    // Mongo ObjectId. Emitting a reaction/sync for a `cid_...` id makes the
+    // gateway reject a non-ObjectId ("Prisma ObjectID error"), so the hook must
+    // stay disabled until the id becomes a real 24-hex ObjectId.
+    const optimisticId = 'cid_123e4567-e89b-42d3-a456-426614174000';
+
+    it('does not emit sync for an optimistic (cid_) message id', () => {
+      renderHook(() =>
+        useMessageReactions({
+          messageId: optimisticId,
+          currentUserId: mockCurrentUserId,
+          enabled: true,
+        })
+      );
+
+      act(() => {
+        jest.runOnlyPendingTimers();
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('does not emit REACTION_ADD for an optimistic (cid_) message id', async () => {
+      const { result } = renderHook(() =>
+        useMessageReactions({
+          messageId: optimisticId,
+          currentUserId: mockCurrentUserId,
+          enabled: true,
+        })
+      );
+
+      let success: boolean = true;
+      await act(async () => {
+        success = await result.current.addReaction('thumbsup');
+      });
+
+      expect(success).toBe(false);
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('emits sync once the message id is a real 24-hex ObjectId', async () => {
+      const { result } = renderHook(() =>
+        useMessageReactions({
+          messageId: mockMessageId,
+          currentUserId: mockCurrentUserId,
+          enabled: true,
+        })
+      );
+
+      await act(async () => {
+        await result.current.refreshReactions();
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        expect.any(String),
+        mockMessageId,
+        expect.any(Function)
+      );
     });
   });
 });

@@ -147,11 +147,21 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // the client can rotate a valid-but-stale JWT without a sessionToken round-trip.
       // If the signature itself is invalid (tampered), jwt.verify will still throw.
       let decoded: { userId?: string; username?: string; role?: string } | null = null;
+      // Signature réellement vérifiée, ou simple lecture du contenu ? La
+      // distinction est TOUT : `jwt.decode` ne vérifie rien, il désérialise.
+      // Sans ce drapeau, un jeton forgé avec une signature quelconque suffisait
+      // à obtenir un JWT valide signé par le serveur pour le compte visé — la
+      // garde en aval ne testait que la PRÉSENCE de `userId`.
+      let signatureVerified = false;
       try {
-        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as any;
+        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as { userId?: string; username?: string; role?: string };
+        signatureVerified = true;
       } catch {
-        // Signature invalid — decoded stays null; will be rejected below unless sessionToken covers it.
-        decoded = jwt.decode(token) as any;
+        // Signature invalide : le contenu n'est plus qu'une prétention. On le
+        // lit uniquement pour retrouver la session à vérifier ci-dessous, et il
+        // ne vaut preuve d'identité que si un sessionToken de confiance la
+        // couvre effectivement.
+        decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
       }
 
       let activeSession: { id: string; userId: string; expiresAt: Date } | null = null;
@@ -178,6 +188,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendUnauthorized(reply, 'Token invalide ou expiré');
       }
 
+      // Une signature invalide n'est rattrapable QUE par une session de
+      // confiance retrouvée en base pour ce même utilisateur. Sans elle, le
+      // jeton présenté ne prouve rien : refus.
+      if (!signatureVerified && !activeSession) {
+        logger.warn('Refus de refresh : signature invalide et aucune session de confiance', {
+          claimedUserId: decoded.userId
+        });
+        return sendUnauthorized(reply, 'Token invalide ou expiré');
+      }
+
       const user = await authService.getUserById(decoded!.userId!);
 
       if (!user) {
@@ -198,7 +218,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           where: { id: activeSession.id },
           data: {
             expiresAt: nextExpiresAt,
-            lastActiveAt: now
+            // P7-3 : le champ du modèle UserSession est `lastActivityAt` —
+            // `lastActiveAt` (champ du modèle User) levait
+            // PrismaClientValidationError sur CHAQUE refresh, avalée par le
+            // .catch ci-dessous → le sliding window n'a jamais fonctionné.
+            lastActivityAt: now
           }
         }).catch((err: unknown) => {
           logger.warn('Failed to slide session expiresAt on refresh', { err });

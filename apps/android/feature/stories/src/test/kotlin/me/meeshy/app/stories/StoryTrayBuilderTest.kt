@@ -112,5 +112,29 @@ class StoryTrayBuilderTest {
         val ring = tray.others.single()
         assertThat(ring.hasUnviewed).isTrue()
         assertThat(ring.storyCount).isEqualTo(3)
+        assertThat(ring.unviewedCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `ring counts only the unviewed stories for the count dots`() {
+        val mixed = StoryGroup(
+            id = "u1",
+            username = "user-u1",
+            avatarColor = "FF6B6B",
+            stories = listOf(
+                StoryItem(id = "u1-0", createdAt = isoAgo(3), expiresAt = isoAgo(-18), isViewed = true),
+                StoryItem(id = "u1-1", createdAt = isoAgo(2), expiresAt = isoAgo(-19), isViewed = false),
+                StoryItem(id = "u1-2", createdAt = isoAgo(1), expiresAt = isoAgo(-20), isViewed = false),
+            ),
+        )
+        val tray = StoryTrayBuilder.build(
+            groups = listOf(mixed),
+            currentUserId = null,
+            mediaBaseUrl = null,
+            nowMillis = now,
+        )
+        val ring = tray.others.single()
+        assertThat(ring.storyCount).isEqualTo(3)
+        assertThat(ring.unviewedCount).isEqualTo(2)
     }
 }

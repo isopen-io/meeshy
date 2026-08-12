@@ -16,6 +16,15 @@ public actor DiskCacheStore: ReadableCacheStore {
     private var inFlightTasks: [String: InFlightDownload] = [:]
     private var fileTimestamps: [String: Date] = [:]
 
+    /// Pin registry (R5 offline replay) : fileKey → pin expiry. A file whose
+    /// pin is still active is exempt from BOTH `evictOverBudget()` (LRU) and
+    /// `evictExpired()` (TTL). Persisted to a hidden sidecar (`.pins.json`)
+    /// so a boot-time sweep cannot evict media pinned in a previous launch —
+    /// the eviction/sizing enumerators use `.skipsHiddenFiles`, so the sidecar
+    /// itself is never a candidate. Loaded lazily on first pin/sweep access.
+    private var pinExpiries: [String: Date] = [:]
+    private var pinsLoaded = false
+
     /// Wraps an in-flight network task with an identity token so a stale
     /// completion never clears a NEWER entry registered under the same key.
     private struct InFlightDownload {
@@ -42,7 +51,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         cache.countLimit = 100
         cache.totalCostLimit = 80 * 1024 * 1024
         self.memoryCache = cache
-        try? FileManager.default.createDirectory(at: self.baseDirectory, withIntermediateDirectories: true)
+        FileManager.default.createDirectoryLogging(at: self.baseDirectory, context: "disk cache root", logger: logger)
 
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
@@ -73,21 +82,37 @@ public actor DiskCacheStore: ReadableCacheStore {
             }
         }
         let filePath = diskFilePath(for: fileKey)
-        guard fileManager.fileExists(atPath: filePath.path),
-              let data = try? Data(contentsOf: filePath) else {
+        guard fileManager.fileExists(atPath: filePath.path) else { return .empty }
+        let data: Data
+        do {
+            data = try Data(contentsOf: filePath)
+        } catch {
+            // Le fichier EXISTE mais est illisible : corruption ou I/O — c'est
+            // un vrai incident, pas un cache miss.
+            logger.error("Cached file present but unreadable for \(fileKey, privacy: .public), treated as a miss: \(error.localizedDescription, privacy: .public)")
             return .empty
         }
-        let modDate = (try? fileManager.attributesOfItem(atPath: filePath.path)[.modificationDate] as? Date) ?? Date()
+        // Un attribut illisible ferait passer l'entrée pour « écrite à
+        // l'instant » : elle serait considérée fraîche à tort.
+        let modDate: Date
+        do {
+            modDate = try (fileManager.attributesOfItem(atPath: filePath.path)[.modificationDate] as? Date) ?? Date()
+        } catch {
+            logger.error("Cache mtime unreadable for \(fileKey, privacy: .public), entry treated as fresh: \(error.localizedDescription, privacy: .public)")
+            modDate = Date()
+        }
         let age = Date().timeIntervalSince(modDate)
         let freshness = policy.freshness(age: age)
         switch freshness {
         case .fresh:
             memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
             fileTimestamps[fileKey] = modDate
+            noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .fresh([data], age: age)
         case .stale:
             memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
             fileTimestamps[fileKey] = modDate
+            noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .stale([data], age: age)
         case .expired:
             return .expired
@@ -99,14 +124,23 @@ public actor DiskCacheStore: ReadableCacheStore {
         memoryCache.removeObject(forKey: fileKey as NSString)
         fileTimestamps.removeValue(forKey: fileKey)
         let filePath = diskFilePath(for: fileKey)
-        try? fileManager.removeItem(at: filePath)
+        fileManager.removeItemLogging(at: filePath, context: "cache invalidate", logger: logger)
+        // Une invalidation explicite prime sur la protection d'éviction : un
+        // pin conservé re-protégerait un futur re-download de la même clé.
+        loadPinsIfNeeded()
+        if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
     }
 
     public func invalidateAll() async {
         memoryCache.removeAllObjects()
         fileTimestamps.removeAll()
-        try? fileManager.removeItem(at: baseDirectory)
-        try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        // Le sidecar `.pins.json` part avec le dossier — vider aussi le
+        // registre en mémoire, sinon des pins fantômes seraient re-persistés
+        // au prochain `pin()` (logout multi-compte).
+        pinExpiries.removeAll()
+        pinsLoaded = true
+        fileManager.removeItemLogging(at: baseDirectory, context: "cache invalidateAll", logger: logger)
+        fileManager.createDirectoryLogging(at: baseDirectory, context: "disk cache root (recreate)", logger: logger)
     }
 
     // MARK: - Write
@@ -116,7 +150,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         let filePath = diskFilePath(for: fileKey)
         do {
             try data.write(to: filePath, options: .atomic)
-            try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: filePath.path)
+            touchModificationDate(atPath: filePath.path)
         } catch {
             logger.error("Failed to write file for key \(fileKey): \(error.localizedDescription)")
             return
@@ -175,7 +209,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             logger.error("seed copy failed for key \(key): \(error.localizedDescription)")
             return
         }
-        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        touchModificationDate(atPath: destination.path)
         fileTimestamps[key] = Date()
     }
 
@@ -199,13 +233,13 @@ public actor DiskCacheStore: ReadableCacheStore {
         } catch {
             do {
                 try fileManager.copyItem(at: localURL, to: destination)
-                try? fileManager.removeItem(at: localURL)
+                fileManager.removeItemLogging(at: localURL, context: "adopt source cleanup", logger: logger)
             } catch {
                 logger.error("adopt failed for key \(key): \(error.localizedDescription)")
                 return
             }
         }
-        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        touchModificationDate(atPath: destination.path)
         fileTimestamps[key] = Date()
     }
 
@@ -236,12 +270,58 @@ public actor DiskCacheStore: ReadableCacheStore {
         return memoryCache.object(forKey: fileKey as NSString)?.value
     }
 
+    /// Granularité de la date d'accès : au plus une écriture d'attribut par
+    /// fichier et par jour. Une précision plus fine coûterait un `utimes` à
+    /// chaque apparition de cellule pendant un défilement, pour un gain nul —
+    /// l'éviction raisonne en semaines.
+    static let accessTouchGranularity: TimeInterval = .days(1)
+
+    /// Marque un ACCÈS en rafraîchissant la date de modification du fichier.
+    ///
+    /// Les deux passes d'éviction (`evictExpired`, `evictOverBudget`) trient sur
+    /// `contentModificationDate`. Sans ce rafraîchissement, cette date reste
+    /// celle du TÉLÉCHARGEMENT : un média rouvert chaque semaine se faisait
+    /// évincer avant un média téléchargé la veille et jamais rouvert — l'inverse
+    /// exact d'un LRU, et la façon la plus sûre de re-télécharger précisément ce
+    /// qui sert le plus.
+    ///
+    /// Effet de bord ASSUMÉ : le TTL devient « temps depuis le dernier accès »
+    /// et non « depuis le téléchargement ». C'est la bonne sémantique ici — ce
+    /// store ne contient que des médias immuables à URL stable (images, audio,
+    /// vidéo, vignettes), pour lesquels une entrée encore utilisée n'a aucune
+    /// raison de périmer.
+    private func noteAccess(fileKey: String, atPath path: String, lastKnown: Date) {
+        guard Date().timeIntervalSince(lastKnown) >= Self.accessTouchGranularity else { return }
+        touchModificationDate(atPath: path)
+        fileTimestamps[fileKey] = Date()
+    }
+
     /// Synchronous local file URL check — no actor hop needed.
     /// Returns the file URL if it exists on disk, nil otherwise.
     nonisolated public func cachedFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = baseDirectory.appendingPathComponent(fileKey)
-        return FileManager.default.fileExists(atPath: filePath.path) ? filePath : nil
+        // `attributesOfItem` lève si le fichier n'existe pas : un seul `stat`
+        // là où `fileExists` + lecture de la date en auraient fait deux.
+        guard let modDate = (try? FileManager.default.attributesOfItem(atPath: filePath.path))?[.modificationDate] as? Date else {
+            return FileManager.default.fileExists(atPath: filePath.path) ? filePath : nil
+        }
+        // Servir depuis le disque EST un accès. C'est même le chemin DOMINANT
+        // pour l'audio et la vidéo (lecture directe du fichier, sans passer par
+        // `load`) : l'oublier ici laisserait tout le média joué hors ligne
+        // vieillir comme s'il n'avait jamais été rouvert.
+        if Date().timeIntervalSince(modDate) >= Self.accessTouchGranularity {
+            let path = filePath.path
+            // On repasse la date LUE SUR LE FICHIER, jamais `fileTimestamps` :
+            // c'est l'attribut du fichier que les deux passes d'éviction
+            // trient. Décider sur le miroir mémoire ferait sauter la mise à
+            // jour dès que les deux divergent, et c'est précisément alors que
+            // l'éviction se tromperait de victime.
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.noteAccess(fileKey: fileKey, atPath: path, lastKnown: modDate)
+            }
+        }
+        return filePath
     }
 
     public func isCached(_ key: String) -> Bool {
@@ -279,7 +359,17 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
 
         let task = Task<Data, Error> {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            // Média protégé même-origine (ex. audio de la bibliothèque de sons
+            // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
+            // recevait 401 et la story jouait MUETTE, gelée sur le spinner de
+            // stall (bug prod 2026-08-02, post 6a6ef0b44415c63ff8da7855).
+            let request = Self.networkRequest(
+                for: url,
+                apiOrigin: MeeshyConfig.shared.serverOrigin,
+                authToken: APIClient.shared.authToken,
+                sessionToken: APIClient.shared.anonymousSessionToken
+            )
+            let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
                 throw DiskCacheError.notCached(urlString)
@@ -294,6 +384,50 @@ public actor DiskCacheStore: ReadableCacheStore {
             if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
         }
         return try await task.value
+    }
+
+    /// Construit la requête du funnel réseau. Un média hébergé sur l'ORIGINE
+    /// de l'API Meeshy (même scheme + host + port que `apiOrigin`) reçoit les
+    /// en-têtes d'auth — `Authorization: Bearer` (prioritaire) ou
+    /// `X-Session-Token` (session anonyme), même convention qu'`APIClient` —
+    /// car certaines routes média sont protégées (`/api/v1/static/:filename`,
+    /// audio de la bibliothèque de sons). Toute autre origine (CDN, hôte
+    /// tiers) reste une requête NUE : un token ne doit jamais fuiter hors de
+    /// l'API. Pure et nonisolated pour être testable sans réseau.
+    nonisolated static func networkRequest(
+        for url: URL,
+        apiOrigin: String?,
+        authToken: String?,
+        sessionToken: String?
+    ) -> URLRequest {
+        var request = URLRequest(url: url)
+        guard let apiOrigin,
+              let origin = URL(string: apiOrigin),
+              let originScheme = origin.scheme?.lowercased(),
+              let originHost = origin.host?.lowercased(),
+              let urlScheme = url.scheme?.lowercased(),
+              let urlHost = url.host?.lowercased(),
+              urlScheme == originScheme,
+              urlHost == originHost,
+              normalizedPort(url.port, scheme: urlScheme) == normalizedPort(origin.port, scheme: originScheme)
+        else { return request }
+        if let authToken {
+            request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        } else if let sessionToken {
+            request.setValue(sessionToken, forHTTPHeaderField: "X-Session-Token")
+        }
+        return request
+    }
+
+    /// `https://host` et `https://host:443` sont la même origine — replie le
+    /// port implicite du scheme pour la comparaison.
+    private nonisolated static func normalizedPort(_ port: Int?, scheme: String) -> Int? {
+        if let port { return port }
+        switch scheme {
+        case "https": return 443
+        case "http": return 80
+        default: return nil
+        }
     }
 
     /// In-flight network download for `key`, if any. Lets an external
@@ -317,7 +451,10 @@ public actor DiskCacheStore: ReadableCacheStore {
         let entry = InFlightDownload(task: task)
         inFlightTasks[fileKey] = entry
         Task {
-            _ = try? await task.value
+            // On n'attend ici que la FIN du téléchargement pour libérer le
+            // slot ; le résultat (et son erreur) appartient à l'appelant qui
+            // a créé la tâche.
+            _ = await task.result
             if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
         }
         return true
@@ -377,6 +514,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func evictExpired() async {
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }
         let now = Date()
+        purgeExpiredPins(now: now)
         var evictedCount = 0
         while let fileURL = enumerator.nextObject() as? URL {
             guard let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]),
@@ -384,9 +522,10 @@ public actor DiskCacheStore: ReadableCacheStore {
             let age = now.timeIntervalSince(modDate)
             if policy.freshness(age: age) == .expired {
                 let fileName = fileURL.lastPathComponent
+                if isPinActive(fileKey: fileName, now: now) { continue }
                 memoryCache.removeObject(forKey: fileName as NSString)
                 fileTimestamps.removeValue(forKey: fileName)
-                try? fileManager.removeItem(at: fileURL)
+                fileManager.removeItemLogging(at: fileURL, context: "cache TTL eviction", logger: logger)
                 evictedCount += 1
             }
         }
@@ -399,6 +538,8 @@ public actor DiskCacheStore: ReadableCacheStore {
             maxBytes = max
         } else { return }
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }
+        let now = Date()
+        purgeExpiredPins(now: now)
         var totalSize = 0
         var files: [(url: URL, date: Date, size: Int)] = []
         while let fileURL = enumerator.nextObject() as? URL {
@@ -413,12 +554,81 @@ public actor DiskCacheStore: ReadableCacheStore {
         for file in sorted {
             guard totalSize > maxBytes else { break }
             let fileName = file.url.lastPathComponent
+            // Un pin actif exempte le fichier du LRU. Borné dans le temps par
+            // construction (`until` obligatoire) : si tout est pinné, la passe
+            // ne libère rien MAINTENANT mais se résorbe à l'échéance des pins.
+            if isPinActive(fileKey: fileName, now: now) { continue }
             memoryCache.removeObject(forKey: fileName as NSString)
             fileTimestamps.removeValue(forKey: fileName)
-            try? fileManager.removeItem(at: file.url)
+            fileManager.removeItemLogging(at: file.url, context: "cache budget eviction", logger: logger)
             totalSize -= file.size
         }
         logger.debug("Budget eviction: trimmed to \(totalSize) bytes (max \(maxBytes))")
+    }
+
+    // MARK: - Pinning (eviction exemption — R5 offline replay)
+
+    /// Marks `key` as non-evictable until `until`. Building block only: the
+    /// store never decides WHAT deserves a pin — the app-side policy does
+    /// (e.g. "media of a viewed story until the story expires"). Pinning a
+    /// key whose download has not landed yet is valid: the exemption applies
+    /// as soon as the file exists.
+    public func pin(_ key: String, until: Date) {
+        loadPinsIfNeeded()
+        pinExpiries[Self.fileKey(for: key)] = until
+        persistPins()
+    }
+
+    public func unpin(_ key: String) {
+        loadPinsIfNeeded()
+        guard pinExpiries.removeValue(forKey: Self.fileKey(for: key)) != nil else { return }
+        persistPins()
+    }
+
+    /// `true` while `key` holds a pin whose expiry is in the future.
+    public func isPinned(_ key: String) -> Bool {
+        loadPinsIfNeeded()
+        return isPinActive(fileKey: Self.fileKey(for: key), now: Date())
+    }
+
+    private func isPinActive(fileKey: String, now: Date) -> Bool {
+        loadPinsIfNeeded()
+        guard let until = pinExpiries[fileKey] else { return false }
+        return until > now
+    }
+
+    /// Drops pins past their expiry so the registry (and sidecar) cannot grow
+    /// unbounded. Called by both eviction sweeps.
+    private func purgeExpiredPins(now: Date) {
+        loadPinsIfNeeded()
+        let before = pinExpiries.count
+        pinExpiries = pinExpiries.filter { $0.value > now }
+        if pinExpiries.count != before { persistPins() }
+    }
+
+    private var pinsSidecarURL: URL {
+        baseDirectory.appendingPathComponent(".pins.json")
+    }
+
+    private func loadPinsIfNeeded() {
+        guard !pinsLoaded else { return }
+        pinsLoaded = true
+        guard fileManager.fileExists(atPath: pinsSidecarURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: pinsSidecarURL)
+            pinExpiries = try JSONDecoder().decode([String: Date].self, from: data)
+        } catch {
+            logger.error("Pin sidecar unreadable, starting empty: \(error.localizedDescription)")
+        }
+    }
+
+    private func persistPins() {
+        do {
+            let data = try JSONEncoder().encode(pinExpiries)
+            try data.write(to: pinsSidecarURL, options: .atomic)
+        } catch {
+            logger.error("Pin sidecar write failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - UIImage Cache
@@ -511,9 +721,14 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         // Local file:// URLs — load directly from filesystem
         if url.scheme == "file" {
-            if let data = try? Data(contentsOf: url), let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-                Self.cacheIfWithinBudget(image, key: fileKey)
-                return image
+            do {
+                let data = try Data(contentsOf: url)
+                if let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
+                    Self.cacheIfWithinBudget(image, key: fileKey)
+                    return image
+                }
+            } catch {
+                Logger.cache.error("Local file:// image unreadable, no thumbnail rendered: \(error.localizedDescription, privacy: .public)")
             }
             return nil
         }
@@ -563,12 +778,15 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// Pre-cache an image in the static UIImage NSCache for immediate display
     /// in ProgressiveCachedImage. Used for optimistic media messages where the
     /// local file URL is set as the attachment URL before upload.
+    ///
+    /// Inserts synchronously via `cacheIfWithinBudget` — matches the fix
+    /// already applied to `image(for:)`/`warmedImage(for:)`: a
+    /// `Task { @MainActor in … }` deferral here bought nothing (`NSCache` is
+    /// thread-safe) and raced the very next synchronous `cachedImage(for:)`
+    /// read on the optimistic-send path, plus skipped the oversized-bitmap
+    /// budget guard entirely.
     public nonisolated static func cacheImageForPreview(_ image: UIImage, key: String) {
-        let cacheKey = Self.fileKey(for: key)
-        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-        Task { @MainActor in
-            Self._imageCache.setObject(image, forKey: cacheKey as NSString, cost: cost)
-        }
+        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: key))
     }
 
     // MARK: - File Key
@@ -599,7 +817,141 @@ public actor DiskCacheStore: ReadableCacheStore {
         return key
     }
 
+    /// Refreshes the mtime used as the LRU key. A failure does not lose data
+    /// but skews eviction order — the entry looks older than it is and gets
+    /// evicted early, so it is worth a trace.
+    private func touchModificationDate(atPath path: String) {
+        do {
+            try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+        } catch {
+            logger.error("LRU touch failed, eviction order skewed for this entry: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     private func diskFilePath(for fileKey: String) -> URL {
         baseDirectory.appendingPathComponent(fileKey)
+    }
+
+    // MARK: - Purge sélective (mesure et destruction ciblées)
+    //
+    // Ajouts pour la purge par type × domaine des Réglages. Le store est
+    // indexé par `SHA256(url)` et ne connaît aucun domaine métier : c'est
+    // l'appelant qui fournit la liste d'URLs qu'il a su attribuer (cf.
+    // `CacheMediaAttribution`). Ces primitives ne font donc que deux choses —
+    // MESURER ce que pèsent des clés données, et les DÉTRUIRE.
+
+    /// Octets réellement occupés sur disque par `urlStrings`.
+    ///
+    /// Mesuré fichier par fichier, jamais estimé : une URL dont le fichier
+    /// n'est pas (ou plus) en cache compte pour zéro. C'est ce qui permet à
+    /// l'UI d'annoncer une taille exacte avant purge plutôt qu'un ordre de
+    /// grandeur.
+    public func diskBytes(forURLs urlStrings: Set<String>) async -> Int {
+        var total = 0
+        for urlString in urlStrings {
+            let path = diskFilePath(for: Self.fileKey(for: urlString)).path
+            guard let size = (try? fileManager.attributesOfItem(atPath: path))?[.size] as? Int else { continue }
+            total += size
+        }
+        return total
+    }
+
+    /// Octets occupés par les fichiers que `urlStrings` ne couvre PAS.
+    ///
+    /// C'est le résidu « non attribué » : des médias bien présents sur disque
+    /// dont l'entité porteuse (post, story, message) a quitté le cache GRDB.
+    /// Plus personne ne peut les rattacher à un domaine, mais ils occupent une
+    /// place réelle — les taire donnerait une somme des cases inférieure à la
+    /// taille du cache, ce que l'utilisateur constaterait immédiatement.
+    ///
+    /// Le sidecar `.pins.json` est exclu du décompte via `.skipsHiddenFiles`,
+    /// comme dans `estimatedDiskBytes()`.
+    public func unattributedDiskBytes(excluding urlStrings: Set<String>) async -> Int {
+        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
+        guard let enumerator = fileManager.enumerator(
+            at: baseDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total = 0
+        while let fileURL = enumerator.nextObject() as? URL {
+            guard !known.contains(fileURL.lastPathComponent) else { continue }
+            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                total += size
+            }
+        }
+        return total
+    }
+
+    /// Détruit les entrées de `urlStrings`, en ANNULANT d'abord tout
+    /// téléchargement en vol pour ces clés.
+    ///
+    /// Sans cette annulation, une purge lancée pendant qu'un média se
+    /// télécharge est silencieusement défaite : la tâche réseau se termine
+    /// après la suppression et son `save()` réécrit le fichier. L'utilisateur
+    /// voit alors le cache regrossir tout seul juste après avoir vidé une
+    /// case — le pire des symptômes, parce qu'il ressemble à un bug de mesure
+    /// et non à une purge incomplète.
+    ///
+    /// L'annulation est coopérative : `URLSession.data(from:)` honore
+    /// l'annulation de la `Task`, et le `save()` qui suit ne s'exécute pas.
+    /// On retire l'entrée du registre AVANT d'annuler pour qu'un appelant
+    /// concurrent ne récupère pas une tâche déjà condamnée.
+    @discardableResult
+    public func purge(urls urlStrings: Set<String>) async -> Int {
+        var freed = 0
+        for urlString in urlStrings {
+            let fileKey = Self.fileKey(for: urlString)
+            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
+                inFlight.task.cancel()
+            }
+            let filePath = diskFilePath(for: fileKey)
+            if let size = (try? fileManager.attributesOfItem(atPath: filePath.path))?[.size] as? Int {
+                freed += size
+            }
+            memoryCache.removeObject(forKey: fileKey as NSString)
+            fileTimestamps.removeValue(forKey: fileKey)
+            fileManager.removeItemLogging(at: filePath, context: "purge sélective", logger: logger)
+            // Même raison que dans `invalidate(for:)` : un pin conservé
+            // re-protégerait le futur re-téléchargement de la même clé.
+            loadPinsIfNeeded()
+            if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
+        }
+        return freed
+    }
+
+    /// Détruit tout ce que `urlStrings` ne couvre PAS (le résidu non attribué).
+    @discardableResult
+    public func purgeUnattributed(excluding urlStrings: Set<String>) async -> Int {
+        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
+        guard let enumerator = fileManager.enumerator(
+            at: baseDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var victims: [(url: URL, size: Int)] = []
+        while let fileURL = enumerator.nextObject() as? URL {
+            guard !known.contains(fileURL.lastPathComponent) else { continue }
+            let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            victims.append((fileURL, size))
+        }
+        var freed = 0
+        for victim in victims {
+            let fileKey = victim.url.lastPathComponent
+            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
+                inFlight.task.cancel()
+            }
+            memoryCache.removeObject(forKey: fileKey as NSString)
+            fileTimestamps.removeValue(forKey: fileKey)
+            fileManager.removeItemLogging(at: victim.url, context: "purge résidu non attribué", logger: logger)
+            freed += victim.size
+        }
+        return freed
+    }
+
+    /// `true` si un téléchargement est en vol pour cette URL. Exposé pour les
+    /// tests de la purge concurrente.
+    public func hasInFlightDownload(forURL urlString: String) -> Bool {
+        inFlightTasks[Self.fileKey(for: urlString)] != nil
     }
 }

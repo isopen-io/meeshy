@@ -50,17 +50,23 @@ struct StoryActiveBridge: View {
     let post: APIPost
     let intent: StoryIntent
     let viewerCoordinator: any StoryViewerCoordinating
+    let commentId: String?
+    let parentCommentId: String?
     let dismiss: () -> Void
 
     init(
         post: APIPost,
         intent: StoryIntent,
         viewerCoordinator: any StoryViewerCoordinating,
+        commentId: String? = nil,
+        parentCommentId: String? = nil,
         dismiss: @escaping () -> Void
     ) {
         self.post = post
         self.intent = intent
         self.viewerCoordinator = viewerCoordinator
+        self.commentId = commentId
+        self.parentCommentId = parentCommentId
         self.dismiss = dismiss
     }
 
@@ -81,7 +87,15 @@ struct StoryActiveBridge: View {
             }
         }()
 
-        let request = StoryViewerRequest(id: post.author.id, initialAction: action)
+        // R4 inc.2 — la notification connaît le post story exact : le
+        // container peut le fetch unitairement si le tray l'ignore.
+        let request = StoryViewerRequest(
+            id: post.author.id,
+            initialAction: action,
+            postId: post.id,
+            targetCommentId: commentId,
+            targetParentCommentId: parentCommentId
+        )
         viewerCoordinator.present(request)
         dismiss()
     }

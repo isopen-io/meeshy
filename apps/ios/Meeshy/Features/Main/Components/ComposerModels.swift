@@ -115,6 +115,21 @@ enum DefaultComposerLanguage {
     static func resolve() -> String { "fr" }
 }
 
+/// Rendu compact du bouton langue du composer de post : le bouton replié ne
+/// montre QUE le drapeau — le nom de la langue n'apparaît que dans la liste
+/// du picker (directive 2026-07-30). Le nom reste porté par l'accessibilité
+/// (`accessibilityValue`), VoiceOver ne lit pas un emoji de drapeau utilement.
+/// `nonisolated` au niveau du type : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non.
+nonisolated enum ComposerLanguageFlag {
+    /// Code hors du référentiel `LanguageData` → code brut en capitales,
+    /// jamais un bouton vide.
+    static func label(for code: String) -> String {
+        let base = MeeshyUser.normalizeLanguageCode(code) ?? code.lowercased()
+        return LanguageData.info(for: base)?.flag ?? code.uppercased()
+    }
+}
+
 // ============================================================================
 // MARK: - Composer Language Resolver
 // ============================================================================
@@ -187,11 +202,7 @@ class KeyboardObserver: ObservableObject {
                 // Use the keyboard-hosting window's height (not the full
                 // display) so split-screen on iPad produces the correct
                 // visible keyboard portion.
-                let screenHeight = UIApplication.shared.connectedScenes
-                    .compactMap { $0 as? UIWindowScene }
-                    .first(where: { $0.activationState == .foregroundActive })?
-                    .windows.first(where: { $0.isKeyWindow })?.bounds.height
-                    ?? UIScreen.main.bounds.height
+                let screenHeight = DeviceLayout.windowSize.height
                 let newHeight = max(screenHeight - endFrame.origin.y, 0)
 
                 if newHeight > 0 {

@@ -139,6 +139,13 @@ struct ConversationAnimatedBackground: View {
         groupColorPhase ? config.groupEndColor : config.groupStartColor
     }
 
+    // Décor animé de la conversation (rendu à 0.12 d'opacité derrière le contenu).
+    // Doctrine : tous les glyphes de ce fichier (cœurs, `person.fill`, globe,
+    // cadenas/boucliers/enveloppes, emojis drapeaux…) sont **purement décoratifs** et
+    // gardent des tailles `.system(size:)` **fixes on purpose** (ils composent des
+    // animations en couches à positions absolues ; les faire scaler avec le Dynamic Type
+    // déformerait le décor). Tout le fond est `.accessibilityHidden(true)` pour que
+    // VoiceOver ne lise jamais les symboles/drapeaux ambiants.
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -166,6 +173,7 @@ struct ConversationAnimatedBackground: View {
             .drawingGroup()
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
         .onAppear { startAnimations() }
         .onDisappear { stopAnimations() }
     }

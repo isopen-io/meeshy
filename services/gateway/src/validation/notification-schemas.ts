@@ -62,13 +62,11 @@ export const GetNotificationsQuerySchema = z.object({
   priority: NotificationPriorityEnum.optional(),
 
   // Date range filtering
-  startDate: z
-    .string()
+  startDate: z.iso
     .datetime()
     .optional(),
 
-  endDate: z
-    .string()
+  endDate: z.iso
     .datetime()
     .optional()
 }).strict(); // Reject unknown query parameters
@@ -122,9 +120,7 @@ export const CreateNotificationSchema = z.object({
     .max(50, 'Sender username must be <= 50 characters')
     .optional(),
 
-  senderAvatar: z
-    .string()
-    .url('Invalid avatar URL')
+  senderAvatar: z.url('Invalid avatar URL')
     .max(500, 'Avatar URL too long')
     .optional(),
 
@@ -163,8 +159,7 @@ export const CreateNotificationSchema = z.object({
     .record(z.string(), z.unknown())
     .optional(),
 
-  expiresAt: z
-    .string()
+  expiresAt: z.iso
     .datetime()
     .transform(val => new Date(val))
     .optional()

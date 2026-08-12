@@ -34,6 +34,7 @@ import type {
   VoiceTranslationFailedEvent,
   StoryTextObjectTranslationCompletedEvent
 } from './types';
+import { extractAudioBinaryFrames } from './utils/binary-frames';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 // Logger dédié pour ZmqMessageHandler
 const logger = enhancedLogger.child({ module: 'ZmqMessageHandler' });
@@ -234,16 +235,13 @@ export class ZmqMessageHandler extends EventEmitter {
       return;
     }
 
-    // Marquer ce task comme traité
-    this.processedResults.add(resultKey);
-
-    // Nettoyer les anciens résultats (garder seulement les 1000 derniers)
-    if (this.processedResults.size > 1000) {
-      const firstKey = this.processedResults.values().next().value;
-      this.processedResults.delete(firstKey);
-    }
-
-    // VALIDATION COMPLÈTE
+    // VALIDATION COMPLÈTE — AVANT de consommer le slot de déduplication. Une
+    // frame malformée (result absent/sans messageId) ne doit PAS marquer
+    // `resultKey` comme traité : ZMQ SUB est at-least-once et un retry du
+    // translator réutilise le même taskId, donc stamper le slot ici ferait
+    // dropper la re-livraison VALIDE par le guard `has(resultKey)` ci-dessus —
+    // le destinataire resterait bloqué sur l'original non traduit (violation
+    // du Prisme). Seul un événement accepté consomme le slot.
     if (!event.result) {
       logger.error(`❌ Message sans résultat`);
       return;
@@ -252,6 +250,15 @@ export class ZmqMessageHandler extends EventEmitter {
     if (!event.result.messageId) {
       logger.error(`❌ Message sans messageId`);
       return;
+    }
+
+    // Marquer ce task comme traité (uniquement après validation réussie)
+    this.processedResults.add(resultKey);
+
+    // Nettoyer les anciens résultats (garder seulement les 1000 derniers)
+    if (this.processedResults.size > 1000) {
+      const firstKey = this.processedResults.values().next().value;
+      this.processedResults.delete(firstKey);
     }
 
     this.stats.translationCompleted++;
@@ -316,29 +323,16 @@ export class ZmqMessageHandler extends EventEmitter {
     // ═══════════════════════════════════════════════════════════════
     // EXTRACTION DES BINAIRES DEPUIS FRAMES MULTIPART
     // ═══════════════════════════════════════════════════════════════
-    const binaryFramesInfo = (event as any).binaryFrames || {};
-    const audioBinaries: Map<string, Buffer> = new Map();
-    let embeddingBinary: Buffer | null = null;
-
-    // Extraire les audios traduits des frames binaires
-    for (const [key, info] of Object.entries(binaryFramesInfo)) {
-      const frameInfo = info as { index: number; size: number; mimeType?: string };
-      const frameIndex = frameInfo.index - 1; // Les indices dans metadata commencent à 1, array à 0
-
-      if (frameIndex >= 0 && frameIndex < binaryFrames.length) {
-        if (key.startsWith('audio_')) {
-          const language = key.replace('audio_', '');
-          audioBinaries.set(language, binaryFrames[frameIndex]);
-        } else if (key === 'embedding') {
-          embeddingBinary = binaryFrames[frameIndex];
-        }
-      } else {
-        logger.warn(`   ⚠️ Frame index invalide pour ${key}: ${frameIndex}`);
-      }
+    const { audioBinaries, embeddingBinary, invalidFrameKeys } = extractAudioBinaryFrames(
+      (event as any).binaryFrames,
+      binaryFrames
+    );
+    for (const key of invalidFrameKeys) {
+      logger.warn(`   ⚠️ Frame index invalide pour ${key}`);
     }
 
     // Enrichir translatedAudios avec les données binaires
-    const enrichedTranslatedAudios = event.translatedAudios.map(audio => {
+    const enrichedTranslatedAudios = (event.translatedAudios ?? []).map(audio => {
       const audioBinary = audioBinaries.get(audio.targetLanguage);
       return {
         ...audio,

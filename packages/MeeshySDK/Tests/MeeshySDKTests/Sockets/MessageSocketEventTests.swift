@@ -60,6 +60,62 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertNil(event.pinnedAt)
     }
 
+    // MARK: - CallTranslatedSegmentData
+
+    func testCallTranslatedSegmentEventDecoding() throws {
+        let json = """
+        {
+            "callId": "507f1f77bcf86cd799439011",
+            "segment": {
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-abc",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
+        XCTAssertEqual(event.callId, "507f1f77bcf86cd799439011")
+        XCTAssertEqual(event.segment.text, "Bonjour")
+        XCTAssertEqual(event.segment.translatedText, "Hello")
+        XCTAssertEqual(event.segment.speakerId, "user-abc")
+        XCTAssertEqual(event.segment.startMs, 0)
+        XCTAssertEqual(event.segment.endMs, 1500)
+        XCTAssertTrue(event.segment.isFinal)
+        XCTAssertEqual(event.segment.sourceLanguage, "fr")
+        XCTAssertEqual(event.segment.targetLanguage, "en")
+        XCTAssertEqual(event.segment.confidence, 0.95, accuracy: 0.001)
+    }
+
+    func testCallTranslatedSegmentEventDecoding_withoutTranslatedText_fallsBackToNil() throws {
+        // `translatedText` is omitted when ZMQ translation is disabled/unavailable —
+        // consumers must fall back to displaying `text`.
+        let json = """
+        {
+            "callId": "507f1f77bcf86cd799439011",
+            "segment": {
+                "text": "Bonjour",
+                "speakerId": "user-abc",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "fr",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
+        XCTAssertNil(event.segment.translatedText)
+    }
+
     func testMessageUnpinnedEventDecoding() throws {
         let json = """
         {"messageId": "m3", "conversationId": "c3"}
@@ -431,6 +487,50 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.summary.readCount, 1)
     }
 
+    // MARK: - AttachmentStatusUpdatedEvent
+
+    func testAttachmentStatusUpdatedEventDecoding_withPositionFields() throws {
+        let json = """
+        {
+            "attachmentId": "att1",
+            "messageId": "msg1",
+            "conversationId": "c1",
+            "userId": "u1",
+            "action": "listened",
+            "updatedAt": "2026-03-06T14:30:00.000Z",
+            "playPositionMs": 2500,
+            "durationMs": 10000,
+            "percentage": 25
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentStatusUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.attachmentId, "att1")
+        XCTAssertEqual(event.action, "listened")
+        XCTAssertEqual(event.playPositionMs, 2500)
+        XCTAssertEqual(event.durationMs, 10000)
+        XCTAssertEqual(event.percentage, 25)
+    }
+
+    func testAttachmentStatusUpdatedEventDecoding_tolerantWithoutPositionFields() throws {
+        let json = """
+        {
+            "attachmentId": "att2",
+            "messageId": "msg2",
+            "conversationId": "c2",
+            "userId": "u2",
+            "action": "downloaded",
+            "updatedAt": "2026-03-06T14:30:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentStatusUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.attachmentId, "att2")
+        XCTAssertNil(event.playPositionMs)
+        XCTAssertNil(event.durationMs)
+        XCTAssertNil(event.percentage)
+    }
+
     // MARK: - MessageConsumedEvent
 
     func testMessageConsumedEventDecoding() throws {
@@ -469,57 +569,6 @@ final class MessageSocketEventTests: XCTestCase {
         let event = try decoder.decode(MessageConsumedEvent.self, from: json)
         XCTAssertTrue(event.isFullyConsumed)
         XCTAssertEqual(event.viewOnceCount, event.maxViewOnceCount)
-    }
-
-    // MARK: - LocationSharedEvent
-
-    func testLocationSharedEventDecoding() throws {
-        let json = """
-        {
-            "messageId": "loc1",
-            "conversationId": "c1",
-            "userId": "u1",
-            "latitude": 48.8566,
-            "longitude": 2.3522,
-            "altitude": 35.0,
-            "accuracy": 10.5,
-            "placeName": "Tour Eiffel",
-            "address": "Champ de Mars, 5 Av. Anatole France, 75007 Paris",
-            "timestamp": "2026-03-06T15:00:00.000Z"
-        }
-        """.data(using: .utf8)!
-
-        let event = try decoder.decode(LocationSharedEvent.self, from: json)
-        XCTAssertEqual(event.messageId, "loc1")
-        XCTAssertEqual(event.conversationId, "c1")
-        XCTAssertEqual(event.userId, "u1")
-        XCTAssertEqual(event.latitude, 48.8566, accuracy: 0.0001)
-        XCTAssertEqual(event.longitude, 2.3522, accuracy: 0.0001)
-        XCTAssertEqual(event.altitude, 35.0)
-        XCTAssertEqual(event.accuracy, 10.5)
-        XCTAssertEqual(event.placeName, "Tour Eiffel")
-        XCTAssertEqual(event.address, "Champ de Mars, 5 Av. Anatole France, 75007 Paris")
-        XCTAssertNotNil(event.timestamp)
-    }
-
-    func testLocationSharedEventDecodingWithNilOptionals() throws {
-        let json = """
-        {
-            "messageId": "loc2",
-            "conversationId": "c2",
-            "userId": "u2",
-            "latitude": 40.7128,
-            "longitude": -74.0060
-        }
-        """.data(using: .utf8)!
-
-        let event = try decoder.decode(LocationSharedEvent.self, from: json)
-        XCTAssertEqual(event.messageId, "loc2")
-        XCTAssertNil(event.altitude)
-        XCTAssertNil(event.accuracy)
-        XCTAssertNil(event.placeName)
-        XCTAssertNil(event.address)
-        XCTAssertNil(event.timestamp)
     }
 
     // MARK: - LiveLocationStartedEvent

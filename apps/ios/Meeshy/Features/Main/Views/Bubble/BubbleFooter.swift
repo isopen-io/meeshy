@@ -88,7 +88,12 @@ struct BubbleFooter: View, Equatable {
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(sender.name)
+                        // Nom borné à 16 caractères (directive user 2026-07-30) :
+                        // au-delà, le pseudo mangeait la rangée et repoussait
+                        // l'heure + l'accusé de lecture contre le bord. Le
+                        // `lineLimit(1)` reste comme filet pour les très grandes
+                        // tailles Dynamic Type, mais la borne est posée ici.
+                        Text(DisplayName.truncated(sender.name))
                             .font(.footnote.weight(.semibold))
                             .lineLimit(1)
                         roleBadge(sender.role)
@@ -203,7 +208,8 @@ struct BubbleFooter: View, Equatable {
                 status: delivery,
                 isOffline: model.isOffline,
                 tint: tint,
-                readTint: readTint
+                readTint: readTint,
+                sendStartedAt: model.sendStartedAt
             )
             if let onShowReadStatus = actions.onShowReadStatus {
                 // Tap sur les coches -> ouvre le sheet detail a l'onglet
@@ -253,6 +259,7 @@ struct BubbleFooter: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(display?.name ?? flag.code)
+        .accessibilityAddTraits(flag.isActive ? [.isSelected] : [])
     }
 
     @ViewBuilder

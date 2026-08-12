@@ -9,7 +9,14 @@ import MeeshyUI
 struct StarredMessagesView: View {
     @StateObject private var store = StarredMessagesStore.shared
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var theme: ThemeManager
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
     var body: some View {
@@ -33,6 +40,10 @@ struct StarredMessagesView: View {
                                         Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                                     }
                                 }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
+                                .accessibilityAction { navigate(to: snapshot) }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -54,36 +65,33 @@ struct StarredMessagesView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
                 }
             }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.circle")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(MeeshyColors.indigo400)
-            Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
-                .font(.system(size: 13))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
+        AdaptiveContentUnavailableView(
+            String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
+            systemImage: "star.circle",
+            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
+        )
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {
         // Delegate to Router's existing highlight-in-conversation flow so the
         // starred row behaves exactly like a tapped notification / search hit.
+        // Le highlight est SCOPÉ à la conversation cible, et la notification
+        // est observée par RootView/iPadRootView (elle était sans observateur —
+        // tap étoilé = no-op silencieux + highlight qui fuitait ailleurs).
         router.pendingHighlightMessageId = snapshot.id
+        router.pendingHighlightConversationId = snapshot.conversationId
         NotificationCenter.default.post(
-            name: Notification.Name("navigateToConversationById"),
+            name: .meeshyNavigateToConversation,
             object: snapshot.conversationId
         )
-        dismiss()
+        back()
     }
 }
 
@@ -106,19 +114,19 @@ private struct StarredRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(MeeshyFont.relative(10, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
                     Text(snapshot.senderName ?? String(localized: "starred.messages.unknown_user", defaultValue: "Utilisateur", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)
                     Text(snapshot.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                 }
 
                 Text(snapshot.contentPreview)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
@@ -126,9 +134,9 @@ private struct StarredRow: View {
                 if let conversationName = snapshot.conversationName {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(MeeshyFont.relative(9, weight: .semibold))
                         Text(conversationName)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                     }
                     .foregroundStyle(accent.opacity(0.85))
                 }

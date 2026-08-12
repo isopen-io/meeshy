@@ -3,6 +3,7 @@ import Security
 @testable import Meeshy
 import MeeshySDK
 
+@MainActor
 final class AnonymousSessionStoreTests: XCTestCase {
 
     // MARK: - A2 — Keychain accessibility class invariants (no Keychain access)

@@ -11,6 +11,8 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -18,17 +20,37 @@ export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  /**
+   * Retracte la frappe que CE socket a diffusée dans la conversation qu'il
+   * quitte — `StatusHandler.retractTypingIn` en pratique.
+   *
+   * Sans elle, seul `disconnecting` retracte, et changer de conversation ne
+   * déconnecte pas le socket : les pairs gardent un « X est en train
+   * d'écrire… » fantôme jusqu'à leur propre filet de sécurité. La conversation
+   * est passée DÉJÀ NORMALISÉE — ce handler l'a résolue, la faire re-résoudre
+   * coûterait un second `findUnique` à chaque changement de conversation.
+   *
+   * Optionnelle : un `ConversationHandler` construit sans elle quitte
+   * normalement, il ne retracte simplement rien.
+   */
+  retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
 }
 
 export class ConversationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.readStatusService = deps.readStatusService;
+    this.retractTyping = deps.retractTyping;
   }
 
   /**
@@ -58,13 +80,46 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const userId = this.socketToUser.get(socket.id);
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      const connectedUser = userIdOrToken ? this.connectedUsers.get(userIdOrToken) : null;
 
-      if (userId) {
-        // Membership check: a user can only join a conversation they are
-        // an active participant of. Banned and removed participants are
-        // both rejected here so the client knows to purge its local
-        // cache and dismiss any open view of the conversation.
+      if (!connectedUser) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'not_authenticated',
+          message: 'Non authentifié',
+        });
+        return;
+      }
+
+      const joinAllowed = await this.rateLimiter.checkLimit(userIdOrToken!, SOCKET_RATE_LIMITS.CONVERSATION_JOIN);
+      if (!joinAllowed) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'rate_limited',
+          message: 'Trop de requêtes. Veuillez réessayer.',
+        });
+        return;
+      }
+
+      if (connectedUser.isAnonymous) {
+        // Anonymous: verify participant owns this exact conversation
+        const participantId = connectedUser.participantId;
+        const participant = await this.prisma.participant.findFirst({
+          where: { id: participantId, conversationId: normalizedId, isActive: true },
+          select: { id: true },
+        });
+        if (!participant) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'not_a_member',
+            message: 'Vous n\'êtes pas membre de cette conversation',
+          });
+          return;
+        }
+      } else {
+        // Registered: check participant record by userId
+        const userId = connectedUser.userId!;
         const participant = await this.prisma.participant.findFirst({
           where: { conversationId: normalizedId, userId },
           select: { id: true, bannedAt: true, leftAt: true, isActive: true },
@@ -99,15 +154,57 @@ export class ConversationHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      socket.join(room);
-      if (userId) {
+      await socket.join(room);
+      const registeredUserId = connectedUser.userId;
+      // L'identité du socket dans cette conversation. Un invité de lien partagé
+      // n'a pas de `userId` : c'est son `Participant.id` qui l'identifie, et
+      // c'est celui que le contrôle d'appartenance vient de résoudre. SURTOUT
+      // PAS `connectedUser.id`, qui est le jeton de SESSION — un credential n'a
+      // rien à faire dans un payload d'événement, et il ne résout d'ailleurs
+      // aucune ligne Participant (`getUnreadCount` rendrait 0 en silence).
+      //
+      // Les deux émissions ci-dessous étaient gatées sur `userId` et laissaient
+      // donc l'invité rejoindre en SILENCE — sans accusé, sans badge — alors
+      // que le contrôle d'appartenance l'a laissé passer et que son socket EST
+      // dans la room.
+      const participationId = registeredUserId ?? connectedUser.participantId;
+
+      if (participationId) {
+        // `userId` ne peut pas être omis pour un anonyme : côté iOS,
+        // `ConversationParticipationEvent.userId` est un `String` NON optionnel
+        // et un payload amputé ferait échouer le décodage Swift — l'accusé
+        // serait silencieusement jeté. Aucun des cinq consommateurs connus ne
+        // LIT ce champ (web use-socket-cache-sync / use-stream-socket /
+        // orchestrator, iOS ConversationSyncEngine / ParticipantsView
+        // n'exploitent que `conversationId`), mais tous exigent qu'il soit là.
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId
+          userId: participationId
         });
 
-        // Envoyer les stats de conversation
-        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(() => {});
+        // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
+        // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
+        // le chemin anonyme comme le cas courant).
+        try {
+          const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
+          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
+        } catch (err) {
+          logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
+        }
+      }
+
+      if (registeredUserId) {
+        // Envoyer les stats de conversation. On passe l'id RÉSOLU (`normalizedId`),
+        // comme le room join, le payload joined et l'emit unread ci-dessus — sauf
+        // pour la conversation globale "meeshy", que ConversationStatsService résout
+        // lui-même via le littéral (elle n'a pas de rows Participant : lui donner
+        // l'ObjectId renverrait participantCount:0 / onlineUsers:[]). Passer le brut
+        // `validated.conversationId` pour tout autre identifiant de slug faisait
+        // manquer `findFirst({ id })` → stats vides mises en cache 1h sous la clé slug.
+        const statsConversationId = validated.conversationId === 'meeshy' ? 'meeshy' : normalizedId;
+        await this.sendConversationStatsToSocket(socket, statsConversationId).catch(err => {
+          logger.warn('conversation stats broadcast failed (non-blocking)', { conversationId: statsConversationId, error: err });
+        });
       }
     } catch (error) {
       logger.error('conversation:join failed', { error });
@@ -136,8 +233,20 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
+      // Retracter AVANT de sortir : « je retire ce que j'ai diffusé, puis je
+      // sors ». Le try/catch est local et non le try/catch général — une
+      // retraction qui échoue ne doit pas transformer un départ demandé par le
+      // client en `conversation:leave` refusé.
+      if (this.retractTyping) {
+        try {
+          await this.retractTyping(socket, normalizedId);
+        } catch (error) {
+          logger.error('conversation:leave — typing retraction failed', { error, conversationId: normalizedId });
+        }
+      }
+
       const room = ROOMS.conversation(normalizedId);
-      socket.leave(room);
+      await socket.leave(room);
 
       const userId = this.socketToUser.get(socket.id);
       if (userId) {
@@ -148,6 +257,7 @@ export class ConversationHandler {
       }
     } catch (error) {
       logger.error('conversation:leave failed', { error });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to leave conversation' });
     }
   }
 
@@ -156,10 +266,14 @@ export class ConversationHandler {
    */
   async sendConversationStatsToSocket(socket: Socket, conversationId: string): Promise<void> {
     try {
-      const stats = await conversationStatsService.updateOnNewMessage(
+      // Read-only refresh on join: getOrCompute returns cached-or-freshly-computed
+      // stats WITHOUT mutating them. Using updateOnNewMessage here (the per-new-message
+      // increment path) bumped messagesPerLanguage['fr'] by one on every warm-cache
+      // join, inflating a conversation's message counts and persisting the corruption
+      // in the shared singleton cache until its 1h TTL expired.
+      const stats = await conversationStatsService.getOrCompute(
         this.prisma,
         conversationId,
-        'fr', // Default language pour stats refresh
         () => Array.from(this.connectedUsers.values()).map((u) => u.id)
       );
 

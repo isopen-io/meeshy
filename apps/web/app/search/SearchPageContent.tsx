@@ -36,8 +36,10 @@ import { buildApiUrl } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { PRESENCE_BADGE_CLASS } from '@/lib/user-status';
+import { getUserInitials } from '@/lib/avatar-utils';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
 import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
@@ -219,13 +221,9 @@ export function SearchPageContent() {
   };
 
   const getUserDisplayName = (user: User): string => {
-    if (user.displayName) return user.displayName;
-    return `${user.firstName} ${user.lastName}`.trim() || user.username;
-  };
-
-  const getInitials = (user: User): string => {
-    const displayName = getUserDisplayName(user);
-    return displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    // Délègue à la source unique `utils/user-display-name` (displayName >
+    // firstName+lastName > username, trim) — pas de réimplémentation locale.
+    return resolveDisplayName(user, user.username);
   };
 
   // Envoyer une demande d'ami
@@ -500,12 +498,12 @@ export function SearchPageContent() {
                                 <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-white dark:border-gray-700 shadow-lg">
                                   <AvatarImage src={user.avatar} alt={getUserDisplayName(user)} />
                                   <AvatarFallback className="text-sm sm:text-lg font-bold">
-                                    {getInitials(user)}
+                                    {getUserInitials(user)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <OnlineIndicator
-                                  isOnline={getUserStatus(user) === 'online'}
-                                  status={getUserStatus(user)}
+                                <ParticipantPresenceIndicator
+                                  userId={user.id}
+                                  fallbackUser={user}
                                   size="md"
                                   className="absolute -bottom-0.5 -right-0.5"
                                 />
@@ -521,9 +519,7 @@ export function SearchPageContent() {
                                     <Badge
                                       variant={user.isOnline ? 'default' : 'secondary'}
                                       className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${
-                                        user.isOnline
-                                          ? 'bg-green-500 hover:bg-green-600'
-                                          : 'bg-gray-400 hover:bg-gray-500'
+                                        PRESENCE_BADGE_CLASS[user.isOnline ? 'online' : 'offline']
                                       }`}
                                     >
                                       {user.isOnline ? t('user.online') : t('user.offline')}

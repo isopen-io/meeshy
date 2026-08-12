@@ -57,6 +57,10 @@ struct AudioCarouselView: View {
     let onShowTranslationDetail: ((String) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onPlayAudio: ((String) -> Void)?
+    /// Cold-open (F1) : forwardés à chaque page (`AudioMediaView`) — voir
+    /// `BubbleStandardLayout.conversationName` / `.audioQueueTailProvider`.
+    var conversationName: String? = nil
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var parentIsMe: Bool = false
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
@@ -127,6 +131,14 @@ struct AudioCarouselView: View {
         .onAppear {
             if currentPageID == nil { currentPageID = items.first?.id }
         }
+        // Contrairement au carrousel visuel (état grille ↔ carrousel), le pager
+        // multi-audio est TOUJOURS actif : le glissement horizontal lui
+        // appartient en permanence. On désengage donc le swipe reply/forward du
+        // BubbleSwipeContainer pour toute la vie de la bulle — sinon un swipe
+        // de piste franc (~60-100pt) franchit même le seuil `.resistant` (48pt)
+        // et déclenche Répondre/Transférer en plein changement de piste.
+        // Répondre/Transférer restent accessibles via le menu long-press.
+        .preference(key: BubbleInlinePagingPreferenceKey.self, value: items.count > 1)
         // Swipe to a track plays it from 0 (validated UX). Tapping play inside a
         // page routes through the same `onPlayAudio` callback below.
         //
@@ -221,7 +233,9 @@ struct AudioCarouselView: View {
             activeAudioLanguageOverride: activeAudioLanguage,
             footerModel: nil,
             footerActions: .none,
-            onPlayAudio: onPlayAudio
+            onPlayAudio: onPlayAudio,
+            conversationName: conversationName,
+            audioQueueTailProvider: audioQueueTailProvider
         )
         .equatable()
         .padding(.trailing, 4)
@@ -234,33 +248,23 @@ struct AudioCarouselView: View {
         let accent = Color(hex: contactColor)
         let currentIndex = items.firstIndex(where: { $0.id == currentPageID }) ?? 0
 
-        if items.count <= 7 {
-            HStack(spacing: 5) {
-                ForEach(0..<items.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == currentIndex ? accent : Color.white.opacity(0.45))
-                        .frame(
-                            width: i == currentIndex ? 7 : 5,
-                            height: i == currentIndex ? 7 : 5
-                        )
-                        .shadow(
-                            color: i == currentIndex ? accent.opacity(0.6) : .clear,
-                            radius: 4
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
+        Group {
+            if items.count <= 7 {
+                HStack(spacing: 5) {
+                    ForEach(0..<items.count, id: \.self) { i in
+                        Circle()
+                            .fill(i == currentIndex ? accent : Color.white.opacity(0.45))
+                            .frame(
+                                width: i == currentIndex ? 7 : 5,
+                                height: i == currentIndex ? 7 : 5
+                            )
+                            .shadow(
+                                color: i == currentIndex ? accent.opacity(0.6) : .clear,
+                                radius: 4
+                            )
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
+                    }
                 }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.7))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
-            )
-        } else {
-            Text("\(currentIndex + 1) / \(items.count)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(
@@ -268,9 +272,31 @@ struct AudioCarouselView: View {
                         .fill(.ultraThinMaterial.opacity(0.7))
                         .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                 )
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
+            } else {
+                Text("\(currentIndex + 1) / \(items.count)")
+                    // Dynamic-Type-aware: the counter scales with the reader's
+                    // text size (the capsule has flexible padding, no fixed width,
+                    // so it grows with the glyphs — no truncation).
+                    .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial.opacity(0.7))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                    )
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
+            }
         }
+        // The position is conveyed visually by dot fill/size (or the "n / N"
+        // counter) — VoiceOver needs it spoken, not left to color alone. One
+        // combined element announces "Piste 2 sur 5" for both variants.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(String(localized: "bubble.audio.carousel.position",
+                                         defaultValue: "Piste \(currentIndex + 1) sur \(items.count)",
+                                         bundle: .main)))
     }
 }
 

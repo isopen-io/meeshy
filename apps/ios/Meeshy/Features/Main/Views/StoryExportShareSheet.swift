@@ -1,18 +1,20 @@
 import SwiftUI
-import UIKit
 import MeeshySDK
 import MeeshyUI
 
 // MARK: - StoryExportShareSheet
 //
 // Author-only sheet that bakes the current slide into an MP4 and presents
-// the system `UIActivityViewController` so the user can drop the file into
+// the system share sheet (`ShareSheet`) so the user can drop the file into
 // Photos / Messages / WhatsApp / AirDrop. NEVER touches the Meeshy backend.
 
 struct StoryExportShareSheet: View {
     let story: StoryItem
     @ObservedObject var viewModel: StoryExportShareViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         NavigationStack {
@@ -27,9 +29,8 @@ struct StoryExportShareSheet: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
-            .background(MeeshyColors.indigo950.opacity(0.04).ignoresSafeArea())
-            .navigationTitle(String(localized: "story.export.share.title",
-                                    defaultValue: "Exporter en vidéo"))
+            .background(StoryExportSheetPalette.wash(isDark: isDark).ignoresSafeArea())
+            .navigationTitle(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -46,10 +47,10 @@ struct StoryExportShareSheet: View {
                 get: { viewModel.sharedURL.map(ShareWrapper.init) },
                 set: { _ in }
             )) { wrapper in
-                ActivityView(url: wrapper.url) { completed in
+                ShareSheet(activityItems: [wrapper.url], onCompletion: { completed in
                     viewModel.finishSharing(success: completed)
                     dismiss()
-                }
+                })
                 .onAppear { viewModel.markSharingPresented() }
             }
             .alert(
@@ -60,7 +61,8 @@ struct StoryExportShareSheet: View {
                     set: { if !$0 { viewModel.errorMessage = nil } }
                 ),
                 actions: {
-                    Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+                    Button(String(localized: "common.ok", defaultValue: "OK"),
+                           role: .cancel) { viewModel.errorMessage = nil }
                 },
                 message: {
                     if let msg = viewModel.errorMessage {
@@ -76,13 +78,15 @@ struct StoryExportShareSheet: View {
     private var header: some View {
         VStack(spacing: 8) {
             Image(systemName: "square.and.arrow.up.fill")
+                // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
+                // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
+                // masqué du rotor car le sous-titre adjacent porte le sens.
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
-            Text(String(
-                localized: "story.export.share.subtitle",
-                defaultValue: "Bake un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
-            ))
-            .font(.system(size: 14))
+                .accessibilityHidden(true)
+            Text(String(localized: "story.export.share.subtitle",
+                        defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."))
+            .font(MeeshyFont.relative(14))
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
         }
@@ -95,7 +99,7 @@ struct StoryExportShareSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "story.export.share.languageLabel",
                         defaultValue: "Langue à graver"))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.secondary)
 
             Menu {
@@ -116,17 +120,18 @@ struct StoryExportShareSheet: View {
                         .foregroundColor(.primary)
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(MeeshyColors.indigo50.opacity(0.6))
+                        .fill(StoryExportSheetPalette.pickerFill(isDark: isDark))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(MeeshyColors.indigo200, lineWidth: 1)
+                        .stroke(StoryExportSheetPalette.pickerStroke(isDark: isDark), lineWidth: 1)
                 )
             }
             .disabled(viewModel.phase == .exporting || viewModel.phase == .sharing)
@@ -153,7 +158,7 @@ struct StoryExportShareSheet: View {
                                    defaultValue: "Export en cours… %lld%%"),
                     Int(viewModel.progress * 100)
                 ))
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(.secondary)
             }
         case .idle, .failed:
@@ -161,9 +166,8 @@ struct StoryExportShareSheet: View {
                 HapticFeedback.medium()
                 Task { await viewModel.startExport(story: story) }
             } label: {
-                Text(String(localized: "story.export.share.cta",
-                            defaultValue: "Exporter en vidéo"))
-                    .font(.system(size: 16, weight: .semibold))
+                Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(MeeshyColors.brandGradient)
@@ -177,24 +181,45 @@ struct StoryExportShareSheet: View {
     }
 }
 
-// MARK: - Share Sheet wrappers
+// MARK: - Share Sheet wrapper
 
 private struct ShareWrapper: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
 }
 
-private struct ActivityView: UIViewControllerRepresentable {
-    let url: URL
-    let onCompletion: (Bool) -> Void
+// MARK: - Palette de surface
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        vc.completionWithItemsHandler = { _, completed, _, _ in
-            onCompletion(completed)
-        }
-        return vc
+/// Jetons de surface de la feuille d'export, dérivés du **`colorScheme` réel
+/// de rendu** — jamais de `ThemeManager.mode`.
+///
+/// La distinction n'est pas théorique : cette feuille a deux points d'entrée,
+/// et l'un des deux force le sombre. `StoryViewerView` applique
+/// `.preferredColorScheme(.dark)` à son contenu, et une `.sheet` présentée
+/// depuis cette hiérarchie en hérite. Le sélecteur de langue s'y rendait donc
+/// **toujours** avec ses valeurs de mode clair, quel que soit le thème choisi
+/// dans l'app : texte `.primary` (blanc en sombre) sur un fond lavande très
+/// clair, soit un contraste de **2,7:1** — sous le seuil WCAG AA de 4,5:1.
+/// Le chevron `.secondary` tombait à ~1,9:1.
+///
+/// Les valeurs de mode clair sont reprises **à l'identique** : l'itération
+/// répare le mode sombre, elle ne re-règle pas le mode clair.
+enum StoryExportSheetPalette {
+
+    /// Voile de fond de la feuille. En clair, la lavande sombre de la marque à
+    /// 4 % ; en sombre, son inverse — l'ancienne valeur y peignait du presque
+    /// noir sur du noir, c'est-à-dire rien.
+    static func wash(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo50.opacity(0.04) : MeeshyColors.indigo950.opacity(0.04)
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    /// Fond du sélecteur de langue.
+    static func pickerFill(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo900.opacity(0.35) : MeeshyColors.indigo50.opacity(0.6)
+    }
+
+    /// Bordure du sélecteur de langue.
+    static func pickerStroke(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo700.opacity(0.5) : MeeshyColors.indigo200
+    }
 }

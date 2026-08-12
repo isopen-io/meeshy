@@ -160,6 +160,7 @@ describe('NotificationPreferenceSchema', () => {
       vibrationEnabled: true,
       newMessageEnabled: true,
       missedCallEnabled: true,
+      callsEnabled: false,
       voicemailEnabled: true,
       systemEnabled: false,
       conversationEnabled: true,
@@ -174,6 +175,7 @@ describe('NotificationPreferenceSchema', () => {
       dndStartTime: '20:00',
       dndEndTime: '07:30',
       dndDays: ['sat', 'sun'] as const,
+      dndUtcOffsetMinutes: 540,
       showPreview: true,
       showSenderName: true,
       groupNotifications: true,
@@ -183,7 +185,8 @@ describe('NotificationPreferenceSchema', () => {
       postRepostEnabled: true,
       storyReactionEnabled: true,
       commentReplyEnabled: true,
-      commentLikeEnabled: false
+      commentLikeEnabled: false,
+      friendContentEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);
@@ -349,6 +352,37 @@ describe('ApplicationPreferenceSchema', () => {
       tutorialsCompleted: ['tutorial1', 'tutorial2', 'tutorial3']
     });
     expect(valid.tutorialsCompleted).toHaveLength(3);
+  });
+
+  test('conserve les timestamps de consentement voix (non strippés par Zod)', () => {
+    // Popup iOS 2026-07-08 : le consentement vocal transite par la MÊME API
+    // préférences (PATCH /me/preferences/application). Sans ces clés au
+    // schema, Zod (mode strip) les supprimait silencieusement.
+    const result = ApplicationPreferenceSchema.parse({
+      dataProcessingConsentAt: '2026-07-08T10:00:00Z',
+      voiceDataConsentAt: '2026-07-08T10:00:00Z',
+      voiceProfileConsentAt: '2026-07-08T10:00:00Z',
+      voiceCloningConsentAt: '2026-07-08T10:00:00Z',
+      voiceCloningEnabledAt: '2026-07-08T10:00:00Z'
+    });
+    expect(result.voiceProfileConsentAt).toBe('2026-07-08T10:00:00Z');
+    expect(result.voiceCloningConsentAt).toBe('2026-07-08T10:00:00Z');
+  });
+
+  test('accepte null et l\'absence des timestamps de consentement', () => {
+    const withNulls = ApplicationPreferenceSchema.parse({
+      voiceProfileConsentAt: null
+    });
+    expect(withNulls.voiceProfileConsentAt).toBeNull();
+
+    const absent = ApplicationPreferenceSchema.parse({});
+    expect(absent.voiceProfileConsentAt).toBeUndefined();
+  });
+
+  test('rejette un timestamp de consentement non ISO-8601', () => {
+    expect(() => {
+      ApplicationPreferenceSchema.parse({ voiceProfileConsentAt: 'pas-une-date' });
+    }).toThrow();
   });
 });
 
