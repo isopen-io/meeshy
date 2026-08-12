@@ -55,16 +55,68 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
     }
 
+    // MARK: - Flux de messages jusqu'au bord haut de l'écran
+
+    // 3e retour du 2026-08-12 : « enlever la couleur unie derrière dynamic
+    // island pour avoir de la transparence jusqu'en bordure d'écran comme sur
+    // les autres vues ». Le scrim retiré, il restait la bande de fond plate :
+    // la liste (UIViewControllerRepresentable) était posée DANS la safe area,
+    // donc aucun message ne traversait la zone îlot — juste le dégradé de
+    // fond, uniforme. Les autres écrans (CollapsibleHeader) laissent leur
+    // contenu défiler sous un verre translucide jusqu'au bord. La liste doit
+    // donc s'étendre sous la safe area haute.
+    func test_messageList_extendsUnderTopSafeArea() throws {
+        let source = try conversationViewSource()
+        guard let listStart = source.range(of: "MessageListView("),
+              let listEnd = source.range(of: "floatingHeaderSection", range: listStart.upperBound..<source.endIndex) else {
+            return XCTFail("MessageListView introuvable dans ConversationView")
+        }
+        let listBlock = String(source[listStart.lowerBound..<listEnd.lowerBound])
+        XCTAssertTrue(
+            listBlock.contains("ignoresSafeArea(.container, edges: .top)"),
+            "Le flux de messages doit s'étendre sous la safe area haute pour que " +
+            "les bulles traversent la zone status bar / Dynamic Island — sans ça " +
+            "cette bande ne montre que le fond, une couleur unie jusqu'au bord."
+        )
+        XCTAssertTrue(
+            listBlock.contains("topInset: previewMode ? 0 : DeviceLayout.safeAreaTop"),
+            "Sous `ignoresSafeArea`, ni le GeometryReader ni le contrôleur " +
+            "hébergé ne connaissent l'inset haut : il doit venir de la fenêtre."
+        )
+    }
+
+    func test_messageListController_ownsItsInsetsExplicitly() throws {
+        let source = try messageListControllerSource()
+        XCTAssertTrue(
+            source.contains("contentInsetAdjustmentBehavior = .never"),
+            "La liste est inversée (scaleY: -1) : l'ajustement automatique de " +
+            "UIKit poserait la safe area haute du mauvais côté. Les inserts " +
+            "sont gérés explicitement."
+        )
+        XCTAssertTrue(
+            source.contains("func applyTopInset(_ inset: CGFloat)"),
+            "Le repos du flux doit réserver la hauteur de la bande îlot — le " +
+            "contenu la TRAVERSE au défilement, il ne s'y arrête qu'au repos."
+        )
+        XCTAssertFalse(
+            source.contains("view.safeAreaInsets.top"),
+            "L'inset haut ne doit JAMAIS être relu sur la vue : sous " +
+            "`ignoresSafeArea` SwiftUI ne le propage plus au contrôleur hébergé."
+        )
+    }
+
     // MARK: - Pill sticky de jour
 
     func test_stickyDayPill_isAnchoredBelowFloatingHeader() throws {
         let source = try messageListControllerSource()
         XCTAssertTrue(
-            source.contains("constant: MessageDayStickyPlacement.topOffset"),
+            source.contains("constant: topInset + MessageDayStickyPlacement.topOffset"),
             "The sticky day pill must be anchored with the named " +
             "MessageDayStickyPlacement.topOffset — the bare `constant: 4` put " +
             "it under the Dynamic Island / Live Activity band and over the " +
-            "floating header row (user feedback 2026-08-12)."
+            "floating header row (user feedback 2026-08-12). Depuis que la vue " +
+            "court jusqu'au bord haut de l'écran, l'ancre part du haut de la " +
+            "vue et l'offset inclut `topInset` — même position à l'écran."
         )
     }
 
