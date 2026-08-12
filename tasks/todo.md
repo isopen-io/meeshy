@@ -69,12 +69,46 @@ sur 4** ; la 5e ancre le comportement CONSERVÉ (le mode `after` reste une lectu
 bloc `pagination` offset, aucun `COUNT`). Gate : suite `messages-routes` 206/206,
 `tsc --noEmit` gateway propre, suite gateway complète verte.
 
-**Portée honnête.** Le défaut 1 est LATENT : le seul client du mode `after` aujourd'hui (iOS)
-n'utilise pas `nextCursor` — il tient son propre watermark `createdAt` et s'arrête sur
-`page.count < pageSize`. Sa valeur est la même que celle invoquée au cycle 98 : le contrat est
-corrigé AVANT que le prochain client (web, Android) ne se règle dessus, et la description du champ
-n'invite plus au geste faux. Le défaut 2 était en revanche ACTIF — un aller-retour HTTP gaspillé
-par rattrapage tombant sur la frontière, à chaque reconnexion socket concernée.
+**Portée honnête — et une erreur d'inventaire à ne pas rejouer.** Le corps de la PR #2925
+affirmait que le mode `after` n'avait qu'UN consommateur (iOS). **C'est faux**, et l'erreur a été
+commise en s'arrêtant au premier appelant trouvé (`MessageService.listAfter`, côté SDK Swift) sans
+balayer le web. Inventaire exact, vérifié après coup et corrigé en commentaire sur la PR :
+
+| Client | Chemin | lit `nextCursor` ? | lit `hasMore` ? |
+|---|---|---|---|
+| iOS | `MessageService.listAfter` → `ConversationViewModel.syncMissedMessages` | non | non (`page.count < pageSize`) |
+| **web** | `MessagesService.getMessages(…, after)` → `syncNewerMessages` (`use-conversation-messages-rq.ts` ~658), déclenché sur reconnexion socket ET retour de focus | non | **OUI** (`:700`) |
+
+**La conclusion tenait, mais pas pour la raison écrite.** Personne ne lit `nextCursor` en mode
+`after` — le web fait bien remonter `cursorPagination`, mais sa boucle de rattrapage n'en consomme
+que `messages` et `hasMore`, et le `getNextPageParam` de l'`useInfiniteQuery` (qui lit, lui,
+`lastPage.nextCursor`) n'est alimenté que par `fetchMessagesFromService`, **qui ne passe jamais
+`after`**. Les deux chemins ne se croisent pas. Le défaut 1 est donc bien LATENT, et sa valeur est
+celle invoquée au cycle 98 : le contrat est corrigé AVANT que le prochain client ne s'y règle.
+
+Le défaut 2, lui, avait un lecteur RÉEL (le web) — mais le correctif serveur seul ne suffisait pas
+à réaliser le gain : `const hasMore = result.hasMore === true || missed.length === CATCH_UP_PAGE_LIMIT;`
+était une seconde estimation, côté client cette fois, **reproduisant exactement le défaut corrigé
+côté serveur**. Tant qu'elle était là, une page pleine finale faisait boucler le web une fois de
+plus, et l'itération de trop se terminait par un `refetch()` COMPLET (la sortie de boucle sur
+`newestFetchedMs <= watermarkMs` tombe dans le `await refetch()` final) — soit **deux** lectures
+serveur gaspillées, pas une.
+
+**Corrigé dans le même cycle** (`apps/web/hooks/queries/use-conversation-messages-rq.ts`) : la
+boucle s'arrête désormais sur `result.hasMore !== true`, le serveur faisant autorité et lui seul.
+**Sûr dans les deux sens pendant un déploiement** — un gateway antérieur annonce `true` sur cette
+même page, donc la boucle se comporte au pire comme avant ; le garde-fou client n'était pas une
+compatibilité descendante, seulement une redondance devenue fausse.
+
+Tests : 2 (`use-conversation-messages-rq.test.ts`, describe « rattrapage en avant — le hasMore du
+serveur fait autorité »), **RED prouvé sur 1** (4 lectures observées au lieu de 2) ; la 2ᵉ ancre le
+comportement CONSERVÉ (`hasMore: true` continue de paginer). Suite web complète verte.
+
+**La leçon d'inventaire, à ajouter au réflexe d'ouverture de cycle** : avant d'écrire « le seul
+consommateur est X », balayer les TROIS clients (iOS, web, Android) séparément. Le nom de la
+méthode diffère d'un client à l'autre (`listAfter` côté Swift, un simple paramètre `after` côté
+web) — chercher le NOM de l'appelant ne trouve qu'un client sur deux. Chercher le paramètre de
+requête (`after`) les trouve tous.
 
 **Nettoyage annexe, sans contrat** : `callParticipantSchema` était importé dans
 `services/gateway/src/routes/calls.ts` et n'y était **jamais utilisé** (une seule occurrence dans

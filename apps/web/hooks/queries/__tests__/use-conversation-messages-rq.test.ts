@@ -211,4 +211,74 @@ describe('useConversationMessagesRQ — B1 dedup', () => {
       focusManager.setFocused(undefined as unknown as boolean);
     });
   });
+
+  // Le rattrapage « en avant » (syncNewerMessages) boucle tant qu'il croit qu'il
+  // reste des messages. Le gateway lit désormais une ligne SONDE (limit + 1) en
+  // mode `after` et rend un `hasMore` EXACT : une page pleine qui clôt la
+  // fenêtre annonce `hasMore: false`. Doubler cette réponse d'une seconde
+  // estimation côté client (`missed.length === CATCH_UP_PAGE_LIMIT`) reproduisait
+  // ici le défaut corrigé là-bas, et coûtait un aller-retour HTTP à chaque
+  // rattrapage tombant pile sur la frontière de page.
+  describe('rattrapage en avant — le hasMore du serveur fait autorité', () => {
+    const CATCH_UP_PAGE_LIMIT = 50;
+
+    async function runCatchUp(catchUpPage: { messages: Message[]; hasMore: boolean }) {
+      const getMessages = conversationsService.getMessages as jest.Mock;
+      getMessages.mockClear();
+      // Chargement initial : un message CONFIRMÉ par le serveur, sans quoi le
+      // watermark vaut 0 et le rattrapage retombe sur un refetch complet.
+      getMessages.mockResolvedValueOnce({
+        messages: [makeMessage({ id: 'srv-anchor', createdAt: '2026-08-01T00:00:00.000Z' })],
+        hasMore: false,
+        total: 1,
+      });
+
+      const { result } = await setup();
+      await waitFor(() =>
+        expect(result.current.messages.map(m => m.id)).toContain('srv-anchor')
+      );
+      expect(getMessages).toHaveBeenCalledTimes(1);
+
+      getMessages.mockResolvedValue({ ...catchUpPage, total: catchUpPage.messages.length });
+
+      act(() => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+      // Le déclencheur focus est debounced (FOCUS_CATCH_UP_DEBOUNCE_MS = 1 s).
+      await new Promise(resolve => setTimeout(resolve, 1_200));
+      await waitFor(() => expect(getMessages.mock.calls.length).toBeGreaterThan(1));
+
+      focusManager.setFocused(undefined as unknown as boolean);
+      return getMessages;
+    }
+
+    it('ne redemande PAS une page de plus quand une page PLEINE annonce hasMore: false', async () => {
+      const fullFinalPage = Array.from({ length: CATCH_UP_PAGE_LIMIT }, (_, i) =>
+        makeMessage({ id: `srv-catchup-${i}`, createdAt: `2026-08-02T00:00:${String(i % 60).padStart(2, '0')}.000Z` })
+      );
+      const getMessages = await runCatchUp({ messages: fullFinalPage, hasMore: false });
+
+      // 1 lecture initiale + 1 seule page de rattrapage. Avec la seconde
+      // estimation client, la page pleine relançait un tour pour rien.
+      await waitFor(() => expect(getMessages).toHaveBeenCalledTimes(2));
+      const afterReads = getMessages.mock.calls.filter((c: unknown[]) => c[5] !== undefined);
+      expect(afterReads).toHaveLength(1);
+    });
+
+    it('continue de paginer quand le serveur annonce hasMore: true', async () => {
+      // Comportement CONSERVÉ : c'est le serveur, et lui seul, qui décide.
+      const page = Array.from({ length: CATCH_UP_PAGE_LIMIT }, (_, i) =>
+        makeMessage({ id: `srv-more-${i}`, createdAt: `2026-08-02T00:00:${String(i % 60).padStart(2, '0')}.000Z` })
+      );
+      const getMessages = await runCatchUp({ messages: page, hasMore: true });
+
+      // Les pages suivantes rendent les MÊMES ids (mock unique) : le watermark
+      // n'avance plus et la boucle sort sur sa garde `newestFetchedMs <= watermarkMs`
+      // — ce qui prouve que `hasMore: true` a bien été suivi au moins une fois.
+      await waitFor(() => expect(getMessages.mock.calls.length).toBeGreaterThanOrEqual(2));
+      const afterReads = getMessages.mock.calls.filter((c: unknown[]) => c[5] !== undefined);
+      expect(afterReads.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

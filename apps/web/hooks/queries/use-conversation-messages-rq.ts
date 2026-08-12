@@ -698,8 +698,17 @@ export function useConversationMessagesRQ(
           });
         }
 
-        const hasMore = result.hasMore === true || missed.length === CATCH_UP_PAGE_LIMIT;
-        if (!hasMore) return;
+        // Le serveur fait autorité, et lui seul. Le mode `after` lit une ligne
+        // SONDE (`limit + 1`) et rend un `hasMore` MESURÉ : une page pleine qui
+        // clôt la fenêtre annonce `false`. Le `|| missed.length === LIMIT` qui
+        // doublait cette réponse était une seconde ESTIMATION, reproduisant
+        // côté client le défaut « page pleine = forcément tronquée » corrigé
+        // côté serveur — un aller-retour HTTP par rattrapage tombant pile sur
+        // la frontière de page, à chaque reconnexion socket et chaque retour de
+        // focus. Sûr dans les deux sens pendant un déploiement : un gateway
+        // antérieur annonce `true` sur cette même page, donc la boucle se
+        // comporte au pire comme avant.
+        if (result.hasMore !== true) return;
 
         const newestFetchedMs = newestCreatedAtMs(missed);
         if (newestFetchedMs <= watermarkMs) break;
