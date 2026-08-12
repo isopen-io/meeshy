@@ -48,6 +48,11 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
     let contentAndState = a.content == b.content && a.serverId == b.serverId
         && a.state == b.state && a.isEdited == b.isEdited
         && a.editedAt == b.editedAt && a.deletedAt == b.deletedAt
+        // `createdAt` is the immutable server send time, but a row first
+        // written by the Notification Service Extension pre-persist carries a
+        // PLACEHOLDER value (the push-receipt time). Comparing it here lets the
+        // canonical reconcile detect — and persist — the correction.
+        && a.createdAt == b.createdAt && a.cachedTimeString == b.cachedTimeString
     let attachmentsAndReactions = a.attachmentsJson == b.attachmentsJson
         && a.reactionsJson == b.reactionsJson && a.reactionCount == b.reactionCount
     let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
@@ -61,6 +66,7 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
         && a.forwardedFromJson == b.forwardedFromJson
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
         && a.callSummaryJson == b.callSummaryJson && a.effectFlags == b.effectFlags
+        && a.locationJson == b.locationJson
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras
 }
@@ -171,6 +177,20 @@ public actor MessagePersistenceActor {
             try db.execute(sql: "DELETE FROM pending_ids")
             try db.execute(sql: "DELETE FROM messages")
             try db.execute(sql: "DELETE FROM outbox")
+            try db.execute(sql: "DELETE FROM send_attempts")
+        }
+    }
+
+    /// startup-03 — compte des lignes outbox encore éligibles à l'envoi
+    /// (.pending/.inflight). Lu par `DependencyContainer.wireOutboxLogoutHook`
+    /// AVANT `clearAllMessagesForLogout()` pour signaler à l'utilisateur la
+    /// perte de travail quand la purge suit une invalidation de session
+    /// serveur (jamais sur un logout volontaire).
+    public func pendingOutboxCount() async throws -> Int {
+        try await dbWriter.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue].contains(Column("status")))
+                .fetchCount(db)
         }
     }
 
@@ -202,7 +222,13 @@ public actor MessagePersistenceActor {
         // T14 — one-shot GC of stale terminal (`.exhausted`) outbox rows so the
         // table can't grow without bound across sessions. Fire-and-forget: a
         // failure here is non-fatal and retried next boot.
-        Task { [weak self] in try? await self?.purgeExhaustedOlderThan() }
+        Task { [weak self] in
+            do {
+                try await self?.purgeExhaustedOlderThan()
+            } catch {
+                Logger.messages.error("Outbox GC skipped this boot, stale terminal rows kept: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         processorTask = Task { [weak self, writeStream] in
             for await op in writeStream {
                 guard let self else { break }
@@ -217,8 +243,8 @@ public actor MessagePersistenceActor {
                     // the new row. Scoped to the conversations whose rows
                     // actually changed: a re-delivered identical payload must
                     // not trigger the MessageStore → applySnapshot cascade.
-                    if let changed = try? await self.reconcileBatchSync(messages),
-                       !changed.isEmpty {
+                    let changed = await self.reconcileBatchSyncOrLog(messages)
+                    if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
                 case .upsertAPIMessages(let messages):
@@ -226,10 +252,18 @@ public actor MessagePersistenceActor {
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
-                    try? await self.upsertFromAPIMessages(messages)
+                    do {
+                        try await self.upsertFromAPIMessages(messages)
+                    } catch {
+                        Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
+                    }
                 case .batchDeliveryUpdate(let convId, let event):
-                    if (try? await self.batchDeliverySync(conversationId: convId, event: event)) == true {
-                        postMessageStoreRefresh(conversationIds: [convId])
+                    do {
+                        if try await self.batchDeliverySync(conversationId: convId, event: event) {
+                            postMessageStoreRefresh(conversationIds: [convId])
+                        }
+                    } catch {
+                        Logger.messages.error("batchDeliverySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }
@@ -263,6 +297,46 @@ public actor MessagePersistenceActor {
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// Journalise une tentative d'envoi (spec 2026-07-08
+    /// message-send-failure-retry-flow). `attemptNumber` est monotone par
+    /// message ; l'historique survit au `serverAck` pour la vue détails.
+    public func recordSendAttempt(
+        localId: String,
+        transport: SendAttemptRecord.Transport,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        errorMessage: String? = nil
+    ) throws {
+        try dbWriter.write { db in
+            _ = try SendAttemptRecord.log(
+                db,
+                localId: localId,
+                transport: transport,
+                startedAt: startedAt,
+                outcome: outcome,
+                errorMessage: errorMessage
+            )
+        }
+    }
+
+    /// Historique des tentatives d'envoi d'un message, ordonné par tentative.
+    /// `messageId` accepte indifféremment le `localId` (`cid_…`) ou le
+    /// `serverId` (la vue détails ne connaît que `message.id`, qui bascule sur
+    /// l'id serveur après réconciliation).
+    public func sendAttempts(messageId: String) throws -> [SendAttemptRecord] {
+        try dbWriter.read { db in
+            let localId = try String.fetchOne(
+                db,
+                sql: "SELECT localId FROM messages WHERE localId = ? OR serverId = ? LIMIT 1",
+                arguments: [messageId, messageId]
+            ) ?? messageId
+            return try SendAttemptRecord
+                .filter(Column("localId") == localId)
+                .order(Column("attemptNumber").asc)
+                .fetchAll(db)
         }
     }
 
@@ -363,7 +437,9 @@ public actor MessagePersistenceActor {
     /// affiché est ainsi toujours juste, indépendamment du cycle de vie des
     /// ViewModels.
     public func reconcileFailedFromOutbox(conversationId: String) {
-        let didChange = (try? dbWriter.write { db -> Bool in
+        let didChange: Bool
+        do {
+            didChange = try dbWriter.write { db -> Bool in
             let exhaustedLocalIds = try OutboxRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
@@ -375,9 +451,18 @@ public actor MessagePersistenceActor {
             let updated = try MessageRecord
                 .filter(exhaustedLocalIds.contains(Column("localId")))
                 .filter(stuckStates.contains(Column("state")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    // grdb-04 — invariant : toute écriture visible bump
+                    // changeVersion, sinon le diff O(1) du MessageStore
+                    // (Equatable localId+changeVersion) l'avale.
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
-        }) ?? false
+            }
+        } catch {
+            Logger.messages.error("reconcileFailedFromOutbox write failed for conv=\(conversationId, privacy: .public), stale states left as-is: \(error.localizedDescription, privacy: .public)")
+            didChange = false
+        }
         if didChange {
             postMessageStoreRefresh(conversationIds: [conversationId])
         }
@@ -400,7 +485,9 @@ public actor MessagePersistenceActor {
         olderThan age: TimeInterval = 120
     ) {
         let cutoff = Date().addingTimeInterval(-age)
-        let didChange = (try? dbWriter.write { db -> Bool in
+        let didChange: Bool
+        do {
+            didChange = try dbWriter.write { db -> Bool in
             let stuckStates = [MessageState.sending.rawValue, MessageState.queued.rawValue]
             let stuckIds = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
@@ -427,9 +514,15 @@ public actor MessagePersistenceActor {
             guard !orphanIds.isEmpty else { return false }
             let updated = try MessageRecord
                 .filter(orphanIds.contains(Column("localId")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
-        }) ?? false
+            }
+        } catch {
+            Logger.messages.error("reconcileStuckSending write failed for conv=\(conversationId, privacy: .public), stale states left as-is: \(error.localizedDescription, privacy: .public)")
+            didChange = false
+        }
         if didChange {
             postMessageStoreRefresh(conversationIds: [conversationId])
         }
@@ -459,6 +552,59 @@ public actor MessagePersistenceActor {
         // Notification is posted by the worker AFTER the GRDB write completes
         // (see `start()`).
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+    }
+
+    /// Message ids carrying a still-pending outbox mutation of `kind`.
+    ///
+    /// Callers use the result to keep a stale REST snapshot from clobbering an
+    /// optimistic local change. Returning `[]` therefore DISABLES that guard —
+    /// the edit reverts, the delete un-deletes, the reaction flickers back — so
+    /// neither the query nor the payload decode may fail silently here.
+    nonisolated private static func pendingOutboxMessageIds<P: Decodable>(
+        _ db: Database,
+        kind: OutboxKind,
+        payload: P.Type,
+        messageId: (P) -> String
+    ) -> Set<String> {
+        let rows: [OutboxRecord]
+        do {
+            rows = try OutboxRecord
+                .filter(Column("kind") == kind.rawValue)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .fetchAll(db)
+        } catch {
+            Logger.messages.error(
+                "Pending \(kind.rawValue, privacy: .public) lookup failed — anti-clobber guard disabled, optimistic changes may revert: \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
+        let payloadDecoder = JSONDecoder()
+        payloadDecoder.dateDecodingStrategy = .iso8601
+        var ids = Set<String>()
+        for row in rows {
+            guard let decoded = payloadDecoder.decodeOrLog(
+                P.self,
+                from: row.payload,
+                field: "\(kind.rawValue) payload",
+                id: row.id
+            ) else { continue }
+            ids.insert(messageId(decoded))
+        }
+        return ids
+    }
+
+    /// `reconcileBatchSync` for the fire-and-forget stream worker: a write
+    /// failure means the batch is NOT persisted and no observer will ever be
+    /// refreshed for it, so it must leave a trace rather than vanish.
+    private func reconcileBatchSyncOrLog(_ messages: [IncomingMessageData]) -> Set<String> {
+        do {
+            return try reconcileBatchSync(messages)
+        } catch {
+            Logger.messages.error(
+                "reconcileBatchSync dropped \(messages.count, privacy: .public) message(s), no refresh posted: \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
     }
 
     /// Returns the conversations where a row was actually written, so the
@@ -586,16 +732,39 @@ public actor MessagePersistenceActor {
 
     // MARK: - Translation / Transcription writes
 
+    /// grdb-06 — deux schémas d'id coexistent pour la même (message, langue) :
+    /// le fallback socket horodaté (`m1_en_1700…`) et l'id serveur stable
+    /// (`m1-en`). Un save par PK sur un id différent viole l'index UNIQUE
+    /// `idx_trans_msg_lang` ; l'upsert cible cet index pour REMPLACER la row,
+    /// quel que soit l'id sous lequel elle était arrivée.
+    nonisolated private static func upsertTranslationRecord(_ record: TranslationRecord, in db: Database) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO message_translations
+                (id, messageLocalId, messageServerId, targetLanguage,
+                 translatedContent, translationModel, confidenceScore,
+                 sourceLanguage, receivedAt)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(messageLocalId, targetLanguage) DO UPDATE SET
+                id = excluded.id,
+                messageServerId = excluded.messageServerId,
+                translatedContent = excluded.translatedContent,
+                translationModel = excluded.translationModel,
+                confidenceScore = excluded.confidenceScore,
+                sourceLanguage = excluded.sourceLanguage,
+                receivedAt = excluded.receivedAt
+            """,
+            arguments: [
+                record.id, record.messageLocalId, record.messageServerId,
+                record.targetLanguage, record.translatedContent,
+                record.translationModel, record.confidenceScore,
+                record.sourceLanguage, record.receivedAt
+            ]
+        )
+    }
+
     public func saveTranslation(_ translation: TranslationRecord) throws {
-        try dbWriter.write { db in try translation.save(db) }
-    }
-
-    public func saveTranscription(_ transcription: TranscriptionRecord) throws {
-        try dbWriter.write { db in try transcription.save(db) }
-    }
-
-    public func saveAudioTranslation(_ audio: AudioTranslationRecord) throws {
-        try dbWriter.write { db in try audio.save(db) }
+        try dbWriter.write { db in try Self.upsertTranslationRecord(translation, in: db) }
     }
 
     // MARK: - Edit / Delete / Reactions / ViewOnce
@@ -614,12 +783,36 @@ public actor MessagePersistenceActor {
     // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
     // resolves at most one row.
 
+    /// Slack for the `markEdited` ordering guard — see its comment for why a
+    /// strict `<` is unsafe across a GRDB `Date` round-trip.
+    private static let editOrderingTolerance: TimeInterval = 0.05
+
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
+        var didApply = false
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
+            guard let existing = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)?.conversationId
+                .fetchOne(db)
+            else { return }
+            // Ordering guard: `message:edited` carries no monotonic sequence, so a
+            // delayed/duplicate socket delivery can arrive after a newer edit was
+            // already applied. Comparing against the stored `editedAt` stops a
+            // stale edit from permanently clobbering the current content.
+            //
+            // A tolerance (rather than a strict `<`) is required: GRDB round-trips
+            // `Date` through a millisecond-precision text column, so re-applying
+            // the exact same in-memory `Date` twice (e.g. an optimistic edit
+            // followed by its own failure rollback, which reuses the same
+            // `editedAt`) can read back a value a fraction of a millisecond off
+            // from what was passed in — enough to misfire a strict comparison.
+            // Genuine out-of-order deliveries differ by network-delay magnitudes
+            // (well beyond this), so the tolerance doesn't weaken the guard.
+            if let currentEditedAt = existing.editedAt,
+               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
+                return
+            }
+            affectedConversationId = existing.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
@@ -628,10 +821,61 @@ public actor MessagePersistenceActor {
                     """,
                 arguments: [newContent, editedAt, Date(), localId, localId]
             )
+            didApply = true
         }
-        if let convId = affectedConversationId {
+        if didApply, let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
+    }
+
+    /// In-place update of a call system message when its state changes on the
+    /// server — the live "Appel … en cours" bubble becoming the terminal
+    /// summary ("Appel audio · 04:32", "Appel manqué", …) via a
+    /// `message:edited` carrying call metadata. Applies content +
+    /// `callSummaryJson` + `updatedAt` + `changeVersion` WITHOUT touching
+    /// `isEdited`/`editedAt`: this is a server-authored state transition, not
+    /// a user edit, and must not brand the bubble "modifié".
+    public func applyCallNoticeUpdate(
+        localId: String,
+        content: String,
+        callSummaryJson: Data?,
+        serverUpdatedAt: Date
+    ) throws {
+        var affectedConversationId: String?
+        var didApply = false
+        try dbWriter.write { db in
+            guard let existing = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db)
+            else { return }
+            affectedConversationId = existing.conversationId
+            try db.execute(
+                sql: """
+                    UPDATE messages SET content = ?, callSummaryJson = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
+                    """,
+                arguments: [content, callSummaryJson, serverUpdatedAt, localId, localId]
+            )
+            didApply = true
+        }
+        if didApply, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
+    /// 'call-live'`) for the SAME call whose stored summary is already
+    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
+    /// ongoing that landed AFTER the terminal edit. Applying it would regress
+    /// the bubble to "en cours" forever. Any other combination returns `false`.
+    static func isStaleLiveCallSnapshot(existing: Data?, incoming: Data?) -> Bool {
+        guard
+            let existing, let incoming,
+            let stored = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: existing, field: "callSummaryJson(stored)"),
+            let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
+        else { return false }
+        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
 
     public func markDeleted(localId: String, deletedAt: Date) throws {
@@ -861,8 +1105,8 @@ public actor MessagePersistenceActor {
     /// file into the typed cache when the URL flips `file://` → `https://`.
     private static func adoptChangedAttachments(oldJson: Data, newJson: Data) async {
         let decoder = JSONDecoder()
-        guard let oldAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: oldJson),
-              let newAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: newJson),
+        guard let oldAtts = decoder.decodeOrLog([MeeshyMessageAttachment].self, from: oldJson, field: "attachmentsJson(old)"),
+              let newAtts = decoder.decodeOrLog([MeeshyMessageAttachment].self, from: newJson, field: "attachmentsJson(new)"),
               !newAtts.isEmpty else { return }
 
         for (newIdx, newAtt) in newAtts.enumerated() {
@@ -948,8 +1192,12 @@ public actor MessagePersistenceActor {
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
-            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
-                                from: record.reactionsJson ?? Data())) ?? []
+            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
+            // doit PAS être journalisé : on ne décode que s'il y a des octets.
+            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
+                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
+                                          field: "reactionsJson", id: localId)
+            } ?? []
             let alreadyExists = reactions.contains {
                 $0.emoji == emoji && $0.participantId == participantId
             }
@@ -983,8 +1231,12 @@ public actor MessagePersistenceActor {
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
-            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
-                                from: record.reactionsJson ?? Data())) ?? []
+            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
+            // doit PAS être journalisé : on ne décode que s'il y a des octets.
+            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
+                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
+                                          field: "reactionsJson", id: localId)
+            } ?? []
             let countBefore = reactions.count
             reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
             guard reactions.count != countBefore else { return }
@@ -1028,7 +1280,12 @@ public actor MessagePersistenceActor {
             guard let data = record.attachmentsJson else { return }
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
-            guard var attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data),
+            guard var attachments = decoder.decodeOrLog(
+                    [MeeshyMessageAttachment].self,
+                    from: data,
+                    field: "attachmentsJson(enrich)",
+                    id: messageId
+                  ),
                   let idx = attachments.firstIndex(where: { $0.id == attachmentId })
             else { return }
 
@@ -1074,7 +1331,15 @@ public actor MessagePersistenceActor {
             if let new = embeddedAudioTranslations { enriched.audioTranslations = new }
             attachments[idx] = enriched
 
-            record.attachmentsJson = try? encoder.encode(attachments)
+            // Un encodage raté écrivait `nil` ici, ce qui EFFAÇAIT tous les
+            // attachments du message — l'inverse exact du merge non destructif
+            // annoncé. On préfère abandonner l'enrichissement.
+            guard let encoded = encoder.encodeOrLog(
+                attachments,
+                field: "attachmentsJson(enrich)",
+                id: messageId
+            ) else { return }
+            record.attachmentsJson = encoded
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
@@ -1111,11 +1376,11 @@ public actor MessagePersistenceActor {
     public func updateLayout(localId: String, width: Double, height: Double,
                               lastLineWidth: Double, lineCount: Int, timestampInline: Bool,
                               epoch: Int, maxWidth: Double) throws {
-        var affectedConversationId: String?
+        // grdb-04 — pas de bump changeVersion, pas de refresh : le cache de
+        // layout est relu au prochain fetch et un refresh ici était un no-op
+        // prouvé (MessageRecord == ne compare que localId+changeVersion) qui
+        // coûtait fetch+compare à chaque écriture de layout.
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
-                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET cachedBubbleWidth = ?, cachedBubbleHeight = ?,
@@ -1125,9 +1390,6 @@ public actor MessagePersistenceActor {
                 arguments: [width, height, lastLineWidth, lineCount, timestampInline,
                            epoch, maxWidth, localId]
             )
-        }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
@@ -1200,57 +1462,21 @@ public actor MessagePersistenceActor {
             // not yet on the server, so a stale REST snapshot must NOT clobber
             // it on upsert — otherwise the reaction visibly reverts until the
             // next post-sync refresh. One query per batch (a handful of rows).
-            let pendingReactionMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(ReactionOutboxPayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
+            let pendingReactionMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .sendReaction, payload: ReactionOutboxPayload.self
+            ) { $0.messageId }
             // S2 — message ids whose edit/delete is still pending in the outbox.
             // Their local content/editedAt/deletedAt hold an optimistic mutation
             // not yet on the server, so a stale REST snapshot must NOT clobber
             // them — otherwise the edit reverts to the old text / the delete
             // un-deletes until the outbox drains (or forever if exhausted).
             // Mirrors the reaction guard above (one query each per batch).
-            let pendingEditMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.editMessage.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(OfflineEditPayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
-            let pendingDeleteMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.deleteMessage.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(OfflineDeletePayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
+            let pendingEditMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .editMessage, payload: OfflineEditPayload.self
+            ) { $0.messageId }
+            let pendingDeleteMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .deleteMessage, payload: OfflineDeletePayload.self
+            ) { $0.messageId }
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
@@ -1335,7 +1561,7 @@ public actor MessagePersistenceActor {
                             consumedCount: apiAtt.consumedCount
                         )
                     }
-                    return try? encoder.encode(ui)
+                    return encoder.encodeOrLog(ui, field: "attachmentsJson", id: api.id)
                 }()
 
                 // The current user's own reaction is tagged with `currentUserId`
@@ -1349,7 +1575,7 @@ public actor MessagePersistenceActor {
                     currentUserReactions: api.currentUserReactions,
                     currentUserId: currentUserId
                 )
-                let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
+                let reactionsJson: Data? = uiReactions.isEmpty ? nil : encoder.encodeOrLog(uiReactions, field: "reactionsJson", id: api.id)
 
                 let replyToJson: Data? = {
                     // Réponse à un post : snapshot figé `postReplyTo` (survit à
@@ -1368,7 +1594,7 @@ public actor MessagePersistenceActor {
                                 storyPublishedAt: story.createdAt,
                                 moodEmoji: emoji
                             )
-                            return try? encoder.encode(ref)
+                            return encoder.encodeOrLog(ref, field: "replyToJson(mood)", id: api.id)
                         }
                         let ref = ReplyReference(
                             messageId: story.id,
@@ -1382,7 +1608,7 @@ public actor MessagePersistenceActor {
                             storyShareCount: story.shareCount,
                             storyThumbnailUrl: story.thumbnailUrl
                         )
-                        return try? encoder.encode(ref)
+                        return encoder.encodeOrLog(ref, field: "replyToJson(story)", id: api.id)
                     }
                     // Réponse à un message : chemin historique inchangé.
                     return api.replyTo.flatMap { reply in
@@ -1397,7 +1623,7 @@ public actor MessagePersistenceActor {
                             attachmentType: firstAtt?.mimeType,
                             attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                         )
-                        return try? encoder.encode(ref)
+                        return encoder.encodeOrLog(ref, field: "replyToJson", id: api.id)
                     }
                 }()
 
@@ -1414,16 +1640,26 @@ public actor MessagePersistenceActor {
                         attachmentType: firstAtt?.mimeType,
                         attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                     )
-                    return try? encoder.encode(ref)
+                    return encoder.encodeOrLog(ref, field: "forwardedFromJson", id: api.id)
                 }
 
                 let mentionedUsersJson: Data? = api.mentionedUsers.flatMap {
-                    $0.isEmpty ? nil : try? encoder.encode($0)
+                    $0.isEmpty ? nil : encoder.encodeOrLog($0, field: "mentionedUsersJson", id: api.id)
                 }
 
                 // Structured call-summary metadata for system call messages —
                 // persisted so the rich call bubble survives a cache reload.
-                let callSummaryJson: Data? = api.callSummary.flatMap { try? encoder.encode($0) }
+                let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
+
+                // Lieu partagé — même mécanique que callSummaryJson : le
+                // pipeline ne stocke pas l'`APIMessage` brut, seulement des
+                // colonnes dérivées, donc une position affichée en ligne mais
+                // jamais hissée ici disparaîtrait au prochain chargement du
+                // cache (relaunch, pull-to-refresh).
+                let locationJson: String? = api.location.flatMap { place in
+                    encoder.encodeOrLog(place, field: "locationJson", id: api.id)
+                        .flatMap { String(data: $0, encoding: .utf8) }
+                }
 
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
@@ -1526,14 +1762,38 @@ public actor MessagePersistenceActor {
                     // un-delete the row.
                     let pendingEdit = pendingEditMessageIds.contains(api.id)
                     let pendingDelete = pendingDeleteMessageIds.contains(api.id)
+                    // Live-call anti-régression : un snapshot REST sérialisé
+                    // PENDANT l'appel peut être appliqué APRÈS l'édition
+                    // terminale reçue par socket. Un résumé TERMINAL stocké
+                    // n'est jamais régressé vers le live du même appel —
+                    // ni sa métadonnée ni son content « en cours ».
+                    let staleLiveCallSnapshot = Self.isStaleLiveCallSnapshot(
+                        existing: existing.callSummaryJson,
+                        incoming: callSummaryJson
+                    )
                     // Update mutable fields; preserve layout cache.
-                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete {
+                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete && !staleLiveCallSnapshot {
                         existing.content = api.content
                     }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
                     existing.serverId = api.id
+                    // Authoritative send time. A row first written by the
+                    // Notification Service Extension pre-persist (offline push,
+                    // cold cache) only knows WHEN THE PUSH ARRIVED — i.e. when
+                    // the device came back online — not the real send time,
+                    // which it stamps as a `now` placeholder. The canonical
+                    // REST/socket payload IS the source of truth, so adopt its
+                    // `createdAt` here (and refresh the derived time-string the
+                    // bubble renders) instead of treating the placeholder as
+                    // immutable. Without this, a message received while offline
+                    // is permanently branded with the data-reactivation time,
+                    // contradicting its own notification timestamp and read
+                    // receipts (status-management-inconsistency, 2026-06).
+                    existing.createdAt = api.createdAt
+                    existing.sentAt = api.createdAt
+                    existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
                         existing.editedAt = nil
@@ -1610,7 +1870,14 @@ public actor MessagePersistenceActor {
                     existing.replyToId = api.replyToId ?? existing.replyToId
                     existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
-                    existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
+                    existing.callSummaryJson = staleLiveCallSnapshot
+                        ? existing.callSummaryJson
+                        : (callSummaryJson ?? existing.callSummaryJson)
+                    // Coalesce like attachmentsJson/replyToJson above: a
+                    // refresh that omits `location` (older gateway payload,
+                    // partial socket event) must not erase a position already
+                    // persisted from an earlier, richer snapshot.
+                    existing.locationJson = locationJson ?? existing.locationJson
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
@@ -1702,7 +1969,8 @@ public actor MessagePersistenceActor {
                         cachedTimeString: timeString,
                         changeVersion: 0,
                         callSummaryJson: callSummaryJson,
-                        recipientCount: api.recipientCount ?? 0
+                        recipientCount: api.recipientCount ?? 0,
+                        locationJson: locationJson
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)
@@ -1732,7 +2000,7 @@ public actor MessagePersistenceActor {
                             sourceLanguage: t.sourceLanguage,
                             receivedAt: now
                         )
-                        try record.save(db)
+                        try Self.upsertTranslationRecord(record, in: db)
                     }
                 }
             }
@@ -1744,9 +2012,39 @@ public actor MessagePersistenceActor {
     }
 
     /// Delete all message records for a conversation (called on 403/access revoked).
+    /// grdb-09 — cascade aux tables enfants scopées sur les messages de la
+    /// conversation : une conversation révoquée ne laisse aucun orphelin.
     public func deleteAll(conversationId: String) async throws {
         try await dbWriter.write { db in
-            try MessageRecord
+            let ids = try String.fetchAll(
+                db,
+                sql: "SELECT localId FROM messages WHERE conversationId = ?",
+                arguments: [conversationId]
+            )
+            if !ids.isEmpty {
+                let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+            }
+            _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
         }
@@ -1830,8 +2128,12 @@ public actor MessagePersistenceActor {
     public static let defaultRetentionMonths: Int = 6
 
     /// Deletes all message records whose `createdAt` is older than
-    /// `retentionMonths` months from now. Also removes associated rows in
-    /// `message_translations` and `translation_cache` to avoid orphans.
+    /// `retentionMonths` months from now. Also cascades to the child rows
+    /// keyed on those messages — `message_translations`,
+    /// `message_transcriptions`, `message_audio_translations`, `pending_ids`,
+    /// `send_attempts` (grdb-02/grdb-09). `translation_cache` lives in the
+    /// OTHER SQLite file (AppDatabase/meeshy.sqlite, GC au boot par
+    /// `loadTranslationCaches`) and is out of scope here.
     ///
     /// Returns the number of message rows deleted so callers can log it.
     ///
@@ -1858,20 +2160,29 @@ public actor MessagePersistenceActor {
             """, arguments: [cutoff])
 
             if !expiredIds.isEmpty {
-                // Delete associated translation cache entries
+                // grdb-02 — cascade sur la clé RÉELLE (messageLocalId, pas
+                // messageId) et uniquement sur les tables de CETTE base.
                 let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
                 try db.execute(
-                    sql: "DELETE FROM translation_cache WHERE messageId IN (\(placeholders))",
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
                     arguments: StatementArguments(expiredIds)
                 )
-
-                // Delete message_translations if the table exists
-                if try db.tableExists("message_translations") {
-                    try db.execute(
-                        sql: "DELETE FROM message_translations WHERE messageId IN (\(placeholders))",
-                        arguments: StatementArguments(expiredIds)
-                    )
-                }
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
             }
 
             // Delete the messages themselves

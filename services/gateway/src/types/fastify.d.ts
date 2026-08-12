@@ -16,6 +16,7 @@ import { MessagingService } from '../services/messaging/MessagingService';
 import { MentionService } from '../services/MentionService';
 import { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache';
 import { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
+import { CallService } from '../services/CallService';
 import { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module '@fastify/jwt' {
@@ -43,6 +44,12 @@ declare module 'fastify' {
     mentionService: MentionService;
     jobMappingCache: MultiLevelJobMappingCache;
     socketIOHandler: MeeshySocketIOHandler;
+    // Shared with the Socket.IO layer's CallEventsHandler (see
+    // MeeshySocketIOManager.getCallService()) so REST call routes observe the
+    // same in-memory ringingTimeouts/heartbeats/backgroundedParticipants maps
+    // instead of a second, disconnected CallService instance. Optional: only
+    // set once setupSocketIO() has run and resolved a manager.
+    callService?: CallService;
     presenceChecker: {
       isOnline: (id: string) => boolean;
       bulk: (ids: readonly string[]) => Map<string, boolean>;

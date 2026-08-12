@@ -139,6 +139,47 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             "Publisher MUST emit each intermediate count change")
     }
 
+    /// Item H — le DRAIN de la file doit refermer le bandeau
+    /// « Synchronisation… » : quand le flusher termine une row (delete sur
+    /// `.applied`), le callback `onOutcome → publishOutcome` rafraîchit
+    /// `pendingCountSubject` (fix 80e7dc874 — avant, le compteur ne tournait
+    /// que sur enqueue/retry, jamais sur le drainage → bannière figée à vie).
+    /// Ce test verrouille le chemin DESCENDANT complet avec un vrai flusher
+    /// câblé comme en production ; seul le chemin montant était testé.
+    func test_pendingCountPublisher_returnsToBaseline_afterFlusherDrainsQueue() async throws {
+        let stable = await stabilizePendingCount()
+
+        let cmid = "cid_drain_\(UUID().uuidString)"
+        try await queue.enqueue(OfflineQueueItem(
+            conversationId: "conv-drain",
+            content: "drain test",
+            clientMessageId: cmid
+        ))
+
+        let recorder = Recorder<Int>()
+        let cancellable = queue.pendingCountPublisher
+            .sink { recorder.append($0) }
+        defer { cancellable.cancel() }
+
+        // Vrai flusher, câblage production (onOutcome → publishOutcome) :
+        // claim atomique → dispatch OK → delete de la row → outcome publié.
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutcomeSucceedingDispatcher(),
+            onOutcome: { @Sendable outcome in
+                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+            }
+        )
+        await flusher.flush()
+
+        // Laisse le Task de publishOutcome + refreshPendingCount se poser.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let received = recorder.snapshot()
+        XCTAssertEqual(received.last, stable,
+            "After the flusher drains the queue, pendingCount MUST return to baseline — otherwise the « Synchronisation… » banner never closes (item H)")
+    }
+
     // MARK: - retryItem — resets counter and status
 
     func test_retryItem_resetsCounterAndStatus() async throws {
@@ -194,16 +235,18 @@ final class OfflineQueueOutcomeTests: XCTestCase {
     /// inbound message must NOT accumulate one outbox row per fire. The
     /// generic `enqueue<P>` collapses earlier `.pending` rows for the same
     /// `(kind: .markAsRead, conversationId: anchor)` before inserting the
-    /// newer payload — only the latest upToMessageId is kept (subsumes all
-    /// previous reads by monotonic property).
+    /// newer payload — la row survivante porte le cmid du dernier lot, les
+    /// identifiants lus des rows périmées y étant fusionnés.
     func test_enqueueMarkAsRead_coalescesPendingForSameConversation() async throws {
         let conv = "conv-coalesce-\(UUID().uuidString)"
 
+        var newestCmid = ""
         for i in 0..<5 {
+            newestCmid = ClientMutationId.generate()
             let payload = MarkAsReadPayload(
-                clientMutationId: ClientMutationId.generate(),
+                clientMutationId: newestCmid,
                 conversationId: conv,
-                upToMessageId: "msg-\(i)"
+                messageIds: ["msg-\(i)"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payload, conversationId: conv)
         }
@@ -216,9 +259,12 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         }
         XCTAssertEqual(rows.count, 1, "5 markAsRead enqueues for the same conversation must coalesce into 1 row")
 
-        // The surviving row must carry the LATEST payload (upToMessageId = msg-4)
+        // The surviving row must carry the LATEST payload, with every earlier
+        // batch's read receipts merged into it.
         let decoded = try JSONDecoder().decode(MarkAsReadPayload.self, from: rows[0].payload)
-        XCTAssertEqual(decoded.upToMessageId, "msg-4", "Surviving row must carry the latest upToMessageId")
+        XCTAssertEqual(decoded.clientMutationId, newestCmid, "Surviving row must carry the latest payload")
+        XCTAssertEqual(decoded.messageIds, ["msg-0", "msg-1", "msg-2", "msg-3", "msg-4"],
+                       "Coalescing must not drop the read receipts of superseded rows")
     }
 
     /// Coalescing is scoped per conversation — enqueuing markAsRead for two
@@ -233,7 +279,7 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             let payloadA = MarkAsReadPayload(
                 clientMutationId: ClientMutationId.generate(),
                 conversationId: convA,
-                upToMessageId: "msg-A"
+                messageIds: ["msg-A"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payloadA, conversationId: convA)
         }
@@ -241,7 +287,7 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             let payloadB = MarkAsReadPayload(
                 clientMutationId: ClientMutationId.generate(),
                 conversationId: convB,
-                upToMessageId: "msg-B"
+                messageIds: ["msg-B"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payloadB, conversationId: convB)
         }
@@ -296,6 +342,12 @@ final class OfflineQueueOutcomeTests: XCTestCase {
 }
 
 // MARK: - Test Dispatchers
+
+/// Dispatcher that always succeeds — used to exercise the happy drain path
+/// (claim → dispatch OK → row deleted → `.applied` outcome).
+actor MockOutcomeSucceedingDispatcher: OutboxDispatching {
+    func dispatch(_ record: OutboxRecord) async throws {}
+}
 
 /// Dispatcher that always fails — used to exercise the retry-budget path that
 /// flips an `OutboxRecord` from `.pending(attempts=4)` to `.exhausted`.

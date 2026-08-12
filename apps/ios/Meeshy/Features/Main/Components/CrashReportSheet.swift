@@ -11,61 +11,66 @@ struct CrashReportSheet: View {
             List {
                 ForEach(reports) { report in
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                kindBadge(report.kind)
-                                Spacer()
-                                Text(report.timestamp, style: .relative)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
+                        DisclosureGroup(isExpanded: expansionBinding(for: report.id)) {
+                            Text(report.details)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    kindBadge(report.kind)
+                                    Spacer()
+                                    Text(report.timestamp, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
 
-                            Text(report.summary)
-                                .font(.system(size: 14, weight: .medium))
-
-                            if expandedId == report.id {
-                                Text(report.details)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                expandedId = expandedId == report.id ? nil : report.id
+                                Text(report.summary)
+                                    .font(.subheadline.weight(.medium))
                             }
                         }
                     }
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Crash Reports")
+            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Crash Reports", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     ShareLink(item: formatAllReports()) {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel(String(localized: "crash.reports.share", defaultValue: "Partager les rapports", bundle: .main))
                 }
             }
         }
     }
 
+    private func expansionBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expandedId == id },
+            set: { isExpanded in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    expandedId = isExpanded ? id : nil
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private func kindBadge(_ kind: CrashDiagnostic.Kind) -> some View {
-        let (label, color): (String, Color) = switch kind {
-        case .nsException: ("Exception", MeeshyColors.error)
-        case .crash: ("Crash", MeeshyColors.error)
-        case .hang: ("Blocage", MeeshyColors.warning)
-        case .cpuException: ("CPU", MeeshyColors.warning)
-        case .diskWriteException: ("Disque", MeeshyColors.info)
+        let color: Color = switch kind {
+        case .nsException, .crash: MeeshyColors.error
+        case .hang, .cpuException: MeeshyColors.warning
+        case .diskWriteException: MeeshyColors.info
         }
-        Text(label)
-            .font(.system(size: 10, weight: .bold))
+        Text(kind.localizedLabel)
+            .font(.caption2.weight(.bold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

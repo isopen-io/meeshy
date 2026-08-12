@@ -6,23 +6,37 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useToast } from '@/components/v2';
 import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
+import { CommentList } from '@/components/v2/CommentList';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
   useUnlikePostMutation,
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
-  useSharePostMutation,
+  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
+import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
+import {
+  useCreateCommentMutation,
+  useLikeCommentMutation,
+  useUnlikeCommentMutation,
+  useDeleteCommentMutation,
+} from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
-
-const LIKE_EMOJI = '❤️';
+import { isHeartLikedByMe } from '@/lib/reactions';
+import { shareLink } from '@/lib/share-utils';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 
 function isReelLiked(post: Post): boolean {
-  return (post.currentUserReactions ?? []).includes(LIKE_EMOJI) || (post.isLikedByMe ?? false);
+  return isHeartLikedByMe(post);
 }
 
 /**
@@ -46,13 +60,21 @@ export function ReelsFeedScreen() {
   const reelsQuery = useReelsFeedQuery();
   const reels = useReelsFeedPosts(reelsQuery);
 
+  const authUser = useAuthStore((s) => s.user);
+
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
-  const shareMutation = useSharePostMutation();
+  const repostMutation = useRepostMutation();
+  const createCommentMutation = useCreateCommentMutation();
+  const likeCommentMutation = useLikeCommentMutation();
+  const unlikeCommentMutation = useUnlikeCommentMutation();
+  const deleteCommentMutation = useDeleteCommentMutation();
 
   const [index, setIndex] = useState(0);
+  const [showComments, setShowComments] = useState(false);
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
 
   // Clamp the cursor if the thread shrinks (cache eviction / refetch).
   useEffect(() => {
@@ -68,8 +90,44 @@ export function ReelsFeedScreen() {
   }, [index, reels.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const current = reels[index];
+  const currentId = current?.id ?? '';
+
+  // Join the room of the reel on screen so live comments / reactions broadcast
+  // to `ROOMS.post(currentId)` surface in the inline comments overlay.
+  usePostRoom(currentId || null);
+
+  // Record an impression for whichever reel is on screen (source: 'feed', as iOS).
+  const { record: recordImpression } = useImpressionTracking({ source: 'feed' });
+  useEffect(() => {
+    if (currentId) recordImpression(currentId);
+  }, [currentId, recordImpression]);
+
+  // Comments overlay — scoped to the reel in view; reset when the reel changes.
+  useEffect(() => setShowComments(false), [currentId]);
+  const commentsQuery = useCommentsInfiniteQuery({ postId: currentId, enabled: showComments && !!currentId });
+  const comments = useCommentsList(commentsQuery);
 
   const close = useCallback(() => router.push('/feed/posts'), [router]);
+
+  const handleCloseComments = useCallback(() => setShowComments(false), []);
+  const handleSubmitComment = useCallback(
+    (content: string, parentId?: string) => {
+      if (currentId) createCommentMutation.mutate({ postId: currentId, content, parentId });
+    },
+    [currentId, createCommentMutation],
+  );
+  const handleLikeComment = useCallback(
+    (commentId: string) => { if (currentId) likeCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, likeCommentMutation],
+  );
+  const handleUnlikeComment = useCallback(
+    (commentId: string) => { if (currentId) unlikeCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, unlikeCommentMutation],
+  );
+  const handleDeleteComment = useCallback(
+    (commentId: string) => { if (currentId) deleteCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, deleteCommentMutation],
+  );
 
   const onLike = useCallback(() => {
     if (!current) return;
@@ -85,18 +143,74 @@ export function ReelsFeedScreen() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
+    const localUrl = `${window.location.origin}/reel/${current.id}`;
+    const title = current.author?.displayName ?? current.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
-      shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+      const { shortUrl } = await postsService.sharePost(current.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, current.content ?? '');
+      if (shared) {
+        toastCtx.addToast(t('shared', 'Shared!'), 'success');
+      } else if (!hasNativeShare) {
+        toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
     } catch {
-      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
+      toastCtx.addToast(t('linkCopyError', "Couldn't share the reel"), 'error');
     }
-  }, [current, shareMutation, toastCtx, t]);
+  }, [current, toastCtx, t]);
 
   const onComment = useCallback(() => {
-    if (current) router.push(`/feeds/post/${current.id}`);
-  }, [current, router]);
+    if (current) setShowComments(true);
+  }, [current]);
+
+  const onReport = useCallback(() => {
+    if (!current) return;
+    if (!window.confirm(t('report.confirm', 'Report this reel?'))) return;
+    reportService
+      .reportPost(current.id, 'inappropriate', '')
+      .then(() => toastCtx.addToast(t('report.success', 'Reel reported'), 'success'))
+      .catch(() => toastCtx.addToast(t('report.error', "Couldn't report the reel"), 'error'));
+  }, [current, toastCtx, t]);
+
+  const onRepost = useCallback(() => {
+    if (current) setRepostModalOpen(true);
+  }, [current]);
+
+  const handleRepost = useCallback(() => {
+    if (!current) return;
+    repostMutation.mutate(
+      { postId: current.id, data: { isQuote: false } },
+      {
+        onSuccess: () => {
+          setRepostModalOpen(false);
+          toastCtx.addToast(t('repost.success', 'Reposted!'), 'success');
+        },
+        onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+      },
+    );
+  }, [current, repostMutation, toastCtx, t]);
+
+  const handleQuote = useCallback(
+    (quoteContent: string) => {
+      if (!current) return;
+      repostMutation.mutate(
+        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostModalOpen(false);
+            toastCtx.addToast(t('repost.quoted', 'Quoted!'), 'success');
+          },
+          onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [current, repostMutation, toastCtx, t],
+  );
+
+  const onDownload = useCallback((mediaId: string, owningPostId: string) => {
+    postsService.recordMediaDownloads(owningPostId, [mediaId], 'reel');
+  }, []);
 
   const content = useMemo(() => {
     if (current) {
@@ -119,6 +233,9 @@ export function ReelsFeedScreen() {
           onComment={onComment}
           onShare={onShare}
           onBookmark={onBookmark}
+          onReport={authUser?.id !== current.authorId ? onReport : undefined}
+          onRepost={onRepost}
+          onDownload={onDownload}
         />
       );
     }
@@ -156,14 +273,76 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, onDownload, reelsQuery, t, authUser]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-4">
         <FeedTabs active="reels" />
       </div>
-      <div className="relative h-full w-full">{content}</div>
+      <div className="relative h-full w-full">
+        {content}
+
+        {/* Comments overlay — slides up over the reel instead of navigating away */}
+        {showComments && current && (
+          <div
+            className="absolute inset-0 z-[70] flex flex-col justify-end"
+            onClick={handleCloseComments}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('feed.comments', 'Comments')}
+          >
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative flex max-h-[70%] flex-col rounded-t-2xl bg-[var(--gp-surface)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--gp-border)] px-4 py-3">
+                <span className="font-semibold text-[var(--gp-text-primary)]">
+                  {t('feed.comments', 'Comments')}
+                </span>
+                <button
+                  onClick={handleCloseComments}
+                  className="text-[var(--gp-text-muted)] transition-colors hover:text-[var(--gp-text-primary)]"
+                  aria-label={t('feed.closeComments', 'Close comments')}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <CommentList
+                  postId={currentId}
+                  comments={comments}
+                  currentUserId={authUser?.id ?? null}
+                  currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
+                  userLanguage={userLanguage}
+                  isLoading={commentsQuery.isLoading}
+                  hasMore={commentsQuery.hasNextPage}
+                  onLoadMore={() => commentsQuery.fetchNextPage()}
+                  isLoadingMore={commentsQuery.isFetchingNextPage}
+                  onLikeComment={handleLikeComment}
+                  onUnlikeComment={handleUnlikeComment}
+                  onDeleteComment={handleDeleteComment}
+                  onSubmitComment={handleSubmitComment}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Repost Modal */}
+      {repostModalOpen && current && (
+        <RepostModal
+          open
+          originalAuthor={current.author?.displayName ?? current.author?.username}
+          originalContent={current.content ?? undefined}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostModalOpen(false)}
+          saving={repostMutation.isPending}
+        />
+      )}
     </DashboardLayout>
   );
 }

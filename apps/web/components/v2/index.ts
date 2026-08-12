@@ -114,7 +114,7 @@ export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
 
 export { Avatar } from './Avatar';
-export type { AvatarProps } from './Avatar';
+export type { AvatarProps, AvatarPresence } from './Avatar';
 
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
@@ -170,7 +170,7 @@ export type { AudioPostComposerProps } from './AudioPostComposer';
 export { TranslationToggle } from './TranslationToggle';
 export type { TranslationToggleProps, TranslationItem } from './TranslationToggle';
 
-export { getFlag, getLanguageName, FLAG_MAP, LANGUAGE_NAMES } from './flags';
+export { getFlag, getLanguageName } from './flags';
 
 export { ReactionPicker } from './ReactionPicker';
 export type { ReactionPickerProps } from './ReactionPicker';

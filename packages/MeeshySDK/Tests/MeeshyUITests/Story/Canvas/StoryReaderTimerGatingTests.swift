@@ -404,4 +404,188 @@ final class StoryReaderTimerGatingTests: XCTestCase {
         timer._advanceClockForTesting(by: 1.0)
         XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
     }
+
+    // MARK: - setPlaybackStalled(_:) contracts (unified timeline)
+
+    /// Playback-stall contract : while the slide's primary video is stalled
+    /// (buffering / `.waitingToPlayAtSpecifiedRate`), wall-time deltas must
+    /// not move `progress`. This is the NEW gate that ties the progress bar
+    /// to ACTUAL media playback — distinct from `setPaused` (user/lifecycle).
+    func test_setPlaybackStalled_freezesProgress() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertEqual(timer.progress, 0.4, accuracy: 1e-6)
+
+        timer.setPlaybackStalled(true)
+        XCTAssertTrue(timer.isPlaybackStalled)
+        timer._advanceClockForTesting(by: 3.0)
+        XCTAssertEqual(timer.progress, 0.4, accuracy: 1e-6,
+                       "Progress must freeze while the primary video is stalled")
+    }
+
+    /// Resume contract : clearing the stall resumes from the frozen elapsed
+    /// value WITHOUT a jump — the stalled span must never be integrated.
+    func test_setPlaybackStalled_resume_doesNotJump() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 2.0)
+
+        timer.setPlaybackStalled(true)
+        timer._advanceClockForTesting(by: 3.0)   // buffered 3 s — must be ignored
+        timer.setPlaybackStalled(false)
+        timer._advanceClockForTesting(by: 1.0)
+
+        XCTAssertEqual(timer.progress, 0.6, accuracy: 1e-6,
+                       "Resume in phase : 2 s + 1 s = 3 s / 5 s, not absorbing the stalled span")
+    }
+
+    /// The two freeze inputs are INDEPENDENT : clearing one while the other
+    /// is still engaged keeps the timeline frozen. A stall that resolves must
+    /// not silently un-pause a user long-press, and vice-versa.
+    func test_setPlaybackStalled_independentOfPause() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 1.0)   // progress 0.2
+
+        timer.setPaused(true)
+        timer.setPlaybackStalled(true)
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
+
+        // Stall resolves but the user is STILL paused -> stays frozen.
+        timer.setPlaybackStalled(false)
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6,
+                       "Clearing the stall must NOT override an active user pause")
+
+        // User resumes -> now (both clear) it advances, in phase.
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0.4, accuracy: 1e-6)
+    }
+
+    /// Completion must never fire from a tick that lands while stalled.
+    func test_setPlaybackStalled_true_blocksCompletion() {
+        var completionCount = 0
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.onCompletion = { completionCount += 1 }
+        timer.setCurrentSlide(id: "slide-current", duration: 2)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 1.9)
+
+        timer.setPlaybackStalled(true)
+        timer._advanceClockForTesting(by: 5.0)
+        XCTAssertEqual(completionCount, 0,
+                       "Completion must not fire while the primary video is stalled")
+
+        timer.setPlaybackStalled(false)
+        timer._advanceClockForTesting(by: 0.2)
+        XCTAssertEqual(completionCount, 1)
+    }
+
+    /// Stalling while pending must not implicitly start the timer.
+    func test_setPlaybackStalled_whilePending_staysPending() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+
+        timer.setPlaybackStalled(true)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertFalse(timer.isActive)
+        XCTAssertEqual(timer.progress, 0)
+
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0,
+                       "Stalled timer must not advance even after readiness")
+
+        timer.setPlaybackStalled(false)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
+    }
+
+    /// `setCurrentSlide` and `reset` both clear a latched stall — a new slide
+    /// always starts un-stalled (mirrors the un-paused contract).
+    func test_setCurrentSlide_and_reset_clearPlaybackStall() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-A", duration: 5)
+        timer.setPlaybackStalled(true)
+
+        timer.setCurrentSlide(id: "slide-B", duration: 5)
+        XCTAssertFalse(timer.isPlaybackStalled, "New slide must start un-stalled")
+
+        timer.setPlaybackStalled(true)
+        timer.reset()
+        XCTAssertFalse(timer.isPlaybackStalled, "reset() must clear the stall latch")
+    }
+
+    // MARK: - contentReadyFailsafe (anti-freeze) contracts
+
+    /// P5 — a slide whose canvas NEVER reports content-ready (a `Kind` the
+    /// per-layer evaluation doesn't cover, an eval that never re-triggers, a
+    /// canvas retained off-window) must NOT freeze the story forever. After
+    /// `contentReadyFailsafe` seconds of pending, the timer force-activates and
+    /// the story auto-advances.
+    func test_contentReadyFailsafe_forceActivates_whenReadyNeverArrives() {
+        var completed = false
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.onCompletion = { completed = true }
+        timer.setCurrentSlide(id: "slide-stuck", duration: 2)
+
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertFalse(timer.isActive, "Below the failsafe the slide stays pending")
+
+        timer._advanceClockForTesting(by: 1.5)   // total pending 3.5 > 3.0
+        XCTAssertTrue(timer.isActive,
+                      "Failsafe must force-activate a slide that never reports content-ready")
+
+        timer._advanceClockForTesting(by: 2.0)   // normal countdown completes
+        XCTAssertTrue(completed,
+                      "The story must auto-advance after the failsafe rescues a frozen slide")
+    }
+
+    /// Disabling the failsafe (0) preserves the pure gating semantics — the
+    /// timer stays pending forever without a content-ready signal.
+    func test_contentReadyFailsafe_disabledWithZero_neverForceActivates() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer._advanceClockForTesting(by: 100)
+        XCTAssertFalse(timer.isActive, "A disabled failsafe (0) must never force-activate")
+        XCTAssertEqual(timer.progress, 0)
+    }
+
+    /// A paused (backgrounded / long-pressed) pending slide must not trip the
+    /// failsafe — we never auto-advance while the user is holding the story.
+    func test_contentReadyFailsafe_notConsumedWhilePaused() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 10.0)
+        XCTAssertFalse(timer.isActive,
+                       "A paused pending slide must not trip the content-ready failsafe")
+
+        // Releasing resumes the failsafe countdown from where it froze (0).
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 3.5)
+        XCTAssertTrue(timer.isActive,
+                      "After release the failsafe resumes and eventually rescues the slide")
+    }
+
+    /// When content-ready arrives normally the failsafe is a no-op — no double
+    /// activation, the countdown runs exactly as gated.
+    func test_contentReadyFailsafe_noOp_whenReadyArrivesFirst() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.contentReadyFailsafe = 3.0
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        XCTAssertTrue(timer.isActive)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
+    }
 }

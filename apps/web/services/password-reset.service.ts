@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 
 /**
@@ -82,7 +83,7 @@ class PasswordResetService {
         message: data.message || 'If an account exists with this email, a password reset link has been sent.',
       };
     } catch (error) {
-      console.error('[PasswordResetService] Error requesting reset:', error);
+      logger.error('[PasswordReset]', 'Error requesting reset', { error });
       return {
         success: true, // Return generic success even on error to prevent enumeration
         message: 'If an account exists with this email, a password reset link has been sent.',
@@ -123,7 +124,7 @@ class PasswordResetService {
         };
       }
     } catch (error) {
-      console.error('[PasswordResetService] Error resetting password:', error);
+      logger.error('[PasswordReset]', 'Error resetting password', { error });
       return {
         success: false,
         error: 'Network error. Please check your connection and try again.',
@@ -165,7 +166,7 @@ class PasswordResetService {
         };
       }
     } catch (error) {
-      console.error('[PasswordResetService] Error verifying token:', error);
+      logger.error('[PasswordReset]', 'Error verifying token', { error });
       return {
         success: false,
         valid: false,

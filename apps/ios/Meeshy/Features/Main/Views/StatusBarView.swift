@@ -22,24 +22,29 @@ struct StatusBarView: View {
                     addStatusPill
                 }
 
-                // Error indicator
+                // Error indicator — retry affordance. A native Button (not a
+                // bare .onTapGesture) so VoiceOver exposes the .isButton trait
+                // and a double-tap actually retries; the hint promises the retry.
                 if viewModel.error != nil, viewModel.statuses.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(MeeshyColors.warning)
-                            .accessibilityHidden(true)
-                        Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .glassCard(cornerRadius: 20)
-                    .accessibilityElement(children: .combine)
-                    .onTapGesture {
+                    Button {
+                        HapticFeedback.light()
                         Task { await viewModel.loadStatuses() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(MeeshyColors.warning)
+                                .accessibilityHidden(true)
+                            Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
+                                .font(.caption2.weight(.medium))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .glassCard(cornerRadius: 20)
                     }
+                    .accessibilityLabel(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
+                    .accessibilityHint(String(localized: "status.bar.load_error.retry_hint", defaultValue: "Touchez pour réessayer", bundle: .main))
                 }
 
                 // Other statuses
@@ -47,6 +52,7 @@ struct StatusBarView: View {
                     statusPill(status)
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentStatus: status) }
+                            viewModel.trackImpression(status.id)
                         }
                 }
 
@@ -64,6 +70,9 @@ struct StatusBarView: View {
         .popover(item: $selectedPopover) { entry in
             statusPopover(entry)
         }
+        // Sans ce flush, le lot d'impressions en cours de groupement part avec
+        // la vue.
+        .onDisappear { Task { await viewModel.flushImpressions() } }
     }
 
     // MARK: - My Status Pill
@@ -85,6 +94,8 @@ struct StatusBarView: View {
             .glassCard(cornerRadius: 20)
             .breathingGlow(color: Color(hex: status.avatarColor), intensity: 0.4)
         }
+        .accessibilityLabel(String(localized: "status.bar.my_status_label", defaultValue: "Mon statut \(status.moodEmoji)", bundle: .main))
+        .accessibilityHint(String(localized: "status.bar.my_status_hint", defaultValue: "Voir les détails de votre statut", bundle: .main))
     }
 
     // MARK: - Add Status Pill
@@ -106,6 +117,8 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: 20)
         }
+        .accessibilityLabel(String(localized: "status.bar.add_label", defaultValue: "Ajouter un statut", bundle: .main))
+        .accessibilityHint(String(localized: "status.bar.add_hint", defaultValue: "Publie un statut visible par vos contacts", bundle: .main))
         .breathingGlow(color: MeeshyColors.indigo500, intensity: 0.3)
     }
 
@@ -115,6 +128,9 @@ struct StatusBarView: View {
         Button {
             HapticFeedback.light()
             selectedPopover = status
+            // Ouvrir un mood est une VUE (unique par utilisateur, dédupliquée
+            // côté serveur) — le pendant du `viewPost` du détail de post.
+            viewModel.markStatusViewed(status.id)
         } label: {
             HStack(spacing: 6) {
                 Text(status.moodEmoji)
@@ -128,6 +144,8 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: 20)
         }
+        .accessibilityLabel("\(status.moodEmoji) \(status.username)")
+        .accessibilityHint(String(localized: "status.bar.status_hint", defaultValue: "Voir le statut", bundle: .main))
     }
 
     // MARK: - Status Popover
@@ -142,9 +160,16 @@ struct StatusBarView: View {
                 .foregroundColor(theme.textPrimary)
 
             if let content = entry.content {
-                Text(content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(
+                    content,
+                    fontSize: 13,
+                    color: theme.textSecondary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                    accentColor: MeeshyColors.brandPrimary,
+                    usesRelativeFont: true
+                )
+                    .tint(MeeshyColors.brandPrimary)
                     .multilineTextAlignment(.center)
             }
 

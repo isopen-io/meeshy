@@ -10,18 +10,26 @@ public struct DocumentViewerView: View {
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var onDelete: (() -> Void)? = nil
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Documents direct legacy.
+    public var onSaveRequested: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
+    // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
+    // from the environment instead.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showFullViewer = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil) {
+                accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil,
+                onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context
         self.accentColor = accentColor; self.onDelete = onDelete
+        self.onSaveRequested = onSaveRequested
     }
 
     // MARK: - Body
@@ -38,7 +46,8 @@ public struct DocumentViewerView: View {
             DocumentFullSheet(
                 attachment: attachment,
                 docType: docType,
-                accentColor: accentColor
+                accentColor: accentColor,
+                onSaveRequested: onSaveRequested
             )
         }
     }
@@ -66,10 +75,11 @@ public struct DocumentViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
+                    .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
                 }
             }
 
@@ -124,7 +134,7 @@ public struct DocumentViewerView: View {
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
-                        Text("\(pages) pages")
+                        Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     }
@@ -141,8 +151,9 @@ public struct DocumentViewerView: View {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .foregroundColor(MeeshyColors.error)
                 }
+                .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
             }
         }
         .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -164,19 +175,28 @@ public struct DocumentFullSheet: View {
     public let attachment: MeeshyMessageAttachment
     public let docType: DocumentMediaType
     public let accentColor: String
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Documents direct legacy.
+    public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
+    // precedent); colorScheme drives the two derived colors below directly.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var saveState: SaveState = .idle
 
     private enum SaveState { case idle, saving, saved, failed }
 
-    public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String) {
+    private var isDark: Bool { colorScheme == .dark }
+
+    public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String,
+                onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.docType = docType; self.accentColor = accentColor
+        self.onSaveRequested = onSaveRequested
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
@@ -193,11 +213,18 @@ public struct DocumentFullSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: accentColor))
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if !attachment.fileUrl.isEmpty {
-                        Button { saveDocument() } label: {
+                        Button {
+                            if let onSaveRequested {
+                                onSaveRequested()
+                            } else {
+                                saveDocument()
+                            }
+                        } label: {
                             Group {
                                 switch saveState {
                                 case .idle:   Image(systemName: "arrow.down.to.line")
@@ -209,6 +236,7 @@ public struct DocumentFullSheet: View {
                             .foregroundColor(Color(hex: accentColor))
                         }
                         .disabled(saveState == .saving || saveState == .saved)
+                        .accessibilityLabel(String(localized: "media.document.download", defaultValue: "T\u{00E9}l\u{00E9}charger le document", bundle: .module))
                     }
                 }
 
@@ -246,6 +274,16 @@ public struct DocumentFullSheet: View {
                 let preferred = attachment.originalName.isEmpty ? nil : attachment.originalName
                 _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
 
+                // P7-9 gap — parité avec ImageViewerView : reporter la
+                // consommation `downloaded` pour que le panneau « Qui a vu »
+                // reflète les téléchargements de DOCUMENTS, pas seulement les
+                // images. Durable via l'outbox : un enregistrement hors-ligne
+                // remonte au retour du réseau au lieu d'être perdu.
+                if !attachment.id.isEmpty {
+                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                    AttachmentStatusReporter.report(attachmentId: attachment.id, body: body)
+                }
+
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = .saved
@@ -275,16 +313,16 @@ public struct DocumentFullSheet: View {
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
                 .font(.system(size: 14))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             }
         }
     }

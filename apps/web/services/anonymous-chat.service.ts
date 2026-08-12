@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * Service pour la gestion des participants anonymes
  * Gère les connexions, messages et sessions pour les participants anonymes
@@ -9,6 +10,7 @@ import { authManager } from './auth-manager.service';
 import { generateClientMessageId } from '@/utils/client-message-id';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { Message } from '@meeshy/shared/types';
+import type { LinkMessageSendResponseData } from '@meeshy/shared/types/socketio-events';
 
 export interface AnonymousChatData {
   participant: Participant;
@@ -71,7 +73,7 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors du rafraîchissement de la session');
       }
     } catch (error) {
-      console.error('Erreur rafraîchissement session anonyme:', error);
+      logger.error('[Service]', 'Erreur rafraîchissement session anonyme', { error });
       throw error;
     }
   }
@@ -107,18 +109,34 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors du chargement des messages');
       }
     } catch (error) {
-      console.error('Erreur chargement messages anonymes:', error);
+      logger.error('[Service]', 'Erreur chargement messages anonymes', { error });
       throw error;
     }
   }
 
   /**
-   * Envoie un message
+   * Envoie un message par la route de lien de partage.
+   *
+   * Le type de retour décrit ce que la route rend RÉELLEMENT :
+   * `{ messageId, message }`, pas un `Message`. La signature annonçait
+   * `Promise<Message>`, et l'unique appelant compensait par un double cast qui
+   * lisait les deux formes à l'aveugle. Le type mentait ; le cast le cachait.
+   *
+   * `clientMessageId` vient de l'APPELANT quand il en a déjà un : c'est la clé
+   * qui relie la réponse serveur à sa ligne optimiste. En forger un ici rendrait
+   * la réconciliation impossible — le message s'afficherait deux fois.
    */
-  public async sendMessage(content: string, originalLanguage: string = 'fr', replyToId?: string): Promise<Message> {
+  public async sendMessage(params: {
+    content: string;
+    originalLanguage?: string;
+    replyToId?: string;
+    clientMessageId?: string;
+  }): Promise<LinkMessageSendResponseData> {
     if (!this.sessionToken || !this.linkId) {
       throw new Error('Session non initialisée');
     }
+
+    const { content, originalLanguage = 'fr', replyToId, clientMessageId } = params;
 
     try {
       const response = await fetch(buildApiUrl(`/api/links/${this.linkId}/messages`), {
@@ -131,7 +149,7 @@ export class AnonymousChatService {
           content,
           originalLanguage,
           messageType: 'text',
-          clientMessageId: generateClientMessageId(),
+          clientMessageId: clientMessageId ?? generateClientMessageId(),
           ...(replyToId && { replyToId })
         })
       });
@@ -149,7 +167,7 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors de l\'envoi du message');
       }
     } catch (error) {
-      console.error('Erreur envoi message anonyme:', error);
+      logger.error('[Service]', 'Erreur envoi message anonyme', { error });
       throw error;
     }
   }
@@ -171,7 +189,7 @@ export class AnonymousChatService {
         body: JSON.stringify({ sessionToken: this.sessionToken })
       });
     } catch (error) {
-      console.error('Erreur lors de la fermeture de session:', error);
+      logger.error('[Service]', 'Erreur lors de la fermeture de session', { error });
     } finally {
       // Nettoyer le localStorage
       if (typeof window !== 'undefined') {
@@ -188,6 +206,18 @@ export class AnonymousChatService {
    */
   public hasActiveSession(): boolean {
     return !!this.sessionToken;
+  }
+
+  /**
+   * Ce service est-il en mesure d'envoyer MAINTENANT par la route de lien ?
+   *
+   * Prédicat unique : c'est ce service qui détient les deux éléments requis
+   * (le jeton de session et le lien), donc c'est lui qui répond. Un appelant
+   * qui recomposerait la réponse à partir de `authManager` et d'un `linkId`
+   * glané ailleurs dupliquerait la règle et divergerait au premier changement.
+   */
+  public canSendViaLink(): boolean {
+    return !!this.sessionToken && !!this.linkId;
   }
 
   /**

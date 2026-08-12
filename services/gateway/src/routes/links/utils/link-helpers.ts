@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { generateConversationIdentifier as sharedGenerateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import type { UnifiedAuthRequest } from '../../../middleware/auth';
 import { isRegisteredUser } from '../../../middleware/auth';
 
@@ -75,32 +76,14 @@ export function generateInitialLinkId(): string {
 }
 
 /**
- * Génère un identifiant unique pour une conversation
+ * Génère un identifiant unique pour une conversation.
+ * Délègue à la source unique de vérité pour garantir une translittération
+ * cohérente des accents/caractères allemands (é→e, ü→ue, ö→oe, ß→ss) et un
+ * timestamp UTC identique aux autres chemins de création de conversation.
+ * @see packages/shared/utils/conversation-helpers.ts
  */
 export function generateConversationIdentifier(title?: string): string {
-  const now = new Date();
-  const timestamp = now.getFullYear().toString() +
-    (now.getMonth() + 1).toString().padStart(2, '0') +
-    now.getDate().toString().padStart(2, '0') +
-    now.getHours().toString().padStart(2, '0') +
-    now.getMinutes().toString().padStart(2, '0') +
-    now.getSeconds().toString().padStart(2, '0');
-
-  if (title) {
-    const sanitizedTitle = title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-
-    if (sanitizedTitle.length > 0) {
-      return `mshy_${sanitizedTitle}-${timestamp}`;
-    }
-  }
-
-  const uniqueId = Math.random().toString(36).slice(2, 10);
-  return `mshy_${uniqueId}-${timestamp}`;
+  return sharedGenerateConversationIdentifier(title);
 }
 
 /**

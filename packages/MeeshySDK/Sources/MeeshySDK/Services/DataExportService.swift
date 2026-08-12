@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DataExportData: Decodable, Sendable {
+public struct DataExportData: Codable, Sendable {
     public let exportDate: String
     public let format: String
     public let requestedTypes: [String]
@@ -12,7 +12,7 @@ public struct DataExportData: Decodable, Sendable {
     public let csv: [String: String]?
 }
 
-public struct ExportedProfile: Decodable, Sendable {
+public struct ExportedProfile: Codable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -31,7 +31,7 @@ public struct ExportedProfile: Decodable, Sendable {
     public let lastActiveAt: Date?
 }
 
-public struct ExportedMessage: Decodable, Sendable {
+public struct ExportedMessage: Codable, Sendable {
     public let id: String
     public let conversationId: String
     public let content: String
@@ -42,12 +42,12 @@ public struct ExportedMessage: Decodable, Sendable {
     public let editedAt: Date?
 }
 
-public struct ExportedContactParticipant: Decodable, Sendable {
+public struct ExportedContactParticipant: Codable, Sendable {
     public let displayName: String
     public let type: String
 }
 
-public struct ExportedContact: Decodable, Sendable {
+public struct ExportedContact: Codable, Sendable {
     public let conversationId: String
     public let conversationName: String?
     public let conversationType: String?

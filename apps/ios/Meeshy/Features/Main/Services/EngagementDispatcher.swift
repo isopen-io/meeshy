@@ -25,9 +25,13 @@ public struct EngagementDispatcher: Sendable {
         self.record = record
         self.currentUserId = currentUserId
     }
-    public func dispatch(_ session: EngagementSession) async -> EngagementDispatchOutcome {
-        if let uid = currentUserId(), uid != session.userId { return .failedPermanent } // anti cross-user
-        do { try await record([session]); return .completed }
+    public func dispatch(_ sessions: [EngagementSession]) async -> EngagementDispatchOutcome {
+        // Anti cross-user: after an account switch the outbox may still hold the
+        // previous user's rows. Filter them out BEFORE the POST (the server also
+        // trusts only the auth context). If every row is cross-user, drop them.
+        let mine = currentUserId().map { uid in sessions.filter { $0.userId == uid } } ?? sessions
+        guard !mine.isEmpty else { return .failedPermanent }
+        do { try await record(mine); return .completed }
         catch { return .failedTransient }
     }
 }
@@ -41,7 +45,7 @@ enum EngagementFlushTrigger {
         let dispatcher = EngagementDispatcher(
             record: { sessions in try await PostService.shared.recordEngagement(sessions) },
             currentUserId: { uid })
-        await EngagementOutbox.shared.flush { session in await dispatcher.dispatch(session) }
+        await EngagementOutbox.shared.flush { sessions in await dispatcher.dispatch(sessions) }
     }
 }
 

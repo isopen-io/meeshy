@@ -30,11 +30,14 @@ const BORDER_COLORS: Record<string, string> = {
 };
 
 function NodeCard({ name, data }: { name: string; data: ScanLogNodeResult }) {
+  /* istanbul ignore next -- name is always a key in NODE_META (fixed iteration array) */
   const meta = NODE_META[name] ?? { label: name, icon: Eye, color: 'text-gray-500' };
   const Icon = meta.icon;
+  /* istanbul ignore next -- name is always a key in BORDER_COLORS (fixed iteration array) */
+  const borderColor = BORDER_COLORS[name] ?? '#6b7280';
 
   return (
-    <Card className="border-l-2" style={{ borderLeftColor: BORDER_COLORS[name] ?? '#6b7280' }}>
+    <Card className="border-l-2" style={{ borderLeftColor: borderColor }}>
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -74,7 +77,7 @@ export default memo(function ScanLogDetail({ logId, onClose }: Props) {
   }, [logId]);
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { /* istanbul ignore else -- Dialog cannot call onOpenChange(true) while already open */ if (!open) onClose(); }}>
       <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-sm">

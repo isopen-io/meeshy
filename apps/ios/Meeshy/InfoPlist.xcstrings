@@ -4,6 +4,12 @@
     "CFBundleDisplayName" : {
       "comment" : "Bundle display name",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28,6 +34,12 @@
             "value" : "Meeshy"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -40,10 +52,48 @@
       "comment" : "Bundle name",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Meeshy Dev"
+            "value" : "Meeshy"
+          }
+        }
+      ,
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
           }
         }
       }
@@ -51,6 +101,12 @@
     "NSCameraUsageDescription" : {
       "comment" : "Privacy - Camera Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج Meeshy إلى الوصول إلى الكاميرا لالتقاط الصور وتصوير الفيديو للرسائل ومكالمات الفيديو وتجارب الواقع المعزّز."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -75,6 +131,12 @@
             "value" : "Meeshy a besoin d'accéder à votre caméra pour prendre des photos et vidéos pour les messages, les appels vidéo et les expériences AR."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy ha bisogno di accedere alla fotocamera per scattare foto e girare video per i messaggi, le videochiamate e le esperienze in realtà aumentata."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -86,6 +148,12 @@
     "NSContactsUsageDescription" : {
       "comment" : "Privacy - Contacts Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج Meeshy إلى الوصول إلى جهات اتصالك لمساعدتك في العثور على أصدقائك على المنصّة."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -110,6 +178,12 @@
             "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy ha bisogno di accedere ai tuoi contatti per aiutarti a ritrovare i tuoi amici sulla piattaforma."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -121,6 +195,12 @@
     "NSFaceIDUsageDescription" : {
       "comment" : "Privacy - Face ID Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Meeshy تقنية Face ID لمصادقة آمنة وسهلة."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -145,6 +225,12 @@
             "value" : "Meeshy utilise Face ID pour fournir une authentification sécurisée et pratique."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa Face ID per un'autenticazione sicura e comoda."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -156,6 +242,12 @@
     "NSLocationWhenInUseUsageDescription" : {
       "comment" : "Privacy - Location When In Use Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Meeshy موقعك لمشاركته مع جهات اتصالك والعثور على أصدقاء قريبين منك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -180,6 +272,12 @@
             "value" : "Meeshy utilise votre position pour partager votre localisation avec vos contacts et trouver des amis à proximité."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa la tua posizione per condividerla con i tuoi contatti e trovare amici nelle vicinanze."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -191,6 +289,12 @@
     "NSMicrophoneUsageDescription" : {
       "comment" : "Privacy - Microphone Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج Meeshy إلى الوصول إلى الميكروفون للرسائل الصوتية ومكالمات الفيديو وتسجيل الصوت."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -215,6 +319,12 @@
             "value" : "Meeshy a besoin d'accéder à votre microphone pour les messages vocaux, les appels vidéo et l'enregistrement audio."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy ha bisogno di accedere al microfono per i messaggi vocali, le videochiamate e la registrazione audio."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -226,6 +336,12 @@
     "NSPhotoLibraryAddUsageDescription" : {
       "comment" : "Privacy - Photo Library Additions Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج Meeshy إلى إذن لحفظ الصور ومقاطع الفيديو في مكتبتك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -250,6 +366,12 @@
             "value" : "Meeshy a besoin de l'autorisation pour enregistrer des photos et vidéos dans votre bibliothèque."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy ha bisogno del permesso di salvare foto e video nella tua libreria."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -261,6 +383,12 @@
     "NSPhotoLibraryUsageDescription" : {
       "comment" : "Privacy - Photo Library Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج Meeshy إلى الوصول إلى مكتبة صورك لمشاركة الصور ومقاطع الفيديو مع جهات اتصالك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -285,6 +413,12 @@
             "value" : "Meeshy a besoin d'accéder à votre photothèque pour partager des photos et vidéos avec vos contacts."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy ha bisogno di accedere alla tua libreria foto per condividere foto e video con i tuoi contatti."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -296,6 +430,12 @@
     "NSSpeechRecognitionUsageDescription" : {
       "comment" : "Privacy - Speech Recognition Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Meeshy التعرّف على الكلام على الجهاز للترجمة الصوتية الفورية ونسخ الرسائل الصوتية. تبقى بيانات صوتك على جهازك حفاظًا على أقصى درجات الخصوصية."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -320,6 +460,12 @@
             "value" : "Meeshy utilise la reconnaissance vocale sur l'appareil pour la traduction vocale en temps réel et la transcription des messages vocaux. Vos données vocales restent sur votre appareil pour une confidentialité maximale."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa il riconoscimento vocale sul dispositivo per la traduzione vocale in tempo reale e la trascrizione dei messaggi vocali. I dati della tua voce restano sul tuo dispositivo per la massima riservatezza."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -331,6 +477,12 @@
     "NSVoIPUsageDescription" : {
       "comment" : "Privacy - VoIP Usage Description",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Meeshy تقنية VoIP لإتاحة المكالمات الصوتية والمرئية الفورية مع جهات اتصالك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -353,6 +505,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy utilise la VoIP pour permettre les appels vocaux et vidéo en temps réel avec vos contacts."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa il VoIP per consentire chiamate vocali e video in tempo reale con i tuoi contatti."
           }
         },
         "pt-BR" : {

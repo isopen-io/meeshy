@@ -20,18 +20,21 @@ interface DraggableParticipantOverlayProps {
   isAudioEnabled?: boolean;
   isVideoEnabled?: boolean;
   isDisconnected?: boolean;
+  /** Speaker off → this tile's remote audio is muted too, same as the fullscreen tile. */
+  muted?: boolean;
   initialPosition?: { x: number; y: number };
   onDoubleClick?: () => void;
   onRemove?: () => void;
 }
 
 export function DraggableParticipantOverlay({
-  _participantId,
+  participantId: _participantId,
   stream,
   participantName,
   isAudioEnabled = true,
   isVideoEnabled = true,
   isDisconnected = false,
+  muted = false,
   initialPosition = { x: 20, y: 20 },
   onDoubleClick,
   onRemove,
@@ -117,7 +120,7 @@ export function DraggableParticipantOverlay({
     >
       <VideoStream
         stream={stream}
-        muted={false}
+        muted={muted}
         isLocal={false}
         className="w-full h-full object-cover"
         participantName={participantName}
@@ -130,10 +133,20 @@ export function DraggableParticipantOverlay({
       {/* Fullscreen button (on hover) */}
       {isHovered && !isDisconnected && (
         <div
-          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors"
+          role="button"
+          tabIndex={0}
+          aria-label={t('calls.stream.fullscreen')}
+          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/40"
           onClick={(e) => {
             e.stopPropagation();
             onDoubleClick?.();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onDoubleClick?.();
+            }
           }}
           title={t('calls.stream.fullscreen')}
         >

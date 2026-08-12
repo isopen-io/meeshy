@@ -8,8 +8,15 @@ public struct CommunityInviteView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
-    public init(communityId: String) {
+    /// Fermeture fournie par l'hôte. `nil` = présentation modale classique, on
+    /// retombe sur `dismiss()`. Indispensable dès que la vue n'est PAS présentée
+    /// modalement (poussée dans une pile, posée dans le panneau droit iPad) :
+    /// `dismiss()` y est un no-op et « Done » ne fermait alors rien.
+    private let onDone: (() -> Void)?
+
+    public init(communityId: String, onDone: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityInviteViewModel(communityId: communityId))
+        self.onDone = onDone
     }
 
     public var body: some View {
@@ -26,7 +33,9 @@ public struct CommunityInviteView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.done", defaultValue: "Done", bundle: .module)) { dismiss() }
+                    Button(String(localized: "common.done", defaultValue: "Done", bundle: .module)) {
+                        if let onDone { onDone() } else { dismiss() }
+                    }
                         .foregroundColor(theme.textSecondary)
                 }
             }
@@ -118,7 +127,7 @@ public struct CommunityInviteView: View {
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 avatarURL: user.avatar,
-                presenceState: user.isOnline == true ? .online : .offline
+                presenceState: UserPresence(isOnline: user.isOnline ?? false).state
             )
 
             VStack(alignment: .leading, spacing: 2) {

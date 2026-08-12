@@ -84,7 +84,8 @@ export class SocialEventsHandler {
           if (v.expiresAt <= now) this.friendsCache.delete(k);
         }
         if (this.friendsCache.size >= 500) {
-          this.friendsCache.delete(this.friendsCache.keys().next().value!);
+          const oldest = this.friendsCache.keys().next().value;
+          if (oldest !== undefined) this.friendsCache.delete(oldest);
         }
       }
       this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
@@ -107,10 +108,45 @@ export class SocialEventsHandler {
   }
 
   /**
+   * Émission UNIQUE sur l'union des feed rooms (amis filtrés par visibilité +
+   * auteur) ET de la post room (`ROOMS.post`). Socket.IO dédoublonne un socket
+   * présent dans plusieurs rooms → livraison EXACTEMENT une fois, ce qui supprime
+   * la double-livraison du modèle « boucle feed + emit post room séparé » (un
+   * ami-viewer était dans sa feed room ET la post room). Cf. `commentBroadcastRooms`.
+   */
+  private emitToFeedsAndPostRoom(
+    recipientIds: string[],
+    authorId: string,
+    postId: string,
+    event: string,
+    data: unknown,
+  ): void {
+    const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
+    rooms.push(ROOMS.post(postId));
+    this.io.to(rooms).emit(event, data);
+  }
+
+  /**
    * Broadcast uniquement vers l'auteur du post (notifs personnelles)
    */
   private emitToUser(userId: string, event: string, data: unknown): void {
     this.io.to(ROOMS.feed(userId)).emit(event, data);
+  }
+
+  /**
+   * Émission UNIQUE sur l'union de la feed room d'un utilisateur ET de la post
+   * room — déduplication Socket.IO incluse (`io.to([...])`). Un même socket
+   * présent dans LES DEUX rooms (typiquement l'auteur qui regarde sa propre
+   * story/statut : il est dans sa feed room ET dans la post room du viewer)
+   * reçoit l'événement EXACTEMENT une fois.
+   *
+   * Avant ce seam, `broadcastStoryReacted`/`broadcastStatusReacted` faisaient
+   * deux `.emit()` séparés (feed room PUIS post room) → l'auteur-viewer recevait
+   * `story:reacted` DEUX fois → le delta `+1` côté iOS s'appliquait deux fois →
+   * compteur de réactions affiché en `+2`. Miroir de `emitToFeedsAndPostRoom`.
+   */
+  private emitToUserFeedAndPostRoom(userId: string, postId: string, event: string, data: unknown): void {
+    this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]).emit(event, data);
   }
 
   // ==============================================
@@ -120,23 +156,39 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:subscribe
    */
-  handleFeedSubscribe(socket: Socket, userId: string): void {
+  async handleFeedSubscribe(socket: Socket, userId: string): Promise<void> {
     const room = ROOMS.feed(userId);
-    socket.join(room);
+    await socket.join(room);
   }
 
   /**
    * Appelé quand un socket reçoit feed:unsubscribe
    */
-  handleFeedUnsubscribe(socket: Socket, userId: string): void {
+  async handleFeedUnsubscribe(socket: Socket, userId: string): Promise<void> {
     const room = ROOMS.feed(userId);
-    socket.leave(room);
+    await socket.leave(room);
   }
 
+  /**
+   * L'ÉNUMÉRATEUR d'audience du temps réel : « à qui pousser cet événement ? »,
+   * par dépliage du graphe de l'auteur. Ce n'est pas un test d'admission — pour
+   * juger un utilisateur ARBITRAIRE, voir `filterPostConsumers` /
+   * `canUserConsumePost` (leçon du cycle 28).
+   *
+   * `visibility` et `visibilityUserIds` sont REQUIS. Ils portaient un défaut
+   * `'PUBLIC'` / `[]` que huit méthodes de diffusion propageaient : un appelant
+   * qui les omettait diffusait un post `PRIVATE` à tous les amis de l'auteur, ou
+   * un `EXCEPT` sans sa liste noire, sans que rien ne le signale. Aucun appelant
+   * ne les omettait — c'est justement pourquoi le défaut ne coûte rien à retirer
+   * et tout à garder.
+   *
+   * Une visibilité INCONNUE retombe sur les amis (`default:`), jamais sur une
+   * ouverture plus large : même politique que `filterPostConsumers`.
+   */
   private async getVisibilityFilteredRecipients(
     authorId: string,
-    visibility: string,
-    visibilityUserIds: string[] = []
+    visibility: string | null | undefined,
+    visibilityUserIds: string[]
   ): Promise<string[]> {
     if (visibility === 'COMMUNITY') {
       return getCommunityCoMemberIds(this.prisma, authorId);
@@ -164,43 +216,72 @@ export class SocialEventsHandler {
   // ==============================================
 
   async broadcastPostCreated(post: Post, authorId: string, clientMutationId?: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
-    logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} friends=${friendIds.length}`);
+    // Respect the post's visibility — an ONLY/EXCEPT/PRIVATE/COMMUNITY post must
+    // NOT be fanned out (full body) to friends outside the allowed set.
+    const recipients = await this.getVisibilityFilteredRecipients(
+      authorId,
+      post.visibility as string | undefined,
+      (post.visibilityUserIds as string[] | undefined) ?? [],
+    );
+    logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} recipients=${recipients.length}`);
     // U1 — echo the cmid so the author's offline-created optimistic post (keyed
     // by cmid) reconciles to the server id instead of duplicating.
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
   }
 
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_UPDATED, { post });
+    const recipients = await this.getVisibilityFilteredRecipients(
+      authorId,
+      post.visibility as string | undefined,
+      (post.visibilityUserIds as string[] | undefined) ?? [],
+    );
+    // Feed rooms filtrées par visibilité + post room, UN SEUL emit dédoublonné
+    // (miroir broadcastPostLiked). Caveat assumé : si l'édition RESTREINT la
+    // visibilité, les membres déjà joints à la post room reçoivent encore
+    // cette update — même sémantique que comment:added, pas d'éviction de room.
+    this.emitToFeedsAndPostRoom(recipients, authorId, post.id, SERVER_EVENTS.POST_UPDATED, { post });
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
+    // Sur-diffusion sûre (payload id-only) : la post room reçoit aussi la
+    // suppression, sinon un viewer non-ami resté sur le détail/reel d'un post
+    // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
+    // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
     const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
+    this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
   }
 
-  async broadcastPostLiked(data: PostLikedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_LIKED, data);
-    // Atteindre AUSSI les viewers de la post room (détail de post + reel viewer) :
-    // ils rejoignent `ROOMS.post` mais ne sont PAS dans les feed rooms des amis de
-    // l'auteur. Payload ABSOLU (likeCount + reactionSummary) → idempotent même si un
-    // socket est dans les deux rooms (la feed room ET la post room). Modèle identique
-    // à `broadcastStoryReacted`.
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_LIKED, data);
+  async broadcastPostLiked(
+    data: PostLikedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
+    // reel viewer) en UN SEUL emit dédoublonné — plus de double-livraison.
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data);
   }
 
-  async broadcastPostUnliked(data: PostUnlikedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_UNLIKED, data);
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_UNLIKED, data);
+  async broadcastPostUnliked(
+    data: PostUnlikedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+    // The repost is itself a post authored by the reposter; honour ITS visibility.
+    const repost = data.repost as Post | undefined;
+    const recipients = await this.getVisibilityFilteredRecipients(
+      authorId,
+      repost?.visibility as string | undefined,
+      (repost?.visibilityUserIds as string[] | undefined) ?? [],
+    );
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
   }
 
   /**
@@ -234,11 +315,20 @@ export class SocialEventsHandler {
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
-  async broadcastStoryUpdated(story: Post, authorId: string): Promise<void> {
+  /// `engagementReset: true` when the edit wiped views/reactions (content
+  /// edit) — clients must mark the story unseen again for every viewer.
+  async broadcastStoryUpdated(
+    story: Post,
+    authorId: string,
+    options?: { engagementReset?: boolean },
+  ): Promise<void> {
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, { story });
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, {
+      story,
+      engagementReset: options?.engagementReset ?? false,
+    });
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have
@@ -255,15 +345,14 @@ export class SocialEventsHandler {
   }
 
   broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string): void {
-    // Notify the author (via their feed room)
-    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_REACTED, data);
-    // Also broadcast to viewers currently watching the story room (ROOMS.post is separate from feed room — no overlap)
-    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_REACTED, data);
+    // UN SEUL emit dédoublonné vers la feed room de l'auteur ET la story room
+    // des viewers. L'auteur qui regarde sa propre story est dans les deux rooms :
+    // sans dédup il recevait l'event deux fois → compteur `+2` (cf. helper).
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_REACTED, data);
   }
 
   broadcastStoryUnreacted(data: StoryUnreactedEventData, storyAuthorId: string): void {
-    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_UNREACTED, data);
-    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_UNREACTED, data);
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_UNREACTED, data);
   }
 
   // ==============================================
@@ -287,61 +376,130 @@ export class SocialEventsHandler {
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, { status });
   }
 
-  async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string = 'PUBLIC', visibilityUserIds: string[] = []): Promise<void> {
+  async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string | null | undefined, visibilityUserIds: string[]): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_DELETED, { statusId, authorId });
   }
 
   broadcastStatusReacted(data: StatusReactedEventData, statusAuthorId: string): void {
-    this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_REACTED, data);
-    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_REACTED, data);
+    // Même dédup que `broadcastStoryReacted` : l'auteur-viewer ne compte plus son
+    // émoji deux fois.
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_REACTED, data);
   }
 
   broadcastStatusUnreacted(data: StatusUnreactedEventData, statusAuthorId: string): void {
-    this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_UNREACTED, data);
-    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_UNREACTED, data);
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_UNREACTED, data);
   }
 
   // ==============================================
   // COMMENT BROADCASTS
   // ==============================================
 
-  async broadcastCommentAdded(data: CommentAddedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_ADDED, data);
+  /**
+   * Rooms devant recevoir un événement de commentaire : les feed rooms de
+   * l'auteur du post et de ses amis (fil d'actualité) ET la post room
+   * (`ROOMS.post`) où se trouvent les viewers du détail / reel viewer qui ne
+   * sont PAS amis de l'auteur (post PUBLIC, co-membre de communauté, ou le
+   * commentateur lui-même). Sans la post room, un viewer ouvrant le détail d'un
+   * post qui ne suit pas l'auteur ne voyait JAMAIS les nouveaux commentaires en
+   * temps réel — il fallait recharger. Miroir de `broadcastPostLiked` /
+   * `broadcastStoryReacted` qui atteignent déjà la post room.
+   *
+   * Émission UNIQUE sur l'union des rooms : Socket.IO dédoublonne les sockets
+   * présents dans plusieurs rooms (un viewer ami est dans SA feed room ET dans la
+   * post room), donc l'événement est livré EXACTEMENT une fois. C'est requis
+   * pour les commentaires : l'insertion d'un commentaire et l'incrément du
+   * compteur de réponses côté client ne sont PAS idempotents en cas de double
+   * livraison (contrairement au payload absolu de `post:liked`).
+   */
+  private commentBroadcastRooms(recipientIds: string[], postAuthorId: string, postId: string): string[] {
+    const feedRooms = [...recipientIds, postAuthorId].map((id) => ROOMS.feed(id));
+    return [...feedRooms, ROOMS.post(postId)];
   }
 
-  async broadcastCommentDeleted(data: CommentDeletedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_DELETED, data);
+  /**
+   * Recipients of a comment-scoped event = the feed rooms allowed by the POST's
+   * visibility (NOT the author's full friend list) + the post author + the
+   * join-gated post room. Without the visibility filter, a comment on an
+   * `ONLY` / `EXCEPT` / `PRIVATE` / `COMMUNITY` post leaked its content to every
+   * friend of the author, including friends not permitted to see the post.
+   * Mirrors `getVisibilityFilteredRecipients` already used by story/status
+   * creation. `visibility` defaults to `PUBLIC` (legacy friend fan-out) so a
+   * caller that cannot resolve the post's visibility degrades to the previous
+   * behaviour rather than dropping delivery.
+   */
+  async broadcastCommentAdded(
+    data: CommentAddedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
+  }
+
+  async broadcastCommentDeleted(
+    data: CommentDeletedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
   broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
     this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
+    // Reach every viewer of the post detail (join-gated post room) so the
+    // comment's like count updates live for them too — not just the comment
+    // author. Payload is ABSOLUTE (likeCount) → idempotent even if the comment
+    // author is in both their feed room and the post room. Mirrors
+    // `broadcastPostLiked`.
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
   }
 
   // ==============================================
   // POST/COMMENT TRANSLATION BROADCASTS
   // ==============================================
 
-  async broadcastPostTranslationUpdated(data: PostTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
+  async broadcastPostTranslationUpdated(
+    data: PostTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
-  async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+  async broadcastCommentTranslationUpdated(
+    data: CommentTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   /**
    * Diffuse `comment:media-updated` (transcription/traductions audio d'un média de
-   * commentaire prêtes) à la même audience que `comment:translation-updated` :
-   * l'auteur du post et ses amis.
+   * commentaire prêtes) à la même audience filtrée par visibilité que
+   * `comment:translation-updated` : les destinataires autorisés par la visibilité
+   * du post + l'auteur + la post room (join-gated).
    */
-  async broadcastCommentMediaUpdated(data: CommentMediaUpdatedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+  async broadcastCommentMediaUpdated(
+    data: CommentMediaUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
   }
 
   // ==============================================

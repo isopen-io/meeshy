@@ -12,15 +12,18 @@
  * Run with: npm test -- normalize.test.ts
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import {
   normalizeEmail,
   normalizePhoneNumber,
+  normalizePhoneWithCountry,
   normalizeUsername,
   capitalizeName,
   normalizeDisplayName,
   normalizeUserData,
-  UserDataToNormalize
+  looksLikePhoneNumber,
+  validatePhoneNumber,
+  type UserDataToNormalize
 } from '../../../utils/normalize';
 
 describe('normalizeEmail', () => {
@@ -304,6 +307,26 @@ describe('capitalizeName', () => {
     it('should handle all lowercase compound name', () => {
       expect(capitalizeName('jean pierre')).toBe('Jean Pierre');
     });
+
+    it('should capitalize the segment after a hyphen', () => {
+      expect(capitalizeName('jean-pierre')).toBe('Jean-Pierre');
+    });
+
+    it('should capitalize each segment of an all-uppercase hyphenated name', () => {
+      expect(capitalizeName('JEAN-PIERRE')).toBe('Jean-Pierre');
+    });
+
+    it('should capitalize the segment after an apostrophe', () => {
+      expect(capitalizeName("o'brien")).toBe("O'Brien");
+    });
+
+    it('should handle a mixed hyphen + space + apostrophe name', () => {
+      expect(capitalizeName("marie-claire d'arc")).toBe("Marie-Claire D'Arc");
+    });
+
+    it('should preserve accented letters when capitalizing', () => {
+      expect(capitalizeName('émile-rené')).toBe('Émile-René');
+    });
   });
 
   describe('edge cases', () => {
@@ -364,7 +387,11 @@ describe('normalizeDisplayName', () => {
     });
 
     it('should remove carriage return-newline combination', () => {
-      expect(normalizeDisplayName('Test\r\nUser')).toBe('Test\rUser');
+      expect(normalizeDisplayName('Test\r\nUser')).toBe('TestUser');
+    });
+
+    it('should remove a lone carriage return (legacy Mac line ending)', () => {
+      expect(normalizeDisplayName('Test\rUser')).toBe('TestUser');
     });
   });
 
@@ -582,6 +609,117 @@ describe('normalizeUserData', () => {
   });
 });
 
+describe('looksLikePhoneNumber', () => {
+  it('returns false for empty string', () => {
+    expect(looksLikePhoneNumber('')).toBe(false);
+  });
+
+  it('returns false for whitespace-only string', () => {
+    expect(looksLikePhoneNumber('   ')).toBe(false);
+  });
+
+  it('returns false for email address (contains @)', () => {
+    expect(looksLikePhoneNumber('user@example.com')).toBe(false);
+  });
+
+  it('returns true for international phone with + prefix', () => {
+    expect(looksLikePhoneNumber('+33612345678')).toBe(true);
+  });
+
+  it('returns true for phone with spaces and parens', () => {
+    expect(looksLikePhoneNumber('+1 (555) 123-4567')).toBe(true);
+  });
+
+  it('returns true for NANP local format starting with a parenthesis', () => {
+    expect(looksLikePhoneNumber('(555) 123-4567')).toBe(true);
+  });
+
+  it('returns true for a local number whose leading area code is parenthesised', () => {
+    expect(looksLikePhoneNumber('(020) 7946 0958')).toBe(true);
+  });
+
+  it('returns false for parenthesised text that is not a number', () => {
+    expect(looksLikePhoneNumber('(abc) def-ghij')).toBe(false);
+  });
+
+  it('returns false for a leading parenthesis with too few digits', () => {
+    expect(looksLikePhoneNumber('(12) 34')).toBe(false);
+  });
+
+  it('returns false for a number-like string starting with a separator', () => {
+    expect(looksLikePhoneNumber('-33612345678')).toBe(false);
+    expect(looksLikePhoneNumber(') 555 123456')).toBe(false);
+  });
+
+  it('returns false for string with fewer than 6 digits', () => {
+    expect(looksLikePhoneNumber('12345')).toBe(false);
+  });
+
+  it('returns false for alphabetic string', () => {
+    expect(looksLikePhoneNumber('username')).toBe(false);
+  });
+});
+
+describe('normalizePhoneWithCountry', () => {
+  it('returns null for empty string', () => {
+    expect(normalizePhoneWithCountry('')).toBeNull();
+  });
+
+  it('returns null for whitespace-only input', () => {
+    expect(normalizePhoneWithCountry('   ')).toBeNull();
+  });
+
+  it('returns null for unparseable string', () => {
+    expect(normalizePhoneWithCountry('not-a-number')).toBeNull();
+  });
+
+  it('parses a French number with default country', () => {
+    const result = normalizePhoneWithCountry('0612345678', 'FR');
+    expect(result).not.toBeNull();
+    expect(result?.phoneNumber).toBe('+33612345678');
+    expect(result?.countryCode).toBe('FR');
+    expect(result?.isValid).toBe(true);
+  });
+
+  it('parses an E.164 number without default country', () => {
+    const result = normalizePhoneWithCountry('+15551234567');
+    expect(result).not.toBeNull();
+    expect(result?.phoneNumber).toBe('+15551234567');
+  });
+
+  it('returns nationalNumber field', () => {
+    const result = normalizePhoneWithCountry('+33612345678');
+    expect(result?.nationalNumber).toBeDefined();
+    expect(typeof result?.nationalNumber).toBe('string');
+  });
+});
+
+describe('validatePhoneNumber', () => {
+  it('returns false for empty string', () => {
+    expect(validatePhoneNumber('')).toBe(false);
+  });
+
+  it('returns false for whitespace-only input', () => {
+    expect(validatePhoneNumber('   ')).toBe(false);
+  });
+
+  it('returns true for valid international number', () => {
+    expect(validatePhoneNumber('+33612345678')).toBe(true);
+  });
+
+  it('returns true for valid national number with country code', () => {
+    expect(validatePhoneNumber('0612345678', 'FR')).toBe(true);
+  });
+
+  it('returns false for obviously invalid number', () => {
+    expect(validatePhoneNumber('+00000000000')).toBe(false);
+  });
+
+  it('returns false for non-numeric string', () => {
+    expect(validatePhoneNumber('abc')).toBe(false);
+  });
+});
+
 describe('Integration scenarios', () => {
   describe('realistic user data scenarios', () => {
     it('should normalize French user data', () => {
@@ -597,7 +735,7 @@ describe('Integration scenarios', () => {
 
       expect(result.email).toBe('jean-pierre.dupont@orange.fr');
       expect(result.username).toBe('JPDupont');
-      expect(result.firstName).toBe('Jean-pierre');
+      expect(result.firstName).toBe('Jean-Pierre');
       expect(result.lastName).toBe('Dupont');
       expect(result.displayName).toBe('Jean-Pierre Dupont');
     });

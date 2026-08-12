@@ -52,7 +52,7 @@ func mostCenteredReel(
         let fraction = visible / f.height
         guard fraction >= minVisibleFraction else { continue }
         let distance = abs(f.midY - viewportMid)
-        if best == nil || distance < best!.distance {
+        if best.map({ distance < $0.distance }) ?? true {
             best = (f.id, distance)
         }
     }

@@ -22,11 +22,12 @@ import {
   createPhoneResetResendRateLimiter
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
+import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
 const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address').max(255),
+  email: z.email('Invalid email address').max(255),
   captchaToken: z.string().optional(), // No longer required - using rate limiting + honeypot
   deviceFingerprint: z.string().optional()
 });
@@ -51,7 +52,7 @@ const phoneLookupSchema = z.object({
 const phoneVerifyIdentitySchema = z.object({
   tokenId: z.string().min(1, 'Token ID is required'),
   fullUsername: z.string().min(2, 'Username is required').max(30),
-  fullEmail: z.string().email('Valid email is required').max(255)
+  fullEmail: z.email('Valid email is required').max(255)
 });
 
 const phoneVerifyCodeSchema = z.object({
@@ -188,15 +189,11 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       // Always return 200 OK with generic message (prevents email enumeration)
-      return reply.status(200).send(result);
+      return sendSuccess(reply, undefined, { message: result.message });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid request data',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'Invalid request data');
       }
 
       fastify.log.error({ err: error }, '[PasswordReset] Error in forgot-password');
@@ -305,6 +302,17 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       if (result.success) {
+        // The reset transaction invalidated every session of this user. A
+        // socket authenticates once at connect and is never re-checked, so
+        // without this the device that prompted the reset kept receiving every
+        // message in real time. `userId` stays server-side — the body below
+        // carries `message` alone.
+        await disconnectRevokedSessions({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId: result.userId ?? '',
+          reason: 'password_changed',
+          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+        });
         return sendSuccess(reply, { message: result.message });
       } else {
         return sendBadRequest(reply, result.error);
@@ -312,11 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid request data',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'Invalid request data');
       }
 
       fastify.log.error({ err: error }, '[PasswordReset] Error in reset-password');
@@ -393,10 +397,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       const { token } = request.query as { token: string };
 
       if (!token) {
-        return reply.status(400).send({
-          valid: false,
-          error: 'Token is required'
-        });
+        return sendBadRequest(reply, 'Token is required');
       }
 
       // Hash the token to lookup in database
@@ -417,37 +418,25 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       if (!resetToken) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token is expired
       if (resetToken.expiresAt < new Date()) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token was already used
       if (resetToken.usedAt) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token is revoked
       if (resetToken.isRevoked) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
-      return reply.send({
+      return sendSuccess(reply, {
         valid: true,
         requires2FA: !!resetToken.user.twoFactorSecret,
         expiresAt: resetToken.expiresAt.toISOString()
@@ -455,10 +444,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       fastify.log.error({ err: error }, '[PasswordReset] Error verifying token');
-      return reply.status(500).send({
-        valid: false,
-        error: 'Error verifying token'
-      });
+      return sendInternalError(reply, 'Error verifying token');
     }
   });
 
@@ -544,14 +530,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s1, ...data1 } = result as any;
+      return sendSuccess(reply, data1);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'validation_error',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'validation_error');
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in phone lookup');
       return sendInternalError(reply, 'internal_error');
@@ -630,14 +616,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s2, ...data2 } = result as any;
+      return sendSuccess(reply, data2);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'validation_error',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'validation_error');
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in identity verification');
       return sendInternalError(reply, 'internal_error');
@@ -710,14 +696,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s3, ...data3 } = result as any;
+      return sendSuccess(reply, data3);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'validation_error',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'validation_error');
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code verification');
       return sendInternalError(reply, 'internal_error');
@@ -775,14 +761,13 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
       const result = await phonePasswordResetService.resendCode(body.tokenId, ipAddress);
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      return sendSuccess(reply, undefined);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'validation_error',
-          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
-        });
+        return sendBadRequest(reply, 'validation_error');
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code resend');
       return sendInternalError(reply, 'internal_error');

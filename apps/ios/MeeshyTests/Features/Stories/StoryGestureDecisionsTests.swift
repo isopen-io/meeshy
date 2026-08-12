@@ -13,6 +13,7 @@ import XCTest
 ///   does **not** navigate.
 /// - Short tap on a playing story ⇒ navigate prev/next based on side.
 /// - Composer engaged ⇒ tap dismisses the composer instead.
+@MainActor
 final class StoryGestureDecisionsTests: XCTestCase {
 
     // MARK: - decideTouchDown
@@ -24,7 +25,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
     }
 
     func test_touchDown_whenPaused_returnsResumeFromPause() {
@@ -34,7 +35,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .resumeFromPause)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .resumeFromPause)
     }
 
     func test_touchDown_whenPausedButComposerEngaged_returnsNone() {
@@ -46,7 +47,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: true
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
     }
 
     // MARK: - decideTouchUp — composer engaged
@@ -61,7 +62,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
@@ -82,7 +83,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 350,   // right half — would normally navigate next
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.06,
             holdThreshold: 0.2
         )
@@ -103,7 +104,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.25,
             holdThreshold: 0.2
         )
@@ -126,7 +127,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.21,
             holdThreshold: 0.2
         )
@@ -135,7 +136,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
 
     // MARK: - decideTouchUp — short tap navigation
 
-    func test_touchUp_shortTapLeftHalf_navigatesPrevious() {
+    func test_touchUp_shortTapLeftEdge_navigatesPrevious() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -145,14 +146,14 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
         XCTAssertEqual(action, .navigatePrevious)
     }
 
-    func test_touchUp_shortTapRightHalf_navigatesNext() {
+    func test_touchUp_shortTapRightEdge_navigatesNext() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -162,16 +163,18 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 300,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
         XCTAssertEqual(action, .navigateNext)
     }
 
-    func test_touchUp_shortTapExactlyAtHalfWidth_navigatesNext() {
-        // Boundary check : `touchStartX < halfWidth` is the prev condition;
-        // exact equality should fall through to `next`.
+    /// Le milieu exact appartenait au côté `next` quand l'écran était coupé en
+    /// deux. Depuis l'introduction des bandes 30/40/30 (spec 2026-07-25), le
+    /// centre est réservé au double tap et ne navigue plus.
+    /// Voir `StoryGestureNavigationTests` pour la couverture des trois bandes.
+    func test_touchUp_shortTapAtExactCenter_doesNotNavigate() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -181,11 +184,118 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 200,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
-        XCTAssertEqual(action, .navigateNext)
+        XCTAssertEqual(action, .none)
+    }
+
+    // MARK: - decideTouchUp — le doigt a bougé (slop franchi)
+
+    /// Depuis le 2026-07-26, le drag du lecteur est reconnu EN PARALLÈLE de cet
+    /// overlay (`.simultaneousGesture` sur l'ancêtre, pour que les swipes
+    /// cessent d'être morts). Un swipe parti d'une bande latérale relâche donc
+    /// aussi ce recognizer-ci : sans la porte `didExceedSlop`, l'utilisateur
+    /// naviguait d'une story ET changeait de groupe du même geste.
+    ///
+    /// Le défaut du champ est `false` (« toucher immobile ») : c'est le cas
+    /// historique, et c'est pourquoi les contextes des autres tests restent
+    /// valides tels quels.
+    func test_touchUp_afterExceedingSlop_doesNotNavigate() {
+        for touchStartX: CGFloat in [50, 300] {   // bande gauche, puis bande droite
+            let ctx = StoryGestureContext(
+                holdActive: false,
+                isPaused: false,
+                isResumingTap: false,
+                isComposerEngaged: false,
+                didExceedSlop: true
+            )
+            let action = StoryGestureDecisions.decideTouchUp(
+                context: ctx,
+                touchStartX: touchStartX,
+                width: 400,
+                elapsed: 0.05,
+                holdThreshold: 0.2
+            )
+            XCTAssertEqual(action, .none,
+                           "Un toucher qui a dépassé le slop appartient au drag parent, " +
+                           "il ne doit plus naviguer (x = \(touchStartX)).")
+        }
+    }
+
+    /// La porte est placée APRÈS `holdActive` : un long-press confirmé puis
+    /// relâché garde son contrat même si le doigt a dérivé de quelques points
+    /// pendant les 200 ms de maintien — sinon la pause « sauterait » sur le
+    /// moindre tremblement.
+    func test_touchUp_holdConfirmedThenSlop_stillConfirmsThePause() {
+        let ctx = StoryGestureContext(
+            holdActive: true,
+            isPaused: true,
+            isResumingTap: false,
+            isComposerEngaged: false,
+            didExceedSlop: true
+        )
+        let action = StoryGestureDecisions.decideTouchUp(
+            context: ctx,
+            touchStartX: 50,
+            width: 400,
+            elapsed: 0.25,
+            holdThreshold: 0.2
+        )
+        XCTAssertEqual(action, .confirmLongPressPause)
+    }
+
+    /// `decideDoubleTap` ne tranche QUE la bande : au centre, un double tap vaut
+    /// toujours `.togglePause`. C'est l'appelant (`StoryGestureOverlayView`) qui
+    /// décide quels relâchements ALIMENTENT la fenêtre de double tap — verrouillé
+    /// par le test de source juste en dessous.
+    func test_doubleTap_inCenterBand_togglesPause() {
+        let ctx = StoryGestureContext(
+            holdActive: false,
+            isPaused: false,
+            isResumingTap: false,
+            isComposerEngaged: false
+        )
+        XCTAssertEqual(
+            StoryGestureDecisions.decideDoubleTap(context: ctx, touchStartX: 200, width: 400),
+            .togglePause
+        )
+    }
+
+    /// UN TOUCHER QUI A BOUGÉ N'ALIMENTE PAS LA FENÊTRE DE DOUBLE TAP.
+    ///
+    /// Corrigé le 2026-07-26. `isCleanTap` excluait volontairement
+    /// `didExceedSlop`, au motif que « le second tap d'un double tap arrive
+    /// presque toujours à quelques points du premier » — justification fausse :
+    /// ce drapeau mesure le déplacement À L'INTÉRIEUR du toucher courant, jamais
+    /// la distance entre deux taps successifs (seul l'écart de TEMPS l'est). Un
+    /// vrai second tap est immobile ; en revanche deux flicks horizontaux
+    /// enchaînés dans la bande centrale (geste courant pour défiler les groupes)
+    /// remplissaient la fenêtre et déclenchaient `onTogglePause()` : changement de
+    /// groupe ET pause + chrome masqué, sans un seul tap.
+    ///
+    /// `isCleanTap` vit dans la View (`@State` + `GeometryProxy`), non
+    /// instanciable en test : garde par analyse de source, pattern établi du dépôt.
+    func test_movedTouch_doesNotFeedTheDoubleTapWindow() throws {
+        let canvasURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        let source = try String(contentsOf: canvasURL, encoding: .utf8)
+
+        guard let start = source.range(of: "let isCleanTap ="),
+              let end = source.range(of: "if isCleanTap,", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("expression `isCleanTap` introuvable dans StoryViewerView+Canvas.swift")
+        }
+        let expression = String(source[start.upperBound..<end.lowerBound])
+        XCTAssertTrue(
+            expression.contains("!ctx.didExceedSlop"),
+            "isCleanTap doit exclure les touchers qui ont franchi le slop — sinon deux " +
+            "flicks au centre mettent la story en pause en plus de changer de groupe."
+        )
     }
 
     // MARK: - End-to-end flow
@@ -200,7 +310,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
 
         // 2. Après 200 ms, le hold se confirme dans la View (poserait
         // holdActive = true et isPaused = true).
@@ -212,7 +322,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             StoryGestureDecisions.decideTouchUp(
                 context: ctx,
                 touchStartX: 50,
-                halfWidth: 200,
+                width: 400,
                 elapsed: 0.25,
                 holdThreshold: 0.2
             ),
@@ -226,7 +336,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .resumeFromPause)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .resumeFromPause)
 
         // 5. La View pose isResumingTap = true et isPaused = false pour le
         // reste du geste. Release : no-op, surtout pas de nav.
@@ -236,7 +346,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             StoryGestureDecisions.decideTouchUp(
                 context: ctx,
                 touchStartX: 350,
-                halfWidth: 200,
+                width: 400,
                 elapsed: 0.08,
                 holdThreshold: 0.2
             ),

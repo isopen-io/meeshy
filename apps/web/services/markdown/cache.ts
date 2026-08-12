@@ -40,6 +40,7 @@ export const setCachedHtml = (cacheKey: string, html: string): void => {
   // LRU eviction: remove oldest entry if cache is full
   if (htmlCache.size >= MAX_CACHE_SIZE) {
     const firstKey = htmlCache.keys().next().value;
+    /* istanbul ignore next -- defensive guard: map is non-empty when size >= MAX_CACHE_SIZE */
     if (firstKey) {
       htmlCache.delete(firstKey);
     }

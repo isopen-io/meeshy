@@ -3,6 +3,7 @@
 import { HTMLAttributes, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
+import { formatDuration } from '@/utils/audio-formatters';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
   /** Audio source URL */
@@ -15,16 +16,6 @@ export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   onPause?: () => void;
   /** Callback when playback ends */
   onEnded?: () => void;
-}
-
-/**
- * Format seconds to mm:ss
- */
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 /**
@@ -353,10 +344,10 @@ export function AudioPlayer({
         {/* Time display */}
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
-            {formatTime(currentTime)}
+            {formatDuration(currentTime)}
           </span>
           <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
-            {formatTime(duration)}
+            {formatDuration(duration)}
           </span>
         </div>
       </div>

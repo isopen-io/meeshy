@@ -6,6 +6,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Loader2, CheckCircle } from 'lucide-react';
+import { formatFileSize } from '@meeshy/shared/types/attachment';
 import { AudioFilePreviewProps } from './types';
 
 export const AudioFilePreview = React.memo(function AudioFilePreview({
@@ -132,7 +133,7 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
 
         {/* Taille et status */}
         <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-          <span>{(file.size / 1024).toFixed(0)} KB</span>
+          <span>{formatFileSize(file.size)}</span>
           <span>{isPlayingAudio ? 'Playing...' : 'Ready'}</span>
         </div>
       </div>

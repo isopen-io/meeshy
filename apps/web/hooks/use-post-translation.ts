@@ -2,6 +2,8 @@
 
 import { useMemo } from 'react';
 import { useLanguageStore } from '@/stores/language-store';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { getDeviceLocale } from '@/lib/device-locale';
 
 interface TranslationEntry {
   readonly text: string;
@@ -19,15 +21,22 @@ interface UsePostTranslationResult {
   originalLanguage: string | null;
 }
 
+/**
+ * Résout la langue préférée pour les posts/commentaires via la source de
+ * vérité unique du Prisme Linguistique (`resolveUserLanguage` de `@meeshy/shared`).
+ *
+ * Injecte la `deviceLocale` du navigateur en 4e priorité (Prisme étendu
+ * 2026-05-26) pour rester aligné avec la résolution des messages
+ * (`resolveUserPreferredLanguage`). L'ancienne implémentation locale dupliquait
+ * l'ordre system > regional > custom > 'fr' en OMETTANT la `deviceLocale`, ce
+ * qui faisait diverger l'affichage des posts de celui des messages.
+ */
 function resolvePreferredLanguage(config: {
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage?: string;
 }): string {
-  if (config.systemLanguage) return config.systemLanguage;
-  if (config.regionalLanguage) return config.regionalLanguage;
-  if (config.customDestinationLanguage) return config.customDestinationLanguage;
-  return 'fr';
+  return resolveUserLanguage(config, { deviceLocale: getDeviceLocale() ?? undefined });
 }
 
 function findTranslation(

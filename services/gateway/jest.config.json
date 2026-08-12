@@ -27,7 +27,6 @@
     "<rootDir>/src/__tests__/unit/StatusService",
     "<rootDir>/src/__tests__/unit/MaintenanceService",
     "<rootDir>/src/__tests__/unit/encryption/shared-encryption",
-    "<rootDir>/src/__tests__/unit/adapters/node-crypto",
     "<rootDir>/src/dma-interoperability/"
   ],
   "collectCoverageFrom": [
@@ -37,6 +36,7 @@
     "src/socketio/**/*.ts",
     "src/utils/**/*.ts",
     "src/jobs/**/*.ts",
+    "src/validation/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/main.ts",
@@ -60,10 +60,10 @@
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 63,
-      "branches": 58,
-      "statements": 63,
-      "functions": 64
+      "lines": 87,
+      "branches": 80,
+      "statements": 86,
+      "functions": 83
     }
   }
 }

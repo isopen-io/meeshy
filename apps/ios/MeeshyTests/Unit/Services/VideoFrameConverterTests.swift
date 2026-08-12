@@ -11,6 +11,7 @@ import CoreMedia
 import CoreVideo
 @testable import Meeshy
 
+@MainActor
 final class VideoFrameConverterTests: XCTestCase {
 
     private func makeSUT() -> VideoFrameConverter {
@@ -76,5 +77,33 @@ final class VideoFrameConverterTests: XCTestCase {
         let sample = sut.makeSampleBuffer(pixelBuffer: makePixelBuffer(), timeStampNs: 0)
 
         XCTAssertNotNil(sample)
+    }
+
+    // MARK: - Placeholder pixel buffer (PiP "camera off" — never the frozen last frame)
+
+    func test_makePlaceholderPixelBuffer_returnsBufferWithRequestedDimensions() {
+        let buffer = VideoFrameConverter.makePlaceholderPixelBuffer(width: 200, height: 300)
+
+        XCTAssertNotNil(buffer)
+        XCTAssertEqual(CVPixelBufferGetWidth(buffer!), 200)
+        XCTAssertEqual(CVPixelBufferGetHeight(buffer!), 300)
+        XCTAssertEqual(CVPixelBufferGetPixelFormatType(buffer!), kCVPixelFormatType_32BGRA)
+    }
+
+    func test_makePlaceholderPixelBuffer_usesDefaultPortraitDimensionsWhenUnspecified() {
+        let buffer = VideoFrameConverter.makePlaceholderPixelBuffer()
+
+        XCTAssertEqual(CVPixelBufferGetWidth(buffer!), 480)
+        XCTAssertEqual(CVPixelBufferGetHeight(buffer!), 854)
+    }
+
+    func test_makePlaceholderPixelBuffer_feedsConverterIntoAValidSampleBuffer() {
+        let sut = makeSUT()
+        let placeholder = VideoFrameConverter.makePlaceholderPixelBuffer(width: 320, height: 240)!
+
+        let sample = sut.makeSampleBuffer(pixelBuffer: placeholder, timeStampNs: 0)
+
+        XCTAssertNotNil(sample)
+        XCTAssertTrue(CMSampleBufferIsValid(sample!))
     }
 }

@@ -16,7 +16,7 @@ import { formatNotificationTimeAgo } from '@/utils/notification-helpers';
 import { Bell, Search, X, Check } from 'lucide-react';
 
 function NotificationsPageContent() {
-  const { t } = useI18n('notifications');
+  const { t, locale } = useI18n('notifications');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
@@ -160,6 +160,7 @@ function NotificationsPageContent() {
             onClick={handleNotificationClick}
             formatTimeAgo={formatTimeAgo}
             t={t}
+            locale={locale}
             searchQuery={searchQuery}
             grouped={!searchQuery && activeFilter === 'all'}
           />

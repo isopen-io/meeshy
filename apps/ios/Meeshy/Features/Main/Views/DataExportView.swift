@@ -5,13 +5,19 @@ import MeeshyUI
 
 struct DataExportView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var selectedFormats: Set<ExportFormat> = [.json]
+    @State private var selectedFormat: ExportFormat = .json
     @State private var includeMessages = true
-    @State private var includeMedia = false
     @State private var includeContacts = true
     @State private var isExporting = false
     @State private var exportComplete = false
@@ -69,13 +75,13 @@ struct DataExportView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "chevron.backward")
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -84,7 +90,7 @@ struct DataExportView: View {
             Spacer()
 
             Text(String(localized: "settings.data.export.title", defaultValue: "Export de donnees", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -119,16 +125,17 @@ struct DataExportView: View {
     private var infoCard: some View {
         HStack(spacing: 12) {
             Image(systemName: "shield.checkered")
-                .font(.system(size: 24, weight: .semibold))
+                .font(MeeshyFont.relative(24, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos donnees, votre controle", bundle: .main))
-                    .font(.system(size: 14, weight: .bold))
+                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos données, votre contrôle", bundle: .main))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
 
-                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.", bundle: .main))
-                    .font(.system(size: 12))
+                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.", bundle: .main))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -141,6 +148,7 @@ struct DataExportView: View {
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var formatSection: some View {
@@ -151,30 +159,29 @@ struct DataExportView: View {
                 ForEach(ExportFormat.allCases) { format in
                     Button {
                         HapticFeedback.light()
-                        if selectedFormats.contains(format) {
-                            selectedFormats.remove(format)
-                        } else {
-                            selectedFormats.insert(format)
-                        }
+                        selectedFormat = format
                     } label: {
                         VStack(spacing: 6) {
                             Image(systemName: format.icon)
-                                .font(.system(size: 22, weight: .semibold))
+                                .font(MeeshyFont.relative(22, weight: .semibold))
+                                .accessibilityHidden(true)
                             Text(format.rawValue)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
                         }
-                        .foregroundColor(selectedFormats.contains(format) ? .white : Color(hex: accentColor))
+                        .foregroundColor(selectedFormat == format ? .white : Color(hex: accentColor))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
                                 .fill(
-                                    selectedFormats.contains(format)
+                                    selectedFormat == format
                                         ? Color(hex: accentColor)
                                         : Color(hex: accentColor).opacity(0.12)
                                 )
                         )
                     }
+                    .accessibilityLabel(format.rawValue)
+                    .accessibilityAddTraits(selectedFormat == format ? .isSelected : [])
                 }
             }
         }
@@ -186,7 +193,6 @@ struct DataExportView: View {
 
             VStack(spacing: 0) {
                 toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.error, isOn: $includeMessages)
-                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandDeep, isOn: $includeMedia)
                 toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo500, isOn: $includeContacts)
             }
             .background(
@@ -202,6 +208,8 @@ struct DataExportView: View {
 
     private func toggleRow(title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
+            // Glyphe figé : badge de dimension fixe 28×28 (doctrine 74i/86i — le scaling
+            // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(color)
@@ -213,7 +221,7 @@ struct DataExportView: View {
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -230,10 +238,11 @@ struct DataExportView: View {
     private func errorBanner(message: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
             Text(message)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(MeeshyColors.error)
         }
         .padding(12)
@@ -242,6 +251,7 @@ struct DataExportView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(MeeshyColors.error.opacity(0.1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var exportButton: some View {
@@ -256,15 +266,15 @@ struct DataExportView: View {
                         .scaleEffect(0.8)
                 } else if exportComplete {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                 } else {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                 }
                 Text(exportComplete
                     ? String(localized: "settings.data.export.button.done", defaultValue: "Export termine", bundle: .main)
                     : String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
@@ -274,23 +284,26 @@ struct DataExportView: View {
                     .fill(exportComplete ? MeeshyColors.success : Color(hex: accentColor))
             )
         }
-        .disabled(isExporting || selectedFormats.isEmpty)
+        .disabled(isExporting)
         .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
         .accessibilityHint(isExporting
             ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
-            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos donnees", bundle: .main))
+            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos données", bundle: .main))
     }
 
     private func sectionHeader(title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(color)
+                .accessibilityHidden(true)
             Text(title)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(color)
                 .tracking(1.2)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
         .padding(.leading, 4)
     }
 
@@ -305,7 +318,7 @@ struct DataExportView: View {
         if includeMessages { types.append("messages") }
         if includeContacts { types.append("contacts") }
 
-        let format = selectedFormats.contains(.csv) ? "csv" : "json"
+        let format = selectedFormat.apiValue
         let service = exportService
 
         Task {
@@ -314,7 +327,7 @@ struct DataExportView: View {
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                 encoder.dateEncodingStrategy = .iso8601
-                let jsonData = try encoder.encode(ExportWrapper(data: result))
+                let jsonData = try encoder.encode(result)
 
                 await MainActor.run {
                     exportedData = jsonData
@@ -334,22 +347,4 @@ struct DataExportView: View {
     }
 }
 
-// MARK: - Encodable wrapper for sharing
-
-private struct ExportWrapper: Encodable {
-    let data: DataExportData
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(data.exportDate, forKey: .exportDate)
-        try container.encode(data.format, forKey: .format)
-        try container.encode(data.requestedTypes, forKey: .requestedTypes)
-        try container.encodeIfPresent(data.messagesCount, forKey: .messagesCount)
-        try container.encodeIfPresent(data.contactsCount, forKey: .contactsCount)
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case exportDate, format, requestedTypes, messagesCount, contactsCount
-    }
-}
 

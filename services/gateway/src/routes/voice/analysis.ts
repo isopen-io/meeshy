@@ -3,7 +3,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { logger } from '../../utils/logger';
 import {
@@ -51,6 +51,15 @@ export function registerAnalysisRoutes(
    * Analyze voice characteristics
    */
   fastify.post(`${prefix}/analyze`, {
+    // SECURITY: authentification obligatoire.
+    // Sans ce `preHandler`, `registerVoiceRoutes` (câblée depuis
+    // server.ts:1111) n'installait AUCUNE vérification en amont, et
+    // `getUserId()` retombait sur l'en-tête brut `x-user-id` fourni par le
+    // client : n'importe quel appelant anonyme pouvait usurper l'identité de
+    // n'importe quel utilisateur (CWE-290 / CWE-807). Aligné sur le mécanisme
+    // déjà utilisé par routes/translation.ts et
+    // routes/translation-non-blocking.ts:268.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Analyze voice characteristics including pitch, timbre, MFCC (Mel-frequency cepstral coefficients), spectral features, and speaker classification. Returns detailed acoustic analysis for voice profiling, speaker verification, or voice quality assessment.',
       tags: ['voice'],
@@ -128,6 +137,9 @@ export function registerAnalysisRoutes(
    * Compare two voice samples
    */
   fastify.post(`${prefix}/compare`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /analyze ci-dessus. Même faille, même correctif.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Compare two voice samples for speaker verification. Analyzes similarity across multiple acoustic dimensions (pitch, timbre, MFCC, energy) and provides a verdict on whether samples are from the same speaker. Useful for authentication, duplicate detection, or voice matching.',
       tags: ['voice'],
@@ -201,6 +213,10 @@ export function registerAnalysisRoutes(
    * Submit feedback for a translation
    */
   fastify.post(`${prefix}/feedback`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /analyze ci-dessus. Sans elle, un appelant anonyme pouvait
+    // soumettre du feedback au nom de n'importe quel utilisateur.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Submit user feedback for a completed voice translation. Ratings help improve translation quality and voice cloning accuracy. Feedback can include quality ratings, accuracy assessments, voice similarity scores, and optional comments.',
       tags: ['voice', 'feedback'],
@@ -307,6 +323,11 @@ export function registerAnalysisRoutes(
    * Get translation history
    */
   fastify.get(`${prefix}/history`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /analyze ci-dessus. Sans elle, un appelant anonyme pouvait lire
+    // l'historique de traduction de n'importe quel utilisateur en usurpant
+    // son identité via x-user-id.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Retrieve user translation history with pagination and date filtering. Returns completed translations with source/target languages, original text, translated outputs, and user feedback. Useful for tracking usage and accessing past translations.',
       tags: ['voice', 'history'],
@@ -399,6 +420,10 @@ export function registerAnalysisRoutes(
    * Get user statistics
    */
   fastify.get(`${prefix}/stats`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /analyze ci-dessus. Sans elle, un appelant anonyme pouvait lire
+    // les statistiques d'usage de n'importe quel utilisateur.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Get user voice translation statistics for a specified time period. Returns aggregated metrics including total translations, audio minutes processed, languages used, average processing times, and feedback ratings. Useful for usage analytics and billing.',
       tags: ['voice', 'analytics'],
@@ -454,6 +479,10 @@ export function registerAnalysisRoutes(
    * Get system metrics (admin only)
    */
   fastify.get(`${prefix}/admin/metrics`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /analyze ci-dessus. Le contrôle `isAdmin()` plus bas ne peut être
+    // fiable que si `request.user` provient d'une session vérifiée.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Get comprehensive system metrics and performance data. Admin-only endpoint that returns active/queued jobs, completion rates, resource usage (CPU, memory, GPU), loaded ML models, and service uptime. Critical for monitoring and capacity planning.',
       tags: ['voice', 'admin'],
@@ -536,11 +565,7 @@ export function registerAnalysisRoutes(
       return reply.status(statusCode).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get health error:', error);
-      return reply.status(503).send({
-        success: false,
-        error: 'HEALTH_CHECK_FAILED',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      return sendError(reply, 503, 'HEALTH_CHECK_FAILED', { message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

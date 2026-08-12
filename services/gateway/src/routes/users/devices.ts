@@ -460,6 +460,17 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
               }
             });
             conversationId = conversation.id;
+
+            // Auto-join both users' currently-connected sockets to the new DM
+            // room so they receive message:new immediately without a reconnect.
+            const socketManager = fastify.socketIOHandler?.getManager();
+            if (socketManager) {
+              for (const memberUserId of [friendRequest.senderId, friendRequest.receiverId]) {
+                socketManager.joinUserToConversationRoom(memberUserId, conversation.id).catch(
+                  (err: unknown) => logger.error('Failed to auto-join friend to new DM room', err as Error)
+                );
+              }
+            }
           } else {
             conversationId = existingConversation.id;
           }
@@ -538,6 +549,11 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
  */
 export async function getAffiliateToken(fastify: FastifyInstance) {
   fastify.get('/users/:userId/affiliate-token', {
+    // Route publique jusqu'ici : n'importe qui énumérait les jetons
+    // d'affiliation actifs de tous les utilisateurs, sans limitation de débit.
+    // Combinée à /affiliate/register, elle permettait de forger des relations
+    // de parrainage à la chaîne.
+    onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
       description: 'Get the active affiliate token for a user. Used for automatic affiliation via /join links. Returns the most recent active token that has not expired.',
       tags: ['users', 'affiliate'],

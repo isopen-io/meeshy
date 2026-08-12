@@ -248,7 +248,8 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 apps/ios/screenshots/
 .claude/worktrees/
-.claude/settings.local.json
+**/.claude/settings.json
+**/.claude/settings.local.json
 fastlane/test_output
 fastlane/ui_test_output
 fastlane/.env.local
@@ -316,6 +317,18 @@ Jinu_*/
 *.p8
 match_key
 match_key.pub
+
+# ANDP credential/state files (2026-07-28). `meeshy.sh release --andp` writes
+# the FULL App Store Connect .p8 private key into .andp/secrets.yml, and the
+# CI steps write secrets.yml the same way — neither path was covered by the
+# `*.p8` rule above, so a later `git add` would have committed the key.
+# Motifs NON ancrés : ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/, et
+# le cwd varie selon le job (racine du repo en CI, apps/ios en local). Ancrer
+# sur apps/ios/ laissait un .andp/ de racine traçable — donc committable.
+.andp/
+secrets.yml
+apps/ios/andp.yml
+
 apps/ios/SourcePackages/
 .superpowers/
 tasks/screenshots/
@@ -325,3 +338,4 @@ apps/ios/test-results*/
 
 # publish-monthly-digest : annonces + état runtime (ne pas committer)
 scripts/announcements/
+apps/android/tasks/webrtc-parity/

@@ -56,7 +56,7 @@ public struct BackgroundTransform: Sendable, Equatable {
 ///
 /// Uses `nonisolated` inits to interop with `CALayer`'s nonisolated initializers
 /// (MeeshyUI module applies `defaultIsolation(MainActor)`).
-public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
+public final class StoryBackgroundLayer: CALayer {
     public enum Kind: Sendable {
         case solidColor(UIColor)
         case gradient(colors: [UIColor], direction: GradientDirection)
@@ -98,6 +98,21 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         }
     }
 
+    /// Volume du média de fond, dans `0...StoryVolume.maxGain`.
+    ///
+    /// Cette couche forçait `1.0` à l'attache et ne lisait jamais
+    /// `StoryMediaObject.volume` : une vidéo de fond couvrait donc la musique
+    /// quel que soit le réglage de l'auteur, alors même que l'export
+    /// l'appliquait déjà. La valeur est réappliquée à chaque attache, le player
+    /// étant recréé au gré du cache LRU.
+    @MainActor
+    public var volume: Float = 1.0 {
+        didSet {
+            guard oldValue != volume else { return }
+            avPlayer?.volume = volume
+        }
+    }
+
     /// Drapeau levé par le canvas (`StoryCanvasUIView`) en mode `.play` pour
     /// autoriser la lecture du player vidéo de fond. Quand un nouveau player
     /// est attaché alors que le canvas est déjà actif (slide change durant
@@ -110,12 +125,22 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         didSet {
             guard oldValue != isPlaybackActive else { return }
             if isPlaybackActive {
-                avPlayer?.play()
+                alignToTimelineThenPlay()
             } else {
                 avPlayer?.pause()
             }
         }
     }
+
+    /// Playhead unifié de la slide (secondes), poussé par le canvas. Sert au
+    /// CALAGE timeline de la vidéo de fond quand elle (re)démarre — symétrique au
+    /// foreground. Pour une ouverture/scrub à `t>0`, la frame de fond se cale sur
+    /// le playhead au lieu de repartir de zéro. JAMAIS appliqué par frame : seul
+    /// `alignToTimelineThenPlay()` seek, et uniquement au-delà du seuil de dérive
+    /// (resume en place / bascule plein écran = aucun saut).
+    @MainActor public var slidePlayheadSeconds: Double = 0
+
+    private static let timelineSeekDriftThreshold: Double = 0.30
 
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
@@ -722,17 +747,35 @@ extension StoryBackgroundLayer {
     /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
     /// ou s'il faut tout reconstruire (changement réel de slide bg).
     ///
-    /// On ignore les paramètres dynamiques (mute, color associé) car leur
-    /// changement n'impose pas de recréer le layer (mute = property AVPlayer,
-    /// color = backgroundColor du layer). Seule l'IDENTITÉ du média compte.
-    nonisolated private static func contentIdentity(for kind: Kind) -> String {
+    /// On ignore les paramètres dynamiques (mute) car leur changement n'impose
+    /// pas de recréer le layer (mute = property AVPlayer). Pour les fonds
+    /// COULEUR/GRADIENT, la valeur fait partie de l'identité (BUG-1 user
+    /// 2026-07-04) : « color » constant faisait passer un changement de
+    /// pastille par le no-op diff (`hasVisibleContent` satisfait par
+    /// l'ANCIENNE couleur) → la nouvelle couleur n'atterrissait jamais sur le
+    /// canvas (la mini-preview SwiftUI, elle, se mettait à jour). La
+    /// reconstruction d'un fond couleur est SYNCHRONE — aucun risque de flash,
+    /// le fast-path ne protège que les fetchs async image/vidéo.
+    /// `internal` (pas private) : seam de test du contrat d'identité.
+    nonisolated static func contentIdentity(for kind: Kind) -> String {
         switch kind {
-        case .solidColor:                       return "color"
-        case .gradient:                         return "gradient"
+        case .solidColor(let color):
+            return "color:\(Self.colorKey(color))"
+        case .gradient(let colors, let direction):
+            let key = colors.map(Self.colorKey).joined(separator: "|")
+            return "gradient:\(key):\(String(describing: direction))"
         case .image(let postMediaId, _):        return "image:\(postMediaId)"
         case .video(let postMediaId, let looping, _, _):
             return "video:\(postMediaId):\(looping)"
         }
+    }
+
+    nonisolated private static func colorKey(_ color: UIColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            return String(format: "%.3f,%.3f,%.3f,%.3f", r, g, b, a)
+        }
+        return String(describing: color)
     }
 }
 
@@ -765,9 +808,11 @@ extension StoryBackgroundLayer {
         // OU l'autre demande mute, le player démarre silencieux ; le toggle
         // unmute du sidebar passera ensuite par `isMuted.didSet`.
         self.avPlayer?.isMuted = mute || self.isMuted
-        // Volume explicite (l'AVPlayer démarre à 1.0 mais soyons déterministes
-        // pour les paths de re-attach via cache LRU).
-        self.avPlayer?.volume = 1.0
+        // Volume explicite : le player est recréé à chaque re-attache (cache
+        // LRU), il faut donc lui réappliquer la valeur courante de la couche —
+        // et surtout pas un 1.0 codé en dur, qui rendait le réglage de l'auteur
+        // inopérant sur toute vidéo de fond.
+        self.avPlayer?.volume = self.volume
         // Defensive : assurer la catégorie `.playback` avant de jouer. La
         // session est normalement déjà `.playback` (via `StoryMediaCoordinator
         // .activate` sync depuis `onAppear`), mais le re-attach peut intervenir
@@ -833,7 +878,7 @@ extension StoryBackgroundLayer {
         // La vidéo prefetchée reste prête à jouer instantanément sans
         // gaspiller le décodeur audio.
         if isPlaybackActive {
-            self.avPlayer?.play()
+            alignToTimelineThenPlay()
         }
 
         // Background loop observer — ensures the video repeats until the slide
@@ -855,6 +900,46 @@ extension StoryBackgroundLayer {
         }
 
         onPlayerAttached?()
+    }
+
+    /// Cale la vidéo de fond sur le playhead unifié puis lance la lecture.
+    ///
+    /// On ne cale QUE les fonds **non loopés** (`avPlayerLooper == nil`, clip ≥
+    /// durée du slide) : leur temps interne doit suivre le playhead, donc une
+    /// ouverture/scrub à `t>0` les positionne correctement. Un fond **loopé**
+    /// remplit la durée du slide et sa phase exacte n'a aucun sens timeline — le
+    /// recaler risquerait un saut visible sur un resume en place, donc on le
+    /// laisse boucler librement. `seek` uniquement au-delà du seuil de dérive
+    /// (resume déjà aligné / bascule plein écran = aucun saut).
+    @MainActor
+    private func alignToTimelineThenPlay() {
+        guard let player = avPlayer else { return }
+        if avPlayerLooper == nil {
+            let target = max(0, slidePlayheadSeconds)
+            let current = player.currentTime().seconds
+            if target.isFinite, current.isFinite,
+               abs(current - target) > Self.timelineSeekDriftThreshold {
+                player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                            toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+        }
+        player.play()
+    }
+
+    /// Scrub de preview timeline : pause puis cale le player de fond sur le
+    /// playhead unifié avec une tolérance large. Même règle que
+    /// `alignToTimelineThenPlay` pour un fond bouclé (`avPlayerLooper`) : sa
+    /// phase n'a aucun sens timeline, on le fige sans le recaler.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        guard avPlayerLooper == nil else { return }
+        let target = max(0, slidePlayheadSeconds)
+        guard target.isFinite else { return }
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
     }
 
     @MainActor
@@ -885,10 +970,19 @@ extension StoryBackgroundLayer {
     /// aux strings parsables en URL avec un scheme connu.
     nonisolated static func directURLIfAny(from candidate: String) -> URL? {
         guard !candidate.isEmpty else { return nil }
-        guard candidate.hasPrefix("file://")
-                || candidate.hasPrefix("http://")
-                || candidate.hasPrefix("https://") else { return nil }
-        return URL(string: candidate)
+        // Local composer asset — returned verbatim, never network-normalized.
+        if candidate.hasPrefix("file://") { return URL(string: candidate) }
+        // Absolute http(s) OR a server-relative media path (getAttachmentPath /
+        // forward / repost emit `/api/v1/attachments/...`). Normalize both via
+        // the SSRF-guarded resolver so a relative background URL still loads
+        // instead of dropping to the solid-color fallback (black background on
+        // another user's story).
+        if candidate.hasPrefix("http://")
+            || candidate.hasPrefix("https://")
+            || candidate.hasPrefix("/") {
+            return MeeshyConfig.resolveMediaURL(candidate)
+        }
+        return nil
     }
 }
 
@@ -906,8 +1000,8 @@ extension StoryBackgroundLayer {
 /// happens implicitly when the layer assigns `contents` and respects
 /// `contentsGravity`. Pre-scaling here would waste CPU and degrade quality on
 /// retina displays.
-enum ThumbHashDecoder {
-    nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
+public enum ThumbHashDecoder {
+    public nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
         guard !hash.isEmpty else { return nil }
         return UIImage.fromThumbHash(hash)
     }

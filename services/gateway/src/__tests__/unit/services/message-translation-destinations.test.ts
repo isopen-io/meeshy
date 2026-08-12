@@ -200,6 +200,38 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages.sort()).toEqual(['ar', 'fr', 'it'].sort());
   });
 
+  it('normalises an uppercase/locale-cased anonymous participant.language (Prisme rule #1)', async () => {
+    // An anonymous participant stores `language` unvalidated, so it may hold 'EN'
+    // or 'en-US'. Adding it verbatim injected a duplicate, never-matching NLLB
+    // target against the lowercase-keyed MessageTranslation store.
+    const { prisma } = makePrismaMock({
+      participants: [
+        {
+          type: 'user',
+          user: {
+            id: 'alice',
+            username: 'alice',
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        },
+        { type: 'anonymous', language: 'EN' },
+        { type: 'bot', language: 'ES-ES' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-cased');
+
+    // 'EN' collapses onto the registered 'en' (no duplicate); 'ES-ES' → 'es'.
+    expect(languages.sort()).toEqual(['en', 'es'].sort());
+    expect(languages).not.toContain('EN');
+    expect(languages).not.toContain('ES-ES');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,

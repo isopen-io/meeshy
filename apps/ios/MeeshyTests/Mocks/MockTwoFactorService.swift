@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-final class MockTwoFactorService: TwoFactorServiceProviding {
+final class MockTwoFactorService: TwoFactorServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 

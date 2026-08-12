@@ -6,17 +6,28 @@
 //
 
 import XCTest
+import Combine
 @testable import Meeshy
 
 // MARK: - Async Test Helpers
 
+// `@nonobjc` on the non-generic helpers below is load-bearing, not cosmetic.
+// Swift 6.2.1's SILGen crashes (`emitNativeToForeignThunk` → segfault) when it
+// tries to synthesise an Objective-C bridging thunk for an `async`/closure
+// method declared in an extension of the `@objc` `XCTestCase` class. These
+// helpers are only ever called from Swift, so suppressing the (buggy) ObjC
+// thunk emission is both correct and the documented workaround. The generic
+// helpers in the other extensions are not `@objc`-representable, so they don't
+// need it.
 extension XCTestCase {
     /// Wait for async expectation with timeout
+    @nonobjc
     func waitForExpectation(timeout: TimeInterval = 5.0, handler: XCWaitCompletionHandler? = nil) {
         wait(for: [], timeout: timeout)
     }
 
     /// Wait for condition to be true
+    @nonobjc
     func waitForCondition(
         timeout: TimeInterval = 5.0,
         pollingInterval: TimeInterval = 0.1,
@@ -33,12 +44,53 @@ extension XCTestCase {
 
         XCTFail("Condition not met within timeout")
     }
+
+    /// Waits for a `@Published`-backed value to satisfy `condition`, driven by
+    /// Combine emissions + an `XCTestExpectation` — NOT a wall-clock sleep.
+    ///
+    /// Use this after triggering a fire-and-forget `Task` whose completion
+    /// isn't otherwise awaitable (e.g. an outbox outcome-stream observer):
+    /// asserting on the mutated `@Published` property right after a fixed
+    /// `Task.sleep` is flaky under CI contention (#1869) — the observer Task
+    /// may not have run yet. Subscribing reacts the instant the mutation
+    /// actually happens instead of hoping a fixed delay was long enough.
+    ///
+    /// `@MainActor`-pinned (this target's `SWIFT_DEFAULT_ACTOR_ISOLATION` is
+    /// `nonisolated`, see project.yml): the `@Published` view models this is
+    /// used with are themselves `@MainActor`, so subscribing here — same
+    /// actor as the caller — avoids any cross-actor hop/Sendable requirement
+    /// on the Combine publisher or the closure. No `@nonobjc` needed: unlike
+    /// the non-generic helpers above, a generic method isn't `@objc`-representable.
+    @MainActor
+    func waitForPublishedValue<P: Publisher>(
+        _ publisher: P,
+        timeout: TimeInterval = 2.0,
+        condition: @escaping (P.Output) -> Bool
+    ) async where P.Failure == Never {
+        let expectation = XCTestExpectation(description: "Published value met condition")
+        // `@Published` replays its CURRENT value synchronously to a new
+        // subscriber, i.e. possibly before `cancellable` below has been
+        // assigned. Guarding with `fulfilled` keeps `fulfill()` to exactly
+        // one call regardless of that race (XCTestExpectation asserts on
+        // over-fulfillment by default).
+        var fulfilled = false
+        var cancellable: AnyCancellable?
+        cancellable = publisher.sink { value in
+            guard !fulfilled, condition(value) else { return }
+            fulfilled = true
+            expectation.fulfill()
+            cancellable?.cancel()
+        }
+        await fulfillment(of: [expectation], timeout: timeout)
+        cancellable?.cancel()
+    }
 }
 
 // MARK: - Main Actor Test Helpers
 
 extension XCTestCase {
     /// Execute test on main actor
+    @nonobjc
     @MainActor
     func runOnMainActor(_ block: @MainActor () async throws -> Void) async throws {
         try await block()
@@ -49,12 +101,12 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Assert arrays are equal ignoring order
-    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
+    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(Set(lhs), Set(rhs), "Arrays contain different elements", file: file, line: line)
     }
 
     /// Assert dates are approximately equal (within threshold)
-    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #file, line: UInt = #line) {
+    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #filePath, line: UInt = #line) {
         let difference = abs(date1.timeIntervalSince(date2))
         XCTAssertLessThan(difference, threshold, "Dates differ by more than \(threshold) seconds", file: file, line: line)
     }
@@ -67,7 +119,7 @@ extension XCTestCase {
     func assertThrowsError<T, E: Error & Equatable>(
         _ expression: @autoclosure () async throws -> T,
         expectedError: E,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -83,7 +135,7 @@ extension XCTestCase {
     /// Assert async function throws any error
     func assertThrowsAnyError<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -97,7 +149,7 @@ extension XCTestCase {
     /// Assert async function does not throw
     func assertNoThrow<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -118,6 +170,7 @@ extension XCTestCase {
     /// scheduled task can deadlock against `wait(for:timeout:)` because both
     /// want the main runloop. `Task.detached` escapes the actor, runs on a
     /// background thread, and signals the expectation cleanly.
+    @nonobjc
     func measureAsync(
         timeout: TimeInterval = 60.0,
         options: XCTMeasureOptions = XCTMeasureOptions.default,
@@ -219,23 +272,23 @@ actor TestActor {
 
 extension XCTestCase {
     /// Assert collection is not empty
-    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert collection is empty
-    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert optional is nil
-    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #file, line: UInt = #line) {
+    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertNil(optional, message, file: file, line: line)
     }
 
     /// Assert optional is not nil and return unwrapped value
     @discardableResult
-    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #file, line: UInt = #line) -> T? {
+    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #filePath, line: UInt = #line) -> T? {
         XCTAssertNotNil(optional, message, file: file, line: line)
         return optional
     }

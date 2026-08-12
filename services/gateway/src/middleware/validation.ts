@@ -78,6 +78,14 @@ export type SocketValidationResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; details?: any[] };
 
+export type SocketValidationFailure = { success: false; error: string; details?: any[] };
+
+export function isValidationFailure<T>(
+  result: SocketValidationResult<T>
+): result is SocketValidationFailure {
+  return !result.success;
+}
+
 export function validateSocketEvent<T>(
   schema: z.ZodType<T>,
   data: unknown
@@ -95,7 +103,7 @@ export function validateSocketEvent<T>(
 
       return {
         success: false,
-        error: `Validation failed: ${error.issues[0]?.message || 'Invalid data'}`,
+        error: `Validation failed: ${error.issues[0]?.message /* istanbul ignore next -- ZodError with no issues is structurally impossible */ ?? 'Invalid data'}`,
         details
       };
     }

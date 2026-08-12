@@ -80,8 +80,17 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    participant: {
+      count: jest.fn(),
+    },
     userPreferences: {
       findUnique: jest.fn(),
+    },
+    // Les notifications d'appartenance passent par le mute par conversation
+    // (cf. `mutedRecipients.ts`) : sans ce modèle, la lecture lève au lieu de
+    // rendre « personne n'a coupé le son ».
+    userConversationPreferences: {
+      findMany: jest.fn(),
     },
   };
 
@@ -90,10 +99,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -110,8 +122,16 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   securityLogger: { logViolation: jest.fn(), logAttempt: jest.fn(), logSuccess: jest.fn() },
 }));
 
+// In-memory setnx so the email-throttle branch is fully controllable: the first
+// call for a given key returns true (lock acquired), subsequent calls false.
+const mockSetnx = jest.fn();
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({ setnx: mockSetnx }),
+}));
+
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 describe('NotificationService — New Methods', () => {
   let service: NotificationService;
@@ -123,6 +143,8 @@ describe('NotificationService — New Methods', () => {
     jest.useFakeTimers();
 
     prisma = new PrismaClient();
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+    prisma.participant.count.mockResolvedValue(0);
     service = new NotificationService(prisma);
 
     mockIO = {
@@ -604,9 +626,12 @@ describe('NotificationService — New Methods', () => {
       },
     });
 
-    it('should block member_left when memberJoinedEnabled=false', async () => {
+    // GW9 — alignement iOS : « Membre parti » (memberLeftEnabled) gate les
+    // départs/retraits/changements de rôle ; « Membre rejoint »
+    // (memberJoinedEnabled) ne gate QUE member_joined.
+    it('should block member_left when memberLeftEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ memberLeftEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -621,9 +646,11 @@ describe('NotificationService — New Methods', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('should block added_to_conversation when memberJoinedEnabled=false', async () => {
+    // GW9 — alignement iOS : être ajouté/retiré d'une conversation relève du
+    // toggle « Conversations » (conversationEnabled), pas de « Membre rejoint ».
+    it('should block added_to_conversation when conversationEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ conversationEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -638,9 +665,9 @@ describe('NotificationService — New Methods', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('should block role change when memberJoinedEnabled=false', async () => {
+    it('should block role change when memberLeftEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ memberLeftEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -673,6 +700,35 @@ describe('NotificationService — New Methods', () => {
 
       expect(result).toBeDefined();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    // GW9 — le toggle « Système » de l'app doit être effectif : avant ce
+    // correctif, `type === 'system'` court-circuitait shouldCreateNotification
+    // et le case `systemEnabled` était du code mort.
+    it('system notifications respect systemEnabled', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue(
+        createUserPrefs({ systemEnabled: false })
+      );
+      const blocked = await (service as any).shouldCreateNotification('user-123', 'system');
+      expect(blocked).toBe(false);
+
+      prisma.userPreferences.findUnique.mockResolvedValue(
+        createUserPrefs({ systemEnabled: true })
+      );
+      const allowed = await (service as any).shouldCreateNotification('user-123', 'system');
+      expect(allowed).toBe(true);
+    });
+
+    // GW9 — alignement iOS : « Invitations groupe » (groupInviteEnabled) gate
+    // community_invite ; il ne doit pas retomber sur le default:true.
+    it('community_invite is gated by groupInviteEnabled, not conversationEnabled', () => {
+      const basePrefs = createUserPrefs().notification;
+      expect(
+        (service as any).isTypeEnabled({ ...basePrefs, groupInviteEnabled: false, conversationEnabled: true }, 'community_invite')
+      ).toBe(false);
+      expect(
+        (service as any).isTypeEnabled({ ...basePrefs, groupInviteEnabled: true }, 'community_invite')
+      ).toBe(true);
     });
 
     it('should always allow security types even when all prefs disabled', async () => {
@@ -710,6 +766,158 @@ describe('NotificationService — New Methods', () => {
       });
       expect(loginResult).toBeDefined();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ==============================================
+  // Email throttle — per-category buckets (Debt C)
+  // ==============================================
+
+  describe('email throttle — security alerts are not suppressed by social emails', () => {
+    let mockEmail: any;
+
+    beforeEach(() => {
+      const throttleKeys = new Set<string>();
+      mockSetnx.mockImplementation(async (key: string) => {
+        if (throttleKeys.has(key)) return false;
+        throttleKeys.add(key);
+        return true;
+      });
+
+      mockEmail = {
+        sendSecurityAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendLoginAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+      };
+
+      // Offline recipient (no sockets) so the immediate-email branch fires.
+      const offlineIO = {
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+        in: jest.fn(() => ({ fetchSockets: jest.fn().mockResolvedValue([]) })),
+      };
+      service.setSocketIO(offlineIO as any, new Map());
+      service.setEmailService(mockEmail as any);
+
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'u', displayName: 'U', avatar: null, email: 'u@example.com', systemLanguage: 'fr',
+      });
+      prisma.conversation.findUnique.mockResolvedValue({ title: 'C', type: 'GROUP' });
+      prisma.userPreferences.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue(mockNotification('missed_call'));
+    });
+
+    it('sends a security email even after a social email to the same offline user', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      // Social notification → dedicated notification email (NOT the security template).
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
+      expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+
+      await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
+      // The social email must NOT have consumed the security bucket.
+      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    });
+
+    // GW9 — le toggle « Email » doit gater l'e-mail immédiat haute priorité
+    // (mention, appel manqué…) comme il gate déjà le digest et les broadcasts.
+    // Les alertes de sécurité restent toujours envoyées (transactionnel).
+    it('emailEnabled:false suppresses the immediate social email but keeps the notification', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { emailEnabled: false },
+      });
+
+      const result = await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+
+      expect(result).toBeDefined();
+      expect(mockEmail.sendNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('emailEnabled:false still sends security alert emails', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { emailEnabled: false },
+      });
+      prisma.notification.create.mockResolvedValue(mockNotification('password_changed'));
+
+      await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
+
+      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('still throttles repeated social emails to the same offline user (anti-spam preserved)', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-2', conversationId: 'c1', callSessionId: 's2', callType: 'audio',
+      });
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ==============================================
+  // Immediate high-priority email — presence room
+  // ==============================================
+  // The offline gate MUST query the room every registered socket actually
+  // joins (`ROOMS.user(id)` === `user:${id}`, per AuthHandler). A presence
+  // check on the BARE user id resolves an always-empty room, wrongly marking
+  // every online user "offline" and spamming them with immediate emails
+  // (mentions, missed calls, security alerts) once per category per 5 min.
+  describe('immediate high-priority email — presence check targets ROOMS.user', () => {
+    let mockEmail: any;
+    const onlineSocket = { id: 'socket-online-1' };
+
+    beforeEach(() => {
+      // Throttle never blocks, so the ONLY thing suppressing the email is the
+      // presence gate — isolating the room-targeting behavior under test.
+      mockSetnx.mockResolvedValue(true);
+
+      mockEmail = {
+        sendSecurityAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendLoginAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+      };
+
+      // Online recipient: a live socket sits in `ROOMS.user('u1')`. The room
+      // named by the bare id (`'u1'`) is empty — a bare-id presence check would
+      // see zero sockets and misfire the "offline" email path.
+      const onlineIO = {
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+        in: jest.fn((room: string) => ({
+          fetchSockets: jest
+            .fn()
+            .mockResolvedValue(room === ROOMS.user('u1') ? [onlineSocket] : []),
+        })),
+      };
+      service.setSocketIO(onlineIO as any, new Map());
+      service.setEmailService(mockEmail as any);
+
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'u', displayName: 'U', avatar: null, email: 'u@example.com', systemLanguage: 'fr',
+      });
+      prisma.conversation.findUnique.mockResolvedValue({ title: 'C', type: 'GROUP' });
+      prisma.userPreferences.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue(mockNotification('missed_call'));
+    });
+
+    it('does NOT send an immediate social email when the recipient is online', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      expect(mockEmail.sendNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('queries the ROOMS.user room, not the bare user id', async () => {
+      const onlineIO = (service as any).io;
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      expect(onlineIO.in).toHaveBeenCalledWith(ROOMS.user('u1'));
+      expect(onlineIO.in).not.toHaveBeenCalledWith('u1');
     });
   });
 });

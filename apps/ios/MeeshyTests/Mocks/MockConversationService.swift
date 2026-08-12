@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockConversationService: ConversationServiceProviding {
+final class MockConversationService: ConversationServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -137,7 +137,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastListOffset = offset
             lastListLimit = limit
         }
-        return try await MainActor.run { try listResult.get() }
+        return try listResult.get()
     }
 
     nonisolated func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
@@ -153,7 +153,7 @@ final class MockConversationService: ConversationServiceProviding {
         if let handler {
             return try handler(cursor).get()
         }
-        return try await MainActor.run { try listPageResult.get() }
+        return try listPageResult.get()
     }
 
     nonisolated func getById(_ conversationId: String) async throws -> APIConversation {
@@ -161,7 +161,7 @@ final class MockConversationService: ConversationServiceProviding {
             getByIdCallCount += 1
             lastGetByIdConversationId = conversationId
         }
-        return try await MainActor.run { try getByIdResult.get() }
+        return try getByIdResult.get()
     }
 
     nonisolated func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse {
@@ -171,7 +171,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastCreateTitle = title
             lastCreateParticipantIds = participantIds
         }
-        return try await MainActor.run { try createResult.get() }
+        return try createResult.get()
     }
 
     nonisolated func delete(conversationId: String) async throws {
@@ -179,7 +179,7 @@ final class MockConversationService: ConversationServiceProviding {
             deleteCallCount += 1
             lastDeleteConversationId = conversationId
         }
-        try await MainActor.run { try deleteResult.get() }
+        try deleteResult.get()
     }
 
     nonisolated func markRead(conversationId: String) async throws {
@@ -188,7 +188,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastMarkReadConversationId = conversationId
             onMarkReadCalled?()
         }
-        try await MainActor.run { try markReadResult.get() }
+        try markReadResult.get()
     }
 
     nonisolated func markAsReceived(conversationId: String) async throws {
@@ -196,7 +196,7 @@ final class MockConversationService: ConversationServiceProviding {
             markAsReceivedCallCount += 1
             lastMarkAsReceivedConversationId = conversationId
         }
-        try await MainActor.run { try markAsReceivedResult.get() }
+        try markAsReceivedResult.get()
     }
 
     nonisolated func markUnread(conversationId: String) async throws {
@@ -204,7 +204,7 @@ final class MockConversationService: ConversationServiceProviding {
             markUnreadCallCount += 1
             lastMarkUnreadConversationId = conversationId
         }
-        try await MainActor.run { try markUnreadResult.get() }
+        try markUnreadResult.get()
     }
 
     nonisolated func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> {
@@ -213,7 +213,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastGetParticipantsConversationId = conversationId
             lastGetParticipantsLimit = limit
         }
-        return try await MainActor.run { try getParticipantsResult.get() }
+        return try getParticipantsResult.get()
     }
 
     nonisolated func deleteForMe(conversationId: String) async throws {
@@ -221,7 +221,7 @@ final class MockConversationService: ConversationServiceProviding {
             deleteForMeCallCount += 1
             lastDeleteForMeConversationId = conversationId
         }
-        try await MainActor.run { try deleteForMeResult.get() }
+        try deleteForMeResult.get()
     }
 
     nonisolated func findDirectWith(userId: String) async throws -> APIConversation? {
@@ -234,7 +234,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastRemoveParticipantConversationId = conversationId
             lastRemoveParticipantParticipantId = participantId
         }
-        try await MainActor.run { try removeParticipantResult.get() }
+        try removeParticipantResult.get()
     }
 
     nonisolated func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {
@@ -244,7 +244,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastUpdateParticipantRoleParticipantId = participantId
             lastUpdateParticipantRoleRole = role
         }
-        try await MainActor.run { try updateParticipantRoleResult.get() }
+        try updateParticipantRoleResult.get()
     }
 
     nonisolated func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] {
@@ -253,7 +253,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastListSharedWithUserId = userId
             lastListSharedWithLimit = limit
         }
-        return try await MainActor.run { try listSharedWithResult.get() }
+        return try listSharedWithResult.get()
     }
 
     nonisolated func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation {
@@ -269,7 +269,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastUpdateSlowModeSeconds = slowModeSeconds
             lastUpdateAutoTranslateEnabled = autoTranslateEnabled
         }
-        return try await MainActor.run { try updateResult.get() }
+        return try updateResult.get()
     }
 
     nonisolated func leave(conversationId: String) async throws {
@@ -277,7 +277,7 @@ final class MockConversationService: ConversationServiceProviding {
             leaveCallCount += 1
             lastLeaveConversationId = conversationId
         }
-        try await MainActor.run { try leaveResult.get() }
+        try leaveResult.get()
     }
 
     nonisolated func banParticipant(conversationId: String, userId: String) async throws {
@@ -286,7 +286,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastBanParticipantConversationId = conversationId
             lastBanParticipantUserId = userId
         }
-        try await MainActor.run { try banParticipantResult.get() }
+        try banParticipantResult.get()
     }
 
     nonisolated func unbanParticipant(conversationId: String, userId: String) async throws {
@@ -295,7 +295,7 @@ final class MockConversationService: ConversationServiceProviding {
             lastUnbanParticipantConversationId = conversationId
             lastUnbanParticipantUserId = userId
         }
-        try await MainActor.run { try unbanParticipantResult.get() }
+        try unbanParticipantResult.get()
     }
 
     // MARK: - Reset

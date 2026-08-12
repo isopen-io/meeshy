@@ -35,7 +35,7 @@ export function UserSecuritySection({
         hour: '2-digit',
         minute: '2-digit'
       });
-    } catch {
+    } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
       return 'N/A';
     }
   };

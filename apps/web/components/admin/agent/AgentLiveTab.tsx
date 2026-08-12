@@ -27,17 +27,11 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
+import { formatCompactTimeAgo } from '@/utils/relative-time-format';
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return t('agent.overview.timeAgo.never');
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return t('timeAgo.now');
-  if (minutes < 60) return `${minutes}${t('timeAgo.minutes')}`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}${t('timeAgo.hours')}`;
-  const days = Math.floor(hours / 24);
-  return `${days}${t('timeAgo.days')}`;
+  return formatCompactTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'timeAgo');
 }
 
 function confidenceColor(value: number) {

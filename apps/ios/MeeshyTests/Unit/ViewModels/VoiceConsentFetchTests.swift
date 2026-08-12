@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class VoiceConsentFetchTests: XCTestCase {
     func test_voiceConsentMissing_falseWhenFetchThrows() async {
         // resolveVoiceConsentMissing is a pure async helper: maps a throwing

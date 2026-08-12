@@ -7,6 +7,7 @@ import XCTest
 /// in-flight Set is always released (rollback path) even when the underlying
 /// network call hangs forever. Without this helper, a stalled
 /// SocialSocketManager left the heart button locked until app kill.
+@MainActor
 final class TaskTimeoutTests: XCTestCase {
 
     func test_fastOperation_returnsResultBeforeDeadline() async throws {

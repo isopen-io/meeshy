@@ -5,6 +5,8 @@
  */
 
 import type { Conversation, Message } from '@meeshy/shared/types';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserDisplayNameOrNull } from '@/utils/user-display-name';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
@@ -28,23 +30,25 @@ function formatRelativeTime(
 ): string {
   if (!date) return '';
 
-  const now = new Date();
   const messageDate = typeof date === 'string' ? new Date(date) : date;
-  const diffMs = now.getTime() - messageDate.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+  const bucket = classifyRelativeTime(messageDate.getTime(), Date.now());
 
-  if (diffMins < 1) return t('timeCompact.now');
-  if (diffMins < 60) return t('timeCompact.minutes', { count: diffMins });
-  if (diffHours < 24) return t('timeCompact.hours', { count: diffHours });
-  if (diffDays < 7) return t('timeCompact.days', { count: diffDays });
-
-  // Format as date for older messages
-  return messageDate.toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'short',
-  });
+  switch (bucket.unit) {
+    case 'now':
+      return t('timeCompact.now');
+    case 'minutes':
+      return t('timeCompact.minutes', { count: bucket.value });
+    case 'hours':
+      return t('timeCompact.hours', { count: bucket.value });
+    case 'days':
+      return t('timeCompact.days', { count: bucket.value });
+    case 'beyond':
+      // Format as date for older messages
+      return messageDate.toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'short',
+      });
+  }
 }
 
 /**
@@ -102,10 +106,13 @@ export function transformToConversationItem(
   } else {
     const otherMember = otherMembers[0];
     const otherUser = otherMember?.user as any;
+    // Canonical name resolution (displayName > firstName+lastName > username)
+    // via the SSOT `getUserDisplayName`. The prior inline chain preferred
+    // `username` over the real name and never used `lastName`, showing cryptic
+    // handles for users without a custom displayName. Participant-level
+    // fallbacks (member displayName/nickname, conversation title) are preserved.
     name =
-      otherUser?.displayName ||
-      otherUser?.username ||
-      otherUser?.firstName ||
+      getUserDisplayNameOrNull(otherUser) ||
       otherMember?.displayName ||
       (otherMember as any)?.nickname ||
       conversation.title ||
@@ -125,7 +132,9 @@ export function transformToConversationItem(
         type: getMessageType(lastMessage),
         attachmentCount: lastMessage.attachments?.length,
         timestamp: formatRelativeTime(lastMessage.createdAt, t, locale),
-        senderName: isGroup ? (lastMessage.sender as any)?.displayName : undefined,
+        senderName: isGroup
+          ? (getUserDisplayNameOrNull(lastMessage.sender as any) ?? undefined)
+          : undefined,
       }
     : {
         content: '',

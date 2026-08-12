@@ -18,6 +18,7 @@ import {
   Link as LinkIcon,
   Newspaper,
   ChevronDown,
+  ChevronLeft,
   Shield,
   Sun,
   Moon,
@@ -47,14 +48,21 @@ interface DashboardLayoutProps {
   hideSearch?: boolean;
   className?: string;
   hideHeaderOnMobile?: boolean;
+  /**
+   * When set, the `/ {title}` breadcrumb becomes a back affordance — a left
+   * chevron linking here. Lets detail pages drop their own in-content header
+   * (which otherwise scrolls over this sticky one) and reuse the single header.
+   */
+  backHref?: string;
 }
 
-export function DashboardLayout({ 
-  children, 
+export function DashboardLayout({
+  children,
   title,
   hideSearch = false,
   className = "",
-  hideHeaderOnMobile = false
+  hideHeaderOnMobile = false,
+  backHref,
 }: DashboardLayoutProps) {
   const router = useRouter();
   const user = useUser();
@@ -167,10 +175,22 @@ export function DashboardLayout({
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white hidden md:inline">Meeshy</h1>
               </Link>
               {title && (
-                <div className="hidden md:block">
-                  <span className="text-gray-400 dark:text-gray-600 mx-2">/</span>
-                  <span className="text-lg font-medium text-gray-700 dark:text-gray-300">{title}</span>
-                </div>
+                backHref ? (
+                  <Link
+                    href={backHref}
+                    className="flex items-center gap-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    aria-label={`${t('common.back', 'Back')} — ${title}`}
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                    <span className="text-gray-400 dark:text-gray-600">/</span>
+                    <span className="text-lg font-medium">{title}</span>
+                  </Link>
+                ) : (
+                  <div className="hidden md:block">
+                    <span className="text-gray-400 dark:text-gray-600 mx-2">/</span>
+                    <span className="text-lg font-medium text-gray-700 dark:text-gray-300">{title}</span>
+                  </div>
+                )
               )}
             </div>
 

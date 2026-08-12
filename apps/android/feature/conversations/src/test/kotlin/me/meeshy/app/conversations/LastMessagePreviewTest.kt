@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversationLastMessage
+import me.meeshy.sdk.model.ConversationDraft
 import org.junit.Test
 
 class LastMessagePreviewTest {
@@ -15,6 +16,7 @@ class LastMessagePreviewTest {
         none = "Aucun message",
         you = "Vous",
         senderFormat = "%1\$s : %2\$s",
+        draftPrefix = "Brouillon : ",
     )
 
     private fun message(
@@ -122,5 +124,33 @@ class LastMessagePreviewTest {
         )
 
         assertThat(preview).isEqualTo("Aucun message")
+    }
+
+    // ---- draftPreview ----
+
+    @Test
+    fun `no draft yields no draft preview`() {
+        assertThat(draftPreview(null, labels)).isNull()
+    }
+
+    @Test
+    fun `an empty inert draft yields no draft preview`() {
+        val draft = ConversationDraft(conversationId = "c1", text = "   ", replyToId = null)
+
+        assertThat(draftPreview(draft, labels)).isNull()
+    }
+
+    @Test
+    fun `a text draft is previewed with the draft prefix and trimmed text`() {
+        val draft = ConversationDraft(conversationId = "c1", text = "  à finir  ")
+
+        assertThat(draftPreview(draft, labels)).isEqualTo("Brouillon : à finir")
+    }
+
+    @Test
+    fun `a reply-only draft is previewed as the prefix with an ellipsis`() {
+        val draft = ConversationDraft(conversationId = "c1", text = "", replyToId = "m9")
+
+        assertThat(draftPreview(draft, labels)).isEqualTo("Brouillon : …")
     }
 }

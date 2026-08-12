@@ -1,5 +1,10 @@
 # Résumé de la Refactorisation - NotificationService
 
+> ⚠️ **Instantané historique — obsolète sur plusieurs points.** Le push FCM/APNs passe désormais par
+> `services/PushNotificationService.ts` (injecté, non composé). `FirebaseNotificationService` et le
+> module `NotificationServiceExtensions` décrits ci-dessous n'existent plus (supprimés / jamais
+> présents dans l'arbre courant). Contexte historique uniquement.
+
 ## Objectif Atteint ✅
 
 Refactoriser `NotificationService.ts` (2,033 lignes) en modules < 800 lignes avec composition forte, types stricts et exports sélectifs.

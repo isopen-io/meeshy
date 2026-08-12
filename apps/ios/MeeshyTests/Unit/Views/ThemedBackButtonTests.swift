@@ -8,6 +8,7 @@ import MeeshyUI
 /// `ThemedBackButton`. The SwiftUI body itself is exercised manually via
 /// smoke checks — these tests pin the formatting rules so the visual
 /// invariant cannot regress without a build-breaking test failure.
+@MainActor
 final class ThemedBackButtonTests: XCTestCase {
 
     // MARK: - displayedUnread (text)

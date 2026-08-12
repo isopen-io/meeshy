@@ -1,6 +1,8 @@
 package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ApiConversationLastMessage
+import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.isMeaningful
 
 data class LastMessagePreviewLabels(
     val photo: String,
@@ -11,7 +13,25 @@ data class LastMessagePreviewLabels(
     val none: String,
     val you: String,
     val senderFormat: String,
+    val draftPrefix: String,
 )
+
+/**
+ * The draft-preview line for a conversation row, or `null` when [draft] is absent
+ * or inert (so the caller falls back to [lastMessagePreview]). A meaningful draft's
+ * own text wins over the last message — iOS shows an accent "Draft: …" preview for a
+ * conversation the user has started replying to — prefixed by
+ * [LastMessagePreviewLabels.draftPrefix]. A reply-only draft (armed reply, empty
+ * text) shows the prefix with an ellipsis so the row still signals an unsent reply.
+ */
+fun draftPreview(
+    draft: ConversationDraft?,
+    labels: LastMessagePreviewLabels,
+): String? {
+    if (draft == null || !draft.isMeaningful) return null
+    val text = draft.text.trim()
+    return if (text.isEmpty()) labels.draftPrefix + "…" else labels.draftPrefix + text
+}
 
 /**
  * Rich last-message preview for a conversation row — port of the iOS

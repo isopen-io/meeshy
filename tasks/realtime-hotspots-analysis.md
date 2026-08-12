@@ -58,18 +58,17 @@ Total estimé pour un envoi texte simple (réseau MongoDB local) :
 
 **Risque** : aucun fonctionnel — le client REST/Socket attend déjà l'objet enrichi seulement pour l'affichage optimiste, qu'il a déjà construit lui-même côté iOS (`MessageRecord.insertOptimistic`).
 
-### Hotspot #2 — `messaging.participantLookup` 🔴
+### Hotspot #2 — `messaging.participantLookup` 🟢 RÉSOLU (2026-07-01)
 
-**Pourquoi** : 2-3 queries Prisma séquentielles (`findUnique` → `findFirst` fallback → `ensureParticipantFromMember`). Le legacy `userId-as-participantId` fallback fait un `console.error` deprecated mais reste en place pour compat.
+**Pourquoi (historique)** : 2-3 queries Prisma séquentielles (`findUnique` → `findFirst` fallback → `ensureParticipantFromMember`). Le legacy `userId-as-participantId` fallback fait un `console.error` deprecated mais restait en place pour compat.
 
-**Mesure attendue** : 20-60 ms typique. Peut grimper si auto-création.
+**Audit (2026-07-01)** : le fallback DEPRECATED n'était pas du poids mort — il était déclenché sur CHAQUE requête par deux callers internes qui passaient un `User.id` là où `MessagingService.handleMessage` attend un `Participant.id` :
+- `routes/translation-non-blocking.ts` (CAS 2 — nouveau message via `POST /translate`)
+- `socketio/MeeshySocketIOManager.ts#handleAgentResponse` (réponses des agents ZMQ impersonator/animator/orchestrator)
 
-**Origine** : code de migration ConversationMember → Participant qui se déclenche encore en production pour les conversations anciennes.
+**Fix appliqué** : les deux callers résolvent maintenant leur `Participant.id` via un `participant.findFirst({ userId, conversationId, isActive: true })` (même pattern que `POST /conversations/:id/messages` et que `handleAgentReaction`, déjà correct) AVANT d'appeler `handleMessage`. Le fallback DEPRECATED dans `MessagingService` reste en place pour compat mais n'est plus jamais exercé sur ces deux chemins — donc plus de query supplémentaire, plus de log d'erreur en boucle. Root-cause fix, pas de cache/TTL introduit (évite tout risque de staleness sur `isActive`).
 
-**Pistes de fix** :
-1. **Memoization in-memory** : un cache `Map<(participantId, conversationId), isActive>` avec TTL court (30s). Invalidé sur `participant:left`.
-2. **Suppression du legacy fallback** : forcer le caller à passer le bon `Participant.id` partout. Le `console.error('DEPRECATED')` peut être promu en erreur après audit des callsites.
-3. **Single combined query** : remplacer findUnique + findFirst par un seul `findFirst` qui couvre les deux cas.
+Tests : `translation-non-blocking-participant.test.ts` (3 cas) + `MeeshySocketIOManager.test.ts` (mis à jour + 1 cas ajouté). Suite gateway complète : 317/317 suites vertes.
 
 ### Hotspot #3 — `messaging.mentionsAndNotifications` 🔴
 
@@ -98,9 +97,9 @@ Pour un DM 1-1 c'est 1-2 documents. Pour un groupe de 50 utilisateurs c'est 50 `
 **Origine** : fire-and-forget côté handler → **n'impacte pas l'ACK sender** mais détermine quand le destinataire voit la notif système.
 
 **Pistes de fix** (déjà identifiés Phase A) :
-1. **Retry exponentiel** sur erreurs transitoires (`InternalServerError`, `ServiceUnavailable`).
-2. **Cleanup token agressif** : invalider après 1-2 failures `BadDeviceToken` / `Unregistered` au lieu de 3 — sinon 3 messages successifs vers un token mort = 3 round-trips ratés.
-3. **`collapse-id` systématique** sur les notifs message d'une même conversation pour éviter les pile-ups.
+1. **Retry exponentiel** sur erreurs transitoires (`InternalServerError`, `ServiceUnavailable`). — ✅ **corrigé 2026-06-30** : `sendApnsWithRetry`/`sendFcmWithRetry` retentent jusqu'à 2 fois (backoff 200ms/400ms) les raisons APNs `InternalServerError`/`ServiceUnabailable`/`TooManyRequests`/`Shutdown` et les codes FCM `messaging/internal-error`/`server-unavailable`/`unavailable`/`quota-exceeded`. Les erreurs permanentes (`BadDeviceToken`, `messaging/registration-token-not-registered`, ...) ne sont jamais retentées. Le retry est encapsulé dans le `CircuitBreaker.execute()` existant donc ne compte que comme un seul échec logique.
+2. **Cleanup token agressif** : invalider après 1-2 failures `BadDeviceToken` / `Unregistered` au lieu de 3 — sinon 3 messages successifs vers un token mort = 3 round-trips ratés. — ✅ **partiellement corrigé 2026-06-30** (classification transitoire/permanente, prérequis identifié dans ce backlog) : `PushResult.transient` propage la classification depuis `sendViaAPNS`/`sendViaFCM` jusqu'à `handleFailedToken`, qui **n'incrémente plus `failedAttempts` ni ne désactive le token** pour les échecs déjà classifiés transitoires (après épuisement des retries) — seules les erreurs permanentes comptent désormais vers le seuil des 3 strikes. Abaisser le seuil à 1-2 pour les erreurs permanentes reste une piste séparée si besoin (gain marginal, risque faible maintenant que les faux positifs transitoires sont éliminés).
+3. **`collapse-id` systématique** sur les notifs message d'une même conversation pour éviter les pile-ups. — ✅ **corrigé 2026-06-30** : `NotificationService.createMessageNotification/createMentionNotification/createReplyNotification` utilisaient `msg-${messageId}` (unique par message, ne collapsait jamais rien). Passé à `conv-${conversationId}` (scope conversation, partagé entre tous les messages/mentions/réponses d'une même conv). Tests : `NotificationService.collapseId.test.ts`.
 4. **Vérifier `apnsEnvironment` mismatch** : si beaucoup de `BadDeviceToken`, c'est probablement un Debug build qui envoie sandbox alors que la clé est en prod.
 
 ### Hotspot #5 — `messaging.detectLanguage` 🟡
@@ -128,10 +127,10 @@ Logs nouveaux côté client :
 
 Une fois la baseline numérique remplie dans `tasks/realtime-baseline.md`, Phase B devrait s'attaquer (en évaluant le gain mesuré contre le risque) :
 
-1. **B.1 — Sortir `mentionsAndNotifications` du chemin bloquant** (Hotspot #3) — gain estimé : 50-500 ms selon taille de la conversation. Risque : nécessite garantie de durabilité (MutationLog déjà en place pour ça).
+1. **B.1 — Sortir `mentionsAndNotifications` du chemin bloquant** (Hotspot #3) — ⚠️ **réévalué 2026-07-03, fix naïf REJETÉ** : le hotspot conflait deux sous-étapes distinctes de `MessageProcessor.handleMentionsAndNotifications` (`MessageProcessor.ts:866-890`). La partie réellement O(taille du groupe) — `triggerAllNotifications` (création des `Notification` + push) — est **déjà fire-and-forget** (`.catch()`, pas d'`await`, ligne 884-885) ; ce n'est plus dans le chemin bloquant. La partie encore `await`ée est `processMentionsInDB` (ligne 878, corps ligne 895-949), et elle ne peut PAS être basculée en `setImmediate` sans régression : elle mute `message.validatedMentions` en mémoire (ligne 940), qui est lu directement par le broadcast `message:new` (`MeeshySocketIOManager.ts:1711`, `MessageHandler.ts:1260`) et par l'ACK REST (retour de `saveMessage`, `MessageProcessor.ts:647-650`). La backgrounder ferait partir le broadcast/ACK AVANT résolution des mentions → les destinataires ne verraient jamais le highlight `@mention` du message initial (aucun `message:updated` de rattrapage n'existe aujourd'hui). Coût réel restant : borné aux messages contenant effectivement une mention (déjà court-circuité à 0 requête sinon, ligne 875-879 `hasPotentialMentions`), PAS O(taille du groupe) — sévérité bien plus faible que ce que la doc supposait. **Conclusion : ne rien changer ici sans redesign du broadcast (ex. émettre `message:new` sans mentions puis un `message:updated` une fois résolues) — hors scope tant que ce redesign n'est pas fait.**
 2. **B.2 — Alléger l'include de `prismaMessageCreate`** (Hotspot #1) — gain estimé : 30-150 ms. Risque : aucune (le client a déjà l'optimistic).
-3. **B.3 — Memoization `participantLookup`** (Hotspot #2) — gain estimé : 15-40 ms. Risque : invalidation cache à gérer.
-4. **B.4 — UX iOS : implémenter `.invisible` / `.clock` / `.slow` states** dans `CoreModels.swift:365-395` (déjà définis, pas branchés). Masque l'horloge sur les envois < 200 ms — gain perçu immédiat, indépendant du backend.
+3. **B.3 — Memoization `participantLookup`** (Hotspot #2) — ✅ **corrigé 2026-07-01** : `MessagingService.handleMessage` mémorise désormais `{id, conversationId, isActive}` par `(participantId, conversationId)` dans un cache in-process TTL 30s (`utils/participant-lookup-cache.ts`), évitant les 2-3 requêtes Prisma séquentielles pour un participant qui vient d'envoyer un message. Invalidation explicite au même point que le cache socket jumeau (`invalidateParticipantCache`) : `leave.ts`, `ban.ts` (ban seulement — unban s'auto-corrige via TTL), `participants.ts` (kick), `delete-for-me.ts`. N'invalide PAS sur changement de rôle (le cache ne stocke pas le rôle). Tests : `participant-lookup-cache.test.ts` (9 cas) + assertions d'invalidation dans les 4 fichiers de tests de routes concernés + `MessagingService.test.ts` (reset cache ajouté dans les 4 `beforeEach` pour éviter la pollution inter-tests).
+4. **B.4 — UX iOS : implémenter `.invisible` / `.clock` / `.slow` states** dans `CoreModels.swift:365-395` (déjà définis, pas branchés). Masque l'horloge sur les envois < 200 ms — gain perçu immédiat, indépendant du backend. — ✅ **corrigé 2026-07-03** : le state machine `.slow` (queue de retry) et `.clock` (server-driven) restent hors scope de cet incrément — les brancher aurait nécessité un redesign du flux `state`→`deliveryStatus` (`MessageRecord+ToMessage.swift`) hors budget. Le vrai gain perçu identifié par ce hotspot — masquer le clignotement d'icône sur un envoi qui round-trip en <200ms — est livré côté présentation pure : `BubbleDeliveryCheck.SendingClockGlyph` démarre invisible et se révèle après le délai restant jusqu'à 200ms (calculé depuis `Message.createdAt`, propagé via `BubbleFooterModel.sendStartedAt`), sans toucher la state machine ni GRDB. Tests : `BubbleDeliveryCheckSendingRevealTests` (fonction pure `shouldRevealImmediately`) + `BubbleFooterModelTests` (propagation `sendStartedAt`).
 5. **B.5 — Fiabilisation push** (Hotspot #4) — retry exponentiel + cleanup tokens agressif + collapse-id systématique.
 
 Chacun de ces points devient un sous-plan `docs/superpowers/plans/2026-05-XX-realtime-phase-B-{N}.md` une fois la baseline confirmée.

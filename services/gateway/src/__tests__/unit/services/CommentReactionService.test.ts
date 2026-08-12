@@ -108,7 +108,9 @@ describe('CommentReactionService', () => {
         findMany: jest.fn(),
         deleteMany: jest.fn(),
         // Compteur autoritaire lu dans updateCommentReactionSummary (sync likeCount).
-        count: jest.fn().mockResolvedValue(1)
+        count: jest.fn().mockResolvedValue(1),
+        // Ventilation + total autoritaires recomputés dans updateCommentReactionSummary.
+        groupBy: jest.fn().mockResolvedValue([])
       },
       user: {
         findMany: jest.fn().mockResolvedValue([])
@@ -154,7 +156,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -252,6 +254,50 @@ describe('CommentReactionService', () => {
       expect(mockPrisma.commentReaction.create).not.toHaveBeenCalled();
     });
 
+    // The handler relies on `unchanged` to decide whether to re-broadcast
+    // `comment:reaction-added` and re-notify the author. A re-fire (existing row)
+    // MUST report unchanged: true so the handler skips both. Mirrors ReactionService.
+    it('should report unchanged: true when the reaction already exists', async () => {
+      const existingReaction = createMockCommentReaction();
+      mockPrisma.commentReaction.findFirst.mockResolvedValue(existingReaction);
+
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+      expect(mockPrisma.commentReaction.create).not.toHaveBeenCalled();
+    });
+
+    it('should report unchanged: false on a fresh insert', async () => {
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(false);
+      expect(mockPrisma.commentReaction.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should report unchanged: true on a concurrent-insert race (P2002)', async () => {
+      const existingReaction = createMockCommentReaction();
+      mockPrisma.commentReaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.commentReaction.create.mockRejectedValue({ code: 'P2002' });
+
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+    });
+
     it('should throw error when max reactions per user reached', async () => {
       // User has already 1 different emoji (MAX_REACTIONS_PER_USER = 1)
       mockPrisma.commentReaction.findMany.mockResolvedValue([
@@ -323,7 +369,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -429,6 +475,19 @@ describe('CommentReactionService', () => {
       expect(result.commentId).toBe(testCommentId);
       expect(result.totalCount).toBe(4);
       expect(result.reactions.length).toBe(2);
+    });
+
+    it('should include the owning postId so clients can locate the comment cache', async () => {
+      mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
+      mockPrisma.commentReaction.findMany.mockResolvedValue([
+        createMockCommentReaction({ emoji: '👍', userId: 'user1' })
+      ]);
+
+      const result = await service.getCommentReactions({
+        commentId: testCommentId
+      });
+
+      expect(result.postId).toBe(testPostId);
     });
 
     it('should correctly aggregate reactions by emoji', async () => {
@@ -1030,7 +1089,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -1078,7 +1137,7 @@ describe('CommentReactionService', () => {
   // TRANSACTION WRAPS REACTION SUMMARY (Fix 3)
   // ==============================================
 
-  describe('updateCommentReactionSummary — uses $transaction', () => {
+  describe('updateCommentReactionSummary — $transaction + authoritative groupBy recompute', () => {
     beforeEach(() => {
       mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
       mockPrisma.commentReaction.findMany.mockResolvedValue([]);
@@ -1091,7 +1150,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -1128,6 +1187,74 @@ describe('CommentReactionService', () => {
       });
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      // La carte reactionSummary DOIT être recomputée depuis groupBy(CommentReaction),
+      // pas dérivée par delta de la valeur préalable (auto-réparant vs emoji fantôme).
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '🔥': 99 }, reactionCount: 99 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 3 } },
+        { emoji: '❤️', _count: { emoji: 2 } }
+      ]);
+
+      await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '❤️'
+      });
+
+      expect(mockPrisma.commentReaction.groupBy).toHaveBeenCalledWith({
+        by: ['emoji'],
+        where: { commentId: testCommentId },
+        _count: { emoji: true }
+      });
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: { '👍': 3, '❤️': 2 }, reactionCount: 5, likeCount: 5 }
+      });
+    });
+
+    it('test_removeReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '👍': 3 }, reactionCount: 3 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 2 } }
+      ]);
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: { '👍': 2 }, reactionCount: 2, likeCount: 2 }
+      });
+    });
+
+    it('test_lastReactionRemoved_writesEmptySummaryAndZeroCounts', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([]);
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: {}, reactionCount: 0, likeCount: 0 }
+      });
     });
   });
 

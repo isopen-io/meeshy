@@ -18,15 +18,76 @@ import Foundation
 
 // MARK: - Conversations & messages metadata
 
+/// R6 — payload du kind `.markStoryViewed` : le « vu » d'une story survit à
+/// un kill/offline et se rejoue au reconnect. `storyId` sert aussi d'anchor
+/// de coalescing (latest-wins par story).
+public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let storyId: String
+
+    public init(clientMutationId: String, storyId: String) {
+        self.clientMutationId = clientMutationId
+        self.storyId = storyId
+    }
+}
+
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String
-    public let upToMessageId: String
 
-    public init(clientMutationId: String, conversationId: String, upToMessageId: String) {
+    /// Identifiants SERVEUR des messages réellement affichés.
+    ///
+    /// Optionnel à dessein : les enregistrements d'outbox déjà persistés ont été
+    /// sérialisés sans ce champ, et le rendre obligatoire casserait leur
+    /// décodage après mise à jour de l'app — les lectures en attente seraient
+    /// perdues en silence. `nil` signifie « client non informé » et laisse le
+    /// serveur sur son repli historique.
+    ///
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    public let messageIds: [String]?
+
+    /// Version linguistique affichée pendant que ce lot défilait — la résolution
+    /// de la conversation, celle qui vaut par défaut pour chaque bulle.
+    ///
+    /// Optionnelle pour la même raison que `messageIds` : un enregistrement
+    /// d'outbox sérialisé par une version antérieure ne la porte pas, et la
+    /// rendre obligatoire perdrait ces lectures au décodage.
+    public let language: String?
+
+    /// EXCEPTIONS à `language`, par message. Sans traduction disponible, c'est
+    /// l'ORIGINAL qui s'affiche : déclarer tout le lot dans la langue préférée
+    /// mentirait là où l'auteur a précisément besoin de savoir.
+    public let messageLanguages: [String: String]?
+
+    /// Le lecteur a ATTEINT ce message, le plus récent de la conversation :
+    /// il n'a plus de retard. Fait avancer le curseur de non-lus jusque-là,
+    /// donc vide le badge côté serveur.
+    ///
+    /// Distinct de `messageIds`, et volontairement : « quels messages ai-je
+    /// affichés » (accusés de lecture, coches bleues — exact, jamais gonflé) et
+    /// « ai-je rattrapé mon retard » (badge) sont deux questions différentes.
+    /// Descendre au dernier message d'une conversation à deux cents non-lus ne
+    /// rend pas les cent quatre-vingt-dix intermédiaires lus ; ça rend bien la
+    /// conversation rattrapée. Les gonfler ensemble mentirait à l'expéditeur.
+    ///
+    /// `nil` = l'appelant ne se prononce pas ; le curseur avance alors sur le
+    /// seul préfixe contigu réellement lu.
+    public let caughtUpToMessageId: String?
+
+    public init(
+        clientMutationId: String,
+        conversationId: String,
+        messageIds: [String]? = nil,
+        language: String? = nil,
+        messageLanguages: [String: String]? = nil,
+        caughtUpToMessageId: String? = nil
+    ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
-        self.upToMessageId = upToMessageId
+        self.messageIds = messageIds
+        self.language = language
+        self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages
+        self.caughtUpToMessageId = caughtUpToMessageId
     }
 }
 
@@ -246,6 +307,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// Explicit recipient ids for `EXCEPT` / `ONLY` visibility (and audience
     /// scoping for statuses). `nil` for the public/friends default.
     public let visibilityUserIds: [String]?
+    /// Task 17 — lieu partagé en attente d'envoi. `nil` pour l'immense
+    /// majorité des posts — porté ici pour que le chemin durable (outbox)
+    /// transporte la position exactement comme le chemin direct
+    /// (`PostService.create`), au lieu de la perdre au flush après un envoi
+    /// hors-ligne. Optionnel : un enregistrement persisté avant Task 17
+    /// décode toujours sans cette clé.
+    public let location: SharedPlace?
 
     public init(
         clientMutationId: String,
@@ -258,7 +326,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         moodEmoji: String? = nil,
         audioUrl: String? = nil,
         audioDuration: Int? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        location: SharedPlace? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -271,6 +340,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.audioUrl = audioUrl
         self.audioDuration = audioDuration
         self.visibilityUserIds = visibilityUserIds
+        self.location = location
     }
 }
 
@@ -293,17 +363,28 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let postId: String
     public let parentCommentId: String?
     public let content: String
+    /// Lieu partagé en attente d'envoi. `nil` pour l'immense majorité des
+    /// commentaires — porté ici pour que le chemin durable (offline queue)
+    /// transporte la position exactement comme le chemin direct.
+    public let location: SharedPlace?
+    /// Effets visuels du commentaire (bitmask) — porté par le chemin durable
+    /// pour ne pas être perdu à l'enfilement, comme le chemin direct le porte.
+    public let effectFlags: Int?
 
     public init(
         clientMutationId: String,
         postId: String,
         parentCommentId: String?,
-        content: String
+        content: String,
+        location: SharedPlace? = nil,
+        effectFlags: Int? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.parentCommentId = parentCommentId
         self.content = content
+        self.location = location
+        self.effectFlags = effectFlags
     }
 }
 
@@ -326,5 +407,62 @@ public struct ToggleLikeCommentPayload: Codable, Sendable, Equatable {
         self.clientMutationId = clientMutationId
         self.commentId = commentId
         self.liked = liked
+    }
+}
+
+// MARK: - Consommation d'un attachement
+
+/// Point 7 — rapport de consommation d'un média, rendu durable.
+///
+/// Les six sites de lecture postaient jusqu'ici en `try?` inline : une écoute
+/// hors-ligne, en avion ou dans un ascenseur était perdue sans trace. Le
+/// rapport passe désormais par l'outbox, comme toute autre écriture.
+///
+/// ## Pourquoi ce kind ne se coalesce PAS
+///
+/// `markStoryViewed` se coalesce parce qu'un « vu » est binaire : le rejouer
+/// deux fois ne dit rien de plus. Un rapport de consommation, lui, porte des
+/// `stretches` DIFFÉRENTS à chaque fois — trois écoutes hors-ligne du même
+/// audio sont trois passages distincts sur trois portions distinctes. Écraser
+/// le rapport précédent par le suivant détruirait précisément ce que la trace
+/// motivée existe pour préserver. Chaque rapport est donc conservé et rejoué
+/// dans l'ordre ; le serveur accumule et dédoublonne par identité de segment.
+public struct ReportAttachmentStatusPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let attachmentId: String
+    /// `listened` | `watched` | `viewed` | `downloaded` — verbe attendu par la
+    /// route gateway `POST /attachments/:id/status`.
+    public let action: String
+    public let playPositionMs: Int
+    public let durationMs: Int
+    public let complete: Bool
+    public let wasZoomed: Bool?
+    public let stretches: [PlaybackStretch]?
+    /// Version linguistique consommée. `nil` quand le lecteur ne peut pas la
+    /// déterminer — mieux vaut ne rien déclarer qu'inventer une langue.
+    public let language: String?
+
+    public init(
+        clientMutationId: String,
+        attachmentId: String,
+        action: String,
+        playPositionMs: Int,
+        durationMs: Int,
+        complete: Bool,
+        wasZoomed: Bool? = nil,
+        stretches: [PlaybackStretch]? = nil,
+        language: String? = nil
+    ) {
+        self.clientMutationId = clientMutationId
+        self.attachmentId = attachmentId
+        self.action = action
+        self.playPositionMs = playPositionMs
+        self.durationMs = durationMs
+        self.complete = complete
+        self.wasZoomed = wasZoomed
+        // Un tableau vide ne dirait rien au serveur et ferait voyager une clé
+        // pour rien — même règle que `AttachmentStatusBody`.
+        self.stretches = (stretches?.isEmpty ?? true) ? nil : stretches
+        self.language = language
     }
 }

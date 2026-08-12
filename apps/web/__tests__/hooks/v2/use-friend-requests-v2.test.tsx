@@ -22,6 +22,39 @@ jest.mock('@/hooks/use-websocket', () => ({
   useWebSocket: () => ({ isConnected: true }),
 }));
 
+let friendRequestCancelledHandler: ((data: { friendRequestId: string; cancelledBy: string }) => void) | null = null;
+const mockOnFriendRequestCancelled = jest.fn((listener: (data: { friendRequestId: string; cancelledBy: string }) => void) => {
+  friendRequestCancelledHandler = listener;
+  return () => { friendRequestCancelledHandler = null; };
+});
+
+let friendRequestNewHandler: ((data: { friendRequestId: string; senderId: string; receiverId: string }) => void) | null = null;
+const mockOnFriendRequestNew = jest.fn((listener: (data: { friendRequestId: string; senderId: string; receiverId: string }) => void) => {
+  friendRequestNewHandler = listener;
+  return () => { friendRequestNewHandler = null; };
+});
+
+let friendRequestAcceptedHandler: ((data: { friendRequestId: string; accepterId: string; conversationId?: string }) => void) | null = null;
+const mockOnFriendRequestAccepted = jest.fn((listener: (data: { friendRequestId: string; accepterId: string; conversationId?: string }) => void) => {
+  friendRequestAcceptedHandler = listener;
+  return () => { friendRequestAcceptedHandler = null; };
+});
+
+let friendRequestRejectedHandler: ((data: { friendRequestId: string; rejecterId: string }) => void) | null = null;
+const mockOnFriendRequestRejected = jest.fn((listener: (data: { friendRequestId: string; rejecterId: string }) => void) => {
+  friendRequestRejectedHandler = listener;
+  return () => { friendRequestRejectedHandler = null; };
+});
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    onFriendRequestCancelled: (...args: unknown[]) => mockOnFriendRequestCancelled(...(args as [(data: { friendRequestId: string; cancelledBy: string }) => void])),
+    onFriendRequestNew: (...args: unknown[]) => mockOnFriendRequestNew(...(args as [(data: { friendRequestId: string; senderId: string; receiverId: string }) => void])),
+    onFriendRequestAccepted: (...args: unknown[]) => mockOnFriendRequestAccepted(...(args as [(data: { friendRequestId: string; accepterId: string; conversationId?: string }) => void])),
+    onFriendRequestRejected: (...args: unknown[]) => mockOnFriendRequestRejected(...(args as [(data: { friendRequestId: string; rejecterId: string }) => void])),
+  },
+}));
+
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -44,6 +77,10 @@ const makeFriendRequest = (overrides: Partial<FriendRequest> = {}): FriendReques
 describe('useFriendRequestsV2', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    friendRequestCancelledHandler = null;
+    friendRequestNewHandler = null;
+    friendRequestAcceptedHandler = null;
+    friendRequestRejectedHandler = null;
     mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
   });
 
@@ -167,6 +204,82 @@ describe('useFriendRequestsV2', () => {
     });
 
     expect(mockDelete).toHaveBeenCalledWith('/friend-requests/req1');
+  });
+
+  it('invalidates and refetches when the OTHER party cancels/removes a request', async () => {
+    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(mockOnFriendRequestCancelled).toHaveBeenCalled();
+
+    const callsBefore = mockGet.mock.calls.length;
+
+    await act(async () => {
+      friendRequestCancelledHandler?.({ friendRequestId: 'req1', cancelledBy: 'other-user' });
+    });
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('invalidates and refetches when a new friend request arrives', async () => {
+    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(mockOnFriendRequestNew).toHaveBeenCalled();
+
+    const callsBefore = mockGet.mock.calls.length;
+
+    await act(async () => {
+      friendRequestNewHandler?.({ friendRequestId: 'req1', senderId: 'other-user', receiverId: 'me' });
+    });
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('invalidates and refetches when the receiver accepts a sent request', async () => {
+    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(mockOnFriendRequestAccepted).toHaveBeenCalled();
+
+    const callsBefore = mockGet.mock.calls.length;
+
+    await act(async () => {
+      friendRequestAcceptedHandler?.({ friendRequestId: 'req1', accepterId: 'other-user', conversationId: 'conv1' });
+    });
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('invalidates and refetches when the receiver rejects a sent request', async () => {
+    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(mockOnFriendRequestRejected).toHaveBeenCalled();
+
+    const callsBefore = mockGet.mock.calls.length;
+
+    await act(async () => {
+      friendRequestRejectedHandler?.({ friendRequestId: 'req1', rejecterId: 'other-user' });
+    });
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
   });
 
   it('provides getPendingRequestWithUser helper', async () => {

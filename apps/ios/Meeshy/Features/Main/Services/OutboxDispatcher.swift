@@ -36,9 +36,6 @@ struct OutboxDispatcher: OutboxDispatching {
         case .sendReaction:
             try await dispatchSendReaction(record)
 
-        // Wave 1 Phase B — 5 of the 14 new mutation kinds are now wired
-        // through to their REST endpoints with X-Client-Mutation-Id header
-        // for gateway-side MutationLog dedup.
         case .blockUser:
             try await dispatchBlockUser(record)
 
@@ -54,13 +51,14 @@ struct OutboxDispatcher: OutboxDispatching {
         case .updateProfile:
             try await dispatchUpdateProfile(record)
 
-        // Wave 1 Phase C — 9 of the 11 remaining kinds are now wired.
-        // `publishStory` / `repostStory` stay in the existing
-        // `StoryOfflineQueue` pipeline for now (Tier C queue merge will
-        // unify them later) and surface here as a permanent failure so a
-        // stray row doesn't loop in the flusher.
         case .markAsRead:
             try await dispatchMarkAsRead(record)
+
+        case .markStoryViewed:
+            try await dispatchMarkStoryViewed(record)
+
+        case .reportAttachmentStatus:
+            try await dispatchReportAttachmentStatus(record)
 
         case .createConversation:
             try await dispatchCreateConversation(record)
@@ -102,22 +100,26 @@ struct OutboxDispatcher: OutboxDispatching {
         }
     }
 
-    // MARK: - Non-message mutation dispatch (Wave 1 Phase B)
+    // MARK: - Social mutations
 
     /// Decoded the typed payload from `record.payload`. Treats a decode
     /// failure as permanent so the flusher escalates to `.exhausted` after
     /// the next attempt instead of looping forever on a corrupt row.
+    ///
+    /// Throws a typed `MeeshyError.server(statusCode: 400, _)` — not a raw
+    /// `NSError` — so `OutboxFlusher.isPermanentServerRejection` (which
+    /// pattern-matches on `MeeshyError`) recognizes a corrupt local payload
+    /// as permanent and dead-letters it on the first attempt, the same as
+    /// any other 4xx rejection, instead of burning the full retry budget
+    /// (~1 min of exponential backoff) on a row that can never succeed.
     private func decodePayload<P: Decodable>(_ record: OutboxRecord, as type: P.Type) throws -> P {
         do {
             return try decoder.decode(P.self, from: record.payload)
         } catch {
             logger.error("Failed to decode \(String(describing: P.self), privacy: .public) for outbox \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            throw NSError(
-                domain: "OutboxDispatcher",
-                code: 400,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
-                ]
+            throw MeeshyError.server(
+                statusCode: 400,
+                message: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
             )
         }
     }
@@ -189,29 +191,36 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("respondFriendRequest dispatched for \(payload.friendRequestId, privacy: .public) status=\(status, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// PATCH /users/me — only sends fields that are non-nil. The gateway
-    /// schema accepts displayName, bio, avatarUrl among others ; we
-    /// forward exactly what the payload carries.
+    /// PATCH /users/me — only sends fields that are non-nil. The gateway's
+    /// `updateUserProfileSchema` (packages/shared/utils/validation.ts) is
+    /// `.strict()` and has no `avatar` (nor `avatarUrl`) property, so an
+    /// `avatar` key in this body 400s the WHOLE request every single time —
+    /// silently blocking displayName/bio right alongside it. Avatar changes
+    /// are dispatched separately through the dedicated `PATCH /users/me/avatar`
+    /// endpoint (`updateAvatarSchema`, `{ avatar: string }`), matching the
+    /// online path (`UserService.updateAvatar`).
     private func dispatchUpdateProfile(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UpdateProfilePayload.self)
-        struct UpdateProfileBody: Encodable {
-            let displayName: String?
-            let bio: String?
-            let avatar: String?
 
-            enum CodingKeys: String, CodingKey { case displayName, bio, avatar }
-
-            func encode(to encoder: Encoder) throws {
-                var container = encoder.container(keyedBy: CodingKeys.self)
-                if let displayName { try container.encode(displayName, forKey: .displayName) }
-                if let bio { try container.encode(bio, forKey: .bio) }
-                if let avatar { try container.encode(avatar, forKey: .avatar) }
-            }
+        if let avatarUrl = payload.avatarUrl {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/users/me/avatar",
+                method: "PATCH",
+                body: try JSONEncoder().encode(UpdateProfileAvatarBody(avatar: avatarUrl)),
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("updateProfile avatar dispatched cmid=\(payload.clientMutationId, privacy: .public)")
         }
-        let body = UpdateProfileBody(
+
+        guard payload.displayName != nil || payload.bio != nil else {
+            logger.info("updateProfile dispatched (avatar-only) cmid=\(payload.clientMutationId, privacy: .public)")
+            return
+        }
+
+        let body = UpdateProfileFieldsBody(
             displayName: payload.displayName,
-            bio: payload.bio,
-            avatar: payload.avatarUrl
+            bio: payload.bio
         )
         // The /users/me response wraps the updated user under `data.user`,
         // which doesn't match `APIResponse<MeeshyUser>`. We don't need the
@@ -227,7 +236,7 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("updateProfile dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    // MARK: - Non-message mutation dispatch (Wave 1 Phase C)
+    // MARK: - Conversation & content mutations
 
     /// `POST /conversations/:id/mark-read` — the gateway treats read
     /// receipts as monotonic + idempotent at the storage layer (a higher
@@ -237,9 +246,79 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `X-Client-Mutation-Id` header (no server-side dedup to feed).
     /// A 404 means the conversation was deleted while the row was pending
     /// — swallow as success so the flusher removes the row.
+    /// R6 — `POST /posts/:id/view`, même contrat que le chemin direct
+    /// historique (`StoryService.markViewed`) : le gateway renvoie
+    /// `{ viewed: true }` (Bool) et un P2002 (déjà vu) est un no-op serveur.
+    /// Une story supprimée/expirée (404) rend le « vu » obsolète — succès.
+    private func dispatchMarkStoryViewed(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/posts/\(payload.storyId)/view",
+                method: "POST",
+                body: nil,
+                queryItems: nil
+            )
+            logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("markStoryViewed 404 story=\(payload.storyId, privacy: .public) — story gone, accepting as success")
+        }
+    }
+
+    /// Point 7 — rejoue un rapport de consommation média.
+    ///
+    /// Un attachement supprimé entre-temps (404) rend le rapport sans objet :
+    /// on l'accepte comme un succès pour que la ligne quitte la file, sinon
+    /// elle serait rejouée jusqu'à épuisement des tentatives pour un média qui
+    /// n'existe plus.
+    private func dispatchReportAttachmentStatus(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ReportAttachmentStatusPayload.self)
+        let body = AttachmentStatusBody(
+            action: payload.action,
+            playPositionMs: payload.playPositionMs,
+            durationMs: payload.durationMs,
+            complete: payload.complete,
+            wasZoomed: payload.wasZoomed,
+            stretches: payload.stretches,
+            language: payload.language
+        )
+        do {
+            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+                endpoint: "/attachments/\(payload.attachmentId)/status",
+                body: body
+            )
+            logger.info("reportAttachmentStatus dispatched att=\(payload.attachmentId, privacy: .public) action=\(payload.action, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("reportAttachmentStatus 404 att=\(payload.attachmentId, privacy: .public) — attachement disparu, accepté comme succès")
+        }
+    }
+
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
+            // Le corps porte les messages RÉELLEMENT affichés. Sans lui, le
+            // gateway retombe sur son chemin par fenêtre temporelle, qui
+            // déclare lus des messages jamais montrés. Un payload legacy
+            // (`messageIds == nil`) continue de poster sans corps : c'est le
+            // seul comportement sûr pour un enregistrement non informé.
+            let reported = payload.messageIds.map(MarkAsReadBody.cap) ?? []
+            // Le rattrapage voyage même quand le plafond a rogné le lot : c'est
+            // une borne de curseur, pas un identifiant à figer, et la perdre
+            // laisserait le badge plein précisément dans le cas — deux cents
+            // messages d'un coup — où il gêne le plus.
+            let body = (reported.isEmpty && payload.caughtUpToMessageId == nil)
+                ? nil
+                : try JSONEncoder().encode(
+                    MarkAsReadBody(
+                        messageIds: reported,
+                        language: payload.language,
+                        messageLanguages: MarkAsReadBody.scopedLanguages(
+                            payload.messageLanguages, to: reported
+                        ),
+                        caughtUpToMessageId: payload.caughtUpToMessageId
+                    )
+                )
+
             // Decode the envelope loosely as a dictionary (same pattern as
             // `dispatchUpdateProfile` / `dispatchCreateConversation` above).
             // The mark-read response `data` carries a string `message` field,
@@ -249,10 +328,13 @@ struct OutboxDispatcher: OutboxDispatching {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
                 endpoint: "/conversations/\(payload.conversationId)/mark-read",
                 method: "POST",
-                body: nil,
+                body: body,
                 queryItems: nil
             )
-            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+            // Le nombre d'ids rapportés est le seul moyen de distinguer, en
+            // production, un marquage exact d'un repli par fenêtre : sans lui,
+            // un observateur débranché passerait inaperçu.
+            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public) reportedIds=\(reported.isEmpty ? "none(window-fallback)" : String(reported.count), privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("markAsRead 404 for conversation \(payload.conversationId, privacy: .public) — conversation gone, accepting as success")
         }
@@ -348,11 +430,10 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchCreatePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreatePostPayload.self)
 
-        // U1b — an OFFLINE media post carries local file paths; upload them via
-        // TUS on reconnect, then create the post with the resulting ids. Faithful
-        // twin of the message media replay (dispatchSendMessage). The within-
-        // session TUS checkpoint resume fires automatically on re-upload (same
-        // sha256 key), so a kill mid-upload resumes from the saved offset.
+        // An offline media post carries local file paths; upload them via TUS
+        // on reconnect, then create the post with the resulting ids. TUS
+        // checkpoint resume fires on re-upload (same sha256 key), so a kill
+        // mid-upload resumes from the saved offset.
         var resolvedMediaIds = payload.attachmentIds
         var uploadedLocalPaths: [String] = []
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
@@ -412,6 +493,11 @@ struct OutboxDispatcher: OutboxDispatching {
             let audioUrl: String?
             let audioDuration: Int?
             let visibilityUserIds: [String]?
+            /// Task 17 — même clé top-level `location` que le chemin direct
+            /// (`CreatePostRequest`, `PostService.create`) : sans elle ici, la
+            /// position survivrait jusqu'au décodage de `CreatePostPayload` mais
+            /// serait tout de même jetée en silence à l'ultime saut réseau.
+            let location: SharedPlace?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -424,11 +510,12 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
                 if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
                 if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
+                if let location { try container.encode(location, forKey: .location) }
             }
 
             enum CodingKeys: String, CodingKey {
                 case content, mediaIds, visibility, originalLanguage, type
-                case moodEmoji, audioUrl, audioDuration, visibilityUserIds
+                case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location
             }
         }
         let body = CreatePostBody(
@@ -440,7 +527,8 @@ struct OutboxDispatcher: OutboxDispatching {
             moodEmoji: payload.moodEmoji,
             audioUrl: payload.audioUrl,
             audioDuration: payload.audioDuration,
-            visibilityUserIds: payload.visibilityUserIds
+            visibilityUserIds: payload.visibilityUserIds,
+            location: payload.location
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -449,7 +537,11 @@ struct OutboxDispatcher: OutboxDispatching {
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
-        for path in uploadedLocalPaths { try? FileManager.default.removeItem(atPath: path) }
+        for path in uploadedLocalPaths {
+            do { try FileManager.default.removeItem(atPath: path) } catch {
+                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
@@ -481,18 +573,27 @@ struct OutboxDispatcher: OutboxDispatching {
         struct CreateCommentBody: Encodable {
             let content: String
             let parentId: String?
+            /// Lieu partagé — même clé `location` que le chemin direct
+            /// (`PostService.addComment`), hissée par le gateway depuis
+            /// `metadata.location`.
+            let location: SharedPlace?
+            let effectFlags: Int?
 
-            enum CodingKeys: String, CodingKey { case content, parentId }
+            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(content, forKey: .content)
                 if let parentId { try container.encode(parentId, forKey: .parentId) }
+                try container.encodeIfPresent(location, forKey: .location)
+                try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             }
         }
         let body = CreateCommentBody(
             content: payload.content,
-            parentId: payload.parentCommentId
+            parentId: payload.parentCommentId,
+            location: payload.location,
+            effectFlags: payload.effectFlags
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts/\(payload.postId)/comments",
@@ -569,26 +670,32 @@ struct OutboxDispatcher: OutboxDispatching {
     /// Durably reconciles a successful message send — independent of whether a
     /// `ConversationViewModel` is currently alive for the conversation.
     ///
-    /// Fix A: before this, the optimistic→server transition (`serverAck`) ran
-    /// ONLY from `ConversationViewModel`'s `retrySucceeded` Combine sink. When
-    /// an outbox flush completed while the user was outside the conversation
-    /// (the canonical "leave → reconnect → return" path), that transient
-    /// `PassthroughSubject` event was dropped, the optimistic GRDB row stayed
-    /// `.sending`, and a cold reload duplicated it against the real server
-    /// message. Applying the `serverAck` here — at the always-alive dispatcher
-    /// — guarantees the row flips to `.sent` and a `PendingIdRecord` is written
-    /// regardless of UI state. When a VM IS alive its sink runs the same
-    /// `applyEvent` again as a harmless no-op on the already-`.sent` record.
+    /// Without this, the optimistic→server transition (`serverAck`) only ran
+    /// from `ConversationViewModel`'s `retrySucceeded` Combine sink. When a
+    /// flush completed while the user was outside the conversation, that
+    /// transient `PassthroughSubject` event was dropped, the optimistic GRDB
+    /// row stayed `.sending`, and a cold reload duplicated it against the real
+    /// server message. Applying the `serverAck` here — at the always-alive
+    /// dispatcher — guarantees the row flips to `.sent` and a `PendingIdRecord`
+    /// is written regardless of UI state. When a VM IS alive its sink runs the
+    /// same `applyEvent` again as a harmless no-op on the already-`.sent` row.
     private func reconcileSuccessfulMessageSend(
         clientMessageId: String,
         serverId: String,
         conversationId: String
     ) async {
         let persistence = await DependencyContainer.shared.messagePersistence
-        _ = try? await persistence.applyEvent(
-            localId: clientMessageId,
-            event: .serverAck(serverId: serverId, at: Date())
-        )
+        do {
+            _ = try await persistence.applyEvent(
+                localId: clientMessageId,
+                event: .serverAck(serverId: serverId, at: Date())
+            )
+        } catch {
+            // Le serveur a accepté le message mais la ligne locale n'est pas
+            // passée `.sent` : la bulle reste « en cours d'envoi » jusqu'au
+            // prochain resync.
+            logger.error("Server ACK not applied for \(clientMessageId, privacy: .public), bubble stays 'sending': \(error.localizedDescription, privacy: .public)")
+        }
         await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
             cached.filter { $0.id != clientMessageId }
         }
@@ -602,23 +709,22 @@ struct OutboxDispatcher: OutboxDispatching {
 
     private func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
-            guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else {
+            let item: OfflineQueueItem
+            do {
+                item = try decoder.decode(OfflineQueueItem.self, from: record.payload)
+            } catch {
                 // Corrupt payload — accept to let the flusher remove the row.
-                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping")
+                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
                 return
             }
 
-            // A3 — multi-track audio offline write-ahead replay path.
-            // Task 4 routes single-audio enqueues through `enqueueAudios`, so
-            // the canonical field is `localAudioPaths` (array). Legacy rows
-            // written before Task 4 may still carry only `localAudioPath`
-            // (scalar). Both are resolved here so the dispatcher handles every
-            // row shape. Each track is uploaded via TUS independently; any
-            // track whose file is missing or whose upload throws is skipped
-            // (best-effort). All successfully-uploaded ids are sent in a
-            // single `message:send-with-attachments` socket event so the
-            // gateway runs Whisper transcription + NLLB translation +
-            // Chatterbox TTS exactly like an online multi-track send.
+            // Multi-track audio offline replay. The canonical field is
+            // `localAudioPaths` (array); legacy rows may still carry only
+            // `localAudioPath` (scalar). Both are resolved so the dispatcher
+            // handles every row shape. Each track is uploaded via TUS
+            // independently; missing or failed tracks are skipped
+            // (best-effort). All uploaded ids go out in a single
+            // `message:send-with-attachments` socket event.
             let pendingAudioPaths: [String] = {
                 if let many = item.localAudioPaths, !many.isEmpty { return many }
                 if let one = item.localAudioPath, !one.isEmpty { return [one] }
@@ -674,7 +780,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — le canal socket porte la
+                    // même clé `location` que le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -689,7 +798,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
                 // the outbox record terminates (applied or exhausted), which
                 // now sweeps both `localAudioPath` and `localAudioPaths`.
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("audio dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -699,14 +812,13 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
-            // S7b ST3 — offline VISUAL-media (photo/video) replay, the parity
-            // twin of the audio branch above. Each pending file (relocated under
-            // Documents/pending-media/ by enqueueMedia) is uploaded via TUS with
-            // a MIME derived from its preserved extension (MimeTypeResolver —
-            // the audio branch hardcodes audio/mp4), then all ids go out in one
-            // message:send-with-attachments. The within-session TUS checkpoint
-            // resume fires automatically on re-upload (same sha256 key), so a
-            // kill mid-upload resumes from the saved offset (S8).
+            // Offline visual-media (photo/video) replay. Each pending file
+            // (relocated under Documents/pending-media/ by enqueueMedia) is
+            // uploaded via TUS with a MIME derived from its extension (unlike
+            // the audio branch which hardcodes audio/mp4), then all ids go out
+            // in one message:send-with-attachments. TUS checkpoint resume fires
+            // on re-upload (same sha256 key), so a kill mid-upload resumes from
+            // the saved offset.
             if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
@@ -758,7 +870,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — même clé `location` que
+                    // le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -768,7 +883,11 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                 }
 
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("media dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -784,7 +903,10 @@ struct OutboxDispatcher: OutboxDispatching {
                 forwardedFromId: item.forwardedFromId,
                 forwardedFromConversationId: item.forwardedFromConversationId,
                 attachmentIds: item.attachmentIds,
-                clientMessageId: item.clientMessageId
+                clientMessageId: item.clientMessageId,
+                // Lieu partagé rejoué au renvoi, comme pour un post et un
+                // commentaire : clé top-level `location`, omise quand nil.
+                location: item.location
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
@@ -799,17 +921,15 @@ struct OutboxDispatcher: OutboxDispatching {
             )
 
         } else if record.id.hasPrefix("mrq_") {
-            // Wave 1 Task 3.6 — `MessageRetryQueue` was removed but legacy
-            // `mrq_*` rows may still live on user devices that upgraded mid-
-            // queue. The payload format (`RetryQueueItem`) was a strict
-            // superset of the fields we care about for replay (content,
-            // originalLanguage, replyToId, attachmentIds, clientMessageId) ;
-            // we hand-roll a minimal struct here so we don't need to keep
-            // the deleted public types around just for legacy decoding.
+            // `MessageRetryQueue` was removed but legacy `mrq_*` rows may
+            // still live on devices that upgraded mid-queue. The payload
+            // format was a strict superset of the fields needed for replay;
+            // we hand-roll a minimal struct here instead of keeping the
+            // deleted public types around just for legacy decoding.
             //
-            // Decoded rows are sent through the SAME unified
-            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows so
-            // ConversationViewModel reconciles via a single subscription.
+            // Decoded rows are sent through the same unified
+            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows
+            // so ConversationViewModel reconciles via a single subscription.
             struct LegacyMrqPayload: Decodable {
                 let conversationId: String
                 let content: String
@@ -818,9 +938,15 @@ struct OutboxDispatcher: OutboxDispatching {
                 let attachmentIds: [String]?
                 let clientMessageId: String?
             }
-            guard let item = try? decoder.decode(LegacyMrqPayload.self, from: record.payload),
-                  let clientMessageId = item.clientMessageId else {
-                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping")
+            let item: LegacyMrqPayload
+            do {
+                item = try decoder.decode(LegacyMrqPayload.self, from: record.payload)
+            } catch {
+                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+            guard let clientMessageId = item.clientMessageId else {
+                logger.error("Legacy mrq_* payload without clientMessageId for record \(record.id, privacy: .public), dropping")
                 return
             }
             let request = SendMessageRequest(
@@ -845,8 +971,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Edit Message
 
     private func dispatchEditMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineEditPayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineEditPayload
+        do {
+            payload = try decoder.decode(OfflineEditPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         _ = try await MessageService.shared.edit(
@@ -859,8 +988,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Delete Message
 
     private func dispatchDeleteMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineDeletePayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineDeletePayload
+        do {
+            payload = try decoder.decode(OfflineDeletePayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         try await MessageService.shared.delete(
@@ -873,8 +1005,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Send Reaction
 
     private func dispatchSendReaction(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
-            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping")
+        let payload: ReactionOutboxPayload
+        do {
+            payload = try decoder.decode(ReactionOutboxPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         do {
@@ -891,14 +1026,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 )
             }
             logger.info("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) dispatched for message \(payload.messageId, privacy: .public)")
-            // Wave 1 Task 3.6 — emit unified success. We don't have a
-            // server-assigned id for reactions (the gateway broadcasts
-            // `reaction:added` / `reaction:removed` over the socket which
-            // the rest of the app already consumes), but the call still
-            // carries enough context for any pending-indicator UI to clear
-            // its hint. `serverId` is set to the reaction `clientMessageId`
-            // as a stable placeholder so subscribers reading it never see
-            // an empty string.
+            // Reactions have no server-assigned id (the gateway broadcasts
+            // `reaction:added` / `reaction:removed` over the socket), but
+            // the success signal still carries enough context for any
+            // pending-indicator UI to clear its hint. `serverId` is set to
+            // `clientMessageId` as a stable non-empty placeholder.
             OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
                 clientMessageId: payload.clientMessageId,
                 serverId: payload.clientMessageId,
@@ -936,6 +1068,80 @@ struct OutboxDispatcher: OutboxDispatching {
     }
 }
 
+// MARK: - updateProfile wire bodies
+
+/// Wire body for `PATCH /users/me/avatar` — mirrors the online path's
+/// `UserService.updateAvatar(url:)` body shape (`updateAvatarSchema` on the
+/// gateway: `{ avatar: string }`).
+nonisolated struct UpdateProfileAvatarBody: Encodable {
+    let avatar: String
+}
+
+/// Corps de `POST /conversations/:id/mark-read` — les messages RÉELLEMENT
+/// affichés. `MarkReadBodySchema` est `.strict()` côté gateway : toute clé non
+/// déclarée rejette la requête ENTIÈRE en 400, ce qui perdrait aussi les
+/// lectures légitimes du même lot. D'où un type qui ne porte que `messageIds`.
+/// `internal` (et non `private`) pour que son contrat d'encodage soit
+/// directement testable depuis `MeeshyTests`.
+///
+/// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+nonisolated struct MarkAsReadBody: Encodable {
+    let messageIds: [String]
+
+    /// Version linguistique affichée pendant que le lot défilait.
+    var language: String?
+
+    /// EXCEPTIONS à `language`, par message : sans traduction disponible, c'est
+    /// l'ORIGINAL qui s'affiche. Restreintes au lot réellement envoyé — le
+    /// gateway n'accepte que des identifiants qu'il vient de recevoir, une clé
+    /// écartée par le plafond ferait rejeter le corps entier.
+    var messageLanguages: [String: String]?
+
+    /// Le lecteur a atteint ce message, le plus récent : le curseur de non-lus
+    /// avance jusque-là et le badge tombe à zéro côté serveur. N'élargit PAS
+    /// l'ensemble des messages marqués lus — cf. `MarkAsReadPayload`.
+    var caughtUpToMessageId: String?
+
+    /// Plafond accepté par le gateway.
+    static let limit = 200
+
+    /// Tronque en gardant les PLUS RÉCENTS : ce sont ceux que l'utilisateur
+    /// vient de voir, et dépasser la borne ferait rejeter tout le lot.
+    static func cap(_ ids: [String]) -> [String] {
+        ids.count <= limit ? ids : Array(ids.suffix(limit))
+    }
+
+    /// Restreint les exceptions aux identifiants effectivement rapportés.
+    static func scopedLanguages(
+        _ table: [String: String]?,
+        to reported: [String]
+    ) -> [String: String]? {
+        guard let table, !table.isEmpty else { return nil }
+        let allowed = Set(reported)
+        let scoped = table.filter { allowed.contains($0.key) }
+        return scoped.isEmpty ? nil : scoped
+    }
+}
+
+/// Wire body for `PATCH /users/me`. Deliberately has NO `avatar` property —
+/// the gateway's `updateUserProfileSchema` (packages/shared/utils/validation.ts)
+/// is `.strict()` and rejects any key it doesn't declare with a 400 that takes
+/// down the WHOLE request, so an `avatar` key here previously blocked
+/// displayName/bio from ever saving. `internal` (not `private`) so its
+/// encoding contract is directly testable from `MeeshyTests`.
+nonisolated struct UpdateProfileFieldsBody: Encodable {
+    let displayName: String?
+    let bio: String?
+
+    enum CodingKeys: String, CodingKey { case displayName, bio }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let displayName { try container.encode(displayName, forKey: .displayName) }
+        if let bio { try container.encode(bio, forKey: .bio) }
+    }
+}
+
 // MARK: - On-demand outbox drain
 
 /// Triggers an immediate outbox drain. `OutboxFlusher.flush()` otherwise
@@ -954,7 +1160,6 @@ enum OutboxFlushTrigger {
             onOutcome: { @Sendable outcome in
                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
             },
-            // BW1 — bandwidth gate (cf. MeeshyApp boot flusher).
             isNetworkReachable: { @Sendable in
                 await MainActor.run { NetworkConditionMonitor.shared.isOnline }
             }
@@ -978,9 +1183,10 @@ final class OutboxRetryScheduler {
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
+    private var mutationCancellable: AnyCancellable?
     private init() {}
 
-    /// Réveille le flusher à chaque transition réseau offline→online (T10).
+    /// Réveille le flusher à chaque transition réseau offline→online.
     ///
     /// `OutboxFlusher.flush()` est bandwidth-gated : une mutation enqueueée
     /// hors-ligne court-circuite, et comme rien n'est différé, AUCUN timer de
@@ -999,6 +1205,22 @@ final class OutboxRetryScheduler {
             .removeDuplicates()
             .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
             .filter { $0 }          // uniquement offline→online
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
+
+    /// outbox-04 — réveille le flusher juste après une mutation sociale
+    /// enfilée EN LIGNE (like/post/commentaire) : sans ce trigger la row
+    /// reste `.pending` jusqu'au prochain événement de cycle de vie incident
+    /// (reconnect, boot, foreground). Débounce 250 ms : une rafale (double-tap
+    /// like, commentaires d'affilée) ne déclenche qu'un seul flush groupé.
+    /// Publisher + flush injectés pour la testabilité — même pattern que
+    /// `startObservingNetworkReconnect`.
+    func startObservingMutationEnqueued(
+        mutationPublisher: AnyPublisher<Void, Never> = OfflineQueue.shared.mutationEnqueued.publisher,
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        mutationCancellable = mutationPublisher
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
             .sink { _ in Task { @MainActor in await flush() } }
     }
 

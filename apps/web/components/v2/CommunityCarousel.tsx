@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+import { formatCompactNumber } from '@/utils/format-number';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 export interface CommunityItem {
   id: string;
@@ -93,15 +95,7 @@ function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }): React.JSX
   );
 }
 
-function formatCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}k`;
-  }
-  return count.toString();
-}
+const formatCount = formatCompactNumber;
 
 interface CommunityCardProps {
   id: string;
@@ -146,7 +140,7 @@ function CommunityCard({
       {/* Fond */}
       {banner ? (
         <img
-          src={banner}
+          src={buildAttachmentUrl(banner) ?? undefined}
           alt={name}
           width={400}
           height={300}

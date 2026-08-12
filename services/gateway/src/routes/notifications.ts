@@ -6,6 +6,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
+import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import {
   notificationSchema,
   errorResponseSchema,
@@ -82,11 +83,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         const userId = request.user!.userId;
         const { offset = 0, limit = 20, unreadOnly = false } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean };
 
-        // Récupérer les notifications BRUTES de Prisma (pas encore formatées)
-        const where: any = { userId };
-        if (unreadOnly) {
-          where.isRead = false;
-        }
+        // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
+        // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
+        // une liste et un badge qui ne s'accordent pas sur ce qui est visible
+        // se contredisent à l'écran.
+        const where = visibleNotificationsWhere({ userId, unreadOnly });
 
         const [rawNotifications, total, unreadCount] = await Promise.all([
           fastify.prisma.notification.findMany({
@@ -320,6 +321,67 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // POST /notifications/post/:postId/read
+  // Marque toutes les notifications liées à un post comme lues.
+  // Appelé à l'ouverture d'une story / d'un post : le contenu étant consommé,
+  // ses notifications ne doivent plus apparaître comme non lues.
+  //
+  // Distinct de l'appel opportuniste fait par `POST /posts/:postId/view`, qui
+  // est borné à la PREMIÈRE vue : une notification arrivée après cette première
+  // vue (nouveau commentaire, réaction) resterait non lue pour toujours, et le
+  // « vu » client est coalescé donc la seconde ouverture ne repart même pas.
+  // ============================================
+
+  fastify.post(
+    '/notifications/post/:postId/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Mark all notifications of a post (story, status, feed post) as read',
+        tags: ['notifications'],
+        summary: 'Mark post notifications as read',
+        params: {
+          type: 'object',
+          properties: {
+            postId: { type: 'string', description: 'Post / story ID' },
+          },
+          required: ['postId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications marked as read',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+        const { postId } = request.params as { postId: string };
+
+        const count = await notificationService.markPostNotificationsAsRead(userId, postId);
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error marking post notifications as read');
+        return sendInternalError(reply, 'Failed to mark post notifications as read');
+      }
+    }
+  );
+
+  // ============================================
   // POST /notifications/read-by-types
   // Marque comme lues toutes les notifications de l'utilisateur dont le type
   // est dans la liste fournie. Appelé quand un écran consomme une catégorie
@@ -374,6 +436,52 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       } catch (error) {
         fastify.log.error({ error }, 'Error marking notifications by types as read');
         return sendInternalError(reply, 'Failed to mark notifications as read');
+      }
+    }
+  );
+
+  // ============================================
+  // DELETE /notifications/read - Supprimer toutes les notifications lues
+  // Route STATIQUE : elle gagne sur DELETE /notifications/:id dans find-my-way.
+  // Sans elle, l'appel (déjà émis par le web) matchait :id avec id="read" → 404.
+  // ============================================
+
+  fastify.delete(
+    '/notifications/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Delete all read notifications of the current user',
+        tags: ['notifications'],
+        summary: 'Delete read notifications',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications deleted',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+        const count = await notificationService.deleteAllRead(userId);
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error deleting read notifications');
+        return sendInternalError(reply, 'Failed to delete read notifications');
       }
     }
   );
@@ -438,59 +546,6 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       } catch (error) {
         fastify.log.error({ error }, 'Error deleting notification');
         return sendInternalError(reply, 'Failed to delete notification');
-      }
-    }
-  );
-
-  // ============================================
-  // DELETE /notifications/test/clear-all - Nettoyer toutes les notifications (TEMP - NO AUTH CHECK)
-  // ============================================
-
-  fastify.delete(
-    '/notifications/test/clear-all',
-    {
-      onRequest: [fastify.authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        fastify.log.warn('TEMP: Clearing all notifications (no admin check)');
-
-        const result = await fastify.prisma.notification.deleteMany({});
-
-        return sendSuccess(reply, { deletedCount: result.count });
-      } catch (error) {
-        fastify.log.error({ error }, 'Error clearing notifications');
-        return sendInternalError(reply, 'Failed to clear notifications');
-      }
-    }
-  );
-
-  // ============================================
-  // POST /notifications/test/create - Créer une notification de test
-  // ============================================
-
-  fastify.post(
-    '/notifications/test/create',
-    {
-      onRequest: [fastify.authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        const userId = request.user!.userId;
-        const body = request.body as { recipientUserId?: string; conversationId?: string; message?: string };
-
-        const notification = await notificationService.createMessageNotification({
-          recipientUserId: body.recipientUserId || userId,
-          senderId: userId,
-          messageId: 'test-msg-' + Date.now(),
-          conversationId: body.conversationId || 'test-conv-' + Date.now(),
-          messagePreview: body.message || 'Test notification depuis API',
-        });
-
-        return sendSuccess(reply, { notification });
-      } catch (error) {
-        fastify.log.error({ error }, 'Error creating test notification');
-        return sendInternalError(reply, 'Failed to create test notification');
       }
     }
   );

@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class MessageFrameTrackerTests: XCTestCase {
 
     private func makeTracker(maxEntries: Int = 200) -> MessageFrameTracker {
