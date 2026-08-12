@@ -58,6 +58,21 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
       }),
     },
     postMedia: {
+      // Lue AVANT la destruction des lignes ET avant celle des commentaires :
+      // c'est par elle que la passe fige la liste des médias et retrouve les
+      // fichiers à effacer (`reclaimMediaRowBytes`). Rend une ligne par cible
+      // désignée, pour que les gardes puissent suivre ce qui en découle.
+      findMany: jest.fn(async (args: any) => {
+        calls.push('postMedia.findMany');
+        const targets: string[] = (args?.where?.OR ?? []).flatMap(
+          (clause: any) => clause.postId?.in ?? clause.commentId?.in ?? [],
+        );
+        return targets.map((target) => ({
+          id: `media-of-${target}`,
+          fileUrl: `/f/${target}.jpg`,
+          thumbnailUrl: null,
+        }));
+      }),
       deleteMany: jest.fn(async (args: any) => {
         calls.push('postMedia.deleteMany');
         return { count: 0 };
@@ -84,6 +99,9 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
       }),
     },
     sound: {
+      // La garde de récupération des octets : un fichier encore référencé par
+      // un son vivant n'est pas effacé. Aucun ici.
+      findMany: jest.fn(async () => []),
       update: jest.fn(async () => ({})),
     },
     // Le retrait des notifications gouverne désormais la passe : sans ces deux
@@ -138,6 +156,7 @@ function makeSimplePrisma() {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postMedia: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     trackingLink: {
@@ -148,6 +167,7 @@ function makeSimplePrisma() {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     sound: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     $runCommandRaw: jest.fn<any>().mockResolvedValue({ cursor: { firstBatch: [] } }),
@@ -287,7 +307,9 @@ describe('ExpiredStoriesCleanupService — G7 media-orphan purge', () => {
   // PostMedia.post and PostMedia.comment are `onDelete: SetNull`: without an
   // explicit purge, every hard-deleted story left its media rows orphaned
   // (postId/commentId = null) forever — stories are the most media-heavy
-  // content and ALL of them expire. Disk files are a separate follow-up.
+  // content and ALL of them expire. Les lignes sont DÉSIGNÉES par une lecture
+  // préalable puis détruites PAR ID : le même `SetNull` cachait les médias de
+  // commentaire à un `where` rejoué après la suppression des commentaires.
   it('purges media rows of the deleted posts BEFORE deleting the posts', async () => {
     const fake = makeFakePrisma({
       storyIds: ['story1'],
@@ -303,10 +325,14 @@ describe('ExpiredStoriesCleanupService — G7 media-orphan purge', () => {
     expect(mediaIdx).toBeGreaterThanOrEqual(0);
     expect(mediaIdx).toBeLessThan(postIdx);
 
-    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
-    const orClauses = args.where.OR as any[];
-    const postClause = orClauses.find((c) => c.postId);
+    const lookup = (fake.prisma.postMedia.findMany as jest.Mock).mock.calls[0][0] as any;
+    const postClause = (lookup.where.OR as any[]).find((c) => c.postId);
     expect(postClause.postId.in).toEqual(expect.arrayContaining(['story1', 'repost1']));
+
+    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
+    expect(args.where.id.in).toEqual(
+      expect.arrayContaining(['media-of-story1', 'media-of-repost1']),
+    );
   });
 
   it('also purges media attached to the deleted comments (commentId leg)', async () => {
@@ -319,10 +345,17 @@ describe('ExpiredStoriesCleanupService — G7 media-orphan purge', () => {
 
     await service.cleanup();
 
-    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
-    const orClauses = args.where.OR as any[];
-    const commentClause = orClauses.find((c) => c.commentId);
+    const lookup = (fake.prisma.postMedia.findMany as jest.Mock).mock.calls[0][0] as any;
+    const commentClause = (lookup.where.OR as any[]).find((c) => c.commentId);
     expect(commentClause.commentId.in).toEqual(['c1']);
+
+    // La désignation précède la suppression des commentaires ; sans cela le
+    // `SetNull` aurait déjà vidé `commentId` et ce média serait resté orphelin.
+    expect(fake.calls.indexOf('postMedia.findMany'))
+      .toBeLessThan(fake.calls.indexOf('postComment.deleteMany'));
+
+    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
+    expect(args.where.id.in).toContain('media-of-c1');
   });
 });
 

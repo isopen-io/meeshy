@@ -58,6 +58,9 @@ function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: str
     // explicite, chaque story détruite laissait ses lignes média orphelines
     // pour toujours.
     postMedia: {
+      // Lue AVANT la purge : c'est par elle que la passe retrouve les fichiers
+      // à effacer (`reclaimPostMediaBytes`).
+      findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };

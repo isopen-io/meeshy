@@ -22,6 +22,7 @@ import { composeStoryContent, storyTextObjectText } from './posts/storyContentCo
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -804,7 +805,21 @@ export class PostService {
       // (`qualifiesAsReel`, y compris le plancher de durée 3s) sur la liste
       // FINALE des médias — Prisma `select` : tout champ vérifié DOIT y
       // figurer.
-      include: { media: { select: { id: true, mimeType: true, duration: true } } },
+      // `fileUrl`/`thumbnailUrl` : les octets des médias RETIRÉS par cette
+      // édition, lus ICI parce qu'après la transaction plus aucune ligne ne
+      // dira où ils sont (cf. `reclaimMediaRowBytes`). Coût nul — la requête
+      // partait de toute façon.
+      include: {
+        media: {
+          select: {
+            id: true,
+            mimeType: true,
+            duration: true,
+            fileUrl: true,
+            thumbnailUrl: true,
+          },
+        },
+      },
     });
 
     if (!post) return null;
@@ -984,6 +999,23 @@ export class PostService {
         include: postInclude,
       });
     });
+
+    // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
+    // et c'est l'inverse de l'ordre du balayage : ici la transaction peut
+    // encore échouer, et effacer avant elle détruirait les fichiers de lignes
+    // qui survivent. Les chemins sont lus plus haut, sur le `post` chargé —
+    // après le commit, aucune ligne ne les porte plus.
+    //
+    // BEST-EFFORT, contrairement au balayage qui rejette : là-bas renoncer
+    // repousse la destruction à la passe suivante ; ici les lignes sont DÉJÀ
+    // parties, donc rejeter transformerait une édition réussie en 500 sans
+    // rien récupérer.
+    if (mediaIdsToRemove.length > 0) {
+      const doomed = post.media.filter((m) => removalSet.has(m.id));
+      await reclaimMediaRowBytes(this.prisma, this.mediaService, doomed).catch((err: unknown) => {
+        log.warn('[PostService] updatePost: media byte reclamation failed', { postId, err });
+      });
+    }
 
     if (languageChanged) {
       const content = data.content ?? post.content;

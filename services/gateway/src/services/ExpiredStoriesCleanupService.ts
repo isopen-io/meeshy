@@ -4,9 +4,12 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
+import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { NOT_DELETED } from './posts/softDelete';
+import { MediaService } from './MediaService';
+import type { MediaStorage } from './storage/MediaStorage';
 
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
 
@@ -53,6 +56,8 @@ export class ExpiredStoriesCleanupService {
   private softDeleteAfterExpiryMs: number;
   /** Seul propriétaire de la logique d'usages : la purge ne la réimplémente pas. */
   private soundCaptureService: SoundCaptureService;
+  /** Qui efface les octets. Même défaut que `PostService` — le volume local. */
+  private mediaStorage: MediaStorage;
 
   constructor(
     private prisma: PrismaClient,
@@ -61,9 +66,11 @@ export class ExpiredStoriesCleanupService {
       hardDeleteAgeMs?: number;
       hardDeleteBatchSize?: number;
       softDeleteAfterExpiryMs?: number;
+      mediaStorage?: MediaStorage;
     } = {},
   ) {
     this.soundCaptureService = new SoundCaptureService(prisma);
+    this.mediaStorage = options.mediaStorage ?? new MediaService();
     // 6h soft-delete window: clients holding stale `StoryItem` refs from cache
     // can still resolve them while their own TTL is valid; new fetchers will
     // see the post as deleted.
@@ -270,6 +277,24 @@ export class ExpiredStoriesCleanupService {
         });
         const commentIds = commentRows.map((c) => c.id);
 
+        // Les lignes média sont IDENTIFIÉES ici, avant la suppression des
+        // commentaires — et pas plus tard, au moment de les détruire. Le
+        // `onDelete: SetNull` que le bloc ci-dessus invoque joue AUSSI contre
+        // celui qui interroge trop tard : sitôt les commentaires supprimés,
+        // `PostMedia.commentId` vaut `null`, et un `where` sur `commentId` ne
+        // trouve plus rien. Identifier d'abord fige la liste ; c'est aussi ce
+        // qui donne aux octets un chemin, puisque après la purge plus aucune
+        // ligne ne dit où ils sont.
+        const doomedMedia = await this.prisma.postMedia.findMany({
+          where: {
+            OR: [
+              { postId: { in: allPostIds } },
+              { commentId: { in: commentIds } },
+            ],
+          },
+          select: { id: true, fileUrl: true, thumbnailUrl: true },
+        });
+
         // Clear PostComments BEFORE deleting the posts. The cascade from
         // Post→PostComment would otherwise hit the `CommentReplies`
         // self-relation (onDelete: NoAction): Prisma's MongoDB referential
@@ -297,19 +322,34 @@ export class ExpiredStoriesCleanupService {
         // passe horaire suivante rejoue tout.
         await this.soundCaptureService.releasePosts(allPostIds);
 
+        // Les OCTETS avant les LIGNES, et l'ordre porte tout : la ligne est le
+        // seul chemin qui relie un post à ses fichiers. Détruite en premier,
+        // elle laisserait des fichiers qu'aucun balayage ne sait plus nommer —
+        // et servis par une route sans authentification, donc téléchargeables
+        // pour toujours. C'est le suivi que le commentaire ci-dessous annonçait
+        // (« Disk-file reclamation is a separate follow-up ») ; il est fait.
+        //
+        // REJETTE volontairement, comme ses deux voisins juste au-dessus : une
+        // requête en échec doit renoncer à la destruction, pas la précéder.
+        // Détail des deux régimes d'échec dans `reclaimPostMediaBytes`.
+        const reclaimedBytes = await reclaimMediaRowBytes(this.prisma, this.mediaStorage, doomedMedia);
+        if (reclaimedBytes > 0) {
+          log.info('reclaimed media files of hard-deleted posts', { count: reclaimedBytes });
+        }
+
         // G7 — PostMedia.post/.comment are `onDelete: SetNull`: without this
         // explicit purge every hard-deleted story left its media rows
         // orphaned (postId = null) FOREVER — stories are the most
-        // media-heavy content and all of them expire. Disk-file reclamation
-        // is a separate follow-up (fileUrl→path resolution, prod caution);
-        // this closes the unbounded DB-row leak.
+        // media-heavy content and all of them expire. This closes the
+        // unbounded DB-row leak; the disk files are reclaimed just above.
+        //
+        // Par ID, et non plus par un `where` rejouant `postId`/`commentId` :
+        // celui des deux qui portait `commentId` n'appariait plus rien, la
+        // suppression des commentaires l'ayant mis à `null` quelques lignes
+        // plus haut. Le média d'un commentaire de story détruite restait donc
+        // orphelin — exactement la fuite que ce bloc a été écrit pour fermer.
         const mediaResult = await this.prisma.postMedia.deleteMany({
-          where: {
-            OR: [
-              { postId: { in: allPostIds } },
-              { commentId: { in: commentIds } },
-            ],
-          },
+          where: { id: { in: doomedMedia.map((media) => media.id) } },
         });
         if (mediaResult.count > 0) {
           log.info('purged media rows of hard-deleted stories', { count: mediaResult.count });
