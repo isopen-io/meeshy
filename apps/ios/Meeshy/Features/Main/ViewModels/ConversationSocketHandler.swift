@@ -674,8 +674,11 @@ final class ConversationSocketHandler {
                 // marque la cle pour que la nouvelle pill joue la comete au
                 // prochain rendu. La propre reaction de l'utilisateur a deja ete
                 // marquee+animee par le toggle optimiste (`toggleReaction`), donc
-                // on ne la re-anime pas ici.
-                if event.participantId != self.currentUserId {
+                // on ne la re-anime pas ici. La garde compare `userId` (User.id,
+                // identité stable) — `participantId` est un Participant.id qui
+                // ne vaut JAMAIS `currentUserId`, donc l'écho de sa propre
+                // réaction re-déclenchait la comète une seconde fois.
+                if (event.userId ?? event.participantId) != self.currentUserId {
                     let animMessageId = event.messageId
                     let animEmoji = event.emoji
                     Task { @MainActor in
@@ -693,6 +696,7 @@ final class ConversationSocketHandler {
                 let participantId = event.participantId
                 let emoji = event.emoji
                 let maxCount = event.aggregation?.count
+                let ownerUserId = event.userId
                 Task {
                     do {
                         try await persistence.appendReaction(
@@ -701,7 +705,8 @@ final class ConversationSocketHandler {
                             messageId: msgId,
                             participantId: participantId,
                             emoji: emoji,
-                            maxCount: maxCount
+                            maxCount: maxCount,
+                            ownerUserId: ownerUserId
                         )
                     } catch {
                         Logger.messages.warning("[ConversationSocket] appendReaction failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -722,7 +727,8 @@ final class ConversationSocketHandler {
                         try await persistence.removeReaction(
                             localId: event.messageId,
                             emoji: event.emoji,
-                            participantId: event.participantId
+                            participantId: event.participantId,
+                            ownerUserId: event.userId
                         )
                     } catch {
                         Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")

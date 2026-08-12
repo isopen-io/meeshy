@@ -433,6 +433,35 @@ class PostDetailViewModel: ObservableObject {
         commentLikedIds.formUnion(liked)
     }
 
+    /// Réconciliation par l'agrégat ABSOLU d'un événement cœur de commentaire :
+    /// pose `likes = count` sur la ligne (top-level ou réponse), purge le delta
+    /// optimiste, et dérive « mon cœur » de `reactorUserIds` (la liste des
+    /// User.id ayant réagi — PAS `hasCurrentUser`, qui est calculé côté gateway
+    /// relativement à l'ACTEUR de l'événement, donc faux pour les destinataires
+    /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
+    /// serveur sans jamais compter double.
+    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String]) {
+        if let myId = AuthManager.shared.currentUser?.id {
+            if reactorUserIds.contains(myId) {
+                commentLikedIds.insert(commentId)
+            } else {
+                commentLikedIds.remove(commentId)
+            }
+        }
+        commentLikeDelta[commentId] = nil
+        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
+            comments[idx].likes = count
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx].likes = count
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
+
     /// Like/unlike d'un commentaire — optimistic + réaction socket cœur + rollback.
     /// Miroir exact de `CommentsSheetView.toggleCommentLike` pour que le like de
     /// commentaire dans le détail de post se comporte comme dans la sheet.
@@ -1100,16 +1129,23 @@ class PostDetailViewModel: ObservableObject {
         // Réactions cœur de commentaire en temps réel (miroir de CommentsSheetView) :
         // synchronise `commentLikedIds` (réaction du user courant) ou `commentLikeDelta`
         // (réaction d'un tiers) sans toucher l'optimistic local déjà appliqué.
+        // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
+        // `StoryViewerView.applyCommentReactionEvent`) : l'événement porte
+        // `aggregation.count` (état global après application) et
+        // `hasCurrentUser`. L'ancien ±1 sur `commentLikeDelta` ne purgeait
+        // jamais le delta de sa PROPRE réaction : dès que la base était
+        // rafraîchie (`loadReplies`, refetch), `likes` incluait déjà le like
+        // et l'affichage `likes + delta` comptait DOUBLE.
         socialSocket.commentReactionAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }
             .sink { [weak self] event in
                 guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
-                if event.userId == AuthManager.shared.currentUser?.id {
-                    self.commentLikedIds.insert(event.commentId)
-                } else {
-                    self.commentLikeDelta[event.commentId, default: 0] += 1
-                }
+                self.applyCommentReactionAggregate(
+                    commentId: event.commentId,
+                    count: event.aggregation.count,
+                    reactorUserIds: event.aggregation.userIds
+                )
             }
             .store(in: &socketCancellables)
 
@@ -1118,11 +1154,11 @@ class PostDetailViewModel: ObservableObject {
             .filter { $0.postId == postId }
             .sink { [weak self] event in
                 guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
-                if event.userId == AuthManager.shared.currentUser?.id {
-                    self.commentLikedIds.remove(event.commentId)
-                } else {
-                    self.commentLikeDelta[event.commentId, default: 0] -= 1
-                }
+                self.applyCommentReactionAggregate(
+                    commentId: event.commentId,
+                    count: event.aggregation.count,
+                    reactorUserIds: event.aggregation.userIds
+                )
             }
             .store(in: &socketCancellables)
 

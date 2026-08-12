@@ -828,6 +828,47 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.comments.first?.id, "c-other")
     }
 
+    // MARK: - Réactions de commentaire : agrégat absolu (anti double-compte)
+
+    /// L'événement cœur porte l'agrégat ABSOLU : la réconciliation pose
+    /// `likes = count` et PURGE le delta optimiste. L'ancien ±1 laissait le
+    /// delta de sa propre réaction empilé pour toute la session → dès que la
+    /// base était rafraîchie, `likes + delta` comptait DOUBLE.
+    func test_commentReactionAdded_appliesAbsoluteCountAndPurgesDelta() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 2)]
+        sut.commentLikeDelta["c1"] = 1
+
+        let event: SocketCommentReactionUpdateEvent = JSONStub.decode("""
+        {"commentId":"c1","postId":"p1","userId":"me","emoji":"\u{2764}\u{FE0F}","action":"added","aggregation":{"emoji":"\u{2764}\u{FE0F}","count":3,"userIds":["me","u2","u3"],"hasCurrentUser":true}}
+        """)
+        socket.commentReactionAdded.send(event)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.first?.likes, 3, "le count absolu de l'agrégat fait autorité")
+        XCTAssertNil(sut.commentLikeDelta["c1"], "le delta optimiste est purgé — likes + delta ne compte plus double")
+    }
+
+    func test_commentReactionAggregate_updatesReplyRowInsideRepliesMap() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)]
+        sut.repliesMap = ["c1": [FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", likes: 0, parentId: "c1")]]
+        sut.commentLikeDelta["r1"] = 1
+
+        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"])
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.likes, 5)
+        XCTAssertNil(sut.commentLikeDelta["r1"])
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

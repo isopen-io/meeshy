@@ -2966,9 +2966,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
 
     /// Realtime delta for a STORY reaction (`story:reacted`/`story:unreacted` — fan-out
-    /// distinct des events POST). La réaction propre est fire-and-forget (`sendReaction`
-    /// n'incrémente pas en optimiste), donc l'écho de sa propre action fournit le +1 sans
-    /// double-compte. Non-`private` pour permettre la vérification unitaire.
+    /// distinct des events POST). L'optimiste du viewer vit dans son @State
+    /// (`StoryViewerView.sendReaction` incrémente `storyReactionCount` localement,
+    /// PAS `item.reactionCount`) ; l'écho de sa propre action fournit ici le +1 sur
+    /// l'item, et le miroir absolu (`storyReactionCount = currentStory?.reactionCount`)
+    /// écrase l'optimiste — les deux chemins convergent sans double-compte.
+    /// Non-`private` pour permettre la vérification unitaire.
     func applyStoryReactionDelta(storyId: String, userId: String, emoji: String, delta: Int) {
         let myId = AuthManager.shared.currentUser?.id
         mutateStoryItem(byPostId: storyId) { item in

@@ -347,6 +347,34 @@ struct CommentsSheetView: View {
         return localOnly + fetched
     }
 
+    /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
+    /// pose `likes = count` (top-level ou réponse), purge le delta optimiste et
+    /// dérive « mon cœur » de la liste des réacteurs. Miroir de
+    /// `PostDetailViewModel.applyCommentReactionAggregate`.
+    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String]) {
+        if let myId = AuthManager.shared.currentUser?.id {
+            if reactorUserIds.contains(myId) {
+                likedIds.insert(commentId)
+            } else {
+                likedIds.remove(commentId)
+            }
+        }
+        likeDelta[commentId] = nil
+        var current = liveComments ?? post.comments
+        if let idx = current.firstIndex(where: { $0.id == commentId }) {
+            current[idx].likes = count
+            liveComments = current
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx].likes = count
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
+
     /// Removes the optimistic `tempId` row (and decrements its parent's reply
     /// count / the sheet's total count) — shared by the synchronous
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
@@ -591,18 +619,24 @@ struct CommentsSheetView: View {
             }
             liveCommentCount = data.commentCount
         }
+        // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
+        // `StoryViewerView.applyCommentReactionEvent`) : l'ancien ±1 ne purgeait
+        // jamais le delta de sa PROPRE réaction — dès que la base était
+        // rafraîchie (loadReplies, refetch), `likes` incluait déjà le like et
+        // l'affichage `likes + delta` comptait DOUBLE. « Mon cœur » dérive de
+        // `aggregation.userIds` (User.id des réacteurs), PAS de `hasCurrentUser`
+        // qui est calculé relativement à l'ACTEUR de l'événement côté gateway.
         .onReceive(
             SocialSocketManager.shared.commentReactionAdded
                 .receive(on: DispatchQueue.main)
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { event in
             guard event.emoji == StoryViewerView.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                likedIds.insert(event.commentId)
-            } else {
-                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) + 1
-            }
+            applyCommentReactionAggregate(
+                commentId: event.commentId,
+                count: event.aggregation.count,
+                reactorUserIds: event.aggregation.userIds
+            )
         }
         .onReceive(
             SocialSocketManager.shared.commentReactionRemoved
@@ -610,12 +644,11 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { event in
             guard event.emoji == StoryViewerView.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                likedIds.remove(event.commentId)
-            } else {
-                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) - 1
-            }
+            applyCommentReactionAggregate(
+                commentId: event.commentId,
+                count: event.aggregation.count,
+                reactorUserIds: event.aggregation.userIds
+            )
         }
         // Pipeline audio d'un média de commentaire terminé (transcription / variantes
         // TTS prêtes) → on remplace le média du commentaire en cache par la version

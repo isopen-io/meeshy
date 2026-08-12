@@ -2286,15 +2286,18 @@ extension StoryViewerView {
 
         let commentId = event.commentId
         let serverCount = event.aggregation.count
-        let userHasReacted = event.aggregation.hasCurrentUser
 
-        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — peu
-        // importe que ce soit l'événement de l'utilisateur courant ou d'un
-        // autre, l'agrégat décrit l'état global.
-        if userHasReacted {
-            storyCommentLikedIds.insert(commentId)
-        } else {
-            storyCommentLikedIds.remove(commentId)
+        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — « mon
+        // cœur » dérive de `userIds` (la liste des User.id ayant réagi), PAS de
+        // `hasCurrentUser` : ce flag est calculé côté gateway relativement à
+        // l'ACTEUR de l'événement, donc il vaut true pour le like d'un TIERS et
+        // allumait le cœur de tous les destinataires du broadcast.
+        if let myId = AuthManager.shared.currentUser?.id {
+            if event.aggregation.userIds.contains(myId) {
+                storyCommentLikedIds.insert(commentId)
+            } else {
+                storyCommentLikedIds.remove(commentId)
+            }
         }
 
         // Reset du delta et propagation du count serveur dans la liste pour
