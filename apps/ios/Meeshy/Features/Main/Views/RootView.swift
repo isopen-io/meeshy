@@ -66,7 +66,20 @@ struct CallPresentationLayer: ViewModifier {
     @ObservedObject private var callManager = CallManager.shared
 
     func body(content: Content) -> some View {
-        content
+        // Compression de frame, PAS augmentation de safe area : la bannière
+        // d'appel est le premier élément d'un VStack au-dessus du contenu,
+        // donc TOUTE l'app (NavigationStack comprise) voit sa frame commencer
+        // sous la bannière — comportement WhatsApp. L'ancien montage
+        // `.safeAreaInset(edge: .top)` ne traversait pas la frontière UIKit
+        // de la NavigationStack : les headers des navigationDestination
+        // (ConversationView, ConversationListView) restaient épinglés au
+        // sommet physique, cachés et inaccessibles derrière la bannière.
+        // Réduire la frame préserve aussi toutes les géométries internes des
+        // écrans (clearances, gradients, overlays) — seul le viewport bouge.
+        VStack(spacing: 0) {
+            FloatingCallPillView(callManager: callManager)
+            content
+        }
             // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
             // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
             // chaque UI passe explicitement par `callManager.endCall()`.
@@ -104,9 +117,6 @@ struct CallPresentationLayer: ViewModifier {
                         .padding(.top, MeeshySpacing.sm)
                         .allowsHitTesting(false)
                 }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                FloatingCallPillView(callManager: callManager)
             }
             .overlay {
                 CallBubbleView(callManager: callManager)
@@ -743,9 +753,9 @@ struct RootView: View {
         // statut connexion + file d'attente hors-ligne), voir
         // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
         // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
-        // composite (contenu + SyncPill) descende comme un bloc quand la
-        // bannière d'appel réserve de l'espace (§B2 de la spec — l'ordre
-        // inverse ferait chevaucher les deux bannières).
+        // composite (contenu + SyncPill) soit comprimé comme un bloc sous la
+        // bannière d'appel (VStack de compression de frame, §B2 de la spec —
+        // l'ordre inverse ferait chevaucher les deux bannières).
         // conversationListViewModel/isStoryViewerPresenting passés
         // explicitement, jamais via @EnvironmentObject/@Environment dans ce
         // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).

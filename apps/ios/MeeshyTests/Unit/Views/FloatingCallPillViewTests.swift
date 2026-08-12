@@ -447,6 +447,76 @@ final class FloatingCallPillViewTests: XCTestCase {
     }
 }
 
+// MARK: - CallPresentationLayer Mount Tests
+
+// 2026-08-12 — la bannière d'appel doit COMPRIMER la frame de toute l'app
+// (VStack bannière → contenu), pas seulement augmenter sa safe area. Un
+// `.safeAreaInset(edge: .top)` ne traverse pas la frontière UIKit de la
+// NavigationStack : les headers des destinations (ConversationView,
+// ConversationListView) restaient épinglés au sommet physique, cachés et
+// inaccessibles derrière la bannière (capture user 2026-08-12). Réduire la
+// frame propage mécaniquement — chaque écran garde ses géométries internes,
+// seul son viewport commence sous la bannière (comportement WhatsApp).
+@MainActor
+final class CallPresentationLayerMountTests: XCTestCase {
+
+    private func rootViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Corps de CallPresentationLayer, commentaires dépouillés — les
+    /// commentaires documentent l'ancien mécanisme `.safeAreaInset` rejeté
+    /// et matcheraient sinon les assertions négatives (même piège que la
+    /// garde RTL, cf. RightToLeftLayoutGuardTests.strippingComments).
+    private func callPresentationLayerBody() throws -> String {
+        let source = AppSourceGuard.stripComments(try rootViewSource())
+        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {"),
+              let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex) else {
+            XCTFail("CallPresentationLayer not found in RootView.swift")
+            return ""
+        }
+        return String(source[start.lowerBound..<end.lowerBound])
+    }
+
+    func test_pill_isMountedAsFrameCompressingVStack_notSafeAreaInset() throws {
+        let body = try callPresentationLayerBody()
+        XCTAssertTrue(
+            body.contains("VStack(spacing: 0)"),
+            "CallPresentationLayer must mount the call banner as the first element of a " +
+            "VStack(spacing: 0) above the app content so the banner SHRINKS the frame of " +
+            "the whole app — a safeAreaInset only augments the safe area, which does not " +
+            "propagate across the NavigationStack's UIKit boundary (conversation headers " +
+            "stayed pinned under the banner, unreachable)."
+        )
+        XCTAssertFalse(
+            body.contains(".safeAreaInset(edge: .top"),
+            "The pill must NOT be mounted via .safeAreaInset(edge: .top) — that mechanism " +
+            "left navigationDestination chrome (back pill, avatar, call/search buttons) " +
+            "hidden behind the banner."
+        )
+    }
+
+    func test_pill_precedesContentInCompressionStack() throws {
+        let body = try callPresentationLayerBody()
+        guard let pillRange = body.range(of: "FloatingCallPillView(callManager: callManager)"),
+              let contentRange = body.range(of: "content", range: pillRange.upperBound..<body.endIndex) else {
+            XCTFail("expected FloatingCallPillView mounted before content in CallPresentationLayer")
+            return
+        }
+        XCTAssertLessThan(
+            pillRange.lowerBound, contentRange.lowerBound,
+            "The banner must be the FIRST element of the compression VStack, with the app " +
+            "content below it — the app viewport starts under the banner, WhatsApp-style."
+        )
+    }
+}
+
 // MARK: - CallParticipantVisual Source Inspection Tests
 
 @MainActor
