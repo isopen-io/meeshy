@@ -407,29 +407,26 @@ export function CallManager() {
       // Add participant to call
       addParticipant(event.participant);
 
-      // Update call status to 'active' if it was 'initiated'. This is also
-      // the caller's true "answered" moment (Vague 110, 2026-08-12): the
-      // first participant to join a still-ringing call is the callee
-      // picking up. Stamp `answeredAt` here — it's what VideoCallInterface
-      // anchors the visible call-duration clock on, instead of `startedAt`
-      // (set at ring-start in use-video-call.ts), so the ring delay is never
-      // counted as talk time. Guarded by the same 'initiated' check so a
-      // later participant joining a group call never re-stamps it.
-      const { currentCall } = useCallStore.getState();
-      if (currentCall && currentCall.status === 'initiated') {
-        setCurrentCall({
-          ...currentCall,
-          status: 'active',
-          answeredAt: new Date(),
-        });
-      }
+      // Vague 113 (2026-08-12, supersedes Vague 110's stamp here) — this
+      // event fires on room-JOIN, not on answer: iOS deliberately
+      // auto-early-joins the call room the instant it receives an incoming
+      // call (CallManager.swift `joinCallRoomReliably`), specifically to
+      // receive the SDP offer while still ringing. Treating this as the
+      // caller's "answered" moment meant the visible call-duration clock
+      // started (and status flipped to 'active') the instant an iOS
+      // callee's phone started ringing, not when they picked up — for
+      // every call to an iOS callee. The genuine pickup signal is the SDP
+      // *answer*, which only a real Accept sends: `useWebRTCP2P`'s
+      // `handleAnswer` now stamps `status`/`answeredAt` there instead (same
+      // 'initiated' guard, so a later participant joining a group call
+      // still never re-stamps it).
 
       // Note: CallInterface will handle creating the WebRTC offer
       // based on currentCall.initiatorId check
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [addParticipant, setCurrentCall, setIceServers, clearCallTimeout]
+    [addParticipant, setIceServers, clearCallTimeout]
   );
 
   /**
