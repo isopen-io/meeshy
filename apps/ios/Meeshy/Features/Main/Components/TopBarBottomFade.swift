@@ -6,11 +6,11 @@ import SwiftUI
 /// zone de dégradé (~24 %, dans la fourchette 20–30 % demandée) qui remonte
 /// vers la pleine opacité.
 ///
-/// Deux consommateurs partagent ces bandes :
-/// - `FloatingCallPillView` — masque alpha sur le décor indigo
-///   (brandGradient + scrim) de la bannière d'appel réduite ;
-/// - `ConversationView` — scrim noir de la zone status bar / Dynamic Island
-///   (noir plein en haut, mêmes bandes de sortie en bas).
+/// Consommateur : `FloatingCallPillView` — masque alpha sur le décor indigo
+/// (brandGradient + scrim) de la bannière d'appel réduite. (Le scrim status
+/// bar de ConversationView l'a utilisé brièvement puis a été RETIRÉ — retour
+/// user 2026-08-12, pas de barre noire en conversation ; cf.
+/// `ConversationTopChromeFadeTests`.)
 enum TopBarBottomFade {
     /// Fraction inférieure de la hauteur totalement transparente.
     nonisolated static let transparentFraction: CGFloat = 0.06
@@ -23,8 +23,7 @@ enum TopBarBottomFade {
 
     /// Rampe verticale noir → transparent portant les bandes ci-dessus :
     /// opaque du haut jusqu'à `fadeStartLocation`, dégradé jusqu'à
-    /// `fullyTransparentLocation`, transparent jusqu'au bord bas.
-    /// Rendue telle quelle = scrim noir (ConversationView) ; posée en
+    /// `fullyTransparentLocation`, transparent jusqu'au bord bas. Posée en
     /// `.mask()` = rampe d'alpha sur un décor coloré (bannière d'appel).
     static var gradient: LinearGradient {
         LinearGradient(

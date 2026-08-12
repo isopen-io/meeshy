@@ -1416,22 +1416,6 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            // Scrim status bar — noir plein depuis le bord haut de l'écran à
-            // travers la zone status bar / Dynamic Island (le contenu scrollé
-            // — tuiles de jour comprises — n'y transparaît plus), puis les
-            // bandes de sortie partagées TopBarBottomFade : ~24 % de dégradé,
-            // 6 % transparent en bas (retour user 2026-08-12). Le header
-            // flottant reste net au-dessus (zIndex 100 > 99).
-            VStack(spacing: 0) {
-                TopBarBottomFade.gradient
-                    .frame(height: 100)
-                Spacer()
-            }
-            .ignoresSafeArea(edges: .top)
-            .zIndex(99)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-
             if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
                     .zIndex(60)

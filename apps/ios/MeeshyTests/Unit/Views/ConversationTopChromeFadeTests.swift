@@ -1,17 +1,16 @@
 import XCTest
 @testable import Meeshy
 
-// MARK: - Conversation Top Chrome — scrim status bar + pill sticky de jour
+// MARK: - Conversation Top Chrome — pas de scrim status bar + pill sticky de jour
 
-// 2026-08-12 — retour user (capture à l'appui) : les tuiles de jour
-// transparaissaient dans la zone status bar / Dynamic Island (une Live
-// Activity y déploie un bandeau noir), et la pill sticky de jour vivait à
-// safeArea+4, en plein dessous. Deux correctifs gardés ici :
-// 1. Le scrim status bar de ConversationView est NOIR PLEIN en haut puis
-//    suit les bandes de sortie partagées TopBarBottomFade (~24 % de dégradé,
-//    6 % transparent en bas) — plus de stops translucides ad hoc.
-// 2. La pill sticky démarre SOUS la rangée du header flottant
-//    (MessageDayStickyPlacement.topOffset), hors de la barre noire.
+// 2026-08-12 — retours user successifs (captures à l'appui) :
+// 1. Les tuiles de jour transparaissaient dans la zone status bar / Dynamic
+//    Island → un scrim noir plein y a d'abord été posé… puis RETIRÉ le jour
+//    même (« il faut juste enlever la barre noire de la status bar ») : la
+//    conversation reste immersive, AUCUN scrim au-dessus de la liste.
+// 2. La pill sticky de jour vivait à safeArea+4, sous l'îlot et la rangée du
+//    header flottant — elle démarre désormais SOUS le header
+//    (MessageDayStickyPlacement.topOffset).
 @MainActor
 final class ConversationTopChromeFadeTests: XCTestCase {
 
@@ -38,42 +37,21 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
     }
 
-    // MARK: - Scrim status bar
+    // MARK: - Pas de scrim status bar
 
-    func test_statusBarScrim_usesSharedTopBarBottomFadeGradient() throws {
+    func test_statusBarScrim_staysRemoved() throws {
         let source = try conversationViewSource()
-        XCTAssertTrue(
-            source.contains("TopBarBottomFade.gradient"),
-            "ConversationView's status-bar scrim must render the shared " +
-            "TopBarBottomFade.gradient (solid black through the status bar / " +
-            "Dynamic Island strip, then the shared exit bands) — scrolled day " +
-            "tiles must no longer show through that zone."
+        XCTAssertFalse(
+            source.contains("TopBarBottomFade"),
+            "ConversationView must NOT mount a status-bar scrim — the solid " +
+            "black band was explicitly removed (user feedback 2026-08-12: " +
+            "« il faut juste enlever la barre noire de la status bar »). " +
+            "TopBarBottomFade belongs to the call banner only."
         )
         XCTAssertFalse(
             source.contains("Color.black.opacity(0.75), location: 0"),
             "The old ad-hoc translucent scrim stops (0.75 → 0.4 → clear) must " +
-            "stay removed — they let scrolled content bleed through the " +
-            "status-bar strip (user feedback 2026-08-12)."
-        )
-    }
-
-    func test_statusBarScrim_staysAboveListButBelowFloatingHeader() throws {
-        let source = try conversationViewSource()
-        guard let gradientRange = source.range(of: "TopBarBottomFade.gradient") else {
-            XCTFail("expected the shared scrim gradient in ConversationView")
-            return
-        }
-        let end = source.index(gradientRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[gradientRange.lowerBound..<end])
-        XCTAssertTrue(
-            vicinity.contains(".zIndex(99)"),
-            "The scrim must keep zIndex 99 — above the message list, below the " +
-            "floating header (zIndex 100) so the back pill / call / search " +
-            "controls stay crisp over the solid black band."
-        )
-        XCTAssertTrue(
-            vicinity.contains(".allowsHitTesting(false)"),
-            "The scrim is decorative — it must never intercept touches."
+            "not come back either — no dark band over the status-bar strip."
         )
     }
 

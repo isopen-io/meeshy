@@ -155,7 +155,7 @@ struct FloatingCallPillView: View {
             // Fondu bas (retour user 2026-08-12) : le décor se termine en
             // dégradé vers le transparent au lieu d'une arête nette — 6 % du
             // bas transparent, ~24 % de zone de dégradé, indigo complet
-            // au-dessus (bandes partagées TopBarBottomFade). Posé AVANT
+            // au-dessus (bandes TopBarBottomFade). Posé AVANT
             // ignoresSafeArea pour que le masque couvre aussi le débord sous
             // la status bar.
             .mask(TopBarBottomFade.gradient)
