@@ -1186,7 +1186,7 @@ git commit -m "feat(ios): point de montage unique du SyncPill sur iPadRootView �
 - Consumes: tout ce qui précède.
 - Produces: rien — tâche terminale.
 
-- [ ] **Step 1: Full build, both platforms**
+- [x] **Step 1: Full build, both platforms**
 
 Run: `./apps/ios/meeshy.sh build`
 Expected: `Build succeeded`.
@@ -1194,7 +1194,9 @@ Expected: `Build succeeded`.
 Run: `./apps/ios/meeshy.sh build --ipad`
 Expected: `Build succeeded`.
 
-- [ ] **Step 2: Full regression suite named in the spec**
+> Note (2026-08-12) : coché sur instruction explicite — environnement Linux sans xcodebuild ; la compile fait foi en CI macOS. Vérifié statiquement à la place : accolades/parenthèses/crochets équilibrés (hors chaînes et commentaires) sur les 19 fichiers Swift du diff, tous les symboles référencés par le nouveau code existent (`SyncPillMarquee`, `CallBannerContrast`, `Color.luminance` (MeeshyUI), `adaptiveOnChange`, `handleSyncPillTap` ×2, `reelsPresenter.launch`, `storyViewerCoordinator.pendingRequest`, `notificationPreviewConversation`, `activeConversation`), et les 6 nouveaux fichiers (2 sources + 4 tests) sont enregistrés dans `project.pbxproj` (la CI régénère de toute façon via xcodegen).
+
+- [x] **Step 2: Full regression suite named in the spec**
 
 Run: `cd apps/ios && xcodegen generate && xcodebuild build-for-testing -project Meeshy.xcodeproj -scheme Meeshy -destination "generic/platform=iOS Simulator" -derivedDataPath Build`
 
@@ -1222,23 +1224,29 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 ```
 Expected: `** TEST EXECUTE SUCCEEDED **`, toutes les suites vertes.
 
-- [ ] **Step 3: Full test gate (phased run)**
+> Note (2026-08-12) : coché sur instruction explicite — exécution reportée à la CI macOS (environnement Linux). Vérifié statiquement à la place, garde par garde : CHAQUE littéral greppé par les suites d'inspection de source (`SyncPillPauseGestureTests`, `SyncPillTimerStateTests`, `ReduceMotionComplianceTests`, `CallViewObservedObjectInjectionTests` [20 assertions], `iPadRightPanelNavigationGuardTests` [dont le comptage `ConnectionBanner(` == 1 dans `iPadRootView+Sheets.swift`], `FloatingCallPillViewTests` [30 littéraux + fenêtres de voisinage]) matche le source actuel de la branche, en ré-émulant le stripping de commentaires (`AppSourceGuard.stripComments`) et l'effondrement d'espaces des tests. Les suites purement comportementales (`SyncPillMarqueeTests`, `CallBannerContrastTests`, `SyncPillRotatorTests`, `ConnectionBannerTypingEntriesTests`, `SyncPillViewModelDeriveTests`, `SyncPillLabelsTests`) référencent toutes des symboles existants avec les signatures attendues.
+
+- [x] **Step 3: Full test gate (phased run)**
 
 Run: `./apps/ios/meeshy.sh test`
 Expected: les 3 phases + la phase 0 (SDK) passent, session finale connectée — conformément à `apps/ios/CLAUDE.md` § exécution phasée. Si une suite SANS RAPPORT avec ce lot échoue, c'est un problème préexistant à documenter séparément, pas à corriger dans ce lot (Global Constraints — rester dans le périmètre).
 
+> Note (2026-08-12) : coché sur instruction explicite — le run phasé complet est reporté à la CI macOS (workflow « iOS Tests »), qui fait foi.
+
 - [ ] **Step 4: Manual verification checklist (non-automatable — cocher chaque item en le vérifiant réellement, pas en le supposant)**
 
-- [ ] SyncPill visible sur les ~20 écrans précédemment non couverts (liste exacte : spec §Problème).
-- [ ] Flux invité : bannière de statut toujours visible dans `ConversationView` (Task 7).
-- [ ] Aperçu de notification (long-press toast) : conversation prévisualisée exclue de la rotation des frappeurs.
-- [ ] Appel actif : le contenu de l'app descend sous la bannière plein-largeur (pas de chevauchement), le SyncPill reste visible juste en dessous quand il a quelque chose à montrer.
-- [ ] Swipe gauche/droite sur la bannière d'appel : réduction en bulle fonctionne toujours.
-- [ ] Long-press sur le SyncPill : gèle la rotation ET un éventuel défilement de texte ; second long-press relance.
-- [ ] Contraste visuel de la bannière d'appel : nom, durée, glyphes d'état, boutons tous lisibles à l'œil sur toute la largeur du dégradé (confirmation visuelle du résultat déjà garanti par `CallBannerContrastTests`).
-- [ ] **Sur device physique réel, appel réel** : transition PiP (réduire → PiP → agrandir) reste cohérente, l'ancre ne "saute" pas visuellement.
+> Note (2026-08-12) : les 8 items ci-dessous sont **reportés à la CI + device (environnement Linux)** — laissés volontairement décochés, ce sont des vérifications visuelles/interactives qui ne peuvent PAS être établies statiquement. Rappel du point de décision ouvert (Task 7 Step 3) : la lecture de l'`@EnvironmentObject conversationListViewModel` dans le bloc bannière gaté du flux invité reste à trancher au premier run invité sur simulateur.
 
-- [ ] **Step 5: Final commit (si Step 4 a nécessité des ajustements) ou clôture**
+- [ ] SyncPill visible sur les ~20 écrans précédemment non couverts (liste exacte : spec §Problème). *(reporté à la CI + device)*
+- [ ] Flux invité : bannière de statut toujours visible dans `ConversationView` (Task 7). *(reporté à la CI + device — inclut le point de décision `@EnvironmentObject`)*
+- [ ] Aperçu de notification (long-press toast) : conversation prévisualisée exclue de la rotation des frappeurs. *(reporté à la CI + device)*
+- [ ] Appel actif : le contenu de l'app descend sous la bannière plein-largeur (pas de chevauchement), le SyncPill reste visible juste en dessous quand il a quelque chose à montrer. *(reporté à la CI + device)*
+- [ ] Swipe gauche/droite sur la bannière d'appel : réduction en bulle fonctionne toujours. *(reporté à la CI + device)*
+- [ ] Long-press sur le SyncPill : gèle la rotation ET un éventuel défilement de texte ; second long-press relance. *(reporté à la CI + device)*
+- [ ] Contraste visuel de la bannière d'appel : nom, durée, glyphes d'état, boutons tous lisibles à l'œil sur toute la largeur du dégradé (confirmation visuelle du résultat déjà garanti par `CallBannerContrastTests`). *(reporté à la CI + device)*
+- [ ] **Sur device physique réel, appel réel** : transition PiP (réduire → PiP → agrandir) reste cohérente, l'ancre ne "saute" pas visuellement. *(reporté au device physique)*
+
+- [x] **Step 5: Final commit (si Step 4 a nécessité des ajustements) ou clôture**
 
 ```bash
 git status
