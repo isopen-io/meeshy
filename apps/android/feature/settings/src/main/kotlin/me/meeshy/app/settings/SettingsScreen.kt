@@ -97,6 +97,23 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
+    onOpenShareLinks: () -> Unit = {},
+    onOpenChangePassword: () -> Unit = {},
+    onOpenTwoFactor: () -> Unit = {},
+    onOpenAccountContact: () -> Unit = {},
+    onOpenAutoDownload: () -> Unit = {},
+    onOpenMediaCache: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
+    onOpenActiveSessions: () -> Unit = {},
+    onOpenBlockedUsers: () -> Unit = {},
+    onOpenDataExport: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
+    onOpenSupport: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
+    onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -256,6 +273,11 @@ fun SettingsScreen(
                     detail = null,
                     onClick = onOpenStarred,
                 )
+                SettingsRow(
+                    label = stringResource(R.string.settings_share_links),
+                    detail = null,
+                    onClick = onOpenShareLinks,
+                )
             }
 
             SettingsSection(
@@ -263,11 +285,49 @@ fun SettingsScreen(
                 icon = Icons.Filled.Lock,
                 iconColor = MeeshyPalette.Purple600,
             ) {
-                SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_privacy),
+                    detail = null,
+                    onClick = onOpenPrivacy,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_change_password),
+                    detail = null,
+                    onClick = onOpenChangePassword,
+                )
+                // 2FA restaure (2026-08-11) : le gateway a bien des routes reelles et
+                // testees (services/gateway/src/routes/two-factor.ts, TwoFactorService)
+                // depuis un commit anterieur au retrait — l'hypothese "aucune route
+                // gateway" etait incorrecte. iOS livre deja ce flux (TwoFactorViewModel/
+                // TwoFactorSetupView) ; TwoFactorScreen en est le port Android.
+                SettingsRow(
+                    label = stringResource(R.string.settings_two_factor),
+                    detail = null,
+                    onClick = onOpenTwoFactor,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
+                // Change email / phone (§K) — the gateway's change-email/change-phone routes
+                // (services/gateway/src/routes/users/contact-change.ts) had no UI consumer
+                // anywhere in apps/android until this row; iOS ships the reference flow inline
+                // in SecurityView.
+                SettingsRow(
+                    label = stringResource(R.string.settings_account_contact),
+                    detail = null,
+                    onClick = onOpenAccountContact,
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(
+                    label = stringResource(R.string.settings_active_sessions),
+                    detail = null,
+                    onClick = onOpenActiveSessions,
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(
+                    label = stringResource(R.string.settings_blocked_users),
+                    detail = null,
+                    onClick = onOpenBlockedUsers,
+                )
             }
 
             SettingsSection(
@@ -275,11 +335,17 @@ fun SettingsScreen(
                 icon = Icons.Filled.Storage,
                 iconColor = MeeshyPalette.Info,
             ) {
-                SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_media_download),
+                    detail = null,
+                    onClick = onOpenAutoDownload,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = onOpenDataExport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = onOpenMediaCache)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = onOpenMediaCache)
             }
 
             SettingsSection(
@@ -287,11 +353,17 @@ fun SettingsScreen(
                 icon = Icons.Filled.Info,
                 iconColor = MeeshyPalette.Neutral500,
             ) {
-                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
+                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = onOpenAbout)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_help_support), detail = null, onClick = onOpenSupport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_diagnostics), detail = null, onClick = onOpenDiagnostics)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_open_source_licenses), detail = null, onClick = onOpenLicenses)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = onOpenTerms)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = onOpenPrivacyPolicy)
             }
 
             SettingsSection(
@@ -317,7 +389,7 @@ fun SettingsScreen(
                     SettingsRow(
                         label = stringResource(R.string.settings_delete_account),
                         detail = null,
-                        onClick = {},
+                        onClick = onOpenDeleteAccount,
                         labelColor = MeeshyPalette.Error,
                     )
                 }

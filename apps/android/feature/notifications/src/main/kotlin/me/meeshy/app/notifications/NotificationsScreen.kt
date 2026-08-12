@@ -37,13 +37,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.ZoneId
+import java.util.Locale
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.component.chrome.MeeshyTopBar
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -118,9 +123,10 @@ private fun NotificationItem(
     onTap: () -> Unit,
 ) {
     val isUnread = !notification.state.isRead
+    val accent = hexColor(notificationTypeAccentHex(notification.type))
     Surface(
         onClick = onTap,
-        color = if (isUnread) MeeshyPalette.Indigo500.copy(alpha = 0.12f) else Color.Transparent,
+        color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -131,6 +137,7 @@ private fun NotificationItem(
             MeeshyAvatar(
                 name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                 modifier = Modifier.size(44.dp),
+                containerColor = accent,
             )
             Spacer(Modifier.width(MeeshySpacing.md))
             Column(modifier = Modifier.weight(1f)) {
@@ -148,7 +155,7 @@ private fun NotificationItem(
                             Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(MeeshyPalette.Indigo500),
+                                .background(accent),
                         )
                     }
                 }
@@ -159,12 +166,35 @@ private fun NotificationItem(
                         color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
-                Text(
-                    text = shortDateTimeLabel(notification.state.createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
+                notificationRowRelativeTime(notification)?.let { relativeTime ->
+                    Text(
+                        text = relativeTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * The notification row's arrival timestamp as a compact relative label ("5 min", "2 h", "3 j", …)
+ * — the Android parity of iOS `NotificationRowView`'s
+ * `RelativeTimeFormatter.shortString(for: notification.createdAt)`, replacing the previous absolute
+ * short date-time. Returns null when the notification carries no parseable `createdAt`, so the row
+ * shows no label rather than a raw/garbled string. The [rememberRelativeTimeStrings] read stays
+ * before the early return to keep the composable-call graph unconditional.
+ */
+@Composable
+private fun notificationRowRelativeTime(notification: ApiNotification): String? {
+    val strings = rememberRelativeTimeStrings()
+    val millis = NotificationRowTime.epochMillis(notification) ?: return null
+    return RelativeTimeFormat.short(
+        epochMillis = millis,
+        referenceMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        strings = strings,
+    )
 }

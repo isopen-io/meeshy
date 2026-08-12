@@ -73,14 +73,20 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     userPreferences: {
       findUnique: jest.fn(),
     },
+    userConversationPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -227,21 +233,10 @@ describe('NotificationService — Uncovered Paths', () => {
   // createTranslationReadyNotification
   // ==============================================
 
-  describe('createTranslationReadyNotification', () => {
-    it('should create notification', async () => {
-      prisma.conversation.findUnique.mockResolvedValue({ title: 'Conv', type: 'direct' });
-      prisma.userPreferences.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotif('translation_ready'));
-
-      const result = await service.createTranslationReadyNotification({
-        recipientUserId: 'user-1',
-        messageId: 'msg-1',
-        conversationId: 'conv-1',
-      });
-
-      expect(result).toBeDefined();
-    });
-  });
+  // `createTranslationReadyNotification` a été retiré : aucun appelant de
+  // production ne l'atteignait, et ce test était son unique invocation dans
+  // tout le dépôt. Un test qui est le seul appelant de son sujet ne mesure pas
+  // du code vivant — il en entretient l'apparence.
 
   // ==============================================
   // createReplyNotification
@@ -568,6 +563,38 @@ describe('NotificationService — Uncovered Paths', () => {
       const result = (service as any).isDNDActive(prefs);
       jest.useRealTimers();
       expect(result).toBe(false);
+    });
+
+    // Overnight window + dndDays: the morning tail (00:00 → end) belongs to the
+    // night that STARTED the previous day, so dndDays must key on the window's
+    // start day, not the current wall-clock day. Mirrors PushNotificationService.
+    it('nocturne DND — morning tail belongs to the previous day (Monday night → Tuesday morning)', () => {
+      // dndDays ['mon'] + 22:00→08:00 = "quiet Monday night → Tuesday morning".
+      // 2024-01-16 is a Tuesday; 02:00 is still inside the Monday-night window.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-16T02:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(true);
+    });
+
+    it('nocturne DND — morning tail of an unselected night is NOT quiet (Sunday night not selected)', () => {
+      // dndDays ['mon']; 2024-01-15 is a Monday, 02:00 is the tail of the
+      // Sunday-night window — which the user did not select — so DND is inactive.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T02:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(false);
+    });
+
+    it('nocturne DND — evening portion keys on the current (start) day', () => {
+      // 2024-01-15 is a Monday, 23:00 opens the Monday-night window.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T23:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(true);
     });
   });
 

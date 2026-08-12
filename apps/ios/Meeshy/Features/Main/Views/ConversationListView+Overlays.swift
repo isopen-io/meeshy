@@ -6,7 +6,26 @@ import MeeshyUI
 
 extension ConversationListView {
 
-    // MARK: - Context Menu
+    // MARK: - Menu d'appui long — deux chemins par version d'OS
+    //
+    // iOS 26+ : menu contextuel NATIF `.contextMenu(menuItems:preview:)`
+    // (rendu Liquid Glass système) — builder ci-dessous, attaché par
+    // `ConversationRowItem`. < iOS 26 : overlay custom
+    // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
+    // → `onLongPress`). Les DEUX chemins doivent rester en parité d'actions ;
+    // la suppression arme toujours `deleteTargetConversation` (confirmation
+    // système — invariants `ConversationMenuSystemDesignGuardTests`).
+
+    // MARK: - Native Context Menu (iOS 26 Liquid Glass)
+
+    /// Box stable pour `ConversationRowItem.nativeContextMenu` : le menu est
+    /// construit UNE fois par évaluation de `conversationRow` (pas à chaque
+    /// body pass de la row) et seulement quand l'OS rend le menu natif.
+    func nativeContextMenuView(for conversation: Conversation) -> AnyView {
+        guard #available(iOS 26.0, *) else { return AnyView(EmptyView()) }
+        return AnyView(conversationContextMenu(for: conversation))
+    }
+
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
         // Pin/Unpin
@@ -16,8 +35,8 @@ extension ConversationListView {
         } label: {
             Label(
                 conversation.userState.isPinned
-                    ? String(localized: "context.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
-                    : String(localized: "context.pin", defaultValue: "\u{00c9}pingler"),
+                    ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
+                    : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main),
                 systemImage: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill"
             )
         }
@@ -29,28 +48,71 @@ extension ConversationListView {
         } label: {
             Label(
                 conversation.userState.isMuted
-                    ? String(localized: "context.unmute", defaultValue: "R\u{00e9}activer les notifications")
-                    : String(localized: "context.mute", defaultValue: "Mettre en silence"),
+                    ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
+                    : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main),
                 systemImage: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill"
             )
         }
 
+        // Rechercher dans la conversation — MÊME chemin que le bouton
+        // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
+        // arme `pendingOpenSearch` puis ouvre la conversation, qui consomme le
+        // flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
+        // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
+        Button {
+            HapticFeedback.light()
+            router.pendingOpenSearch = true
+            onSelect(conversation)
+        } label: {
+            Label(
+                String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
+                systemImage: "magnifyingglass"
+            )
+        }
+
+        // Appeler — DM uniquement (participant résolu). MÊME chemin que le
+        // bouton « Appeler » de l'aperçu custom (`onCall` → CallManager, audio).
+        if conversation.type == .direct, let calleeId = conversation.participantUserId {
+            Button {
+                HapticFeedback.medium()
+                Task {
+                    await CallManager.shared.requestPermissionsThenStartCall(
+                        conversationId: conversation.id,
+                        userId: calleeId,
+                        displayName: conversation.name,
+                        isVideo: false
+                    )
+                }
+            } label: {
+                Label(
+                    String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
+                    systemImage: "phone.fill"
+                )
+            }
+        }
+
         Divider()
 
-        // Mark as read/unread
+        // Marquer lu / non lu
         if conversation.userState.unreadCount > 0 {
             Button {
                 HapticFeedback.light()
                 Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
             } label: {
-                Label(String(localized: "context.mark_read", defaultValue: "Marquer comme lu"), systemImage: "envelope.open.fill")
+                Label(
+                    String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main),
+                    systemImage: "envelope.open.fill"
+                )
             }
         } else {
             Button {
                 HapticFeedback.light()
                 Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
             } label: {
-                Label(String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu"), systemImage: "envelope.badge.fill")
+                Label(
+                    String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
+                    systemImage: "envelope.badge.fill"
+                )
             }
         }
 
@@ -59,10 +121,27 @@ extension ConversationListView {
             HapticFeedback.light()
             conversationInfoConversation = conversation
         } label: {
-            Label(String(localized: "context.details", defaultValue: "Détails"), systemImage: "info.circle.fill")
+            Label(
+                String(localized: "context.details", defaultValue: "Détails", bundle: .main),
+                systemImage: "info.circle.fill"
+            )
         }
 
-        // Favorite with emoji
+        // Renommer — groupes/communautés uniquement (parité menu custom)
+        if conversation.type != .direct {
+            Button {
+                HapticFeedback.light()
+                renameText = conversation.name
+                renameTarget = conversation
+            } label: {
+                Label(
+                    String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
+                    systemImage: "pencil"
+                )
+            }
+        }
+
+        // Favori (emoji)
         Menu {
             ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
                 Button {
@@ -78,29 +157,29 @@ extension ConversationListView {
                     HapticFeedback.light()
                     Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
                 } label: {
-                    Label(String(localized: "context.remove_favorite", defaultValue: "Retirer le favori"), systemImage: "star.slash")
+                    Label(
+                        String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
+                        systemImage: "star.slash"
+                    )
                 }
             }
         } label: {
             Label(
-                conversation.userState.reaction != nil
-                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.userState.reaction ?? "")")
-                    : String(localized: "context.favorite", defaultValue: "Favori"),
+                String(localized: "context.favorite", defaultValue: "Favori", bundle: .main),
                 systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
             )
         }
 
-        // Move to category
+        // Déplacer vers une catégorie
         Menu {
             ForEach(conversationViewModel.userCategories) { category in
                 let isCurrentCategory = conversation.userState.sectionId == category.id
                 Button {
                     HapticFeedback.light()
-                    if isCurrentCategory {
-                        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
-                    } else {
-                        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: category.id)
-                    }
+                    conversationViewModel.moveToSection(
+                        conversationId: conversation.id,
+                        sectionId: isCurrentCategory ? "" : category.id
+                    )
                 } label: {
                     if isCurrentCategory {
                         Label("\(category.name) \u{2713}", systemImage: category.icon)
@@ -116,28 +195,36 @@ extension ConversationListView {
                 HapticFeedback.light()
                 conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
             } label: {
-                Label(String(localized: "context.my_conversations", defaultValue: "Mes conversations"), systemImage: "tray.fill")
+                Label(
+                    String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
+                    systemImage: "tray.fill"
+                )
             }
         } label: {
-            Label(String(localized: "context.move_to", defaultValue: "D\u{00e9}placer vers..."), systemImage: "folder.fill")
+            Label(
+                String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main),
+                systemImage: "folder.fill"
+            )
         }
 
         Divider()
 
-        // Secondary actions — grouped to keep top-level count ≤8 so iOS renders
-        // the compact popup style where Label icons are visible.
+        // Actions secondaires — groupées pour garder ≤8 items top-level
+        // (au-delà, iOS bascule sur le style liste où les icônes disparaissent).
         Menu {
-            // Inviter — ouvrir le sheet d'invitation si droits suffisants
             if canCreateShareLink(for: conversation) {
                 Button {
                     HapticFeedback.medium()
                     inviteSheetConversation = conversation
                 } label: {
-                    Label(String(localized: "context.invite_friends", defaultValue: "Inviter mes amis"), systemImage: "person.badge.plus")
+                    Label(
+                        String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
+                        systemImage: "person.badge.plus"
+                    )
                 }
             }
 
-            // Lock/Unlock
+            // Verrouiller / Déverrouiller
             let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
             Button {
                 HapticFeedback.medium()
@@ -153,20 +240,15 @@ extension ConversationListView {
             } label: {
                 Label(
                     isLockedCtx
-                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller")
-                        : String(localized: "context.lock", defaultValue: "Verrouiller"),
+                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
+                        : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
                     systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
                 )
             }
 
-            // Archive / Unarchive — always offered so an archived conversation can
-            // always be unarchived (including blocked DMs, which previously hid this
-            // button and left them stuck in the Archived filter).
-            // Per-user archive state — same source the list filter (`.archived`) and
-            // the `.setArchived` mutation read. NOT `conversation.isActive`, which is
-            // the server-side conversation lifecycle flag and is never toggled by
-            // archiving. `userState.isArchived` is folded into `renderFingerprint`,
-            // so the row re-evaluates and this closure stays fresh.
+            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), même
+            // source que le filtre `.archived` ; jamais `conversation.isActive`
+            // (flag de cycle de vie serveur, indépendant de l'archivage).
             let isArchivedConv = conversation.userState.isArchived
             Button {
                 HapticFeedback.medium()
@@ -178,13 +260,13 @@ extension ConversationListView {
             } label: {
                 Label(
                     isArchivedConv
-                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
-                        : String(localized: "context.archive", defaultValue: "Archiver"),
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
+                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
                     systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
                 )
             }
 
-            // Block / Unblock (DM only)
+            // Bloquer / Débloquer (DM uniquement)
             if conversation.type == .direct, let userId = conversation.participantUserId {
                 let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
                 Divider()
@@ -197,7 +279,7 @@ extension ConversationListView {
                         }
                     } label: {
                         Label(
-                            String(localized: "context.unblock", defaultValue: "Débloquer"),
+                            String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main),
                             systemImage: "hand.raised.slash.fill"
                         )
                     }
@@ -208,28 +290,34 @@ extension ConversationListView {
                         showBlockConfirmation = true
                     } label: {
                         Label(
-                            String(localized: "context.block", defaultValue: "Bloquer"),
+                            String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
                             systemImage: "hand.raised.fill"
                         )
                     }
                 }
             }
         } label: {
-            Label(String(localized: "context.more_options", defaultValue: "Plus d'options"), systemImage: "ellipsis.circle.fill")
+            Label(
+                String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main),
+                systemImage: "ellipsis.circle.fill"
+            )
         }
 
         Divider()
 
-        // Delete (destructive -- soft delete for user only)
+        // Supprimer — arme la confirmation système (jamais de delete direct).
         Button(role: .destructive) {
             HapticFeedback.heavy()
-            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+            deleteTargetConversation = conversation
         } label: {
-            Label(String(localized: "context.delete", defaultValue: "Supprimer"), systemImage: "trash.fill")
+            Label(
+                String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
+                systemImage: "trash"
+            )
         }
     }
 
-    // MARK: - Custom Context Menu Overlay (icônes garanties iOS 26)
+    // MARK: - Custom Context Menu Overlay (fallback < iOS 26)
 
     func dismissContextMenu() {
         // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
@@ -357,12 +445,14 @@ extension ConversationListView {
                         onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
                             dismissContextMenu()
                             if let uid = conversation.participantUserId {
-                                CallManager.shared.startCall(
-                                    conversationId: conversation.id,
-                                    userId: uid,
-                                    displayName: conversation.name,
-                                    isVideo: false
-                                )
+                                Task {
+                                    await CallManager.shared.requestPermissionsThenStartCall(
+                                        conversationId: conversation.id,
+                                        userId: uid,
+                                        displayName: conversation.name,
+                                        isVideo: false
+                                    )
+                                }
                             }
                         } : nil,
                         onSearch: {
@@ -490,7 +580,9 @@ extension ConversationListView {
                             }
                         },
                         onDelete: {
-                            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                            // Destructif → confirmation système obligatoire
+                            // (dialog attaché dans ConversationListView.body).
+                            deleteTargetConversation = conversation
                         },
                         onDismiss: { dismissContextMenu() }
                     )
@@ -881,6 +973,10 @@ struct ConversationListHeaderOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Volet latéral iPad : chip Feed + 4 actions laissent ~110 pt
+                    // au titre, qui tronquait en « Mee. » — rétrécir plutôt.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
                     .accessibilityAddTraits(.isHeader)
             },
             trailing: {
@@ -928,11 +1024,15 @@ struct ConversationListHeaderOverlay: View {
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
-                                    Text("\(min(iPadNotificationCount, 99))")
-                                        .font(.system(size: 9, weight: .bold))
+                                    Text(NotificationBadge.displayed(iPadNotificationCount))
+                                        .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                         .foregroundColor(.white)
-                                        .frame(width: 16, height: 16)
-                                        .background(Circle().fill(MeeshyColors.error))
+                                        .lineLimit(1)
+                                        // Capsule et non cercle figé : « 99+ » doit
+                                        // s'afficher entier, pas être rogné.
+                                        .padding(.horizontal, 5)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(Capsule().fill(MeeshyColors.error))
                                         .offset(x: 6, y: -6)
                                 }
                             }

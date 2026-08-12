@@ -47,6 +47,14 @@ object CallSignalMapper {
                 json.decodeFromString<CallAlreadyAnsweredPayload>(rawJson)
                 CallEvent.RemoteHangUp
             }
+            // Group/UX side-channels — decoded by the dedicated parallel decodes
+            // ([participantLeft]/[qualityAlert]/[screenCaptureAlert]/[translatedSegment]),
+            // inert to the 1:1 FSM: a participant leaving is not a teardown
+            // (`call:ended` is), and quality/capture/caption frames never drive a
+            // phase transition.
+            "call:participant-left", "call:quality-alert",
+            "call:screen-capture-alert", "call:translated-segment",
+            -> null
             else -> null
         }
     }.getOrNull()
@@ -112,6 +120,56 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
+     * Decode a `call:participant-left` frame — a participant left the room
+     * without ending the call (group calls; a 1:1 teardown rides `call:ended`).
+     * `null` on a malformed frame or a blank call id, so an untargetable roster
+     * change is dropped rather than applied to an arbitrary call.
+     */
+    fun participantLeft(rawJson: String): CallParticipantLeftPayload? = runCatching {
+        json.decodeFromString<CallParticipantLeftPayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:quality-alert` frame — the gateway flagging the REMOTE
+     * peer's sustained bad network. `null` on a malformed frame or a blank
+     * call id (the indicator is gated on the active call's id).
+     */
+    fun qualityAlert(rawJson: String): CallQualityAlertPayload? = runCatching {
+        json.decodeFromString<CallQualityAlertPayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:screen-capture-alert` frame — the remote peer
+     * starting/stopping a screen capture of the call. A frame missing the
+     * `isCapturing` flag fails to decode (it IS the signal); `null` then, and on
+     * a blank call id.
+     */
+    fun screenCaptureAlert(rawJson: String): CallScreenCaptureAlertPayload? = runCatching {
+        json.decodeFromString<CallScreenCaptureAlertPayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:translated-segment` frame — a live caption from the remote
+     * speaker, translated server-side when available. A frame missing the
+     * segment or its `text` fails to decode; `null` then, and on a blank call id.
+     */
+    fun translatedSegment(rawJson: String): CallTranslatedSegmentPayload? = runCatching {
+        json.decodeFromString<CallTranslatedSegmentPayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:media-toggled` frame — the remote peer muting/unmuting the
+     * mic or turning the camera off/on. Inert to the FSM ([map] keeps returning
+     * `null`); this parallel, total, side-effect-free decode feeds the "peer is
+     * muted / camera off" indicators (iOS parity: `callMediaToggled` →
+     * `isRemoteAudioEnabled`/`isRemoteVideoEnabled`). `null` on a malformed
+     * frame or a blank call id.
+     */
+    fun mediaToggle(rawJson: String): CallMediaTogglePayload? = runCatching {
+        json.decodeFromString<CallMediaTogglePayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
      * Only the callee's SDP `answer` advances the FSM (Offering → Connecting).
      * Renegotiation `offer`s and `ice-candidate`s are WebRTC plumbing — inert to
      * the phase machine.
@@ -131,6 +189,13 @@ object CallSignalMapper {
     private fun endedEvent(payload: CallEndedPayload): CallEvent =
         when (payload.reason) {
             "missed" -> CallEvent.RingTimeout
+            // A server/peer-signalled TRANSIENT failure must reach the FSM as a
+            // ConnectionFailed (→ retryable Ended(Failed)), NOT a RemoteHangUp
+            // (→ non-retryable Ended(Remote)). Mirrors iOS `handleRemoteEnd`
+            // (`failed`/`connectionlost` → `.connectionLost`, retryable) so the
+            // « Réessayer » affordance appears on all three platforms even when a
+            // peer-signalled drop beats the caller's own reconnect-budget cutoff.
+            "failed", "connectionLost" -> CallEvent.ConnectionFailed(payload.reason ?: "failed")
             else -> CallEvent.RemoteHangUp
         }
 

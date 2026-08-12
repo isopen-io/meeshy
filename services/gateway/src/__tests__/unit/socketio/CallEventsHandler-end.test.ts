@@ -22,13 +22,28 @@ const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 const mockForceEndOrphanedCallSession = jest.fn<any>();
+const mockGetCallSession = jest.fn<any>();
+const mockResolveEndReason = jest.fn((reason?: string) => {
+  switch (reason) {
+    case 'missed': return 'missed';
+    case 'rejected': return 'rejected';
+    case 'failed': return 'failed';
+    case 'connectionLost': return 'connectionLost';
+    case 'heartbeatTimeout': return 'heartbeatTimeout';
+    case 'garbageCollected': return 'garbageCollected';
+    default: return 'completed';
+  }
+}) as jest.Mock<any>;
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
+    getCallSession: mockGetCallSession,
+    resolveEndReason: mockResolveEndReason,
   })),
 }));
 
@@ -167,6 +182,9 @@ describe('CallEventsHandler — call:end handler', () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
     mockCreateCallSummaryMessage.mockResolvedValue(null);
     mockClearRingingTimeout.mockReturnValue(undefined);
+    mockGetCallSession.mockResolvedValue({
+      participants: [{ participantId: PARTICIPANT_ID, leftAt: null, participant: { userId: CALLER_ID } }],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -248,12 +266,15 @@ describe('CallEventsHandler — call:end handler', () => {
       await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
 
       expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      // END_DATA.reason ('hangup') is schema-valid but not a CallEndReason
+      // member — the fast path must normalize it via resolveEndReason(),
+      // same as the authoritative broadcast, not forward it raw.
       expect(socketToEmit).toHaveBeenCalledWith(
         CALL_EVENTS.ENDED,
         expect.objectContaining({
           callId: CALL_ID,
           endedBy: CALLER_ID,
-          reason: END_DATA.reason,
+          reason: 'completed',
         })
       );
     });
@@ -391,7 +412,41 @@ describe('CallEventsHandler — call:end handler', () => {
     // an authorization rejection — the orphaned-session recovery must still
     // run so the call session isn't left stuck ACTIVE for other callers.
     it('force-ends the orphaned call session (recovery preserved for non-authorization errors)', () => {
-      expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, END_DATA.reason);
+      // Same normalization requirement as the fast-path broadcast: 'hangup'
+      // is schema-valid but not a CallEndReason member.
+      expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Room-membership leak: forceEndOrphanedCallAfterOptimisticBroadcast (the
+  // recovery path shared by call:end/call:leave/call:force-leave's catch
+  // blocks) terminates the call session but, unlike their happy paths, never
+  // evicted straggling sockets from the call room — leaking Socket.IO room
+  // membership for any device that never explicitly left. Regression guard.
+  // -------------------------------------------------------------------------
+  describe('error path: endCall throws, orphaned-session recovery actually ends the call', () => {
+    it('evicts every remaining socket from the call room', async () => {
+      mockEndCall.mockRejectedValue(new Error('CALL_NOT_FOUND: call does not exist'));
+      mockForceEndOrphanedCallSession.mockResolvedValue({
+        conversationId: CONV_ID,
+        duration: 30,
+        endReason: 'connectionLost',
+        status: 'ended',
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, fetchSockets } = makeIo();
+      const staleSocket = { id: 'stale-device', leave: jest.fn() };
+      fetchSockets.mockResolvedValue([staleSocket]);
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(staleSocket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
     });
   });
 
@@ -476,15 +531,16 @@ describe('CallEventsHandler — call:end handler', () => {
   // Non-participant guard
   // -------------------------------------------------------------------------
 
-  describe('non-participant: resolveParticipantIdFromCall returns null', () => {
+  describe('non-participant: resolveActiveCallParticipantId returns null', () => {
     let directEmit: jest.MockedFunction<any>;
     let ack: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      const prisma = makePrisma({
-        // callSession.findUnique returns null → call not found → participantId is null
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue(null),
-      });
+      // No CallParticipant row matches this user for this call → not an
+      // active participant → participantId is null.
+      mockGetCallSession.mockResolvedValue({ participants: [] });
+
+      const prisma = makePrisma();
       const { socket, handlers, directEmit: d } = makeSocket();
       directEmit = d;
       const { io } = makeIo();
@@ -517,6 +573,64 @@ describe('CallEventsHandler — call:end handler', () => {
     // callId) could terminate a real, live call they had no relationship to.
     it('does NOT force-end the call session (no destructive fallback for an unauthorized caller)', () => {
       expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: the fast-path authorization gate must require an ACTIVE
+  // participant of THIS call, not merely conversation membership. A caller
+  // who already left this specific call (e.g. a stale/duplicate socket
+  // still lingering in the call room after a reconnect race) is still a
+  // conversation member, so `resolveParticipantIdFromCall` would wrongly
+  // authorize them — firing the instant `call:ended` fast-path broadcast at
+  // the real active participant before `endCall()` ever ran its own
+  // (correct) NOT_A_PARTICIPANT rejection.
+  // -------------------------------------------------------------------------
+
+  describe('authorization: caller already left THIS call (stale call-room socket)', () => {
+    let directEmit: jest.MockedFunction<any>;
+    let socketToEmit: jest.MockedFunction<any>;
+    let ack: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      // Conversation membership still resolves fine (they never left the
+      // conversation) — only their CallParticipant row for THIS call has
+      // `leftAt` set.
+      mockGetCallSession.mockResolvedValue({
+        participants: [{ participantId: PARTICIPANT_ID, leftAt: new Date(), participant: { userId: CALLER_ID } }],
+      });
+
+      const prisma = makePrisma();
+      // Socket is still (erroneously) inside the call room — the exact
+      // condition the fast-path's room-membership check alone cannot catch.
+      const { socket, handlers, directEmit: d, socketToEmit: ste } = makeSocket([`call:${CALL_ID}`]);
+      directEmit = d;
+      socketToEmit = ste;
+      const { io } = makeIo();
+      ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+    });
+
+    it('does NOT fire the fast-path call:ended broadcast', () => {
+      expect(socketToEmit).not.toHaveBeenCalled();
+    });
+
+    it('emits NOT_A_PARTICIPANT error to sender', () => {
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+    });
+
+    it('acks { success: false }', () => {
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+
+    it('does NOT call endCall', () => {
+      expect(mockEndCall).not.toHaveBeenCalled();
     });
   });
 

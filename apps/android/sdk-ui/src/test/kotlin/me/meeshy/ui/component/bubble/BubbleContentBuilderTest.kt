@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.MessageEffectFlags
 import org.junit.Test
 
 private data class Prefs(
@@ -31,6 +32,10 @@ private fun message(
     pinnedAt: String? = null,
     forwardedFromId: String? = null,
     forwardedFromConversationId: String? = null,
+    effectFlags: Int? = null,
+    isBlurred: Boolean? = null,
+    isViewOnce: Boolean? = null,
+    expiresAt: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -47,6 +52,10 @@ private fun message(
     pinnedAt = pinnedAt,
     forwardedFromId = forwardedFromId,
     forwardedFromConversationId = forwardedFromConversationId,
+    effectFlags = effectFlags,
+    isBlurred = isBlurred,
+    isViewOnce = isViewOnce,
+    expiresAt = expiresAt,
 )
 
 class BubbleContentBuilderTest {
@@ -575,6 +584,71 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Pending)
+    }
+
+    @Test
+    fun `a pending outgoing message while offline shows the queued-offline status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.QueuedOffline)
+    }
+
+    @Test
+    fun `a pending outgoing message with a live connection stays a clock, not the hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = false,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Pending)
+    }
+
+    @Test
+    fun `a failed outgoing message stays Failed even while offline`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isFailed = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun `a delivered outgoing message never shows the offline hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 1),
+            currentUserId = "me",
+            preferences = french,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
+    }
+
+    @Test
+    fun `an incoming message never shows the offline hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "other"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
     }
 
     @Test
@@ -1519,6 +1593,221 @@ class BubbleContentBuilderTest {
         assertThat(content.audios.single().transcriptionText).isEqualTo("cleaned up")
     }
 
+    // --- Cloned-voice audio translation (Prisme) ---------------------------
+
+    @Test
+    fun `an audio bubble plays the preferred-language cloned voice when one exists`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello everyone", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(
+                                url = "/media/fr.mp3",
+                                transcription = "bonjour tout le monde",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(audio.isAudioTranslated).isTrue()
+        assertThat(audio.audioLanguage).isEqualTo("fr")
+        assertThat(audio.transcriptionText).isEqualTo("bonjour tout le monde")
+    }
+
+    @Test
+    fun `an audio bubble keeps the original voice when the preferred language is the original`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "bonjour", language = "fr"),
+                        translations = mapOf(
+                            "de" to ApiAttachmentTranslation(url = "/media/de.mp3", transcription = "hallo"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+        assertThat(audio.audioLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a preferred translation with a transcription but no audio url keeps the original voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+        assertThat(audio.transcriptionText).isEqualTo("bonjour")
+    }
+
+    @Test
+    fun `a blank cloned-voice url falls back to the original voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(url = "   ", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+    }
+
+    @Test
+    fun `the cloned-voice duration overrides the original when a translation is played`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        duration = 12,
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(
+                                url = "/media/fr.mp3",
+                                transcription = "bonjour",
+                                durationMs = 5000,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.audios.single().durationSeconds).isEqualTo(5)
+    }
+
+    @Test
+    fun `the cloned-voice language key matches case-insensitively`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "FR" to ApiAttachmentTranslation(url = "/media/fr.mp3", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.audios.single().url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(content.audios.single().isAudioTranslated).isTrue()
+    }
+
+    @Test
+    fun `the highest-priority preferred language wins the cloned voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "es" to ApiAttachmentTranslation(url = "/media/es.mp3", transcription = "hola"),
+                            "fr" to ApiAttachmentTranslation(url = "/media/fr.mp3", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = Prefs(systemLanguage = "fr", regionalLanguage = "es"),
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.audios.single().url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(content.audios.single().audioLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `an audio with no translations keeps the original voice and is not marked translated`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+    }
+
     @Test
     fun `a deleted message hides its audio`() {
         val content = BubbleContentBuilder.build(
@@ -1565,6 +1854,128 @@ class BubbleContentBuilderTest {
         assertThat(audio.url).isNull()
         assertThat(audio.sizeBytes).isEqualTo(8000)
         assertThat(content.files).isEmpty()
+    }
+
+    // MARK: - blurReveal (tap-to-reveal conceal spec)
+
+    @Test
+    fun `a plain message has no blurReveal spec`() {
+        val content = BubbleContentBuilder.build(message(), currentUserId = "me", preferences = french)
+
+        assertThat(content.blurReveal).isNull()
+    }
+
+    @Test
+    fun `a blurred message carries a blurReveal spec that is not view-once`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.BLURRED.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isFalse()
+    }
+
+    @Test
+    fun `a view-once message carries a view-once blurReveal spec`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isTrue()
+    }
+
+    @Test
+    fun `blurReveal derives from the legacy isBlurred boolean when no bitfield`() {
+        val content = BubbleContentBuilder.build(
+            message(isBlurred = true),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isFalse()
+    }
+
+    @Test
+    fun `blurReveal defaults to the shared visibility window`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.BLURRED.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal?.visibilitySeconds)
+            .isEqualTo(me.meeshy.sdk.model.BlurRevealLifecycle.defaultRevealDurationSeconds)
+    }
+
+    @Test
+    fun `an ephemeral-only message is not concealed`() {
+        // EPHEMERAL is a lifecycle effect but drives the countdown badge, not a blur.
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.EPHEMERAL.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNull()
+    }
+
+    @Test
+    fun `a deleted blurred message drops its blurReveal spec`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt(), deletedAt = "2026-07-14T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNull()
+    }
+
+    @Test
+    fun `a plain message carries no render effects`() {
+        val content = BubbleContentBuilder.build(message(), currentUserId = "me", preferences = french)
+
+        assertThat(content.effects.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun `a glow message carries the glow render effect`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.GLOW.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.has(MessageEffectFlags.GLOW)).isTrue()
+    }
+
+    @Test
+    fun `a view-once message carries no visual render effect`() {
+        // The lifecycle bit drives concealment, not the visual-treatment modifier.
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.has(MessageEffectFlags.VIEW_ONCE)).isFalse()
+        assertThat(content.effects.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun `a deleted glow message carries no render effects`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.GLOW.toInt(), deletedAt = "2026-07-14T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.hasAnyEffect).isFalse()
     }
 
 }

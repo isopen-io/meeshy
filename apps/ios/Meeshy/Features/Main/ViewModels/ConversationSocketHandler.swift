@@ -51,12 +51,6 @@ protocol ConversationSocketDelegate: AnyObject {
     /// the same UX.
     func handleSocketAccessRevoked(reason: String?)
 
-    /// Mark the conversation as read. Called from the socket handler when an
-    /// inbound message arrives while this conversation is on screen so the
-    /// sender's checkmark upgrades from `.delivered` to `.read` without
-    /// waiting for a navigation cycle.
-    func markAsRead()
-
     /// Apply a server-pushed attachment delta atomically : injects the
     /// enriched transcription / audio translations into the metadata
     /// dictionaries in a single MainActor slice, then schedules the
@@ -534,24 +528,12 @@ final class ConversationSocketHandler {
                         self.clearTypingSafetyTimer(for: sender.id)
                     }
 
-                    // Read PRECISION gate. Being subscribed to the socket is NOT
-                    // proof the user is reading: the handler stays wired while the
-                    // app is backgrounded (phone in a pocket) and while the user is
-                    // scrolled up reading history. Emitting `mark-as-read` in those
-                    // cases produces a FALSE read receipt — the sender's check turns
-                    // indigo "read" although nobody read anything. Only fire when the
-                    // app is foregrounded AND the viewport is at the bottom (the new
-                    // message is, or auto-scrolls into, view). A deferred read is
-                    // re-emitted when the user foregrounds or scrolls back to the
-                    // bottom (`onNearBottomChanged`), so receipts stay truthful and
-                    // eventually complete. markAsRead is idempotent (REST dedups
-                    // within 2s, cache update is local-first).
-                    if ReadReceiptGate.shouldEmitAutoRead(
-                        isApplicationActive: self.isApplicationActive(),
-                        isViewportAtBottom: delegate.isViewportAtBottom
-                    ) {
-                        delegate.markAsRead()
-                    }
+                    // Un message entrant n'est PAS marqué lu à l'arrivée, même
+                    // app active et viewport en bas : être abonné au socket dit
+                    // que l'utilisateur POUVAIT le voir, pas qu'il l'a vu. Sa
+                    // bulle passera par l'observateur de visibilité comme les
+                    // autres — seuil de présence, ou promotion immédiate quand
+                    // le bas est atteint (`MessageListViewController.flushSeenNow`).
 
                     // mark-as-received is handled globally by ConversationListViewModel
                 }
@@ -580,16 +562,38 @@ final class ConversationSocketHandler {
                     // Write through persistence; store observation surfaces the edit.
                     let msgId = apiMsg.id
                     let content = apiMsg.content ?? ""
-                    // Use the server's editedAt, not the device clock: markEdited
-                    // compares this against the stored editedAt to reject stale,
-                    // out-of-order edit events, which only works if every device
-                    // is comparing the same (server) clock.
-                    let editedAt = apiMsg.editedAt ?? Date()
-                    Task {
-                        do {
-                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    if let callSummary = apiMsg.callSummary {
+                        // Message d'appel : l'édition serveur est la transition
+                        // live → terminal (« en cours » → « Appel · 04:32 »).
+                        // markEdited ne ré-applique JAMAIS la métadonnée et
+                        // poserait isEdited — applyCallNoticeUpdate met à jour
+                        // content + callSummaryJson sans flags d'édition.
+                        let callSummaryJson = try? JSONEncoder().encode(callSummary)
+                        let serverUpdatedAt = apiMsg.updatedAt ?? apiMsg.editedAt ?? Date()
+                        Task {
+                            do {
+                                try await persistence.applyCallNoticeUpdate(
+                                    localId: msgId,
+                                    content: content,
+                                    callSummaryJson: callSummaryJson,
+                                    serverUpdatedAt: serverUpdatedAt
+                                )
+                            } catch {
+                                Logger.messages.warning("[ConversationSocket] applyCallNoticeUpdate failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            }
+                        }
+                    } else {
+                        // Use the server's editedAt, not the device clock: markEdited
+                        // compares this against the stored editedAt to reject stale,
+                        // out-of-order edit events, which only works if every device
+                        // is comparing the same (server) clock.
+                        let editedAt = apiMsg.editedAt ?? Date()
+                        Task {
+                            do {
+                                try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
+                            } catch {
+                                Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     }
                 }
@@ -830,7 +834,19 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
+                guard let self else { return }
+                // At-rest consumption tint (waveform/progress bar) : only OUR OWN
+                // playback echo (multi-device sync) may feed this store — it is
+                // documented and purged as single-local-user state, so another
+                // participant's progress must never tint MY bubble.
+                if event.userId == self.currentUserId,
+                   let playPositionMs = event.playPositionMs,
+                   let durationMs = event.durationMs, durationMs > 0 {
+                    let fraction = Double(playPositionMs) / Double(durationMs)
+                    MediaConsumptionStore.shared.record(
+                        fraction: fraction, complete: fraction >= 1, for: event.attachmentId)
+                }
+                guard let persistence = self.persistence else { return }
                 // Touch the record so the store observation fires and
                 // bubbles re-render with the updated attachment status.
                 Task {

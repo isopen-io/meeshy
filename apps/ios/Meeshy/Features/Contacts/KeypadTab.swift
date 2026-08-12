@@ -58,6 +58,11 @@ struct KeypadTab: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "keypad.delete.a11y", defaultValue: "Effacer", bundle: .main))
+                .accessibilityHint(String(localized: "keypad.delete.a11y.hint", defaultValue: "Efface le dernier caractère", bundle: .main))
+                .accessibilityAction(named: Text(String(localized: "keypad.clear.a11y", defaultValue: "Tout effacer", bundle: .main))) {
+                    viewModel.clear()
+                    HapticFeedback.medium()
+                }
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
                         viewModel.clear()
@@ -109,7 +114,7 @@ struct KeypadTab: View {
             // completed search found nothing.
             hintMessage(
                 title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numero ou un nom", bundle: .main),
-                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numero de telephone ou par nom.", bundle: .main)
+                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numéro de téléphone ou par nom.", bundle: .main)
             )
         }
     }
@@ -157,13 +162,30 @@ struct KeypadTab: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name))
+            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
 
             dialMenu(for: user, displayName: name)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(name)
+    }
+
+    // `.accessibilityElement(children: .combine)` above would let VoiceOver read
+    // the child Texts, but the explicit `.accessibilityLabel` replaces that
+    // combined text — so a bare `name` dropped the visible `@username` and the
+    // avatar's online-presence dot (a green Circle drawn only when online), which
+    // convey identity/status by text/colour alone (WCAG 1.1.1 / 1.4.1). Compose
+    // them into the label, mirroring the shipped NewConversationView (185i) /
+    // ContactsListTab idiom and reusing its lowercase online key. Offline stays
+    // silent, matching the visual (no dot is drawn when offline).
+    private func resultRowAccessibilityLabel(for user: UserSearchResult, name: String) -> String {
+        var parts = [name, "@\(user.username)"]
+        if user.isOnline == true {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {

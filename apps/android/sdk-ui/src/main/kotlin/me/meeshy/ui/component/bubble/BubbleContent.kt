@@ -1,10 +1,15 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.BlurRevealLifecycle
+import me.meeshy.sdk.model.MessageEffects
 
 @Immutable
 sealed class DeliveryStatus {
     @Immutable data object Pending : DeliveryStatus()
+
+    /** Pending, but parked in the offline outbox — shows a queue hourglass, not a clock. */
+    @Immutable data object QueuedOffline : DeliveryStatus()
     @Immutable data object Sent : DeliveryStatus()
     @Immutable data object Delivered : DeliveryStatus()
     @Immutable data object Read : DeliveryStatus()
@@ -108,6 +113,8 @@ public data class BubbleAudio(
     val transcriptionText: String? = null,
     val transcriptionLanguage: String? = null,
     val isTranscriptionTranslated: Boolean = false,
+    val isAudioTranslated: Boolean = false,
+    val audioLanguage: String? = null,
 ) {
     /** True when the audio has a playable URL (already downloaded / remote-ready). */
     val isPlayable: Boolean get() = !url.isNullOrBlank()
@@ -159,7 +166,39 @@ public data class BubbleContent(
     val locations: List<BubbleLocation> = emptyList(),
     val audios: List<BubbleAudio> = emptyList(),
     val emojiOnlyCount: Int = 0,
+    val expiresAtIso: String? = null,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
     val isStarred: Boolean = false,
+    val isFirstInGroup: Boolean = true,
+    val isLastInGroup: Boolean = true,
+    val blurReveal: BubbleBlurRevealSpec? = null,
+    /**
+     * The visual-treatment effects (glow / pulse / rainbow / one-shot appearance) this
+     * bubble renders via `Modifier.messageEffects`. Lifecycle bits are stripped and the
+     * value is empty for a deleted tombstone (see
+     * [me.meeshy.sdk.model.MessageEffectRenderPlanner.renderEffects]).
+     */
+    val effects: MessageEffects = MessageEffects(),
+    /** True when this message is a view-once ("open once, then burn") message. */
+    val isViewOnce: Boolean = false,
+    /**
+     * How many times the view-once message has been consumed on the server. Once
+     * this is > 0 on a [isViewOnce] message the bubble renders the "Seen and
+     * deleted" burned tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
+     */
+    val viewOnceCount: Int = 0,
+)
+
+/**
+ * Conceal spec for a blurred / view-once ("tap to reveal") message — port of the
+ * inputs iOS `BubbleBlurRevealController` receives. A non-null value means the bubble
+ * body is hidden behind a fog + blur until the viewer taps it. [isViewOnce] drives the
+ * "view once" affordance (and, later, the server view-count consume);
+ * [visibilitySeconds] is how long the content stays revealed before it re-conceals.
+ */
+@Immutable
+public data class BubbleBlurRevealSpec(
+    val isViewOnce: Boolean,
+    val visibilitySeconds: Double = BlurRevealLifecycle.defaultRevealDurationSeconds,
 )

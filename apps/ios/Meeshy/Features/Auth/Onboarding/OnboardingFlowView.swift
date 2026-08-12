@@ -11,6 +11,7 @@ struct OnboardingFlowView: View {
     var onComplete: (() -> Void)?
 
     @State private var keyboardHeight: CGFloat = 0
+    @State private var didUploadProfileAssets = false
 
     var body: some View {
         ZStack {
@@ -87,11 +88,37 @@ struct OnboardingFlowView: View {
         }
         .adaptiveOnChange(of: authManager.isAuthenticated) { _, authenticated in
             if authenticated {
+                uploadProfileCompletionAssets()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     onComplete?()
                     dismiss()
                 }
             }
+        }
+    }
+
+    // MARK: - Profile Completion Assets
+
+    /// Le wizard collecte photo/bannière/bio AVANT la création du compte, mais
+    /// `POST /auth/register` ne les transporte pas — l'envoi ne peut se faire
+    /// qu'une fois authentifié. Le JPEG est encodé ici (hors réseau) puis
+    /// l'upload continue en tâche détachée : il survit au dismiss de la vue.
+    private func uploadProfileCompletionAssets() {
+        guard !didUploadProfileAssets else { return }
+        didUploadProfileAssets = true
+
+        let profileImageData = viewModel.profileImage?.jpegData(compressionQuality: 0.9)
+        let bannerImageData = viewModel.bannerImage?.jpegData(compressionQuality: 0.9)
+        let bio = viewModel.bio
+        guard profileImageData != nil || bannerImageData != nil
+                || !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        Task.detached(priority: .utility) {
+            _ = await ProfileCompletionUploader.shared.uploadPostRegistrationAssets(
+                profileImageData: profileImageData,
+                bannerImageData: bannerImageData,
+                bio: bio
+            )
         }
     }
 
@@ -104,10 +131,10 @@ struct OnboardingFlowView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.previousStep()
                     }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(15, weight: .semibold))
                         Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                             .font(MeeshyFont.relative(14, weight: .medium))
@@ -121,7 +148,7 @@ struct OnboardingFlowView: View {
             } else {
                 Button(action: {
                     dismiss()
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     Image(systemName: "xmark")
                         // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 38×38 →
@@ -215,14 +242,14 @@ struct OnboardingFlowView: View {
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant !", bundle: .main)
         }
     }
 
     private var buttonIcon: String? {
         switch viewModel.currentStep {
         case .recap: return "sparkles"
-        default: return "arrow.right"
+        default: return "arrow.forward"
         }
     }
 

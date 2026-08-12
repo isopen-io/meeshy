@@ -19,6 +19,13 @@ import MeeshyUI
 /// + hard-press preview. Extracted from `ConversationListView.conversationRow`.
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
+///
+/// Menu d'appui long — deux chemins par version d'OS :
+/// - iOS 26+ : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid Glass
+///   système, exposé automatiquement à VoiceOver). Le contenu vient du
+///   builder `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
+/// - < iOS 26 : overlay custom (`RowPressBounceModifier` → `onLongPress` →
+///   `ConversationContextMenuView`), avec émergence/morph maison.
 struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
@@ -46,79 +53,165 @@ struct ConversationRowItem: View {
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
     let onLoadPreview: () async -> Void
-    /// Appui long → overlay de menu custom (dessine ses icônes ; le
-    /// `.contextMenu` natif ne les affiche pas sur iOS 26). Reçoit la frame
-    /// GLOBALE de la ligne pressée — point de départ de l'émergence de
-    /// l'aperçu (+Overlays). `.zero` quand la frame n'est pas connue
-    /// (action de rotor accessibilité) : l'overlay retombe sur le zoom
-    /// centré 0.7 → 1.0.
+    /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
+    /// a bounded PREFIX of the list (`ConversationRowMetrics
+    /// .autoPreviewLoadRowLimit`, computed by the caller via
+    /// `ConversationListView.shouldAutoLoadPreview`). Without this, EVERY
+    /// row firing `.task` on appear meant scrolling through a cold cache
+    /// issued one REST call per newly-visible conversation (audit
+    /// 2026-07-20). Rows past the limit still get their preview populated
+    /// on-demand via the long-press path (`onLongPress` →
+    /// `loadPreviewMessages`, ConversationListView.swift).
+    let enableAutoPreviewLoad: Bool
+    /// Fallback < iOS 26 : appui long → overlay de menu custom (dessine ses
+    /// icônes). Reçoit la frame GLOBALE de la ligne pressée — point de départ
+    /// de l'émergence de l'aperçu (+Overlays). `.zero` quand la frame n'est
+    /// pas connue (action de rotor accessibilité) : l'overlay retombe sur le
+    /// zoom centré 0.7 → 1.0. Jamais appelé sur iOS 26+ (menu natif).
     let onLongPress: (CGRect) -> Void
+    /// Chemin iOS 26+ : items du `.contextMenu` NATIF (rendu Liquid Glass
+    /// système), résolus UNE fois à la construction de la row et stockés en
+    /// AnyView — précédent MeeshyAvatar (« single, stable array »). Deux
+    /// raisons, toutes deux vécues :
+    /// 1. Un `@ViewBuilder () -> MenuContent` générique re-exécutait le
+    ///    builder à CHAQUE body pass (mesures LazyVStack comprises) et
+    ///    matérialisait un tuple géant (9 items + sous-menus) copié en pleine
+    ///    récursion de layout → EXC_BAD_ACCESS `initializeWithCopy for
+    ///    Button` au LANCEMENT sur iOS 26 (crash 2026-07-11, PAC failure).
+    /// 2. Le paramètre générique regonflait le type de la row — la famille
+    ///    de crash type-metadata que l'extraction en structs nominales avait
+    ///    éliminée (voir l'en-tête du fichier). AnyView est ACCEPTABLE ici,
+    ///    contrairement aux rows : un contenu de menu n'a pas d'identité
+    ///    structurelle à préserver (reconstruit à l'ouverture du menu).
+    /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
+    let nativeContextMenu: AnyView
 
     var body: some View {
         SwipeableRow(
             leadingActions: leadingActions,
             trailingActions: trailingActions
         ) {
-            ThemedConversationRow(
-                conversation: conversation,
-                community: community,
-                availableWidth: rowWidth,
-                isDragging: isDragging,
-                presenceState: presenceState,
-                onViewStory: onViewStory,
-                onViewProfile: onViewProfile,
-                onViewConversationInfo: onViewConversationInfo,
-                onMoodBadgeTap: onMoodBadgeTap,
-                onCreateShareLink: onCreateShareLink,
-                isDark: isDark,
-                storyRingState: storyRingState,
-                moodStatus: moodStatus,
-                typingUsername: typingUsername,
-                isSelected: isSelected,
-                draftSummary: draftSummary,
-                preferredContentLanguages: preferredContentLanguages
-            )
-            .equatable()
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
-            // Les gestes tactiles (tap + long-press) vivent dans l'overlay de
-            // RowPressBounceModifier, HORS de l'élément combiné : cette action
-            // par défaut garantit que le double-tap VoiceOver ouvre toujours
-            // la conversation.
-            .accessibilityAction {
-                onTap()
-            }
-            // Le menu custom n'est plus un `.contextMenu` natif (auto-exposé
-            // à VoiceOver) : cette action de rotor reste le seul accès non-visuel
-            // à épingler/sourdine/archiver/verrouiller depuis la ligne.
-            .accessibilityAction(named: String(
-                localized: "conversation.row.menu_action",
-                defaultValue: "Ouvrir le menu",
-                bundle: .main
-            )) {
-                onLongPress(.zero)
-            }
-            // Appui long → overlay custom (icônes garanties iOS 26). Le
-            // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
-            // UIDragInteraction UIKit qui capte le long-press système et
-            // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
-            // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
-            // accessible via « Déplacer vers » dans le menu.
-            //
-            // AUCUN DragGesture custom ici — jamais. Un `highPriorityGesture(
-            // DragGesture())` plein-ligne (régression ff5d5649) capturait le
-            // pan vertical du ScrollView parent et figeait le scroll de la
-            // liste sous le doigt. Le LongPressGesture (distance max 10 pt)
-            // s'annule de lui-même dès que le scroll démarre : le pan reste
-            // la propriété exclusive du ScrollView. Le geste « replier
-            // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
-            // contexte scrollable.
-            .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
-            .task {
-                await onLoadPreview()
+            if #available(iOS 26.0, *) {
+                // Menu contextuel NATIF (Liquid Glass) : le système possède le
+                // long-press, la preview et l'exposition VoiceOver ; l'avatar
+                // garde son propre `.contextMenu` (interaction la plus
+                // profonde), donc un appui maintenu dessus n'ouvre PAS le menu
+                // de la ligne (feedback user 2026-07-08). Le tap d'ouverture
+                // reste un `.onTapGesture` plein-ligne : les gestes internes
+                // de l'avatar (story/profil/mood) restent prioritaires.
+                rowCore
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        HapticFeedback.light()
+                        onTap()
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    // Drag-to-section natif : press-and-hold = menu, press-and-
+                    // move = drag — la coordination est SYSTÈME avec le
+                    // `.contextMenu` natif. C'est le long-press CUSTOM du
+                    // fallback que `.onDrag` cassait (raison de son retrait,
+                    // 135af8f2) — il ne doit donc JAMAIS être attaché sur la
+                    // branche < iOS 26. La source ne publie que l'id ; les
+                    // headers (`SectionDropDelegate` → `handleDrop`) décident
+                    // via `ChipDropResolver`, même sémantique que le drop de
+                    // la chip du morph custom.
+                    .onDrag {
+                        NSItemProvider(object: conversation.id as NSString)
+                    }
+                    .contextMenu {
+                        nativeContextMenu
+                    } preview: {
+                        // Preview statique (non interactive dans un contextMenu
+                        // natif) — mêmes inputs que l'overlay custom, sans
+                        // callbacks. Largeur pilotée par le call site, comme
+                        // l'overlay (source de vérité unique).
+                        ConversationPreviewView(
+                            conversation: conversation,
+                            cachedMessages: cachedPreviewMessages,
+                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
+                                .flatMap { MeeshyConfig.resolveMediaURL($0) },
+                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                            storyState: storyRingState,
+                            moodEmoji: moodStatus?.moodEmoji,
+                            presenceState: conversation.type == .direct ? presenceState : nil,
+                            isDirect: conversation.type == .direct
+                        )
+                        .frame(width: 340)
+                    }
+                    .task {
+                        guard enableAutoPreviewLoad else { return }
+                        await onLoadPreview()
+                    }
+            } else {
+                rowCore
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    // Les gestes tactiles (tap + long-press) vivent dans l'overlay de
+                    // RowPressBounceModifier, HORS de l'élément combiné : cette action
+                    // par défaut garantit que le double-tap VoiceOver ouvre toujours
+                    // la conversation.
+                    .accessibilityAction {
+                        onTap()
+                    }
+                    // Le menu custom n'est pas un `.contextMenu` natif (auto-exposé
+                    // à VoiceOver) : cette action de rotor reste le seul accès non-visuel
+                    // à épingler/sourdine/archiver/verrouiller depuis la ligne.
+                    .accessibilityAction(named: String(
+                        localized: "conversation.row.menu_action",
+                        defaultValue: "Ouvrir le menu",
+                        bundle: .main
+                    )) {
+                        onLongPress(.zero)
+                    }
+                    // Appui long → overlay custom (icônes garanties). Le
+                    // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
+                    // UIDragInteraction UIKit qui capte le long-press système et
+                    // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
+                    // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
+                    // accessible via « Déplacer vers » dans le menu.
+                    //
+                    // AUCUN DragGesture custom ici — jamais. Un `highPriorityGesture(
+                    // DragGesture())` plein-ligne (régression ff5d5649) capturait le
+                    // pan vertical du ScrollView parent et figeait le scroll de la
+                    // liste sous le doigt. Le LongPressGesture (distance max 10 pt)
+                    // s'annule de lui-même dès que le scroll démarre : le pan reste
+                    // la propriété exclusive du ScrollView. Le geste « replier
+                    // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
+                    // contexte scrollable.
+                    .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
+                    .task {
+                        guard enableAutoPreviewLoad else { return }
+                        await onLoadPreview()
+                    }
             }
         }
+    }
+
+    /// Coeur visuel de la ligne, commun aux deux chemins de menu.
+    private var rowCore: some View {
+        ThemedConversationRow(
+            conversation: conversation,
+            community: community,
+            availableWidth: rowWidth,
+            isDragging: isDragging,
+            presenceState: presenceState,
+            onViewStory: onViewStory,
+            onViewProfile: onViewProfile,
+            onViewConversationInfo: onViewConversationInfo,
+            onMoodBadgeTap: onMoodBadgeTap,
+            onCreateShareLink: onCreateShareLink,
+            isDark: isDark,
+            storyRingState: storyRingState,
+            moodStatus: moodStatus,
+            typingUsername: typingUsername,
+            isSelected: isSelected,
+            draftSummary: draftSummary,
+            preferredContentLanguages: preferredContentLanguages
+        )
+        .equatable()
     }
 }
 
@@ -134,6 +227,14 @@ struct ConversationRowItem: View {
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
+
+    /// Bound for the opportunistic preview auto-load (`enableAutoPreviewLoad`
+    /// above) — matches the ViewModel's own top-conversations batch prefetch
+    /// (`ConversationListViewModel.prefetchTopConversationMessages`, N=20),
+    /// so rows within this prefix almost always find their preview already
+    /// cache-warm and rows beyond it fall back to the on-demand long-press
+    /// load instead of firing a REST call just for scrolling into view.
+    static let autoPreviewLoadRowLimit = 20
 }
 
 // MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
@@ -305,7 +406,8 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.enableAutoPreviewLoad == rhs.enableAutoPreviewLoad
     }
 }
 

@@ -3,11 +3,11 @@
  * VÉRITÉ partagée `@meeshy/shared/utils/user-presence` et centralise ICI le
  * mapping état -> classes Tailwind (un seul endroit pour toute l'app).
  *
- * Règle produit (identique iOS / Android) :
- *   online  (isOnline backend OU activité <= 60s) -> VERT emerald-400 + pulse
- *   recent  (activité <= 5min)                    -> VERT emerald-400
- *   away    (5-30min)                             -> ORANGE amber-400
- *   offline (> 30min)                             -> GRIS gray-400
+ * Règle produit 1/3/5 (identique iOS / Android) :
+ *   online  (isOnline backend <= 5min OU activité <= 60s) -> VERT emerald-400 + pulse
+ *   away    (1-3min)                                      -> ORANGE amber-400
+ *   idle    (3-5min)                                      -> GRIS gray-400 AFFICHÉ
+ *   offline (> 5min)                                      -> AUCUN dot (les composants return null)
  *
  * Les hex correspondent exactement aux tokens iOS/Android :
  * emerald-400 = #34D399 (MeeshyColors.success), amber-400 = #FBBF24
@@ -22,8 +22,8 @@ import {
   isPresenceActive,
   isPresencePulsing,
   PRESENCE_ONLINE_WINDOW_MS,
-  PRESENCE_RECENT_WINDOW_MS,
   PRESENCE_AWAY_WINDOW_MS,
+  PRESENCE_IDLE_WINDOW_MS,
   type UserPresenceStatus,
   type UserPresenceSource,
   type PresenceTone,
@@ -36,8 +36,8 @@ export {
   isPresenceActive,
   isPresencePulsing,
   PRESENCE_ONLINE_WINDOW_MS,
-  PRESENCE_RECENT_WINDOW_MS,
   PRESENCE_AWAY_WINDOW_MS,
+  PRESENCE_IDLE_WINDOW_MS,
 };
 export type { PresenceTone };
 
@@ -49,19 +49,21 @@ export function getUserStatus(user: User | Participant | PresenceSource | null |
  * Mapping central statut -> classe de fond du dot. Seul 'online' pulse.
  * TOUT composant présence (dot, badge, sidebar) DOIT consommer ces maps —
  * ne jamais redéclarer bg-emerald/amber/gray localement.
+ * 'idle' est le gris AFFICHÉ (3-5min) ; 'offline' reste défini uniquement pour
+ * les affichages LABELLISÉS explicites — les dots d'avatar ne le rendent jamais.
  */
 export const PRESENCE_DOT_CLASS: Record<UserStatus, string> = {
   online: 'bg-emerald-400 animate-pulse',
-  recent: 'bg-emerald-400',
   away: 'bg-amber-400',
+  idle: 'bg-gray-400',
   offline: 'bg-gray-400',
 };
 
 /** Variante badge (avec état hover) pour les Badge shadcn. */
 export const PRESENCE_BADGE_CLASS: Record<UserStatus, string> = {
   online: 'bg-emerald-400 hover:bg-emerald-500',
-  recent: 'bg-emerald-400 hover:bg-emerald-500',
   away: 'bg-amber-400 hover:bg-amber-500',
+  idle: 'bg-gray-400 hover:bg-gray-500',
   offline: 'bg-gray-400 hover:bg-gray-500',
 };
 

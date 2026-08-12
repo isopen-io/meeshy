@@ -66,6 +66,7 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     }
 
     private var traitObserver: NSObjectProtocol?
+    private var cancellables = Set<AnyCancellable>()
 
     private init() {
         if let saved = UserDefaults.standard.string(forKey: "themePreference"),
@@ -79,6 +80,45 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
             object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.resolveMode() }
+        }
+
+        observeRemoteThemeSync()
+    }
+
+    // MARK: - Remote Theme Sync (was push-only — never read back)
+
+    /// Reflète `UserPreferencesManager.application.theme` dans `preference`
+    /// quand — et SEULEMENT quand — une synchronisation serveur vient de
+    /// s'achever (`lastSyncDate` avance : login via `observeAuth` ou
+    /// refresh foreground via `observeForeground`, cf.
+    /// `UserPreferencesManager.fetchFromBackend` → `applyRemote`).
+    /// `dropFirst()` ignore le rejeu, à l'abonnement, du timestamp persisté
+    /// au précédent lancement — sans ça, un choix local jamais encore
+    /// synchronisé (`application.theme` toujours à son default `.auto`)
+    /// serait écrasé au tout premier cold start post-fix. Corrige la sync
+    /// thème auparavant unidirectionnelle (poussée au backend via
+    /// `SettingsView.syncThemeToPrefs`, jamais relue).
+    private func observeRemoteThemeSync() {
+        UserPreferencesManager.shared.$lastSyncDate
+            .dropFirst()
+            .compactMap { $0 }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let mapped = Self.mapRemoteTheme(UserPreferencesManager.shared.application.theme)
+                guard self.preference != mapped else { return }
+                self.preference = mapped
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Pure mapping, `AppThemeMode` (backend) → `ThemePreference` (local
+    /// display state) — extracted so it's unit-testable without touching
+    /// either singleton. `nonisolated`: no actor-isolated state.
+    nonisolated static func mapRemoteTheme(_ remote: AppThemeMode) -> ThemePreference {
+        switch remote {
+        case .auto: return .system
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 
@@ -96,9 +136,19 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     }
 
     public func syncWithSystem(_ colorScheme: ColorScheme) {
-        if preference == .system {
-            let resolved: ThemeMode = colorScheme == .dark ? .dark : .light
-            if mode != resolved { mode = resolved }
+        guard preference == .system else { return }
+        let resolved: ThemeMode = colorScheme == .dark ? .dark : .light
+        guard mode != resolved else { return }
+        // Defer the @Published mutation off the current SwiftUI update pass. The
+        // colorScheme change that triggers this (SystemThemeDetector, on the
+        // RootView path) is itself observed by views in-flight, so mutating
+        // `mode` synchronously here republishes ThemeManager *within* that pass →
+        // "Publishing changes from within view updates is not allowed" + parasitic
+        // re-renders on the watchdog-sensitive root path (P0). Re-check on the
+        // next main-actor turn in case `preference` changed meanwhile.
+        Task { @MainActor [weak self] in
+            guard let self, self.preference == .system, self.mode != resolved else { return }
+            self.mode = resolved
         }
     }
 

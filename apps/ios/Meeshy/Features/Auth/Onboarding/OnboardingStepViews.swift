@@ -6,6 +6,36 @@ import MeeshyUI
 
 // MARK: - Shared Components
 
+/// One "tip" line of an onboarding info card: a leading glyph plus its caption.
+///
+/// Four step views each carried a byte-identical `tipRow` helper that differed
+/// only in the glyph tint, so the tint is the sole parameter beyond the content.
+/// The glyph is decorative — the caption carries the whole meaning — so it is
+/// hidden from VoiceOver (precedent 90i), leaving one spoken element per row
+/// instead of an SF Symbol name followed by the text.
+struct OnboardingTipRow: View {
+    let icon: String
+    let text: String
+    let tint: Color
+
+    /// The gutter that aligns every caption of a card on one edge. It must scale
+    /// with the caption beside it: a hard 16pt kept the alignment but let a
+    /// `.caption` glyph outgrow its column at the accessibility text sizes and
+    /// crowd the text, while sizing to the glyph would lose the shared edge.
+    @ScaledMetric(relativeTo: .caption) private var glyphColumn: CGFloat = 16
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(tint)
+                .frame(width: glyphColumn)
+                .accessibilityHidden(true)
+            Text(text).font(.caption).foregroundColor(.secondary)
+        }
+    }
+}
+
 struct GlassTextField: View {
     let icon: String
     let placeholder: String
@@ -46,7 +76,7 @@ struct GlassTextField: View {
                             .foregroundColor(.secondary)
                     }
                     .accessibilityLabel(String(localized: "onboarding.password.toggleVisibility",
-                                                defaultValue: "Toggle password visibility", bundle: .main))
+                                                defaultValue: "Afficher ou masquer le mot de passe", bundle: .main))
                 }
 
                 if isValidating {
@@ -171,7 +201,7 @@ struct StepPseudoView: View {
 
                 GlassTextField(
                     icon: "at",
-                    placeholder: String(localized: "onboarding.step.pseudo.placeholder", defaultValue: "Your cool username", bundle: .main),
+                    placeholder: String(localized: "onboarding.step.pseudo.placeholder", defaultValue: "Ton pseudo qui claque", bundle: .main),
                     text: $viewModel.username,
                     errorMessage: viewModel.usernameError,
                     accentColor: viewModel.currentStep.accentColor,
@@ -179,6 +209,10 @@ struct StepPseudoView: View {
                     isAvailable: viewModel.usernameAvailable
                 )
                 .focused($isFocused)
+                // AutoFill : c'est l'identifiant que iOS associera au mot de
+                // passe généré à l'étape suivante. Sans lui, rien n'est proposé
+                // à l'enregistrement au trousseau en fin d'inscription.
+                .textContentType(.username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -202,14 +236,14 @@ struct StepPseudoView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lightbulb.max.fill").foregroundColor(MeeshyColors.warning)
-                Text(String(localized: "onboarding.step.pseudo.suggestions", defaultValue: "Available suggestions", bundle: .main))
+                Text(String(localized: "onboarding.step.pseudo.suggestions", defaultValue: "Suggestions disponibles", bundle: .main))
                     .font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             FlowLayout(spacing: 8) {
                 ForEach(viewModel.usernameSuggestions, id: \.self) { suggestion in
                     Button(action: {
                         viewModel.selectSuggestion(suggestion)
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        HapticFeedback.light()
                     }) {
                         Text("@\(suggestion)")
                             .font(.footnote.weight(.medium))
@@ -235,12 +269,12 @@ struct StepPseudoView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lightbulb.fill").foregroundColor(MeeshyColors.warning)
-                Text(String(localized: "onboarding.step.pseudo.tips.title", defaultValue: "Meeshy Tips", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.pseudo.tips.title", defaultValue: "Astuces Meeshy", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.pseudo.tips.length", defaultValue: "2 to 16 characters, no spaces", bundle: .main))
-                tipRow(icon: "star", text: String(localized: "onboarding.step.pseudo.tips.original", defaultValue: "Be original, it's your identity!", bundle: .main))
-                tipRow(icon: "eye.slash", text: String(localized: "onboarding.step.pseudo.tips.privacy", defaultValue: "No personal data in your username", bundle: .main))
+                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.pseudo.tips.length", defaultValue: "2 à 16 caractères, sans espaces", bundle: .main))
+                tipRow(icon: "star", text: String(localized: "onboarding.step.pseudo.tips.original", defaultValue: "Sois original, c'est ton identité !", bundle: .main))
+                tipRow(icon: "eye.slash", text: String(localized: "onboarding.step.pseudo.tips.privacy", defaultValue: "Pas de données personnelles dans ton pseudo", bundle: .main))
             }
         }
         .padding(14)
@@ -248,10 +282,7 @@ struct StepPseudoView: View {
     }
 
     private func tipRow(icon: String, text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(MeeshyColors.success).frame(width: 16)
-            Text(text).font(.caption).foregroundColor(.secondary)
-        }
+        OnboardingTipRow(icon: icon, text: text, tint: MeeshyColors.success)
     }
 }
 
@@ -327,16 +358,18 @@ struct StepPhoneView: View {
                     .padding(.leading, 16)
                 }
 
+                if viewModel.phoneBelongsToExistingAccount {
+                    recoveryHintCard
+                }
+
                 Button(action: { viewModel.skipCurrentStep() }) {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.right.circle").font(.subheadline)
-                        Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
+                        Image(systemName: "arrow.forward.circle").font(.subheadline)
+                        Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette étape", bundle: .main))
                             .font(.subheadline.weight(.medium))
                     }
                     .foregroundColor(.secondary)
                 }
-                .accessibilityLabel(String(localized: "onboarding.step.skip",
-                                            defaultValue: "Skip step", bundle: .main))
                 .bounceOnTap(scale: 0.94)
 
                 infoCard
@@ -358,11 +391,12 @@ struct StepPhoneView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi le telephone?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi ton numéro ?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Recuperation de compte securisee", bundle: .main))
-                tipRow(icon: "bell.badge", text: String(localized: "onboarding.step.phone.tip.alerts", defaultValue: "Alertes de securite importantes", bundle: .main))
+                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Récupération de compte sécurisée", bundle: .main))
+                tipRow(icon: "person.badge.shield.checkmark", text: String(localized: "onboarding.step.phone.tip.unique", defaultValue: "Un seul compte par numéro — tes engagements sont protégés", bundle: .main))
+                tipRow(icon: "person.2.wave.2", text: String(localized: "onboarding.step.phone.tip.friends", defaultValue: "Tes proches qui ont ton numéro te retrouvent", bundle: .main))
                 tipRow(icon: "hand.raised", text: String(localized: "onboarding.step.phone.tip.optional", defaultValue: "Optionnel, tu peux passer", bundle: .main))
             }
         }
@@ -371,10 +405,35 @@ struct StepPhoneView: View {
     }
 
     private func tipRow(icon: String, text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(.secondary).frame(width: 16)
-            Text(text).font(.caption).foregroundColor(.secondary)
+        OnboardingTipRow(icon: icon, text: text, tint: .secondary)
+    }
+
+    @ViewBuilder
+    private var recoveryHintCard: some View {
+        let recover = viewModel.phoneRecoverySuggested
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: recover ? "person.badge.key.fill" : "info.circle")
+                    .foregroundColor(recover ? MeeshyColors.warning : viewModel.currentStep.accentColor)
+                Text(recover
+                     ? String(localized: "onboarding.step.phone.recovery.title", defaultValue: "On dirait ton ancien compte", bundle: .main)
+                     : String(localized: "onboarding.step.phone.existing.title", defaultValue: "Ce numéro est déjà lié à un compte", bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+            Text(recover
+                 ? String(localized: "onboarding.step.phone.recovery.body", defaultValue: "Ce numéro appartient à un compte inactif dont le nom te ressemble. Depuis l'écran de connexion, choisis « Mot de passe oublié » pour le récupérer plutôt que d'en créer un nouveau.", bundle: .main)
+                 : String(localized: "onboarding.step.phone.existing.body", defaultValue: "Si c'est le tien, récupère-le depuis « Mot de passe oublié » sur l'écran de connexion. Sinon, saisis un autre numéro ou passe cette étape.", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill((recover ? MeeshyColors.warning : viewModel.currentStep.accentColor).opacity(0.1))
+        )
     }
 
     private var countryPickerSheet: some View {
@@ -429,6 +488,7 @@ struct StepEmailView: View {
                     isAvailable: viewModel.emailAvailable
                 )
                 .focused($isFocused)
+                .textContentType(.emailAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -448,12 +508,12 @@ struct StepEmailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield.fill").foregroundColor(MeeshyColors.success)
-                Text(String(localized: "onboarding.step.email.protected.title", defaultValue: "Ton email est protege", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.email.protected.title", defaultValue: "Ton email est protégé", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
                 tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.email.tip.privacy", defaultValue: "On ne partage jamais ton email", bundle: .main))
                 tipRow(icon: "bell", text: String(localized: "onboarding.step.email.tip.notifications", defaultValue: "Pour les notifications importantes", bundle: .main))
-                tipRow(icon: "key", text: String(localized: "onboarding.step.email.tip.recovery", defaultValue: "Pour recuperer ton compte si besoin", bundle: .main))
+                tipRow(icon: "key", text: String(localized: "onboarding.step.email.tip.recovery", defaultValue: "Pour récupérer ton compte si besoin", bundle: .main))
             }
         }
         .padding(14)
@@ -461,10 +521,7 @@ struct StepEmailView: View {
     }
 
     private func tipRow(icon: String, text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(MeeshyColors.success).frame(width: 16)
-            Text(text).font(.caption).foregroundColor(.secondary)
-        }
+        OnboardingTipRow(icon: icon, text: text, tint: MeeshyColors.success)
     }
 }
 
@@ -484,7 +541,7 @@ struct StepIdentityView: View {
                 VStack(spacing: 16) {
                     GlassTextField(
                         icon: "person",
-                        placeholder: String(localized: "onboarding.step.identity.first-name", defaultValue: "Ton prenom", bundle: .main),
+                        placeholder: String(localized: "onboarding.step.identity.first-name", defaultValue: "Ton prénom", bundle: .main),
                         text: $viewModel.firstName,
                         accentColor: viewModel.currentStep.accentColor
                     )
@@ -517,12 +574,12 @@ struct StepIdentityView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "person.crop.circle.badge.checkmark").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.identity.title", defaultValue: "Ton identite sur Meeshy", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.identity.title", defaultValue: "Ton identité sur Meeshy", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.identity.tip.recognize", defaultValue: "Tes amis pourront te reconnaitre", bundle: .main))
+                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.identity.tip.recognize", defaultValue: "Tes amis pourront te reconnaître", bundle: .main))
                 tipRow(icon: "eye", text: String(localized: "onboarding.step.identity.tip.profile", defaultValue: "Visible sur ton profil", bundle: .main))
-                tipRow(icon: "person.badge.shield.checkmark", text: String(localized: "onboarding.step.identity.tip.verification", defaultValue: "Aide a la verification", bundle: .main))
+                tipRow(icon: "person.badge.shield.checkmark", text: String(localized: "onboarding.step.identity.tip.verification", defaultValue: "Aide à la vérification", bundle: .main))
             }
         }
         .padding(14)
@@ -530,10 +587,7 @@ struct StepIdentityView: View {
     }
 
     private func tipRow(icon: String, text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(viewModel.currentStep.accentColor).frame(width: 16)
-            Text(text).font(.caption).foregroundColor(.secondary)
-        }
+        OnboardingTipRow(icon: icon, text: text, tint: viewModel.currentStep.accentColor)
     }
 }
 
@@ -561,12 +615,17 @@ struct StepPasswordView: View {
                 VStack(spacing: 16) {
                     GlassTextField(
                         icon: "lock",
-                        placeholder: String(localized: "onboarding.step.password.placeholder", defaultValue: "Ton mot de passe beton", bundle: .main),
+                        placeholder: String(localized: "onboarding.step.password.placeholder", defaultValue: "Ton mot de passe béton", bundle: .main),
                         text: $viewModel.password,
                         accentColor: viewModel.currentStep.accentColor,
                         isSecure: true
                     )
                     .focused($focusedField, equals: .password)
+                    // `.newPassword` déclenche la proposition de mot de passe
+                    // fort ET, à la fin du flux, la boîte « Enregistrer ce mot
+                    // de passe ? » du trousseau. Sans lui, l'inscription ne
+                    // laissait aucune trace dans le gestionnaire.
+                    .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
 
                     if !viewModel.password.isEmpty {
@@ -576,13 +635,14 @@ struct StepPasswordView: View {
                     if viewModel.password.count >= 8 {
                         GlassTextField(
                             icon: "lock.rotation",
-                            placeholder: String(localized: "onboarding.step.password.confirm-placeholder", defaultValue: "Repete ton mot de passe", bundle: .main),
+                            placeholder: String(localized: "onboarding.step.password.confirm-placeholder", defaultValue: "Répète ton mot de passe", bundle: .main),
                             text: $viewModel.confirmPassword,
                             errorMessage: (!viewModel.confirmPassword.isEmpty && !passwordsMatch) ? String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main) : nil,
                             accentColor: viewModel.currentStep.accentColor,
                             isSecure: true
                         )
                         .focused($focusedField, equals: .confirm)
+                        .textContentType(.newPassword)
                         .textInputAutocapitalization(.never)
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),
@@ -594,7 +654,7 @@ struct StepPasswordView: View {
                                 Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .font(MeeshyFont.relative(20))
                                     .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
-                                Text(passwordsMatch ? String(localized: "onboarding.step.password.match", defaultValue: "Les mots de passe correspondent!", bundle: .main) : String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main))
+                                Text(passwordsMatch ? String(localized: "onboarding.step.password.match", defaultValue: "Les mots de passe correspondent !", bundle: .main) : String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main))
                                     .font(.subheadline.weight(.medium))
                                     .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
                                 Spacer()
@@ -627,10 +687,10 @@ struct StepPasswordView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "shield.lefthalf.filled").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.password.requirements.title", defaultValue: "Criteres de securite", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.password.requirements.title", defaultValue: "Critères de sécurité", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                reqRow(met: viewModel.password.count >= 8, text: String(localized: "onboarding.step.password.req.length", defaultValue: "Au moins 8 caracteres", bundle: .main))
+                reqRow(met: viewModel.password.count >= 8, text: String(localized: "onboarding.step.password.req.length", defaultValue: "Au moins 8 caractères", bundle: .main))
                 reqRow(met: viewModel.password.contains(where: { $0.isUppercase }), text: String(localized: "onboarding.step.password.req.uppercase", defaultValue: "Une majuscule", bundle: .main))
                 reqRow(met: viewModel.password.contains(where: { $0.isLowercase }), text: String(localized: "onboarding.step.password.req.lowercase", defaultValue: "Une minuscule", bundle: .main))
                 reqRow(met: viewModel.password.contains(where: { $0.isNumber }), text: String(localized: "onboarding.step.password.req.digit", defaultValue: "Un chiffre", bundle: .main))
@@ -656,10 +716,10 @@ enum PasswordStrength {
 
     var label: String {
         switch self {
-        case .weak: return String(localized: "onboarding.step.password.strength.weak", defaultValue: "Weak", bundle: .main)
-        case .fair: return String(localized: "onboarding.step.password.strength.fair", defaultValue: "Fair", bundle: .main)
-        case .good: return String(localized: "onboarding.step.password.strength.good", defaultValue: "Good", bundle: .main)
-        case .strong: return String(localized: "onboarding.step.password.strength.strong", defaultValue: "Strong", bundle: .main)
+        case .weak: return String(localized: "onboarding.step.password.strength.weak", defaultValue: "Faible", bundle: .main)
+        case .fair: return String(localized: "onboarding.step.password.strength.fair", defaultValue: "Moyen", bundle: .main)
+        case .good: return String(localized: "onboarding.step.password.strength.good", defaultValue: "Bon", bundle: .main)
+        case .strong: return String(localized: "onboarding.step.password.strength.strong", defaultValue: "Fort", bundle: .main)
         }
     }
 
@@ -766,19 +826,19 @@ struct StepLanguageView: View {
 
                 HStack(spacing: 10) {
                     languageTargetTab(String(localized: "onboarding.step.language.system", defaultValue: "Langue principale", bundle: .main), target: .system, icon: "globe")
-                    languageTargetTab(String(localized: "onboarding.step.language.regional", defaultValue: "Langue regionale", bundle: .main), target: .regional, icon: "map")
+                    languageTargetTab(String(localized: "onboarding.step.language.regional", defaultValue: "Langue régionale", bundle: .main), target: .regional, icon: "map")
                 }
 
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                    TextField(String(localized: "onboarding.step.language.search-placeholder", defaultValue: "Chercher une langue...", bundle: .main), text: $searchText)
+                    TextField(String(localized: "onboarding.step.language.search-placeholder", defaultValue: "Chercher une langue…", bundle: .main), text: $searchText)
                         .font(.subheadline)
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                         }
                         .accessibilityLabel(String(localized: "onboarding.search.clear",
-                                                    defaultValue: "Clear search", bundle: .main))
+                                                    defaultValue: "Effacer la recherche", bundle: .main))
                     }
                 }
                 .padding(12)
@@ -811,7 +871,7 @@ struct StepLanguageView: View {
                         .font(.subheadline.weight(.semibold))
                 }
                 Spacer()
-                Text(String(localized: "onboarding.step.language.detected", defaultValue: "Detectee", bundle: .main)).font(.caption2.weight(.medium))
+                Text(String(localized: "onboarding.step.language.detected", defaultValue: "Détectée", bundle: .main)).font(.caption2.weight(.medium))
                     .foregroundColor(viewModel.currentStep.accentColor)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Capsule().fill(viewModel.currentStep.accentColor.opacity(0.15)))
@@ -825,12 +885,12 @@ struct StepLanguageView: View {
                     .foregroundColor(MeeshyColors.warning)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "onboarding.step.language.regional", defaultValue: "Langue regionale", bundle: .main)).font(.caption2.weight(.medium)).foregroundColor(.secondary)
+                    Text(String(localized: "onboarding.step.language.regional", defaultValue: "Langue régionale", bundle: .main)).font(.caption2.weight(.medium)).foregroundColor(.secondary)
                     Text("\(selectedRegionalLang?.flag ?? "") \(selectedRegionalLang?.name ?? viewModel.regionalLanguage)")
                         .font(.subheadline.weight(.semibold))
                 }
                 Spacer()
-                Text(String(localized: "onboarding.step.language.detected", defaultValue: "Detectee", bundle: .main)).font(.caption2.weight(.medium))
+                Text(String(localized: "onboarding.step.language.detected", defaultValue: "Détectée", bundle: .main)).font(.caption2.weight(.medium))
                     .foregroundColor(MeeshyColors.warning)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
@@ -845,7 +905,7 @@ struct StepLanguageView: View {
         let color: Color = target == .system ? viewModel.currentStep.accentColor : MeeshyColors.warning
         return Button(action: {
             withAnimation(.spring(response: 0.3)) { editingTarget = target }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.caption.weight(.medium))
@@ -861,6 +921,9 @@ struct StepLanguageView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .bounceOnTap(scale: 0.94)
+        // L'onglet actif n'est signale que par le fill/texte (couleur) : on ajoute le trait
+        // `.isSelected` pour que VoiceOver annonce le segment courant (WCAG 1.4.1).
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private func languageCard(_ lang: MeeshyUI.LanguageOption) -> some View {
@@ -875,7 +938,7 @@ struct StepLanguageView: View {
                     viewModel.regionalLanguage = lang.id
                 }
             }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(spacing: 10) {
                 Text(lang.flag).font(MeeshyFont.relative(26))
@@ -886,6 +949,7 @@ struct StepLanguageView: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill").font(MeeshyFont.relative(20)).foregroundColor(color)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(12)
@@ -897,13 +961,16 @@ struct StepLanguageView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .bounceOnTap(scale: 0.94)
+        // La selection est signalee visuellement par un checkmark (masque a VoiceOver ci-dessus)
+        // + couleur : on porte l'etat via le trait `.isSelected` pour l'annonce VoiceOver.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var conversationExampleCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.bubble.right.fill").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.language.example.title", defaultValue: "Comment ca marche", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.language.example.title", defaultValue: "Comment ça marche", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -936,7 +1003,7 @@ struct StepLanguageView: View {
                     Spacer()
                 }
 
-                Text(String(format: String(localized: "onboarding.step.language.example.description", defaultValue: "Tu recois le message original + la traduction dans ta langue principale (%@)", bundle: .main), selectedSystemLangName))
+                Text(String(format: String(localized: "onboarding.step.language.example.description", defaultValue: "Tu reçois le message original + la traduction dans ta langue principale (%@)", bundle: .main), selectedSystemLangName))
                     .font(.caption2).foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -977,8 +1044,6 @@ struct StepProfileView: View {
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var photoTarget: PhotoTarget = .profile
-    @State private var profileImage: UIImage?
-    @State private var bannerImage: UIImage?
 
     enum PhotoTarget { case profile, banner }
 
@@ -987,7 +1052,7 @@ struct StepProfileView: View {
             VStack(spacing: 24) {
                 HStack {
                     Image(systemName: "sparkles").foregroundColor(MeeshyColors.warning)
-                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Cette etape est optionnelle", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
+                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Optionnelle — mais un profil soigné multiplie tes mises en relation", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(MeeshyColors.warning.opacity(0.1)))
@@ -1006,7 +1071,7 @@ struct StepProfileView: View {
                                 .fill(Color(.systemBackground).opacity(0.8))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.systemGray4).opacity(0.4), lineWidth: 1))
                         )
-                    Text(String(format: String(localized: "onboarding.step.profile.bio.counter", defaultValue: "%d/150 caracteres", bundle: .main), viewModel.bio.count))
+                    Text(String(format: String(localized: "onboarding.step.profile.bio.counter", defaultValue: "%d/150 caractères", bundle: .main), viewModel.bio.count))
                         .font(.caption2)
                         .foregroundColor(viewModel.bio.count > 150 ? MeeshyColors.error : .secondary)
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -1024,9 +1089,9 @@ struct StepProfileView: View {
                 if let data = try? await item?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     if photoTarget == .profile {
-                        profileImage = image
+                        viewModel.profileImage = image
                     } else {
-                        bannerImage = image
+                        viewModel.bannerImage = image
                     }
                 }
             }
@@ -1036,7 +1101,7 @@ struct StepProfileView: View {
     private var profilePreviewCard: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
-                if let banner = bannerImage {
+                if let banner = viewModel.bannerImage {
                     Image(uiImage: banner)
                         .resizable().scaledToFill()
                         .frame(height: 100).clipped()
@@ -1057,11 +1122,13 @@ struct StepProfileView: View {
                         .padding(8).background(Circle().fill(Color.black.opacity(0.5)))
                 }
                 .padding(8)
+                // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                .accessibilityLabel(String(localized: "onboarding.photo.banner.a11y", defaultValue: "Ajouter une photo de bannière", bundle: .main))
             }
 
             HStack {
                 ZStack(alignment: .bottomTrailing) {
-                    if let photo = profileImage {
+                    if let photo = viewModel.profileImage {
                         Image(uiImage: photo)
                             .resizable().scaledToFill()
                             .frame(width: 80, height: 80).clipShape(Circle())
@@ -1088,6 +1155,8 @@ struct StepProfileView: View {
                             .font(.caption2).foregroundColor(.white)
                             .padding(6).background(Circle().fill(viewModel.currentStep.accentColor))
                     }
+                    // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                    .accessibilityLabel(String(localized: "onboarding.photo.profile.a11y", defaultValue: "Ajouter une photo de profil", bundle: .main))
                 }
                 .offset(y: -30)
                 .padding(.leading, 16)
@@ -1114,7 +1183,7 @@ struct StepProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "doc.text").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.profile.summary.title", defaultValue: "Apercu de ton profil", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.profile.summary.title", defaultValue: "Aperçu de ton profil", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             ForEach(viewModel.summaryItems, id: \.label) { item in
                 HStack(spacing: 10) {
@@ -1159,7 +1228,7 @@ struct StepRecapView: View {
             ProgressView()
                 .scaleEffect(1.5)
                 .padding(.bottom, 10)
-            Text(String(localized: "onboarding.step.recap.creating", defaultValue: "Creation de ton compte...", bundle: .main))
+            Text(String(localized: "onboarding.step.recap.creating", defaultValue: "Création de ton compte…", bundle: .main))
                 .font(.callout.weight(.medium))
                 .foregroundColor(.secondary)
         }
@@ -1188,7 +1257,7 @@ struct StepRecapView: View {
             VStack(spacing: 14) {
                 HStack {
                     Image(systemName: "doc.text.fill").foregroundColor(viewModel.currentStep.accentColor)
-                    Text(String(localized: "onboarding.step.recap.title", defaultValue: "Recapitulatif", bundle: .main)).font(.callout.weight(.semibold))
+                    Text(String(localized: "onboarding.step.recap.title", defaultValue: "Récapitulatif", bundle: .main)).font(.callout.weight(.semibold))
                     Spacer()
                 }
 
@@ -1221,7 +1290,7 @@ struct StepRecapView: View {
     private var termsCheckbox: some View {
         Button(action: {
             withAnimation(.spring(response: 0.3)) { viewModel.acceptTerms.toggle() }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
@@ -1230,12 +1299,15 @@ struct StepRecapView: View {
                         .frame(width: 24, height: 24)
                     if viewModel.acceptTerms {
                         RoundedRectangle(cornerRadius: 6).fill(MeeshyColors.success).frame(width: 24, height: 24)
+                        // Glyphe décoratif : l'état coché est porté par le trait `.isSelected` sur le bouton
+                        // (WCAG 1.4.1) — masqué pour éviter une annonce brute « checkmark » dans le label.
                         Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "onboarding.step.recap.terms.accept", defaultValue: "J'accepte les conditions d'utilisation et la politique de confidentialite", bundle: .main))
+                    Text(String(localized: "onboarding.step.recap.terms.accept", defaultValue: "J'accepte les conditions d'utilisation et la politique de confidentialité", bundle: .main))
                         .font(.footnote).foregroundColor(.primary).multilineTextAlignment(.leading)
                     Button(action: { showTerms = true }) {
                         Text(String(localized: "onboarding.step.recap.terms.read", defaultValue: "Lire les conditions", bundle: .main)).font(.caption.weight(.medium)).foregroundColor(viewModel.currentStep.accentColor)
@@ -1245,6 +1317,10 @@ struct StepRecapView: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        // La case « J'accepte les conditions » ne signale son état coché que par la couleur/le
+        // checkmark — on porte l'état via le trait `.isSelected` pour que VoiceOver annonce
+        // « sélectionné » sur ce consentement (WCAG 1.4.1, miroir CallsTab.chip/StepLanguageView).
+        .accessibilityAddTraits(viewModel.acceptTerms ? .isSelected : [])
         .bounceOnTap(scale: 0.96)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6).opacity(0.6)))
@@ -1256,24 +1332,24 @@ struct StepRecapView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(String(localized: "onboarding.step.recap.terms.title", defaultValue: "Conditions d'utilisation", bundle: .main)).font(.title2.bold())
                     Text(String(localized: "onboarding.step.recap.terms.body", defaultValue: """
-                    Bienvenue sur Meeshy! En utilisant notre application, tu acceptes les conditions suivantes:
+                    Bienvenue sur Meeshy ! En utilisant notre application, tu acceptes les conditions suivantes :
 
                     1. UTILISATION RESPONSABLE
-                    Meeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illegal.
+                    Meeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illégal.
 
                     2. TON COMPTE
-                    Tu es responsable de ton compte. Garde ton mot de passe secret!
+                    Tu es responsable de ton compte. Garde ton mot de passe secret !
 
-                    3. TES DONNEES
-                    On protege tes donnees avec le chiffrement de bout en bout. Tes messages sont prives.
+                    3. TES DONNÉES
+                    On protège tes données avec le chiffrement de bout en bout. Tes messages sont privés.
 
                     4. TRADUCTION
-                    La traduction est automatique et peut ne pas etre parfaite. C'est un outil, pas une science exacte!
+                    La traduction est automatique et peut ne pas être parfaite. C'est un outil, pas une science exacte !
 
                     5. RESPECT
-                    Traite les autres comme tu voudrais etre traite. On est une communaute!
+                    Traite les autres comme tu voudrais être traité. On est une communauté !
 
-                    On est ensemble!
+                    On est ensemble !
                     """, bundle: .main))
                     .font(.subheadline)
                     .foregroundColor(.secondary)

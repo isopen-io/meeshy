@@ -391,6 +391,21 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(getNotificationLink(n)).toBe('/story/s1');
     });
 
+    it('route friend_story_comment vers /story sans metadata (préfixe `friend_`)', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_STORY_COMMENT, context: { postId: 's3', commentId: 'c3' } });
+      expect(getNotificationLink(n)).toBe('/story/s3#comment-c3');
+    });
+
+    it('route story_new_comment vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_NEW_COMMENT, context: { postId: 's4', commentId: 'c4' } });
+      expect(getNotificationLink(n)).toBe('/story/s4#comment-c4');
+    });
+
+    it('route story_thread_reply vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_THREAD_REPLY, context: { postId: 's5', commentId: 'c5' } });
+      expect(getNotificationLink(n)).toBe('/story/s5#comment-c5');
+    });
+
     it('route status_reaction vers /mood/:postId (status partage mood)', () => {
       const n = makeNotif({ type: NotificationTypeEnum.STATUS_REACTION, context: { postId: 'st1' } });
       expect(getNotificationLink(n)).toBe('/mood/st1');
@@ -429,6 +444,31 @@ describe('notification-helpers - Structure Groupée V2', () => {
     it('comment_reply via metadata (postId+commentId) → /post#comment', () => {
       const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REPLY, context: {}, metadata: { postId: 'pc', commentId: 'cc' } as any });
       expect(getNotificationLink(n)).toBe('/post/pc#comment-cc');
+    });
+
+    it('comment_reply avec parentCommentId (context) → ?parent=…#comment-…', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.COMMENT_REPLY,
+        context: { postId: 'p3', commentId: 'r1', parentCommentId: 'c9' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p3?parent=c9#comment-r1');
+    });
+
+    it('replie sur metadata.parentCommentId si absent du context', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.STORY_THREAD_REPLY,
+        context: { postId: 's6', commentId: 'r2' },
+        metadata: { parentCommentId: 'c7' } as any,
+      });
+      expect(getNotificationLink(n)).toBe('/story/s6?parent=c7#comment-r2');
+    });
+
+    it('parentCommentId sans commentId → pas de ?parent (lien inchangé)', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.POST_COMMENT,
+        context: { postId: 'p4', parentCommentId: 'c1' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p4');
     });
 
     it('comment_reaction sans postId → null (gap données gateway)', () => {
@@ -612,10 +652,28 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(formatContentPublishedAt(sixMinAgo, t)).toBe('il y a 6 min');
     });
 
+    it('utilise « il y a {count}h » pour aujourd\'hui au-delà d\'une heure', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const threeHoursAgo = new Date(2026, 5, 15, 11, 0);
+      expect(formatContentPublishedAt(threeHoursAgo.toISOString(), t, 'fr')).toBe('il y a 3h');
+      jest.useRealTimers();
+    });
+
     it('utilise « hier {time} » pour la veille', () => {
       const now = new Date();
       const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 14, 30);
       expect(formatContentPublishedAt(yesterday.toISOString(), t, 'fr').startsWith('hier ')).toBe(true);
+    });
+
+    // Le bucket jour est calculé via calendarDayDiff (SSOT DST-safe), pas via un
+    // delta fixe de 24 h : l'avant-veille reste une date absolue même un jour de
+    // transition heure d'été/hiver. La correction DST elle-même est couverte par
+    // packages/shared/__tests__/utils/calendar-date.test.ts.
+    it('utilise une date absolue pour l\'avant-veille (2 jours)', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const twoDaysAgo = new Date(2026, 5, 13, 14, 0);
+      expect(formatContentPublishedAt(twoDaysAgo.toISOString(), t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      jest.useRealTimers();
     });
 
     it('utilise une date+heure absolue au-delà', () => {

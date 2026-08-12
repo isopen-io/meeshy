@@ -10,6 +10,8 @@
 		<string>applinks:www.meeshy.me</string>
 		<string>applinks:api.meeshy.me</string>
 		<string>applinks:gate.meeshy.me</string>
+		<string>webcredentials:meeshy.me</string>
+		<string>webcredentials:www.meeshy.me</string>
 	</array>
 	<key>com.apple.developer.default-data-protection</key>
 	<string>NSFileProtectionComplete</string>
@@ -20,6 +22,8 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.me.meeshy.apps</string>
+		<string>group.app.meeshy.me</string>
+		<string>group.apps.me.meeshy</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>

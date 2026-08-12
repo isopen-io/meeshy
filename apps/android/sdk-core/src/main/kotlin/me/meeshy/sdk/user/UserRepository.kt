@@ -2,8 +2,12 @@ package me.meeshy.sdk.user
 
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
+import me.meeshy.sdk.model.ChangePasswordRequest
+import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
+import me.meeshy.sdk.model.DeleteAccountRequest
+import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -104,8 +108,33 @@ class UserRepository @Inject constructor(
     suspend fun resendEmailChangeVerification(): NetworkResult<ChangeEmailResponse> =
         apiCall { userApi.resendEmailChangeVerification() }
 
+    /**
+     * Changes the signed-in user's password (`PATCH /users/me/password`). This is an
+     * inherently *online* action — the gateway must verify the current password against
+     * the stored hash, so it cannot be optimistic or offline-queued (unlike a profile
+     * edit). A wrong current password comes back as an HTTP 400 in the folded
+     * [NetworkResult.Failure] (`httpStatus == 400`), which the caller maps to a targeted
+     * "incorrect current password" message; transport failures surface as `code == "NETWORK"`.
+     */
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): NetworkResult<ChangePasswordResponse> =
+        apiCall { userApi.changePassword(ChangePasswordRequest(currentPassword, newPassword)) }
+
     suspend fun changePhone(newPhoneNumber: String): NetworkResult<ChangePhoneResponse> =
         apiCall { userApi.changePhone(ChangePhoneRequest(newPhoneNumber)) }
+
+    /**
+     * Initiates permanent account deletion (`DELETE /me/delete-account`). Like
+     * [changePassword] this is inherently *online* — the gateway starts a 90-day grace
+     * period and mails a confirmation link, so it cannot be optimistic or offline-queued.
+     * The caller passes the canonical [me.meeshy.sdk.model.AccountDeletionConfirmation.REQUIRED_PHRASE]
+     * (never a raw buffer) — the gateway validates it against `z.literal('SUPPRIMER MON COMPTE')`.
+     * An already-pending request folds to `httpStatus == 409`; transport failures to `code == "NETWORK"`.
+     */
+    suspend fun deleteAccount(confirmationPhrase: String): NetworkResult<DeleteAccountResponse> =
+        apiCall { userApi.deleteAccount(DeleteAccountRequest(confirmationPhrase)) }
 
     suspend fun verifyPhoneChange(code: String): NetworkResult<VerifyPhoneChangeResponse> =
         apiCall { userApi.verifyPhoneChange(VerifyPhoneChangeRequest(code)) }

@@ -117,3 +117,70 @@ data class CallErrorPayload(
 data class CallAlreadyAnsweredPayload(
     val callId: String,
 )
+
+/**
+ * `call:participant-left` — a participant left the room WITHOUT ending the call
+ * (group calls; a 1:1 teardown rides `call:ended` instead). [mode] is the
+ * architecture the call survives under (`"p2p"`/`"sfu"` — an SFU call can fall
+ * back to P2P when only two participants remain).
+ */
+@Serializable
+data class CallParticipantLeftPayload(
+    val callId: String,
+    val participantId: String? = null,
+    val userId: String? = null,
+    val mode: String? = null,
+)
+
+/**
+ * `call:quality-alert` — the gateway flags the REMOTE peer's sustained bad
+ * network (two consecutive reports past threshold). [metric] ∈
+ * rtt|packetLoss|bitrate|jitter; drives a transient "your contact's connection
+ * is unstable" indicator (iOS `isRemoteQualityDegraded` parity).
+ */
+@Serializable
+data class CallQualityAlertPayload(
+    val callId: String,
+    val participantId: String? = null,
+    val metric: String? = null,
+    val value: Double? = null,
+    val threshold: Double? = null,
+)
+
+/**
+ * `call:screen-capture-alert` — the remote peer started/stopped capturing the
+ * call screen. Drives the privacy warning banner (iOS `isRemoteScreenCapturing`
+ * parity); [isCapturing] is the whole signal, so a frame without it is inert.
+ */
+@Serializable
+data class CallScreenCaptureAlertPayload(
+    val callId: String,
+    val participantId: String? = null,
+    val isCapturing: Boolean,
+)
+
+/**
+ * `call:translated-segment` — a live caption segment from the remote speaker,
+ * already translated server-side when ZMQ translation is available.
+ * `translatedText == null` means the relay carries only the original [CallTranslatedSegmentRef.text];
+ * consumers fall back to displaying it (same contract as the web/iOS clients).
+ */
+@Serializable
+data class CallTranslatedSegmentPayload(
+    val callId: String,
+    val segment: CallTranslatedSegmentRef,
+)
+
+/** The nested caption body a `call:translated-segment` frame carries. */
+@Serializable
+data class CallTranslatedSegmentRef(
+    val text: String,
+    val translatedText: String? = null,
+    val speakerId: String? = null,
+    val startMs: Double? = null,
+    val endMs: Double? = null,
+    val isFinal: Boolean = false,
+    val sourceLanguage: String? = null,
+    val targetLanguage: String? = null,
+    val confidence: Double? = null,
+)

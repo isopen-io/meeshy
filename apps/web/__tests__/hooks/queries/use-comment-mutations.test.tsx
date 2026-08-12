@@ -5,6 +5,7 @@ import {
   useCreateCommentMutation,
   useDeleteCommentMutation,
   useLikeCommentMutation,
+  useUnlikeCommentMutation,
 } from '@/hooks/queries/use-comment-mutations';
 
 const mockCreateComment = jest.fn();
@@ -227,6 +228,40 @@ describe('useLikeCommentMutation', () => {
     await waitFor(() => {
       const comments = qc.getQueryData<{ pages: { data: typeof mockComment[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
       expect(comments?.pages[0].data[0].likeCount).toBe(4);
+    });
+  });
+});
+
+describe('useUnlikeCommentMutation', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); });
+
+  it('removes the emoji from reactionSummary when its count drops to zero (no residual "0" chip)', async () => {
+    const qc = createQueryClient();
+    qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+      pages: [{
+        data: [{
+          ...mockComment,
+          likeCount: 1,
+          reactionSummary: { '❤️': 1 } as Record<string, number>,
+          currentUserReactions: ['❤️'] as string[],
+        }],
+        meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useUnlikeCommentMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ postId: 'post-1', commentId: 'comment-1' }); });
+
+    await waitFor(() => {
+      const comments = qc.getQueryData<{ pages: { data: { reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(comments?.pages[0].data[0].reactionSummary).toEqual({});
+      expect(comments?.pages[0].data[0].reactionSummary['❤️']).toBeUndefined();
+      expect(comments?.pages[0].data[0].currentUserReactions).not.toContain('❤️');
     });
   });
 });

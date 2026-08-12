@@ -19,7 +19,7 @@ final class ConversationListViewModelTests: XCTestCase {
         authManager: MockAuthManager? = nil,
         storyService: MockStoryService? = nil,
         syncEngine: MockConversationSyncEngine? = nil,
-        messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
+        messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never>? = nil,
         draftStore: DraftStore? = nil,
         store: ConversationStore? = nil,
         categoryStore: UserCategoryStore? = nil
@@ -41,7 +41,7 @@ final class ConversationListViewModelTests: XCTestCase {
         let storyService = storyService ?? MockStoryService()
         let syncEngine = syncEngine ?? MockConversationSyncEngine()
         let pushPublisher = messageNotificationPublisher
-            ?? PassthroughSubject<String, Never>().eraseToAnyPublisher()
+            ?? PassthroughSubject<MessageActivitySignal, Never>().eraseToAnyPublisher()
         let resolvedDraftStore: DraftStore = {
             if let draftStore { return draftStore }
             let store = DraftStore(userDefaults: UserDefaults(suiteName: "ConvListVMTests-\(UUID().uuidString)")!)
@@ -72,10 +72,14 @@ final class ConversationListViewModelTests: XCTestCase {
     /// the global `.shared` singleton — prevents cross-test pollution.
     /// `prefError` makes the preference writer throw (e.g. a 4xx for a
     /// permanent-failure rollback test).
-    static func makeTestStore(prefError: Error? = nil, lifecycleError: Error? = nil) -> ConversationStore {
+    static func makeTestStore(
+        prefError: Error? = nil,
+        lifecycleError: Error? = nil,
+        lifecycleWriter: ConvListTestLifecycleWriter? = nil
+    ) -> ConversationStore {
         let writer = ConvListTestPreferenceWriter()
         writer.errorToThrow = prefError
-        let lifecycle = ConvListTestLifecycleWriter()
+        let lifecycle = lifecycleWriter ?? ConvListTestLifecycleWriter()
         lifecycle.errorToThrow = lifecycleError
         let outboxPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
@@ -278,6 +282,49 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertGreaterThan(countAfterSecond, countAfterFirst, "Should refetch after invalidation")
     }
 
+    // MARK: - loadConversations: `.expired` cache recovery (P1 — Offline Graceful Degradation)
+    //
+    // `performLoadConversations`'s `.expired` branch recovers a disk snapshot
+    // past the 24h TTL via `loadIgnoringExpiry` and paints it immediately
+    // (`.offline`) before attempting a resync, instead of treating an expired
+    // entry as empty. These tests drive the REAL `CacheCoordinator.shared.
+    // conversations` singleton (not a stub) past its TTL via the
+    // `debugRewindFetchTimestamp` test seam, exercising the integration the
+    // SDK-level `GRDBCacheStoreFreshnessTests` (isolated `DatabaseQueue`)
+    // cannot reach.
+
+    func test_loadConversations_whenCacheExpiredAndSyncFails_paintsRecoveredDataAndReportsOffline() async throws {
+        let conversation = makeConversation(id: "000000000000000000000002")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.map(\.id), [conversation.id],
+                       "an expired-but-present disk cache must be painted immediately, not treated as empty")
+        XCTAssertEqual(sut.loadState, .offline,
+                       "a failed resync after `.expired` recovery must keep showing the recovered data, not regress to the empty error state")
+        XCTAssertFalse(sut.loadFailed, "recovered data means this is NOT the empty-cache failure case")
+    }
+
+    func test_loadConversations_whenCacheExpiredAndSyncSucceeds_reportsLoaded() async throws {
+        let conversation = makeConversation(id: "000000000000000000000003")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.loadState, .loaded,
+                       "a successful resync following `.expired` recovery must land on `.loaded`, not stay `.offline`")
+        XCTAssertFalse(sut.loadFailed)
+    }
+
     // MARK: - togglePin: Success (via ConversationStore — Strategy B 1b-ii-a)
 
     func test_togglePin_appliesViaStoreAndReflectsInList() async throws {
@@ -356,6 +403,58 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0)
     }
 
+    // MARK: - markAsRead: conversation ouverte (split-view iPad)
+
+    /// La conversation à l'écran possède son propre chemin de marquage, qui
+    /// NOMME les messages réellement affichés. Le chemin de la liste poste un
+    /// mark-read SANS corps : le gateway retombe alors sur son repli par
+    /// fenêtre temporelle et déclare lus des messages jamais montrés. En
+    /// split-view iPad les deux surfaces coexistent, donc le cas est réel.
+    func test_markAsRead_whenConversationIsOpen_skipsTheWindowFallbackDispatch() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv1"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertTrue(lifecycle.markReadCalls.isEmpty,
+                      "le repli par fenêtre ne doit pas doubler le marquage exact de la conversation ouverte")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+                       "la pastille tombe quand même : la mise à jour optimiste locale est conservée")
+    }
+
+    func test_markAsRead_whenAnotherConversationIsOpen_stillDispatches() async throws {
+        let lifecycle = ConvListTestLifecycleWriter()
+        let socket = MockMessageSocket()
+        socket.activeConversationId = "conv-other"
+        let store = Self.makeTestStore(lifecycleWriter: lifecycle)
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
+
+        await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
+
+        XCTAssertEqual(lifecycle.markReadCalls, ["conv1"])
+    }
+
+    func test_shouldDispatchListMarkAsRead_onlyWhenTheConversationIsNotTheOpenOne() {
+        XCTAssertFalse(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c1"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: "c2"
+        ))
+        XCTAssertTrue(ConversationListViewModel.shouldDispatchListMarkAsRead(
+            conversationId: "c1", activeConversationId: nil
+        ))
+    }
+
     // MARK: - markAsRead: Failure (rollback)
 
     func test_markAsRead_rollsBackOnPermanentFailure() async throws {
@@ -369,6 +468,39 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 5,
                        "4xx must roll back to the previous unread count")
+    }
+
+    /// Bug user 2026-08-11 : une conversation déjà ouverte réaffichait parfois
+    /// sa pastille de non-lu indéfiniment. Cause racine — `ConversationStore`
+    /// (RAM, tiers) n'apprenait jamais qu'une conversation venait d'être lue
+    /// via le flux normal d'ouverture (`.conversationMarkedRead`, posté par
+    /// `ConversationViewModel.markAsRead`/les quick-actions push/le widget) :
+    /// sa prochaine republication — déclenchée par N'IMPORTE QUELLE mutation
+    /// sur N'IMPORTE QUELLE AUTRE conversation — regreffait son `unreadCount`
+    /// périmé sur la ligne pourtant déjà lue.
+    func test_conversationMarkedRead_correctsTheStore_survivesAnUnrelatedRepublish() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([
+            makeConversation(id: "conv1", unreadCount: 9),
+            makeConversation(id: "conv2", unreadCount: 0)
+        ])
+        await sut.storeHydrationTask?.value
+
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: "conv1")
+        await waitForListState(sut, id: "conv1") { $0.unreadCount == 0 }
+
+        // N'IMPORTE QUELLE autre mutation republie TOUT le snapshot du store
+        // (`ConversationStore.commit` → `publishList`) — avant le correctif,
+        // le store n'ayant jamais appris la lecture de "conv1", cette
+        // republication regreffait son vieux `unreadCount=9` sur la ligne.
+        try await store.apply(.setPinned(true), for: "conv2")
+        await waitForListState(sut, id: "conv2") { $0.isPinned }
+
+        XCTAssertEqual(
+            sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+            "Une mutation SANS RAPPORT sur une autre conversation ne doit pas ressusciter le badge d'une conversation déjà lue"
+        )
     }
 
     // MARK: - deleteConversation: Success (soft delete via store)
@@ -403,6 +535,35 @@ final class ConversationListViewModelTests: XCTestCase {
                      "4xx must restore the conversation (clear deletedForUserAt)")
     }
 
+    // MARK: - deleteConversation: sweeps local call transcripts
+
+    func test_deleteConversation_sweepsLocalCallTranscripts() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv-call-1")])
+        await sut.storeHydrationTask?.value
+
+        let callMessage = MeeshyMessage(
+            conversationId: "conv-call-1", content: "",
+            callSummary: CallSummaryMetadata(
+                callId: "call-sweep-1", initiatorId: "user-1", callType: .audio, outcome: .completed,
+                durationSeconds: 12, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+            )
+        )
+        try? await CacheCoordinator.shared.messages.save([callMessage], for: "conv-call-1")
+        let transcript = CallTranscript(
+            callId: "call-sweep-1", conversationId: "conv-call-1",
+            callStartedAt: Date(timeIntervalSince1970: 0), segments: []
+        )
+        await CallTranscriptStore.shared.saveMerging(transcript)
+
+        await sut.deleteConversation(conversationId: "conv-call-1")
+        await drainMainQueue()
+
+        let loaded = await CallTranscriptStore.shared.transcript(for: "call-sweep-1")
+        XCTAssertNil(loaded, "deleting a conversation must sweep every local call transcript it carried")
+    }
+
     // MARK: - filterConversations hides soft-deleted rows
 
     func test_filterConversations_excludesSoftDeleted() {
@@ -419,6 +580,29 @@ final class ConversationListViewModelTests: XCTestCase {
         }
     }
 
+    /// P2 — a conversation renamed locally (`userState.customName`) must
+    /// remain findable by the name the row actually shows. Matching on
+    /// `c.name` (server title/identifier) instead of `c.displayName`
+    /// (customName ?? title ?? identifier) made a renamed conversation
+    /// invisible to search under its own displayed name.
+    func test_filterConversations_matchesLocalCustomName_notJustServerTitle() {
+        var renamed = makeConversation(id: "conv1", name: "Team Alpha")
+        renamed.userState.customName = "Mon Groupe Préféré"
+        let untouched = makeConversation(id: "conv2", name: "Team Beta")
+
+        let byCustomName = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Préféré", filter: .all
+        )
+        XCTAssertEqual(byCustomName.map(\.id), ["conv1"],
+                       "search must match the locally-renamed displayName, not just the server title")
+
+        let byOldServerTitle = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Alpha", filter: .all
+        )
+        XCTAssertTrue(byOldServerTitle.isEmpty,
+                      "once renamed locally, the row is found by its displayed name — not the superseded server title")
+    }
+
     // MARK: - Filter Pipeline
 
     func test_filterPipeline_allFilterShowsActiveConversations() async throws {
@@ -429,7 +613,12 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 200_000_000)
+        // Deterministic wait on the debounced filter pipeline instead of a
+        // fixed sleep (#1869): `filteredConversations` isn't itself @Published
+        // (only the downstream groupedConversations is), so poll-until-true is
+        // the established fix here — mirrors `waitForGrouping` below — rather
+        // than hoping 200ms cleared the 16ms debounce on a busy CI runner.
+        try await waitForCondition(timeout: 2.0) { sut.filteredConversations.count == 1 }
 
         XCTAssertEqual(sut.filteredConversations.count, 1)
         XCTAssertEqual(sut.filteredConversations[0].id, "active1")
@@ -562,6 +751,86 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations[0].userState.unreadCount, 5)
         XCTAssertEqual(sut.conversations[1].userState.unreadCount, 3, "Other conversations should not be affected")
+    }
+
+    // MARK: - Socket: effectif de la ligne de liste
+
+    /// Les événements d'appartenance sont `Decodable` seuls : leur init
+    /// mémberwise reste interne au SDK. Le JSON est donc la seule façon de les
+    /// construire depuis le module de test — et c'est aussi la forme exacte
+    /// que le gateway envoie.
+    private func makeParticipantJoinedEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantJoinedEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    private func makeParticipantLeftEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantLeftEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","leftAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    /// L'effectif ne connaissait que des soustractions — départ, retrait,
+    /// bannissement — et dérivait durablement vers le bas, `schedulePersist`
+    /// écrivant chaque valeur fausse dans le cache disque.
+    func test_socketParticipantJoined_incrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 5)
+    }
+
+    /// Le nouvel arrivant reçoit son effectif par `conversation:new`, où le
+    /// serveur le compte DÉJÀ. Le gateway l'écarte de l'éventail, mais son
+    /// auto-join de room est asynchrone : le garde local est la seconde barrière.
+    func test_socketParticipantJoined_ignoresSelf() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "me")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 4)
+    }
+
+    func test_socketParticipantSelfLeft_decrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 3)
     }
 
     // MARK: - Socket: Typing
@@ -1417,7 +1686,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ])
 
         let newer = Date(timeIntervalSince1970: 9_000)
-        sut.bumpToTop(conversationId: "third", newLastMessageAt: newer)
+        sut.bumpToTop(conversationId: "third", facet: .bumped(at: newer))
 
         XCTAssertEqual(sut.conversations.first?.id, "third")
         XCTAssertEqual(sut.conversations.first?.lastMessageAt.timeIntervalSinceReferenceDate ?? 0,
@@ -1433,10 +1702,81 @@ final class ConversationListViewModelTests: XCTestCase {
         })
         let originalSnapshot = sut.conversations.map(\.id)
 
-        sut.bumpToTop(conversationId: "ghost", newLastMessageAt: Date())
+        sut.bumpToTop(conversationId: "ghost", facet: .bumped(at: Date()))
 
         XCTAssertEqual(sut.conversations.map(\.id), originalSnapshot,
                        "bumpToTop on unknown id must leave the list untouched")
+    }
+
+    /// P1 — a lightweight bump (socket relay or push notification) never
+    /// carries the new message's sender/attachments/flags. Leaving the
+    /// PREVIOUS message's companion fields in place renders a wrong
+    /// author, a phantom attachment icon, or summarizes a brand-new text
+    /// message as "1 message vue unique" because the stale
+    /// `lastMessageIsViewOnce` flag survives the bump.
+    ///
+    /// P2 (follow-up): the same reasoning applies to `lastMessagePreview`
+    /// and its Prisme Linguistique companions (`lastMessageTranslations`,
+    /// `lastMessageOriginalLanguage`) — neither caller has the new
+    /// message's text either. Resetting only the sender/attachments/flags
+    /// while leaving the OLD preview text in place regressed the bug to a
+    /// subtler form: an unattributed stale text (no sender label, since
+    /// that's now nil) rendered as if it were the new message, and worse,
+    /// a stale `lastMessageTranslations` entry matching the viewer's
+    /// preferred language would surface a stale TRANSLATED string even
+    /// after `lastMessagePreview` itself is cleared.
+    func test_bumpToTop_resetsStaleCompanionFields() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageAttachments = [
+            MeeshyMessageAttachment(id: "att1", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg", uploadedBy: "alice")
+        ]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 2_000)
+        conv.lastMessagePreview = "Photo envoyée à l'instant"
+        conv.lastMessageTranslations = ["en": "Photo just sent"]
+        conv.lastMessageOriginalLanguage = "fr"
+        sut.setConversations([conv])
+
+        sut.bumpToTop(conversationId: "conv1", facet: .bumped(at: Date(timeIntervalSince1970: 9_000)))
+
+        let bumped = sut.conversations[0]
+        XCTAssertNil(bumped.lastMessageSenderName, "stale author must not survive the bump")
+        XCTAssertTrue(bumped.lastMessageAttachments.isEmpty, "phantom attachment must not survive the bump")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
+        XCTAssertFalse(bumped.lastMessageIsBlurred)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "a new message must not inherit the old one's 'View once' flag")
+        XCTAssertNil(bumped.lastMessageExpiresAt)
+        XCTAssertNil(bumped.lastMessagePreview, "stale preview text must not survive the bump — an unattributed old text is worse than a blank row")
+        XCTAssertNil(bumped.lastMessageTranslations, "stale translations must not survive the bump — resolvedLastMessagePreview would otherwise surface a stale translated string even with lastMessagePreview cleared")
+        XCTAssertNil(bumped.lastMessageOriginalLanguage)
+    }
+
+    /// `conversation:updated` transporte l'identifiant et le texte du nouveau
+    /// dernier message. Ils étaient posés sur la ligne PUIS effacés une ligne
+    /// plus bas par la remise à neutre du bump : la ligne restait muette
+    /// jusqu'à la synchro suivante alors que le gateway venait d'envoyer le
+    /// texte. Ce que l'appelant SAIT doit traverser le bump.
+    func test_bumpToTop_facetCarryingPreview_survivesTheReset() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        sut.setConversations([conv])
+
+        sut.bumpToTop(
+            conversationId: "conv1",
+            facet: .bumped(at: Date(timeIntervalSince1970: 9_000), id: "msg-9", preview: "Nouveau message")
+        )
+
+        let bumped = sut.conversations[0]
+        XCTAssertEqual(bumped.lastMessageId, "msg-9")
+        XCTAssertEqual(bumped.lastMessagePreview, "Nouveau message")
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "les champs NON portés par la facette restent remis à neutre")
+        XCTAssertNil(bumped.lastMessageSenderName)
     }
 
     // MARK: - conversation:updated socket event — graft du titre
@@ -1480,6 +1820,132 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Le rename d'un groupe doit continuer de se propager via l'event socket")
     }
 
+    // MARK: - conversation:updated : position du dernier message
+
+    func test_conversationUpdatedEvent_bump_carriesLocationToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "loc1", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc1", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-loc", locationName: "Tour Eiffel")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "Un message position-seule a un content vide : la ligne doit recevoir la position pour composer son libellé")
+    }
+
+    func test_conversationUpdatedEvent_bump_withoutLocation_clearsThePreviousPin() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "loc2", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessageLocation = SharedPlace(latitude: 1, longitude: 2, name: "Ancien lieu")
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc2", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-txt")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageLocation,
+                     "Un texte qui remplace la position doit EFFACER la pastille du message précédent — c'est l'atomicité de la facette")
+    }
+
+    // MARK: - conversation:updated : Prisme Linguistique de la ligne
+
+    /// Une ÉDITION arrive à horodatage ÉGAL — pas de bump, c'est la branche
+    /// `else`. Le gateway périme la carte du Prisme dans la MÊME écriture que
+    /// le nouveau texte (`translations: null`, `routes/messages.ts`). Sans
+    /// application de la paire, le résolveur — qui PRÉFÈRE la traduction à
+    /// `lastMessagePreview` — rendrait le texte D'AVANT indéfiniment.
+    func test_conversationUpdatedEvent_edit_expiresTheStalePrismCard() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        let sameInstant = Date(timeIntervalSince1970: 5_000)
+        var conv = makeConversation(id: "prism-edit", lastMessageAt: sameInstant)
+        conv.lastMessageId = "m-1"
+        conv.lastMessagePreview = "Old text"
+        conv.lastMessageTranslations = ["fr": "Ancien texte"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-edit", lastMessageAt: sameInstant,
+            lastMessageId: "m-1", lastMessagePreview: "New text",
+            lastMessageTranslations: .replaced([:]))
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageTranslations,
+                     "Une carte reçue `null` DIT que la traduction est périmée : la garder fait rendre le texte d'avant")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "New text",
+            "Le lecteur francophone doit voir le texte ÉDITÉ, jamais la traduction de l'ancien")
+    }
+
+    /// Nouveau message : branche `bumpToTop`. La facette est délibérément
+    /// neutre pour ce qu'elle IGNORE, mais la carte que le gateway vient de
+    /// résoudre POUR CE lecteur voyage dans l'événement — la jeter affiche
+    /// l'original là où une traduction était disponible et déjà payée.
+    func test_conversationUpdatedEvent_bump_carriesThePrismCardToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-2", lastMessagePreview: "Hello",
+            lastMessageTranslations: .replaced(["fr": "Bonjour"]),
+            lastMessageOriginalLanguage: "en")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "La carte résolue par le gateway pour ce lecteur doit atteindre la ligne dès le bump")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "Bonjour",
+            "Prisme ['fr'], message anglais, traduction française disponible ⇒ « Bonjour », jamais « Hello »")
+    }
+
+    /// Le tri-état existe pour CE cas : un renommage ne parle pas du dernier
+    /// message. Clé absente ⇒ `.unchanged` ⇒ la carte du cache survit. Un
+    /// `Optional` seul confondrait ce cas avec le `null` du test ci-dessus, et
+    /// vider inconditionnellement effacerait la carte que `message:new` vient
+    /// d'installer sur le chemin d'envoi.
+    func test_conversationUpdatedEvent_metadataOnly_leavesThePrismCardIntact() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "prism-meta", type: .group,
+                                    lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessagePreview = "Hello"
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-meta", lastMessageAt: nil, title: "Nouveau nom")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom")
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "Une mise à jour de métadonnées ne parle pas du dernier message : sa carte doit survivre")
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
@@ -1499,6 +1965,86 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations.first?.id, "c",
                        "Event with lastMessageAt must promote the conversation to the top")
+    }
+
+    /// P1 — end-to-end through the real socket sink (not calling
+    /// `bumpToTop` directly): CONVERSATION_UPDATED never carries the new
+    /// message's sender/attachments/flags, so the row must not keep
+    /// rendering the PREVIOUS message's companion state after the bump.
+    func test_conversationUpdatedEvent_withLastMessageAt_resetsStaleCompanionFields() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageAttachmentCount = 1
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(conversationId: "c", lastMessageAt: newer)
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "c" }))
+        XCTAssertNil(bumped.lastMessageSenderName)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce,
+                       "the row must not summarize a brand-new message as 'View once' from the stale flag")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
+    }
+
+    /// Bug report 2026-08-04 : une notification arrive pour un DM, la ligne
+    /// remonte bien en tête mais s'affiche SANS le nom de l'auteur — la
+    /// facette neutre (`.bumped`) pose `senderName: nil` sans condition, et
+    /// CONVERSATION_UPDATED (chemin message-driven) ne porte que `senderId`
+    /// (jamais `updatedBy`). Pour un DM, l'auteur d'un message ENTRANT est
+    /// forcément l'autre participant : la ligne doit résoudre son nom depuis
+    /// `participantUserId`/`participantUsername`, déjà en mémoire, sans
+    /// attendre la prochaine synchro.
+    func test_conversationUpdatedEvent_directConversation_resolvesSenderNameFromParticipant() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "dm1", type: .direct, lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.participantUserId = "windie-id"
+        conv.participantUsername = "Windie Nh"
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "dm1", lastMessageAt: newer,
+            lastMessageId: "m-windie", senderId: "windie-id"
+        )
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "dm1" }))
+        XCTAssertEqual(bumped.lastMessageSenderName, "Windie Nh",
+                       "Le nom de l'autre participant doit être résolu immédiatement pour un DM — sans lui la ligne affiche le texte du message sans auteur.")
+    }
+
+    /// Contrôle négatif du test ci-dessus : un `senderId` qui ne correspond
+    /// PAS au participant du DM (message d'un tiers dans un contexte où le
+    /// client ne peut pas l'identifier localement) ne doit rien inventer.
+    func test_conversationUpdatedEvent_directConversation_senderIdMismatch_leavesSenderNameNil() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "dm2", type: .direct, lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.participantUserId = "windie-id"
+        conv.participantUsername = "Windie Nh"
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "dm2", lastMessageAt: newer,
+            lastMessageId: "m-other", senderId: "someone-else-id"
+        )
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "dm2" }))
+        XCTAssertNil(bumped.lastMessageSenderName)
     }
 
     /// Pins the production payload shape: handlers/MessageHandler.ts emits
@@ -2230,7 +2776,7 @@ final class ConversationListViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-        let cachedItems = cached.value ?? []
+        let cachedItems = cached.snapshot() ?? []
         XCTAssertTrue(cachedItems.contains(where: { $0.id == "persisted" }),
                       "loadMore must persist the merged list to the cache")
     }
@@ -2238,6 +2784,14 @@ final class ConversationListViewModelTests: XCTestCase {
     // MARK: - pullToRefresh
 
     func test_pullToRefresh_resetsCursorAndRefetches() async {
+        // `forceRefresh()` reads the REAL `CacheCoordinator.shared.conversations`
+        // singleton on a successful sync (fetch-then-replace, see its own doc
+        // comment) — a leftover "list" entry from another test in this same
+        // process would otherwise leak into `conversations` here and skew the
+        // fallback cursor `loadMore()` derives from `conversations.min(by:
+        // lastMessageAt)`. Same defensive reset other tests in this file use
+        // for the sibling `stories` store.
+        await CacheCoordinator.shared.conversations.invalidateAll()
         let conversationService = MockConversationService()
         let syncEngine = MockConversationSyncEngine()
         // Seed an "advanced" cursor by running loadMore once
@@ -2284,6 +2838,148 @@ final class ConversationListViewModelTests: XCTestCase {
                       "pullToRefresh must not wipe the persistent image cache (avatars/banners)")
         XCTAssertTrue(thumbStillCached,
                       "pullToRefresh must not wipe the thumbnail cache")
+    }
+
+    /// P1 — TOP RISK: a pull-to-refresh that fails offline must never
+    /// destroy the conversations cache it can't repopulate. `forceRefresh`
+    /// used to call `invalidateCache()` (wiping L1+L2) BEFORE the fetch —
+    /// an offline pull emptied the app. Fetch-then-replace: existing data
+    /// must survive an unreachable sync untouched.
+    func test_forceRefresh_whenSyncFails_preservesExistingCache() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+        XCTAssertEqual(sut.conversations.count, 1, "precondition: cache seeded")
+
+        await sut.forceRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed refresh must not wipe the on-disk cache either")
+    }
+
+    /// Same guarantee, driven through the user-facing `.refreshable` entry
+    /// point. A failed offline pull must leave every cache untouched — not
+    /// just skip re-invalidating the ones `pullToRefresh` also wipes.
+    func test_pullToRefresh_whenSyncFails_preservesExistingCacheAndSkipsAncillaryInvalidation() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed pull-to-refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed pull-to-refresh must not wipe the conversations cache")
+    }
+
+    /// Regression guard: the ancillary cross-surface invalidation that runs
+    /// AFTER a successful `forceRefresh()` must not clobber the
+    /// conversations store `forceRefresh()` just fetch-then-replaced —
+    /// only the OTHER caches (messages, stories, preferences, ...) get
+    /// wiped for lazy rehydration.
+    func test_pullToRefresh_whenSyncSucceeds_leavesConversationsCacheIntact() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertFalse(sut.loadFailed, "a successful pull-to-refresh must not report a failure")
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "the post-success ancillary invalidation must not wipe the conversations store it just fetch-then-replaced")
+    }
+
+    // MARK: - handleForegroundReturn (P2 — inverted guard)
+
+    /// Waits for the SUT's story prefetch to actually finish, instead of hoping a
+    /// fixed sleep is long enough for it to land.
+    ///
+    /// `handleForegroundReturn()` spawns an unstored `Task` that awaits the stories
+    /// cache before reaching `prefetchRecentStories()`, so the handle only appears
+    /// after that hop — hence the poll. The deadline keeps a genuine regression a
+    /// failed assertion rather than a hung suite, and the poll interval avoids
+    /// spinning the main actor.
+    private func awaitStoryPrefetch(_ sut: ConversationListViewModel,
+                                    timeout: TimeInterval = 5) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while sut.storyPrefetchTask == nil && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        await sut.storyPrefetchTask?.value
+    }
+
+    /// `isCacheValid` means "we last fetched within the last 30s" — the
+    /// USEFUL case for a foreground-return stories refresh is precisely
+    /// when it's FALSE (a long background stint just ended). The guard
+    /// used to read `isCacheValid` (proceed only while still fresh),
+    /// short-circuiting the one scenario this method exists for.
+    func test_handleForegroundReturn_afterLongBackground_refreshesStaleStories() async throws {
+        await CacheCoordinator.shared.stories.invalidateAll()
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        // No `loadConversations()`/`forceRefresh()` call: `lastFetchedAt`
+        // stays nil, i.e. `isCacheValid == false` — simulates returning
+        // from a long background stint.
+
+        sut.handleForegroundReturn()
+        // Was a fixed 150ms sleep: if the cache-load hop plus the detached prefetch
+        // exceeded it under CI load, the count was still 0 and this test failed for
+        // a reason that had nothing to do with the guard it exercises.
+        await awaitStoryPrefetch(sut)
+
+        XCTAssertGreaterThan(storyService.listCallCount, 0,
+                             "after a long background stint the stale stories cache must be refreshed")
+    }
+
+    func test_handleForegroundReturn_withinCacheValidWindow_skipsStoriesRefresh() async throws {
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        await sut.loadConversations() // stamps `lastFetchedAt = Date()` — cache still valid
+        // THE flake this iteration fixes. `loadConversations()` calls
+        // `prefetchRecentStories()` synchronously before returning, so its task
+        // handle is already set and awaiting it is deterministic. The fixed 150ms
+        // sleep that stood here was a guess: when the detached prefetch hadn't
+        // landed in time it ran AFTER the `reset()` below, incremented the counter,
+        // and this test failed reporting 1 instead of 0 — with
+        // `handleForegroundReturn` playing no part in it.
+        await sut.storyPrefetchTask?.value
+
+        // Empty the stories cache again so, if the OUTER `isCacheValid`
+        // guard didn't short-circuit, the INNER freshness check inside
+        // the Task would have no reason to skip either — isolates what
+        // this test actually exercises.
+        await CacheCoordinator.shared.stories.invalidateAll()
+        storyService.reset()
+
+        sut.handleForegroundReturn()
+        // Asserting a NEGATIVE keeps a bounded window: when the guard short-circuits
+        // correctly nothing is spawned, so there is no handle to await. Unlike the
+        // sleep removed above, this one can only ever produce a false GREEN — never
+        // the false RED that made this test flaky. The follow-up await then covers
+        // the regression case, where a task WAS spawned and must be let finish
+        // before the count is read.
+        try await Task.sleep(nanoseconds: 150_000_000)
+        await sut.storyPrefetchTask?.value
+
+        XCTAssertEqual(storyService.listCallCount, 0,
+                       "within the 30s cache-valid window, a foreground return must not force a stories refresh even with an empty stories cache")
     }
 
     func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
@@ -2377,14 +3073,66 @@ final class ConversationListViewModelTests: XCTestCase {
     // MARK: - Push notification bump
 
     func test_pushNotification_messageForKnownConversation_bumpsToTop() {
-        let subject = PassthroughSubject<String, Never>()
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
         let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
         sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
-        subject.send("b")
+        subject.send(MessageActivitySignal(conversationId: "b"))
         let exp = expectation(description: "bump applied on main")
         DispatchQueue.main.async { exp.fulfill() }
         wait(for: [exp], timeout: 1)
         XCTAssertEqual(sut.conversations.first?.id, "b")
+    }
+
+    /// Régression 2026-08-04 : le push APNs de premier plan arrive ~1 s APRÈS
+    /// l'événement socket `message:new`. Sa facette est NEUTRE (aucun fait sur
+    /// le message) et `applyLastMessage` remplace les onze champs en bloc —
+    /// donc l'appliquer au message que la ligne affiche DÉJÀ effaçait l'aperçu
+    /// et l'auteur, puis `schedulePersist` gravait le vide en L2. La ligne
+    /// restait muette jusqu'à un resync REST complet (relance de l'app).
+    func test_pushNotification_forMessageAlreadyOnRow_preservesLastMessageFacts() {
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        let sentAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var known = makeConversation(id: "b", lastMessageAt: sentAt)
+        known.applyLastMessage(LastMessageFacet(
+            id: "msg-1", preview: "Bonjour", senderName: "meeshy sama", at: sentAt
+        ))
+        sut.conversations = [makeConversation(id: "a"), known]
+
+        subject.send(MessageActivitySignal(conversationId: "b", messageId: "msg-1"))
+        let exp = expectation(description: "push handled on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+
+        let row = sut.conversations.first { $0.id == "b" }
+        XCTAssertEqual(row?.lastMessagePreview, "Bonjour")
+        XCTAssertEqual(row?.lastMessageSenderName, "meeshy sama")
+        XCTAssertEqual(row?.lastMessageId, "msg-1")
+        XCTAssertEqual(row?.lastMessageAt, sentAt,
+                       "L'horodatage SERVEUR ne doit pas être remplacé par l'heure locale du push")
+    }
+
+    /// Le push reste le filet de sécurité quand il parle d'un message que le
+    /// client n'a PAS : la facette neutre est alors le bon choix (garder les
+    /// champs du message précédent afficherait un auteur faux).
+    func test_pushNotification_forUnknownMessage_stillBumpsWithNeutralFacet() {
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        var known = makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000))
+        known.applyLastMessage(LastMessageFacet(
+            id: "msg-1", preview: "Bonjour", senderName: "meeshy sama",
+            at: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        sut.conversations = [makeConversation(id: "a"), known]
+
+        subject.send(MessageActivitySignal(conversationId: "b", messageId: "msg-2"))
+        let exp = expectation(description: "push handled on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+
+        XCTAssertEqual(sut.conversations.first?.id, "b")
+        XCTAssertNil(sut.conversations.first?.lastMessagePreview)
+        XCTAssertNil(sut.conversations.first?.lastMessageSenderName)
     }
 
     // MARK: - Foreground reactivation
@@ -2531,6 +3279,37 @@ final class ConversationListViewModelTests: XCTestCase {
                       "A mutation applied to the store must reflect into the list via listPublisher")
     }
 
+    // MARK: - mergeUserStateFromStore: persists on real change (stores-06)
+
+    func test_storeUserStateChange_mergedIntoList_schedulesPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 1,
+                       "un changement réel de userState mergé depuis le store doit programmer un persist")
+    }
+
+    func test_storeUserStateEcho_unchangedState_doesNotPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        let unchanged = sut.conversations.first!
+        await store.hydrateMetadata([unchanged])
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 0,
+                       "un écho de snapshot inchangé ne doit pas programmer de persist (guard changed)")
+    }
+
     // MARK: - UserCategoryStore observation (increment 4)
 
     func test_loadCategories_seedsCategoryStore_andReflectsIntoUserCategories() async {
@@ -2634,12 +3413,88 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.typingUsernames["g1"], "the row clears once the last typer stops")
     }
 
-    func test_typingDisplayName_pickIsDeterministicAndNilWhenEmpty() {
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: nil))
-        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: [:]))
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Alice"]), "Alice")
-        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Bob", "u2": "Alice"]), "Alice",
-                       "several typers → deterministic (sorted) single-name pick for the single-name row API")
+    func test_typingSelection_pickIsDeterministicAndNilWhenEmpty() {
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: nil))
+        XCTAssertNil(ConversationListViewModel.typingSelection(for: [:]))
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: ["u1": .init(username: "alice", displayName: "Alice")])?.displayName,
+            "Alice"
+        )
+        XCTAssertEqual(
+            ConversationListViewModel.typingSelection(for: [
+                "u1": .init(username: "bob", displayName: "Bob"),
+                "u2": .init(username: "alice", displayName: "Alice")
+            ])?.displayName,
+            "Alice",
+            "several typers → deterministic (sorted) single-name pick for the single-name row API"
+        )
+    }
+
+    // MARK: - Typing: pseudo brut pour la pastille de synchronisation
+
+    /// La ligne affiche le NOM ; la pastille affiche le PSEUDO. Les deux
+    /// désignent la même personne — un « Alice Martin écrit » en liste et un
+    /// « @bob » en pastille pour la même conversation serait incohérent.
+    func test_typingStarted_publishesTheHandleAlongsideTheDisplayName() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice_handle", displayName: "Alice Martin", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice Martin")
+        XCTAssertEqual(sut.typingUsers["conv1"], "alice_handle")
+    }
+
+    /// Sans `displayName` transmis, le handle sert aux deux — la pastille ne
+    /// doit pas rester vide pour autant.
+    func test_typingStarted_withoutDisplayName_fallsBackToTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "charlie", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers["conv1"], "charlie")
+    }
+
+    func test_typingStopped_removesTheHandle() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        await drainMainQueue()
+
+        XCTAssertNil(sut.typingUsers["conv1"])
+    }
+
+    /// Un membre qui s'arrête ne doit pas vider la pastille tant qu'un autre
+    /// écrit : les deux dérivations restent alignées sur le même frappeur.
+    func test_typingStopped_inGroup_keepsTheRemainingTyperOnBothDerivations() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        socket.typingStarted.send(TypingEvent(userId: "ub", username: "bob", displayName: "Bob", conversationId: "g1"))
+        await drainMainQueue()
+        socket.typingStopped.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["g1"], "Bob")
+        XCTAssertEqual(sut.typingUsers["g1"], "bob")
+    }
+
+    func test_typingUsers_tracksConversationsIndependently() async throws {
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket)
+
+        socket.typingStarted.send(TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1"))
+        socket.typingStarted.send(TypingEvent(userId: "u2", username: "bob", displayName: "Bob", conversationId: "conv2"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
 }
 
@@ -2650,7 +3505,13 @@ private func makeConversationUpdatedEvent(
     lastMessageAt: Date?,
     title: String? = nil,
     avatar: String? = nil,
-    includeUpdatedBy: Bool = true
+    includeUpdatedBy: Bool = true,
+    lastMessageId: String? = nil,
+    lastMessagePreview: String? = nil,
+    lastMessageTranslations: LastMessagePreviewTranslations? = nil,
+    lastMessageOriginalLanguage: String? = nil,
+    locationName: String? = nil,
+    senderId: String? = nil
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -2663,15 +3524,33 @@ private func makeConversationUpdatedEvent(
     }
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
+    if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let lastMessagePreview { json["lastMessagePreview"] = lastMessagePreview }
+    if let lastMessageOriginalLanguage { json["lastMessageOriginalLanguage"] = lastMessageOriginalLanguage }
+    // Le tri-état du Prisme se joue sur la PRÉSENCE de la clé, jamais sur sa
+    // valeur : `nil` ne l'écrit pas (donc `.unchanged` au décodage),
+    // `.replaced([:])` l'écrit à `null` — c'est littéralement ce que le gateway
+    // envoie pour périmer la carte après une édition — et `.replaced(map)`
+    // l'écrit peuplée. Passer par le JSON plutôt que par le mémberwise init est
+    // ce qui rend cette distinction exprimable ici.
+    if case .some(.replaced(let map)) = lastMessageTranslations {
+        json["lastMessageTranslations"] = map.isEmpty ? NSNull() as Any : map as Any
+    }
+    if let senderId { json["senderId"] = senderId }
+    if let locationName {
+        json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]
+    }
     if let lastMessageAt {
         json["lastMessageAt"] = isoFormatter.string(from: lastMessageAt)
     }
     let data = try! JSONSerialization.data(withJSONObject: json)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let container = try decoder.singleValueContainer()
         let str = try container.decode(String.self)
-        if let date = isoFormatter.date(from: str) { return date }
+        if let date = parser.date(from: str) { return date }
         throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
     }
     return try! decoder.decode(ConversationUpdatedEvent.self, from: data)
@@ -2696,7 +3575,11 @@ final class ConvListTestPreferenceWriter: ConversationPreferenceWriting, @unchec
 
 final class ConvListTestLifecycleWriter: ConversationLifecycleWriting, @unchecked Sendable {
     var errorToThrow: Error?
-    func markRead(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    private(set) var markReadCalls: [String] = []
+    func markRead(conversationId: String) async throws {
+        markReadCalls.append(conversationId)
+        if let e = errorToThrow { throw e }
+    }
     func markUnread(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func deleteForMe(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func leave(conversationId: String) async throws { if let e = errorToThrow { throw e } }

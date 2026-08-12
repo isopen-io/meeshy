@@ -26,6 +26,7 @@ import type {
   SocketIOMessage
 } from '@/types';
 import type { EncryptedPayload } from '@meeshy/shared/types/encryption';
+import type { AnonymousChatService } from '../anonymous-chat.service';
 import type {
   TypedSocket,
   MessageListener,
@@ -430,9 +431,20 @@ export class MessagingService {
   }
 
   /**
-   * REST fallback when WebSocket send fails
+   * REST fallback when WebSocket send fails.
+   *
+   * An anonymous participant holds no JWT — only an `anon_*` session token —
+   * so `POST /conversations/:id/messages` cannot authenticate them and the
+   * fallback answered 401 for every anonymous sender: a WebSocket ack error
+   * lost the message outright, with no recovery path. Their endpoint is the
+   * share-link route, which authenticates on `X-Session-Token`.
    */
   private async sendMessageViaRest(options: MessageSendOptions): Promise<MessageAckResponse> {
+    const { anonymousChatService } = await import('../anonymous-chat.service');
+    if (anonymousChatService.canSendViaLink()) {
+      return this.sendMessageViaLinkRest(anonymousChatService, options);
+    }
+
     try {
       const { conversationsService } = await import('../conversations');
 
@@ -458,6 +470,39 @@ export class MessagingService {
       };
     } catch (error) {
       logger.error('[MessagingService]', 'REST fallback also failed', { error: error instanceof Error ? error.message : String(error) });
+      return { success: false };
+    }
+  }
+
+  /**
+   * REST fallback for an anonymous sender, over the share-link route.
+   *
+   * The caller's `clientMessageId` travels with the request and comes back in
+   * the 201 body: it is the only key linking the server message to the
+   * optimistic row already on screen. Minting a fresh one here — or reading the
+   * server's `messageId` alone — would leave the optimistic row unreconciled
+   * and the message rendered twice.
+   */
+  private async sendMessageViaLinkRest(
+    anonymousChatService: AnonymousChatService,
+    options: MessageSendOptions
+  ): Promise<MessageAckResponse> {
+    try {
+      const result = await anonymousChatService.sendMessage({
+        content: options.content,
+        originalLanguage: options.originalLanguage,
+        replyToId: options.replyToId,
+        clientMessageId: options.clientMessageId,
+      });
+
+      logger.info('[MessagingService]', 'Message sent via share-link REST fallback');
+      return {
+        success: true,
+        messageId: result.messageId ?? result.message?.id,
+        clientMessageId: result.message?.clientMessageId ?? options.clientMessageId,
+      };
+    } catch (error) {
+      logger.error('[MessagingService]', 'Share-link REST fallback also failed', { error: error instanceof Error ? error.message : String(error) });
       return { success: false };
     }
   }

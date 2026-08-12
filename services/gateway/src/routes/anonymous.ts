@@ -4,7 +4,8 @@ import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { generateNickname } from '../utils/anonymous-nickname';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -23,8 +24,8 @@ const joinAnonymousSchema = z.object({
   // Normalise at the write boundary: the participant `language` feeds the
   // translation-target set (MessageTranslationService), which is keyed lowercase.
   // Storing 'EN' / 'en-US' verbatim would inject a duplicated, never-matching NLLB
-  // target (Prisme rule #1 miss). `normalizeLanguageCode` also strips region subtags.
-  language: z.string().transform((v) => normalizeLanguageCode(v) ?? v.toLowerCase()).default('fr'),
+  // target (Prisme rule #1 miss). `normalizeLanguageForDedup` also strips region subtags.
+  language: z.string().transform((v) => normalizeLanguageForDedup(v)).default('fr'),
   deviceFingerprint: z.string().optional()
 });
 
@@ -38,14 +39,6 @@ function generateSessionToken(deviceFingerprint?: string): string {
   const randomPart = crypto.randomBytes(16).toString('hex');
   const devicePart = deviceFingerprint ? crypto.createHash('md5').update(deviceFingerprint).digest('hex').slice(0, 8) : '';
   return `anon_${timestamp}_${randomPart}_${devicePart}`;
-}
-
-// Helper pour generer un username automatique
-function generateNickname(firstName: string, lastName: string): string {
-  const cleanFirstName = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const lastNameInitials = lastName.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2);
-  const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${cleanFirstName}_${lastNameInitials}${randomSuffix}`;
 }
 
 // Helper pour verifier l'IP et extraire le pays (simulation)
@@ -927,12 +920,13 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       allActiveParticipants.forEach(p => {
         if (p.type === 'user' && p.user) {
-          // Lowercase so 'en'/'EN' from legacy mixed-case rows count once (spokenLanguages stat)
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage.toLowerCase());
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage.toLowerCase());
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage.toLowerCase());
+          // Canonicalise BCP-47/casse via le SSOT : 'en', 'EN' et 'en-US' comptent
+          // pour UNE langue (`.toLowerCase()` brut laissait 'en-us' ≠ 'en' → stat gonflée)
+          if (p.user.systemLanguage) languageSet.add(normalizeLanguageForDedup(p.user.systemLanguage));
+          if (p.user.regionalLanguage) languageSet.add(normalizeLanguageForDedup(p.user.regionalLanguage));
+          if (p.user.customDestinationLanguage) languageSet.add(normalizeLanguageForDedup(p.user.customDestinationLanguage));
         } else {
-          if (p.language) languageSet.add(p.language.toLowerCase());
+          if (p.language) languageSet.add(normalizeLanguageForDedup(p.language));
         }
       });
 

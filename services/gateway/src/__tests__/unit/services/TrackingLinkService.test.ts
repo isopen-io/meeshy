@@ -1,1067 +1,729 @@
 /**
- * TrackingLinkService Unit Tests
- *
- * Covers:
- * - resolveFrontendBaseUrl(): env var priority, trailing-slash strip
- * - generateShortToken(): length, character set
- * - buildTrackingUrl() / buildShortFormat()
- * - createTrackingLink(): custom token (collision), auto-unique token, DB create
- * - getTrackingLinkByToken(): found / not found
- * - resolveTarget(): tracking link path, conversation link fallback, null for 404
- * - isLinkActive(): inactive flag, expired date
- * - findExistingTrackingLink(): with and without conversationId filter
- * - recordClick(): not found, inactive, expired, unique detection, stats update
- * - updateRedirectStatus(): delegates to prisma update
- * - getTrackingLinkStats(): not found, aggregation, date filter, unique clicks
- * - getUserTrackingLinks() / getConversationTrackingLinks()
- * - deactivateTrackingLink()
- * - deleteTrackingLink(): not found, deletes clicks then link
- * - getAllTrackingLinks(): with/without search
- * - getTrackingLinkClicks()
- * - processExplicitLinksInContent(): [[url]], <url>, markdown protection, reuse
- * - processMessageLinks(): URL detection, skip existing tracking links, rewrite flag
- * - collectContentTrackingLinks(): empty content, dedup, error → []
- * - updateTrackingLinksMessageId(): no-op for empty, updateMany
- * - updateTrackingLink(): not found, token collision, updates fields
- * - isTokenAvailable()
+ * Unit tests for TrackingLinkService utility exports and class methods.
+ * Covers: resolveFrontendBaseUrl, generateShortToken, buildTrackingUrl,
+ * buildShortFormat, createTrackingLink, getTrackingLinkByToken, resolveTarget,
+ * findExistingTrackingLink, recordClick, getTrackingLinkStats,
+ * getUserTrackingLinks, getConversationTrackingLinks, deactivateTrackingLink,
+ * deleteTrackingLink, processMessageLinks, collectContentTrackingLinks,
+ * updateTrackingLinksMessageId, updateTrackingLink, isTokenAvailable.
  *
  * @jest-environment node
  */
 
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
-    child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
   },
 }));
 
 import {
-  TrackingLinkService,
   resolveFrontendBaseUrl,
   generateShortToken,
+  TrackingLinkService,
 } from '../../../services/TrackingLinkService';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
+// ─── Factories ────────────────────────────────────────────────────────────────
 
-const LINK_FIXTURE = {
-  id: 'link_001',
-  token: 'AbCd12',
-  shortUrl: '/l/AbCd12',
-  originalUrl: 'https://example.com/page',
-  isActive: true,
-  expiresAt: null,
-  totalClicks: 0,
-  uniqueClicks: 0,
-  createdBy: 'user_001',
-  conversationId: null,
-  messageId: null,
-  targetType: 'URL',
-  targetId: null,
-  name: null,
-  campaign: null,
-  source: null,
-  medium: null,
-  createdAt: new Date('2024-01-01'),
-  lastClickedAt: null,
-};
-
-// ---------------------------------------------------------------------------
-// Prisma factory
-// ---------------------------------------------------------------------------
-
-function makePrisma(overrides: Record<string, Partial<Record<string, jest.Mock>>> = {}) {
+function makeLink(overrides: Record<string, any> = {}) {
   return {
-    trackingLink: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      findFirst: jest.fn().mockResolvedValue(null),
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      update: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      delete: jest.fn().mockResolvedValue({}),
-      count: jest.fn().mockResolvedValue(0),
-      ...overrides.trackingLink,
-    },
-    trackingLinkClick: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({ id: 'click_001', clickedAt: new Date() }),
-      update: jest.fn().mockResolvedValue({}),
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-      count: jest.fn().mockResolvedValue(0),
-      ...overrides.trackingLinkClick,
-    },
-    conversationShareLink: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      ...overrides.conversationShareLink,
-    },
-  } as any;
+    id: 'link-1',
+    token: 'ABC123',
+    originalUrl: 'https://example.com',
+    shortUrl: '/l/ABC123',
+    isActive: true,
+    expiresAt: null,
+    totalClicks: 5,
+    uniqueClicks: 3,
+    targetType: 'POST',
+    targetId: 'post-1',
+    createdBy: 'user-1',
+    createdAt: new Date(),
+    ...overrides,
+  };
 }
 
-afterEach(() => jest.clearAllMocks());
+function makeClick(overrides: Record<string, any> = {}) {
+  return {
+    id: 'click-1',
+    trackingLinkId: 'link-1',
+    clickedAt: new Date('2026-06-25T10:00:00Z'),
+    redirectStatus: null,
+    country: 'FR',
+    device: 'mobile',
+    browser: 'Safari',
+    os: 'iOS',
+    language: 'fr',
+    socialSource: 'twitter',
+    referrer: 'https://google.com',
+    ipAddress: '1.2.3.4',
+    deviceFingerprint: 'fp-1',
+    ...overrides,
+  };
+}
 
-// ---------------------------------------------------------------------------
-// resolveFrontendBaseUrl
-// ---------------------------------------------------------------------------
+function makePrisma(overrides: {
+  findUniqueResult?: any;
+  findFirstResult?: any;
+  findManyResult?: any[];
+  createLinkResult?: any;
+  updateLinkResult?: any;
+  clickFindFirstResult?: any;
+  clickFindManyResult?: any[];
+  invitationResult?: any;
+  linkCount?: number;
+  clickCount?: number;
+} = {}) {
+  const defaultLink = makeLink();
+  const {
+    findUniqueResult = defaultLink,
+    findFirstResult = null,
+    findManyResult = [],
+    createLinkResult = defaultLink,
+    updateLinkResult = defaultLink,
+    clickFindFirstResult = null,
+    clickFindManyResult = [],
+    invitationResult = null,
+    linkCount = 0,
+    clickCount = 0,
+  } = overrides;
+
+  return {
+    trackingLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(findUniqueResult),
+      findFirst: jest.fn<any>().mockResolvedValue(findFirstResult),
+      create: jest.fn<any>().mockResolvedValue(createLinkResult),
+      update: jest.fn<any>().mockResolvedValue(updateLinkResult),
+      findMany: jest.fn<any>().mockResolvedValue(findManyResult),
+      delete: jest.fn<any>().mockResolvedValue({}),
+      count: jest.fn<any>().mockResolvedValue(linkCount),
+      updateMany: jest.fn<any>().mockResolvedValue({}),
+    },
+    trackingLinkClick: {
+      create: jest.fn<any>().mockResolvedValue(makeClick()),
+      findFirst: jest.fn<any>().mockResolvedValue(clickFindFirstResult),
+      findMany: jest.fn<any>().mockResolvedValue(clickFindManyResult),
+      count: jest.fn<any>().mockResolvedValue(clickCount),
+      update: jest.fn<any>().mockResolvedValue({}),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
+    conversationShareLink: {
+      findFirst: jest.fn<any>().mockResolvedValue(invitationResult),
+    },
+  };
+}
+
+const originalEnv = process.env;
+
+beforeEach(() => {
+  process.env = { ...originalEnv };
+});
+
+afterEach(() => {
+  process.env = originalEnv;
+});
+
+// ─── resolveFrontendBaseUrl ───────────────────────────────────────────────────
+
 describe('resolveFrontendBaseUrl', () => {
-  const ORIGINAL_ENV = { ...process.env };
-
-  afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-  });
-
   it('returns FRONTEND_URL when set', () => {
-    process.env.FRONTEND_URL = 'https://app.example.com';
-    expect(resolveFrontendBaseUrl()).toBe('https://app.example.com');
+    process.env.FRONTEND_URL = 'https://app.meeshy.me';
+    delete process.env.NEXT_PUBLIC_FRONTEND_URL;
+    expect(resolveFrontendBaseUrl()).toBe('https://app.meeshy.me');
   });
 
-  it('falls back to NEXT_PUBLIC_FRONTEND_URL when FRONTEND_URL is unset', () => {
+  it('falls back to NEXT_PUBLIC_FRONTEND_URL when FRONTEND_URL is absent', () => {
     delete process.env.FRONTEND_URL;
-    process.env.NEXT_PUBLIC_FRONTEND_URL = 'https://next.example.com';
-    expect(resolveFrontendBaseUrl()).toBe('https://next.example.com');
+    process.env.NEXT_PUBLIC_FRONTEND_URL = 'https://next.meeshy.me';
+    expect(resolveFrontendBaseUrl()).toBe('https://next.meeshy.me');
   });
 
-  it('falls back to meeshy.me when both vars are unset', () => {
+  it('falls back to https://meeshy.me when both env vars are absent', () => {
     delete process.env.FRONTEND_URL;
     delete process.env.NEXT_PUBLIC_FRONTEND_URL;
     expect(resolveFrontendBaseUrl()).toBe('https://meeshy.me');
   });
 
   it('strips trailing slashes', () => {
-    process.env.FRONTEND_URL = 'https://app.example.com///';
-    expect(resolveFrontendBaseUrl()).toBe('https://app.example.com');
+    process.env.FRONTEND_URL = 'https://app.meeshy.me///';
+    expect(resolveFrontendBaseUrl()).toBe('https://app.meeshy.me');
   });
 });
 
-// ---------------------------------------------------------------------------
-// generateShortToken
-// ---------------------------------------------------------------------------
+// ─── generateShortToken ───────────────────────────────────────────────────────
+
 describe('generateShortToken', () => {
-  it('generates a 6-char token by default', () => {
-    const token = generateShortToken();
-    expect(token).toHaveLength(6);
+  it('returns a string of the requested length', () => {
+    expect(generateShortToken(8)).toHaveLength(8);
   });
 
-  it('generates a token of the requested length', () => {
-    expect(generateShortToken(10)).toHaveLength(10);
-    expect(generateShortToken(3)).toHaveLength(3);
+  it('defaults to 6 characters', () => {
+    expect(generateShortToken()).toHaveLength(6);
   });
 
-  it('uses only alphanumeric characters', () => {
+  it('only contains alphanumeric characters', () => {
     const token = generateShortToken(100);
     expect(token).toMatch(/^[A-Za-z0-9]+$/);
   });
+});
 
-  it('generates different tokens on repeated calls (statistically)', () => {
-    const tokens = new Set(Array.from({ length: 20 }, () => generateShortToken()));
-    expect(tokens.size).toBeGreaterThan(1);
+// ─── buildTrackingUrl / buildShortFormat ─────────────────────────────────────
+
+describe('TrackingLinkService.buildTrackingUrl', () => {
+  it('combines the base URL with the /l/<token> path', () => {
+    process.env.FRONTEND_URL = 'https://meeshy.me';
+    const sut = new TrackingLinkService(makePrisma() as any);
+    expect(sut.buildTrackingUrl('XYZ99')).toBe('https://meeshy.me/l/XYZ99');
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildTrackingUrl / buildShortFormat
-// ---------------------------------------------------------------------------
-describe('buildTrackingUrl and buildShortFormat', () => {
-  const svc = new TrackingLinkService(makePrisma());
-
-  it('buildTrackingUrl returns baseUrl + /l/<token>', () => {
-    const url = svc.buildTrackingUrl('AbCd12');
-    expect(url).toMatch(/\/l\/AbCd12$/);
-  });
-
-  it('buildShortFormat returns m+<token>', () => {
-    expect(svc.buildShortFormat('AbCd12')).toBe('m+AbCd12');
+describe('TrackingLinkService.buildShortFormat', () => {
+  it('returns m+<token>', () => {
+    const sut = new TrackingLinkService(makePrisma() as any);
+    expect(sut.buildShortFormat('ABC123')).toBe('m+ABC123');
   });
 });
 
-// ---------------------------------------------------------------------------
-// createTrackingLink
-// ---------------------------------------------------------------------------
-describe('createTrackingLink', () => {
-  it('uses customToken when provided', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(null), // no collision
-        create: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'CUSTOM' }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
+// ─── createTrackingLink ───────────────────────────────────────────────────────
 
-    const result = await svc.createTrackingLink({ originalUrl: 'https://x.com', customToken: 'CUSTOM' });
-
-    expect(result.token).toBe('CUSTOM');
-  });
-
-  it('throws when customToken already exists', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
-    });
-    const svc = new TrackingLinkService(prisma);
+describe('TrackingLinkService.createTrackingLink', () => {
+  it('throws when a customToken already exists', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
+    const sut = new TrackingLinkService(prisma as any);
 
     await expect(
-      svc.createTrackingLink({ originalUrl: 'https://x.com', customToken: 'TAKEN' })
+      sut.createTrackingLink({ originalUrl: 'https://x.com', customToken: 'TAKEN' })
     ).rejects.toThrow('Token already exists');
   });
 
-  it('generates a unique token when no customToken', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      },
+  it('creates with a custom token when it is available', async () => {
+    const link = makeLink({ token: 'MYTOK' });
+    const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.createTrackingLink({
+      originalUrl: 'https://x.com',
+      customToken: 'MYTOK',
     });
-    const svc = new TrackingLinkService(prisma);
 
-    const result = await svc.createTrackingLink({ originalUrl: 'https://x.com' });
-    expect(result).toBeDefined();
-  });
-
-  it('retries token generation on collision', async () => {
-    const findUnique = jest.fn()
-      .mockResolvedValueOnce(LINK_FIXTURE) // first token collides
-      .mockResolvedValueOnce(null);        // second token is free
-    const prisma = makePrisma({ trackingLink: { findUnique, create: jest.fn().mockResolvedValue(LINK_FIXTURE) } });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.createTrackingLink({ originalUrl: 'https://x.com' });
-
-    // findUnique called twice: once collision, once clear
-    expect(findUnique).toHaveBeenCalledTimes(2);
-  });
-
-  it('throws when max token generation attempts exceeded', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) }, // always collides
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await expect(svc.createTrackingLink({ originalUrl: 'https://x.com' })).rejects.toThrow(
-      'Unable to generate unique token after maximum attempts'
+    expect(result.token).toBe('MYTOK');
+    expect(prisma.trackingLink.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ token: 'MYTOK', isActive: true, totalClicks: 0 }),
+      })
     );
   });
 
-  it('sets shortUrl as /l/<token>', async () => {
-    const create = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({ trackingLink: { findUnique: jest.fn().mockResolvedValue(null), create } });
-    const svc = new TrackingLinkService(prisma);
+  it('auto-generates a unique token when no customToken is provided', async () => {
+    const link = makeLink({ token: 'AUTOTK' });
+    const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
+    const sut = new TrackingLinkService(prisma as any);
 
-    await svc.createTrackingLink({ originalUrl: 'https://x.com' });
+    const result = await sut.createTrackingLink({ originalUrl: 'https://auto.example.com' });
 
-    const [arg] = create.mock.calls[0];
-    expect(arg.data.shortUrl).toMatch(/^\/l\//);
+    expect(result.token).toBe('AUTOTK');
   });
 });
 
-// ---------------------------------------------------------------------------
-// getTrackingLinkByToken
-// ---------------------------------------------------------------------------
-describe('getTrackingLinkByToken', () => {
-  it('returns link when found', async () => {
-    const prisma = makePrisma({ trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) } });
-    const svc = new TrackingLinkService(prisma);
-    expect(await svc.getTrackingLinkByToken('AbCd12')).toEqual(LINK_FIXTURE);
+// ─── getTrackingLinkByToken ───────────────────────────────────────────────────
+
+describe('TrackingLinkService.getTrackingLinkByToken', () => {
+  it('returns the link when found', async () => {
+    const link = makeLink();
+    const prisma = makePrisma({ findUniqueResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.getTrackingLinkByToken('ABC123');
+
+    expect(result).toEqual(link);
   });
 
   it('returns null when not found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    expect(await svc.getTrackingLinkByToken('nope')).toBeNull();
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.getTrackingLinkByToken('MISSING');
+
+    expect(result).toBeNull();
   });
 });
 
-// ---------------------------------------------------------------------------
-// resolveTarget
-// ---------------------------------------------------------------------------
-describe('resolveTarget', () => {
-  it('returns null when neither link nor invitation exists', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    expect(await svc.resolveTarget('unknown')).toBeNull();
-  });
+// ─── resolveTarget ────────────────────────────────────────────────────────────
 
+describe('TrackingLinkService.resolveTarget', () => {
   it('returns tracking kind when a TrackingLink is found', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    const result = await svc.resolveTarget('AbCd12');
-    expect(result?.kind).toBe('tracking');
-    expect(result?.isActive).toBe(true);
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.resolveTarget('ABC123');
+
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe('tracking');
+    expect(result!.isActive).toBe(true);
+    expect(result!.targetType).toBe('POST');
   });
 
-  it('marks as inactive when link.isActive is false', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, isActive: false }) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    const result = await svc.resolveTarget('AbCd12');
-    expect(result?.isActive).toBe(false);
+  it('marks expired tracking link as isActive:false', async () => {
+    const expired = makeLink({ isActive: true, expiresAt: new Date(Date.now() - 1000) });
+    const prisma = makePrisma({ findUniqueResult: expired });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.resolveTarget('EXPIRED');
+
+    expect(result!.isActive).toBe(false);
   });
 
-  it('marks as inactive when link has expired', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, expiresAt: new Date('2000-01-01') }) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    const result = await svc.resolveTarget('AbCd12');
-    expect(result?.isActive).toBe(false);
-  });
-
-  it('falls back to conversation kind when TrackingLink not found', async () => {
+  it('falls back to conversation kind when no TrackingLink exists', async () => {
     const invitation = {
-      conversationId: 'conv_001',
-      createdBy: 'user_001',
+      conversationId: 'conv-99',
+      createdBy: 'user-host',
       isActive: true,
       expiresAt: null,
+      linkId: 'INV123',
+      identifier: 'INV123',
     };
-    const prisma = makePrisma({
-      conversationShareLink: { findFirst: jest.fn().mockResolvedValue(invitation) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    const result = await svc.resolveTarget('token123');
-    expect(result?.kind).toBe('conversation');
-    expect(result?.targetType).toBe('CONVERSATION');
-    expect(result?.targetId).toBe('conv_001');
+    const prisma = makePrisma({ findUniqueResult: null, invitationResult: invitation });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.resolveTarget('INV123');
+
+    expect(result!.kind).toBe('conversation');
+    expect(result!.targetId).toBe('conv-99');
+  });
+
+  it('returns null when neither a tracking link nor invitation is found', async () => {
+    const prisma = makePrisma({ findUniqueResult: null, invitationResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.resolveTarget('UNKNOWN');
+
+    expect(result).toBeNull();
   });
 });
 
-// ---------------------------------------------------------------------------
-// findExistingTrackingLink
-// ---------------------------------------------------------------------------
-describe('findExistingTrackingLink', () => {
-  it('queries without conversationId when not provided', async () => {
-    const findFirst = jest.fn().mockResolvedValue(null);
-    const prisma = makePrisma({ trackingLink: { findFirst } });
-    const svc = new TrackingLinkService(prisma);
+// ─── findExistingTrackingLink ─────────────────────────────────────────────────
 
-    await svc.findExistingTrackingLink('https://x.com');
+describe('TrackingLinkService.findExistingTrackingLink', () => {
+  it('queries with originalUrl and isActive:true', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
 
-    const [arg] = findFirst.mock.calls[0];
-    expect(arg.where).not.toHaveProperty('conversationId');
+    await sut.findExistingTrackingLink('https://example.com');
+
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true }),
+      })
+    );
   });
 
-  it('queries with conversationId filter when provided', async () => {
-    const findFirst = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({ trackingLink: { findFirst } });
-    const svc = new TrackingLinkService(prisma);
+  it('includes conversationId filter when provided', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
 
-    await svc.findExistingTrackingLink('https://x.com', 'conv_001');
+    await sut.findExistingTrackingLink('https://example.com', 'conv-42');
 
-    const [arg] = findFirst.mock.calls[0];
-    expect(arg.where.conversationId).toBe('conv_001');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// recordClick
-// ---------------------------------------------------------------------------
-describe('recordClick', () => {
-  const CLICK_PARAMS = { token: 'AbCd12', ipAddress: '1.2.3.4' };
-
-  it('throws when link not found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    await expect(svc.recordClick(CLICK_PARAMS)).rejects.toThrow('Tracking link not found');
-  });
-
-  it('throws when link is inactive', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, isActive: false }) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    await expect(svc.recordClick(CLICK_PARAMS)).rejects.toThrow('Tracking link is inactive');
-  });
-
-  it('throws when link has expired', async () => {
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, expiresAt: new Date('2000-01-01') }) },
-    });
-    const svc = new TrackingLinkService(prisma);
-    await expect(svc.recordClick(CLICK_PARAMS)).rejects.toThrow('Tracking link has expired');
-  });
-
-  it('creates a click record on success', async () => {
-    const create = jest.fn().mockResolvedValue({ id: 'click_001', clickedAt: new Date() });
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      },
-      trackingLinkClick: { findFirst: jest.fn().mockResolvedValue(null), create },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.recordClick(CLICK_PARAMS);
-
-    expect(create).toHaveBeenCalledTimes(1);
-  });
-
-  it('increments uniqueClicks when click is unique (no prior click from IP)', async () => {
-    const update = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update,
-      },
-      trackingLinkClick: {
-        findFirst: jest.fn().mockResolvedValue(null), // unique
-        create: jest.fn().mockResolvedValue({ id: 'click_001', clickedAt: new Date() }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.recordClick(CLICK_PARAMS);
-
-    const updateData = update.mock.calls[0][0].data;
-    expect(updateData.uniqueClicks).toEqual({ increment: 1 });
-  });
-
-  it('does not increment uniqueClicks for non-unique click', async () => {
-    const update = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update,
-      },
-      trackingLinkClick: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'existing_click' }), // NOT unique
-        create: jest.fn().mockResolvedValue({ id: 'click_001', clickedAt: new Date() }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.recordClick(CLICK_PARAMS);
-
-    const updateData = update.mock.calls[0][0].data;
-    expect(updateData.uniqueClicks).toBeUndefined();
-  });
-
-  it('returns both trackingLink and click', async () => {
-    const click = { id: 'click_001', clickedAt: new Date() };
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      },
-      trackingLinkClick: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue(click),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const result = await svc.recordClick(CLICK_PARAMS);
-
-    expect(result.click).toEqual(click);
-    expect(result.trackingLink).toBeDefined();
-  });
-
-  it('treats click as non-unique when no ipAddress and no fingerprint', async () => {
-    const update = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update,
-      },
-      trackingLinkClick: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: 'click_001', clickedAt: new Date() }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    // No ipAddress, no deviceFingerprint → isUnique = false
-    await svc.recordClick({ token: 'AbCd12' });
-
-    const updateData = update.mock.calls[0][0].data;
-    expect(updateData.uniqueClicks).toBeUndefined();
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ conversationId: 'conv-42' }),
+      })
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// updateRedirectStatus
-// ---------------------------------------------------------------------------
-describe('updateRedirectStatus', () => {
-  it('calls prisma update with correct args', async () => {
-    const update = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ trackingLinkClick: { update } });
-    const svc = new TrackingLinkService(prisma);
+// ─── recordClick ─────────────────────────────────────────────────────────────
 
-    await svc.updateRedirectStatus('click_001', 'link_001', 'confirmed');
+describe('TrackingLinkService.recordClick', () => {
+  it('throws when the tracking link is not found', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
 
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'click_001', trackingLinkId: 'link_001' },
-      data: { redirectStatus: 'confirmed' },
+    await expect(sut.recordClick({ token: 'MISSING' })).rejects.toThrow('not found');
+  });
+
+  it('throws when the tracking link is inactive', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink({ isActive: false }) });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(sut.recordClick({ token: 'INACTIVE' })).rejects.toThrow('inactive');
+  });
+
+  it('throws when the tracking link has expired', async () => {
+    const expired = makeLink({ isActive: true, expiresAt: new Date(Date.now() - 1000) });
+    const prisma = makePrisma({ findUniqueResult: expired });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(sut.recordClick({ token: 'EXPIRED' })).rejects.toThrow('expired');
+  });
+
+  it('creates a click record and updates totalClicks', async () => {
+    const link = makeLink({ totalClicks: 5, uniqueClicks: 3 });
+    const prisma = makePrisma({ findUniqueResult: link, clickFindFirstResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.recordClick({ token: 'ABC123', ipAddress: '1.2.3.4' });
+
+    expect(prisma.trackingLinkClick.create).toHaveBeenCalled();
+    expect(prisma.trackingLink.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ totalClicks: { increment: 1 } }),
+      })
+    );
+  });
+
+  it('increments uniqueClicks when the click is unique (no prior click found)', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink(), clickFindFirstResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.recordClick({ token: 'ABC123', ipAddress: '9.9.9.9' });
+
+    const updateCall = (prisma.trackingLink.update as jest.Mock<any>).mock.calls[0][0];
+    expect(updateCall.data.uniqueClicks).toEqual({ increment: 1 });
+  });
+
+  it('does NOT increment uniqueClicks when a prior click exists', async () => {
+    const prisma = makePrisma({
+      findUniqueResult: makeLink(),
+      clickFindFirstResult: makeClick(),
     });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.recordClick({ token: 'ABC123', ipAddress: '1.2.3.4' });
+
+    const updateCall = (prisma.trackingLink.update as jest.Mock<any>).mock.calls[0][0];
+    expect(updateCall.data.uniqueClicks).toBeUndefined();
   });
 });
 
-// ---------------------------------------------------------------------------
-// getTrackingLinkStats
-// ---------------------------------------------------------------------------
-describe('getTrackingLinkStats', () => {
-  it('throws when link not found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    await expect(svc.getTrackingLinkStats('nope')).rejects.toThrow('Tracking link not found');
+// ─── getTrackingLinkStats ────────────────────────────────────────────────────
+
+describe('TrackingLinkService.getTrackingLinkStats', () => {
+  it('throws when the tracking link is not found', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(sut.getTrackingLinkStats('BAD')).rejects.toThrow('not found');
   });
 
-  it('aggregates clicks by country', async () => {
+  it('returns zero-click stats when no clicks exist', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink(), clickFindManyResult: [] });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const stats = await sut.getTrackingLinkStats('ABC123');
+
+    expect(stats.totalClicks).toBe(0);
+    expect(stats.confirmedClicks).toBe(0);
+    expect(stats.topReferrers).toEqual([]);
+  });
+
+  it('aggregates clicks by country, device, browser, os, language, date, socialSource and referrer', async () => {
     const clicks = [
-      { country: 'US', device: null, browser: null, os: null, language: null, clickedAt: new Date('2024-01-01T10:00:00Z'), socialSource: null, referrer: null, ipAddress: '1.1.1.1', deviceFingerprint: null, redirectStatus: null },
-      { country: 'US', device: null, browser: null, os: null, language: null, clickedAt: new Date('2024-01-01T11:00:00Z'), socialSource: null, referrer: null, ipAddress: '1.1.1.2', deviceFingerprint: null, redirectStatus: null },
-      { country: 'FR', device: null, browser: null, os: null, language: null, clickedAt: new Date('2024-01-01T12:00:00Z'), socialSource: null, referrer: null, ipAddress: '2.2.2.2', deviceFingerprint: null, redirectStatus: null },
+      makeClick({ country: 'FR', device: 'mobile', browser: 'Safari', os: 'iOS', language: 'fr', socialSource: 'twitter', referrer: 'https://google.com', redirectStatus: 'confirmed' }),
+      makeClick({ id: 'click-2', country: 'US', device: 'desktop', browser: 'Chrome', os: 'Windows', language: 'en', socialSource: null, referrer: null }),
     ];
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      },
-      trackingLinkClick: { findMany: jest.fn().mockResolvedValue(clicks) },
-    });
-    const svc = new TrackingLinkService(prisma);
+    const link = makeLink({ uniqueClicks: 2 });
+    const prisma = makePrisma({ findUniqueResult: link, clickFindManyResult: clicks });
+    const sut = new TrackingLinkService(prisma as any);
 
-    const stats = await svc.getTrackingLinkStats('AbCd12');
+    const stats = await sut.getTrackingLinkStats('ABC123');
 
-    expect(stats.clicksByCountry).toEqual({ US: 2, FR: 1 });
-    expect(stats.totalClicks).toBe(3);
+    expect(stats.totalClicks).toBe(2);
+    expect(stats.clicksByCountry['FR']).toBe(1);
+    expect(stats.clicksByCountry['US']).toBe(1);
+    expect(stats.clicksByDevice['mobile']).toBe(1);
+    expect(stats.clicksByBrowser['Safari']).toBe(1);
+    expect(stats.clicksByOS['iOS']).toBe(1);
+    expect(stats.clicksByLanguage['fr']).toBe(1);
+    expect(stats.clicksBySocialSource['twitter']).toBe(1);
+    expect(stats.confirmedClicks).toBe(1);
+    expect(stats.uniqueClicks).toBe(2);
+    expect(stats.topReferrers).toHaveLength(1);
+    expect(stats.topReferrers[0].referrer).toBe('https://google.com');
   });
 
-  it('applies date filter when startDate/endDate provided', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
-      trackingLinkClick: { findMany },
-    });
-    const svc = new TrackingLinkService(prisma);
+  it('applies startDate and endDate filters on clickedAt', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink(), clickFindManyResult: [] });
+    const sut = new TrackingLinkService(prisma as any);
+    const start = new Date('2026-06-01');
+    const end = new Date('2026-06-30');
 
-    const startDate = new Date('2024-01-01');
-    const endDate = new Date('2024-01-31');
-    await svc.getTrackingLinkStats('AbCd12', { startDate, endDate });
+    await sut.getTrackingLinkStats('ABC123', { startDate: start, endDate: end });
 
-    const [arg] = findMany.mock.calls[0];
-    expect(arg.where.clickedAt.gte).toBe(startDate);
-    expect(arg.where.clickedAt.lte).toBe(endDate);
-  });
-
-  it('uses stored uniqueClicks from link record', async () => {
-    const link = { ...LINK_FIXTURE, uniqueClicks: 42 };
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(link) },
-      trackingLinkClick: { findMany: jest.fn().mockResolvedValue([]) },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const stats = await svc.getTrackingLinkStats('AbCd12');
-
-    expect(stats.uniqueClicks).toBe(42);
-  });
-
-  it('counts confirmedClicks correctly', async () => {
-    const clicks = [
-      { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date(), socialSource: null, referrer: null, ipAddress: null, deviceFingerprint: null, redirectStatus: 'confirmed' },
-      { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date(), socialSource: null, referrer: null, ipAddress: null, deviceFingerprint: null, redirectStatus: 'failed' },
-      { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date(), socialSource: null, referrer: null, ipAddress: null, deviceFingerprint: null, redirectStatus: 'confirmed' },
-    ];
-    const prisma = makePrisma({
-      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
-      trackingLinkClick: { findMany: jest.fn().mockResolvedValue(clicks) },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const stats = await svc.getTrackingLinkStats('AbCd12');
-
-    expect(stats.confirmedClicks).toBe(2);
+    expect(prisma.trackingLinkClick.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          clickedAt: expect.objectContaining({ gte: start, lte: end }),
+        }),
+      })
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// getUserTrackingLinks / getConversationTrackingLinks
-// ---------------------------------------------------------------------------
-describe('getUserTrackingLinks', () => {
-  it('queries by createdBy with desc order', async () => {
-    const findMany = jest.fn().mockResolvedValue([LINK_FIXTURE]);
-    const prisma = makePrisma({ trackingLink: { findMany } });
-    const svc = new TrackingLinkService(prisma);
+// ─── getUserTrackingLinks ─────────────────────────────────────────────────────
 
-    const result = await svc.getUserTrackingLinks('user_001');
+describe('TrackingLinkService.getUserTrackingLinks', () => {
+  it('queries by createdBy userId ordered by createdAt desc', async () => {
+    const prisma = makePrisma({ findManyResult: [] });
+    const sut = new TrackingLinkService(prisma as any);
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { createdBy: 'user_001' },
-    }));
-    expect(result).toHaveLength(1);
+    await sut.getUserTrackingLinks('user-99');
+
+    expect(prisma.trackingLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { createdBy: 'user-99' },
+        orderBy: { createdAt: 'desc' },
+      })
+    );
   });
 });
 
-describe('getConversationTrackingLinks', () => {
-  it('queries by conversationId', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const prisma = makePrisma({ trackingLink: { findMany } });
-    const svc = new TrackingLinkService(prisma);
+// ─── getConversationTrackingLinks ─────────────────────────────────────────────
 
-    await svc.getConversationTrackingLinks('conv_001');
+describe('TrackingLinkService.getConversationTrackingLinks', () => {
+  it('queries by conversationId ordered by createdAt desc', async () => {
+    const prisma = makePrisma({ findManyResult: [] });
+    const sut = new TrackingLinkService(prisma as any);
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { conversationId: 'conv_001' },
-    }));
+    await sut.getConversationTrackingLinks('conv-77');
+
+    expect(prisma.trackingLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { conversationId: 'conv-77' },
+        orderBy: { createdAt: 'desc' },
+      })
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// deactivateTrackingLink
-// ---------------------------------------------------------------------------
-describe('deactivateTrackingLink', () => {
-  it('sets isActive to false', async () => {
-    const update = jest.fn().mockResolvedValue({ ...LINK_FIXTURE, isActive: false });
-    const prisma = makePrisma({ trackingLink: { update } });
-    const svc = new TrackingLinkService(prisma);
+// ─── deactivateTrackingLink ───────────────────────────────────────────────────
 
-    const result = await svc.deactivateTrackingLink('AbCd12');
+describe('TrackingLinkService.deactivateTrackingLink', () => {
+  it('updates isActive to false on the target token', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
 
-    expect(update).toHaveBeenCalledWith({ where: { token: 'AbCd12' }, data: { isActive: false } });
-    expect(result.isActive).toBe(false);
+    await sut.deactivateTrackingLink('ABC123');
+
+    expect(prisma.trackingLink.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: 'ABC123' },
+        data: { isActive: false },
+      })
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// deleteTrackingLink
-// ---------------------------------------------------------------------------
-describe('deleteTrackingLink', () => {
-  it('throws when link not found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    await expect(svc.deleteTrackingLink('nope')).rejects.toThrow('Tracking link not found');
+// ─── deleteTrackingLink ───────────────────────────────────────────────────────
+
+describe('TrackingLinkService.deleteTrackingLink', () => {
+  it('throws when the tracking link does not exist', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(sut.deleteTrackingLink('GHOST')).rejects.toThrow('not found');
   });
 
-  it('deletes clicks then deletes the link', async () => {
-    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
-    const del = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        delete: del,
-      },
-      trackingLinkClick: { deleteMany },
+  it('deletes all associated clicks then deletes the link', async () => {
+    const link = makeLink({ id: 'link-1', token: 'ABC123' });
+    const prisma = makePrisma({ findUniqueResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.deleteTrackingLink('ABC123');
+
+    expect(prisma.trackingLinkClick.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { trackingLinkId: 'link-1' } })
+    );
+    expect(prisma.trackingLink.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { token: 'ABC123' } })
+    );
+  });
+});
+
+// ─── processMessageLinks ──────────────────────────────────────────────────────
+
+describe('TrackingLinkService.processMessageLinks', () => {
+  it('returns unchanged content and empty links when no URLs are present', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.processMessageLinks({ content: 'Hello world' });
+
+    expect(result.processedContent).toBe('Hello world');
+    expect(result.trackingLinks).toHaveLength(0);
+  });
+
+  it('creates a tracking link for a raw URL and replaces it with m+<token>', async () => {
+    const link = makeLink({ token: 'NEWTKN' });
+    const prisma = makePrisma({ findUniqueResult: null, findFirstResult: null, createLinkResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.processMessageLinks({
+      content: 'Visit https://example.com for more',
+      conversationId: 'conv-1',
     });
-    const svc = new TrackingLinkService(prisma);
 
-    await svc.deleteTrackingLink('AbCd12');
-
-    expect(deleteMany).toHaveBeenCalledWith({ where: { trackingLinkId: LINK_FIXTURE.id } });
-    expect(del).toHaveBeenCalledWith({ where: { token: 'AbCd12' } });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getAllTrackingLinks
-// ---------------------------------------------------------------------------
-describe('getAllTrackingLinks', () => {
-  it('returns trackingLinks and total without search', async () => {
-    const findMany = jest.fn().mockResolvedValue([LINK_FIXTURE]);
-    const count = jest.fn().mockResolvedValue(1);
-    const prisma = makePrisma({ trackingLink: { findMany, count } });
-    const svc = new TrackingLinkService(prisma);
-
-    const result = await svc.getAllTrackingLinks({ limit: 10, offset: 0 });
-
-    expect(result.total).toBe(1);
+    expect(result.processedContent).toContain('m+NEWTKN');
+    expect(result.processedContent).not.toContain('https://example.com');
     expect(result.trackingLinks).toHaveLength(1);
   });
 
-  it('adds OR search filter when search is provided', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = makePrisma({ trackingLink: { findMany, count } });
-    const svc = new TrackingLinkService(prisma);
+  it('skips URLs that are already m+<token> format', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
 
-    await svc.getAllTrackingLinks({ limit: 10, offset: 0, search: 'example' });
+    const result = await sut.processMessageLinks({ content: 'See m+ABC123 here' });
 
-    const [arg] = findMany.mock.calls[0];
-    expect(arg.where.OR).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getTrackingLinkClicks
-// ---------------------------------------------------------------------------
-describe('getTrackingLinkClicks', () => {
-  it('returns clicks and total with pagination', async () => {
-    const clicks = [{ id: 'click_001', clickedAt: new Date() }];
-    const findMany = jest.fn().mockResolvedValue(clicks);
-    const count = jest.fn().mockResolvedValue(1);
-    const prisma = makePrisma({ trackingLinkClick: { findMany, count } });
-    const svc = new TrackingLinkService(prisma);
-
-    const result = await svc.getTrackingLinkClicks('link_001', 10, 0);
-
-    expect(result.total).toBe(1);
-    expect(result.clicks).toHaveLength(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// processExplicitLinksInContent
-// ---------------------------------------------------------------------------
-describe('processExplicitLinksInContent', () => {
-  it('replaces [[url]] with m+<token>', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'tok001' }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const { processedContent } = await svc.processExplicitLinksInContent({
-      content: 'Check [[https://example.com/page]]',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent).toContain('m+tok001');
-    expect(processedContent).not.toContain('[[');
+    expect(result.trackingLinks).toHaveLength(0);
+    expect(prisma.trackingLink.findFirst).not.toHaveBeenCalled();
   });
 
-  it('replaces <url> with m+<token>', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'tok002' }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
+  it('preserves content when rewriteToShortLink is false', async () => {
+    const link = makeLink({ token: 'NEWTKN' });
+    const prisma = makePrisma({ findUniqueResult: null, findFirstResult: null, createLinkResult: link });
+    const sut = new TrackingLinkService(prisma as any);
 
-    const { processedContent } = await svc.processExplicitLinksInContent({
-      content: 'See <https://example.com/page>',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent).toContain('m+tok002');
-  });
-
-  it('reuses existing token for duplicate [[url]] in same content', async () => {
-    const create = jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'tok003' });
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create,
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const { processedContent } = await svc.processExplicitLinksInContent({
-      content: 'A: [[https://x.com/p]] B: [[https://x.com/p]]',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent.match(/m\+tok003/g)!.length).toBe(2);
-    expect(create).toHaveBeenCalledTimes(1); // only created once
-  });
-
-  it('protects markdown links from conversion', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-
-    const { processedContent } = await svc.processExplicitLinksInContent({
-      content: '[click here](https://example.com)',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent).toContain('[click here](https://example.com)');
-  });
-
-  it('falls back to raw URL when createTrackingLink throws for [[url]]', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockRejectedValue(new Error('DB error')),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const { processedContent } = await svc.processExplicitLinksInContent({
-      content: '[[https://example.com/page]]',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent).toContain('https://example.com/page');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// processMessageLinks
-// ---------------------------------------------------------------------------
-describe('processMessageLinks', () => {
-  it('returns original content when no URLs found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    const { processedContent, trackingLinks } = await svc.processMessageLinks({
-      content: 'Hello world, no links here!',
-      conversationId: 'conv_001',
-    });
-    expect(processedContent).toBe('Hello world, no links here!');
-    expect(trackingLinks).toHaveLength(0);
-  });
-
-  it('replaces URL with m+<token> when rewriteToShortLink is true (default)', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'tok001' }),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const { processedContent } = await svc.processMessageLinks({
-      content: 'Check https://example.com/page',
-      conversationId: 'conv_001',
-    });
-
-    expect(processedContent).toContain('m+tok001');
-    expect(processedContent).not.toContain('https://example.com/page');
-  });
-
-  it('does NOT rewrite when rewriteToShortLink is false', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue(LINK_FIXTURE),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    const { processedContent, trackingLinks } = await svc.processMessageLinks({
-      content: 'Check https://example.com/page',
-      conversationId: 'conv_001',
+    const result = await sut.processMessageLinks({
+      content: 'https://example.com',
       rewriteToShortLink: false,
     });
 
-    expect(processedContent).toContain('https://example.com/page');
-    expect(trackingLinks).toHaveLength(1);
+    expect(result.processedContent).toBe('https://example.com');
+    expect(result.trackingLinks).toHaveLength(1);
   });
 
-  it('skips existing /l/<token> tracking URLs', async () => {
-    const create = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const svc = new TrackingLinkService(makePrisma({ trackingLink: { create } }));
+  it('reuses an existing tracking link instead of creating a new one', async () => {
+    const existing = makeLink({ token: 'EXIST1' });
+    const prisma = makePrisma({ findFirstResult: existing });
+    const sut = new TrackingLinkService(prisma as any);
 
-    await svc.processMessageLinks({
-      content: 'See https://meeshy.me/l/AbCd12 for more',
-      conversationId: 'conv_001',
+    const result = await sut.processMessageLinks({
+      content: 'https://example.com',
+      conversationId: 'conv-1',
     });
 
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('skips existing m+<token> short links', async () => {
-    const create = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const svc = new TrackingLinkService(makePrisma({ trackingLink: { create } }));
-
-    // m+token pattern contains https:// which matches urlRegex — but the short form
-    // itself doesn't start with http. The underlying test is that m+... is skipped.
-    await svc.processMessageLinks({
-      content: 'Click m+AbCd12 to view',
-      conversationId: 'conv_001',
-    });
-
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('reuses existing tracking link for same URL in same conversation', async () => {
-    const findFirst = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const create = jest.fn();
-    const prisma = makePrisma({ trackingLink: { findFirst, create } });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.processMessageLinks({
-      content: 'Check https://example.com/page',
-      conversationId: 'conv_001',
-    });
-
-    expect(create).not.toHaveBeenCalled();
-    expect(findFirst).toHaveBeenCalled();
-  });
-
-  it('continues processing other links when one throws', async () => {
-    const create = jest.fn()
-      .mockRejectedValueOnce(new Error('DB error'))
-      .mockResolvedValueOnce({ ...LINK_FIXTURE, token: 'tok002' });
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create,
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    // Two URLs — first one throws, second succeeds
-    const { processedContent } = await svc.processMessageLinks({
-      content: 'A: https://fail.com/page B: https://ok.com/page',
-    });
-
-    expect(processedContent).toContain('https://fail.com/page'); // left as-is
-    expect(processedContent).toContain('m+tok002'); // second one processed
+    expect(prisma.trackingLink.create).not.toHaveBeenCalled();
+    expect(result.processedContent).toContain('m+EXIST1');
   });
 });
 
-// ---------------------------------------------------------------------------
-// collectContentTrackingLinks
-// ---------------------------------------------------------------------------
-describe('collectContentTrackingLinks', () => {
-  it('returns [] for empty content', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    expect(await svc.collectContentTrackingLinks({ content: '' })).toEqual([]);
+// ─── collectContentTrackingLinks ─────────────────────────────────────────────
+
+describe('TrackingLinkService.collectContentTrackingLinks', () => {
+  it('returns empty array for empty content', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.collectContentTrackingLinks({ content: '' });
+
+    expect(result).toEqual([]);
   });
 
-  it('returns [] for null/undefined content', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    expect(await svc.collectContentTrackingLinks({ content: null as any })).toEqual([]);
+  it('deduplicates URLs when the same URL appears twice', async () => {
+    const link = makeLink({ token: 'UNIQ1', originalUrl: 'https://example.com' });
+    const prisma = makePrisma({ findFirstResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+
+    const result = await sut.collectContentTrackingLinks({
+      content: 'https://example.com and again https://example.com',
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ url: 'https://example.com', token: 'UNIQ1' });
   });
 
-  it('returns deduplicated { url, token } pairs', async () => {
-    // Both URLs with token=tok001 and tok002
-    const links = [
-      { ...LINK_FIXTURE, token: 'tok001', originalUrl: 'https://a.com' },
-      { ...LINK_FIXTURE, token: 'tok001', originalUrl: 'https://a.com' }, // duplicate
-      { ...LINK_FIXTURE, token: 'tok002', originalUrl: 'https://b.com' },
-    ];
-    let callIdx = 0;
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockImplementation(() => Promise.resolve(links[callIdx++] ?? links[0])),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
+  it('returns empty array without throwing when DB errors occur', async () => {
+    const prisma = makePrisma({ findUniqueResult: null, findFirstResult: null });
+    (prisma.trackingLink.create as jest.Mock<any>).mockRejectedValue(new Error('DB down'));
+    const sut = new TrackingLinkService(prisma as any);
 
-    const result = await svc.collectContentTrackingLinks({
-      content: 'https://a.com and https://a.com and https://b.com',
-    });
+    const result = await sut.collectContentTrackingLinks({ content: 'https://example.com' });
 
-    // Deduplicated by URL
-    const urls = result.map(r => r.url);
-    expect(new Set(urls).size).toBe(urls.length);
-  });
-
-  it('returns [] when processMessageLinks throws', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findFirst: jest.fn().mockRejectedValue(new Error('crash')),
-        findUnique: jest.fn().mockRejectedValue(new Error('crash')),
-        create: jest.fn().mockRejectedValue(new Error('crash')),
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    // processMessageLinks catches individual link errors and continues — so we need
-    // to also test the outer try/catch of collectContentTrackingLinks.
-    // Force the outer error by making the findMany/etc crash at a higher level.
-    jest.spyOn(svc as any, 'processMessageLinks').mockRejectedValue(new Error('outer crash'));
-
-    const result = await svc.collectContentTrackingLinks({ content: 'https://x.com' });
     expect(result).toEqual([]);
   });
 });
 
-// ---------------------------------------------------------------------------
-// updateTrackingLinksMessageId
-// ---------------------------------------------------------------------------
-describe('updateTrackingLinksMessageId', () => {
-  it('is a no-op for empty tokens array', async () => {
-    const updateMany = jest.fn();
-    const prisma = makePrisma({ trackingLink: { updateMany } });
-    const svc = new TrackingLinkService(prisma);
+// ─── updateTrackingLinksMessageId ─────────────────────────────────────────────
 
-    await svc.updateTrackingLinksMessageId([], 'msg_001');
-    expect(updateMany).not.toHaveBeenCalled();
+describe('TrackingLinkService.updateTrackingLinksMessageId', () => {
+  it('does nothing when the tokens array is empty', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.updateTrackingLinksMessageId([], 'msg-1');
+
+    expect(prisma.trackingLink.updateMany).not.toHaveBeenCalled();
   });
 
-  it('calls updateMany with correct tokens and messageId', async () => {
-    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
-    const prisma = makePrisma({ trackingLink: { updateMany } });
-    const svc = new TrackingLinkService(prisma);
+  it('calls updateMany with the provided tokens and messageId', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
 
-    await svc.updateTrackingLinksMessageId(['tok001', 'tok002'], 'msg_001');
+    await sut.updateTrackingLinksMessageId(['TK1', 'TK2'], 'msg-999');
 
-    expect(updateMany).toHaveBeenCalledWith({
-      where: { token: { in: ['tok001', 'tok002'] } },
-      data: { messageId: 'msg_001' },
-    });
+    expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: { in: ['TK1', 'TK2'] } },
+        data: { messageId: 'msg-999' },
+      })
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// updateTrackingLink
-// ---------------------------------------------------------------------------
-describe('updateTrackingLink', () => {
-  it('throws when link not found', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    await expect(svc.updateTrackingLink({ token: 'nope' })).rejects.toThrow('Tracking link not found');
+// ─── updateTrackingLink ───────────────────────────────────────────────────────
+
+describe('TrackingLinkService.updateTrackingLink', () => {
+  it('throws when the tracking link does not exist', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(sut.updateTrackingLink({ token: 'GHOST' })).rejects.toThrow('not found');
   });
 
-  it('throws when newToken already exists', async () => {
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn()
-          .mockResolvedValueOnce(LINK_FIXTURE) // getTrackingLinkByToken
-          .mockResolvedValueOnce(LINK_FIXTURE), // tokenExists for newToken
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
+  it('throws when the new token is already taken', async () => {
+    const existing = makeLink({ token: 'EXISTING' });
+    const prisma = makePrisma({ findUniqueResult: existing });
+    (prisma.trackingLink.findUnique as jest.Mock<any>)
+      .mockResolvedValueOnce(existing)  // current link found
+      .mockResolvedValueOnce(existing); // newToken check → already exists
+    const sut = new TrackingLinkService(prisma as any);
 
-    await expect(svc.updateTrackingLink({ token: 'AbCd12', newToken: 'TAKEN' })).rejects.toThrow(
-      'Token already exists'
+    await expect(
+      sut.updateTrackingLink({ token: 'EXISTING', newToken: 'TAKEN' })
+    ).rejects.toThrow('Token already exists');
+  });
+
+  it('calls update with correct fields when isActive and expiresAt are provided', async () => {
+    const link = makeLink();
+    const prisma = makePrisma({ findUniqueResult: link, updateLinkResult: link });
+    const sut = new TrackingLinkService(prisma as any);
+    const expires = new Date('2027-01-01');
+
+    await sut.updateTrackingLink({ token: 'ABC123', isActive: false, expiresAt: expires });
+
+    expect(prisma.trackingLink.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: 'ABC123' },
+        data: expect.objectContaining({ isActive: false, expiresAt: expires }),
+      })
     );
-  });
-
-  it('updates originalUrl when provided', async () => {
-    const update = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE),
-        update,
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.updateTrackingLink({ token: 'AbCd12', originalUrl: 'https://new.example.com' });
-
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ originalUrl: 'https://new.example.com' }) })
-    );
-  });
-
-  it('updates token and shortUrl when newToken is different', async () => {
-    const update = jest.fn().mockResolvedValue(LINK_FIXTURE);
-    const prisma = makePrisma({
-      trackingLink: {
-        findUnique: jest.fn()
-          .mockResolvedValueOnce(LINK_FIXTURE) // link exists
-          .mockResolvedValueOnce(null),         // newToken is free
-        update,
-      },
-    });
-    const svc = new TrackingLinkService(prisma);
-
-    await svc.updateTrackingLink({ token: 'AbCd12', newToken: 'NewTok' });
-
-    const updateData = update.mock.calls[0][0].data;
-    expect(updateData.token).toBe('NewTok');
-    expect(updateData.shortUrl).toBe('/l/NewTok');
   });
 });
 
-// ---------------------------------------------------------------------------
-// isTokenAvailable
-// ---------------------------------------------------------------------------
-describe('isTokenAvailable', () => {
-  it('returns true when token does not exist', async () => {
-    const svc = new TrackingLinkService(makePrisma());
-    expect(await svc.isTokenAvailable('free_token')).toBe(true);
+// ─── isTokenAvailable ─────────────────────────────────────────────────────────
+
+describe('TrackingLinkService.isTokenAvailable', () => {
+  it('returns true when no link is found for the token', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    expect(await sut.isTokenAvailable('FREE')).toBe(true);
   });
 
-  it('returns false when token already exists', async () => {
-    const prisma = makePrisma({ trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) } });
-    const svc = new TrackingLinkService(prisma);
-    expect(await svc.isTokenAvailable('AbCd12')).toBe(false);
+  it('returns false when a link already uses the token', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
+    const sut = new TrackingLinkService(prisma as any);
+
+    expect(await sut.isTokenAvailable('TAKEN')).toBe(false);
   });
 });

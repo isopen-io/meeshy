@@ -375,6 +375,26 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
+    it('should reject reactions on soft-deleted messages', async () => {
+      // A soft-deleted message (deletedAt set) still exists in the DB, so the
+      // !message guard does not catch it. Reacting to it must be rejected —
+      // mirroring the deletedAt guard every sibling write path enforces (edit,
+      // delete). Without the guard, addReaction persists and the handler
+      // broadcasts REACTION_ADDED for a message clients already show as deleted.
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ deletedAt: new Date('2025-01-06T12:00:00Z') })
+      );
+
+      await expect(
+        service.addReaction({
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Cannot react to a deleted message');
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
+    });
+
     it('should allow adding same emoji again (returns existing)', async () => {
       const existingReaction = createMockReaction({ emoji: '👍' });
       mockPrisma.reaction.findFirst
@@ -898,6 +918,59 @@ describe('ReactionService', () => {
   });
 
   // ==============================================
+  // GET USER REACTIONS (across the user's participants) TESTS
+  // ==============================================
+
+  describe('getUserReactions', () => {
+    const testUserId = '507f1f77bcf86cd799439055';
+
+    it('resolves the user\'s participant rows, then filters reactions by those participant ids', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ participantId: testParticipantId, emoji: '👍' }),
+        createMockReaction({ participantId: testParticipantId2, emoji: '❤️' })
+      ]);
+
+      const result = await service.getUserReactions(testUserId);
+
+      expect(mockPrisma.participant.findMany).toHaveBeenCalledWith({
+        where: { userId: testUserId },
+        select: { id: true }
+      });
+      expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith({
+        where: { participantId: { in: [testParticipantId, testParticipantId2] } },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      });
+      expect(result.length).toBe(2);
+      expect(result.map(r => r.emoji)).toEqual(['👍', '❤️']);
+    });
+
+    it('returns an empty array without querying reactions when the user has no participants', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const result = await service.getUserReactions(testUserId);
+
+      expect(result).toEqual([]);
+      expect(mockPrisma.reaction.findMany).not.toHaveBeenCalled();
+    });
+
+    it('caps the result set at 100 for performance', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: testParticipantId }]);
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+
+      await service.getUserReactions(testUserId);
+
+      expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 100 })
+      );
+    });
+  });
+
+  // ==============================================
   // HAS USER REACTED TESTS
   // ==============================================
 
@@ -996,19 +1069,29 @@ describe('ReactionService', () => {
       ]);
     });
 
-    it('should create add event with aggregation', async () => {
+    // User.id du réacteur, volontairement DISTINCT de tout Participant.id ci-dessus
+    // pour prouver que l'event transporte bien le User.id (pas le participantId).
+    const reactorUserId = '507f1f77bcf86cd799439099';
+
+    it('should create add event with aggregation and reactor userId', async () => {
       const result = await service.createUpdateEvent(
         testMessageId,
         '👍',
         'add',
         testParticipantId,
-        'conv123'
+        'conv123',
+        reactorUserId
       );
 
       expect(result.messageId).toBe(testMessageId);
       expect(result.emoji).toBe('👍');
       expect(result.action).toBe('add');
       expect(result.participantId).toBe(testParticipantId);
+      // Le User.id du réacteur est propagé tel quel, distinct du participantId :
+      // c'est ce champ que les autres appareils du même utilisateur comparent pour
+      // reconnaître leur propre réaction (un Participant.id n'égale jamais un User.id).
+      expect(result.userId).toBe(reactorUserId);
+      expect(result.userId).not.toBe(result.participantId);
       expect(result.conversationId).toBe('conv123');
       expect(result.aggregation).toBeDefined();
       expect(result.timestamp).toBeInstanceOf(Date);
@@ -1022,11 +1105,13 @@ describe('ReactionService', () => {
         '👍',
         'remove',
         testParticipantId,
-        'conv123'
+        'conv123',
+        reactorUserId
       );
 
       expect(result.action).toBe('remove');
       expect(result.aggregation.count).toBe(0);
+      expect(result.userId).toBe(reactorUserId);
     });
 
     it('should create event for different participant', async () => {
@@ -1039,7 +1124,8 @@ describe('ReactionService', () => {
         '👍',
         'add',
         testParticipantId2,
-        'conv456'
+        'conv456',
+        reactorUserId
       );
 
       expect(result.participantId).toBe(testParticipantId2);

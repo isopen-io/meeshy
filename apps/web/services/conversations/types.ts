@@ -35,6 +35,13 @@ export interface GetConversationsOptions {
   type?: ConversationType;
   withUserId?: string;
   before?: string;
+  /**
+   * Delta-sync : ISO8601. Ne renvoie que les conversations dont `updatedAt` est
+   * postérieur — y compris celles passées `isActive: false` (à retirer côté
+   * client). Aucun tombstone pour les suppressions dures : voir
+   * `lib/conversations/delta-sync.ts`.
+   */
+  updatedSince?: string;
 }
 
 /**

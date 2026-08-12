@@ -14,17 +14,46 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
 
-/** A single slide projected for the viewer. Pure data. */
+/**
+ * A foreground media layer on a slide — a non-background [StoryMediaObject]
+ * (video or image) composited on top of the background. Position/scale are
+ * normalised canvas fractions (0..1), matching the wire model; keyframe
+ * animation, rotation and transitions are not applied in this projection.
+ */
+@Immutable
+data class StoryForegroundMediaView(
+    val url: String,
+    val isVideo: Boolean,
+    val x: Double,
+    val y: Double,
+    val scale: Double,
+    val aspectRatio: Double,
+)
+
+/**
+ * A single slide projected for the viewer. Pure data.
+ *
+ * Background media is EITHER [imageUrl] (static) OR [backgroundVideoUrl]
+ * (looping video) — never both; a video background never populates [imageUrl]
+ * so the viewer's `AsyncImage` branch (Coil, image-only) is never handed a
+ * video URL it cannot decode. [foregroundMedia] layers extra video/image
+ * objects on top; [backgroundAudioUrl]/[foregroundAudioUrl] are the resolved
+ * playback URLs for the slide's background and foreground/voice audio tracks.
+ */
 @Immutable
 data class StorySlideView(
     val id: String,
@@ -33,6 +62,20 @@ data class StorySlideView(
     val imageUrl: String?,
     val accentHex: String,
     val reactionCount: Int = 0,
+    val backgroundVideoUrl: String? = null,
+    val backgroundLoop: Boolean = true,
+    val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
+    val backgroundAudioUrl: String? = null,
+    val foregroundAudioUrl: String? = null,
+    val languageCode: String? = null,
+)
+
+/** One language chip of the story language bar. Pure data. */
+@Immutable
+data class StoryLanguageOption(
+    val code: String,
+    val flag: String,
+    val label: String,
 )
 
 /**
@@ -55,6 +98,8 @@ data class StoryViewerUiState(
     val currentStoryId: String? = null,
     val prefetchUrls: List<String> = emptyList(),
     val canAutoAdvance: Boolean = false,
+    val availableLanguages: List<StoryLanguageOption> = emptyList(),
+    val languageOverride: String? = null,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -67,6 +112,7 @@ class StoryViewerViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val reportRepository: ReportRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -76,6 +122,12 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
+
+    /** Raw items by slide id — needed to re-resolve text when the language override changes. */
+    private val rawItems = mutableMapOf<String, StoryItem>()
+
+    /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
+    private var languageOverride: Pair<String, String>? = null
 
     /**
      * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
@@ -186,6 +238,17 @@ class StoryViewerViewModel @Inject constructor(
         if (playback.currentSlide?.imageUrl == url) emit()
     }
 
+    /**
+     * Prisme « Exploration » : bascule la langue AFFICHÉE du slide courant.
+     * Re-tap sur la langue active = retour à la résolution automatique.
+     * L'override est éphémère — il meurt au changement de slide.
+     */
+    fun toggleLanguageOverride(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        languageOverride = if (languageOverride == storyId to code) null else storyId to code
+        emit()
+    }
+
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
@@ -228,10 +291,24 @@ class StoryViewerViewModel @Inject constructor(
         reactionStates[slide.id] ?: StoryReactionState(count = slide.reactionCount)
 
     private fun emit() {
+        val currentId = playback.currentSlide?.id
+        if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
+        val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
+        val slides = if (override == null) playback.slides else playback.slides.map { slideView ->
+            if (slideView.id != currentId) return@map slideView
+            val item = rawItems[slideView.id] ?: return@map slideView
+            val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+            val resolved = StoryContentResolver.resolve(item, prefs, override)
+            slideView.copy(
+                text = resolved.content,
+                isTranslated = resolved.isTranslated,
+                languageCode = resolved.languageCode,
+            )
+        }
         _state.value = StoryViewerUiState(
             authorName = playback.authorName,
-            slides = playback.slides,
+            slides = slides,
             index = playback.slideIndex,
             groupIndex = playback.groupIndex,
             isLoading = false,
@@ -239,10 +316,27 @@ class StoryViewerViewModel @Inject constructor(
             reactionCount = reaction.count,
             myReactions = reaction.mine,
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
-            currentStoryId = playback.currentSlide?.id,
+            currentStoryId = currentId,
             prefetchUrls = StoryPrefetchPlanner.plan(playback),
             canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
+            availableLanguages = availableLanguagesFor(currentId),
+            languageOverride = override,
         )
+    }
+
+    private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
+        val item = storyId?.let { rawItems[it] } ?: return emptyList()
+        return item.translations.orEmpty()
+            .filter { it.language.isNotBlank() && it.content.isNotBlank() }
+            .distinctBy { it.language.lowercase() }
+            .map { translation ->
+                val info = LanguageData.info(translation.language)
+                StoryLanguageOption(
+                    code = translation.language,
+                    flag = info?.flag ?: "🌐",
+                    label = info?.nativeName ?: translation.language,
+                )
+            }
     }
 
     private fun StoryGroup.toGroupSlides(): StoryGroupSlides {
@@ -258,19 +352,90 @@ class StoryViewerViewModel @Inject constructor(
         accentHex: String,
         prefs: LanguageResolver.ContentLanguagePreferences,
     ): StorySlideView {
+        rawItems[id] = this
         val resolved = StoryContentResolver.resolve(this, prefs)
-        val image = media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
-            ?: media.firstOrNull { it.thumbnailUrl != null }
-        val imageUrl = (image?.url ?: image?.thumbnailUrl)
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+        val background = resolveBackgroundMedia()
+        val foreground = storyEffects?.mediaObjects.orEmpty()
+            .filterNot { it.isBackground }
+            .mapNotNull { it.toForegroundMediaView() }
         return StorySlideView(
             id = id,
             text = resolved.content,
             isTranslated = resolved.isTranslated,
-            imageUrl = imageUrl,
+            imageUrl = background.imageUrl,
             accentHex = accentHex,
             reactionCount = reactionCount,
+            languageCode = resolved.languageCode,
+            backgroundVideoUrl = background.videoUrl,
+            backgroundLoop = background.loop,
+            foregroundMedia = foreground,
+            backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
+            foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
         )
+    }
+
+    private data class BackgroundMedia(val imageUrl: String?, val videoUrl: String?, val loop: Boolean)
+
+    /**
+     * Resolves the slide's single background layer. `storyEffects.mediaObjects`
+     * (the modern, RAW-publish wire shape) is authoritative when present: the
+     * object flagged `isBackground` carries its own `mediaURL` + kind, so no
+     * cross-referencing against the flat `media[]` list is needed. Legacy
+     * stories without `storyEffects.mediaObjects` fall back to the flat list,
+     * preferring a VIDEO item over an IMAGE one — critically, a video's own
+     * `.url` is only ever assigned to [BackgroundMedia.videoUrl], never to
+     * [BackgroundMedia.imageUrl] (the historical bug: Coil can't decode a video
+     * file as an image, so the slide painted nothing and no video ever played).
+     */
+    private fun StoryItem.resolveBackgroundMedia(): BackgroundMedia {
+        val backgroundObject = storyEffects?.mediaObjects?.firstOrNull { it.isBackground }
+        val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
+            ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
+
+        val isVideo = backgroundObject?.mediaType == "video" ||
+            (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
+        val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
+            ?.let { resolveMediaUrl(it, config.socketUrl) }
+
+        if (isVideo) {
+            return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
+        }
+        val imageUrl = resolvedUrl
+            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
+    }
+
+    private fun StoryMediaObject.toForegroundMediaView(): StoryForegroundMediaView? {
+        val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
+        return StoryForegroundMediaView(
+            url = url,
+            isVideo = mediaType == "video",
+            x = x,
+            y = y,
+            scale = scale,
+            aspectRatio = aspectRatio,
+        )
+    }
+
+    /**
+     * Resolves the URL of the slide's background (voice/library/effects track)
+     * or foreground (non-background) audio, per [preferBackground].
+     * `storyEffects.audioPlayerObjects` only carry a `postMediaId`, so the
+     * playable URL is cross-referenced from the flat `media[]` list by id. When
+     * no `audioPlayerObjects` exist at all, the background slot falls back to
+     * the story's direct `audioUrl` (voice attachment) then its library
+     * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
+     */
+    private fun StoryItem.resolveAudioUrl(preferBackground: Boolean): String? {
+        val match = storyEffects?.audioPlayerObjects.orEmpty()
+            .firstOrNull { (it.isBackground == true) == preferBackground }
+        val fromObject = match?.postMediaId
+            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
+            ?.let { resolveMediaUrl(it, config.socketUrl) }
+        if (fromObject != null) return fromObject
+        if (!preferBackground) return null
+        return audioUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.socketUrl) }
     }
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
@@ -281,5 +446,27 @@ class StoryViewerViewModel @Inject constructor(
 
     companion object {
         const val USER_ID_ARG: String = "userId"
+    }
+
+    /**
+     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur
+     * [StoryViewerUiState.isOwnStory]) puis avance ou ferme : rester sur un slide
+     * supprime rejouerait un fantome.
+     */
+    fun deleteCurrentStory(onEmpty: () -> Unit) {
+        val storyId = _state.value.currentStoryId ?: return
+        viewModelScope.launch {
+            if (storyRepository.delete(storyId) is NetworkResult.Success) {
+                if (_state.value.hasNext) advance() else onEmpty()
+            }
+        }
+    }
+
+    /** Signale la story courante — best effort, meme semantique que le report de post. */
+    fun reportCurrentStory(reason: ReportReason) {
+        val storyId = _state.value.currentStoryId ?: return
+        viewModelScope.launch {
+            reportRepository.reportStory(storyId, reason, details = null)
+        }
     }
 }

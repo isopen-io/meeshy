@@ -1,191 +1,219 @@
 /**
- * ThumbHashGenerator — unit tests
- *
- * Covers: generate() routing by mimeType, image/video hash generation,
- * error handling (returns null), and the PDF/unknown passthrough.
+ * Unit tests for ThumbHashGenerator.
+ * Covers: generate() with image, video, non-visual mime types,
+ * correct sharp pipeline options, and error → null fallback.
  *
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-// ─── Mocks (hoisted) ─────────────────────────────────────────────────────────
+// ─── Module mocks ─────────────────────────────────────────────────────────────
 
-const mockRaw = jest.fn<any>();
-const mockToBuffer = jest.fn<any>();
-const mockEnsureAlpha = jest.fn<any>().mockReturnThis();
-const mockResize = jest.fn<any>().mockReturnThis();
-
-const sharpInstance = {
-  resize: mockResize,
-  ensureAlpha: mockEnsureAlpha,
-  raw: jest.fn<any>().mockReturnThis(),
-  toBuffer: mockToBuffer,
-};
-mockResize.mockReturnValue(sharpInstance);
-mockEnsureAlpha.mockReturnValue(sharpInstance);
-sharpInstance.raw.mockReturnValue(sharpInstance);
-
-const mockSharp = jest.fn<any>().mockReturnValue(sharpInstance);
-
-jest.mock('sharp', () => mockSharp);
-
-const mockRgbaToThumbHash = jest.fn<any>().mockReturnValue(new Uint8Array([1, 2, 3, 4]));
 jest.mock('thumbhash', () => ({
-  rgbaToThumbHash: mockRgbaToThumbHash,
+  rgbaToThumbHash: jest.fn<any>().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
 }));
 
-// ffmpeg mock — fluent-ffmpeg builder pattern
-const mockPipe = jest.fn<any>();
-const mockOutputOptions = jest.fn<any>().mockReturnThis();
-const mockOutputFormat = jest.fn<any>().mockReturnThis();
-const mockFrames = jest.fn<any>().mockReturnThis();
-const mockSeekInput = jest.fn<any>().mockReturnThis();
-const mockOn = jest.fn<any>().mockReturnThis();
-
-const ffmpegInstance = {
-  seekInput: mockSeekInput,
-  frames: mockFrames,
-  outputFormat: mockOutputFormat,
-  outputOptions: mockOutputOptions,
-  on: mockOn,
-  pipe: mockPipe,
+// We declare the chain outside so we can inspect calls per test.
+let sharpChain: {
+  resize: jest.Mock<any>;
+  ensureAlpha: jest.Mock<any>;
+  raw: jest.Mock<any>;
+  toBuffer: jest.Mock<any>;
 };
 
-const mockFfmpeg = jest.fn<any>().mockReturnValue(ffmpegInstance);
-jest.mock('fluent-ffmpeg', () => mockFfmpeg);
+jest.mock('sharp', () => {
+  sharpChain = {
+    resize: jest.fn<any>().mockReturnThis(),
+    ensureAlpha: jest.fn<any>().mockReturnThis(),
+    raw: jest.fn<any>().mockReturnThis(),
+    toBuffer: jest.fn<any>().mockResolvedValue({
+      data: Buffer.from([0, 0, 0, 255]),
+      info: { width: 1, height: 1, channels: 4 },
+    }),
+  };
+  return jest.fn<any>().mockReturnValue(sharpChain);
+});
 
-jest.mock('../../../utils/logger', () => ({
-  __esModule: true,
-  default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+// ffmpeg mock: when .pipe(stream) is called it synchronously writes fake
+// PNG data and ends the stream so extractVideoFrame resolves.
+let ffmpegChain: {
+  seekInput: jest.Mock<any>;
+  frames: jest.Mock<any>;
+  outputFormat: jest.Mock<any>;
+  outputOptions: jest.Mock<any>;
+  on: jest.Mock<any>;
+  pipe: jest.Mock<any>;
+};
+let capturedErrorHandler: (() => void) | undefined;
+
+jest.mock('fluent-ffmpeg', () => {
+  ffmpegChain = {
+    seekInput: jest.fn<any>().mockReturnThis(),
+    frames: jest.fn<any>().mockReturnThis(),
+    outputFormat: jest.fn<any>().mockReturnThis(),
+    outputOptions: jest.fn<any>().mockReturnThis(),
+    on: jest.fn<any>().mockImplementation(function (event: string, fn: () => void) {
+      if (event === 'error') capturedErrorHandler = fn;
+      return ffmpegChain;
+    }),
+    pipe: jest.fn<any>().mockImplementation((stream: any) => {
+      process.nextTick(() => {
+        stream.write(Buffer.from('FAKEPNGFRAME'));
+        stream.end();
+      });
+      return stream;
+    }),
+  };
+  return jest.fn<any>().mockReturnValue(ffmpegChain);
+});
 
 import { ThumbHashGenerator } from '../../../services/attachments/ThumbHashGenerator';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeImageBuffer() {
-  return {
-    data: Buffer.alloc(100 * 100 * 4, 128),
-    info: { width: 100, height: 100 },
-  };
+function resetSharpChain() {
+  sharpChain.resize.mockClear();
+  sharpChain.ensureAlpha.mockClear();
+  sharpChain.raw.mockClear();
+  sharpChain.toBuffer.mockClear().mockResolvedValue({
+    data: Buffer.from([0, 0, 0, 255]),
+    info: { width: 1, height: 1, channels: 4 },
+  });
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockSharp.mockReturnValue(sharpInstance);
-  mockResize.mockReturnValue(sharpInstance);
-  mockEnsureAlpha.mockReturnValue(sharpInstance);
-  sharpInstance.raw.mockReturnValue(sharpInstance);
-  mockToBuffer.mockResolvedValue(makeImageBuffer());
-  mockRgbaToThumbHash.mockReturnValue(new Uint8Array([1, 2, 3, 4]));
+  resetSharpChain();
+  capturedErrorHandler = undefined;
+  ffmpegChain.seekInput.mockClear();
+  ffmpegChain.frames.mockClear();
+  ffmpegChain.outputFormat.mockClear();
+  ffmpegChain.outputOptions.mockClear();
+  ffmpegChain.on.mockClear();
+  ffmpegChain.pipe.mockClear();
 });
 
-describe('ThumbHashGenerator.generate — routing', () => {
-  it('returns null for non-visual mime types (PDF)', async () => {
-    const result = await ThumbHashGenerator.generate('/tmp/doc.pdf', 'application/pdf');
-    expect(result).toBeNull();
-  });
+// ─── generate() ───────────────────────────────────────────────────────────────
 
-  it('returns null for text mime types', async () => {
-    const result = await ThumbHashGenerator.generate('/tmp/file.txt', 'text/plain');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when sharp throws (image)', async () => {
-    mockSharp.mockImplementationOnce(() => { throw new Error('unsupported format'); });
-
-    const result = await ThumbHashGenerator.generate('/tmp/bad.jpg', 'image/jpeg');
-    expect(result).toBeNull();
-  });
-});
-
-describe('ThumbHashGenerator.generate — image', () => {
-  it('calls sharp with the file path for image/* mime types', async () => {
-    await ThumbHashGenerator.generate('/tmp/photo.jpg', 'image/jpeg');
-
-    expect(mockSharp).toHaveBeenCalledWith('/tmp/photo.jpg', expect.objectContaining({ animated: false }));
-  });
-
-  it('resizes to max 100×100', async () => {
-    await ThumbHashGenerator.generate('/tmp/photo.jpg', 'image/jpeg');
-
-    expect(mockResize).toHaveBeenCalledWith(100, 100, expect.objectContaining({ fit: 'inside' }));
-  });
-
-  it('returns base64-encoded thumbhash string', async () => {
-    const hashBytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-    mockRgbaToThumbHash.mockReturnValueOnce(hashBytes);
-
-    const result = await ThumbHashGenerator.generate('/tmp/photo.png', 'image/png');
+describe('ThumbHashGenerator.generate', () => {
+  it('returns a base64 string for an image mime type', async () => {
+    const result = await ThumbHashGenerator.generate('/tmp/photo.jpg', 'image/jpeg');
 
     expect(typeof result).toBe('string');
-    expect(result).toBe(Buffer.from(hashBytes).toString('base64'));
+    expect(result!.length).toBeGreaterThan(0);
+    // base64 of [1,2,3,4] is "AQIDBA=="
+    expect(result).toBe(Buffer.from([1, 2, 3, 4]).toString('base64'));
   });
 
-  it('handles WebP mime type the same as JPEG', async () => {
-    const result = await ThumbHashGenerator.generate('/tmp/image.webp', 'image/webp');
-    expect(result).not.toBeNull();
-    expect(mockSharp).toHaveBeenCalledTimes(1);
+  it('returns a base64 string for a video mime type', async () => {
+    const result = await ThumbHashGenerator.generate('/tmp/clip.mp4', 'video/mp4');
+
+    expect(typeof result).toBe('string');
+    expect(result!.length).toBeGreaterThan(0);
   });
-});
 
-describe('ThumbHashGenerator.generate — video (mocked ffmpeg)', () => {
-  it('returns null and does not throw when ffmpeg pipe triggers error handler', async () => {
-    // Simulate ffmpeg calling the 'error' handler, which tries a fallback
-    // that itself errors — the outer try/catch in generate() returns null
-    mockPipe.mockImplementationOnce(() => {
-      throw new Error('ffmpeg not available');
-    });
+  it('returns null for a non-visual mime type (audio)', async () => {
+    const result = await ThumbHashGenerator.generate('/tmp/audio.mp3', 'audio/mpeg');
 
-    const result = await ThumbHashGenerator.generate('/tmp/video.mp4', 'video/mp4');
     expect(result).toBeNull();
   });
 
-  it('successfully generates thumbhash from video (happy path)', async () => {
-    // When pipe is called, emit data + end on the stream so extractVideoFrame resolves
-    mockPipe.mockImplementationOnce((stream: any) => {
-      process.nextTick(() => {
-        stream.emit('data', Buffer.from([0xde, 0xad, 0xbe, 0xef]));
-        stream.emit('end');
-      });
+  it('returns null for a non-visual mime type (PDF)', async () => {
+    const result = await ThumbHashGenerator.generate('/tmp/doc.pdf', 'application/pdf');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when sharp throws (error caught gracefully)', async () => {
+    sharpChain.toBuffer.mockRejectedValue(new Error('sharp failure'));
+
+    const result = await ThumbHashGenerator.generate('/tmp/bad.jpg', 'image/png');
+
+    expect(result).toBeNull();
+  });
+});
+
+// ─── Image pipeline options ───────────────────────────────────────────────────
+
+describe('image pipeline', () => {
+  it('resizes to 100×100 with fit:inside', async () => {
+    await ThumbHashGenerator.generate('/tmp/photo.png', 'image/png');
+
+    expect(sharpChain.resize).toHaveBeenCalledWith(100, 100, { fit: 'inside' });
+  });
+
+  it('calls ensureAlpha() to guarantee RGBA output', async () => {
+    await ThumbHashGenerator.generate('/tmp/photo.webp', 'image/webp');
+
+    expect(sharpChain.ensureAlpha).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls raw() to get raw pixel data', async () => {
+    await ThumbHashGenerator.generate('/tmp/photo.gif', 'image/gif');
+
+    expect(sharpChain.raw).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Video pipeline options ───────────────────────────────────────────────────
+
+describe('video pipeline', () => {
+  it('seeks to 0.5s to skip black intro frames', async () => {
+    await ThumbHashGenerator.generate('/tmp/video.mp4', 'video/mp4');
+
+    expect(ffmpegChain.seekInput).toHaveBeenCalledWith(0.5);
+  });
+
+  it('extracts exactly 1 frame', async () => {
+    await ThumbHashGenerator.generate('/tmp/video.webm', 'video/webm');
+
+    expect(ffmpegChain.frames).toHaveBeenCalledWith(1);
+  });
+
+  it('outputs in image2pipe format with PNG codec', async () => {
+    await ThumbHashGenerator.generate('/tmp/video.mov', 'video/quicktime');
+
+    expect(ffmpegChain.outputFormat).toHaveBeenCalledWith('image2pipe');
+    expect(ffmpegChain.outputOptions).toHaveBeenCalledWith('-vcodec', 'png');
+  });
+
+  it('passes the extracted frame buffer through the sharp pipeline', async () => {
+    const sharp = require('sharp');
+    await ThumbHashGenerator.generate('/tmp/video.mp4', 'video/mp4');
+
+    // The second sharp() call receives a Buffer (the extracted frame),
+    // not a file path.
+    const calls: any[] = sharp.mock.calls;
+    const videoCall = calls.find((c: any[]) => Buffer.isBuffer(c[0]));
+    expect(videoCall).toBeDefined();
+  });
+
+  it('falls back to seekInput(0) when the primary seek fails', async () => {
+    // Arrange: first .pipe() triggers the error handler instead of writing data.
+    let pipeCallCount = 0;
+    ffmpegChain.pipe.mockImplementation((stream: any) => {
+      pipeCallCount += 1;
+      if (pipeCallCount === 1) {
+        // Simulate ffmpeg error on the first attempt.
+        process.nextTick(() => {
+          if (capturedErrorHandler) capturedErrorHandler();
+        });
+      } else {
+        // Fallback attempt writes the data normally.
+        process.nextTick(() => {
+          stream.write(Buffer.from('FALLBACKFRAME'));
+          stream.end();
+        });
+      }
       return stream;
     });
 
-    const result = await ThumbHashGenerator.generate('/tmp/clip.mp4', 'video/mp4');
+    const result = await ThumbHashGenerator.generate('/tmp/bad-seek.mp4', 'video/mp4');
 
+    // The fallback seek-0 call should have been made.
+    const seekCalls = ffmpegChain.seekInput.mock.calls.map((c: any[]) => c[0]);
+    expect(seekCalls).toContain(0);
+    // Should still resolve to a base64 hash.
     expect(typeof result).toBe('string');
-    expect(result).not.toBeNull();
-  });
-
-  it('falls back to frame 0 when seekInput(0.5) fails', async () => {
-    // First pipe invocation: trigger the registered 'error' handler
-    mockPipe.mockImplementationOnce((_stream: any) => {
-      // The error handler was registered via .on('error', ...) before .pipe()
-      const errorCall = (mockOn as jest.Mock<any>).mock.calls.find(
-        ([event]: [string]) => event === 'error',
-      );
-      if (errorCall) {
-        const handler = errorCall[1] as () => void;
-        // Before calling the handler, set up the SECOND pipe mock (fallback)
-        mockPipe.mockImplementationOnce((fallbackStream: any) => {
-          process.nextTick(() => {
-            fallbackStream.emit('data', Buffer.from([1, 2, 3, 4]));
-            fallbackStream.emit('end');
-          });
-          return fallbackStream;
-        });
-        handler();
-      }
-    });
-
-    const result = await ThumbHashGenerator.generate('/tmp/clip.mp4', 'video/mp4');
-
-    expect(typeof result).toBe('string');
-    expect(result).not.toBeNull();
-    // Two ffmpeg instances created: once for 0.5s, once for 0s fallback
-    expect(mockFfmpeg).toHaveBeenCalledTimes(2);
   });
 });

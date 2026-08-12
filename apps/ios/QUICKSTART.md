@@ -74,7 +74,7 @@ apps/ios/
 | `SocketIO`         | Real-time messaging               |
 | `WebRTC`           | Voice/video calls (P2P)          |
 | `Kingfisher`       | Image caching                     |
-| `WhisperKit`       | On-device speech recognition      |
+| Apple `Speech`     | On-device speech recognition (SFSpeechRecognizer) |
 
 ## Common Commands
 

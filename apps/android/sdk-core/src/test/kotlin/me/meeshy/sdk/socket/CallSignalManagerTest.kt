@@ -6,10 +6,15 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityReport
 import me.meeshy.sdk.model.call.ConnectionQuality
 import org.json.JSONObject
@@ -20,8 +25,12 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class CallSignalManagerTest {
 
-    private fun managerWithHandlers(): Pair<Pair<CallSignalManager, SocketManager>, Map<String, (Array<Any>) -> Unit>> {
+    private fun managerWithHandlers(
+        connectionState: MutableStateFlow<SocketConnectionState> =
+            MutableStateFlow(SocketConnectionState.CONNECTED),
+    ): Pair<Pair<CallSignalManager, SocketManager>, Map<String, (Array<Any>) -> Unit>> {
         val socket: SocketManager = mockk(relaxed = true)
+        every { socket.connectionState } returns connectionState
         val handlers = mutableMapOf<String, (Array<Any>) -> Unit>()
         every { socket.on(any(), any()) } answers {
             handlers[firstArg()] = secondArg()
@@ -138,6 +147,31 @@ class CallSignalManagerTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:media-toggled", """{"callId":"c1","mediaType":"audio","enabled":false}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a media-toggled frame republishes the decoded toggle on mediaToggles`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.mediaToggles.test {
+            deliver(
+                handlers,
+                "call:media-toggled",
+                """{"callId":"c1","participantId":"p2","mediaType":"audio","enabled":false}""",
+            )
+            assertThat(awaitItem()).isEqualTo(
+                CallMediaTogglePayload(callId = "c1", participantId = "p2", mediaType = "audio", enabled = false),
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed media-toggled frame emits nothing on mediaToggles`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.mediaToggles.test {
+            deliver(handlers, "call:media-toggled", """{"callId":"c1","mediaType":"audio"}""")
             expectNoEvents()
         }
     }
@@ -263,6 +297,91 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitEnd without a reason omits the field entirely`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitEnd("call-9")
+        verify { socket.emit("call:end", capture(payload)) }
+        assertThat(payload.captured.has("reason")).isFalse()
+    }
+
+    @Test
+    fun `emitEnd carries an explicit rejected reason on the wire`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitEnd("call-9", reason = "rejected")
+        verify { socket.emit("call:end", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("reason")).isEqualTo("rejected")
+    }
+
+    @Test
+    fun `emitBackgrounded sends callId and the self participant id`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitBackgrounded("call-9", participantId = "me")
+        verify { socket.emit("call:backgrounded", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+    }
+
+    @Test
+    fun `emitForegrounded sends callId and the self participant id`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitForegrounded("call-9", participantId = "me")
+        verify { socket.emit("call:foregrounded", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+    }
+
+    @Test
+    fun `emitAnalytics wraps the pure fields map and keys it by callId`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitAnalytics(
+            "call-9",
+            mapOf(
+                "platform" to "android",
+                "durationSeconds" to 42L,
+                "qualityDistribution" to mapOf("excellent" to 1.0, "good" to 0.0, "fair" to 0.0, "poor" to 0.0),
+                "effectsUsed" to emptyList<String>(),
+            ),
+        )
+        verify { socket.emit("call:analytics", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("platform")).isEqualTo("android")
+        assertThat(payload.captured.getLong("durationSeconds")).isEqualTo(42L)
+        assertThat(payload.captured.getJSONObject("qualityDistribution").getDouble("excellent")).isEqualTo(1.0)
+        assertThat(payload.captured.getJSONArray("effectsUsed").length()).isEqualTo(0)
+    }
+
+    @Test
+    fun `emitCheckActive asks the gateway to replay any in-progress ring`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        manager.emitCheckActive()
+        verify { socket.emit("call:check-active", any<JSONObject>()) }
+    }
+
+    @Test
+    fun `emitScreenCaptureDetected sends callId, self participant id and capture flag`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitScreenCaptureDetected("call-9", participantId = "me", isCapturing = true)
+        verify { socket.emit("call:screen-capture-detected", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+        assertThat(payload.captured.getBoolean("isCapturing")).isTrue()
+    }
+
+    @Test
     fun `emitToggleAudio sends callId and enabled flag`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket
@@ -335,6 +454,55 @@ class CallSignalManagerTest {
         }
         val result = manager.emitInitiate("conv-1", isVideo = true)
         assertThat(result).isEqualTo(CallInitiateResult.ServerError("Room full"))
+    }
+
+    // --- Décroché à froid : attente bornée de la connexion avant initiate/join ---
+    // (un emit sur un _socket encore null est JETÉ en silence — l'ACK ne vient
+    // jamais et l'appel décroché depuis la notification full-screen mourait)
+
+    @Test
+    fun `a join placed before the socket connects waits for CONNECTED then joins`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTING)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+        every { socket.emit("call:join", any(), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(
+                arrayOf(JSONObject("""{"success":true,"data":{"iceServers":[]}}""")),
+            )
+        }
+
+        val pending = async { manager.emitJoinAwaitingAck("call-9") }
+        runCurrent()
+        verify(exactly = 0) { socket.emit("call:join", any(), any()) }
+
+        state.value = SocketConnectionState.CONNECTED
+
+        assertThat(pending.await()).isInstanceOf(CallJoinResult.Success::class.java)
+        verify(exactly = 1) { socket.emit("call:join", any(), any()) }
+    }
+
+    @Test
+    fun `a join whose socket never connects fails fast without burning the ack budget`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTING)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+
+        val result = manager.emitJoinAwaitingAck("call-9")
+
+        assertThat(result).isEqualTo(CallJoinResult.Failure("socket not connected"))
+        verify(exactly = 0) { socket.emit("call:join", any(), any()) }
+    }
+
+    @Test
+    fun `an initiate whose socket never connects times out fast without emitting`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.DISCONNECTED)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+
+        val result = manager.emitInitiate("conv-1", isVideo = false)
+
+        assertThat(result).isEqualTo(CallInitiateResult.Timeout)
+        verify(exactly = 0) { socket.emit("call:initiate", any(), any()) }
     }
 
     @Test
@@ -462,5 +630,86 @@ class CallSignalManagerTest {
         verify { socket.emit("call:reconnected", capture(payload)) }
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
+    }
+
+    // --- Inbound: group/UX side-channels ride their own flows, inert to the FSM ---
+
+    @Test
+    fun `a participant-left frame republishes the leaver on participantLeft`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.participantLeft.test {
+            deliver(handlers, "call:participant-left", """{"callId":"c1","participantId":"p2","userId":"u2","mode":"p2p"}""")
+            val left = awaitItem()
+            assertThat(left.callId).isEqualTo("c1")
+            assertThat(left.userId).isEqualTo("u2")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a participant-left frame emits nothing on the FSM events flow`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.events.test {
+            deliver(handlers, "call:participant-left", """{"callId":"c1","participantId":"p2"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a quality-alert frame republishes the flagged metric on qualityAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.qualityAlerts.test {
+            deliver(handlers, "call:quality-alert", """{"callId":"c1","participantId":"p2","metric":"rtt","value":900,"threshold":500}""")
+            val alert = awaitItem()
+            assertThat(alert.callId).isEqualTo("c1")
+            assertThat(alert.metric).isEqualTo("rtt")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed quality-alert frame emits nothing on qualityAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.qualityAlerts.test {
+            deliver(handlers, "call:quality-alert", """{"metric":"rtt"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a screen-capture-alert frame republishes the capture flag on screenCaptureAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.screenCaptureAlerts.test {
+            deliver(handlers, "call:screen-capture-alert", """{"callId":"c1","participantId":"p2","isCapturing":true}""")
+            val alert = awaitItem()
+            assertThat(alert.callId).isEqualTo("c1")
+            assertThat(alert.isCapturing).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a translated-segment frame republishes the caption on translatedSegments`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.translatedSegments.test {
+            deliver(
+                handlers,
+                "call:translated-segment",
+                """{"callId":"c1","segment":{"text":"bonjour","translatedText":"hello","speakerId":"u2","isFinal":true}}""",
+            )
+            val caption = awaitItem()
+            assertThat(caption.callId).isEqualTo("c1")
+            assertThat(caption.segment.translatedText).isEqualTo("hello")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a translated-segment frame emits nothing on the FSM events flow`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.events.test {
+            deliver(handlers, "call:translated-segment", """{"callId":"c1","segment":{"text":"bonjour"}}""")
+            expectNoEvents()
+        }
     }
 }

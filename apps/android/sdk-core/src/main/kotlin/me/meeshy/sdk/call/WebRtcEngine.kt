@@ -169,6 +169,16 @@ class WebRtcEngine @Inject constructor(
         peerConnection?.addIceCandidate(candidate)
     }
 
+    /**
+     * Marks the connection for an ICE restart: the next [createOffer] carries
+     * fresh ufrag/pwd so the pair re-gathers candidates over the CURRENT network
+     * (WiFi→LTE handoff, router reboot). Pure building block — WHEN to restart
+     * (stall detection, who re-offers) is the app-side coordinator's policy.
+     */
+    fun restartIce() {
+        peerConnection?.restartIce()
+    }
+
     fun close() {
         runCatching { videoCapturer?.stopCapture() }
         videoCapturer?.dispose()

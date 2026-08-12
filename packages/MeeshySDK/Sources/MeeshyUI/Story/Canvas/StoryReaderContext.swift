@@ -14,20 +14,42 @@ public struct StoryReaderContext: Sendable {
     public let onCompletion: (@Sendable () -> Void)?
     public let postMediaURLResolver: (@Sendable (String) -> URL?)?
     public let imageCache: ImageCacheReader?
+    /// Résolveur d'URL audio LOCALE keyé par `audio.id` (et non `postMediaId`).
+    /// Le composer/preview stockent leurs clips fraîchement importés dans
+    /// `loadedAudioURLs[audio.id]` avec un `postMediaId` vide — le resolver
+    /// `postMediaURLResolver` (par `postMediaId`) échoue alors et le son restait
+    /// muet. Consommé en priorité par `reconfigureAudioForPlayback`. Directive
+    /// user 2026-07-14 : « la preview doit jouer le son en arrière-plan ».
+    public let localAudioURLResolver: (@Sendable (String) -> URL?)?
 
     public init(preferredLanguages: [String] = [],
                 mute: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 postMediaURLResolver: (@Sendable (String) -> URL?)? = nil,
-                imageCache: ImageCacheReader? = nil) {
+                imageCache: ImageCacheReader? = nil,
+                localAudioURLResolver: (@Sendable (String) -> URL?)? = nil) {
         self.preferredLanguages = preferredLanguages
         self.mute = mute
         self.onCompletion = onCompletion
         self.postMediaURLResolver = postMediaURLResolver
         self.imageCache = imageCache
+        self.localAudioURLResolver = localAudioURLResolver
     }
 
     public static let empty = StoryReaderContext()
+
+    /// Copie avec une nouvelle chaine de langues, tous les autres réglages
+    /// conservés. L'exploration de langue en cours de lecture ne dispose que de
+    /// la chaine : reconstruire un contexte complet lui imposerait de recréer
+    /// les resolvers média posés à la construction du canvas.
+    public func withPreferredLanguages(_ languages: [String]) -> StoryReaderContext {
+        StoryReaderContext(preferredLanguages: languages,
+                           mute: mute,
+                           onCompletion: onCompletion,
+                           postMediaURLResolver: postMediaURLResolver,
+                           imageCache: imageCache,
+                           localAudioURLResolver: localAudioURLResolver)
+    }
 }
 
 /// Lightweight protocol decoupling the reader from the concrete cache type.

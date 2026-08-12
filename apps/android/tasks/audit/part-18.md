@@ -471,7 +471,7 @@ Scope: 23 SwiftUI files from `packages/MeeshySDK/Sources/MeeshyUI/`. These are r
 - [ ] Floating scroll-to-bottom control with rich unread/typing/offline/search states
 - [ ] Anonymous join-via-share-link flow (preview → form → success)
 - [ ] Share-link preview (conversation info, stats, requirements, expiry)
-- [ ] Live location sharing badge + duration picker
+- [x] Live location sharing badge + duration picker (`chat-live-location-sessions` 2026-07-16 — `:sdk-ui` `LiveLocationBadge` + `LiveLocationDurationPicker`)
 - [ ] Location message bubble + fullscreen map (open in Maps / directions)
 - [ ] Audio message player (waveform, speed control, seek)
 - [ ] Inline audio transcription with tap-to-seek + multi-language audio switching

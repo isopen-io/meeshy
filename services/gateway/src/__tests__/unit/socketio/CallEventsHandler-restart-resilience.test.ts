@@ -31,6 +31,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     joinCall: mockJoinCall,
     generateIceServers: mockGenerateIceServers,
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
@@ -90,6 +91,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallEndReason } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -316,10 +318,15 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
 
+      // Grace expiry with no re-join is a genuine involuntary disconnect, never
+      // a deliberate call:leave/call:end — endReasonHint distinguishes it so
+      // the resulting endReason is `connectionLost`, not `completed` (the web
+      // retry-on-failure toast only fires for failed/connectionLost).
       expect(mockLeaveCall).toHaveBeenCalledWith({
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
+        endReasonHint: CallEndReason.connectionLost,
       });
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
       expect(ended).toHaveLength(1);
@@ -530,6 +537,7 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
+        endReasonHint: CallEndReason.connectionLost,
       });
     });
 

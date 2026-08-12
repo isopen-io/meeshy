@@ -47,10 +47,6 @@ final class RouterTests: XCTestCase {
         XCTAssertFalse(Route.conversation(makeConversation()).isHub)
     }
 
-    func test_isHub_editProfile_returnsFalse() {
-        XCTAssertFalse(Route.editProfile.isHub)
-    }
-
     func test_isHub_communityDetail_returnsFalse() {
         XCTAssertFalse(Route.communityDetail("123").isHub)
     }
@@ -123,6 +119,24 @@ final class RouterTests: XCTestCase {
         XCTAssertFalse(router.isDeepRoute)
     }
 
+    // MARK: - Router.replaceStack — atomic stack replacement (#16)
+
+    func test_replaceStack_iPhone_collapsesToSingleRouteInOneMutation() {
+        let router = Router()   // no onRouteRequested → iPhone NavigationStack path
+        router.push(.settings)
+        router.push(.notifications)
+        router.replaceStack(with: .profile)
+        XCTAssertEqual(router.path, [.profile],
+                       "replaceStack must set the whole stack to one route (no popToRoot + delayed push)")
+    }
+
+    func test_replaceStack_iPad_forwardsViaCallback_withoutMutatingPath() {
+        let router = Router()
+        router.onRouteRequested = { _ in true }   // iPad two-column intercept
+        router.replaceStack(with: .links)
+        XCTAssertTrue(router.path.isEmpty, "iPad forwards via the callback, never the NavigationStack path")
+    }
+
     func test_isHubRoute_afterPushProfile_returnsTrue() {
         let router = Router()
         router.push(.profile)
@@ -143,7 +157,7 @@ final class RouterTests: XCTestCase {
 
     func test_isDeepRoute_afterPushEditProfile_returnsTrue() {
         let router = Router()
-        router.push(.editProfile)
+        router.push(.userStats)
         XCTAssertTrue(router.isDeepRoute)
     }
 
@@ -158,7 +172,7 @@ final class RouterTests: XCTestCase {
     func test_pop_removesLastRoute() {
         let router = Router()
         router.push(.profile)
-        router.push(.editProfile)
+        router.push(.userStats)
         XCTAssertEqual(router.path.count, 2)
         router.pop()
         XCTAssertEqual(router.path.count, 1)
@@ -174,7 +188,7 @@ final class RouterTests: XCTestCase {
     func test_popToRoot_clearsAllRoutes() {
         let router = Router()
         router.push(.profile)
-        router.push(.editProfile)
+        router.push(.userStats)
         router.popToRoot()
         XCTAssertTrue(router.path.isEmpty)
         XCTAssertTrue(router.isHubRoute)
@@ -200,7 +214,7 @@ final class RouterTests: XCTestCase {
         let router = Router()
         router.push(.profile)
         XCTAssertTrue(router.isHubRoute)
-        router.push(.editProfile)
+        router.push(.userStats)
         XCTAssertTrue(router.isDeepRoute)
         router.pop()
         XCTAssertTrue(router.isHubRoute)
@@ -373,13 +387,6 @@ final class RouterTests: XCTestCase {
         XCTAssertEqual(router.currentRoute, .friendRequests)
     }
 
-    func test_push_editProfile_addsToPath() {
-        let router = Router()
-        router.push(.editProfile)
-        XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .editProfile)
-    }
-
     // MARK: - Pop from each route
 
     func test_pop_fromConversation_returnsToEmpty() {
@@ -403,7 +410,7 @@ final class RouterTests: XCTestCase {
     func test_popToRoot_fromDeepChain_clearsAll() {
         let router = Router()
         router.push(.profile)
-        router.push(.editProfile)
+        router.push(.userStats)
         router.push(.bookmarks)
         XCTAssertEqual(router.path.count, 3)
         router.popToRoot()
@@ -424,7 +431,7 @@ final class RouterTests: XCTestCase {
     func test_push_hubRoute_alreadyInStack_popsToExisting() {
         let router = Router()
         router.push(.profile)
-        router.push(.editProfile)
+        router.push(.userStats)
         router.push(.bookmarks)
         XCTAssertEqual(router.path.count, 3)
         router.push(.profile)

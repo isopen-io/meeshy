@@ -61,6 +61,21 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
+    /// Volume courant de la couche, dans `0...StoryVolume.maxGain`.
+    ///
+    /// Initialisé depuis `media.volume` au `configure`, puis réécrit à chaque
+    /// tick par l'automation du canvas (`applyVolumeAutomation`). C'est cette
+    /// propriété — et non `media?.volume` — que `attachPlayer` stampe : relire
+    /// le modèle à l'attache écraserait l'automation en cours, exactement
+    /// comme le `1.0` codé en dur le faisait sur la couche de fond.
+    @MainActor
+    public var volume: Float = 1.0 {
+        didSet {
+            guard oldValue != volume else { return }
+            avPlayer?.volume = volume
+        }
+    }
+
     /// Drapeau de lecture levé par le canvas (`StoryCanvasUIView`) en mode
     /// `.play` pour autoriser le démarrage de la vidéo foreground — EXACT
     /// pendant du `StoryBackgroundLayer.isPlaybackActive`. Sans ce gate,
@@ -146,6 +161,14 @@ public final class StoryMediaLayer: CALayer {
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
     private nonisolated(unsafe) var placeholderLayer: CALayer?
 
+    /// URL actuellement attachée au player. Garde d'idempotence
+    /// d'`attachPlayer` : reconfigurer la layer avec la MÊME URL (cache `.edit`
+    /// qui réutilise la layer sur un changement de géométrie, rebuild du
+    /// canvas composer) ne doit PAS `replaceCurrentItem` ni re-seek — la
+    /// lecture en cours continue sans coupure (impératif user 2026-07-11 :
+    /// manipuler un élément ne fait pas sauter les vidéos qui jouent).
+    private nonisolated(unsafe) var attachedURL: URL?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -194,8 +217,14 @@ public final class StoryMediaLayer: CALayer {
                           geometry: CanvasGeometry,
                           mode: RenderMode,
                           resolver: (@Sendable (String) -> URL?)? = nil,
-                          imageCache: ImageCacheReader? = nil) {
+                          imageCache: ImageCacheReader? = nil,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.media = media
+        // Niveau de BASE repris du modèle. L'automation du canvas réécrira
+        // `volume` au tick suivant si la slide en porte une ; sans cette ligne,
+        // une couche fraîchement configurée jouerait à 1.0 et ignorerait le
+        // réglage de l'auteur.
+        volume = media.volume
         // Un layer fraîchement configuré démarre visible : la disparition d'une
         // vidéo foreground terminée (`.play`) est posée par l'observer de fin,
         // pas héritée d'un état masqué d'une précédente configuration.
@@ -218,7 +247,7 @@ public final class StoryMediaLayer: CALayer {
         anchorPoint = media.anchor
         transform = CATransform3DMakeRotation(CGFloat(media.rotation) * .pi / 180, 0, 0, 1)
         zPosition = CGFloat(media.zIndex)
-        contentsScale = UIScreen.main.scale
+        contentsScale = renderScale
         name = media.id
 
         // Coins arrondis du média (image ET vidéo). `masksToBounds` clippe le
@@ -240,7 +269,23 @@ public final class StoryMediaLayer: CALayer {
         // Videos cannot be rasterized (their AVPlayerLayer keeps changing).
         let staticImage = media.kind == .image && media.isStatic
         shouldRasterize = mode == .play && staticImage
-        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+        if shouldRasterize { rasterizationScale = renderScale }
+    }
+
+    /// Poses a decoded video frame as this layer's `contents` for the MP4 export
+    /// path. A foreground video renders live through an `AVPlayerLayer` sublayer
+    /// that `CALayer.render(in:)` does NOT capture, and a `thumbHash` placeholder
+    /// sublayer would occlude the frame — so we strip the live sublayers and pose
+    /// the frame as the layer's own contents (which `render(in:)` captures).
+    /// `resizeAspectFill` mirrors the player's `videoGravity`. Idempotent: after
+    /// the first call no sublayers remain to remove.
+    @MainActor
+    public func applyExportFrame(_ image: CGImage?) {
+        sublayers?.forEach { $0.removeFromSuperlayer() }
+        avPlayerLayer = nil
+        avPlayer?.pause()
+        contents = image
+        contentsGravity = .resizeAspectFill
     }
 
     // MARK: - Sizing
@@ -302,17 +347,33 @@ public final class StoryMediaLayer: CALayer {
     ///  1. `resolver(media.postMediaId)` — preloaded composer-preview asset,
     ///     then the published `StoryItem.media` remote URL.
     ///  2. Fallback `media.mediaURL` — fixtures and the `file://` URL the
-    ///     composer edition embeds directly on the object.
+    ///     composer edition embeds directly on the object. A `file://` here is
+    ///     the AUTHOR's local edition asset: on another viewer's device it points
+    ///     into the author's sandbox and never exists. Honouring it would feed a
+    ///     dead path to the loader (silent blank foreground, or a video player
+    ///     wired to nothing) — the exact "foreground missing on another user's
+    ///     story" symptom. So a file URL is only used when it resolves on THIS
+    ///     device; otherwise the media is treated as unresolved and the reader's
+    ///     content-readiness failsafe takes over.
     @MainActor
     private func resolvedMediaURL(for media: StoryMediaObject,
                                   resolver: (@Sendable (String) -> URL?)?) -> URL? {
         if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
             return resolved
         }
-        if let urlString = media.mediaURL, let url = URL(string: urlString) {
-            return url
+        guard let urlString = media.mediaURL, let url = URL(string: urlString) else {
+            return nil
         }
-        return nil
+        // The file-existence guard applies ONLY in the READER (a resolver is
+        // always provided there). A `file://` that survives a resolver miss is
+        // the AUTHOR's local edition path — dead on another viewer's device — so
+        // we honour it only when it resolves on THIS device. In the COMPOSER /
+        // edit (resolver == nil) the file:// IS the intended local asset (and
+        // fixtures use placeholder paths), so it is used as-is.
+        if resolver != nil, url.isFileURL {
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        return url
     }
 
     // MARK: - Image path
@@ -438,8 +499,16 @@ public final class StoryMediaLayer: CALayer {
             return
         }
 
-        // Cache miss → ThumbHash placeholder pendant le fetch async.
-        applyThumbHashPlaceholder(media.thumbHash)
+        // Cache miss → ThumbHash placeholder pendant le fetch async — SAUF si
+        // ce player joue déjà cette URL distante (reconfiguration in-place du
+        // cache `.edit` sur changement de géométrie) : re-poser le placeholder
+        // recouvrirait la vidéo en cours de lecture, et `attachPlayer`
+        // (idempotent) ne le fadera jamais.
+        let isReconfiguringAttachedURL = attachedURL == remoteURL
+            && avPlayerLayer?.player?.currentItem != nil
+        if !isReconfiguringAttachedURL {
+            applyThumbHashPlaceholder(media.thumbHash)
+        }
 
         // Annule le load précédent : un layer recyclé pour un autre média
         // ne doit pas stamp l'ancienne URL une fois résolue.
@@ -491,6 +560,21 @@ public final class StoryMediaLayer: CALayer {
     /// la spec § 2.2 (A.1).
     @MainActor
     private func attachPlayer(url: URL, mode: RenderMode, loop: Bool) {
+        // Idempotence à URL constante : un player vivant qui joue déjà CETTE
+        // URL est laissé strictement intact — pas de `replaceCurrentItem`
+        // (la lecture repartirait de zéro), pas de seek, pas de ré-armement
+        // du loop observer. On re-stampe seulement mute/volume, seuls états
+        // susceptibles d'avoir changé entre deux configure d'un même média.
+        if attachedURL == url, let existing = avPlayerLayer?.player, existing.currentItem != nil {
+            existing.isMuted = isMuted
+            // `volume` de la couche, jamais `media?.volume` : le modèle porte
+            // le niveau de BASE, la couche porte le niveau COURANT (base +
+            // automation + ducking).
+            existing.volume = volume
+            return
+        }
+        attachedURL = url
+
         let item = AVPlayerItem(url: url)
         // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
         // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
@@ -517,18 +601,15 @@ public final class StoryMediaLayer: CALayer {
         // l'attach et le prochain `forEachMediaLayer { $0.isMuted = ... }`.
         player.isMuted = isMuted
 
-        // Volume explicite : l'AVPlayer démarre par défaut à 1.0 mais on le
-        // force ici en defensive — certains paths (live composer, cache LRU)
-        // re-attachent un player existant via `replaceCurrentItem`, et si le
-        // volume avait été baissé à 0 ailleurs, on hérite du silence sans le
-        // savoir. Le modèle `StoryMediaObject` porte un champ `volume` à
-        // 1.0 par défaut ; on le respecte mais on le ré-applique à chaque
-        // attach pour garantir le state determinist.
-        if let mediaVolume = media?.volume {
-            player.volume = mediaVolume
-        } else {
-            player.volume = 1.0
-        }
+        // Volume explicite : certains paths (live composer, cache LRU)
+        // re-attachent un player existant via `replaceCurrentItem`, et sans
+        // ré-application on hériterait d'un niveau posé ailleurs.
+        //
+        // On stampe la propriété `volume` de la COUCHE, pas `media?.volume` :
+        // le modèle ne porte que le niveau de base, tandis que la couche porte
+        // le niveau courant (base + automation + ducking). Relire le modèle ici
+        // annulerait l'automation à chaque ré-attache.
+        player.volume = volume
 
         // Defensive : s'assurer que l'`AVAudioSession` est en `.playback` avant
         // de lancer le player. La session est normalement déjà activée par
@@ -632,6 +713,21 @@ public final class StoryMediaLayer: CALayer {
     public func startAlignedIfActive() {
         guard isPlaybackActive else { return }
         alignToTimelineThenPlay()
+    }
+
+    /// Scrub de preview timeline : pause puis cale le player sur le playhead
+    /// unifié (`max(0, slidePlayheadSeconds − startTime)`) avec une tolérance
+    /// large — un seek frame-accurate à la cadence du scrub gèle sur la
+    /// décompression GOP. Le seek fire à chaque appel (pas de seuil de
+    /// dérive) : en pause, la frame affichée DOIT suivre le doigt.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
     }
 
     @MainActor
@@ -738,6 +834,7 @@ public final class StoryMediaLayer: CALayer {
         }
         avPlayerLayer?.player = nil
         avPlayer = nil
+        attachedURL = nil
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
     }

@@ -58,6 +58,12 @@ struct ConversationContextMenuView: View {
 
     @State private var panel: Panel = .root
 
+    // Dynamic Type : hauteur de row et colonne d'icône scalées avec la taille
+    // de texte préférée — même convention que `MessageActionsMenu` et que les
+    // rows des menus contextuels système.
+    @ScaledMetric(relativeTo: .body) private var rowMinHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var iconColumnWidth: CGFloat = 24
+
     private var accent: Color { Color(hex: accentHex) }
 
     private static let favoriteEmojis = ["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"]
@@ -175,10 +181,10 @@ struct ConversationContextMenuView: View {
                     } label: {
                         Text(emoji)
                             .font(MeeshyFont.relative(22))
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: rowMinHeight)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MenuRowHighlightButtonStyle())
                     .accessibilityLabel(emoji)
                     .accessibilityAddTraits(.isButton)
                 }
@@ -294,7 +300,7 @@ struct ConversationContextMenuView: View {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(17, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .frame(width: 24)
+                    .frame(width: iconColumnWidth)
                 Text(label)
                     .font(MeeshyFont.relative(16))
                     .multilineTextAlignment(.leading)
@@ -304,17 +310,17 @@ struct ConversationContextMenuView: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 if showsChevron {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .opacity(0.4)
                 }
             }
             .foregroundStyle(tint)
             .padding(.horizontal, 16)
-            .frame(minHeight: 44)
+            .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MenuRowHighlightButtonStyle())
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isButton)
     }
@@ -324,20 +330,20 @@ struct ConversationContextMenuView: View {
             navigate(to: .root)
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
-                    .frame(width: 24)
+                    .frame(width: iconColumnWidth)
                 Text(title)
                     .font(MeeshyFont.relative(16, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(accent)
             .padding(.horizontal, 16)
-            .frame(minHeight: 44)
+            .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MenuRowHighlightButtonStyle())
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
     }
@@ -348,5 +354,23 @@ struct ConversationContextMenuView: View {
 
     private var divider: some View {
         Divider().overlay(accent.opacity(0.12))
+    }
+}
+
+// MARK: - Row Highlight (parité menus système)
+
+/// Highlight de la row sous le doigt — les menus contextuels système (UIMenu,
+/// Liquid Glass iOS 26 compris) surlignent la ligne pressée ; `.plain` ne
+/// donnait aucun feedback. `Color.primary` suit automatiquement dark/light,
+/// comme le highlight natif.
+///
+/// Type **interne partagé** (2026-07-14) : le menu d'appui long des MESSAGES
+/// (`MessageActionsMenu`) l'applique aussi pour aligner sa liste d'actions sur
+/// le design système par version d'iOS — même parité UIMenu / Liquid Glass que
+/// le menu des lignes de conversation. Un seul style, deux consommateurs.
+struct MenuRowHighlightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
     }
 }

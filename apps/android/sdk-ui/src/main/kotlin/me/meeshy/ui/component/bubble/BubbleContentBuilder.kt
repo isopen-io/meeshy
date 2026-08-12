@@ -5,8 +5,14 @@ import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffectRenderPlanner
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
+import me.meeshy.sdk.model.SendLifecycle
+import me.meeshy.sdk.model.SendLifecycleResolver
 
 public object BubbleContentBuilder {
 
@@ -22,6 +28,8 @@ public object BubbleContentBuilder {
         activeLanguageCode: String? = null,
         mediaBaseUrl: String? = null,
         recipientCount: Int = 0,
+        showReadReceipts: Boolean = true,
+        isOffline: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -41,19 +49,29 @@ public object BubbleContentBuilder {
         val isShowingOriginal = isTranslated && activeIsOriginal
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
-            isFailed -> DeliveryStatus.Failed
-            isPending -> DeliveryStatus.Pending
             else -> when (
-                DeliveryStatusResolver.resolve(
-                    deliveredCount = message.deliveredCount,
-                    readCount = message.readCount,
-                    recipientCount = recipientCount,
-                    readByAllAt = message.readByAllAt,
+                SendLifecycleResolver.resolve(
+                    isPending = isPending,
+                    isFailed = isFailed,
+                    isOffline = isOffline,
                 )
             ) {
-                DeliveryTier.Read -> DeliveryStatus.Read
-                DeliveryTier.Delivered -> DeliveryStatus.Delivered
-                DeliveryTier.Sent -> DeliveryStatus.Sent
+                SendLifecycle.Failed -> DeliveryStatus.Failed
+                SendLifecycle.QueuedOffline -> DeliveryStatus.QueuedOffline
+                SendLifecycle.InFlight -> DeliveryStatus.Pending
+                SendLifecycle.Settled -> when (
+                    DeliveryStatusResolver.resolve(
+                        deliveredCount = message.deliveredCount,
+                        readCount = message.readCount,
+                        recipientCount = recipientCount,
+                        readByAllAt = message.readByAllAt,
+                        showReadReceipts = showReadReceipts,
+                    )
+                ) {
+                    DeliveryTier.Read -> DeliveryStatus.Read
+                    DeliveryTier.Delivered -> DeliveryStatus.Delivered
+                    DeliveryTier.Sent -> DeliveryStatus.Sent
+                }
             }
         }
         val reactions = message.reactionSummary
@@ -174,8 +192,39 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
+            blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
+            // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when
+            // deleted (a tombstone never glows). The played-appearance gate is resolved
+            // later at render time by `MessageEffectRenderPlanner.plan`.
+            effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
+            // View-once burned tombstone inputs — mirror iOS gating burned on
+            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
+            // takes precedence (its own path), so zero these out when deleted.
+            isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
+            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+        )
+    }
+
+    /**
+     * Derives the "tap to reveal" conceal spec from a message's resolved
+     * [MessageEffects] — parity with iOS gating `BubbleBlurRevealController` on
+     * `effects.isBlurred || effects.isViewOnce`. Returns null (no conceal) when
+     * neither lifecycle bit is set; a deleted tombstone never conceals. The
+     * visibility window uses the message's `blurRevealDuration` param when present,
+     * falling back to the shared default (iOS `effects.blurRevealDuration ??`).
+     */
+    private fun buildBlurReveal(effects: MessageEffects): BubbleBlurRevealSpec? {
+        val isBlurred = effects.has(MessageEffectFlags.BLURRED)
+        val isViewOnce = effects.has(MessageEffectFlags.VIEW_ONCE)
+        if (!isBlurred && !isViewOnce) return null
+        return BubbleBlurRevealSpec(
+            isViewOnce = isViewOnce,
+            visibilitySeconds = effects.blurRevealDuration
+                ?: BlurRevealLifecycle.defaultRevealDurationSeconds,
         )
     }
 
@@ -231,17 +280,22 @@ public object BubbleContentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
     ): BubbleAudio {
-        val durationSeconds = attachment.duration
-            ?: attachment.transcription?.durationMs?.let { it / 1000 }
         val resolved = resolveTranscription(attachment, preferences)
+        val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+        val playableUrl = translatedAudio?.url ?: attachment.fileUrl
+        val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
+            ?: attachment.duration
+            ?: attachment.transcription?.durationMs?.let { it / 1000 }
         return BubbleAudio(
             attachmentId = attachment.id,
-            url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            url = playableUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
             durationSeconds = durationSeconds,
             sizeBytes = attachment.fileSize,
             transcriptionText = resolved?.text,
             transcriptionLanguage = resolved?.language,
             isTranscriptionTranslated = resolved?.isTranslated == true,
+            isAudioTranslated = translatedAudio != null,
+            audioLanguage = translatedAudio?.language ?: resolved?.language,
         )
     }
 
@@ -250,6 +304,41 @@ public object BubbleContentBuilder {
         val language: String?,
         val isTranslated: Boolean,
     )
+
+    private data class ResolvedAudio(
+        val url: String,
+        val language: String,
+        val durationMs: Int?,
+    )
+
+    /**
+     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
+     * of the viewer's preferred languages (in priority order). When the highest-priority
+     * preferred language is the attachment's original transcription language the original
+     * voice wins (returns null) — never an arbitrary translation. Returns null when no
+     * preferred-language translation carries a playable audio url, in which case the
+     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
+     * played voice and the surfaced transcription line resolve to the same language.
+     */
+    private fun resolveTranslatedAudio(
+        attachment: ApiMessageAttachment,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+    ): ResolvedAudio? {
+        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
+        val translations = attachment.translations.orEmpty()
+
+        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
+                return null
+            }
+            val translated = translations.entries
+                .firstOrNull { it.key.equals(language, ignoreCase = true) }
+                ?.value
+            val url = translated?.url?.trim()?.ifBlank { null }
+            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
+        }
+        return null
+    }
 
     /**
      * Prisme rule 1: prefer a translation targeting one of the viewer's preferred

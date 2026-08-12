@@ -26,6 +26,19 @@
 
 ### Task 1: Phase 0 — Local mic tap spike (device-gated go/no-go)
 
+**Spike result (2026-07-10, iPhone "Services CEO i16pm" — iPhone 16 Pro Max, plus iPhone 16 Pro Simulator):** PASS —
+no audible degradation on either end of a real 1:1 call across two physical devices (confirmed "nickel" both
+directions by the user), zero crashes on device or simulator after fixing a SIGTRAP caused by implicit
+MainActor isolation on the AVAudioEngine tap closure (root-caused and fixed with an explicit `@Sendable`-typed
+local + `nonisolated` logger — see `CallTranscriptionService.swift` history). Buffer-level confirmation (`[SPIKE]`
+log lines showing non-zero `frameLength`) was not captured — remote sysdiagnose collection failed (device
+needs to be unlocked to confirm on-device, not scriptable via `devicectl`) — and the user explicitly accepted
+PASS without it, given the `AVAudioEngine.start()` success log fires unconditionally before any buffer-delivery
+failure and two independent live-call tests already confirm zero audio-path impact. Interruption/route-change
+behavior (Step 4.8-4.9) was not explicitly exercised — deferred to the Task 7 final QA pass, not re-blocking here.
+
+**Only continue to Task 2 onward given this PASS.**
+
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift` (temporary `#if DEBUG` addition, absorbed/removed by Task 3)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/CallView.swift:1306-1348` (temporary long-press gesture on the existing transcript overlay area, removed by Task 5)
@@ -35,7 +48,7 @@
 
 This task has no automated test — it is a hardware experiment. Follow the steps exactly and record the outcome.
 
-- [ ] **Step 1: Add the debug-only tap toggle to `CallTranscriptionService`**
+- [x] **Step 1: Add the debug-only tap toggle to `CallTranscriptionService`**
 
 Open `apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift` and append at the end of the file (after the closing `}` of the `CallTranscriptionService` class):
 
@@ -60,12 +73,22 @@ extension CallTranscriptionService {
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+        // Explicit @Sendable-typed local breaks the implicit MainActor
+        // isolation this project's SWIFT_DEFAULT_ACTOR_ISOLATION infers onto
+        // closure literals written inline inside a @MainActor method.
+        // AVAudioEngine invokes tap blocks off-MainActor (its own real-time
+        // queue) — an inferred-MainActor closure traps at runtime (SIGTRAP,
+        // swift_task_isCurrentExecutorImpl) the first time AVAudioEngine
+        // calls it. DO NOT pass a bare trailing closure to installTap here —
+        // it crashed on first execution during this exact spike (found
+        // 2026-07-10, crash report Meeshy-2026-07-10-173828.ips).
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             Self.spikeBufferCount += 1
             if Self.spikeBufferCount % 50 == 0 {
                 callsLogger.info("[SPIKE] buffers=\(Self.spikeBufferCount) frameLength=\(buffer.frameLength) sampleRate=\(format.sampleRate)")
             }
         }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         do {
             engine.prepare()
             try engine.start()
@@ -91,23 +114,44 @@ extension CallTranscriptionService {
 
 `callsLogger` is the file-private `Logger` already declared at the top of `CallTranscriptionService.swift` — no import changes needed (`AVFoundation` is already imported for `AVAudioPCMBuffer`).
 
-- [ ] **Step 2: Add a temporary trigger gesture in `CallView`**
+- [x] **Step 2: Add a temporary, always-visible trigger button in `CallView`**
 
-In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, locate the `transcriptOverlay` computed property (starts at line 1306, `private var transcriptOverlay: some View {`). Add a debug-only long-press gesture on the returned `VStack`, immediately before the existing `.padding(12)` modifier (currently line 1328):
+Do NOT attach the gesture to `transcriptOverlay` — that panel's `VStack` is built by `ForEach(transcriptionService.displayedSegments)`, which is always empty during this spike (it never produces segments, only console logs), so the panel collapses to a near-zero hit area and a gesture placed on it is effectively untappable (confirmed during execution: "aucun bouton ne s'affiche" — the panel really was invisible, not a device issue). Add a fixed, unconditionally-visible debug button instead. In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `body`'s outer `ZStack`, locate `transcriptOverlay` (currently around line 718-719) and add right after it:
 
 ```swift
-        .padding(12)
+            // Transcript overlay
+            transcriptOverlay
+
 #if DEBUG
-        .onLongPressGesture(minimumDuration: 1.5) {
-            callManager.transcriptionService.debugSpikeToggleLocalCapture()
-        }
+            // SPIKE (Task 1) — fixed, always-visible debug affordance.
+            // Reverted in Step 6 along with the rest of the spike scaffolding.
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Circle()
+                        .fill(Color.red.opacity(0.85))
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            Image(systemName: "mic.badge.plus")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+                        .onTapGesture {
+                            callManager.transcriptionService.debugSpikeToggleLocalCapture()
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 220)
+                }
+            }
 #endif
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
+
+            // §7.2 — draggable, corner-snapping PiP showing the secondary
 ```
 
-Since `showTranscript` already defaults to `false` and the overlay only renders visibly when `showTranscript == true`, temporarily flip the default to `true` for the spike so the panel (and its long-press target) is reachable without the real toggle button (which doesn't exist yet — that's Task 5). In the same file, locate `@State private var showTranscript = false` (line 38) and change it to `@State private var showTranscript = true` for the duration of this spike only. Revert this line back to `false` in Step 6 below.
+No `showTranscript` default change needed — this button doesn't depend on it. Use a plain tap, not a long-press: automated long-press gestures (`idb`/simulator HID synthesis) are unreliable — SwiftUI's `.onLongPressGesture` cancels on the slightest synthetic-touch jitter during the hold, which reads as "nothing happens" and is easy to misdiagnose as an app bug (confirmed during execution — repeated long-press attempts produced no `[SPIKE]` log and no crash, i.e. silently missed, until switched to `.onTapGesture`). A plain tap is just as good for this throwaway diagnostic.
 
-- [ ] **Step 3: Build and install on a real device**
+- [x] **Step 3: Build and install on a real device**
 
 ```bash
 ./apps/ios/meeshy.sh build
@@ -116,21 +160,21 @@ Since `showTranscript` already defaults to `false` and the overlay only renders 
 
 A real device is required (not the simulator) — CallKit's `provider:didActivate:audioSession` timing and the shared `AVAudioSession` have no reliable simulator parity, and this is exactly the interaction under test.
 
-- [ ] **Step 4: Run the manual verification protocol**
+- [x] **Step 4: Run the manual verification protocol**
 
 Perform an actual 1:1 audio call between two real devices (or one real device + one other participant), and on the device under test:
 
 1. Let the call connect and reach the `connected` state (CallKit `didActivate` has fired).
-2. Long-press anywhere in the (now-visible) transcript overlay area for 1.5s to start the spike tap.
+2. Tap the fixed red debug button (bottom-right) to start the spike tap.
 3. Speak continuously for at least 30 seconds.
 4. On the OTHER participant's device, listen: is the outgoing audio they hear from you unchanged (no dropouts, no volume change, no artifacts)?
 5. On the device under test, listen to the incoming remote audio: unchanged?
 6. Open Console.app (connected to the device) or `xcrun devicectl device console` and confirm `[SPIKE]` log lines appear at a steady rate (roughly one every ~1-2s at 1024-sample buffers / typical 48kHz-or-44.1kHz mic rate) with a non-zero `frameLength`.
-7. Long-press again to stop the tap. Confirm the call audio is unaffected before and after stopping.
+7. Tap again to stop the tap. Confirm the call audio is unaffected before and after stopping.
 8. Trigger an audio interruption (e.g. a Siri request, or another app briefly grabbing the mic) while the tap is running — confirm the call does not drop and does not crash.
 9. Toggle speaker/earpiece route while the tap is running — confirm no crash, and re-run step 4-5.
 
-- [ ] **Step 5: Record the go/no-go decision**
+- [x] **Step 5: Record the go/no-go decision**
 
 Edit this plan file (`docs/superpowers/plans/2026-07-10-live-call-transcription.md`) and insert directly below the `### Task 1` heading a line:
 
@@ -146,7 +190,7 @@ or, if any check in Step 4 fails:
 
 **Only continue to Task 2 if the result is PASS.**
 
-- [ ] **Step 6: Revert the temporary spike scaffolding**
+- [x] **Step 6: Revert the temporary spike scaffolding**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -156,7 +200,7 @@ git checkout -- apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.
 
 This discards the `#if DEBUG` scaffolding and the `showTranscript` default flip — Task 3 and Task 5 rebuild the real (non-debug, correctly gated) versions from a clean base. Do not commit the spike scaffolding.
 
-- [ ] **Step 7: Commit the plan file's recorded decision only**
+- [x] **Step 7: Commit the plan file's recorded decision only**
 
 ```bash
 git add docs/superpowers/plans/2026-07-10-live-call-transcription.md
@@ -176,7 +220,7 @@ git commit -m "docs(ios/calls): record Phase 0 spike result for live call captio
 **Interfaces:**
 - Produces: `CallTranscriptionSegmentPayload` (Sendable struct, outbound), `CallTranslatedSegmentData` (Decodable & Sendable, inbound), `MessageSocketProviding.emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)`, `MessageSocketProviding.callTranslatedSegmentReceived: PassthroughSubject<CallTranslatedSegmentData, Never>`. Task 3 and Task 4 consume these exact names/types.
 
-- [ ] **Step 1: Write the failing decode test**
+- [x] **Step 1: Write the failing decode test**
 
 Open `packages/MeeshySDK/Tests/MeeshySDKTests/Sockets/MessageSocketEventTests.swift` and add, right after the `testMessagePinnedEventDecoding_tolerantWithoutOptionalFields` test (mirrors the existing plain-decode style used throughout this file):
 
@@ -238,7 +282,7 @@ Open `packages/MeeshySDK/Tests/MeeshySDKTests/Sockets/MessageSocketEventTests.sw
     }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -248,7 +292,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: FAIL — `cannot find type 'CallTranslatedSegmentData' in scope`.
 
-- [ ] **Step 3: Add the wire models**
+- [x] **Step 3: Add the wire models**
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`, locate the `CallForcedLeaveData` struct (the last struct in the "Call signaling" model block, ends with a closing `}` right before the `// MARK: - Connection State` — actually before the concrete class declaration; verify by searching for `public struct CallForcedLeaveData`). Insert immediately after it:
 
@@ -299,7 +343,7 @@ public struct CallTranslatedSegmentData: Decodable, Sendable {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
@@ -308,7 +352,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: PASS.
 
-- [ ] **Step 5: Add the protocol requirements + default shim**
+- [x] **Step 5: Add the protocol requirements + default shim**
 
 In the same file, in `public protocol MessageSocketProviding: Sendable { ... }`, add next to the other `var callXxx: PassthroughSubject<...>` declarations (after `var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }`):
 
@@ -330,7 +374,7 @@ In `public extension MessageSocketProviding { ... }` (the default-shim block), a
 
 This default no-op keeps every existing conformer (both mocks, plus any other future conformer) compiling without modification — Task 2 Step 7 upgrades the two mocks to track calls, but they are not *required* to.
 
-- [ ] **Step 6: Implement the concrete class**
+- [x] **Step 6: Implement the concrete class**
 
 In `public final class MessageSocketManager`, add the publisher next to the other call publishers (after `public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()`):
 
@@ -373,7 +417,7 @@ Add the concrete emit implementation next to `emitCallHeartbeat` (fire-and-forge
     }
 ```
 
-- [ ] **Step 7: Update both `MockMessageSocket` conformers**
+- [x] **Step 7: Update both `MockMessageSocket` conformers**
 
 In `apps/ios/MeeshyTests/Mocks/MockMessageSocket.swift`, add next to `let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()`:
 
@@ -399,7 +443,7 @@ And add the tracked implementation next to `func emitCallScreenCaptureDetected(.
 
 Repeat the identical three additions (publisher, call-count var, tracked func) in `packages/MeeshySDK/Tests/MeeshySDKTests/Cache/Helpers/MockMessageSocket.swift` — read that file first to match its exact local conventions (it may use a different `CallCount`/tracking naming scheme than the app-target mock; mirror whatever pattern it already uses for `emitCallScreenCaptureDetected`, keeping the property/method names identical to the app-target mock above so both compile against the same protocol).
 
-- [ ] **Step 8: Run the full SDK and app test suites**
+- [x] **Step 8: Run the full SDK and app test suites**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -408,7 +452,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: PASS, no new failures. This also compiles both `MockMessageSocket` targets, which is the real regression check for Step 7 (a missing conformance is a compile error, not a test failure).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift \
@@ -432,11 +476,11 @@ git commit -m "feat(sdk/calls): wire call:transcription-segment emit + call:tran
 
 This is a full rewrite, not an incremental diff — the class loses the leader/follower/role/capability/DataChannel model entirely and gains local-only AVAudioEngine capture + socket emission. Follow the steps in order; each step's test must be green before the next.
 
-- [ ] **Step 1: Delete the obsolete role-negotiation tests**
+- [x] **Step 1: Delete the obsolete role-negotiation tests**
 
 Open `apps/ios/MeeshyTests/Unit/Services/CallTranscriptionServiceTests.swift`. Delete every test in the `// MARK: - Role Negotiation` section (`test_resolveRole_*`), the `// MARK: - Capability Detection` section (`test_detectLocalCapability_*`, `test_supportedOnDeviceLanguages_*`), and any test referencing `remoteLanguage`, `remoteUserId`, `appendRemoteAudioBuffer`, `receiveRemoteSegment`, `role`, `localCapability`, or `pendingRemoteSegments` — these concepts no longer exist. Keep the `makeSegment(...)` factory function and any test that only exercises `segments`/`isTranscribing`/`permission`/`lastError`/`isShowingOverlay`/`displayedSegments` state that doesn't reference the removed concepts.
 
-- [ ] **Step 2: Update `makeSUT` to inject the mock socket, write the failing test**
+- [x] **Step 2: Update `makeSUT` to inject the mock socket, write the failing test**
 
 Replace the `makeSUT` factory:
 
@@ -462,7 +506,7 @@ Add this new test at the end of the `// MARK: - Initial State` section:
     }
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -472,7 +516,7 @@ xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
 
 Expected: FAIL — `CallTranscriptionService` has no initializer accepting a `socket:` argument, and no `startTranscribing(callId:localLanguage:localUserId:)`.
 
-- [ ] **Step 4: Rewrite `CallTranscriptionService.swift`**
+- [x] **Step 4: Rewrite `CallTranscriptionService.swift`**
 
 Replace the entire file content with:
 
@@ -483,7 +527,14 @@ import Combine
 import MeeshySDK
 import os
 
-private let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+// nonisolated: os.Logger is a thread-safe value type (Apple docs) with no
+// reason to inherit this file's default MainActor isolation — needed so the
+// AVAudioEngine tap closure (which runs off-MainActor, see
+// startLocalCapture/reinstallTap below) can log without an isolation error.
+// Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
+// made the tap closure's log call fail to compile once the closure was
+// correctly typed `@Sendable` (see below) — same fix applied there.
+private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
 // MARK: - Transcription Segment
 
@@ -718,11 +769,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// lui-même). Validé par le spike Phase 0 — voir Task 1 de
     /// docs/superpowers/plans/2026-07-10-live-call-transcription.md.
     ///
-    /// Le tap capture directement une référence non-isolée à `request`
-    /// (SFSpeechAudioBufferRecognitionRequest n'est pas @MainActor) — sa
-    /// closure tourne sur le thread audio temps-réel d'AVAudioEngine, jamais
-    /// sur MainActor, donc aucun hop d'acteur n'est nécessaire ni souhaitable
-    /// sur ce chemin chaud.
+    /// The tap block MUST be an explicit `@Sendable`-typed local, not a bare
+    /// trailing closure — under this project's
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, a closure literal written
+    /// inline inside this `@MainActor` method is implicitly inferred as
+    /// MainActor-isolated regardless of what it captures. AVAudioEngine
+    /// invokes tap blocks off-MainActor (its own real-time queue); an
+    /// inferred-MainActor closure traps at runtime (SIGTRAP,
+    /// `swift_task_isCurrentExecutorImpl`) the first time it's called.
+    /// Discovered via the Task 1 spike (2026-07-10, crash report
+    /// `Meeshy-2026-07-10-173828.ips`) — do not revert this pattern.
     private func startLocalCapture() throws {
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
         newRequest.shouldReportPartialResults = true
@@ -732,9 +788,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [request = newRequest] buffer, _ in
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { [request = newRequest] buffer, _ in
             request.append(buffer)
         }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         audioEngine.prepare()
         try audioEngine.start()
     }
@@ -745,12 +802,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         audioEngine.stop()
     }
 
+    /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local
+    /// requirement applies here.
     private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) {
         audioEngine.inputNode.removeTap(onBus: 0)
         let format = audioEngine.inputNode.outputFormat(forBus: 0)
-        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [request = newRequest] buffer, _ in
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { [request = newRequest] buffer, _ in
             request.append(buffer)
         }
+        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
     }
 
     // MARK: - Recognition
@@ -878,7 +938,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 }
 ```
 
-- [ ] **Step 5: Run to verify the new test passes**
+- [x] **Step 5: Run to verify the new test passes**
 
 ```bash
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -891,7 +951,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS.
 
-- [ ] **Step 6: Write the failing test for the purge invariant**
+- [x] **Step 6: Write the failing test for the purge invariant**
 
 Add to `CallTranscriptionServiceTests.swift`:
 
@@ -930,7 +990,7 @@ Add to `CallTranscriptionServiceTests.swift`:
     }
 ```
 
-- [ ] **Step 7: Run to verify it fails, then confirm it already passes**
+- [x] **Step 7: Run to verify it fails, then confirm it already passes**
 
 The `resetForCallEnd`/`receiveTranslatedSegment` tests should already PASS against the Step 4 implementation (no further production change needed) — this step is a verification, not a RED step, since Step 4 already implemented the purge-unconditionally behavior. Run:
 
@@ -942,7 +1002,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS, all tests including the three new ones from Step 6.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -970,7 +1030,7 @@ git commit -m "feat(ios/calls): rebuild CallTranscriptionService as local-only c
 
 Under the new architecture, transcription segments travel over the call socket (`call:translated-segment`), never over the WebRTC DataChannel. The `"transcription"`-labeled DataChannel itself stays (it also carries the `bye` instant-hangup message and keep-alive ping — untouched), but the transcription-specific message type and its create/send functions become genuinely unreachable and must go, or this rebuild reintroduces the exact dead-code problem PR #1795 was (correctly, on this narrow point) trying to fix.
 
-- [ ] **Step 1: Rewrite `toggleTranscription()`**
+- [x] **Step 1: Rewrite `toggleTranscription()`**
 
 In `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`, replace the `toggleTranscription()` function (currently lines 2053-2077) with:
 
@@ -998,7 +1058,7 @@ In `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`, replace the `togg
     }
 ```
 
-- [ ] **Step 2: Subscribe to translated segments in `setupSocketListeners()`**
+- [x] **Step 2: Subscribe to translated segments in `setupSocketListeners()`**
 
 In the same file, inside `private func setupSocketListeners()` (starts at line 3499), add a new subscription right after the `socket.callOfferReceived.receive(on: DispatchQueue.main).sink { ... }.store(in: &cancellables)` block:
 
@@ -1026,7 +1086,7 @@ In the same file, inside `private func setupSocketListeners()` (starts at line 3
             .store(in: &cancellables)
 ```
 
-- [ ] **Step 3: Remove the `.transcription` DataChannel case**
+- [x] **Step 3: Remove the `.transcription` DataChannel case**
 
 In the same file, in `webRTCService(_:didReceiveTranscriptionData:)` (currently lines 4346-4374), delete the `case .transcription(let message):` branch entirely (lines 4357-4370 in the pre-edit file):
 
@@ -1067,7 +1127,7 @@ leaving:
 
 (This will not compile until Step 4 removes the `.transcription` case from the `DataChannelInbound` enum itself — Swift would otherwise flag the switch as non-exhaustive in the other direction. Steps 3-4 are one atomic change; build only after both are done.)
 
-- [ ] **Step 4: Remove `DataChannelTranscriptionMessage` and the `.transcription` case**
+- [x] **Step 4: Remove `DataChannelTranscriptionMessage` and the `.transcription` case**
 
 In `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift`, delete the `DataChannelTranscriptionMessage` struct (lines 764-774):
 
@@ -1104,7 +1164,7 @@ nonisolated enum DataChannelInbound: Equatable {
 
 (removing the `if let segment = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data), segment.type == "transcription-segment" { return .transcription(segment) }` branch that used to precede the `bye` check.)
 
-- [ ] **Step 5: Remove `createTranscriptionChannel()`/`sendTranscription(_:)`**
+- [x] **Step 5: Remove `createTranscriptionChannel()`/`sendTranscription(_:)`**
 
 In `apps/ios/Meeshy/Features/Main/Services/WebRTCService.swift`, delete the `// MARK: - DataChannel Transcription (H7)` block (lines 463-472):
 
@@ -1124,7 +1184,7 @@ In `apps/ios/Meeshy/Features/Main/Services/WebRTCService.swift`, delete the `// 
 
 Do NOT touch `createOffer()`'s `_ = client.createDataChannel(label: "transcription")` call (around line 146) — that creates the shared channel used by `bye`/keep-alive, which stays. Do NOT touch `didReceiveTranscriptionData` in the `WebRTCServiceDelegate` protocol or its forwarding implementation (lines ~622-627) — it's the generic "a DataChannel message of any kind arrived" hook, still needed for `bye`.
 
-- [ ] **Step 6: Update `CallManagerAudioSessionTests` regression guard**
+- [x] **Step 6: Update `CallManagerAudioSessionTests` regression guard**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallManagerAudioSessionTests.swift`, replace `test_callManager_toggleTranscription_doesNotHardcodeLanguage`:
 
@@ -1157,7 +1217,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallManagerAudioSessionTests.swift`, repl
 
 (dropped the now-meaningless `remoteLang` assertion — the new signature has no remote-language parameter at all, per the spec's local-only-capture architecture).
 
-- [ ] **Step 7: Remove the obsolete `WebRTCServiceTests` test**
+- [x] **Step 7: Remove the obsolete `WebRTCServiceTests` test**
 
 In `apps/ios/MeeshyTests/Unit/Services/WebRTCServiceTests.swift`, delete `test_createTranscriptionChannel_delegatesToClient` (lines 310-316) and the now-empty `// MARK: - Transcription Channel` heading above it (line 293):
 
@@ -1171,11 +1231,11 @@ In `apps/ios/MeeshyTests/Unit/Services/WebRTCServiceTests.swift`, delete `test_c
     }
 ```
 
-- [ ] **Step 8: Remove the obsolete `WebRTCTypesTests` tests**
+- [x] **Step 8: Remove the obsolete `WebRTCTypesTests` tests**
 
 In `apps/ios/MeeshyTests/Unit/Services/WebRTCTypesTests.swift`, delete everything from the `// MARK: - DataChannelTranscriptionMessage Decodable` comment (line 1711) to the end of the file (line 1810) — the entire `DataChannelTranscriptionMessageTests` class, which tests a type that no longer exists.
 
-- [ ] **Step 9: Remove the obsolete `CallSignalIndicatorTests` test**
+- [x] **Step 9: Remove the obsolete `CallSignalIndicatorTests` test**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, delete `test_decode_transcriptionSegment_routesToTranscription` (lines 108-121):
 
@@ -1198,7 +1258,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, delete `
 
 Keep `test_decode_bye_withReason_returnsBye`, `test_decode_bye_withoutReason_returnsBye`, `test_decode_ping_isIgnored`, `test_decode_garbage_isIgnored`, and the entire `CallHangupFastPathTests` class (all still valid — `bye`/keep-alive infra is untouched).
 
-- [ ] **Step 10: Build and run the full affected test suite**
+- [x] **Step 10: Build and run the full affected test suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1217,7 +1277,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: BUILD SUCCEEDED, all listed suites PASS.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Services/CallManager.swift \
@@ -1243,7 +1303,7 @@ git commit -m "refactor(ios/calls): rewire toggleTranscription to the socket rel
 
 `showTranscript` and `transcriptOverlay` are already correctly implemented and wired (fixed 2026-07-10 in PR #1800 — verify this is still true at execution time; if `transcriptionService` in `CallView.init` is no longer derived from `callManager.transcriptionService`, treat that as a blocking regression to fix first, not part of this task's scope). This task only adds the missing UI entry point: a toggle button.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 There is no existing SwiftUI-body unit-test convention for control-bar buttons in this codebase (verified: no test asserts on `controlButtonsRow`'s contents). Follow the source-inspection pattern already used elsewhere in this file's test suite (e.g. `CallHangupFastPathTests`) instead. Add to `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside `CallHangupFastPathTests`:
 
@@ -1264,7 +1324,7 @@ There is no existing SwiftUI-body unit-test convention for control-bar buttons i
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1278,7 +1338,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: FAIL.
 
-- [ ] **Step 3: Add the toggle button**
+- [x] **Step 3: Add the toggle button**
 
 In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `controlButtonsRow` (starts at line 1420), add a new button after the `cameraControl` line and before the video-upgrade `callControlButton` block (i.e. right after the `// §5.4 — always visible so an AUDIO call...` comment's preceding line, or more simply: right after the `cameraControl` reference line):
 
@@ -1313,7 +1373,7 @@ In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `controlButtonsR
 
 This both starts/stops capture AND opens/closes the existing `transcriptOverlay` panel in the same tap — no separate discovery step needed for the user.
 
-- [ ] **Step 4: Add the two new string keys**
+- [x] **Step 4: Add the two new string keys**
 
 Open `apps/ios/Meeshy/Localizable.xcstrings` and add two entries to the top-level `"strings"` object (JSON), following the exact structure of the existing `"call.control.mute.caption"` / `"call.control.mute"` entries (5 languages: `de`, `en`, `es`, `fr`, `pt-BR`; `sourceLanguage` for this catalog is `fr`):
 
@@ -1431,7 +1491,7 @@ Insert these alphabetically among the other `"call.control.*"` keys (JSON key or
 python3 -c "import json; json.load(open('apps/ios/Meeshy/Localizable.xcstrings'))" && echo OK
 ```
 
-- [ ] **Step 5: Run to verify the test passes, then run the localization consistency suite**
+- [x] **Step 5: Run to verify the test passes, then run the localization consistency suite**
 
 ```bash
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -1448,7 +1508,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: both PASS (the localization suite catches malformed/missing-language xcstrings entries — do not skip it, per project history of xcstrings edit mistakes).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1470,7 +1530,7 @@ git commit -m "feat(ios/calls): add live captions toggle button to the call cont
 - Consumes: nothing new (the iOS client already emits `call:transcription-segment` unconditionally when the user toggles captions on — Task 3/4 — so the real product gate is client-side).
 - Produces: no interface change — `translateAndEmitSegment` and its emitted `call:translated-segment` shape are untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Open `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-transcription-translation.test.ts`. Add a new test after the existing `it('subscribes to the scoped translationCompleted:<messageId> event...')`:
 
@@ -1512,7 +1572,7 @@ Open `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-transcripti
   });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/services/gateway
@@ -1521,7 +1581,7 @@ bun test src/__tests__/unit/socketio/CallEventsHandler-transcription-translation
 
 Expected: FAIL — with the current gate, `metadata: {}` means `translationEnabled` is falsy, so the handler falls into the relay-original-text branch instead of calling `translateAndEmitSegment`; `payload.segment.translatedText` is `undefined`, not `'Hello world'`.
 
-- [ ] **Step 3: Remove the gate**
+- [x] **Step 3: Remove the gate**
 
 In `services/gateway/src/socketio/CallEventsHandler.ts`, locate the `socket.on(CALL_EVENTS.TRANSCRIPTION_SEGMENT, ...)` handler. Replace:
 
@@ -1560,7 +1620,7 @@ with:
         } else {
 ```
 
-- [ ] **Step 4: Run to verify both tests pass**
+- [x] **Step 4: Run to verify both tests pass**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/services/gateway
@@ -1569,7 +1629,7 @@ bun test src/__tests__/unit/socketio/CallEventsHandler-transcription-translation
 
 Expected: PASS (both the pre-existing test and the new one — the pre-existing test's mock still sets `metadata: { translationEnabled: true }`, which is now simply ignored, and its assertions are unaffected).
 
-- [ ] **Step 5: Run the full gateway suite for this file's neighbors**
+- [x] **Step 5: Run the full gateway suite for this file's neighbors**
 
 ```bash
 bun test src/socketio/__tests__/CallEventsHandler.test.ts 2>&1 | tail -60
@@ -1577,7 +1637,7 @@ bun test src/socketio/__tests__/CallEventsHandler.test.ts 2>&1 | tail -60
 
 Expected: PASS, no regressions (this suite has its own `metadata: { translationEnabled: true }` mock per the earlier grep — same reasoning: the field becomes inert, not wrong).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1592,7 +1652,7 @@ git commit -m "fix(gateway/calls): drop the dead translationEnabled gate — cli
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Regenerate the Xcode project and run the full iOS suite**
+- [x] **Step 1: Regenerate the Xcode project and run the full iOS suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
@@ -1601,7 +1661,7 @@ cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
 
 Expected: all 3 phases green (per `apps/ios/CLAUDE.md`'s phased test run). Revert any `project.pbxproj`/`Package.resolved`/scheme churn this produces that isn't an intentional change (`git checkout --` on those specific files if they only reflect xcodegen/SPM regeneration noise, per that same doc's guidance) — but do NOT discard the actual source changes from Tasks 1-6.
 
-- [ ] **Step 2: Run the gateway suite**
+- [x] **Step 2: Run the gateway suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy

@@ -17,11 +17,16 @@ protocol WebRTCServiceDelegate: AnyObject {
     /// percentage (0–100) — reported to the gateway so the call-summary message
     /// can surface "data spent · network quality" and drive loss alerts.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double)
+    /// C3 — la caméra locale a cessé (ou repris) de délivrer des frames, sur
+    /// interruption de l'`AVCaptureSession`. Seul fait probant : le passage en
+    /// arrière-plan n'éteint PAS la caméra quand un PiP système est actif.
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool)
 }
 
 extension WebRTCServiceDelegate {
     // Optional by default — only CallManager needs the stats tick.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {}
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool) {}
 }
 
 // MARK: - WebRTC Service
@@ -259,14 +264,21 @@ final class WebRTCService {
         await client.disableLocalVideo()
     }
 
-    func switchCamera() {
+    /// `completion` reports whether the switch actually succeeded — the
+    /// caller (`CallManager`) uses it to correct any optimistic UI state
+    /// (front/back mirroring) it applied before the async switch resolved.
+    /// Always invoked, exactly once, on the same @MainActor context this
+    /// method inherits.
+    func switchCamera(completion: ((Bool) -> Void)? = nil) {
         let previousTask = switchCameraTask
         switchCameraTask = Task { [weak self] in
             await previousTask?.value
             do {
                 try await self?.client.switchCamera()
+                completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
+                completion?(false)
             }
         }
     }
@@ -276,14 +288,20 @@ final class WebRTCService {
         client.availableCameras()
     }
 
-    func switchToCamera(uniqueID: String) {
+    /// `completion` mirrors `switchCamera(completion:)` — reports whether the switch
+    /// actually succeeded, always invoked exactly once on this method's @MainActor
+    /// context. Optional (defaults to nil) so existing fire-and-forget callers are
+    /// unaffected.
+    func switchToCamera(uniqueID: String, completion: ((Bool) -> Void)? = nil) {
         let previousTask = switchCameraTask
         switchCameraTask = Task { [weak self] in
             await previousTask?.value
             do {
                 try await self?.client.switchToCamera(uniqueID: uniqueID)
+                completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+                completion?(false)
             }
         }
     }
@@ -460,24 +478,14 @@ final class WebRTCService {
         )
     }
 
-    // MARK: - DataChannel Transcription (H7)
-
-    func createTranscriptionChannel() -> Bool {
-        client.createDataChannel(label: "transcription")
-    }
-
-    func sendTranscription(_ message: DataChannelTranscriptionMessage) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-        client.sendDataChannelMessage(data)
-    }
-
     /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
     /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
     /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est
     /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
     func sendHangupBye(reason: String = "completed") {
         let message = DataChannelControlMessage(type: "bye", reason: reason)
-        guard let data = try? JSONEncoder().encode(message) else { return }
+        guard let data = JSONEncoder().encodeOrLog(message, field: "data-channel message",
+                                                   logger: Logger.webrtc) else { return }
         client.sendDataChannelMessage(data)
     }
 
@@ -623,6 +631,13 @@ extension WebRTCService: WebRTCClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.webRTCService(self, didReceiveTranscriptionData: data)
+        }
+    }
+
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didChangeCameraInterruption: interrupted)
         }
     }
 }

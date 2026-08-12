@@ -16,6 +16,7 @@
     <string name="call_action_mute">Muet</string>
     <string name="call_action_camera">Caméra</string>
     <string name="call_action_close">Fermer</string>
+    <string name="call_action_retry">Réessayer</string>
     <string name="call_action_minimize">Réduire l\'appel</string>
     <string name="call_pill_ongoing">Appel en cours avec %1$s</string>
     <string name="call_pill_reopen">Revenir à l\'appel</string>
@@ -39,4 +40,8 @@
     <string name="call_waiting_banner_a11y">Appel entrant de %1$s</string>
     <string name="call_waiting_reject_a11y">Refuser l\'appel de %1$s</string>
     <string name="call_waiting_answer_a11y">Raccrocher et répondre à %1$s</string>
+    <string name="call_peer_quality_degraded">La connexion de %1$s est instable</string>
+    <string name="call_peer_screen_capturing">%1$s capture l\'écran</string>
+    <string name="call_peer_muted">%1$s a coupé son micro</string>
+    <string name="call_peer_camera_off">%1$s a désactivé sa caméra</string>
 </resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="legal_terms_title">Terms of Service</string>
+    <string name="legal_privacy_title">Privacy Policy</string>
+    <string name="legal_terms_last_updated">Last updated: February 24, 2026</string>
+    <string name="legal_privacy_last_updated">Last updated: February 24, 2026</string>
+
+    <string name="legal_tos_acceptance_title">Acceptance of Terms</string>
+    <string name="legal_tos_acceptance_body">By using Meeshy, you agree to these terms of service. If you do not accept these terms, please do not use our service.</string>
+    <string name="legal_tos_license_title">License to Use</string>
+    <string name="legal_tos_license_body">We grant you a limited, non-exclusive, revocable license to use Meeshy in accordance with these terms. You may not copy, modify, or distribute the application.</string>
+    <string name="legal_tos_user_conduct_title">User Conduct</string>
+    <string name="legal_tos_user_conduct_body">You agree not to use Meeshy to send spam, illegal content, harassment, or content that infringes on others\' rights. Any abuse will result in account suspension or termination.</string>
+    <string name="legal_tos_content_title">Content</string>
+    <string name="legal_tos_content_body">You retain ownership of your content. By using Meeshy, you grant us a limited license to transmit and store your content to provide our services.</string>
+    <string name="legal_tos_account_termination_title">Account Termination</string>
+    <string name="legal_tos_account_termination_body">You may delete your account at any time. We reserve the right to suspend or terminate accounts that violate these terms.</string>
+    <string name="legal_tos_disclaimer_title">Disclaimer</string>
+    <string name="legal_tos_disclaimer_body">Meeshy is provided as-is, without express or implied warranty. We do not guarantee uninterrupted or error-free operation of the service.</string>
+    <string name="legal_tos_liability_title">Limitation of Liability</string>
+    <string name="legal_tos_liability_body">To the extent permitted by law, Meeshy shall not be liable for indirect, incidental, or consequential damages arising from the use of our service.</string>
+    <string name="legal_tos_changes_title">Changes to Terms</string>
+    <string name="legal_tos_changes_body">We may modify these terms at any time. Changes take effect upon publication in the application. Continued use constitutes your acceptance.</string>
+    <string name="legal_tos_contact_title">Contact</string>
+    <string name="legal_tos_contact_body">For any questions about these terms, contact us at legal@meeshy.me</string>
+
+    <string name="legal_privacy_collection_title">Information Collection</string>
+    <string name="legal_privacy_collection_body">We collect information you provide directly when creating your account, sending messages, and using our services. This includes your username, email address, phone number, and the content of your communications.</string>
+    <string name="legal_privacy_use_title">Use of Information</string>
+    <string name="legal_privacy_use_body">Your information is used to provide, maintain, and improve our messaging services, including real-time translation and voice cloning. We never use your data for advertising purposes.</string>
+    <string name="legal_privacy_security_title">Data Security</string>
+    <string name="legal_privacy_security_body">We use end-to-end encryption (E2E) to protect your messages. Your encryption keys are stored only on your devices. Meeshy cannot read the content of your encrypted messages.</string>
+    <string name="legal_privacy_retention_title">Data Retention</string>
+    <string name="legal_privacy_retention_body">Your messages are retained as long as your account is active. You can delete your messages at any time. Account data is deleted within 30 days of account closure.</string>
+    <string name="legal_privacy_rights_title">Your Rights</string>
+    <string name="legal_privacy_rights_body">You have the right to access, modify, export, and delete your data. Contact us to exercise these rights.</string>
+    <string name="legal_privacy_changes_title">Policy Changes</string>
+    <string name="legal_privacy_changes_body">We may update this policy periodically. We will notify you of any significant changes via in-app notification.</string>
+    <string name="legal_privacy_contact_title">Contact</string>
+    <string name="legal_privacy_contact_body">For any questions about this policy, contact us at privacy@meeshy.me</string>
+</resources>

@@ -12,7 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { startOfLocalDayMs, calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -162,7 +162,10 @@ function resolveContentRoute(notification: Notification): '/post' | '/story' | '
   const type = notification.type;
   if (typeof type === 'string') {
     if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
-    if (type === NotificationTypeEnum.FRIEND_NEW_STORY || type.startsWith('story')) return '/story';
+    // Tous les types portant `story` visent une story — y compris les variantes
+    // préfixées (`friend_story_comment`) que `startsWith('story')` manquait,
+    // ce qui les routait par erreur vers `/post`.
+    if (type.includes('story')) return '/story';
   }
   return '/post';
 }
@@ -189,8 +192,13 @@ export function getNotificationLink(notification: Notification): string | null {
   const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
   if (postId) {
     const commentId = context?.commentId ?? metadata?.commentId;
+    // Quand la cible est une RÉPONSE, le parent top-level voyage en query
+    // (`?parent=<id>`) : la page de destination chasse le parent dans les
+    // pages top-level, déplie son thread puis cible la réponse via l'ancre.
+    const parentCommentId = context?.parentCommentId ?? metadata?.parentCommentId;
+    const parentQuery = commentId && parentCommentId ? `?parent=${parentCommentId}` : '';
     const anchor = commentId ? `#comment-${commentId}` : '';
-    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+    return `${resolveContentRoute(notification)}/${postId}${parentQuery}${anchor}`;
   }
 
   // 3. Amis / contacts
@@ -265,15 +273,18 @@ export function formatContentPublishedAt(
   if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
 
   const diffHours = Math.floor(diffMinutes / 60);
-  const startOfToday = startOfLocalDayMs(now.getTime());
-  const startOfYesterday = startOfToday - 86400000;
+  // DST-safe : compter les jours calendaires locaux plutôt qu'un delta fixe de
+  // 24 h. Un jour de transition heure d'été/hiver dure 23 h ou 25 h, donc
+  // `startOfToday − 86_400_000` ne retombe pas sur le minuit local d'hier. On
+  // réutilise la SSOT `calendarDayDiff`, déjà employée par groupNotificationsByDate.
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-  if (date.getTime() >= startOfToday) {
+  if (dayDiff === 0) {
     return t('timeAgo.hour').replace('{count}', String(diffHours));
   }
 
-  if (date.getTime() >= startOfYesterday) {
+  if (dayDiff === 1) {
     return t('timeAgo.yesterdayAt').replace('{time}', time);
   }
 

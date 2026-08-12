@@ -23,7 +23,7 @@ interface OngoingCallBannerProps {
 }
 
 export function OngoingCallBanner({
-  _callId,
+  callId: _callId,
   participantCount,
   duration,
   onJoin,

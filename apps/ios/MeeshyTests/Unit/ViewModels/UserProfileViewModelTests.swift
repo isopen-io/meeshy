@@ -12,16 +12,16 @@ final class UserProfileViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         mockAuthManager = nil
         mockBlockService = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory
@@ -90,6 +90,35 @@ final class UserProfileViewModelTests: XCTestCase {
         let sut = makeSUT()
 
         XCTAssertFalse(sut.isBlocked)
+    }
+
+    /// P1 — regression: BlockService (canonical, live-updated) is the
+    /// source of truth, not the stale login-time snapshot. A block
+    /// performed elsewhere during the session (or a prior session) must be
+    /// reflected the next time this profile sheet is opened for the user,
+    /// even though `currentUser.blockedUserIds` never changes after login.
+    func test_init_setsIsBlockedTrue_whenBlockServiceReportsBlocked_evenIfLoginSnapshotSaysNotBlocked() {
+        let currentUser = makeCurrentUser(blockedUserIds: [])
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        mockBlockService.blockedUserIds = ["target-user-001"]
+
+        let sut = makeSUT()
+
+        XCTAssertTrue(sut.isBlocked,
+            "BlockService (canonical, injected) must be consulted — not just the login snapshot.")
+    }
+
+    /// The login snapshot remains a valid fallback for the brief window
+    /// right after login, before BlockService's async refreshCache() has
+    /// hydrated `blockedUserIds`.
+    func test_init_setsIsBlockedTrue_fromLoginSnapshot_whenBlockServiceCacheIsCold() {
+        let currentUser = makeCurrentUser(blockedUserIds: ["target-user-001"])
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        // BlockService cache not yet hydrated (default empty state).
+
+        let sut = makeSUT()
+
+        XCTAssertTrue(sut.isBlocked)
     }
 
     func test_init_setsDefaultState() {

@@ -13,6 +13,11 @@ final class MockAudienceUserSearching: AudienceUserSearching, @unchecked Sendabl
     }
 }
 
+final class MockAudienceContacts: AudienceContactsProviding, @unchecked Sendable {
+    var contacts: [UserSearchResult] = []
+    func cachedContacts() async -> [UserSearchResult] { contacts }
+}
+
 final class AudienceUserPickerViewModelTests: XCTestCase {
     @MainActor
     func test_performSearch_populatesResults_excludingSelf() async {
@@ -58,5 +63,59 @@ final class AudienceUserPickerViewModelTests: XCTestCase {
     func test_initialSelection_seedsSelectedIds() {
         let vm = AudienceUserPickerViewModel(initialSelection: ["x", "y"], currentUserId: nil, userService: MockAudienceUserSearching())
         XCTAssertEqual(vm.selectedIds, ["x", "y"])
+    }
+
+    // MARK: - Cache-first seeding
+
+    @MainActor
+    func test_loadInitialContacts_seedsResults_excludingSelf_whenQueryEmpty() async {
+        let contacts = MockAudienceContacts()
+        contacts.contacts = [
+            UserSearchResult(id: "me", username: "me"),
+            UserSearchResult(id: "u1", username: "ana"),
+            UserSearchResult(id: "u2", username: "bob"),
+        ]
+        let vm = AudienceUserPickerViewModel(
+            initialSelection: [], currentUserId: "me",
+            userService: MockAudienceUserSearching(), contactsProvider: contacts
+        )
+        await vm.loadInitialContacts()
+        XCTAssertEqual(vm.results.map(\.id), ["u1", "u2"])
+    }
+
+    @MainActor
+    func test_performSearch_blankQuery_restoresCachedContacts() async {
+        let contacts = MockAudienceContacts()
+        contacts.contacts = [UserSearchResult(id: "u1", username: "ana")]
+        let mock = MockAudienceUserSearching()
+        let vm = AudienceUserPickerViewModel(
+            initialSelection: [], currentUserId: nil,
+            userService: mock, contactsProvider: contacts
+        )
+        await vm.loadInitialContacts()
+        vm.query = "   "
+        await vm.performSearch()
+        XCTAssertEqual(vm.results.map(\.id), ["u1"])
+        XCTAssertEqual(mock.callCount, 0)
+    }
+
+    @MainActor
+    func test_performSearch_mergesCachedThenNetwork_deduplicated() async {
+        let contacts = MockAudienceContacts()
+        contacts.contacts = [UserSearchResult(id: "u1", username: "ana")]
+        let mock = MockAudienceUserSearching()
+        mock.stub = .success([
+            UserSearchResult(id: "u1", username: "ana"),        // duplicate of cached
+            UserSearchResult(id: "u2", username: "anabelle"),   // network-only
+        ])
+        let vm = AudienceUserPickerViewModel(
+            initialSelection: [], currentUserId: nil,
+            userService: mock, contactsProvider: contacts
+        )
+        await vm.loadInitialContacts()
+        vm.query = "ana"
+        await vm.performSearch()
+        XCTAssertEqual(vm.results.map(\.id), ["u1", "u2"])
+        XCTAssertEqual(mock.callCount, 1)
     }
 }

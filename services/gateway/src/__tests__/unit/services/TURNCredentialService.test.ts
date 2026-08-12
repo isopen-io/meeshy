@@ -127,6 +127,37 @@ describe('TURNCredentialService — production security guard', () => {
       expect(() => new TURNCredentialService()).not.toThrow();
     });
   });
+
+  // Audit finding — the production/staging guard matched NODE_ENV with a
+  // strict `===`, so a deployment env file setting "Production", "STAGING",
+  // or " production" (capitalization/whitespace typo — trivially easy to
+  // introduce when copying a value between shell configs) silently fell
+  // through to the dev branch and armed the public committed default secret
+  // in a real deployment instead of refusing to start. Normalize before
+  // comparing so only the literal string differs, not the guard's behavior.
+  it('throws when NODE_ENV="Production" (mixed case) and TURN_SECRET is unset', () => {
+    withEnv({ NODE_ENV: 'Production', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV="STAGING" (uppercase) and TURN_SECRET is the default insecure value', () => {
+    withEnv({ NODE_ENV: 'STAGING', TURN_SECRET: DEFAULT_INSECURE_SECRET }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV=" production " has surrounding whitespace and TURN_SECRET is unset', () => {
+    withEnv({ NODE_ENV: ' production ', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('still does NOT throw for an unrelated NODE_ENV value like "ci" even with no TURN_SECRET', () => {
+    withEnv({ NODE_ENV: 'ci', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -165,11 +196,90 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
     );
   });
 
-  it('still honours an explicit TURN_CREDENTIAL_TTL override', () => {
+  it('still honours an explicit TURN_CREDENTIAL_TTL override above the floor', () => {
     withEnv({ TURN_CREDENTIAL_TTL: '99999', NODE_ENV: 'test' }, () => {
       const service = new TURNCredentialService();
       expect(service.getStatus().credentialTTL).toBe(99999);
     });
+  });
+
+  it('clamps a below-floor TURN_CREDENTIAL_TTL to MAX_ACTIVE_MS in dev/test instead of reintroducing the 2026-06-25 incident', () => {
+    withEnv({ TURN_CREDENTIAL_TTL: '600', NODE_ENV: 'test' }, () => {
+      const service = new TURNCredentialService();
+      expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+      expect(warnMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+    });
+  });
+
+  // A below-floor TTL is self-correctable in the safe direction (clamping UP
+  // preserves the "credentials outlive any active call" invariant), so unlike
+  // a weak TURN_SECRET it must never take the whole gateway down: the
+  // 2026-07-11 incident was a production crash-loop (total platform outage)
+  // caused by the previous throw-on-startup guard meeting a stale prod env.
+  it('clamps (does NOT throw) in production when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS, and logs an error', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: '600', NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET },
+      () => {
+        const service = new TURNCredentialService();
+        expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+      }
+    );
+  });
+
+  it('clamps (does NOT throw) in staging when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS, and logs an error', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: '7199', NODE_ENV: 'staging', TURN_SECRET: STRONG_SECRET },
+      () => {
+        const service = new TURNCredentialService();
+        expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+      }
+    );
+  });
+
+  // Regression guard — parseInt('not-a-number', 10) is NaN, and `NaN <
+  // minTTL` is `false` in JS, so the clamp-warning branch above silently
+  // never fires and `Math.max(NaN, minTTL)` itself evaluates to `NaN`.
+  // credentialTTL must never become NaN: every minted TURN username would
+  // become "NaN:<userId>" and coturn would reject every relayed call with
+  // no alert, defeating the entire floor-clamp safety net this describe
+  // block exists to guard.
+  it('falls back to the 86400s default (NOT NaN) when TURN_CREDENTIAL_TTL is not a valid number', () => {
+    withEnv({ TURN_CREDENTIAL_TTL: 'not-a-number', NODE_ENV: 'test' }, () => {
+      const service = new TURNCredentialService();
+      expect(service.getStatus().credentialTTL).not.toBeNaN();
+      expect(service.getStatus().credentialTTL).toBe(86400);
+      expect(warnMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+    });
+  });
+
+  it('errors (not just warns) on a non-numeric TURN_CREDENTIAL_TTL in production, and never mints a NaN credentialTTL', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: 'null', NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET },
+      () => {
+        const service = new TURNCredentialService();
+        expect(service.getStatus().credentialTTL).not.toBeNaN();
+        expect(service.getStatus().credentialTTL).toBe(86400);
+        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+      }
+    );
+  });
+
+  it('never produces a NaN-timestamped TURN username when TURN_CREDENTIAL_TTL is garbage', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: 'undefined', NODE_ENV: 'test', TURN_SERVERS: 'turn.example.com:3478' },
+      () => {
+        const service = new TURNCredentialService();
+        const iceServers = service.generateCredentials('user-123');
+        const turnServer = iceServers.find((s) =>
+          (Array.isArray(s.urls) ? s.urls.join(',') : s.urls).includes('turn:')
+        );
+        const [expiryStr] = String(turnServer!.username).split(':');
+        expect(expiryStr).not.toBe('NaN');
+        expect(Number.isNaN(parseInt(expiryStr, 10))).toBe(false);
+      }
+    );
   });
 });
 
@@ -452,7 +562,7 @@ describe('TURNCredentialService — generateCredentials', () => {
     const svc = buildService({
       TURN_SECRET: 'test-secret',
       TURN_SERVERS: 'turn.example.com:3478',
-      TURN_CREDENTIAL_TTL: '600',
+      TURN_CREDENTIAL_TTL: undefined,
       NODE_ENV: 'development',
     });
     const now = Math.floor(Date.now() / 1000);
@@ -461,7 +571,7 @@ describe('TURNCredentialService — generateCredentials', () => {
     const [expirationStr] = ((turnEntry as any).username as string).split(':');
     const expiration = parseInt(expirationStr, 10);
     expect(expiration).toBeGreaterThan(now);
-    expect(expiration).toBeLessThanOrEqual(now + 660); // 600s TTL + 60s slack
+    expect(expiration).toBeLessThanOrEqual(now + 86400 + 60); // default 24h TTL + 60s slack
   });
 
   it('credential is valid HMAC-SHA1 of username using the configured secret', () => {
@@ -586,7 +696,7 @@ describe('TURNCredentialService — getStatus', () => {
   });
 
   it('exposes credentialTTL in seconds', () => {
-    const svc = buildService({ TURN_CREDENTIAL_TTL: '300', NODE_ENV: 'test' });
-    expect(svc.getStatus().credentialTTL).toBe(300);
+    const svc = buildService({ TURN_CREDENTIAL_TTL: undefined, NODE_ENV: 'test' });
+    expect(svc.getStatus().credentialTTL).toBe(86400);
   });
 });

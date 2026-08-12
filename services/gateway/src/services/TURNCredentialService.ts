@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
+import { CallCleanupService } from './CallCleanupService';
 
 export interface TURNServerConfig {
   host: string;
@@ -32,7 +33,13 @@ export class TURNCredentialService {
     // Load TURN secret from environment (CRITICAL: must be set in production)
     const envSecret = process.env.TURN_SECRET;
     const nodeEnv = process.env.NODE_ENV ?? 'development';
-    const isProductionOrStaging = nodeEnv === 'production' || nodeEnv === 'staging';
+    // Normalized (trim + lowercase) so a deployment env value like
+    // "Production", "STAGING", or " production" — trivially easy to
+    // introduce copying between shell configs — still trips the guard
+    // below instead of silently falling through to the dev branch and
+    // arming the public committed default secret in a real deployment.
+    const normalizedNodeEnv = nodeEnv.trim().toLowerCase();
+    const isProductionOrStaging = normalizedNodeEnv === 'production' || normalizedNodeEnv === 'staging';
 
     if (isProductionOrStaging) {
       // In production / staging the default secret is committed to the repo —
@@ -98,7 +105,55 @@ export class TURNCredentialService {
     // headroom above the 2h hard cap. The blast radius of a leaked, per-user,
     // relay-only credential is bandwidth use on our own TURN server, not data
     // exposure. Operators can still tighten/loosen via env (must stay ≥ 2h).
-    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+    //
+    // The 2026-06-25 incident happened because that constraint was only
+    // documented in prose — nothing actually enforced it, so a bad env value
+    // silently reintroduced the outage. Enforce the floor here by clamping UP
+    // to it. Unlike a weak TURN_SECRET (unfixable at runtime → refuse to
+    // start), a low TTL has a strictly-safe correction — a higher TTL still
+    // guarantees credentials outlive any active call — so throwing here buys
+    // no protection and turns a stale env file into a total platform outage:
+    // that is exactly what happened on 2026-07-11, when the previous
+    // throw-on-startup guard met a prod .env still carrying the old 3600s
+    // value and crash-looped the gateway (Traefik 404 on every route). Clamp
+    // everywhere; log at error level in production/staging so monitoring
+    // still surfaces the misconfiguration, warn in dev/test.
+    const rawTTL = process.env.TURN_CREDENTIAL_TTL;
+    const parsedTTL = parseInt(rawTTL || '86400', 10);
+    const minTTL = CallCleanupService.MAX_ACTIVE_MS / 1000;
+    // A non-numeric env value (typo, placeholder like "null"/"unset") makes
+    // parseInt return NaN. `NaN < minTTL` is `false`, so the clamp-warning
+    // branch below never fires, and `Math.max(NaN, minTTL)` itself evaluates
+    // to `NaN` — every minted username becomes `"NaN:<userId>"` and coturn
+    // rejects it outright, silently failing every TURN-relayed call with none
+    // of the alerting the floor clamp exists to guarantee. Reject NaN before
+    // it ever reaches the floor comparison and fall back to the safe default.
+    let requestedTTL = parsedTTL;
+    if (Number.isNaN(requestedTTL)) {
+      const invalidMessage =
+        `⚠️ TURN_CREDENTIAL_TTL ("${rawTTL}") is not a valid number — falling back to the ` +
+        '86400s default. An unvalidated NaN here would silently mint invalid TURN credentials ' +
+        '(username "NaN:<userId>") and fail every TURN-relayed call with no alert.';
+      if (isProductionOrStaging) {
+        logger.error(invalidMessage);
+      } else {
+        logger.warn(invalidMessage);
+      }
+      requestedTTL = 86400;
+    }
+    if (requestedTTL < minTTL) {
+      const clampMessage =
+        `⚠️ TURN_CREDENTIAL_TTL (${requestedTTL}s) is below the ${minTTL}s floor ` +
+        '(CallCleanupService.MAX_ACTIVE_MS) — clamping to the floor. A lower value expires ' +
+        'TURN-relayed calls mid-call once the credential outlives its embedded expiry ' +
+        '(see the 2026-06-25 incident note above). Fix the environment value.';
+      if (isProductionOrStaging) {
+        logger.error(clampMessage);
+      } else {
+        logger.warn(clampMessage);
+      }
+    }
+    this.credentialTTL = Math.max(requestedTTL, minTTL);
 
     // TURN-over-TLS port (coturn `tls-listening-port`, default 5349). Plain
     // `turn:` (UDP/TCP) is blocked outright by some corporate/mobile-carrier

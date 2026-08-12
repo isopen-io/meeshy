@@ -39,11 +39,14 @@ final class StoryCanvasReaderTransitionTests: XCTestCase {
         XCTAssertEqual(opacity, 0.5, accuracy: 0.05)
     }
 
-    func test_clipOpacity_dissolveTransition_doesNotAffectOpacity() {
+    func test_clipOpacity_dissolveTransition_appliesCrossfadeFallbackRamp() {
+        // C4 — le reader live n'a pas de compositor per-pixel : dissolve est
+        // dégradé en rampe d'opacité crossfade (l'export MP4 garde le vrai
+        // CIDissolve via DissolveVideoCompositor).
         let media = makeMedia(id: "a", start: 0, duration: 5)
         let trans = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .dissolve, duration: 1.0)
         let opacity = ReaderTransitionResolver.opacity(for: media, transitions: [trans], currentTime: 4.5)
-        XCTAssertEqual(opacity, 1.0, accuracy: 0.001)
+        XCTAssertEqual(opacity, 0.5, accuracy: 0.05)
     }
 
     func test_resolverWiring_combinedWithBaseOpacity_multipliesValues() {

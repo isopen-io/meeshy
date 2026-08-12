@@ -24,6 +24,10 @@ public sealed interface CoalesceDecision {
  * - a repeated edit / read-receipt merges, keeping the latest;
  * - a delete supersedes pending edits of the same message;
  * - a reaction toggle (add then remove, or remove then add) cancels itself;
+ * - a read-then-unread (or unread-then-read) toggle of the same conversation cancels
+ *   itself — both are opposite terminal states of one read cursor, so the pair returns
+ *   the target to the last-synced server state exactly like block/unblock; a repeated
+ *   read receipt (or repeated mark-unread) keeps only the latest;
  * - a block/unblock toggle of the same user cancels itself, and a repeated
  *   block (or unblock) keeps only the latest (idempotent terminal state);
  * - a pin/unpin toggle of the same message cancels itself, and a repeated
@@ -33,7 +37,9 @@ public sealed interface CoalesceDecision {
  * - a repeated profile edit (same user id) keeps only the latest snapshot
  *   (each carries the full PATCH body — the newest edit subsumes the pending one);
  * - a repeated settings update (same user id) keeps only the latest snapshot
- *   (each carries the full preference block — an offline toggle burst collapses to one PATCH).
+ *   (each carries the full preference block — an offline toggle burst collapses to one PATCH);
+ *   notification and privacy settings coalesce independently (distinct kinds share the settings
+ *   lane but never supersede one another).
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -45,13 +51,16 @@ public object OutboxCoalescer {
         return when (incoming.kindEnum) {
             OutboxKind.DELETE_MESSAGE -> onDelete(incoming, sameTarget)
             OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
-            OutboxKind.READ_RECEIPT -> replaceSameKind(incoming, sameTarget, OutboxKind.READ_RECEIPT)
+            OutboxKind.READ_RECEIPT -> terminalToggle(incoming, sameTarget, OutboxKind.MARK_UNREAD, OutboxKind.READ_RECEIPT)
+            OutboxKind.MARK_UNREAD -> terminalToggle(incoming, sameTarget, OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD)
             OutboxKind.UPDATE_CONVERSATION_PREFS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
             OutboxKind.UPDATE_PROFILE ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
             OutboxKind.UPDATE_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
+            OutboxKind.UPDATE_PRIVACY_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PRIVACY_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)

@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import Combine
 @testable import Meeshy
 import MeeshySDK
@@ -9,8 +10,8 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
     private var cancellables: Set<AnyCancellable>!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         cancellables = []
     }
 
@@ -65,6 +66,116 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         let current = makeQueuedAudio(attachmentId: "a1")
         sut.play(current: current, tail: [], conversationName: "T", conversationArtworkURL: nil)
         XCTAssertNil(sut.activeContext)
+        XCTAssertEqual(engine.playCallCount, 0)
+    }
+
+    func test_playVariant_swapsUrl_keepsContextAndQueue() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let contextBefore = sut.activeContext
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a-es.m4a")
+        XCTAssertEqual(sut.activeContext, contextBefore)
+        XCTAssertEqual(sut.queueCount, 2)
+    }
+
+    func test_playVariant_withoutActiveContext_isNoOp() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+
+        XCTAssertEqual(engine.playCallCount, 0)
+    }
+
+    /// Régression : `resumeAfterSystemCall()` rejoue `queue.first.fileUrl` via
+    /// `startCurrentHead()`. Sans reconstruire la tête de file avec l'URL de la
+    /// variante, `playVariant` était annulé par tout chemin qui rejoue la tête —
+    /// la reprise d'appel ramenait l'audio à sa langue d'origine.
+    func test_playVariant_survivesSystemCallResume() async {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        sut.playVariant(urlString: "https://x/a-es.m4a")
+        engine.isPlaying = true
+        await Task.yield()
+
+        sut.suspendForSystemCall()
+        sut.resumeAfterSystemCall()
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a-es.m4a")
+    }
+
+    // MARK: - playKeepingQueue
+
+    func test_playKeepingQueue_targetInQueue_preservesNameAndTail() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        let b = make("b")
+        sut.play(current: make("a"), tail: [b, make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        sut.playKeepingQueue(b)
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "b")
+        XCTAssertEqual(sut.queueCount, 2)
+        XCTAssertEqual(sut.activeContext?.conversationName, "Conv")
+        XCTAssertTrue(sut.hasPrevious)
+    }
+
+    func test_playKeepingQueue_targetNotInQueue_insertsAtHead() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let x = make("x")
+
+        sut.playKeepingQueue(x)
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "x")
+        XCTAssertEqual(sut.queueCount, 3)
+        XCTAssertEqual(sut.activeContext?.conversationName, "Conv")
+    }
+
+    func test_playKeepingQueue_withoutActiveContext_isNoOp() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let x = QueuedAudio(attachmentId: "x", messageId: "m-x", conversationId: "c",
+                             fileUrl: "https://x/x.m4a", durationMs: 1000,
+                             senderName: "S", senderAvatarURL: nil, receivedAt: Date())
+
+        sut.playKeepingQueue(x)
+
         XCTAssertEqual(engine.playCallCount, 0)
     }
 
@@ -473,6 +584,34 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
     // MARK: - CallKit guard — togglePlayPause and playPrevious
 
+    /// Régression : un lecteur transitoire (préversion composer, statut,
+    /// réel) peut stopper le moteur via `PlaybackCoordinator.willStartPlaying`
+    /// pendant que la file reste affichée (`activeContext` non-nil). Le
+    /// moteur n'a alors plus de player chargé — un `togglePlayPause()` brut
+    /// serait un no-op silencieux, laissant le bouton play de la carte
+    /// système / mini-player mort. Le coordinator doit détecter ce cas
+    /// (`activeContext != nil` mais `engine.currentUrl == nil`) et recharger
+    /// la tête au lieu de togguer.
+    func test_togglePlayPause_withContextButUnloadedEngine_reloadsHead() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        engine.stop()   // un lecteur transitoire a volé la lecture
+
+        sut.togglePlayPause()
+
+        XCTAssertEqual(engine.playCallCount, 2, "la tête doit être rechargée, pas togglée")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://x/a.m4a")
+        XCTAssertEqual(engine.togglePlayPauseCallCount, 0)
+    }
+
     func test_togglePlayPause_whileCallActive_isNoOp() {
         let (sut, engine) = makeSUT()
         sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
@@ -503,5 +642,187 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.activeContext?.attachmentId, "a2",
                        "playPrevious must not change track while a CallKit call is active")
         XCTAssertEqual(engine.playCallCount, playsBefore)
+    }
+
+    // MARK: - AudioSessionProfile — Now Playing eligibility
+
+    /// The coordinator's default engine must opt into `.content` session profile
+    /// so that Now Playing and lock-screen controls are eligible (vs. transient
+    /// for UI sounds, alerts, etc.). Production engine: `AudioPlaybackManager()`
+    /// defaults `.transient`, so the coordinator explicitly sets `.content`.
+    func test_init_defaultEngine_optsIntoContentSessionProfile() {
+        let coordinator = ConversationAudioCoordinator()
+        XCTAssertEqual(coordinator.engineForBubble?.sessionProfile, .content)
+    }
+
+    // MARK: - Task 4 — Now Playing enriched card
+
+    func test_nowPlayingTitle_containsConversationAndDate() {
+        let date = Date(timeIntervalSince1970: 1_754_000_000)
+        let title = ConversationAudioCoordinator.nowPlayingTitle(
+            conversationName: "Ashley", receivedAt: date
+        )
+        XCTAssertTrue(title.hasPrefix("Ashley — "))
+        XCTAssertGreaterThan(title.count, "Ashley — ".count)
+    }
+
+    func test_queuePosition_advancesWithHistory() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b"), make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        XCTAssertEqual(sut.queuePosition.index, 0)
+        XCTAssertEqual(sut.queuePosition.count, 3)
+
+        sut.playNext()
+        XCTAssertEqual(sut.queuePosition.index, 1)
+        XCTAssertEqual(sut.queuePosition.count, 3)
+    }
+
+    // MARK: - Task 6 — Background task covers queue-advance transition
+
+    /// Drains the main queue via an `expectation` + `DispatchQueue.main.async` —
+    /// `advanceQueue()` runs inside `Task { @MainActor … }` from
+    /// `onPlaybackFinished`, so a synchronous assertion right after
+    /// `simulateFinishPlayback()` can observe stale state before that hop runs.
+    private func drainMainQueue() {
+        let exp = expectation(description: "drain main queue")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+    }
+
+    /// Strengthened per code review: the begin stub now returns INCREASING
+    /// identifiers (a fixed `rawValue: 42` stub cannot distinguish "some end was
+    /// called" from "the end call was paired with the correct begin"), and the
+    /// end stub RECORDS every identifier it receives so the test can assert
+    /// exact begin/end pairing, not just call counts.
+    func test_advanceQueue_wrapsNextTrackStartInBackgroundTask() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var nextRawId: UIBackgroundTaskIdentifier.RawValue = 1
+        var beganIds: [UIBackgroundTaskIdentifier] = []
+        var endedIds: [UIBackgroundTaskIdentifier] = []
+        sut.beginBackgroundTaskProvider = { _ in
+            let id = UIBackgroundTaskIdentifier(rawValue: nextRawId)
+            nextRawId += 1
+            beganIds.append(id)
+            return id
+        }
+        sut.endBackgroundTaskProvider = { id in endedIds.append(id) }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        engine.simulateFinishPlayback()   // fin de « a » → advanceQueue → play(« b »)
+
+        drainMainQueue()
+        XCTAssertEqual(beganIds.count, 1, "La transition a→b doit être couverte par un background task")
+        // Le mock repasse isPlaying=true dans play() → la fin de tâche est
+        // déclenchée par le sink isPlayingPublisher (asynchrone MainActor).
+        drainMainQueue()
+        XCTAssertEqual(endedIds, beganIds,
+                       "le end doit recevoir EXACTEMENT l'identifiant du dernier begin, pas un identifiant arbitraire")
+    }
+
+    /// Code review finding: the two-advance case with NO intervening
+    /// `isPlaying==true` edge (e.g. degraded network — the engine never actually
+    /// reports having started before the next transition fires) must still end
+    /// the FIRST task before beginning the second — `beginAdvanceBackgroundTask()`
+    /// calls `endAdvanceBackgroundTask()` defensively before requesting a new id.
+    /// `engine.autoPlayOnPlayCall = false` neutralizes the mock's `play()` (which
+    /// normally flips `isPlaying = true`, see `MockAudioPlaybackEngine.swift`) so
+    /// the `isPlayingPublisher` sink never fires between the two advances — this
+    /// isolates `beginAdvanceBackgroundTask()`'s own pairing logic from that sink.
+    /// This test is a characterization test: `beginAdvanceBackgroundTask()`
+    /// already called `endAdvanceBackgroundTask()` unconditionally before Task 6's
+    /// review, so this passes on the existing implementation — it pins the
+    /// contract against regression rather than proving a fix.
+    func test_advanceQueue_twoAdvancesWithoutIsPlayingEdge_endsPriorTaskBeforeNextBegin() {
+        let engine = MockAudioPlaybackEngine()
+        engine.autoPlayOnPlayCall = false
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var nextRawId: UIBackgroundTaskIdentifier.RawValue = 1
+        var trace: [String] = []
+        sut.beginBackgroundTaskProvider = { _ in
+            let id = UIBackgroundTaskIdentifier(rawValue: nextRawId)
+            nextRawId += 1
+            trace.append("begin:\(id.rawValue)")
+            return id
+        }
+        sut.endBackgroundTaskProvider = { id in trace.append("end:\(id.rawValue)") }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b"), make("c")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        engine.simulateFinishPlayback()   // a → b : begin #1 ; isPlaying suppressed, no end via sink
+        drainMainQueue()
+        engine.simulateFinishPlayback()   // b → c : begin #2, but must end #1 FIRST (defensive cleanup)
+        drainMainQueue()
+
+        XCTAssertEqual(trace, ["begin:1", "end:1", "begin:2"],
+                       "begin #2 must be preceded by ending exactly the id opened by begin #1")
+    }
+
+    /// Code review finding 1: `advanceQueue()` calls `beginAdvanceBackgroundTask()`
+    /// unconditionally before `startCurrentHead()`, but `startCurrentHead()`'s
+    /// FIRST statement is the CallKit guard — if a track finishes while a Meeshy
+    /// call is active, the task was opened but `engine.play()` is never reached,
+    /// so the `isPlaying==true` sink never fires and nothing ever ends the task
+    /// (only the ~30s OS expiration eventually would). Fix: the CallKit guard's
+    /// `else` branch in `startCurrentHead()` now ends the pending task before
+    /// returning — this covers ALL callers of `startCurrentHead()`, not just
+    /// `advanceQueue()`. Verified via the `testOverrideCallActive` DEBUG seam
+    /// already used by `test_play_whileCallActive_isNoOp` etc.
+    func test_startCurrentHead_whileCallActive_endsPendingBackgroundTask() {
+        let engine = MockAudioPlaybackEngine()
+        let sut = ConversationAudioCoordinator(engine: engine)
+        var beginCount = 0
+        var endCount = 0
+        sut.beginBackgroundTaskProvider = { _ in
+            beginCount += 1
+            return UIBackgroundTaskIdentifier(rawValue: 7)
+        }
+        sut.endBackgroundTaskProvider = { _ in endCount += 1 }
+
+        let now = Date()
+        let make = { (id: String) in
+            QueuedAudio(attachmentId: id, messageId: "m-\(id)", conversationId: "c",
+                        fileUrl: "https://x/\(id).m4a", durationMs: 1000,
+                        senderName: "S", senderAvatarURL: nil, receivedAt: now)
+        }
+        sut.play(current: make("a"), tail: [make("b")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+
+        CallManager.shared.testOverrideCallActive = true
+        defer { CallManager.shared.testOverrideCallActive = false }
+
+        engine.simulateFinishPlayback()   // a finishes mid-call → advanceQueue → begin, then startCurrentHead blocked
+        drainMainQueue()
+        drainMainQueue()
+
+        XCTAssertEqual(beginCount, 1, "the transition still opens a background task before hitting the CallKit guard")
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "engine.play() must never be reached while a CallKit call is active")
+        XCTAssertEqual(endCount, 1,
+                       "the CallKit guard's early return must end the task it cannot hand off to the isPlaying sink")
     }
 }

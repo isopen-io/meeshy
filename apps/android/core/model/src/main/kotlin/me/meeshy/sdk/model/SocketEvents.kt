@@ -51,11 +51,22 @@ data class UnreadUpdateEvent(
     val totalUnread: Int = 0,
 )
 
+/**
+ * Wire contract of `user:status` (and each entry of `presence:snapshot`'s `users`
+ * array, an identical per-user shape) — mirrors the gateway's real payload
+ * (`packages/shared/types/socketio-events.ts` `UserStatusEvent`:
+ * `{userId, username, isOnline, lastActiveAt}`). A prior `status: String`/
+ * `lastSeenAt: String?` shape here matched no field the gateway ever emits, so
+ * every live presence update silently decoded to blank defaults — RE-PROUVEN
+ * against the shared TS type and the gateway's `_broadcastUserStatus` emitter
+ * before fixing (see `NOTES.md`).
+ */
 @Serializable
 data class UserStatusEvent(
     val userId: String,
-    val status: String,
-    val lastSeenAt: String? = null,
+    val username: String = "",
+    val isOnline: Boolean = false,
+    val lastActiveAt: String? = null,
 )
 
 @Serializable
@@ -78,15 +89,39 @@ data class TranscriptionReadyEvent(
     val durationMs: Long? = null,
 )
 
+/**
+ * A progressive cloned-voice audio translation — the payload of `audio:translation-ready`
+ * / `audio:translations-progressive` / `audio:translations-completed` (all share the
+ * shared `AudioTranslationEventData` shape). The translated audio nests under
+ * [translatedAudio] with the top-level target language in [language]; the gateway keys
+ * a voice-cloned rendering of the original voice note into the viewer's language.
+ *
+ * Faithful to `packages/shared/types/socketio-events.ts` `AudioTranslationEventData`.
+ * Deserialization is lenient ([url]/[language] default to blank) so a malformed frame
+ * is dropped by the merge no-op rather than throwing at decode time.
+ */
 @Serializable
 data class AudioTranslationEvent(
     val messageId: String,
     val conversationId: String,
     val attachmentId: String? = null,
-    val targetLanguage: String,
-    val audioUrl: String,
+    val language: String = "",
+    val translatedAudio: TranslatedAudioPayload = TranslatedAudioPayload(),
+    val processingTimeMs: Long? = null,
+)
+
+@Serializable
+data class TranslatedAudioPayload(
+    val id: String? = null,
+    val targetLanguage: String? = null,
+    val url: String = "",
+    val transcription: String = "",
     val durationMs: Long? = null,
+    val format: String? = null,
     val cloned: Boolean = false,
+    val quality: Double? = null,
+    val voiceModelId: String? = null,
+    val ttsModel: String? = null,
 )
 
 @Serializable
@@ -128,9 +163,16 @@ data class ParticipantRoleUpdatedEvent(
     val role: String,
 )
 
+/**
+ * Wire contract of `presence:snapshot` — mirrors the gateway's real payload
+ * (`PresenceSnapshotEventData`: `{users: [{userId, username, isOnline,
+ * lastActiveAt}]}`), reusing [UserStatusEvent] for each entry since the shape is
+ * identical. A prior flat `onlineUserIds: List<String>` shape matched no field
+ * the gateway ever emits — see [UserStatusEvent]'s own doc comment.
+ */
 @Serializable
 data class PresenceSnapshotEvent(
-    val onlineUserIds: List<String> = emptyList(),
+    val users: List<UserStatusEvent> = emptyList(),
 )
 
 @Serializable
@@ -184,10 +226,24 @@ data class SocketPostDeletedData(
     val deletedAt: String? = null,
 )
 
+/**
+ * `post:bookmarked` — a personal event emitted only to the acting user's sockets
+ * (via `emitToUser`), so [bookmarked] is always the viewer's own state and
+ * [bookmarkCount] the gateway's ABSOLUTE bookmark count after the mutation
+ * (mirrors [SocketPostLikedData.likesCount]). Port of PostBookmarkedEventData.
+ */
+@Serializable
+data class SocketPostBookmarkedData(
+    val postId: String,
+    val bookmarked: Boolean = false,
+    val bookmarkCount: Int = 0,
+)
+
 @Serializable
 data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
+    val commentCount: Int = 0,
 )
 
 @Serializable
@@ -196,6 +252,38 @@ data class SocketCommentLikedData(
     val commentId: String,
     val userId: String,
     val likesCount: Int = 0,
+)
+
+@Serializable
+data class SocketCommentDeletedData(
+    val postId: String,
+    val commentId: String,
+    val commentCount: Int = 0,
+)
+
+/** Server-authoritative aggregation for one emoji on a comment (mirror of iOS `SocketCommentReactionAggregation`). */
+@Serializable
+data class SocketCommentReactionAggregation(
+    val emoji: String = "",
+    val count: Int = 0,
+    val userIds: List<String> = emptyList(),
+    val hasCurrentUser: Boolean = false,
+)
+
+/**
+ * `comment:reaction-added` / `comment:reaction-removed` — a user reacted to (or un-reacted from)
+ * a comment. Mirror of iOS `SocketCommentReactionUpdateEvent`. [aggregation] carries the absolute
+ * post-mutation state for the emoji; [timestamp] is left as the raw ISO string (optional).
+ */
+@Serializable
+data class SocketCommentReactionUpdateData(
+    val commentId: String,
+    val postId: String,
+    val userId: String,
+    val emoji: String,
+    val action: String = "",
+    val aggregation: SocketCommentReactionAggregation? = null,
+    val timestamp: String? = null,
 )
 
 @Serializable
@@ -218,9 +306,59 @@ data class SocketStoryReactedData(
     val emoji: String,
 )
 
+/**
+ * `status:created` — a friend published a mood status. The created post is nested
+ * under [status] (mirror of iOS `SocketStatusCreatedData`); the gateway does not echo
+ * a [clientMutationId] for statuses, so an own-status echo is de-duplicated by id.
+ */
+@Serializable
+data class SocketStatusCreatedData(
+    val status: ApiPost,
+    val clientMutationId: String? = null,
+)
+
+/** `status:updated` — a mood status was edited; [status] carries the full new post. */
+@Serializable
+data class SocketStatusUpdatedData(
+    val status: ApiPost,
+)
+
+/** `status:deleted` — a mood status was removed. Mirror of iOS `SocketStatusDeletedData`. */
+@Serializable
+data class SocketStatusDeletedData(
+    val statusId: String,
+    val authorId: String = "",
+)
+
+/**
+ * `status:reacted` — a user reacted to a mood status. Carries no aggregate count
+ * (mirror of iOS `SocketStatusReactedData`), so the bar increments by one, skipping
+ * the reactor's own echo (guarded in the ViewModel).
+ */
+@Serializable
+data class SocketStatusReactedData(
+    val statusId: String,
+    val userId: String,
+    val emoji: String,
+)
+
 @Serializable
 data class SocketStoryUnreactedData(
     val storyId: String,
+    val userId: String,
+    val emoji: String,
+)
+
+/**
+ * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
+ * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
+ * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the
+ * spent bucket), skipping the un-reactor's own echo (guarded in the ViewModel). A SOTA
+ * symmetry the iOS bar handlers lack — the gateway emits it on every reaction removal.
+ */
+@Serializable
+data class SocketStatusUnreactedData(
+    val statusId: String,
     val userId: String,
     val emoji: String,
 )

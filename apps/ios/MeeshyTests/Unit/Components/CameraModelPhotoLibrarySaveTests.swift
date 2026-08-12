@@ -1,17 +1,24 @@
 import XCTest
 @testable import Meeshy
 
-/// Source-analysis guards for the "in-app capture appears in Recent Media"
-/// fix (2026-07-09). Before this fix, a photo/video taken via the in-app
-/// camera never reached `RecentMediaStripModel.assets` at all — it only ever
-/// existed as a local temp file staged into the composer's attachment tray.
-/// The fix saves the capture into the user's Photos library on a best-effort
-/// basis; `RecentMediaStripModel`'s own `PHPhotoLibraryChangeObserver` then
-/// re-fetches and the new item appears at the front via the SAME
-/// `creationDate`-sorted query as everything else — no manual array index is
-/// ever touched by this code path, which is what actually prevents the
-/// index-mismatch bug class the fix was asked to guard against (a hand-rolled
-/// `assets.insert(at: 0)` racing a concurrent PHFetchResult refresh).
+/// Source-analysis guards for the in-app capture -> Photos-library save path.
+///
+/// Two things this path must get right:
+///  1. A photo/video taken via the in-app camera is saved into the user's
+///     Photos library on a best-effort basis, so `RecentMediaStripModel`'s own
+///     `PHPhotoLibraryChangeObserver` re-fetches and the new item appears at the
+///     front via the SAME `creationDate`-sorted query as everything else — no
+///     manual array index is ever touched.
+///  2. The save runs through `PhotoLibraryManager` (a deliberately NON-@MainActor
+///     Sendable service), NOT an inline `PHPhotoLibrary.performChanges` block.
+///     CameraModel is `@MainActor`, so a `performChanges` change-block written
+///     inline was implicitly MainActor-isolated; Photos invokes that block on its
+///     own background queue, which trips the Swift 6 executor-isolation assertion
+///     (`swift_task_isCurrentExecutorImpl` -> `dispatch_assert_queue_fail`,
+///     EXC_BREAKPOINT) — the "app crashes when I film a video and validate" bug
+///     (2026-07-10). Delegating to the non-isolated `PhotoLibraryManager` removes
+///     the trap. These guards pin that delegation and forbid reintroducing an
+///     inline Photos call in this `@MainActor` type.
 final class CameraModelPhotoLibrarySaveTests: XCTestCase {
 
     private func cameraViewSource() throws -> String {
@@ -32,7 +39,7 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
         return String(source[start.lowerBound..<end])
     }
 
-    func test_photoCapture_savesToPhotoLibrary() throws {
+    func test_photoCapture_savesViaPhotoLibraryManager() throws {
         let source = try cameraViewSource()
         let fn = try body(
             from: "func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto",
@@ -40,47 +47,53 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             in: source
         )
         XCTAssertTrue(
-            fn.contains("Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAsset(from: image) }"),
-            "A successfully captured photo must be saved to the photo library " +
-            "so it appears in RecentMediaStripModel's grid via the library's " +
-            "own change-observer refetch — not via any hand-rolled array insert."
+            fn.contains("PhotoLibraryManager.shared.saveImage(data)"),
+            "A successfully captured photo must be saved to the photo library via " +
+            "the non-@MainActor PhotoLibraryManager (passing the ORIGINAL encoded " +
+            "bytes), so it appears in RecentMediaStripModel's grid via the " +
+            "library's own change-observer refetch — never an inline @MainActor " +
+            "performChanges block (which traps off-main)."
         )
     }
 
-    func test_videoFinalStop_savesMergedResultToPhotoLibrary() throws {
+    func test_videoFinalStop_savesMergedResultViaPhotoLibraryManager() throws {
         let source = try cameraViewSource()
         let fn = try body(
             from: "// Final stop.",
-            to: "/// Best-effort save of an in-app capture",
-            in: source
-        )
-        XCTAssertTrue(
-            fn.contains("Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: finalURL) }"),
-            "The finished recording (merged across any camera switches) must be " +
-            "saved to the photo library exactly like the fail-soft last-segment " +
-            "fallback above it."
-        )
-        XCTAssertTrue(
-            fn.contains("Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: lastSegment) }"),
-            "The fail-soft path (merge failed, falls back to the last recorded " +
-            "segment) must ALSO save that segment — a merge failure must not " +
-            "silently skip the recent-media save too."
-        )
-    }
-
-    func test_saveToPhotoLibrary_neverBlocksOnDeniedOrRestrictedPermission() throws {
-        let source = try cameraViewSource()
-        let fn = try body(
-            from: "private static func saveToPhotoLibrary(",
             to: "/// Concatenates ordered video segments",
             in: source
         )
         XCTAssertTrue(
-            fn.contains("case .denied, .restricted:") && fn.contains("break"),
-            "saveToPhotoLibrary must silently no-op when the app lacks add " +
-            "permission — this is a best-effort side effect of capturing " +
-            "media, never a gate on the capture flow itself (capturedPhotoId/ " +
-            "capturedVideoId must always fire regardless of Photos permission)."
+            fn.contains("PhotoLibraryManager.shared.saveVideo(at: finalURL)"),
+            "The finished recording (merged across any camera switches) must be " +
+            "saved to the photo library via PhotoLibraryManager exactly like the " +
+            "fail-soft last-segment fallback above it."
+        )
+        XCTAssertTrue(
+            fn.contains("PhotoLibraryManager.shared.saveVideo(at: lastSegment)"),
+            "The fail-soft path (merge failed, falls back to the last recorded " +
+            "segment) must ALSO save that segment via PhotoLibraryManager — a " +
+            "merge failure must not silently skip the recent-media save too."
+        )
+    }
+
+    /// Regression guard for the film-and-validate crash: CameraModel is
+    /// `@MainActor`, so it must NEVER call Photos' `performChanges` (or build a
+    /// `PHAssetChangeRequest`) inline — that change-block would be MainActor-
+    /// isolated yet invoked off-main by Photos, trapping (EXC_BREAKPOINT). All
+    /// library writes go through the non-isolated `PhotoLibraryManager`.
+    func test_cameraView_neverCallsPhotosInlineFromMainActor() throws {
+        let source = try cameraViewSource()
+        XCTAssertFalse(
+            source.contains(".performChanges("),
+            "CameraView (a @MainActor type) must not invoke PHPhotoLibrary." +
+            "performChanges inline — the change-block runs off-main and traps. " +
+            "Delegate to the non-@MainActor PhotoLibraryManager instead."
+        )
+        XCTAssertFalse(
+            source.contains("PHAssetChangeRequest"),
+            "CameraView must not construct PHAssetChangeRequest inline — Photos " +
+            "library writes belong to PhotoLibraryManager."
         )
     }
 }

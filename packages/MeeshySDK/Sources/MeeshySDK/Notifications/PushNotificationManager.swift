@@ -6,6 +6,23 @@ import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
+/// « Un message est arrivé dans cette conversation » — le seul fait qu'une
+/// notification entrante établisse. `messageId` est porté séparément pour que
+/// l'abonné puisse reconnaître un message qu'il détient DÉJÀ (le socket
+/// `message:new` précède typiquement le push d'environ une seconde) et
+/// s'abstenir d'écraser ce qu'il en sait par une facette neutre. `nil` quand
+/// le payload ne le transporte pas — l'abonné retombe alors sur son
+/// comportement conservateur.
+public struct MessageActivitySignal: Sendable, Equatable {
+    public let conversationId: String
+    public let messageId: String?
+
+    public init(conversationId: String, messageId: String? = nil) {
+        self.conversationId = conversationId
+        self.messageId = messageId
+    }
+}
+
 @MainActor
 public final class PushNotificationManager: NSObject, ObservableObject {
     public static let shared = PushNotificationManager()
@@ -17,14 +34,14 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// The app layer observes this to perform navigation.
     @Published public var pendingNotificationPayload: NotificationPayload?
 
-    /// Émet un conversationId chaque fois qu'une notification entrante
-    /// (bannière au premier plan ou push silencieux) signale une activité de
-    /// message. La liste de conversations s'y abonne pour remonter la ligne
-    /// en tête en temps réel — y compris quand le message est arrivé via APNs
-    /// alors que le websocket était déconnecté. Distinct de
+    /// Émet un signal d'activité chaque fois qu'une notification entrante
+    /// (bannière au premier plan ou push silencieux) signale un message. La
+    /// liste de conversations s'y abonne pour remonter la ligne en tête en
+    /// temps réel — y compris quand le message est arrivé via APNs alors que
+    /// le websocket était déconnecté. Distinct de
     /// `pendingNotificationPayload`, qui porte une intention de navigation sur
     /// un tap explicite.
-    public let messageNotificationReceived = PassthroughSubject<String, Never>()
+    public let messageNotificationReceived = PassthroughSubject<MessageActivitySignal, Never>()
 
     /// Keys exposed at type level so they can be reused by tests writing to
     /// the same UserDefaults suite without re-stringifying the namespace.
@@ -222,10 +239,12 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public func noteMessageActivity(userInfo: [AnyHashable: Any]) {
         guard let conversationId = userInfo["conversationId"] as? String,
               !conversationId.isEmpty else { return }
-        let isMessage = (userInfo["type"] as? String) == "message"
-            || (userInfo["messageId"] as? String)?.isEmpty == false
+        let messageId = (userInfo["messageId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let isMessage = (userInfo["type"] as? String) == "message" || messageId != nil
         guard isMessage else { return }
-        messageNotificationReceived.send(conversationId)
+        messageNotificationReceived.send(
+            MessageActivitySignal(conversationId: conversationId, messageId: messageId)
+        )
     }
 
     // MARK: - Badge
@@ -318,6 +337,11 @@ public struct NotificationPayload {
     public let senderAvatar: String?
     public let postId: String?
     public let postType: String?
+    /// Discriminant d'entité de la famille `friend_new_*`, que la gateway a
+    /// historiquement émis SOUS CE NOM au lieu de `postType`. Lu en repli par le
+    /// routage client pour que le nouveau réel d'un ami ouvre bien le lecteur
+    /// immersif et non le détail de post plat.
+    public let contentType: String?
     /// Commentaire ciblé par la notification (like/réponse/commentaire). Permet
     /// d'ouvrir l'entité puis de défiler/surligner le commentaire exact.
     public let commentId: String?
@@ -326,6 +350,16 @@ public struct NotificationPayload {
     public let parentCommentId: String?
     public let title: String?
     public let body: String?
+    /// Guideline 5 (MIIT) — China-region incoming-call push (routed via the
+    /// standard 'apns' alert type, not PushKit VoIP, so it arrives as a
+    /// regular tappable notification). Non-nil only for `type == "call"`.
+    public let callId: String?
+    public let callerUserId: String?
+    public let callerName: String?
+    public let isVideoCall: Bool
+    /// JSON-encoded ICE servers, same shape `VoIPPushManager.parseIceServers`
+    /// already decodes for the PushKit path — decode with that same helper.
+    public let iceServersJSON: String?
 
     public init(userInfo: [AnyHashable: Any]) {
         self.type = userInfo["type"] as? String
@@ -341,6 +375,8 @@ public struct NotificationPayload {
         self.postId = rawPostId.isEmpty ? nil : rawPostId
         let rawPostType = userInfo["postType"] as? String ?? ""
         self.postType = rawPostType.isEmpty ? nil : rawPostType
+        let rawContentType = userInfo["contentType"] as? String ?? ""
+        self.contentType = rawContentType.isEmpty ? nil : rawContentType
         let rawCommentId = userInfo["commentId"] as? String ?? ""
         self.commentId = rawCommentId.isEmpty ? nil : rawCommentId
         let rawParentCommentId = userInfo["parentCommentId"] as? String ?? ""
@@ -354,5 +390,19 @@ public struct NotificationPayload {
             self.title = nil
             self.body = nil
         }
+
+        self.callId = userInfo["callId"] as? String
+        self.callerUserId = userInfo["callerUserId"] as? String
+        self.callerName = userInfo["callerName"] as? String
+        // Backend sends `isVideo` as a string ("true"/"false") because APNs
+        // custom payload keys must be JSON-serializable primitives.
+        if let b = userInfo["isVideo"] as? Bool {
+            self.isVideoCall = b
+        } else if let s = userInfo["isVideo"] as? String {
+            self.isVideoCall = s.lowercased() == "true"
+        } else {
+            self.isVideoCall = false
+        }
+        self.iceServersJSON = userInfo["iceServers"] as? String
     }
 }

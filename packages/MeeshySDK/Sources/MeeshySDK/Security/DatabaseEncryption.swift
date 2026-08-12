@@ -15,7 +15,8 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
     public static let shared = DatabaseEncryption()
 
     private static let keychainKey = "meeshy_db_encryption_key"
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "db-encryption")
+    fileprivate static let logger = Logger(subsystem: "com.meeshy.sdk", category: "db-encryption")
+    private var logger: Logger { Self.logger }
     private let key: SymmetricKey
 
     private init() {
@@ -35,7 +36,17 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
 
         let newKey = SymmetricKey(size: .bits256)
         let keyData = newKey.withUnsafeBytes { Data($0) }
-        try? keychain.save(keyData.base64EncodedString(), forKey: keychainKey)
+        do {
+            try keychain.save(keyData.base64EncodedString(), forKey: keychainKey)
+        } catch {
+            // La clé n'a pas pu être persistée : elle reste valide pour cette
+            // session, mais TOUT ce qui sera chiffré avec deviendra illisible
+            // au prochain lancement (une nouvelle clé sera générée). `.fault`
+            // pour que l'incident remonte dans les diagnostics.
+            Self.logger.fault(
+                "DB encryption key could not be persisted to Keychain — cache written this session will be unreadable after relaunch: \(error.localizedDescription, privacy: .public)"
+            )
+        }
         return newKey
     }
 
@@ -78,7 +89,15 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
     public func encryptCodable<T: Encodable>(_ value: T) -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let json = try? encoder.encode(value) else { return nil }
+        let json: Data
+        do {
+            json = try encoder.encode(value)
+        } catch {
+            logger.error(
+                "Encode failed for \(String(describing: T.self), privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
         return encrypt(json)
     }
 
@@ -86,7 +105,16 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
         guard let json = decrypt(ciphertext) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(type, from: json)
+        do {
+            return try decoder.decode(type, from: json)
+        } catch {
+            // Déchiffrement OK mais schéma incompatible : donnée écrite par une
+            // version antérieure du modèle. Le nil est traité comme un cache miss.
+            logger.error(
+                "Decode failed for \(String(describing: type), privacy: .public) — stale cache schema: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
     }
 
     /// Wipes the encryption key from Keychain. Called on account deletion

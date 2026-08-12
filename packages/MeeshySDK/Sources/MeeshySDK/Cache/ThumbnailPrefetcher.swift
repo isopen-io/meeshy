@@ -1,4 +1,5 @@
 import Foundation
+import os
 import ImageIO
 import CoreGraphics
 import CryptoKit
@@ -56,7 +57,12 @@ public actor ThumbnailPrefetcher {
     /// Save raw thumbnail data to disk
     public func saveToDisk(data: Data, forKey key: String) {
         let path = thumbnailPath(forKey: key)
-        try? data.write(to: path)
+        do {
+            try data.write(to: path)
+        } catch {
+            // La miniature sera re-décodée depuis l'original à chaque affichage.
+            Logger.cache.error("Thumbnail not cached to disk, it will be re-decoded every time: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Decode from disk via mmap + CGImageSource — NEVER on MainActor
@@ -82,7 +88,7 @@ public actor ThumbnailPrefetcher {
     private func thumbnailPath(forKey key: String) -> URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("meeshy_thumbnails")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        FileManager.default.createDirectoryLogging(at: dir, context: "thumbnail cache dir")
         let hash = SHA256.hash(data: Data(key.utf8)).compactMap { String(format: "%02x", $0) }.joined()
         return dir.appendingPathComponent(hash + ".jpg")
     }

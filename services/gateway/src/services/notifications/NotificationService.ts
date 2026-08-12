@@ -26,28 +26,36 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
-import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
+import { filterMutedRecipients } from './mutedRecipients';
+import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
+import { filterPostConsumers } from '../posts/postAudience';
+import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
-  // p.ex. 1 048 500 o (< 1 Mio) affiche "1024 Ko" au lieu de "1.0 Mo".
-  const ko = Math.round(bytes / 1024);
-  if (ko < 1024) return `${ko} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+/**
+ * Lit une clé de metadata comme chaîne non vide pour le payload push (les
+ * `data` APNs/FCM ne transportent que des chaînes). Retourne `''` quand la clé
+ * est absente, nulle ou vide — ce que le client interprète comme « pas de
+ * valeur » (`NotificationPayload` mappe la chaîne vide vers `nil`).
+ */
+function pickMetadataString(metadata: unknown, key: string): string {
+  if (!metadata || typeof metadata !== 'object' || !(key in metadata)) return '';
+  const value = (metadata as Record<string, unknown>)[key];
+  return value == null ? '' : String(value);
 }
 
 /**
@@ -56,6 +64,60 @@ function formatFileSize(bytes: number): string {
  */
 function resolveActorName(actor: NotificationActor | undefined): string {
   return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
+}
+
+/**
+ * GW4 — native iOS category set by the PRODUCER (the NSE `applyCategory`
+ * stays as fallback for legacy payloads). Mirrors the NSE type mapping with
+ * one deliberate divergence: the CALL family is split into
+ * `MEESHY_CALL_INCOMING` (answer/decline) vs `MEESHY_CALL_MISSED`
+ * (callback/view) so a finished call never shows an "Answer" action.
+ * Unknown types return undefined — no category means no misleading actions.
+ */
+export function pushCategoryForNotificationType(type: NotificationType): string | undefined {
+  switch (type) {
+    case 'new_message':
+    case 'message_reply':
+    case 'reply':
+    case 'message_forwarded':
+    case 'message_reaction':
+    case 'reaction':
+    case 'new_conversation':
+    case 'new_conversation_direct':
+    case 'new_conversation_group':
+    case 'added_to_conversation':
+      return 'MEESHY_MESSAGE';
+    case 'mention':
+    case 'user_mentioned':
+      return 'MEESHY_MENTION';
+    case 'friend_request':
+    case 'contact_request':
+      return 'MEESHY_FRIEND_REQUEST';
+    case 'post_like':
+    case 'post_comment':
+    case 'post_repost':
+    case 'story_reaction':
+    case 'status_reaction':
+    case 'comment_like':
+    case 'comment_reply':
+    case 'comment_reaction':
+    case 'story_new_comment':
+    case 'story_thread_reply':
+    case 'friend_story_comment':
+    case 'friend_new_story':
+    case 'friend_new_post':
+    case 'friend_new_mood':
+      return 'MEESHY_SOCIAL';
+    case 'incoming_call':
+      return 'MEESHY_CALL_INCOMING';
+    case 'missed_call':
+    case 'call_ended':
+    case 'call_declined':
+    case 'call_recording_ready':
+      return 'MEESHY_CALL_MISSED';
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -183,6 +245,30 @@ export function formatEphemeralDuration(
 }
 
 /**
+ * L'identité d'acteur qu'une notification affiche, résolue par l'APPELANT.
+ *
+ * Les trois créateurs ci-dessous rechargeaient l'expéditeur par
+ * `user.findUnique({ id: senderId })` et abandonnaient sur `null`. Deux
+ * conséquences, corrigées par ce paramètre :
+ *
+ *  - un participant ANONYME n'a pas de ligne `User` (`Participant.userId` est
+ *    nullable), donc la lecture rendait toujours `null` : un anonyme ne
+ *    notifiait personne, ni par lien de partage ni par le chemin socket. Son
+ *    `displayName`/`avatar` de participant est la seule identité qui existe —
+ *    et elle suffit à nommer une notification ;
+ *  - la lecture était refaite PAR DESTINATAIRE alors que l'appelant venait de
+ *    la faire une fois pour tout l'éventail.
+ *
+ * Optionnel : sans lui, le comportement historique (lecture + abandon sur
+ * absence) est conservé à l'identique pour tous les appelants existants.
+ */
+export type NotificationActorProfile = {
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+};
+
+/**
  * Builds the sanitised body for a protected message. Returns `null` when the
  * message is NOT protected (caller should keep the original text).
  *
@@ -287,28 +373,28 @@ export function formatSingleAttachmentLabelI18n(lang: string, params: {
 
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.audio');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'video') {
     if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.video');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'image') {
     if (params.width && params.height) details.push(`${params.width}×${params.height}`);
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.photo');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   const ext = extractExtension(params.filename);
   const docLabel = ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
-  return params.fileSize ? `${docLabel} · ${formatFileSize(params.fileSize)}` : docLabel;
+  return params.fileSize ? `${docLabel} · ${formatFileSizeI18n(lang, params.fileSize)}` : docLabel;
 }
 
 /**
@@ -397,6 +483,79 @@ const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
 
 const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
 
+/**
+ * Borne appliquée à chaque lecture de graphe qui alimente un fan-out de
+ * notification. Elle tient le coût sur un post viral ou un auteur à très grand
+ * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
+ * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
+ * test qui la surveille.
+ *
+ * Les requêtes prennent `FANOUT_ROW_CAP + 1`. La ligne excédentaire est un
+ * TÉMOIN, jamais un destinataire : elle est lue, comptée, puis jetée par un
+ * `slice`, de sorte que la borne de DIFFUSION reste à sa valeur pendant que sa
+ * saturation devient dicible. Sans elle, il faudrait déduire la troncature de
+ * « la requête a rendu autant de lignes que la borne » — ce qui déclare tronqué
+ * un seau de très exactement `FANOUT_ROW_CAP` engagés, alors qu'il est complet,
+ * et fait crier au loup à chaque publication d'un auteur à exactement 500 amis.
+ *
+ * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
+ * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
+ * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
+ * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
+ * déduplication a repliée en deçà de la borne. Le seau où la troncature est de
+ * loin la plus probable — un auteur à plus de 500 amis est banal, un post à plus
+ * de 500 commentateurs distincts ne l'est pas — est celui où le compte est exact.
+ */
+const FANOUT_ROW_CAP = 500;
+
+/** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
+type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
+
+/**
+ * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
+ *
+ * `truncatedBuckets` distingue « ce seau est complet » de « ce seau s'arrête à
+ * la borne » — deux listes identiques en apparence, dont une seule dit la
+ * vérité sur l'audience réelle. Sans ce champ, un fan-out silencieusement
+ * tronqué se lit exactement comme un fan-out exhaustif.
+ */
+type StoryNotificationRecipients = {
+  authorId: string;
+  friendIds: string[];
+  previousCommenterIds: string[];
+  truncatedBuckets: FanoutBucket[];
+};
+
+/**
+ * La part d'une notification `member_joined` qui ne dépend PAS du destinataire.
+ * Lue une fois, servie à toute l'audience — c'est ce qui distingue une arrivée
+ * (un événement, N destinataires) d'une boucle de N notifications distinctes.
+ */
+type MemberJoinedSnapshot = {
+  readonly newMember: { username: string; displayName: string | null; avatar: string | null };
+  readonly conversation: { title: string | null; type: string } | null;
+  readonly memberCount: number;
+};
+
+/**
+ * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
+ * d'amitié produit UNE notification, à sa création — et `singleBatch` en fait
+ * une lecture close plutôt qu'un curseur laissé ouvert côté serveur.
+ */
+const RETRACTION_BATCH_SIZE = 1000;
+
+/**
+ * Le retour d'une commande Mongo `find` brute réduite à sa projection d'ids.
+ *
+ * `_id` arrive en Extended JSON (`{ $oid }`) et non en `string` : c'est la
+ * différence entre la commande brute et un `findMany` Prisma, et la raison pour
+ * laquelle le retrait relit puis supprime par ids typés plutôt que d'enchaîner
+ * deux commandes brutes.
+ */
+type RawNotificationIdBatch = {
+  cursor?: { firstBatch?: ReadonlyArray<{ _id: string | { $oid: string } }> };
+};
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -472,37 +631,77 @@ export class NotificationService {
    * Lit UserPreferences.notification (JSON) — source unique de vérité.
    * Les notifications système passent toujours.
    */
-  private async shouldCreateNotification(userId: string, type: NotificationType): Promise<boolean> {
-    // Les notifications système/sécurité passent toujours
-    if (type === 'system') return true;
-
+  /**
+   * GW7 — chargement unique des préférences (null = lecture en échec, fail
+   * open). Réutilisé par le gating ET par les substitutions
+   * showPreview/showSenderName du push — une seule requête par notification.
+   */
+  private async loadNotificationPrefs(userId: string): Promise<NotifPrefs | null> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
         select: { notification: true },
       });
-
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
-      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
-
-      // 1) Vérifier le toggle par type
-      if (!this.isTypeEnabled(prefs, type)) {
-        notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
-        return false;
-      }
-
-      // 2) Vérifier le mode Ne Pas Déranger
-      if (this.isDNDActive(prefs)) {
-        notificationLogger.info('Notification bloquée par DND', { userId, type });
-        return false;
-      }
-
-      return true;
+      return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
     } catch (error) {
-      // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
-      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId, type });
-      return true;
+      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId });
+      return null;
     }
+  }
+
+  /**
+   * Le destinataire a-t-il mis CETTE conversation en sourdine ?
+   *
+   * Unique porte pour les notifications à destinataire unique dont le type
+   * respecte le mute (cf. le tableau ambiant/adressé de `mutedRecipients.ts`).
+   * Elle existe parce que la règle avait déjà deux exemplaires — réaction et
+   * réponse — qui devaient devenir cinq : un même verdict, un même log, une
+   * même place dans l'ordre d'exécution.
+   *
+   * À appeler AVANT toute lecture et avant tout compteur mutant : une
+   * notification supprimée par le mute ne doit ni payer ses requêtes de
+   * contexte, ni consommer le budget anti-spam d'une paire (verrouillé par
+   * « muted-conversation reactions do not consume the pair throttle budget »).
+   */
+  private async isConversationMutedFor(
+    userId: string,
+    conversationId: string,
+    type: NotificationType
+  ): Promise<boolean> {
+    const nonMuted = await filterMutedRecipients(this.prisma, conversationId, [userId]);
+    if (nonMuted.length > 0) return false;
+
+    notificationLogger.info('Notification suppressed (conversation muted)', { userId, conversationId, type });
+    return true;
+  }
+
+  private async shouldCreateNotification(
+    userId: string,
+    type: NotificationType,
+    preloadedPrefs?: NotifPrefs | null
+  ): Promise<boolean> {
+    const prefs = preloadedPrefs !== undefined
+      ? preloadedPrefs
+      : await this.loadNotificationPrefs(userId);
+
+    // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
+    if (prefs === null) return true;
+
+    // 1) Vérifier le toggle par type
+    if (!this.isTypeEnabled(prefs, type)) {
+      notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
+      return false;
+    }
+
+    // 2) Vérifier le mode Ne Pas Déranger — helper PARTAGÉ tz-aware (GW7),
+    // même implémentation que PushNotificationService.isPushAllowed.
+    if (isWithinDnd(prefs)) {
+      notificationLogger.info('Notification bloquée par DND', { userId, type });
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -536,16 +735,20 @@ export class NotificationService {
       case 'story_new_comment':
       case 'friend_story_comment':
       case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
+      case 'friend_new_post':
+      case 'friend_new_story':
+      case 'friend_new_mood':   return prefs.friendContentEnabled ?? true;
       case 'new_conversation_direct':
       case 'new_conversation_group':
-      case 'new_conversation':  return prefs.conversationEnabled;
+      case 'new_conversation':
       case 'added_to_conversation':
-      case 'removed_from_conversation':
+      case 'removed_from_conversation': return prefs.conversationEnabled;
+      case 'community_invite':      return prefs.groupInviteEnabled;
       case 'member_removed':
-      case 'member_left':           return prefs.memberJoinedEnabled;
+      case 'member_left':
       case 'member_promoted':
       case 'member_demoted':
-      case 'member_role_changed':   return prefs.memberJoinedEnabled;
+      case 'member_role_changed':   return prefs.memberLeftEnabled;
       case 'password_changed':
       case 'two_factor_enabled':
       case 'two_factor_disabled':
@@ -556,31 +759,12 @@ export class NotificationService {
 
   /**
    * Vérifie si le mode DND est actuellement actif.
-   * Utilise l'heure UTC du serveur.
+   * GW7 — délègue au helper PARTAGÉ tz-aware `isWithinDnd` (packages/shared)
+   * — même implémentation que PushNotificationService.isPushAllowed, la
+   * fenêtre est évaluée dans l'heure locale utilisateur (dndUtcOffsetMinutes).
    */
   private isDNDActive(prefs: NotifPrefs): boolean {
-    if (!prefs.dndEnabled) return false;
-
-    const now = new Date();
-
-    // Si dndDays est défini et non vide, vérifier le jour
-    if (prefs.dndDays && prefs.dndDays.length > 0) {
-      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-      const today = dayMap[now.getUTCDay()];
-      if (!prefs.dndDays.includes(today as any)) return false;
-    }
-
-    const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-    const start = prefs.dndStartTime;
-    const end = prefs.dndEndTime;
-
-    // DND nocturne (ex: 22:00 - 08:00)
-    if (start > end) {
-      return currentTime >= start || currentTime < end;
-    }
-
-    // DND diurne (ex: 14:00 - 16:00)
-    return currentTime >= start && currentTime < end;
+    return isWithinDnd(prefs);
   }
 
   // ==============================================
@@ -642,8 +826,11 @@ export class NotificationService {
         return null;
       }
 
-      // Vérifier les préférences utilisateur avant création
-      const allowed = await this.shouldCreateNotification(params.userId, params.type);
+      // Vérifier les préférences utilisateur avant création — chargées UNE
+      // fois et réutilisées par les substitutions showPreview/showSenderName
+      // du push (GW7).
+      const notifPrefs = await this.loadNotificationPrefs(params.userId);
+      const allowed = await this.shouldCreateNotification(params.userId, params.type, notifPrefs);
       if (!allowed) {
         return null;
       }
@@ -674,13 +861,16 @@ export class NotificationService {
           : typeof meta.emoji === 'string' ? meta.emoji : null),
         parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
       };
-      // On ne touche la base pour la langue du destinataire QUE si le type
-      // produit réellement un titre localisé ET que l'appelant ne l'a pas déjà
-      // fournie — évite une requête inutile pour les types non gérés (messages,
-      // appels, sécurité…), qui retombent sur le rendu client.
+      // On ne touche la base pour la langue du destinataire QUE si un rendu
+      // localisé en a réellement besoin (titre localisé du type, ou corps
+      // générique showPreview:false) ET que l'appelant ne l'a pas déjà
+      // fournie — résolution paresseuse mémoïsée, au plus UNE requête.
+      let memoizedLang: string | undefined = params.lang;
+      const recipientLang = async (): Promise<string> =>
+        memoizedLang ?? (memoizedLang = await this.resolveRecipientLang(params.userId));
       let display = buildNotificationDisplay(params.lang ?? 'fr', displayInput);
       if (display.title !== null && params.lang === undefined) {
-        display = buildNotificationDisplay(await this.resolveRecipientLang(params.userId), displayInput);
+        display = buildNotificationDisplay(await recipientLang(), displayInput);
       }
       // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
@@ -776,7 +966,18 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
               `/conversations/${params.context.conversationId}`) :
             undefined;
-          const pushBody = params.content.substring(0, 200);
+          // GW7 — préférences de confidentialité du banner : showPreview:false
+          // remplace le corps par un libellé générique localisé (et supprime le
+          // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
+          // titre (nom de l'acteur) par un titre neutre.
+          const showPreview = notifPrefs?.showPreview ?? true;
+          const showSenderName = notifPrefs?.showSenderName ?? true;
+          // Corps générique localisé dans la langue du DESTINATAIRE — résolue
+          // paresseusement quand l'appelant ne l'a pas fournie (réponses,
+          // réactions, mentions…), jamais un 'fr' codé en dur.
+          const pushBody = showPreview
+            ? params.content.substring(0, 200)
+            : notificationString(await recipientLang(), 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
           // par le payload push : embarquer le même compte unread que
@@ -788,7 +989,7 @@ export class NotificationService {
           let unreadBadge: number | undefined;
           try {
             const count = await this.prisma.notification.count({
-              where: { userId: params.userId, readAt: null },
+              where: visibleNotificationsWhere({ userId: params.userId, unreadOnly: true }),
             });
             if (typeof count === 'number') unreadBadge = count;
           } catch {
@@ -796,24 +997,30 @@ export class NotificationService {
           }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
-          this.pushService.sendToUser({
-            userId: params.userId,
-            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
-            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
-            // for every message/friend-request/conversation-creation. Real call
-            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
-            types: ['apns', 'fcm'],
-            payload: {
-              title: pushTitle,
+          // GW4 — native grouping + actionable banner set by the producer:
+          // threadId groups by conversation on iOS; category selects the
+          // action set (the NSE only fills these for legacy payloads).
+          const pushCategory = pushCategoryForNotificationType(params.type);
+          const pushPayload = {
+              title: showSenderName ? pushTitle : 'Meeshy',
               // Subtitle carries the conversation name for group/global chats
               // — survives iOS Communication Notification rewriting that would
               // otherwise drop a "<sender> | <conv>" concatenated title.
-              ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+              // Dropped with showPreview:false (rich subtitles carry previews).
+              ...(pushSubtitle && showPreview ? { subtitle: pushSubtitle } : {}),
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(params.context.conversationId ? { threadId: params.context.conversationId } : {}),
+              ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                // Identité de la ligne créée : SEULE clé permettant au client
+                // de marquer lu au tap (POST /notifications/:id/read). Sans
+                // elle, les types sans context.conversationId/postId (system,
+                // login_new_device, password_changed, two_factor_*,
+                // friend_request) restaient non lus à vie après un tap push.
+                notificationId: formatted.id,
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
@@ -830,30 +1037,106 @@ export class NotificationService {
                   || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
                 parentCommentId: params.context.parentCommentId
                   || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
-                postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
+                // Navigation sociale iOS — requête d'ami (friend_request). Le
+                // handler iOS lit cette clé défensivement : absente →
+                // résolution via receivedRequests par senderId.
+                friendRequestId: params.context.friendRequestId || '',
+                // Discriminant d'entité du contenu social — pilote la surface
+                // ouverte au tap côté client (lecteur de réel / viewer éphémère
+                // / détail de post). `contentType` sert de repli : c'est sous ce
+                // nom que la famille `friend_new_*` l'a historiquement porté.
+                // Le TYPE de notification n'est JAMAIS un discriminant : le
+                // fan-out de commentaires émet `story_thread_reply` pour
+                // n'importe quel contenu, réel inclus.
+                postType: pickMetadataString(params.metadata, 'postType')
+                  || pickMetadataString(params.metadata, 'contentType'),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase A — message media inline (audio waveform, image preview, video thumb).
-                // L'extension iOS lit ces champs pour télécharger le fichier et l'attacher
-                // comme UNNotificationAttachment avec le bon UTI typeHint.
-                attachmentUrl: params.context.firstAttachmentUrl || '',
-                attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                  ? String(params.context.firstAttachmentDurationMs)
-                  : '',
                 // Phase B — reactions. Emoji used so the iOS extension can format
                 // the body as "<sender> a réagi <emoji> à votre message" while the
                 // INSendMessageIntent path still renders the reactor's avatar.
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
-                encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
+                // GW5 — persistance NSE : timestamp serveur + type du message,
+                // clés absentes (pas de '') quand la notification ne porte pas
+                // de message.
+                ...(params.context.messageCreatedAt ? { createdAt: params.context.messageCreatedAt } : {}),
+                ...(params.context.messageType ? { messageType: params.context.messageType } : {}),
+                // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
+                // data. La NSE réécrit inconditionnellement le body depuis
+                // encryptedContent et attache le média d'attachmentUrl — les
+                // embarquer vaincrait le mode privé (et translatedContent
+                // voyagerait en clair dans le canal push malgré l'opt-out).
+                ...(showPreview ? {
+                  // Phase A — message media inline (audio waveform, image preview,
+                  // video thumb). L'extension iOS lit ces champs pour télécharger le
+                  // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
+                  attachmentUrl: params.context.firstAttachmentUrl || '',
+                  attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                  attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                    ? String(params.context.firstAttachmentDurationMs)
+                    : '',
+                  encryptedContent: params.context.encryptedContent || '',
+                  ...(params.context.translatedContent ? {
+                    translatedContent: params.context.translatedContent,
+                    translatedLanguage: params.context.translatedLanguage || '',
+                  } : {}),
+                } : {}),
               },
-            },
+            };
+
+          // GW5 — budget APNs 4KB (rejet silencieux PayloadTooLarge sinon, et
+          // handleFailedToken compterait un strike sur un token sain).
+          // Dégradation par étages avec RE-VÉRIFICATION après chaque coupe :
+          // la traduction Prisme d'abord, puis encryptedContent — un banner
+          // générique délivré (la NSE retombe sur le body serveur) vaut mieux
+          // qu'un push rejeté qui ne s'affiche jamais.
+          const APNS_SAFE_PAYLOAD_BYTES = 3800;
+          const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
+          const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
+          const { encryptedContent: _ec, ...dataWithoutContentFields } = dataWithoutTranslation;
+          const boundedPayload = [
+            pushPayload,
+            { ...pushPayload, data: dataWithoutTranslation },
+            { ...pushPayload, data: dataWithoutContentFields },
+          ].find(candidate => payloadBytes(candidate) <= APNS_SAFE_PAYLOAD_BYTES)
+            ?? { ...pushPayload, data: dataWithoutContentFields };
+
+          this.pushService.sendToUser({
+            userId: params.userId,
+            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
+            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
+            // for every message/friend-request/conversation-creation. Real call
+            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
+            types: ['apns', 'fcm'],
+            payload: boundedPayload,
+          }).then(async (results) => {
+            // GW7 — delivery.pushSent tracking : flippé dès qu'au moins un
+            // device a reçu le push (le champ était initialisé false et
+            // jamais mis à jour — tracking multi-canal mort).
+            const delivered = Array.isArray(results) && results.some(r => r?.success);
+            if (!delivered) return;
+            try {
+              // RE-LIRE delivery juste avant d'écrire : un autre writer (digest
+              // email quotidien) a pu poser emailSent:true entre-temps — le
+              // snapshot de création { emailSent: false } est périmé.
+              const current = await this.prisma.notification.findUnique({
+                where: { id: notification.id },
+                select: { delivery: true },
+              });
+              const liveDelivery = ((current as { delivery?: unknown } | null)?.delivery ?? {}) as Record<string, unknown>;
+              await this.prisma.notification.update({
+                where: { id: notification.id },
+                data: { delivery: { ...liveDelivery, pushSent: true } as any },
+              });
+            } catch (error) {
+              notificationLogger.error('pushSent flip failed', { error, notificationId: notification.id });
+            }
           }).catch(err => {
             notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
           });
@@ -865,7 +1148,11 @@ export class NotificationService {
       // Send immediate email for high-priority notifications to offline users
       if (this.emailService && params.priority === 'high') {
         try {
-          const sockets = this.io ? await this.io.in(params.userId).fetchSockets() : [];
+          // Presence check MUST target the room every registered socket joins
+          // (`ROOMS.user(id)` === `user:${id}`, cf. AuthHandler). The room named
+          // by the bare user id is always empty, so a bare-id check would mark
+          // every online user "offline" and fire spurious immediate emails.
+          const sockets = this.io ? await this.io.in(ROOMS.user(params.userId)).fetchSockets() : [];
           if (sockets.length === 0) {
             const { getCacheStore } = await import('../CacheStore');
             const cache = getCacheStore();
@@ -902,9 +1189,11 @@ export class NotificationService {
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
                   });
-                } else {
+                } else if (notifPrefs?.emailEnabled !== false) {
                   // Social / general notification (mention, missed call, …):
                   // neutral notification email, never the security template.
+                  // Gated on emailEnabled comme le digest et les broadcasts —
+                  // seules les alertes de sécurité ci-dessus passent toujours.
                   this.emailService.sendNotificationEmail({
                     to: user.email,
                     name: user.username || 'User',
@@ -1063,6 +1352,8 @@ export class NotificationService {
     firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
     // Race-condition guard: between `MessageProcessor.handleMessage` and the
     // moment the notification actually fans out (sender lookup + conversation
@@ -1071,9 +1362,12 @@ export class NotificationService {
     // expire in that window we MUST NOT leak the original content via the
     // banner. Refetch the live state right before the fan-out and bail when
     // the message is no longer eligible.
+    // GW5 — the same refetch feeds the NSE persistence fields: authoritative
+    // createdAt/messageType plus any translation already produced by the
+    // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1096,17 +1390,23 @@ export class NotificationService {
       return null;
     }
 
-    // Expéditeur + conversation : lectures indépendantes, en parallèle
-    const [sender, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.senderId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+    // Expéditeur + conversation : lectures indépendantes, en parallèle. Un
+    // `senderProfile` fourni supprime la lecture `User` — elle est refaite ici
+    // une fois PAR DESTINATAIRE, et elle est vouée à l'échec pour un acteur
+    // anonyme (cf. `NotificationActorProfile`).
+    const [resolvedSender, conversation] = await Promise.all([
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.senderId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
       }),
     ]);
+    const sender = resolvedSender;
 
     if (!sender) {
       notificationLogger.warn('Sender not found for message notification', {
@@ -1116,6 +1416,19 @@ export class NotificationService {
     }
 
     const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+
+    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
+    // langue résolue du destinataire (même résolution que le framing). Pas de
+    // fallback translations.first : aucune correspondance = le contenu est
+    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
+    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
+    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
+    const matchedTranslation = translationsJson
+      ? Object.entries(translationsJson).find(([lang, t]) =>
+          lang.toLowerCase() === recipientLang.toLowerCase()
+          && typeof t?.text === 'string'
+          && !t.isEncrypted)
+      : undefined;
 
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
@@ -1133,6 +1446,10 @@ export class NotificationService {
       content,
       collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
+      // La notification ne survit pas au message qu'elle annonce. La valeur
+      // vient de la relecture VIVANTE ci-dessus, pas de l'appelant : celui-ci
+      // ne pourrait que rapporter ce qu'il croyait savoir à l'envoi.
+      expiresAt: liveMessage.expiresAt ?? undefined,
 
       actor: {
         id: params.senderId,
@@ -1157,6 +1474,13 @@ export class NotificationService {
           : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
+        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
+        messageType: liveMessage.messageType ?? undefined,
+        ...(matchedTranslation ? {
+          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
+          translatedLanguage: matchedTranslation[0],
+        } : {}),
       },
 
       metadata: {
@@ -1189,6 +1513,17 @@ export class NotificationService {
     messageId: string;
     conversationId: string;
     messagePreview: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance du message qui mentionne, reportée sur la notification : elle ne
+     * doit pas survivre au message. Fournie par l'appelant plutôt que relue
+     * ici — l'éventail la tient déjà (`FanOutMessage.expiresAt`), et
+     * `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite,
+     * donc sa copie ne peut pas dériver. Absente : aucune échéance, le
+     * comportement de toujours.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1200,10 +1535,12 @@ export class NotificationService {
     }
 
     const [mentioner, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.mentionerUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.mentionerUserId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
@@ -1218,6 +1555,7 @@ export class NotificationService {
       priority: 'high',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.mentionerUserId,
@@ -1250,11 +1588,18 @@ export class NotificationService {
     mentionedUserIds: string[],
     commonData: {
       senderId: string;
-      senderUsername: string;
-      senderAvatar?: string;
+      /**
+       * Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. Elle
+       * remplace `senderUsername`/`senderAvatar`, qui traversaient cette API
+       * sans jamais être lus : `createMentionNotification` rechargeait
+       * l'utilisateur par destinataire, et abandonnait pour un acteur anonyme.
+       */
+      senderProfile?: NotificationActorProfile;
       messageContent: string;
       conversationId: string;
       messageId: string;
+      /** Échéance du message mentionnant — cf. `createMentionNotification`. */
+      messageExpiresAt?: Date | null;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1279,6 +1624,8 @@ export class NotificationService {
           messageId: commonData.messageId,
           conversationId: commonData.conversationId,
           messagePreview: commonData.messageContent,
+          senderProfile: commonData.senderProfile,
+          messageExpiresAt: commonData.messageExpiresAt,
         })
       )
     );
@@ -1297,6 +1644,15 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
+    // GW3 — per-conversation mute suppresses reaction notifications
+    // (mentions pierce the mute; reactions do not). Checked BEFORE the
+    // throttle : le mute est déterministe/durable alors que
+    // shouldCreateReactionNotification MUTE son bucket — une réaction
+    // supprimée par le mute ne doit pas consommer le budget de la paire.
+    if (await this.isConversationMutedFor(params.messageAuthorId, params.conversationId, 'message_reaction')) {
+      return null;
+    }
+
     // Anti-spam: throttle reaction notifications per sender→recipient pair
     if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
       return null;
@@ -1313,7 +1669,10 @@ export class NotificationService {
       }),
       this.prisma.message.findUnique({
         where: { id: params.messageId },
-        select: { content: true },
+        // `expiresAt` voyage dans la lecture que l'extrait demandait déjà :
+        // la notification d'une réaction DÉSIGNE le message réagi, donc elle
+        // ne doit pas lui survivre.
+        select: { content: true, expiresAt: true },
       }),
     ]);
 
@@ -1331,6 +1690,8 @@ export class NotificationService {
       type: 'message_reaction',
       priority: 'low',
       content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
+      lang,
+      expiresAt: message?.expiresAt ?? undefined,
 
       actor: {
         id: params.reactorUserId,
@@ -1358,6 +1719,40 @@ export class NotificationService {
   // COMMENT_REACTION
   // ==============================================
 
+  /**
+   * Le destinataire d'une notification du FIL a-t-il encore le droit de voir le
+   * post qui la porte ?
+   *
+   * Les trois notifications à destinataire unique du fil (réponse, like et
+   * réaction sur commentaire) visent quelqu'un qui A pu commenter — donc admis
+   * À CE MOMENT-LÀ. Rien ne garantit qu'il le soit encore : une dés-amitié ou
+   * une édition de visibilité le sort de l'audience sans toucher à son
+   * commentaire. Ce qui partirait alors n'est pas un ping : la réponse porte
+   * l'extrait du contenu d'un TIERS et la vignette du post.
+   *
+   * La garde RÉSOUT le post elle-même plutôt que d'exiger un paramètre
+   * `visibility` de ses appelants (le choix du cycle 28 pour les lots de
+   * mention) : ces trois méthodes sont invoquées en fire-and-forget APRÈS la
+   * réponse HTTP/socket, donc la requête supplémentaire ne coûte rien
+   * d'observable — et une garde sans paramètre ne peut pas être désarmée par
+   * omission, pas même par un appelant futur qui ignorerait la règle.
+   *
+   * Audience de CONSOMMATION (amis ∪ contacts DM) : être informé d'un contenu
+   * qu'on a le droit de lire dans le fil est la même question que le lire.
+   *
+   * **En panne ou post introuvable, on REFUSE.** Une notification manquée se
+   * rattrape en ouvrant le post ; un extrait poussé ne se rappelle pas.
+   */
+  private async canNotifyAboutPost(postId: string, recipientId: string): Promise<boolean> {
+    try {
+      const postAcl = await loadPostAcl(this.prisma, postId);
+      if (!postAcl) return false;
+      return await canUserConsumePost(this.prisma, postAcl, recipientId);
+    } catch {
+      return false;
+    }
+  }
+
   async createCommentReactionNotification(params: {
     commentAuthorId: string;
     reactorUserId: string;
@@ -1381,6 +1776,8 @@ export class NotificationService {
     if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
       return;
     }
+
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
 
     const reactor = await this.prisma.user.findUnique({
       where: { id: params.reactorUserId },
@@ -1465,19 +1862,27 @@ export class NotificationService {
     postId: string,
     authorId: string,
     commenterId: string
-  ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
-    // Cap at 500 rows to bound fan-out cost on viral posts.
+  ): Promise<StoryNotificationRecipients> {
+    // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
     // Future: large posts should use a background queue for fan-out.
+    //
+    // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
+    // filtre en aval : sous la borne, une ligne écartée après coup a quand même
+    // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
+    // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
+    // des destinataires réels du seau, en silence.
+    const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
+
     const [previousComments, friendRequests, reactors] = await Promise.all([
       this.prisma.postComment.findMany({
         where: {
           postId,
           deletedAt: null,
-          NOT: { authorId: commenterId },
+          authorId: { notIn: excludedEngagerIds },
         },
         distinct: ['authorId'],
         select: { authorId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.friendRequest.findMany({
@@ -1486,52 +1891,87 @@ export class NotificationService {
           OR: [{ senderId: authorId }, { receiverId: authorId }],
         },
         select: { senderId: true, receiverId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { updatedAt: 'desc' },
       }),
       // Include post reactors as thread-engaged participants (same bucket as prior commenters)
       this.prisma.postReaction.findMany({
         where: {
           postId,
-          NOT: { userId: commenterId },
+          userId: { notIn: excludedEngagerIds },
         },
         distinct: ['userId'],
         select: { userId: true },
-        take: 500,
+        take: FANOUT_ROW_CAP + 1,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
 
+    // Une liste rendue à la borne exacte est INDISCERNABLE d'une liste
+    // complète : le seau paraît entier, et le destinataire au-delà de la borne
+    // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
+    // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
+    // soit observable ailleurs que dans le silence d'un utilisateur.
+    //
+    // Le verdict se lit sur la LIGNE TÉMOIN (`take` = borne + 1), pas sur
+    // « autant de lignes que la borne » : un seau qui compte exactement
+    // `FANOUT_ROW_CAP` engagés est COMPLET, et le déclarer tronqué ferait crier
+    // au loup à chaque publication d'un auteur à exactement 500 amis. C'est ce
+    // que la note ci-dessus demande — distinguer « complet » de « s'arrête à la
+    // borne » — et `>=` échouait précisément au point où les deux se touchent.
+    const truncatedBuckets = [
+      previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
+      friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
+      reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
+    ].filter((bucket): bucket is FanoutBucket => bucket !== null);
+
+    if (truncatedBuckets.length > 0) {
+      notificationLogger.warn('Fan-out de commentaire tronqué à la borne', {
+        postId,
+        authorId,
+        buckets: truncatedBuckets,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
+
+    // Le `notIn` plus haut est ce qui protège le BUDGET ; les `filter` ci-dessous
+    // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
+    // en double : la requête décide qui coûte une ligne, la méthode répond de ce
+    // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
+    // quelle que soit la clause `where` du jour.
+    const isNotifiableEngager = (id: string): boolean =>
+      id !== authorId && id !== commenterId;
+
     const rawPreviousCommenterIds = previousComments
+      .slice(0, FANOUT_ROW_CAP)
       .map((c: { authorId: string }) => c.authorId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
     // Merge reactor user IDs into the "thread engagement" bucket.
     // Reactors who also commented are deduplicated via Set — they still appear only once.
     const reactorIds = reactors
+      .slice(0, FANOUT_ROW_CAP)
       .map((r: { userId: string }) => r.userId)
-      .filter((id: string) => id !== authorId);
+      .filter(isNotifiableEngager);
 
-    const rawEngagedIds = Array.from(new Set([...rawPreviousCommenterIds, ...reactorIds]));
+    const previousCommenterIds = Array.from(
+      new Set([...rawPreviousCommenterIds, ...reactorIds])
+    );
 
-    const previousCommenterSet = new Set(rawEngagedIds);
+    const previousCommenterSet = new Set(previousCommenterIds);
 
-    const allFriendIds = friendRequests.flatMap(
-      (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
-    ).filter((id: string) => id !== authorId);
+    // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
+    // impossible ici : sa présence est structurelle, pas budgétaire.
+    const allFriendIds = friendRequests
+      .slice(0, FANOUT_ROW_CAP)
+      .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
+      .filter(isNotifiableEngager);
 
     const friendIds = Array.from(new Set(allFriendIds)).filter(
-      (id: string) =>
-        id !== commenterId &&
-        id !== authorId &&
-        !previousCommenterSet.has(id)
+      (id: string) => !previousCommenterSet.has(id)
     );
 
-    const previousCommenterIds = rawEngagedIds.filter(
-      (id: string) => id !== commenterId
-    );
-
-    return { authorId, friendIds, previousCommenterIds };
+    return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
   }
 
   /**
@@ -1568,6 +2008,21 @@ export class NotificationService {
      * The story author always gets STORY_NEW_COMMENT regardless of this list.
      */
     excludeUserIds?: string[];
+    /**
+     * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
+     * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
+     * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
+     * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
+     * utilisateur qui n'a pas le droit de le voir.
+     *
+     * REQUIS — annoncé par les cycles 28, 29 et 30, qui l'avaient laissé
+     * `visibility?` à défaut `PUBLIC`. Une garde qu'on désarme en omettant un
+     * paramètre optionnel n'est pas une garde : rien ne signalait l'oubli, ni
+     * au build ni à l'exécution. Le prix se paie une fois, à la déclaration.
+     */
+    visibility: string | null | undefined;
+    /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
+    visibilityUserIds?: string[];
   }): Promise<void> {
     const [actor, postAuthor] = await Promise.all([
       this.prisma.user.findUnique({
@@ -1582,12 +2037,70 @@ export class NotificationService {
 
     if (!actor) return;
 
+    // La saturation des seaux est consignée par `getStoryNotificationRecipients`
+    // lui-même — là où elle est constatée, donc pour TOUS ses appelants et pas
+    // seulement pour celui-ci.
     const { authorId, friendIds, previousCommenterIds } =
       await this.getStoryNotificationRecipients(
         params.postId,
         params.storyAuthorId,
         params.commenterId
       );
+
+    // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
+    // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
+    // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
+    // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
+    const visibility = params.visibility;
+    const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
+    const coMemberIds = visibility === 'COMMUNITY'
+      ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
+      : null;
+    // Ne s'applique QU'À `friendIds`, une sortie d'ÉNUMÉRATEUR : ces gens SONT
+    // les amis actuels de l'auteur, dépliés de son graphe quelques lignes plus
+    // haut. Leur amitié n'est donc pas à re-vérifier, et seules les listes
+    // nominatives peuvent encore les écarter. Un post COMMUNITY ne passe jamais
+    // ici : il a sa propre branche, adossée au graphe communauté.
+    const canSeeAsFriend = (userId: string): boolean => {
+      switch (visibility) {
+        case 'PRIVATE': return false;
+        case 'ONLY': return visibilityUserIdSet.has(userId);
+        case 'EXCEPT': return !visibilityUserIdSet.has(userId);
+        default: return true; // PUBLIC / FRIENDS — amis par construction
+      }
+    };
+    // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
+    // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
+    // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
+    const friendAudience = (
+      visibility === 'COMMUNITY'
+        ? [...coMemberIds!].filter(id =>
+            id !== params.storyAuthorId &&
+            id !== params.commenterId &&
+            !previousCommenterIds.includes(id))
+        : friendIds.filter(canSeeAsFriend)
+    );
+    // `previousCommenterIds` (commentateurs antérieurs ∪ réacteurs) n'est PAS une
+    // sortie d'énumérateur : c'est un ensemble arbitraire au regard de l'audience
+    // du moment. Ils y étaient admis quand ils ont engagé le post ; une
+    // dés-amitié ou une édition de visibilité les en sort sans toucher à leur
+    // commentaire. Il leur faut donc un test d'ADMISSION, pas la table locale
+    // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
+    // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
+    // de cette même population depuis le cycle 30.
+    //
+    // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
+    // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
+    // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
+    // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
+    // avait laissé ce seau sans garde.
+    const engagedAudience = await filterPostConsumers({
+      prisma: this.prisma,
+      authorId: params.storyAuthorId,
+      visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: previousCommenterIds,
+    });
 
     const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
@@ -1606,7 +2119,7 @@ export class NotificationService {
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
-    const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
+    const langs = await this.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
     const contextSubtitleFor = (lang: string): string => authorName
       ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
       : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
@@ -1656,7 +2169,7 @@ export class NotificationService {
     }
 
     // 2. Previous commenters (thread participants) — skip mentioned users
-    for (const recipientId of previousCommenterIds) {
+    for (const recipientId of engagedAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
@@ -1674,8 +2187,8 @@ export class NotificationService {
       );
     }
 
-    // 3. Friends of the story author — skip mentioned users
-    for (const recipientId of friendIds) {
+    // 3. Friends of the story author (or community co-members) — skip mentioned users
+    for (const recipientId of friendAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
@@ -1717,6 +2230,26 @@ export class NotificationService {
     commenterId: string;
     mentionedUserIds: string[];
     commentExcerpt?: string;
+    /**
+     * Type de l'entité portant le commentaire — discriminant qui décide de la
+     * surface ouverte au tap côté client. Sans lui, une mention dans le
+     * commentaire d'un réel ouvre le détail de post plat. Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /**
+     * Auteur du POST commenté — le sommet du graphe qui définit l'audience.
+     * C'est bien lui et non le commentateur : l'auteur seul a choisi qui peut
+     * voir. Requis, pour qu'aucun appelant ne puisse rouvrir la fuite par
+     * omission.
+     */
+    postAuthorId: string;
+    /**
+     * Visibilité du POST commenté. Un commentaire n'a pas d'audience propre :
+     * il hérite de celle du post. Requis — cf. `postAuthorId`.
+     */
+    visibility: string | null | undefined;
+    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
+    visibilityUserIds?: readonly string[];
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -1727,10 +2260,28 @@ export class NotificationService {
 
     if (!commenter) return;
 
+    // Nommer quelqu'un ne lui donne pas le droit de voir : un mentionné hors
+    // audience ne reçoit rien. Sans ce filtre, l'extrait du commentaire — donc
+    // du contenu d'un post restreint — atterrissait sur son écran verrouillé,
+    // avec un lien de tap vers un post qui le refuserait.
+    //
+    // Audience de CONSOMMATION (amis ∪ contacts DM) — la même que
+    // `canNotifyAboutPost` pour les notifications unitaires du fil, et que le
+    // feed. Un contact DM non-ami à qui le feed montre ce post doit être averti
+    // qu'on l'y a nommé.
+    const audience = await filterPostConsumers({
+      prisma: this.prisma,
+      authorId: params.postAuthorId,
+      visibility: params.visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: params.mentionedUserIds,
+    });
+    if (audience.length === 0) return;
+
     const content = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
-    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
+    const langs = await this.resolveRecipientLangs(audience);
 
     const actorInfo = {
       id: params.commenterId,
@@ -1741,7 +2292,7 @@ export class NotificationService {
 
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const userId of params.mentionedUserIds) {
+    for (const userId of audience) {
       if (userId === params.commenterId) continue;
 
       if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
@@ -1770,6 +2321,7 @@ export class NotificationService {
             postId: params.postId,
             commentId: params.commentId,
             commentPreview: content,
+            postType: params.postType ?? 'POST',
           } as any,
         })
       );
@@ -1795,6 +2347,19 @@ export class NotificationService {
     posterId: string;
     mentionedUserIds: string[];
     postExcerpt?: string;
+    /**
+     * Type du contenu mentionnant — discriminant qui décide de la surface
+     * ouverte au tap côté client (lecteur de réel / viewer éphémère / détail de
+     * post). Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /**
+     * `Post.visibility`. Requis — la garde d'audience ne doit pas pouvoir être
+     * désarmée par simple omission d'un paramètre optionnel.
+     */
+    visibility: string | null | undefined;
+    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
+    visibilityUserIds?: readonly string[];
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -1805,10 +2370,23 @@ export class NotificationService {
 
     if (!poster) return;
 
+    // Nommer quelqu'un ne lui donne pas le droit de voir. Cf. le lot des
+    // commentaires : l'extrait du post partait tel quel vers un mentionné hors
+    // audience — et, jusqu'au cycle 31, ne partait pas non plus vers un contact
+    // DM que le feed admet pourtant.
+    const audience = await filterPostConsumers({
+      prisma: this.prisma,
+      authorId: params.posterId,
+      visibility: params.visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: params.mentionedUserIds,
+    });
+    if (audience.length === 0) return;
+
     const excerpt = params.postExcerpt
       ? this.truncateMessage(params.postExcerpt)
       : '';
-    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
+    const langs = await this.resolveRecipientLangs(audience);
 
     const actorInfo = {
       id: params.posterId,
@@ -1819,7 +2397,7 @@ export class NotificationService {
 
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const userId of params.mentionedUserIds) {
+    for (const userId of audience) {
       if (userId === params.posterId) continue;
 
       if (!this.shouldCreateMentionNotification(params.posterId, userId)) {
@@ -1846,6 +2424,7 @@ export class NotificationService {
             entityType: 'post',
             postId: params.postId,
             postPreview: excerpt,
+            postType: params.postType ?? 'POST',
           } as any,
         })
       );
@@ -1893,8 +2472,15 @@ export class NotificationService {
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
-    /** Post visibility — used to filter recipients (same rules as Socket.IO broadcast). */
-    visibility?: string;
+    /**
+     * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
+     *
+     * **Requis**, comme sur les trois lots voisins depuis les cycles 28 et 31.
+     * L'omission n'était pas anodine ici : le défaut `PUBLIC` fait retomber un
+     * post `PRIVATE` — ou un `EXCEPT` et sa liste noire — sur l'énumération
+     * complète des amis, avec extrait et vignette. La faute appartient au build.
+     */
+    visibility: string | null | undefined;
     /** User IDs list for ONLY/EXCEPT visibility modes. */
     visibilityUserIds?: string[];
   }): Promise<void> {
@@ -1916,15 +2502,33 @@ export class NotificationService {
 
     if (!author) return;
 
-    const friendRequests = await this.prisma.friendRequest.findMany({
+    const friendRequestRows = await this.prisma.friendRequest.findMany({
       where: {
         status: 'accepted',
         OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
       },
       select: { senderId: true, receiverId: true },
-      take: 500,
+      take: FANOUT_ROW_CAP + 1,
       orderBy: { updatedAt: 'desc' },
     });
+
+    // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
+    // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
+    // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
+    // structurel, pas ponctuel, d'où la trace.
+    //
+    // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
+    // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
+    // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
+    // diffusion reste à sa valeur, seule sa saturation devient dicible.
+    if (friendRequestRows.length > FANOUT_ROW_CAP) {
+      notificationLogger.warn('Fan-out de publication tronqué à la borne', {
+        postId: params.postId,
+        authorId: params.authorId,
+        cap: FANOUT_ROW_CAP,
+      });
+    }
+    const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
@@ -1933,7 +2537,9 @@ export class NotificationService {
     const media = await this.resolvePostMedia(params.postId);
     const mediaType = params.mediaType ?? media?.mediaType;
 
-    const visibility = params.visibility ?? 'PUBLIC';
+    // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
+    // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
+    const visibility = params.visibility;
     const visibilityUserIds = params.visibilityUserIds ?? [];
     const visibilityUserIdSet = new Set(visibilityUserIds);
 
@@ -1947,7 +2553,14 @@ export class NotificationService {
       friend_new_post: 'friend.post',
       friend_new_mood: 'friend.mood',
     };
-    const contentKey = contentKeyByType[notificationType];
+    // Un réel emprunte le type friend_new_post mais garde son wording propre :
+    // « a publié un nouveau réel », pas « … un nouveau post ». Le discriminant
+    // REEL est conservé dans la metadata pour l'affichage client, donc le titre,
+    // le corps et le sous-titre doivent tous rester conscients de l'entité —
+    // sinon un réel s'annonçait comme un post (titre + corps) tout en affichant
+    // « Nouveau réel » en sous-titre du builder : une contradiction.
+    const contentKey: NotificationStringKey =
+      params.contentType === 'REEL' ? 'friend.reel' : contentKeyByType[notificationType];
 
     const baseFriendIds = friendRequests
       .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
@@ -1990,7 +2603,7 @@ export class NotificationService {
           priority: 'normal',
           content: excerpt || notificationString(fLang, contentKey),
           subtitle: notificationString(fLang, 'friend.subtitleNew', {
-            postType: params.contentType === 'REEL' ? 'POST' : params.contentType,
+            postType: params.contentType,
           }),
           actor: actorInfo,
           lang: fLang,
@@ -2006,6 +2619,12 @@ export class NotificationService {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
+            // Le discriminant d'entité voyage AUSSI sous `postType` : c'est la
+            // clé que lisent le payload push (`data.postType`) et le routage
+            // client. Sans ce miroir, le nouveau réel d'un ami arrivait sans
+            // discriminant et ouvrait le détail de post plat au lieu du lecteur
+            // immersif. `contentType` est conservé pour la rétro-compat web.
+            postType: params.contentType,
             excerpt,
             ...(mediaType ? { mediaType } : {}),
             ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
@@ -2260,82 +2879,137 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
+    // Une arrivée est de l'activité AMBIANTE : elle se tait dans une
+    // conversation en sourdine (cf. `mutedRecipients.ts`). Avant les lectures :
+    // sur un groupe où tout le monde a coupé le son, un ajout de membre payait
+    // trois requêtes par destinataire pour ne rien émettre.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_joined')) {
+      return null;
+    }
+
+    const snapshot = await this.loadMemberJoinedSnapshot(params.newMemberUserId, params.conversationId);
+    if (!snapshot) return null;
+
+    return this.createMemberJoinedFor(params.recipientUserId, params, snapshot);
+  }
+
+  /**
+   * Prévient une audience entière de la même arrivée.
+   *
+   * Les trois lectures dont `member_joined` a besoin — profil du nouveau
+   * membre, conversation, effectif — ne dépendent pas du destinataire : elles
+   * sont faites UNE fois pour toute l'audience, et le mute est demandé en une
+   * requête plutôt qu'une par personne. La boucle d'appels unitaires qui
+   * précédait payait 4 requêtes par destinataire pour quatre résultats
+   * identiques, et le surcoût grandissait avec le groupe.
+   *
+   * Rend le nombre de notifications réellement créées : une préférence de type
+   * ou un DND côté destinataire peut en écarter sans que ce soit une erreur.
+   */
+  async createMemberJoinedNotificationsBatch(
+    recipientUserIds: readonly string[],
+    common: {
+      newMemberUserId: string;
+      conversationId: string;
+      joinMethod?: 'via_link' | 'invited';
+    }
+  ): Promise<number> {
+    const audience = [...new Set(recipientUserIds)];
+    if (audience.length === 0) return 0;
+
+    const listening = await filterMutedRecipients(this.prisma, common.conversationId, audience);
+    if (listening.length === 0) {
+      notificationLogger.info('Member-joined fan-out silenced (whole audience muted)', {
+        conversationId: common.conversationId,
+        audienceSize: audience.length,
+      });
+      return 0;
+    }
+
+    const snapshot = await this.loadMemberJoinedSnapshot(common.newMemberUserId, common.conversationId);
+    if (!snapshot) return 0;
+
+    // `createNotification` ne rejette jamais (catch interne) — un destinataire
+    // en échec rend `null` et n'emporte pas les autres.
+    const results = await Promise.all(
+      listening.map((recipientUserId) => this.createMemberJoinedFor(recipientUserId, common, snapshot))
+    );
+    return results.filter(Boolean).length;
+  }
+
+  /**
+   * La part de `member_joined` qui ne dépend PAS du destinataire. `null` quand
+   * le nouveau membre est introuvable : sans acteur, la notification n'a pas de
+   * sujet, et aucun destinataire ne doit en recevoir.
+   */
+  private async loadMemberJoinedSnapshot(
+    newMemberUserId: string,
+    conversationId: string
+  ): Promise<MemberJoinedSnapshot | null> {
     const [newMember, conversation, memberCount] = await Promise.all([
       this.prisma.user.findUnique({
-        where: { id: params.newMemberUserId },
+        where: { id: newMemberUserId },
         select: { username: true, displayName: true, avatar: true },
       }),
       this.prisma.conversation.findUnique({
-        where: { id: params.conversationId },
+        where: { id: conversationId },
         select: { title: true, type: true },
       }),
       this.prisma.participant.count({
-        where: { conversationId: params.conversationId },
+        where: { conversationId },
       }),
     ]);
 
     if (!newMember) return null;
+    return { newMember, conversation, memberCount };
+  }
 
+  private createMemberJoinedFor(
+    recipientUserId: string,
+    common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
+    snapshot: MemberJoinedSnapshot
+  ): Promise<Notification | null> {
     return this.createNotification({
-      userId: params.recipientUserId,
+      userId: recipientUserId,
       type: 'member_joined',
       priority: 'low',
       content: 'Nouveau membre',
 
       actor: {
-        id: params.newMemberUserId,
-        username: newMember.username,
-        displayName: newMember.displayName,
-        avatar: newMember.avatar,
+        id: common.newMemberUserId,
+        username: snapshot.newMember.username,
+        displayName: snapshot.newMember.displayName,
+        avatar: snapshot.newMember.avatar,
       },
 
       context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
+        conversationId: common.conversationId,
+        conversationTitle: snapshot.conversation?.title,
+        conversationType: snapshot.conversation?.type as any,
       },
 
       metadata: {
         action: 'view_conversation',
-        memberCount,
+        memberCount: snapshot.memberCount,
         isMember: true,
-        joinMethod: params.joinMethod,
+        joinMethod: common.joinMethod,
       },
     });
   }
 
   // ==============================================
-  // TRANSLATION_READY
+  // TRANSLATION_READY — retiré, cf. `NotificationTypeEnum.TRANSLATION_READY`
+  //
+  // `createTranslationReadyNotification` vivait ici sans AUCUN appelant de
+  // production : seul un test l'atteignait. Il n'a donc jamais produit une
+  // ligne, et aucun client n'a jamais reçu ce type. C'était le seul des cinq
+  // producteurs ancrés sur un `context.messageId` à ne pas avoir d'échéance à
+  // hériter — pour la raison la plus simple : il ne créait rien.
+  //
+  // Le laisser en place aurait coûté plus qu'une méthode morte : il donnait à
+  // l'énumération des producteurs de notification une cinquième entrée, et à
+  // tout audit de la famille un cinquième cas à instruire.
   // ==============================================
-
-  async createTranslationReadyNotification(params: {
-    recipientUserId: string;
-    messageId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'translation_ready',
-      priority: 'low',
-      content: 'Traduction disponible',
-
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-        messageId: params.messageId,
-      },
-
-      metadata: {
-        action: 'view_message',
-      },
-    });
-  }
 
   // ==============================================
   // MESSAGE_REPLY
@@ -2348,12 +3022,28 @@ export class NotificationService {
     conversationId: string;
     messagePreview: string;
     originalMessageId?: string;
+    /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
+    senderProfile?: NotificationActorProfile;
+    /**
+     * Échéance de la RÉPONSE — le message que cette notification désigne et
+     * ouvre —, jamais celle du message cité. Même contrat que
+     * `createMentionNotification.messageExpiresAt`.
+     */
+    messageExpiresAt?: Date | null;
   }): Promise<Notification | null> {
+    // GW3 — per-conversation mute suppresses reply notifications
+    // (a reply is not a mention: it does not pierce the mute).
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'message_reply')) {
+      return null;
+    }
+
     const [replier, conversation] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.replierUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
+      params.senderProfile
+        ? Promise.resolve(params.senderProfile)
+        : this.prisma.user.findUnique({
+            where: { id: params.replierUserId },
+            select: { username: true, displayName: true, avatar: true },
+          }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true },
@@ -2368,6 +3058,7 @@ export class NotificationService {
       priority: 'normal',
       content: params.messagePreview,
       collapseId: `conv-${params.conversationId}`,
+      expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
         id: params.replierUserId,
@@ -2682,6 +3373,8 @@ export class NotificationService {
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
+
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },
       select: { username: true, displayName: true, avatar: true },
@@ -2753,8 +3446,16 @@ export class NotificationService {
     emoji: string;
     /** Extrait du commentaire liké — identifie QUEL commentaire reçoit la réaction. */
     commentPreview?: string;
+    /**
+     * Type de l'entité PORTANT le commentaire liké. Sans lui, le client ne peut
+     * pas choisir la bonne surface (lecteur de réel / viewer éphémère / détail
+     * de post) et retombe sur une heuristique de cache. Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
+
+    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
 
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },
@@ -2797,6 +3498,7 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
+        postType: params.postType ?? 'POST',
         ...(trimmedPreview !== ''
           ? { commentPreview: this.truncateMessage(trimmedPreview) }
           : {}),
@@ -2949,6 +3651,13 @@ export class NotificationService {
     removedByUserId: string;
     conversationId: string;
   }): Promise<Notification | null> {
+    // Exclusion d'un TIERS — ambiant. À ne pas confondre avec
+    // `createRemovedFromConversationNotification`, qui annonce au destinataire
+    // sa PROPRE exclusion et perce donc le mute.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_removed')) {
+      return null;
+    }
+
     const actor = await this.prisma.user.findUnique({
       where: { id: params.removedByUserId },
       select: { username: true, displayName: true, avatar: true },
@@ -3040,6 +3749,11 @@ export class NotificationService {
     memberUserId: string;
     conversationId: string;
   }): Promise<Notification | null> {
+    // Départ d'un TIERS — ambiant, comme l'arrivée et l'exclusion.
+    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_left')) {
+      return null;
+    }
+
     const member = await this.prisma.user.findUnique({
       where: { id: params.memberUserId },
       select: { username: true, displayName: true, avatar: true },
@@ -3237,9 +3951,12 @@ export class NotificationService {
   private async emitCountsUpdate(userId: string): Promise<void> {
     if (!this.io) return;
     try {
+      // `isRead: false` — même prédicat (indexé [userId, isRead, expiresAt])
+      // que la liste et le badge REST. `readAt: null` divergeait sur les
+      // données legacy et tournait en collscan (aucun index sur readAt).
       const [unread, total] = await Promise.all([
-        this.prisma.notification.count({ where: { userId, readAt: null } }),
-        this.prisma.notification.count({ where: { userId } }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId, unreadOnly: true }) }),
+        this.prisma.notification.count({ where: visibleNotificationsWhere({ userId }) }),
       ]);
       this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
     } catch (error) {
@@ -3446,10 +4163,10 @@ export class NotificationService {
     offset?: number;
     unreadOnly?: boolean;
   }): Promise<{ notifications: Notification[]; total: number }> {
-    const where: any = { userId: params.userId };
-    if (params.unreadOnly) {
-      where.isRead = false;
-    }
+    const where = visibleNotificationsWhere({
+      userId: params.userId,
+      unreadOnly: params.unreadOnly,
+    });
 
     const [notifications, total] = await Promise.all([
       this.prisma.notification.findMany({
@@ -3520,6 +4237,14 @@ export class NotificationService {
       });
 
       const formatted = this.formatNotification(notification);
+      // Sync multi-appareils : les AUTRES appareils retirent la ligne précise
+      // de leur cloche sans refetch. `notification:counts` seul ne dit pas
+      // LAQUELLE a été lue.
+      if (this.io) {
+        this.io
+          .to(ROOMS.user(formatted.userId))
+          .emit(SERVER_EVENTS.NOTIFICATION_READ, { notificationId });
+      }
       this.emitCountsUpdate(formatted.userId).catch(() => {});
       return formatted;
     } catch (error) {
@@ -3573,7 +4298,7 @@ export class NotificationService {
    */
   private async markContextNotificationsAsRead(
     userId: string,
-    contextKey: 'conversationId' | 'postId',
+    contextKey: 'conversationId' | 'postId' | 'friendRequestId',
     contextValue: string
   ): Promise<number> {
     if (!/^[0-9a-f]{24}$/i.test(userId)) {
@@ -3639,6 +4364,102 @@ export class NotificationService {
   }
 
   /**
+   * Marque comme lues toutes les notifications de l'utilisateur liées à une
+   * demande d'amitié (`context.friendRequestId`). Appelé quand l'utilisateur
+   * répond à la demande (accept/reject) — la notification « X vous a envoyé une
+   * demande d'amitié » ne doit plus rester non lue une fois consommée.
+   *
+   * Passe par la même route indexée que conversation/post (un seul update Mongo
+   * scopé userId) et émet `notification:counts` afin que la cloche des AUTRES
+   * appareils se mette à jour en temps réel — l'ancien chemin artisanal
+   * (findMany de toutes les non-lues + filtre mémoire + N updates) n'émettait
+   * rien et laissait le badge multi-appareils périmé.
+   */
+  async markFriendRequestNotificationsAsRead(userId: string, friendRequestId: string): Promise<number> {
+    return this.markContextNotificationsAsRead(userId, 'friendRequestId', friendRequestId);
+  }
+
+  /**
+   * RETIRE les notifications liées à une demande d'amitié dont la ligne vient
+   * d'être supprimée (`DELETE /friend-requests/:id` — annulation par
+   * l'expéditeur, ou retrait par le destinataire sans répondre).
+   *
+   * Pendant de `markFriendRequestNotificationsAsRead`, et l'arbitrage entre les
+   * deux tient à ce qui reste au bout du lien. Répondre (accept/reject) laisse
+   * la ligne `FriendRequest` en place : la notification est CONSOMMÉE, donc lue.
+   * Supprimer emporte la ligne : la notification n'a plus rien à afficher ET
+   * rien où mener — son `metadata.action: accept_or_reject_contact` ouvrirait
+   * un écran de demande qui répond 404. Même conclusion que le rappel d'un
+   * message (`retractMessageNotifications`), pour la même raison, et le même
+   * geste — le seul que les clients savent déjà recevoir (`notification:deleted`,
+   * écouté par le web et par le SDK iOS).
+   *
+   * Trois conséquences du fait que la ligne part INCONDITIONNELLEMENT :
+   *
+   *  1. **Aucun filtre `isRead`.** Une notification déjà lue est tout aussi
+   *     morte qu'une non lue ; la laisser garderait une ligne sans destination
+   *     dans la liste. C'est la seule différence de filtre avec le marquage.
+   *  2. **Le destinataire est toujours `receiverId`**, quel que soit celui des
+   *     deux qui a appelé la route : `createFriendRequestNotification` ne
+   *     notifie que lui. Le scope `userId` reste la garde anti-IDOR, comme pour
+   *     le marquage.
+   *  3. **`context.friendRequestId` n'appartient qu'à `friend_request`.** Le
+   *     `friend_accepted` de l'expéditeur porte `context.conversationId`, jamais
+   *     cette clé — le retrait ne peut pas l'emporter au passage.
+   *
+   * La lecture passe par `$runCommandRaw` pour la même raison que le marquage
+   * (Prisma ne filtre pas les chemins JSON sur MongoDB), puis la suppression
+   * porte sur les ids RELUS et non sur le prédicat : l'ensemble supprimé et
+   * l'ensemble annoncé sont alors identiques par construction, et aucune ligne
+   * ne peut disparaître sans son `notification:deleted`. `singleBatch` ferme le
+   * curseur côté serveur ; le lot est très au-dessus du réel (une demande
+   * produit UNE notification, à sa création).
+   */
+  async retractFriendRequestNotifications(userId: string, friendRequestId: string): Promise<number> {
+    if (!/^[0-9a-f]{24}$/i.test(userId)) {
+      return 0;
+    }
+
+    try {
+      const raw = await (this.prisma as unknown as {
+        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<RawNotificationIdBatch>;
+      }).$runCommandRaw({
+        find: 'Notification',
+        filter: {
+          userId: { $oid: userId },
+          'context.friendRequestId': friendRequestId,
+        },
+        projection: { _id: 1 },
+        singleBatch: true,
+        batchSize: RETRACTION_BATCH_SIZE,
+      });
+
+      const ids = (raw?.cursor?.firstBatch ?? []).map((row) =>
+        typeof row._id === 'string' ? row._id : row._id.$oid
+      );
+
+      if (ids.length === 0) {
+        return 0;
+      }
+
+      await this.prisma.notification.deleteMany({ where: { id: { in: ids } } });
+
+      // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
+      // qu'elle recalcule doivent voir la base d'après le retrait.
+      await this.announceNotificationsRetracted(ids.map((id) => ({ id, userId })));
+
+      return ids.length;
+    } catch (error) {
+      notificationLogger.error('Failed to retract friend request notifications', {
+        error,
+        userId,
+        friendRequestId,
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Marque comme lues toutes les notifications de l'utilisateur dont le `type`
    * est dans la liste fournie. Utilisé quand l'utilisateur ouvre un écran qui
    * consomme une catégorie entière de notifications (ex : l'écran des demandes
@@ -3678,11 +4499,32 @@ export class NotificationService {
    */
   async getUnreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
+      where: visibleNotificationsWhere({ userId, unreadOnly: true }),
     });
+  }
+
+  /**
+   * Supprime toutes les notifications LUES de l'utilisateur.
+   * Émet `notification:counts` (le total change) quand au moins une ligne part.
+   */
+  async deleteAllRead(userId: string): Promise<number> {
+    try {
+      const result = await this.prisma.notification.deleteMany({
+        where: { userId, isRead: true },
+      });
+
+      if (result.count > 0) {
+        this.emitCountsUpdate(userId).catch(() => {});
+      }
+
+      return result.count;
+    } catch (error) {
+      notificationLogger.error('Failed to delete read notifications', {
+        error,
+        userId,
+      });
+      return 0;
+    }
   }
 
   /**
@@ -3701,6 +4543,11 @@ export class NotificationService {
       });
 
       if (existing?.userId) {
+        if (this.io) {
+          this.io
+            .to(ROOMS.user(existing.userId))
+            .emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId });
+        }
         this.emitCountsUpdate(existing.userId).catch(() => {});
       }
 
@@ -3712,6 +4559,38 @@ export class NotificationService {
       });
       return false;
     }
+  }
+
+  /**
+   * Annonce aux appareils connectés des lignes que le RAPPEL d'un message vient
+   * de retirer de la base.
+   *
+   * Pendant du geste unitaire de `deleteNotification`, pour un retrait qui a
+   * déjà eu lieu : l'écriture durable appartient à `applyMessageRemovalEffects`
+   * — le seul endroit que les trois écrivains de `deletedAt` traversent — et
+   * elle ne doit pas dépendre du câblage socket. Ce service n'en tient que la
+   * moitié volatile, celle qui s'annonce et ne se stocke pas.
+   *
+   * Les deux émissions comptent, et pour deux surfaces distinctes : la liste
+   * ouverte retire la ligne sur `notification:deleted`, la cloche recalcule son
+   * badge sur `notification:counts`. Sans la seconde, un rappel laisserait le
+   * compteur sur des lignes que le serveur vient de supprimer. Un seul
+   * `notification:counts` par destinataire, quel qu'ait été son nombre de
+   * lignes retirées.
+   */
+  async announceNotificationsRetracted(
+    retracted: readonly { readonly id: string; readonly userId: string }[]
+  ): Promise<void> {
+    const affectedUserIds = new Set<string>();
+
+    for (const { id, userId } of retracted) {
+      affectedUserIds.add(userId);
+      this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+    }
+
+    await Promise.all(
+      [...affectedUserIds].map((userId) => this.emitCountsUpdate(userId).catch(() => {}))
+    );
   }
 
   // ==============================================

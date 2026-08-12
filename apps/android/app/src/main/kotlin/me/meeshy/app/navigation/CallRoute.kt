@@ -28,14 +28,16 @@ object CallRoute {
     const val VIDEO_ARG: String = "video"
     const val CALL_ID_ARG: String = "callId"
     const val INCOMING_ARG: String = "incoming"
+    const val ANSWER_ARG: String = "answer"
 
-    /** The `NavHost` route pattern: a static path with five optional query placeholders. */
+    /** The `NavHost` route pattern: a static path with six optional query placeholders. */
     const val PATTERN: String =
         "call?$CONVERSATION_ID_ARG={$CONVERSATION_ID_ARG}" +
             "&$PEER_NAME_ARG={$PEER_NAME_ARG}" +
             "&$VIDEO_ARG={$VIDEO_ARG}" +
             "&$CALL_ID_ARG={$CALL_ID_ARG}" +
-            "&$INCOMING_ARG={$INCOMING_ARG}"
+            "&$INCOMING_ARG={$INCOMING_ARG}" +
+            "&$ANSWER_ARG={$ANSWER_ARG}"
 
     /**
      * Build the concrete route for an outgoing call placed from a chat. The
@@ -60,10 +62,12 @@ object CallRoute {
         conversationId: String,
         callerName: String,
         isVideo: Boolean,
+        autoAnswer: Boolean = false,
     ): String =
         "${path(conversationId, callerName, isVideo)}" +
             "&$CALL_ID_ARG=${Uri.encode(callId)}" +
-            "&$INCOMING_ARG=true"
+            "&$INCOMING_ARG=true" +
+            "&$ANSWER_ARG=$autoAnswer"
 
     /**
      * Map already-decoded navigation arguments into the [CallConfig] the call
