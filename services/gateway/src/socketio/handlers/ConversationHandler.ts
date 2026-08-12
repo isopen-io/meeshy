@@ -21,6 +21,20 @@ export interface ConversationHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  /**
+   * Retracte la frappe que CE socket a diffusée dans la conversation qu'il
+   * quitte — `StatusHandler.retractTypingIn` en pratique.
+   *
+   * Sans elle, seul `disconnecting` retracte, et changer de conversation ne
+   * déconnecte pas le socket : les pairs gardent un « X est en train
+   * d'écrire… » fantôme jusqu'à leur propre filet de sécurité. La conversation
+   * est passée DÉJÀ NORMALISÉE — ce handler l'a résolue, la faire re-résoudre
+   * coûterait un second `findUnique` à chaque changement de conversation.
+   *
+   * Optionnelle : un `ConversationHandler` construit sans elle quitte
+   * normalement, il ne retracte simplement rien.
+   */
+  retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
 }
 
 export class ConversationHandler {
@@ -28,6 +42,7 @@ export class ConversationHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -35,6 +50,7 @@ export class ConversationHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.readStatusService = deps.readStatusService;
+    this.retractTyping = deps.retractTyping;
   }
 
   /**
@@ -191,6 +207,18 @@ export class ConversationHandler {
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+
+      // Retracter AVANT de sortir : « je retire ce que j'ai diffusé, puis je
+      // sors ». Le try/catch est local et non le try/catch général — une
+      // retraction qui échoue ne doit pas transformer un départ demandé par le
+      // client en `conversation:leave` refusé.
+      if (this.retractTyping) {
+        try {
+          await this.retractTyping(socket, normalizedId);
+        } catch (error) {
+          logger.error('conversation:leave — typing retraction failed', { error, conversationId: normalizedId });
+        }
+      }
 
       const room = ROOMS.conversation(normalizedId);
       await socket.leave(room);
