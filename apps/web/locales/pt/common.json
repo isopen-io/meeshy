@@ -269,7 +269,17 @@
     "storyVisibility": {
       "public": "Público",
       "friends": "Amigos",
+      "community": "Comunidade",
+      "except": "Todos exceto…",
+      "only": "Somente…",
       "private": "Privado"
+    },
+    "audiencePicker": {
+      "searchPlaceholder": "Pesquisar pessoas…",
+      "exceptHint": "Sua história ficará oculta para as pessoas selecionadas.",
+      "onlyHint": "Somente as pessoas selecionadas verão sua história.",
+      "empty": "Ninguém encontrado",
+      "remove": "Remover"
     },
     "postComposer": {
       "contentLabel": "Conteúdo da publicação",
@@ -282,6 +292,11 @@
         "except": "Amigos exceto...",
         "only": "Apenas...",
         "private": "Privado"
+      },
+      "reelToggle": {
+        "groupLabel": "Tipo de publicação",
+        "reel": "Reel",
+        "post": "Publicação"
       }
     },
     "audioUnavailable": "URL de áudio indisponível",

@@ -5,13 +5,20 @@ import MeeshySDK
 
 struct AffiliateView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false
 
-    private let accentColor = "2ECC71"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -27,6 +34,7 @@ struct AffiliateView: View {
                 viewModel.tokens.insert(token, at: 0)
             }
             .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .task { await viewModel.load() }
     }
@@ -37,10 +45,10 @@ struct AffiliateView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                Image(systemName: "chevron.backward")
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
@@ -48,8 +56,9 @@ struct AffiliateView: View {
             Spacer()
 
             Text(String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -58,9 +67,10 @@ struct AffiliateView: View {
                 showCreateSheet = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -108,18 +118,20 @@ struct AffiliateView: View {
     private func affiliateStatCard(value: String, label: String, color: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(MeeshyFont.relative(18, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
 
             Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -129,6 +141,7 @@ struct AffiliateView: View {
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Tokens Section
@@ -137,14 +150,18 @@ struct AffiliateView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "link.badge.plus")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
+                    .accessibilityHidden(true)
                 Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.2)
+                    .accessibilityAddTraits(.isHeader)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             if viewModel.tokens.isEmpty {
                 emptyTokensState
@@ -171,16 +188,20 @@ struct AffiliateView: View {
 
     private var emptyTokensState: some View {
         VStack(spacing: 12) {
+            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
+            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
+            // déséquilibrer l'état vide.
             Image(systemName: "link")
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .accessibilityHidden(true)
 
             Text(String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main))
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main))
-                .font(.system(size: 12))
+            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -199,21 +220,22 @@ struct AffiliateView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(token.name)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                     Text("·")
                         .foregroundColor(theme.textMuted)
                     Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(MeeshyColors.success)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -224,43 +246,56 @@ struct AffiliateView: View {
                 }
             } label: {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
-            // Partager
-            Button {
-                guard let link = token.affiliateLink, let url = URL(string: link) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = scene.windows.first,
-                   let root = window.rootViewController {
-                    var topVC = root
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                    if let popover = av.popoverPresentationController {
-                        popover.sourceView = topVC.view
-                        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                        popover.permittedArrowDirections = []
-                    }
-                    topVC.present(av, animated: true)
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 16))
-                    .foregroundColor(MeeshyColors.success)
-            }
+            shareTokenButton(token)
 
             Button {
                 Task { await viewModel.deleteToken(token) }
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
+            .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    /// Native share: `ShareLink` gives the activity sheet, the iPad popover
+    /// anchor and top-VC presentation for free — no manual
+    /// `UIActivityViewController` / window-hierarchy traversal (doctrine:
+    /// prefer first-party SwiftUI over UIKit, cf. `CommunityLinkDetailView`).
+    /// The hand-rolled path it replaces resolved its presenter from
+    /// `connectedScenes.first`; `connectedScenes` is an *unordered* `Set`, so
+    /// under iPad multitasking / Stage Manager it could target a background
+    /// scene and present the sheet on a window nobody can see.
+    @ViewBuilder
+    private func shareTokenButton(_ token: AffiliateToken) -> some View {
+        let shareLabel = String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
+        if let link = token.affiliateLink, let url = URL(string: link) {
+            ShareLink(item: url) {
+                shareTokenGlyph
+            }
+            .accessibilityLabel(shareLabel)
+        } else {
+            // No usable link: the old Button stayed tappable and silently did
+            // nothing. Dim it and hide it from VoiceOver instead of offering a
+            // dead control.
+            shareTokenGlyph
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var shareTokenGlyph: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(MeeshyFont.relative(16))
+            .foregroundColor(Color(hex: accentColor))
     }
 }
 

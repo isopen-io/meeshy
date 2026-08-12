@@ -5,6 +5,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { useUserStore, useUserById, useUserStatusTick, UserStatusUpdate } from '../../stores/user-store';
+import { getUserStatus } from '../../lib/user-status';
 import type { User } from '@/types';
 
 describe('UserStore', () => {
@@ -221,6 +222,26 @@ describe('UserStore', () => {
       expect(newUser).toBeDefined();
       expect(newUser?.isOnline).toBe(true);
       expect(newUser?.username).toBe('newguy');
+    });
+
+    it('does not fabricate now() for an unknown, offline user with an absent lastActiveAt', () => {
+      // A contact whose "last seen" is hidden (gateway nulls lastActiveAt per
+      // privacy prefs) can reach the "new user" branch here before ever being
+      // seeded via mergeParticipants — e.g. onUserStatus forwarding
+      // {lastActiveAt: undefined} for a userId not yet in usersMap. Fabricating
+      // new Date() makes getUserStatus decay to 'online' for an offline contact.
+      act(() => {
+        useUserStore.getState().updateUserStatus('hidden-offline-user', {
+          isOnline: false,
+          lastActiveAt: undefined,
+          username: 'ghost',
+        });
+      });
+
+      const newUser = useUserStore.getState().usersMap.get('hidden-offline-user');
+      expect(newUser).toBeDefined();
+      expect(newUser?.lastActiveAt).toBeUndefined();
+      expect(getUserStatus(newUser!)).toBe('offline');
     });
 
     it('should preserve other user properties when updating status', () => {

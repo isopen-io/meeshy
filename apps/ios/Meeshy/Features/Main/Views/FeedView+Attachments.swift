@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
-import CoreLocation
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -81,24 +80,12 @@ extension FeedView {
                 defer { url.stopAccessingSecurityScopedResource() }
 
                 let fileName = url.lastPathComponent
-                let fileSize = feedGetFileSize(url)
                 let mimeType = feedMimeTypeForURL(url)
 
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
                 try? FileManager.default.copyItem(at: url, to: tempURL)
 
-                let attachmentId = UUID().uuidString
-                let attachment = MessageAttachment(
-                    id: attachmentId,
-                    fileName: fileName,
-                    originalName: fileName,
-                    mimeType: mimeType,
-                    fileSize: fileSize,
-                    fileUrl: tempURL.absoluteString,
-                    thumbnailColor: "45B7D1"
-                )
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingAttachments.append(attachment)
+                appendFeedFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
             }
             HapticFeedback.light()
         case .failure:
@@ -106,15 +93,97 @@ extension FeedView {
         }
     }
 
-    // MARK: - Location Selection
-    func handleFeedLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            color: "2ECC71"
+    /// Cœur commun de l'importateur de documents et de l'ingestion
+    /// dépôt/collage : enregistre un fichier DÉJÀ présent dans notre
+    /// conteneur comme pièce jointe en attente (`pendingAttachments` +
+    /// `pendingMediaFiles`), exactement comme `handleFeedFileImport` le
+    /// faisait inline — factorisé pour que le dépôt n'introduise aucune
+    /// variante de ce chemin.
+    func appendFeedFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(
+            id: attachmentId,
+            fileName: fileName,
+            originalName: fileName,
+            mimeType: mimeType,
+            fileSize: feedGetFileSize(tempURL),
+            fileUrl: tempURL.absoluteString,
+            thumbnailColor: "45B7D1"
         )
+        pendingMediaFiles[attachmentId] = tempURL
+        pendingAttachments.append(attachment)
+    }
+
+    // MARK: - Ingestion dépôt / collage (recette commune des quatre hôtes)
+
+    /// Rappel `onIngest` de la surface POST : chaque `.file` pointe un
+    /// fichier déjà copié dans notre conteneur (la surface en devient
+    /// propriétaire), chaque `.text` est destiné au champ de saisie. Le
+    /// routage MIME est partagé (`ComposerIngestRouter.route(mime:)`) et
+    /// chaque branche réutilise EXACTEMENT le pipeline existant de cette
+    /// surface — toute nouvelle voie contournerait l'amorçage du cache de
+    /// vignettes, la bulle optimiste et le magasin de brouillons durable.
+    func handleFeedComposerIngest(_ ingests: [ComposerIngest]) {
+        guard !ingests.isEmpty else { return }
+        var texts: [String] = []
+        for ingest in ingests {
+            switch ingest {
+            case .text(let value):
+                texts.append(value)
+            case .file(let url, let name, let mime):
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    guard let image = UIImage(contentsOfFile: url.path) else {
+                        // Pas de tuile fantôme : l'image illisible est nommée
+                        // dans un toast et son fichier temporaire retiré.
+                        ComposerIngestFeedback.showFailure(names: [name])
+                        try? FileManager.default.removeItem(at: url)
+                        continue
+                    }
+                    let prep = AttachmentPreparationService.shared.prepareImage(
+                        image,
+                        context: .feedPost,
+                        accentColor: MeeshyColors.brandPrimaryHex
+                    )
+                    trackFeedPreparation(prep)
+                    // L'UIImage est chargée : le fichier source déposé ne sert
+                    // plus, et cette surface en est propriétaire.
+                    try? FileManager.default.removeItem(at: url)
+                case .video:
+                    // `deleteSourceAfterCompression: true` : la préparation
+                    // consomme le fichier déposé, dont nous sommes propriétaires.
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .feedPost
+                    )
+                    trackFeedPreparation(prep)
+                case .audio, .file:
+                    // Même chemin fichier que l'importateur de documents de
+                    // cette surface (tuile audio / document).
+                    appendFeedFileAttachment(tempURL: url, fileName: name, mimeType: mime)
+                }
+            }
+        }
+        if !texts.isEmpty {
+            // Plusieurs `.text` d'un même dépôt : concaténés par un saut de
+            // ligne, dans l'ordre, en UNE SEULE insertion. Le champ est un
+            // `TextEditor` SwiftUI (cible iOS 16) qui n'expose pas la position
+            // du curseur (`TextSelection` = iOS 18) : l'insertion se fait à la
+            // fin — le cas « champ sans focus » de la recette commune.
+            let joined = texts.joined(separator: "\n")
+            composerText = composerText.isEmpty ? joined : composerText + "\n" + joined
+        }
+        HapticFeedback.light()
+    }
+
+    // MARK: - Location Selection
+    /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
+    /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
+    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29).
+    func handleFeedLocationSelection(_ place: SharedPlace) {
         withAnimation {
-            pendingAttachments.append(attachment)
+            pendingPlace = place
         }
         HapticFeedback.light()
     }
@@ -136,7 +205,12 @@ extension FeedView {
         composerText = draft.content
         postVisibility = draft.visibility
         // Preserve the original classification: a plain POST that carried media
-        // must stay a POST, while a REEL re-derives from its media as usual.
+        // must stay a POST. A draft saved as REEL is NOT trusted blindly: the
+        // publish paths re-derive the type from the RESTORED attachments via
+        // `ReelComposition.defaultType` (règle produit 2026-08-02 — video ||
+        // audio || >= 2 images), so a stale 1-image "REEL" draft republishes
+        // as a POST. Eligibility can't be checked here — the media below is
+        // restored asynchronously through the preparation pipeline.
         composerForcePlainPost = (draft.type == "POST")
         recoveredPostCmid = draft.clientMutationId
 
@@ -172,7 +246,10 @@ extension FeedView {
     // MARK: - Publish Post with Attachments
     func publishPostWithAttachments() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        // Une position seule, sans texte ni piece jointe, doit pouvoir partir : sinon
+        // handleFeedLocationSelection() range le lieu dans pendingPlace et ce garde
+        // le jette en silence (Task 13, 2026-07-29).
+        guard !text.isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil else { return }
 
         // A recovered stuck post is being re-sent — supersede its queued row so
         // the resend replaces it (and reclaims its pending-media) instead of
@@ -185,6 +262,10 @@ extension FeedView {
         let attachments = pendingAttachments
         let audioURL = pendingAudioURL
         let mediaFiles = pendingMediaFiles
+        // Capturé avant feedCleanupAttachments() (qui remet pendingPlace à nil) :
+        // sans ce cliché local, la Task async ci-dessous lirait toujours nil,
+        // exactement comme text/attachments/mediaFiles le sont pour la même raison.
+        let pendingPlace = pendingPlace
         let hasFiles = audioURL != nil || !mediaFiles.isEmpty
 
         if !hasFiles || attachments.isEmpty {
@@ -195,9 +276,9 @@ extension FeedView {
             }
             feedCleanupAttachments()
             HapticFeedback.success()
-            if !text.isEmpty {
+            if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
             }
             return
         }
@@ -216,6 +297,7 @@ extension FeedView {
             // flushes — no online/offline divergence on the surface it lands on.
             let postType = ReelComposition.defaultType(
                 mimeTypes: attachments.map(\.mimeType),
+                durationsMs: attachments.map(\.duration),
                 forcePlainPost: composerForcePlainPost
             ).rawValue
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -225,14 +307,15 @@ extension FeedView {
             }
             feedCleanupAttachments()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
                     content: text,
                     visibility: postVisibility,
                     originalLanguage: lang,
-                    type: postType
+                    type: postType,
+                    location: pendingPlace
                 )
             }
             return
@@ -287,6 +370,7 @@ extension FeedView {
                     content: text,
                     type: ReelComposition.defaultType(
                         mimeTypes: attachments.map(\.mimeType) + (audioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: attachments.map(\.duration),
                         forcePlainPost: composerForcePlainPost
                     ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
@@ -303,7 +387,7 @@ extension FeedView {
                     uploadProgress = nil
                     isUploading = false
                     HapticFeedback.success()
-                    FeedbackToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.published", defaultValue: "Post publié", bundle: .main))
                 }
             } catch {
                 await MainActor.run {
@@ -313,14 +397,14 @@ extension FeedView {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
-                    FeedbackToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publishError", defaultValue: "Échec de la publication du post", bundle: .main))
                 }
             }
         }
     }
 
     // MARK: - Audio Post
-    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
+    func publishAudioPost(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
         guard let token = APIClient.shared.authToken,
               let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
 
@@ -332,7 +416,14 @@ extension FeedView {
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
-                type: composerForcePlainPost ? "POST" : "REEL",
+                // Même moteur de classification que les chemins visuels : un
+                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
+                // respecté — plus de "REEL" codé en dur.
+                type: ReelComposition.defaultType(
+                    mimeTypes: [mimeType],
+                    durationsMs: [durationMs],
+                    forcePlainPost: composerForcePlainPost
+                ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
@@ -341,14 +432,14 @@ extension FeedView {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
             }
         } catch {
             try? FileManager.default.removeItem(at: audioURL)
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Echec de la publication du post audio")
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
             }
         }
     }
@@ -356,6 +447,7 @@ extension FeedView {
     // MARK: - Cleanup
     private func feedCleanupAttachments() {
         pendingAttachments.removeAll()
+        pendingPlace = nil
         pendingAudioURL = nil
         pendingMediaFiles.removeAll()
         pendingThumbnails.removeAll()
@@ -376,6 +468,9 @@ extension FeedView {
                     }
                     ForEach(pendingAttachments) { attachment in
                         feedAttachmentTile(attachment)
+                    }
+                    if let place = pendingPlace {
+                        feedPlaceTile(place)
                     }
                     if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
@@ -404,6 +499,7 @@ extension FeedView {
                     pendingThumbnails.removeValue(forKey: id)
                 }
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 28×28 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
@@ -414,6 +510,7 @@ extension FeedView {
                             .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
                     )
             }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
             .padding(.trailing, 8)
 
             VStack(spacing: 4) {
@@ -429,6 +526,7 @@ extension FeedView {
                             Image(systemName: "play.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundStyle(.white, .black.opacity(0.4))
+                                .accessibilityHidden(true)
                         }
                     } else if attachment.type == .location {
                         ZStack {
@@ -445,6 +543,7 @@ extension FeedView {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(.system(size: 22))
                                     .foregroundStyle(.white, .white.opacity(0.3))
+                                    .accessibilityHidden(true)
                                 Circle()
                                     .fill(Color.white.opacity(0.3))
                                     .frame(width: 8, height: 4)
@@ -465,12 +564,73 @@ extension FeedView {
                         Image(systemName: feedIconForType(attachment.type))
                             .font(.system(size: 22))
                             .foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                 }
                 .frame(width: 56, height: 56)
 
                 Text(feedLabelForAttachment(attachment))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(ThemeManager.shared.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 60)
+            }
+        }
+    }
+
+    // MARK: - Pending Place Tile
+    /// Depuis la Task 11/12, un lieu choisi ne vit plus dans `pendingAttachments`
+    /// (`SharedPlace` porte le nom, `MessageAttachment.location` ne le portait
+    /// pas) : sans cette tuile dédiée le choix d'un lieu ne produirait plus
+    /// aucun retour visuel dans le composer. Même gabarit pin-drop que le
+    /// rendu `.location` existant ci-dessus.
+    private func feedPlaceTile(_ place: SharedPlace) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    pendingPlace = nil
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(MeeshyColors.error)
+                            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
+                    )
+            }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+            .padding(.trailing, 8)
+
+            VStack(spacing: 4) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                    VStack(spacing: 2) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white, .white.opacity(0.3))
+                            .accessibilityHidden(true)
+                        Circle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(width: 8, height: 4)
+                            .scaleEffect(x: 1.8, y: 1)
+                    }
+                }
+                .frame(width: 56, height: 56)
+
+                Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .lineLimit(1)
                     .frame(width: 60)
@@ -519,13 +679,16 @@ extension FeedView {
         }
     }
 
+    // Attachment tile labels reuse the shared `attachment.label.*` keys — the same
+    // SSOT `ConversationView.attachmentLabel` uses — so a pending post attachment
+    // reads identically to a message one across the app.
     func feedLabelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Vid\u{00E9}o"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 }
@@ -549,6 +712,10 @@ struct FeedComposerSheet: View {
     @State private var editingVideoURL: URL?
 
     @State private var pendingAttachments: [MessageAttachment] = []
+    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12,
+    /// 2026-07-29) — `SharedPlace` porte le nom, `MessageAttachment.location`
+    /// ne le portait pas et n'est plus le véhicule.
+    @State private var pendingPlace: SharedPlace? = nil
     @State private var pendingMediaFiles: [String: URL] = [:]
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var pendingAudioURL: URL?
@@ -562,8 +729,11 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
-    /// When the composer carries media, the post defaults to a REEL; the author
-    /// can flip this to keep it a plain POST (out of the reels surface).
+    /// A QUALIFYING composition (video || audio || >= 2 images —
+    /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
+    /// flip this to keep it a plain POST. A non-qualifying composition (single
+    /// image, documents) is ALWAYS a POST — the toggle hides and
+    /// `defaultType` ignores this flag.
     @State private var forcePlainPost = false
     @State private var showEmojiPicker = false
     @State private var showAudioComposer = false
@@ -576,12 +746,15 @@ struct FeedComposerSheet: View {
     }
 
     private var hasContent: Bool {
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
+        // position seule et publishPost() (dont le garde autorise deja ce cas)
+        // ne devient jamais atteignable (Task 13, 2026-07-29).
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
-    /// Reel ⇄ Post chip shown when the composer holds media. A media post is a
-    /// reel by default; tapping flips it to a plain post so it stays out of the
-    /// reels surface.
+    /// Reel ⇄ Post chip shown when the composition QUALIFIES as a reel (video
+    /// || audio || >= 2 images). Tapping flips it to a plain post so it stays
+    /// out of the reels surface.
     private var reelTypeToggle: some View {
         Button {
             forcePlainPost.toggle()
@@ -589,11 +762,11 @@ struct FeedComposerSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                 Text(forcePlainPost
                     ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
             }
             .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
         }
@@ -612,14 +785,14 @@ struct FeedComposerSheet: View {
                         cleanupAndDismiss()
                     } label: {
                         Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -633,7 +806,7 @@ struct FeedComposerSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
-                                .font(.system(size: 15, weight: .bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -669,18 +842,27 @@ struct FeedComposerSheet: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.system(size: 10))
+                                    .font(MeeshyFont.relative(10))
                                 Text(postVisibility == "PUBLIC"
                                     ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
                                     : postVisibility == "FRIENDS"
                                         ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
                                         : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
                         }
                     }
-                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                    // Toggle visible SEULEMENT quand la composition qualifie
+                    // (règle produit 2026-08-02 + directive durée minimale).
+                    // Retirer une image (2→1) le fait disparaître et
+                    // `defaultType` retombe sur POST — aucun REEL 1-image
+                    // publiable, ni une vidéo/audio de moins de 3s.
+                    if ReelComposition.qualifiesAsReel(
+                        mimeTypes: pendingAttachments.map(\.mimeType)
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: pendingAttachments.map(\.duration)
+                    ) {
                         reelTypeToggle
                     }
                     Spacer()
@@ -692,7 +874,7 @@ struct FeedComposerSheet: View {
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -701,7 +883,7 @@ struct FeedComposerSheet: View {
                         .focused($isFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -718,15 +900,15 @@ struct FeedComposerSheet: View {
                                 avatarURL: quoted.authorAvatarURL
                             )
                             Text(quoted.author)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
                             Text("·").foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         Text(quoted.displayContent)
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }
@@ -744,7 +926,7 @@ struct FeedComposerSheet: View {
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
                     sheetAttachmentsRow
                 }
 
@@ -802,34 +984,39 @@ struct FeedComposerSheet: View {
                         showLanguagePicker = true
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 14))
-                            Text(composerLanguageDisplayName)
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(MeeshyColors.indigo500)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
-                                )
-                        )
+                        Text(ComposerLanguageFlag.label(for: composerLanguage))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
                     }
+                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
             }
         }
+        // Cible de dépôt de la recette commune (Lot 1) : la feuille EST le
+        // composer, la bande couvre donc tout son contenu. Même modificateur
+        // que `UniversalComposerBar.body` — affordance et résolution partagées.
+        .modifier(ComposerDropTargetModifier(
+            accentColor: MeeshyColors.brandPrimaryHex,
+            onIngest: { handleSheetComposerIngest($0) }
+        ))
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, transcription in
+            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, transcription: transcription)
+                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                 }
             }
         }
@@ -860,8 +1047,8 @@ struct FeedComposerSheet: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                handleLocationSelection(place)
             }
         }
         .fullScreenCover(item: Binding<EditingAttachmentItem?>(
@@ -970,6 +1157,9 @@ struct FeedComposerSheet: View {
                 ForEach(pendingAttachments) { attachment in
                     sheetAttachmentTile(attachment)
                 }
+                if let place = pendingPlace {
+                    sheetPlaceTile(place)
+                }
                 if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
                         .tint(MeeshyColors.brandPrimary)
@@ -1005,6 +1195,7 @@ struct FeedComposerSheet: View {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 22))
                             .foregroundStyle(.white, .black.opacity(0.4))
+                            .accessibilityHidden(true)
                     }
                 } else if attachment.type == .location {
                     RoundedRectangle(cornerRadius: 10)
@@ -1014,6 +1205,7 @@ struct FeedComposerSheet: View {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.system(size: 26))
                                 .foregroundStyle(.white, .white.opacity(0.3))
+                                .accessibilityHidden(true)
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 10)
@@ -1023,6 +1215,7 @@ struct FeedComposerSheet: View {
                             Image(systemName: sheetIconForType(attachment.type))
                                 .font(.system(size: 26))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         )
                 }
             }
@@ -1039,6 +1232,7 @@ struct FeedComposerSheet: View {
                         pendingThumbnails.removeValue(forKey: id)
                     }
                 } label: {
+                    // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white)
@@ -1049,11 +1243,58 @@ struct FeedComposerSheet: View {
                                 .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                         )
                 }
+                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
                 .offset(x: 6, y: -6)
             }
 
             Text(sheetLabelForAttachment(attachment))
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 72)
+        }
+    }
+
+    /// Depuis la Task 11/12, un lieu choisi ne vit plus dans `pendingAttachments`
+    /// — cette tuile dédiée (même gabarit 72×72 pin-drop) est ce qui évite que
+    /// le choix d'un lieu ne produise plus aucun retour visuel ici.
+    private func sheetPlaceTile(_ place: SharedPlace) -> some View {
+        VStack(spacing: 4) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 72, height: 72)
+                    .overlay(
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(.white, .white.opacity(0.3))
+                            .accessibilityHidden(true)
+                    )
+            }
+            .frame(width: 72, height: 72)
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        pendingPlace = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+                .offset(x: 6, y: -6)
+            }
+
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
@@ -1140,28 +1381,85 @@ struct FeedComposerSheet: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let fileName = url.lastPathComponent
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
             let mimeType = mimeTypeForURL(url)
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
             try? FileManager.default.copyItem(at: url, to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
-            pendingMediaFiles[attachmentId] = tempURL
-            pendingAttachments.append(attachment)
+            appendSheetFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
         }
         HapticFeedback.light()
     }
 
-    private func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(latitude: coordinate.latitude, longitude: coordinate.longitude, color: "2ECC71")
-        withAnimation { pendingAttachments.append(attachment) }
+    /// Cœur commun de l'importateur de documents et de l'ingestion dépôt :
+    /// enregistre un fichier DÉJÀ dans notre conteneur comme pièce jointe en
+    /// attente — même factorisation que `FeedView.appendFeedFileAttachment`.
+    private func appendSheetFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
+        pendingMediaFiles[attachmentId] = tempURL
+        pendingAttachments.append(attachment)
+    }
+
+    /// Recette commune des quatre hôtes, déclinée pour la feuille plein
+    /// écran : mêmes pipelines que ses pickers (`trackSheetPreparation`,
+    /// `handleFileImport`), même règle « une seule insertion » pour le texte.
+    private func handleSheetComposerIngest(_ ingests: [ComposerIngest]) {
+        guard !ingests.isEmpty else { return }
+        var texts: [String] = []
+        for ingest in ingests {
+            switch ingest {
+            case .text(let value):
+                texts.append(value)
+            case .file(let url, let name, let mime):
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    guard let image = UIImage(contentsOfFile: url.path) else {
+                        // Pas de tuile fantôme : l'image illisible est nommée
+                        // dans un toast et son fichier temporaire retiré.
+                        ComposerIngestFeedback.showFailure(names: [name])
+                        try? FileManager.default.removeItem(at: url)
+                        continue
+                    }
+                    let prep = AttachmentPreparationService.shared.prepareImage(
+                        image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
+                    )
+                    trackSheetPreparation(prep)
+                    try? FileManager.default.removeItem(at: url)
+                case .video:
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .feedPost
+                    )
+                    trackSheetPreparation(prep)
+                case .audio, .file:
+                    appendSheetFileAttachment(tempURL: url, fileName: name, mimeType: mime)
+                }
+            }
+        }
+        if !texts.isEmpty {
+            // UNE seule insertion, `\n` entre éléments — le `TextEditor`
+            // SwiftUI (cible iOS 16) n'expose pas le curseur : fin de champ.
+            let joined = texts.joined(separator: "\n")
+            composerText = composerText.isEmpty ? joined : composerText + "\n" + joined
+        }
+        HapticFeedback.light()
+    }
+
+    /// Le picker émet désormais un `SharedPlace` complet — `MessageAttachment.location`
+    /// ne portait ni le nom ni l'adresse et n'est plus le véhicule (Task 11/12).
+    private func handleLocationSelection(_ place: SharedPlace) {
+        withAnimation { pendingPlace = place }
         HapticFeedback.light()
     }
 
     // MARK: - Publish
     private func publishPost() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        // Une position seule, sans texte ni piece jointe, doit pouvoir partir : sinon
+        // handleLocationSelection() range le lieu dans pendingPlace et ce garde le
+        // jette en silence (Task 13, 2026-07-29).
+        guard !text.isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil else { return }
 
         // Quote mode: repost with content instead of createPost
         if let quotePost {
@@ -1178,9 +1476,9 @@ struct FeedComposerSheet: View {
         if !hasFiles || attachments.isEmpty {
             onDismiss()
             HapticFeedback.success()
-            if !text.isEmpty {
+            if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
             }
             return
         }
@@ -1198,18 +1496,20 @@ struct FeedComposerSheet: View {
             // post lands on the same surface (REEL for video / multi-image).
             let postType = ReelComposition.defaultType(
                 mimeTypes: attachments.map(\.mimeType),
+                durationsMs: attachments.map(\.duration),
                 forcePlainPost: forcePlainPost
             ).rawValue
             onDismiss()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
                     content: text,
                     visibility: postVisibility,
                     originalLanguage: lang,
-                    type: postType
+                    type: postType,
+                    location: pendingPlace
                 )
             }
             return
@@ -1247,14 +1547,14 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
                 await MainActor.run {
                     isUploading = false
                     uploadProgress = nil
                     onDismiss()
                     HapticFeedback.success()
-                    FeedbackToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.published", defaultValue: "Post publié", bundle: .main))
                 }
             } catch {
                 await MainActor.run {
@@ -1262,13 +1562,13 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     HapticFeedback.error()
-                    FeedbackToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publishError", defaultValue: "Échec de la publication du post", bundle: .main))
                 }
             }
         }
     }
 
-    private func publishAudioFromSheet(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+    private func publishAudioFromSheet(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
         guard let token = APIClient.shared.authToken,
               let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
         await MainActor.run { isUploading = true }
@@ -1277,7 +1577,14 @@ struct FeedComposerSheet: View {
             let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
             await viewModel.createPost(
-                type: forcePlainPost ? "POST" : "REEL",
+                // Même moteur de classification que les chemins visuels : un
+                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
+                // respecté — plus de "REEL" codé en dur.
+                type: ReelComposition.defaultType(
+                    mimeTypes: [mimeType],
+                    durationsMs: [durationMs],
+                    forcePlainPost: forcePlainPost
+                ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: transcription?.language ?? composerLanguage,
                 mobileTranscription: transcription
@@ -1286,13 +1593,13 @@ struct FeedComposerSheet: View {
                 isUploading = false
                 onDismiss()
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
             }
         } catch {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Echec de la publication")
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
             }
         }
     }
@@ -1330,11 +1637,11 @@ struct FeedComposerSheet: View {
 
     private func sheetLabelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Vid\u{00E9}o"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 }

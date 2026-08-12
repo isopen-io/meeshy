@@ -2,688 +2,447 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
-## Environment
-- ⚠ **Always rebase the slice onto `origin/main`, never local `main`.** Fresh containers ship a
-  stale local `main`, and `git pull origin main` can hard-fail with `Need to specify how to
-  reconcile divergent branches` (no merge/rebase strategy configured) — which silently leaves you on
-  the stale tree. A branch cut from it **loses the previous merged slice** (e.g. `story-canvas-snap-guides`
-  was first cut without PR #1045's `scale`/`rotation` fields). Recipe: `git fetch origin main && git
-  checkout -B claude/apps/android/<slice> origin/main`. Verify a known recent symbol is present before coding.
-- Fresh container has **no Android SDK**. Install per `ROUTINE.md` recipe (~2 min).
-- JDK 21 preinstalled; modules target JVM 17 — fine.
-- First Gradle run downloads the whole toolchain (slow); run it in the
-  background and poll the output file.
-- `./apps/android/meeshy.sh check` = `assembleDebug` + `testDebugUnitTest`.
-  Full clean check ≈ 2.5 min once dependencies are cached.
+> **Archive:** entries older than the ~300-line hygiene threshold live in
+> [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
-## Test patterns (established in repo)
-- ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
-  in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine
-  `state.test {}` for flow assertions.
-- `MeeshyConfig` is a plain `data class` with defaults — instantiate it real,
-  do not mock.
-- `SessionRepository` is a concrete class — mock with `mockk(relaxed=true)` and
-  stub `currentUser` (a `MutableStateFlow`) and `currentUserId` explicitly.
-- `NetworkResult.Failure` wraps **`ApiError(message, code?, httpStatus?)`** — not
-  a `NetworkError` type. Use `NetworkResult.Success(Unit)` for unit endpoints.
-- For distinct sequential stub returns, MockK `coEvery { … } returnsMany listOf("a","b")`;
-  for "succeed once then fail", `… returns "a" andThenThrows Exception(…)`. Used to test
-  multi-pending staging (each `enqueue` returns a distinct cmid) and mid-batch failures.
-- **Non-deterministic id minting in a VM, tested without injection:** when a VM mints ids
-  inline (`UUID.randomUUID()` like `StoryCommentsViewModel`), don't fight Hilt to inject a
-  `() -> String` (a function type has no Hilt binding). Instead assert **structure** and read
-  ids back off the state (`vm.state.value.deck.slides[i].id`) to drive the next op — fully
-  behavioural, no exact-id tautology. Used for `story-composer-slide-deck` slide intents.
-- **Editor-buffer ↔ selected-item mirror:** the composer keeps `draft.text == deck.selectedSlide.text`
-  as a one-writer invariant (a single private `applyDeck{}` re-syncs the buffer on every structural
-  op). This is an accepted "active editor buffer" pattern, not a SoT violation — the deck is the SoT,
-  the draft is the live editing view of its selected slide.
-- **MockK capture-all into a `mutableListOf`:** `coEvery { repo.enqueuePublish(capture(reqs), capture(deps)) }`
-  collects **every** call's arg in order — perfect for asserting a publish loop (one row per slide).
-- **Flipping a behavioural test is not weakening it** when the slice *intentionally* changes
-  the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
-  "second offline pick is appended". Keep the assertion strong (assert the new outcome
-  precisely), record the flip + rationale in the run log, and the reviewer gate passes.
-- **A "duplicate-free across categories" invariant pays for itself as a RED test.** `story-sticker-picker-search`'s
-  `all is … duplicate-free` test caught `⭐` accidentally placed in both OBJECTS and SYMBOLS on the first run
-  — exactly the kind of hand-curated-data slip that silently breaks `distinct`/counts. Assert structural
-  invariants (`containsNoDuplicates`, `hasSize(sum of parts)`, `isInOrder`) over curated catalogues, not just
-  spot-checks of individual entries.
-- **Encode "search ignores the active tab" as a pure reducer, not Compose state.** The product rule (a
-  non-blank query searches across all categories) lives in `StickerPickerState.visibleEmojis`, so it is
-  unit-tested with a one-liner (`state.withQuery("heart").visibleEmojis contains ❤️` while the tab is ANIMALS)
-  and the dialog never has to branch. Same grain as `ComposerBandState` — push the decision out of the Composable.
-- **One text field, two roles (caption vs on-canvas element):** rather than add a second editor,
-  `story-text-elements` routes the existing field by a derived `editorText`/`isEditingTextElement`
-  (selected element's text or the slide caption). `onTextChange` branches on
-  `_state.value.selectedTextElement?.id`. Keeps the canvas a single coherent surface and the SoT in
-  the deck. A dangling element selection (after a slide switch/remove) is dropped centrally in
-  `mirrorDraftToSelection` — an element id only lives on one slide, so "not on the selected slide ⇒
-  not editing". Don't clear in `applyDeck` per-op (it also runs on every pan gesture).
-- **Editor models can land before/after-but-separate from wire serialization** — but prefer wiring
-  it when the model already exists: `story-canvas-transform` shipped the per-slide transform without
-  publishing it; `story-text-elements` *did* serialize into the existing `StoryEffects.textObjects`,
-  so the slice is a complete vertical (no dead-end). Check `core/model` for an existing wire type
-  before deciding the publish path is out of scope.
-- **Private VM companion constants aren't visible to tests** — assert `errorMessage != null` (the
-  existing pattern for `MEDIA_LIMIT` etc.), don't reference `StoryComposerViewModel.X` from a test.
-- **Pure gesture resolvers (drag/swipe) — keep thresholds/slot widths as params** so the
-  decision is fully unit-tested off the Composable (`StorySwipeResolver`, `SlideReorderResolver`).
-  The Composable measures (`onSizeChanged`, `LocalDensity`), accumulates (`detectHorizontalDragGestures`
-  with a local `totalDrag`), and on drag end calls the pure resolver → an existing tested intent.
-- **Float interpolation drifts at the endpoints — short-circuit them.** `a + (b - a) * 1f` is
-  **not** bit-equal to `b` for many floats (1-ULP error), so a lerp tested with `isEqualTo(b)` at
-  `t = 1` (and `isEqualTo(a)` at `t = 0`) fails. Don't switch the test to a tolerance and lose
-  exactness — make `blend` return `this`/`other` directly when `k ≤ 0` / `k ≥ 1`. It's also the
-  correct design: "full-strength filter == base matrix" should be exact. Hit on `story-photo-filters`
-  (3 reds: `blend at one`, `non-finite → full`, VM `selecting a filter`).
-- **Model a small fixed-size numeric vector as `List<Float>`, not `FloatArray`, when you want value
-  equality in tests.** `FloatArray` uses reference equality (a `data class` over it won't compare by
-  content), breaking `assertThat(matrix).isEqualTo(other)`. `StoryColorMatrix` wraps a 20-element
-  `List<Float>` (value equality, JVM-testable) and the Composable only does `values.toFloatArray()`
-  at the glue boundary to feed Compose `ColorMatrix`.
-- **`Float.roundToInt()` rounds half **up** toward +∞** (`2.5 → 3`, but `-0.5 → 0`). When a
-  reorder/threshold test sits exactly on `.5` the expectation is ambiguous — pick a value clearly
-  above/below half (e.g. `2.3` not `2.5`) so the assertion is unambiguous, not flaky. Hit while
-  writing `SlideReorderResolverTest`.
-- **Moving a field "up" a level cheaply: keep a *mirror*, not a second source of truth.** Moving story
-  media from whole-draft to per-slide (`story-slide-media`) looked like it would flip ~20 mature media
-  tests. Instead the deck became the single owner and `draft` was made a *mirror of the selected slide*
-  for media — exactly as it already was for text (`mirrorDraftToSelection`). On the single-slide path
-  `draft.mediaIds == selectedSlide.mediaIds`, so nearly every existing test passed unchanged and only
-  the genuinely new per-slide behaviour needed new tests. The reviewer "single source of truth" box
-  still holds because the mirror has **one writer** and the deck is authoritative; `draft.*` media
-  helpers (`remainingMediaSlots`/`isMediaFull`/`hasMedia`) then automatically read per-*selected*-slide
-  for free. Prefer this over a wholesale rename when the existing facade is already a projection.
+## Slice `outbox-message-lane-discovery` (2026-08-11)
+- **A Room DAO method named `deliverableForLane(lane: String)` binding an EXACT-match `WHERE
+  lane = :lane` can be called with a value that was never meant to be a real lane — and the
+  compiler cannot catch it.** `OutboxFlushWorker.doWork()` called
+  `outboxRepository.deliverable(OutboxLanes.forMessage(""))` to "discover" which dynamic
+  per-conversation message lanes needed draining. `OutboxLanes.forMessage("")` innocently
+  evaluates to the literal string `"message:"` — a syntactically valid `String`, so nothing
+  about the call looks wrong at a glance, and it type-checks perfectly. But no row is EVER
+  enqueued with a blank conversation id (every real call site passes a real id), so the exact-
+  match query behind `deliverable()` could never return anything for that input. The entire
+  "drain per-conversation message lanes" loop was silently dead code — `SEND_MESSAGE`/
+  `EDIT_MESSAGE`/`DELETE_MESSAGE` were never drained by `OutboxFlushWorker` at all, in any build
+  that has shipped this discovery mechanism. Lesson: when a "discovery" call reuses a
+  single-item lookup function (`deliverableForLane`, built for "give me lane X's rows") with a
+  deliberately-empty/placeholder argument to try to get "everything under this lane family"
+  behavior, that's a strong signal the lookup function's semantics (exact match) don't actually
+  support the caller's intent (prefix/family match) — the fix needed a genuinely different query
+  (`LIKE 'message:%' GROUP BY lane`), not a cleverer argument to the existing one.
+- **A message "stuck pending forever with a clock icon, even for a plain-text message with zero
+  dependencies" is strong direct evidence the DISCOVERY of its lane never ran at all — not
+  merely evidence of a same-pass dependency-timing race.** The previous iteration's own
+  on-device verification found `flip-test-verify`/`ime-verify-flip-c3` (plain text, no
+  attachment, no `dependsOn`) stuck pending and attributed it to the `OutboxFlushWorker`
+  same-pass graft-timing gap (a real, but narrower, issue that only explains attachment-
+  dependent sends). A `dependsOn`-free row has `DependencyVerdict.SATISFIED` immediately, so the
+  ONLY way it never drains on the very first `drainLane` call on its lane is if that lane is
+  never visited in the first place — which is exactly what the exact-match discovery bug caused.
+  When a "same-run timing" theory doesn't actually explain a **zero-dependency** row exhibiting
+  the identical symptom, treat that as a signal the theory is incomplete, not as an unrelated
+  data point to set aside.
+- **`OutboxFlushPlan.outcome`'s `FlushOutcome.RETRY`-on-blocked-dependency design was already
+  correct for the "prerequisite delivers later in the same pass" case — no additional same-pass
+  redrain loop was needed once lane discovery was fixed.** Before writing a fix, it's worth
+  reading the *existing* retry/backoff design's own doc comments closely: this file's already
+  explained (2026-07 era) that a lane stopping on `stoppedOnBlockedDependency` triggers
+  `Result.retry()`, which WorkManager reschedules via its own `EXPONENTIAL, 10s` backoff — the
+  next pass either delivers the now-satisfied dependent or cascade-exhausts it. That mechanism
+  simply never fired for ANY message lane because message lanes were never drained at all
+  (previous note). Fixing the root cause (discovery) made the already-correct retry design work
+  for the first time, rather than needing a second, parallel same-pass-redrain mechanism layered
+  on top — worth checking whether an adjacent "this looks incomplete" mechanism is actually
+  already complete and just unreachable, before building a second one next to it.
+- **A live-gateway on-device verification can surface a genuine, currently-active, unrelated
+  PRODUCTION incident — reproduce it with a bare `curl` before concluding the diff under test
+  caused it.** After the fix, a real `POST /conversations/:id/messages` finally reached
+  `gate.meeshy.me` (proving the Android-side discovery fix works) but the gateway responded `400
+  {"error":"Internal Server Error"}` for every attempt, in two different conversations. Before
+  writing this off as "my fix is broken" or silently ignoring it, replaying the exact same
+  request with `curl` (same bearer token, same body shape) reproduced the identical 400 outside
+  the app entirely — and a `GET` on the same conversation's messages returned a normal `200` —
+  proving the failure is server-side and platform-independent, not a symptom of anything in this
+  diff (which contains zero gateway changes). Flagged as a new, separate, urgent backlog item
+  rather than investigated further, since gateway code is out of this lane's diff-purity bounds
+  — but the `curl` reproduction step is what turns "my fix might be broken" into "found a live,
+  unrelated production bug" with confidence, in under a minute.
 
-## Outbox / durable chain
-- The durable upload→publish chain is two halves: (1) **gating** the dependent on
-  its prerequisite (`outbox-dependency-gating` — drainer holds/cascade-exhausts via
-  `OutboxDependencies.verdict`); (2) **produced-id write-back**
-  (`outbox-produced-id-writeback` — a prerequisite's `SendResult.SuccessWithId(realId)`
-  grafts the id into dependents' payloads via `OutboxRepository.rewriteDependents` +
-  the pure `PublishMediaWriteBack.graft`). The **placeholder convention** is: a publish
-  queued before its upload carries the **upload row's own `cmid`** as the placeholder
-  media id; the drainer passes `placeholder = row.cmid` to the graft. Self-documenting,
-  needs no extra column.
-- Keep the outbox package **payload-agnostic**: `rewriteDependents` takes a generic
-  `(payload) -> payload?` and the drainer takes an injected `graftProducedId` (no-op
-  default). The story-specific `CreateStoryRequest` decode lives only in
-  `PublishMediaWriteBack` (sdk-core `story` package); the worker injects it. Don't let
-  `OutboxRepository`/`OutboxDrainer` import story types.
-- `MeeshyApi.json` has `explicitNulls = false` + default `encodeDefaults = false`, so
-  re-encoding a `CreateStoryRequest.copy(...)` round-trips cleanly (default/null fields
-  are simply omitted). Safe to decode→edit→re-encode a queued payload.
-- `rewriteDependents` only touches **PENDING** dependents — never rewrite a row that is
-  INFLIGHT (mid-send) or EXHAUSTED. The gate keeps a dependent PENDING until its
-  prerequisite succeeds, so the graft always lands before the dependent's gate opens.
-- Producer gap (still open after `outbox-produced-id-writeback`): nothing emits
-  `SuccessWithId` yet and the worker's lane list omits `MEDIA`. The write-back is a
-  tested primitive awaiting its `UPLOAD_MEDIA` sender — same "ship the primitive before
-  its producer" pattern as the gating slice. Drain `MEDIA` **before** `STORY` when it
-  lands. Also: a `BLOCKED` dependency doesn't set `anyTransient`, so a held lane isn't
-  auto-retried by WorkManager — fix with the producer.
+## Slice `tus-upload-checkpoint-resume` (2026-08-11)
+- **`adb shell run-as <pkg> sqlite3 …` round-trips are too slow and jittery to catch a
+  sub-2-second transient DB row live via a polling loop.** Tried twice to observe the
+  intermediate `tus_upload_checkpoint` row that exists only between the first chunk's PATCH
+  success and the final chunk's PATCH success (a ~2.3 s window for a 17.9 MB two-chunk upload).
+  Each `adb shell "run-as … sqlite3 …"` invocation spawns a fresh `run-as` + `sqlite3` process
+  pair, and the actual per-call latency was inconsistent enough (sometimes ~50 ms, sometimes
+  much more once a background `logcat` stream was also running) that a 20-40-iteration polling
+  loop's *effective* wall-clock coverage was hard to predict in advance — both attempts either
+  finished measuring before the write happened or only started after it was already gone. Do
+  not treat "polled N times, saw nothing" as proof the write never happened when the window is
+  this narrow relative to per-call overhead — either give the polling loop a much wider,
+  deliberately-overlapping window (start before the earliest plausible write time, run well past
+  the latest plausible one) or drop the live-polling approach entirely.
+- **Pre/post DB state + a full logcat request/response trace + mutation-proven unit tests
+  together substitute for a live transient-state capture, and are cheaper to obtain reliably.**
+  For this slice, confirming (a) the checkpoint table is empty *after* a successful multi-chunk
+  upload (proves the delete-on-completion path executed against the real on-device Room DB, not
+  a mock), (b) the exact `POST 201 → PATCH 204 → PATCH 200` sequence in `adb logcat` (proves the
+  real chunk-then-finish shape reached the live gateway unchanged), and (c) a mutation test that
+  fails exactly the "resume" branch's own unit tests when the decision is hardcoded to `Fresh`
+  (proves the decision logic itself), together closes the same loop that watching the live write
+  would have — without needing to win a timing race against `adb`'s own overhead.
+- **A noise-source (`geq=random(1)*255:…`) `ffmpeg` clip is a cheap, reliable way to synthesize a
+  real, playable, large (multi-chunk-triggering) test video on demand.** A `testsrc`/`nullsrc`
+  pattern compresses far too well under h264 (a 20 s clip landed at ~1 MB) to reliably exceed a
+  10 MB chunk boundary; feeding `geq` per-pixel randomness into the video filter graph produces
+  genuinely incompressible frames, so a ~1.6 s clip at 960×540/`crf 18` reliably lands at ~18 MB
+  — enough for a real two-chunk TUS PATCH sequence without waiting on a multi-minute encode.
+- **The system Android photo/media picker's "Add (N)" button lives in a different package
+  (`com.google.android.providers.media.module`) with its own `uiautomator` node tree** — grep the
+  dump for the visible button text (`text="Add"`) rather than assuming the composer's own
+  attach-tile bounds convention (content-desc-first) carries over; the clickable node is a
+  sibling `android.widget.Button` with a `resource-id` in that package's namespace, not the
+  app's.
 
-## Domain gotchas
-- `List<ApiPost>.toStoryGroups()` orders each group's stories **oldest-first**
-  (ascending `createdAt`); groups order = current-user → unviewed → latest desc.
-  When building viewer fixtures, the *first* slide is the *oldest* story.
-- Prisme rule 1: when no translation matches a preferred language, show the
-  ORIGINAL (`isTranslated = false`) — never an arbitrary translation. Honoured by
-  `StoryContentResolver` / `LanguageResolver.preferredTranslation`.
+## Slice `feed-composer-location-attachment` (2026-08-11)
+- **A single visually-estimated tap coordinate broke the routine's own hard rule mid-verification
+  — caught and corrected, but worth restating precisely why the rule exists.** After reading the
+  "Publish" button's approximate on-screen position from a screenshot and computing a tap
+  coordinate by eye, the tap landed nowhere near the button (the composer sheet didn't dismiss,
+  no request fired) — the screenshot viewer displays the 1080×2400 PNG scaled to 900 px wide, and
+  every coordinate read off it needs the stated 1.2× multiplier back to device pixels, a step
+  that's easy to silently skip when eyeballing a position rather than reading a bounds attribute.
+  Every OTHER tap in this same verification session used `uiautomator dump` + a grepped `bounds="
+  [x1,y1][x2,y2]"` attribute (already in real device pixels, no scaling needed) and landed
+  correctly on the first try. Re-confirms the standing rule in absolute terms: there is no
+  "close enough" visual estimate that's actually reliable once a screenshot's display scale
+  enters the picture — the dump-and-grep step is not optional even for "obvious" targets.
+- **A `String.format("%.Nf", …)` call with no explicit `Locale` is a live production bug waiting
+  for a comma-decimal device locale (`fr_FR`, `de_DE`, …), not a theoretical one.** Kotlin's
+  `String.format` without a `Locale` argument defaults to the JVM's current default locale, which
+  on a real device tracks the user's system language — a French or German device would silently
+  render `"48,86"` instead of `"48.86"` for a value the gateway's `parseSharedPlace` treats as a
+  `Double` on the wire. `Locale.ROOT` (not `Locale.US`, which has its own regional quirks over
+  the JDK versions) pins the format regardless of device locale. Proven, not assumed: a dedicated
+  test temporarily calls `Locale.setDefault(Locale.FRANCE)`, asserts the output is still
+  dot-separated, then restores the original default in a `finally` block so no other test in the
+  suite observes a changed JVM-wide default — this is the kind of gotcha that a CI running in a
+  single fixed locale (typically `en_US`) will never catch on its own, so the test has to force
+  the adversarial locale itself rather than rely on the ambient one.
+- **A full port of an iOS map-based picker (search, "my position", `CLGeocoder` reverse-geocoding)
+  is a multi-part epic requiring a new Maps SDK dependency with its own API-key provisioning — not
+  a slice an unattended routine run should attempt whole.** Confirmed by reading iOS's
+  `LocationPickerView.swift` end to end (879 lines) before writing any Android code: the map UI
+  alone needs `com.google.android.gms:play-services-maps`/Maps Compose plus a provisioned API key
+  outside this routine's reach, on top of the picker's own state machine (search debounce,
+  precision degrading, coarse-name fallback). The right-sized first sub-slice instead captured
+  the device's raw coordinate via the plain Android SDK's `android.location.LocationManager` (no
+  new Gradle dependency at all) and shipped a genuinely valuable, wire-compatible "attach my
+  location" capability — deferring map/search/geocoding as explicitly-scoped, heavier follow-ups
+  rather than either attempting the whole epic in one run or silently skipping the candidate
+  again.
+- **`LocationManager.requestLocationUpdates` wrapped in `suspendCancellableCoroutine` +
+  `withTimeoutOrNull` is a clean, dependency-free way to get "one fresh fix or a timeout" without
+  Play Services** — the coroutine resumes on the listener's first `onLocationChanged` callback
+  (which also unregisters itself via `removeUpdates(this)`), and `continuation.invokeOnCancellation
+  { removeUpdates(listener) }` covers the timeout/cancellation path so the listener never leaks
+  past the call's lifetime either way.
 
-## Decisions
-- **Routine docs live in `apps/android/tasks/android-routine/`** (not repo-root
-  `tasks/`) so merged diffs stay inside `apps/android` per the hard merge gate.
-- Cross-group story navigation is modelled as a **pure `StoryPlayback`** reducer
-  in `:feature:stories`; the ViewModel holds an instance and re-derives
-  `UiState` from it, the Composable only wires gestures + the auto-advance timer
-  and observes `isDismissed` to pop. Keeps all branch logic JVM-testable.
+## Slice `feed-composer-language-override` (2026-08-11)
+- **The exact screenshot-estimated-tap mistake this file already documents once (previous
+  slice's own note) recurred mid-verification, on the identical "Publish" button, within the
+  same run.** After confirming the language-picker dialog worked correctly via dump-derived
+  bounds, the very next tap (Publish, after typing text) was read off a *displayed* screenshot
+  coordinate without reapplying the 1.2x scale-to-device-pixel correction — the tap silently
+  landed nowhere near the button and the composer sheet stayed open with no request fired. Caught
+  by checking the resulting screenshot (composer still open) rather than assuming success, then
+  corrected by dumping `uiautomator` fresh and reading the real `bounds="[874,1360][1006,1414]"`
+  for "Publish" — center `(940,1387)`, not the eyeballed `(783,1156)` from the scaled screenshot.
+  Confirms the standing rule needs restating even more bluntly: **every single tap in a
+  verification session needs its own fresh bounds lookup, including ones that feel "the same
+  button I already located a few steps ago"** — a sheet can re-render (draft reset on reopen,
+  keyboard IME changing layout, a dialog closing) and shift coordinates between two visually
+  similar-looking moments, and muscle-memory-reusing an earlier screenshot-derived guess is just
+  as unreliable as never having read a bounds attribute at all.
+- **A wire request parameter that has existed on a `Repository`/`ApiRequest` DTO for a long time
+  can still be entirely dead for one specific call site.** `PostRepository.create(originalLanguage
+  ...)` and `CreatePostRequest.originalLanguage` both already existed (used by other flows), but
+  `FeedViewModel.publishPost` never threaded a value into that parameter — every Feed post ever
+  published from this composer silently sent `originalLanguage: null`. No production change was
+  needed in `PostRepository`/`PostApi` at all; the gap was entirely in the two callers above it
+  (`FeedComposerDraft` never carried a language field, `FeedViewModel.publishPost` never had a
+  parameter to forward). Worth grepping the full call chain of an "already-wired" field before
+  assuming a gap needs wire-model changes — sometimes only the composer-side plumbing is missing.
+- **Giving a ViewModel-level pass-through parameter a `null` default (not the app's own real
+  default) is what keeps every pre-existing test green when threading a new field through an
+  established, heavily-tested method.** `FeedComposerDraft.language` defaults to
+  `ComposerLanguage.DEFAULT` ("fr", matching iOS's own composer always having *some* language
+  selected) — but `FeedViewModel.publishPost(language: String? = null)` deliberately defaults to
+  `null`, not `"fr"`, even though the real composer always supplies a non-null value. Defaulting
+  the ViewModel param to `"fr"` would have silently changed the `originalLanguage` argument
+  every existing `publishPost(content=.., visibility=..)` test call implicitly sends to
+  `repository.create(...)` — MockK's `coEvery`/`coVerify` match on the exact argument values a
+  call site passes (defaults included), so every pre-existing stub omitting `originalLanguage`
+  (implicitly `null`) would have stopped matching and gone red, with zero relation to the actual
+  new behavior under test. Mirrors the established `location: SharedPlace? = null` precedent from
+  the prior slice — an additive, nullable pass-through parameter is the only shape that adds new
+  forwarding capability without silently mutating the default behavior every untouched caller
+  relies on.
 
-## Decisions (cont.)
-- **Optimistic story reactions > iOS fire-and-forget.** iOS `sendReaction` does
-  not bump locally and waits for the socket echo (`applyStoryReactionDelta`) for
-  its own +1. Android `StoryReactionState.reactedLocally` bumps instantly; to keep
-  the eventual socket echo from double-counting, `applyDelta(emoji, delta, isOwn)`
-  treats an own ADD of an emoji already in `mine` as a no-op. The VM rolls back to
-  a snapshot on `NetworkResult.Failure`/exception. Reducer lives in
-  `:feature:stories` (the "when to count" rule is product UX, not an SDK atom).
-- Quick-strip source of truth = `EmojiCatalog.defaultQuickReactions` (sdk model),
-  NOT a screen-local literal — keeps the strip consistent with the picker.
+## Slice `settings-two-factor-auth` (2026-08-11)
+- **A commit message's stated reason for removing a feature is a claim, not a fact — re-verify it
+  against the actual backend before trusting it, even when the commit is barely a day old.**
+  `761164959` (2026-08-10) removed the 2FA settings row with the message "aucune route gateway
+  n'existe" (no gateway route exists). `grep`ping `services/gateway/src/routes/two-factor.ts` +
+  `TwoFactorService.ts` + `route-registration.ts` showed six real, tested, live endpoints under
+  `auth/2fa`, registered since a much OLDER commit (`c44ded3d5`) — the removal's premise was wrong
+  from the moment it was written, not a regression that happened later. A same-day-old commit
+  message is not inherently more trustworthy than an old one; both are claims about the codebase
+  that the codebase itself can confirm or refute in under a minute.
+- **`./apps/android/meeshy.sh check` (`assembleDebug` + `testDebugUnitTest`) does NOT install the
+  APK — a fresh `:app:installDebug` is a separate, required step before on-device verification can
+  see new code.** Tapped the newly-restored Settings row on the emulator and it wasn't there;
+  the emulator was still running whatever build was last installed (from a prior, unrelated
+  slice). `adb shell pm list packages`/screen state can look identical whether or not the running
+  APK matches the current worktree — always `installDebug` explicitly before any on-device
+  verification pass, never assume `check`'s green result means the emulator is running that code.
+- **Kotlin block comments nest (unlike Java/C) — a literal `/*` sequence inside a KDoc comment's
+  prose (not a code fence) silently opens a SECOND comment that the doc's own closing `*/` then
+  closes, leaving the outer one unclosed until EOF.** Writing `` `/auth/2fa/*` `` (a glob-style
+  path in backticks) inside a `/** ... */` doc comment produced `kspDebugKotlin: Unclosed comment`
+  pointing at the LAST line of the file, nowhere near the actual typo — because Kotlin's nested-
+  comment support means the "closing" `*/` at the end of that KDoc block actually closed the
+  accidental nested comment opened by `2fa/*`, and the real outer comment kept consuming the rest
+  of the file. When "Unclosed comment" points at EOF, grep every doc comment for a literal `/*`
+  substring (not just missing `*/`) — the bug is almost certainly an accidental nested-open, not a
+  missing close.
+- **A security-toggle feature (2FA) exercised against the routine's own shared, long-lived test
+  account needs an explicit stop-point BEFORE the state-changing call, not just "verify it works
+  end to end."** The account (`atabeth`) is reused across every verification run this routine has
+  ever done, by both the Android and iOS lanes — and this session does not know its password
+  (needed by the `disable` endpoint's `DisableBodySchema`, which requires it unconditionally).
+  Computing a valid live TOTP code from the real `POST auth/2fa/setup` secret and calling `/enable`
+  was technically straightforward, but would have left the account's real login flow behind 2FA
+  with no password-holder in this session able to complete a subsequent disable — a real risk of
+  locking every future run of this routine out of the account it depends on. Verified the read-only
+  and non-destructive parts instead (`GET status`, `POST setup`, and that `cancel()` fires zero
+  network calls and leaves the account's real status unchanged) and stopped there. When a
+  verification pass would need to flip a real, hard-to-reverse account-level flag on a SHARED
+  fixture the session doesn't fully control (no known password, no dedicated disposable account),
+  the safety-first move is to verify up to but not including that flip, not to "complete the loop"
+  for its own sake.
 
-## Decisions (cont.)
-- **Story viewer swipes = pure resolver + pure engine transition.** A drag is
-  mapped to intent by `StorySwipeResolver.resolve(dragX, dragY, hThreshold,
-  vThreshold)` on the **dominant axis** (`|x|>|y|`); only a *downward* drag
-  dismisses; sub-threshold travel is `None` so finger drift during a tap can't
-  hijack navigation. Thresholds are parameters (Composable feeds them from
-  density) → the decision stays 100% JVM-testable. `StoryViewerViewModel.onSwipe`
-  dispatches into `jumpToNext/PreviousGroup` + the new pure `StoryPlayback
-  .dismissed()`. Composable only runs `detectDragGestures` (exempt glue).
-- Compose gesture coexistence: keep `detectTapGestures` and `detectDragGestures`
-  in **separate `pointerInput`** blocks on the same Box — Compose routes taps vs
-  drags to the right detector; do not try to merge them.
+## Slice `settings-account-contact-change` (2026-08-11)
+- **`advanceUntilIdle()` fully drains a coroutine's `delay()` loop even when that loop is
+  scheduled to run for real minutes of virtual time — it does not stop at "nothing due right
+  now," it keeps advancing virtual time until the scheduler is genuinely empty.** A test that
+  called `submitEmailChange()` (which launches a 60-iteration `delay(1000)` tick loop for the
+  resend cooldown) then `advanceUntilIdle()` to inspect the just-started cooldown got
+  `remaining == 0, expired == true` instead of `remaining == 60` — the single `advanceUntilIdle()`
+  call ran the ENTIRE 60-second countdown to completion before returning, because from the test
+  dispatcher's point of view a 60 s virtual delay and a 1 ms one are equally "not idle yet."
+  `runCurrent()` (only run tasks already due at the CURRENT virtual instant, never advance time)
+  is the correct call to observe a freshly-started periodic coroutine's initial state; reserve
+  `advanceTimeBy(N) + runCurrent()` for when the test actually wants to fast-forward through N ms
+  of that loop. Every call site that chains "trigger a tick-loop-starting action" then immediately
+  inspects tick-loop state must use `runCurrent()`, not `advanceUntilIdle()` — this bit 4 of 27
+  tests on first run here (`MagicLinkViewModel`'s own identical `delay(1000)` tick loop from an
+  earlier slice has no test file yet, so this exact trap hadn't been hit in this codebase before).
+- **A fully generic pure countdown type is worth reusing across unrelated features even when its
+  name reads domain-specific.** `MagicLinkCountdown` (`:core:model/auth`, from the magic-link-login
+  slice) is a `remaining`/`expired`/`tick()`/`canResend()`/`start()` value type with nothing
+  magic-link-specific in its logic — reused verbatim here for the unrelated 60s email-resend
+  cooldown rather than duplicating an identical tick/expire mechanism or renaming the type
+  (renaming would touch an unrelated slice's call site for zero behavioural gain, out of scope for
+  a single-feature PR). Only the 2nd call site so far — this codebase's own established convention
+  (`ComposerLanguagePickerDialog` vs `RegionalLanguageDialog` vs the registration inline grid) is
+  to keep duplicating small UI glue until a 3rd call site forces a shared abstraction, but that
+  convention is about UI glue, not already-fully-generic pure logic; a pure type with zero
+  feature-specific fields is a SSOT from the first reuse, not the third.
 
-## Decisions (cont.)
-- **Realtime story-reaction deltas = SocialSocketManager flow → VM `applyDelta`.**
-  `SocialSocketManager` only decodes `story:reacted`/`story:unreacted` (payload
-  `{storyId,userId,emoji}`, identical across shared TS, iOS, Android) into
-  `SharedFlow`s — pure transport. The product rule ("which slide, fold +1/-1,
-  is-own, ignore unknown ids, don't double-count my optimistic bump") lives in
-  `StoryViewerViewModel.onReactionDelta`, which seeds a non-current slide's base
-  count from `playback.groups`, calls the pure `StoryReactionState.applyDelta`,
-  and re-emits **only on an actual change** (`next == current` → skip). Own echo
-  of an already-counted emoji is inert because `applyDelta` returns `this`.
-- **Testing socket managers on the JVM needs Robolectric** — `org.json.JSONObject`
-  is an android.jar stub that throws "not mocked" under plain unit tests. Mock
-  `SocketManager`, capture the `on(event, cb)` handlers into a map, `attach()`,
-  then invoke the captured handler with a real `JSONObject`; assert via Turbine
-  `flow.test {}`. `@RunWith(RobolectricTestRunner::class)`.
-- VM SharedFlow collectors started in `init` are live under
-  `UnconfinedTestDispatcher`; emit on the test-owned `MutableSharedFlow`
-  (extraBufferCapacity) and read `vm.state.value` synchronously — same pattern as
-  the existing intent-driven tests.
+## Slice `widget-recent-conversations` (2026-08-11)
+- **A `GlanceAppWidget` update can run in a cold app process that never executed the app's
+  normal startup flow — any in-memory-only session state silently reads as absent, not stale.**
+  `SessionRepository.currentUserId` is populated exclusively by `AuthRepository.restoreSession()`,
+  itself called from `MainActivity`'s/a ViewModel's own startup path. `AppWidgetManager` can spawn
+  the app's process purely to service `APPWIDGET_UPDATE` (via `GlanceAppWidgetReceiver.onUpdate`)
+  without ever launching an Activity — that process never runs `restoreSession()`, so
+  `SessionRepository.currentUserId` is `null` even though the user IS signed in on the device.
+  Any widget decision needing the current user's identity (here: resolving a direct conversation's
+  *other* participant) must read from something actually persisted across process death — added
+  `TokenStore.userId`, mirroring the existing `jwt`/`sessionToken` persistence exactly, rather than
+  reaching for the in-memory `SessionRepository` a first instinct suggests since it's the "obvious"
+  place identity lives everywhere else in the app.
+- **`androidx.glance.action.actionStartActivity` (the base `glance` artifact) has NO overload
+  accepting a raw `Intent` — only `ComponentName` or a reified `Class<T : Activity>`, both paired
+  with `ActionParameters` (an extras-like bundle, not a `data` URI).** The `Intent`-accepting
+  overload lives in a DIFFERENT package/artifact: `androidx.glance.appwidget.action.actionStartActivity(Intent, ActionParameters)`
+  (from `glance-appwidget`, imported under an alias to avoid colliding with the base package's
+  same-named function when both are needed in one file — the empty-state tap still wants the typed
+  `actionStartActivity<MainActivity>()` form). Verified via `javap` against the actual jars in
+  `~/.gradle/caches/*/transforms/*/transformed/glance-appwidget-1.1.1-api.jar` BEFORE writing any
+  code — there is no JDK on `$PATH` by default on this machine (`java_home -V` empty), but
+  `brew list` had `openjdk@21` already installed unlinked; `export JAVA_HOME="$(brew --prefix
+  openjdk@21)/libexec/openjdk.jdk/Contents/Home"` unblocks `javap`/Gradle without any install step.
+  This class of "does the API even have the overload I'm about to write against" doubt is cheap to
+  resolve by decompiling the actual dependency jar rather than guessing from memory or Android
+  documentation that may describe a different Glance version.
+- **Navigation-Compose 2.8.3 (this repo's pinned version) auto-consumes the hosting Activity's
+  launching `Intent` for registered `navDeepLink`s — no manual `NavController.handleDeepLink()`
+  call needed**, confirmed by `libs.versions.toml` (`navigationCompose = "2.8.3"`, the version that
+  added this) plus the total absence of any `handleDeepLink` call anywhere in `apps/android/app`.
+  Older Navigation-Compose versions require that call explicitly in `onNewIntent`; don't assume the
+  older requirement without checking the pinned version first — it would have led to writing dead
+  manual-wiring code for a mechanism this version already handles automatically.
+- **A Hilt `@EntryPoint` interface meant for a class of callers (not one specific caller) is worth
+  renaming the moment a second caller needs it, not accreting a misleadingly-scoped name.**
+  `UnreadWidgetEntryPoint` (singular-widget name) already generalizes cleanly to any
+  `GlanceAppWidget` needing a `@Singleton` binding — renamed to `WidgetEntryPoint` via `git mv` the
+  moment this second widget needed `tokenStore()` alongside the existing `conversationRepository()`,
+  rather than leaving the misnomer or spawning a near-duplicate second entry-point interface.
 
-## Decisions (cont.)
-- **MockK `coAnswers` is a member infix, NOT a top-level import.** `import
-  io.mockk.coAnswers` is unresolved in this mockk version — use `coEvery { … }
-  coAnswers { … }` directly (it resolves as a member of `MockKStubScope`). To test
-  a "cold skeleton then content" transition, gate the suspending stub on a
-  `CompletableDeferred` and assert via Turbine `state.test {}` (initial idle →
-  isLoading=true → completed).
-- **Viewers sheet ≫ load-once.** iOS `StoryViewersSheet` loads once in raw gateway
-  order. Android: pure `StoryViewersPresentation.order()` sorts most-recent-first
-  (ISO `viewedAt` desc, nulls last via `compareByDescending { it.viewedAt != null }
-  .thenByDescending { it.viewedAt.orEmpty() }`, stable → ties keep input order) +
-  dedups by id; the VM applies Instant-App SWR (cold-only skeleton, refresh keeps
-  the stale list and swallows refresh failures, error only on cold). The "order /
-  when-skeleton / author-only affordance" rules are product UX → `:feature:stories`,
-  while the wire model + `toStoryViewer()` mapper + `StoryRepository.viewers()` are
-  building blocks → `core/model`/`sdk-core`.
-- **`story:viewed` realtime can't append a viewer row yet.** Socket payload is
-  `{storyId, viewerId, viewedAt}` — no display name/avatar, so a live append would
-  render an empty row. Left as a one-shot load (iOS parity); realtime append needs
-  a richer gateway event or a user lookup. Tracked follow-up.
+## Slice `conversation-hardpress-preview` (2026-08-11)
+- **A high-load host can trigger a genuine, single, real `ActivityManager` ANR on the emulator
+  that has NOTHING to do with the diff under test — distinguish it from an app hang via the
+  `InputDispatcher` log lines, not the dialog alone.** Mid on-device verification, `dumpsys
+  window` reported an "Application Not Responding" dialog after a long-press gesture. Before
+  assuming the new `combinedClickable`/`loadPreviewMessages` code deadlocked something, `adb
+  logcat` showed the actual ANR reason: `Input dispatching timed out … Waited 5008ms for
+  MotionEvent … spent 8323ms processing MotionEvent` — that phrasing means the SYSTEM took
+  8+ seconds just to *deliver* the touch event to the app, not that the app failed to *handle*
+  an already-delivered one. `uptime` confirmed a load average of ~7-8 and `ps aux` showed three
+  concurrent `claude --dangerously-skip-permissions` processes plus an active Xcode `xctest` run
+  alongside the one `meeshy_pixel8` emulator — host-wide contention (the routine's own documented
+  "concurrent sessions" gotcha), not a code-level deadlock. Only ONE `ANR in me.meeshy.app.debug`
+  line was ever logged despite the dialog appearing to "come back" across several dismiss-and-
+  retap attempts — those were the same stuck dialog being slowly re-rendered under load, not
+  repeat crashes. Tapping "Close app" (not "Wait") plus a background wait-loop for `mCurrentFocus`
+  to clear, then relaunching, recovered cleanly with zero code changes.
+- **`dumpsys window`'s `mCurrentFocus` does not reliably report a Compose `DropdownMenu`'s
+  `Popup` the same way it reports a system dialog or a `PopupWindow`.** After a successful
+  long-press, `mCurrentFocus` read `Window{… Pop-Up Window}` once, but on a second identical
+  gesture on a different row it stayed on `MainActivity` even though (per a direct screenshot
+  check) nothing had actually opened — the earlier "long-press" had registered as a plain tap
+  and NAVIGATED into the conversation instead. `mCurrentFocus` alone is not a trustworthy signal
+  for "did a Compose Popup open" — always cross-check with an actual screenshot (or a fresh
+  `uiautomator dump` grepped for the menu's own content) rather than inferring solely from the
+  focus window name, especially the first time a given gesture is attempted on a fresh row.
+- **`input touchscreen swipe x y x y <ms>` reliably triggers a Compose `combinedClickable`'s
+  `onLongClick` at ~700-900ms under a QUIET system, but under host contention the SAME command
+  can be perceived as a short tap** (the framework's long-press timer apparently measures from
+  event delivery, not command issuance, so delivery lag eats into the hold window). No amount of
+  increasing the duration fixes this reliably when the host itself is the bottleneck — the fix is
+  to retry once system load has visibly dropped (`uptime`), not to keep escalating the duration.
+- **A hard-press preview card reusing an existing single-message preview formatter for a LIST of
+  messages resurfaces that formatter's existing "no content, no type" fallback as a
+  mid-list line, not just a whole-row fallback.** `lastMessagePreview`'s `labels.none` ("No
+  messages yet") is designed for "this conversation has no last message at all"; reused verbatim
+  for a mid-list message whose own content happens to be blank with no recognized media type, the
+  same label reads confusingly out of context ("No messages yet" appearing between two real
+  messages in the preview card, seen live on-device against the `atabeth` account's real
+  `Belva Tano` thread). Left as-is rather than special-cased this slice: it is the SAME string the
+  row's own single-line preview would already show if that message were the conversation's most
+  recent one, so this is an inherited pre-existing quirk of the reused formatter, not a new
+  regression — refactoring `lastMessagePreview`'s fallback semantics is out of scope for a slice
+  whose job was reusing it, not rewriting it.
 
-## Decisions (cont.)
-- **Tray cache-first = Room-backed SWR, not in-memory.** The Feed still uses an
-  in-memory L1 cache (`PostRepository`, Room deferred to "Phase 3"); the stories
-  tray instead got a real `StoryCacheSource` (port of `ConversationCacheSource`)
-  so it survives process death and paints instantly on a cold launch — the
-  Instant-App "no spinner when cache has data" rule. Reuse the existing
-  `cacheFirstFlow`/`SwrCacheSource`/`CachePolicy`/`sync_meta` primitives; do NOT
-  re-implement the SWR state machine (Feed did, inline — don't copy that).
-- **Adding a Room entity bumps `MeeshyDatabase.version`.** `StoryEntity` took it
-  4 → 5. `fallbackToDestructiveMigration()` is already set, so no migration test
-  is needed yet (tracked: `exportSchema`/migration tests follow-up).
-- **Story tray fixtures must be LIVE.** `StoryTrayBuilder.build` drops
-  fully-expired groups against `System.currentTimeMillis()` (21h fallback TTL),
-  and the VM calls it with the default wall-clock `nowMillis`. A fixed past
-  `createdAt` makes the tray empty → VM tests fail. Use `Instant.now().toString()`
-  for VM-level fixtures; pass an explicit `nowMillis` only to the pure builder/
-  grouping tests.
+## Slice `widget-favorite-contacts` (2026-08-11)
+- **A `private val` constant becomes worth hoisting to `internal` at its SECOND call site, not
+  its third, when it encodes a correctness-sensitive business rule rather than disposable UI
+  glue.** `directConversationTypes = setOf("direct", "dm")` lived `private` in
+  `RecentConversationsWidgetPresentation.kt`. This slice's `FavoriteContactsWidgetPresentation`
+  needed the exact same "is this a 1:1 chat" gate. The codebase's own established convention
+  (`MagicLinkCountdown`, documented in an earlier slice's note) is to keep duplicating small UI
+  glue until a 3rd call site forces a shared abstraction — but that convention exists because UI
+  glue drifting apart at 2 call sites is cheap to notice and cheap to fix. A `setOf("direct",
+  "dm")` string-literal duplicate is different: if the canonical set of "direct" type strings
+  ever changes (a new value added server-side, a rename), two independently-maintained copies can
+  silently drift apart with no compiler signal — a correctness bug, not a style inconsistency.
+  Changing `private val` to `internal val` plus one import is a strictly smaller diff than
+  duplicating the literal, so there was no actual cost to avoiding the duplication here either.
+  Rule of thumb going forward: duplicate-until-3rd-site applies to disposable glue; anything that
+  encodes "what counts as X" business logic gets hoisted at the 2nd site regardless of size.
+- **`ApiConversation.participants` (`ApiParticipant`) carries no presence fields
+  (`isOnline`/`lastActiveAt`) anywhere in this codebase — confirmed by reading the full model,
+  not assumed.** iOS's `FavoriteContactsWidget` shows an online/offline status line per contact
+  (`MeeshyConversation.lastSeenText`), sourced from a richer conversation snapshot iOS's main app
+  publishes into the widget's App Group. Android's widget architecture is structurally different
+  (a live Room read via a Hilt `EntryPoint`, not an App-Group snapshot the main app pre-publishes)
+  and its `ApiParticipant` model was never given presence fields at all — this is a real, load-
+  bearing platform gap for ANY future participant-facing Android surface that wants a presence
+  dot without first threading a `PresenceRepository`/cache through to that surface, not specific
+  to widgets. Grepped for a `PresenceRepository`/presence-cache class before concluding this —
+  none exists; `isOnline` today only appears on `Friend`/`MeeshyUser`/`Participant` models used by
+  the contacts/profile surfaces, never joined onto a conversation's participant list.
+- **The "mark-read widget action" candidate, twice flagged as the natural next widget sub-slice
+  in two consecutive prior runs' notes, turned out to have almost no new pure decision logic to
+  TDD once actually scoped.** Investigated before picking a slice this run: the only "decision"
+  involved (show the affordance only on an unread row) is already the existing, already-tested
+  `row.isUnread` field — the `ActionCallback.onAction` body itself would be pure Android-framework
+  glue (`Context`/`GlanceId`/`ActionParameters` → a one-line delegate to the already-tested
+  `ConversationRepository.markReadOptimistic(id)` → `GlanceAppWidget().updateAll(context)`),
+  structurally identical in kind to `provideGlance()` itself, which has zero direct JVM tests in
+  either shipped widget (only its downstream pure `*Presentation.from(...)` is covered — the
+  established, `TDD-COVERAGE.md`-sanctioned exemption for Compose/framework glue). A slice that
+  would ship with genuinely zero new unit tests breaks this routine's own evidence rhythm (every
+  prior `PROGRESS.md` entry cites N new mutation-proven tests) even though nothing about it is
+  technically wrong — picked `FavoriteContactsWidget` instead, which had real new filter/sort/cap
+  decision logic to cover. Worth re-surfacing "mark-read" once either (a) a second `ActionCallback`
+  use case exists to justify the framework-glue investment across more than one call site, or
+  (b) someone explicitly decides thin, near-untestable wiring is still worth a slice on its own.
 
-## Decisions (cont.)
-- **Adjacent-slide prefetch = pure planner + shared Coil loader.** The "which
-  images to warm / how far ahead / skip text-only / stop at the end" decision is
-  a pure `StoryPrefetchPlanner.plan(playback, lookahead)` in `:feature:stories`
-  (product UX rule, not an SDK atom) returning distinct URLs in forward viewing
-  order across group boundaries. The VM derives `prefetchUrls` in `emit()`; the
-  Composable enqueues them through `context.imageLoader` — the SAME Coil
-  singleton `AsyncImage` resolves against, so the warmed disk/memory entry is
-  reused (do NOT build a second `ImageLoader`, that would defeat the cache).
-  Coil 2.x prefetch = `loader.enqueue(ImageRequest.Builder(ctx).data(url).build())`
-  with no target. Surpasses iOS (single-next) with a windowed cross-group warm.
+## Slice `dynamic-launcher-shortcuts` (2026-08-11)
+- **"Port this iOS widget/intent" is not a safe default without first checking whether the iOS
+  side's own deep link is actually wired to anything.** iOS's `QuickReplyWidget` ships 4 canned-
+  reply buttons that deep-link via `meeshy://quickreply/{id}?text=...`, and its
+  `FavoriteContactsWidget` uses `meeshy://contact/{id}` — both look like real, intentional URI
+  contracts from the widget file alone. Grepping the FULL app-side router
+  (`DeepLinkRouter.swift`'s complete `switch` over recognized `host` values) found **neither
+  `quickreply` nor `contact` is a case anywhere** — both widgets' primary interaction is dead in
+  production iOS today, not a hidden/obscure fallback path this session simply didn't find. The
+  lesson generalizes past this one file: before treating an iOS widget/intent/extension's own URI
+  scheme as a spec to port, grep the MAIN APP's router for that exact host string, not just the
+  widget/extension file that emits it — a URI can be perfectly well-formed and still go nowhere.
+  Two consequences this run: (1) retroactively confirmed the PRIOR slice's own independent choice
+  (reusing `meeshy://conversation/{id}` instead of inventing a matching `contact` host on Android)
+  was the right call, not just a defensible one; (2) this run's own first candidate (Quick Reply)
+  was disqualified as "port this" and reclassified as "needs a genuinely new mechanism to be worth
+  building" — see `PROGRESS.md` for the pivot.
+- **A single iOS "App Shortcuts" provider can bundle voice-driven (Siri/Assistant NL parameter
+  resolution) and purely-navigational (open a fixed destination) intents under one umbrella —
+  splitting them before scoping an Android port avoids conflating a small, safe slice with a much
+  bigger one.** `MeeshyAppShortcuts` (`MeeshyAppIntents.swift`) lists 5 phrases; 4 need `AppIntents`
+  natural-language parameter resolution against a contact/language with no Android equivalent
+  short of Google Assistant App Actions (external indexing/review, not locally verifiable), while
+  the 5th (`OpenRecentConversationIntent`) is a plain "open this URL" action with a direct,
+  fully-local Android analogue (`ShortcutManagerCompat` dynamic launcher shortcuts). Read the
+  intent bodies, not just the shortcut list, before deciding whether "port the App Shortcuts
+  epic" is one slice or several.
 
-## 2026-06-27 — optimistic tray derived from the durable outbox
-- **Optimism = a projection of the durable queue, not a separate in-memory list.**
-  The tray's optimistic self-ring is `StoryRepository.pendingPublishes()` — a `map`
-  over `OutboxRepository.observeAll()` keeping `PUBLISH_STORY` rows in a **live**
-  state (`PENDING`/`INFLIGHT`). This gives reconcile + rollback for free: a
-  *delivered* publish deletes its row (vanishes), an *exhausted* one flips to
-  `EXHAUSTED` (filtered out) — no bespoke state machine, and the optimism survives
-  process death because the row does. Surpasses iOS's in-memory optimistic story.
-- **Decode lives in `:sdk-core`, "render it" lives in `:feature`.** Decoding the
-  outbox payload (`CreateStoryRequest`) into a `PendingStoryPublish` is queue
-  semantics → a building block in `:sdk-core` (also keeps `:feature` off
-  `:core:database`, which `:sdk-core` only exposes as `implementation`, NOT `api` —
-  so `OutboxEntity` is invisible downstream). The "synthesize a self-authored
-  `STORY` `ApiPost` and merge it into the tray" rule is product UX → pure
-  `StoryOptimisticTray` in `:feature:stories`. Reuse the existing `toStoryGroups` →
-  `StoryTrayBuilder` pipeline (one code path) instead of a second tray builder.
-- **Delivery hand-off without an `outcomes` subscription:** diff consecutive
-  `pendingPublishes` emissions in the VM — a tempId present last tick but gone now
-  was delivered (success deletes the row; exhausted rows linger), so `refresh()`
-  pulls the real story in. Avoids plumbing `OutboxOutcome` + cmid→kind tracking.
-  Guard the first emission (empty→empty ⇒ no spurious refresh) and rely on the
-  pending set staying stable afterwards so the refresh doesn't loop.
-- **`combine` needs every source to emit once.** A `relaxed` mockk of a
-  `Flow`-returning fun yields a flow that emits **nothing**, so `combine` stalls and
-  the VM never updates state. Always stub `pendingPublishes()`/`storiesStream()`
-  explicitly with `flowOf(...)` in `StoriesViewModel` tests, even the unrelated ones.
-
-## 2026-06-27 — media upload foundation (`media-upload-api`)
-- **`:core:network` exposes okhttp only as `implementation`, not `api`.** So a
-  downstream module that builds `MultipartBody.Part` (here `:sdk-core`'s
-  `MediaUpload`) does NOT see okhttp transitively — add an explicit
-  `implementation(libs.okhttp)` to that module's `build.gradle.kts`. Symptom
-  otherwise: `MultipartBody`/`RequestBody.toRequestBody` unresolved at compile.
-- **okhttp multipart parts are JVM-testable without a server or Robolectric.**
-  `MultipartBody.Part.createFormData(name, filename, body)` is pure JVM okhttp:
-  assert the field name + filename via `part.headers?.get("Content-Disposition")`
-  and the content type + length via `part.body.contentType()` / `contentLength()`.
-  Keeps the "which field name / filename / mime" decision behavioural, not mocked.
-- **Stories reference media by id, not URL.** iOS `AttachmentUploader` returns the
-  uploaded URL and throws the attachment **id** away (messages embed by URL). But
-  `CreateStoryRequest.mediaIds` is a list of **ids**, so the Android `UploadedMedia`
-  carries `id` (= the gateway attachment id from `messageAttachmentSchema.id`) as the
-  primary key, with `url` alongside for previews. Don't port iOS's URL-only response.
-- **Repository drops unusable rows instead of failing the batch.** `MediaRepository
-  .upload` maps the wire list through `toUploadedMedia()` with `mapNotNull` — a blank
-  id or url removes that one attachment but keeps the good ones (one degenerate row
-  never discards a multi-file upload). Empty input short-circuits to `Success(empty)`
-  with **no** network call (assert with `coVerify(exactly = 0)`).
-- **A `data class` holding a `ByteArray` is a footgun** (value equality over arrays).
-  `MediaUploadItem` is a plain `class` — it's only ever constructed + read, never
-  compared by value, so no `equals`/`hashCode` is needed.
-
-## Open follow-ups (cross-slice)
-- Wire **Kover** with a 90% per-module verification rule.
-- Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
-- **`SocialSocketManager.attach()` has no caller yet** — none of its social flows
-  (storyCreated/Viewed/Reacted/Unreacted, post*, comment*) actually receive events
-  in-app until attach is wired to the socket lifecycle. Affects ALL social events,
-  touches `:app` → its own slice.
-- Story viewer richness: **swipe gestures done**, **reactions strip done**,
-  **realtime reaction socket-delta done**, **viewers sheet done**, **tray SWR/Room
-  backing done**, **comments overlay done** (optimistic post + `comment:added`
-  delta — but realtime echo only flows once `SocialSocketManager.attach()` is
-  wired, see above); remaining: media prefetch, cross-dissolve transitions,
-  realtime `story:viewed` append (needs richer event payload).
-- **Cross-module smart-cast.** A nullable `public` property declared in another
-  Gradle module (e.g. `StoryComment.clientId` from `:core:model`) cannot be
-  smart-cast after a `!= null` check inside `:feature:*` — Kotlin can't prove it
-  is stable across the module boundary. Bind it to a local `val` first, then
-  null-check the local. Bit us in `StoryCommentsSheet` (compile error).
-- Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
-  exposed by the stories API to pre-fill the user's own emojis.
-- **Optimistic publish has no failed-state UI.** An `EXHAUSTED` publish silently
-  drops from the optimistic tray (rollback). A "failed to post — tap to retry"
-  affordance (read `EXHAUSTED` rows via `observeAll`/`outcomes`, call
-  `outboxRepository.retry(cmid)`) would close the loop. Needs `:app`/`:feature`
-  wiring → its own slice.
-- **`data class` with a non-public primary constructor** triggers a Kotlin 2.1
-  copy-visibility warning (the generated `copy()` will change visibility). When a
-  value object is only meant to be built through a factory (e.g. `StoryCountDots`),
-  prefer a plain `class` (no `copy()` needed) over `data class internal constructor`.
-  `@Immutable` already gives Compose stability without value equality here.
-
-## 2026-06-23 — step-0 open PR may be SUPERSEDED, not just mergeable
-- An open Android PR (#877, conversation swipe pin/mute/archive) from a *parallel*
-  session was far behind `main` (ancient merge-base → a raw merge conflicted in
-  hundreds of unrelated translator/gateway/tasks files). Before forcing a merge,
-  **check whether `main` already implements the feature** — `git grep` for the
-  PR's key symbols on `origin/main`. Here `main` already had a *more complete*
-  version (togglePin/Mute/Archive + outbox `UPDATE_CONVERSATION_PREFS` + swipe UI
-  + mark-read + row badges), so the right move was to **close the PR as
-  superseded**, not merge it. Cherry-picking the PR's single commit onto fresh
-  `main` was the right probe — the `strings.xml` conflict (`conversations_action_*`
-  already present on HEAD vs the PR's `swipe_*`) was the tell.
-- Lesson: "merge the open iteration PR first" assumes the PR's work isn't already
-  on `main`. Verify with a symbol grep on `origin/main` before resolving conflicts.
-
-## 2026-06-23 — auto-advance media gate
-- The story viewer's auto-advance is gated on media readiness via a pure
-  `StoryAutoAdvanceGate`. Readiness is fed from `AsyncImage` `onSuccess`/`onError`
-  (BOTH — a failed load must resolve too, else the viewer hangs forever on a dead
-  URL). The VM's `onImageResolved` re-emits only when the resolved URL is the
-  *current* slide's image, so off-screen prefetch resolutions don't churn state.
-  `resolvedImageUrls` persists across slides so back-navigation never re-waits.
-
-## 2026-06-26 — story composer / publish via outbox
-- **Publish reuses the shared outbox, not a bespoke queue.** iOS has a dedicated
-  `StoryPublishQueue` (its own retry schedule + media-ref persistence). Android's
-  generic `outbox` already gives durable FIFO lanes, ×5 retry/exhaust, boot
-  recovery and the WorkManager drain — so a story publish is just a new
-  `OutboxKind.PUBLISH_STORY` on its own `OutboxLanes.STORY` lane. The sender lives
-  inline in `OutboxFlushWorker.buildSenders()` (mirror the existing senders:
-  `json.decodeFromString<CreateStoryRequest>` → `postApi.createStory`, map
-  Success/Failure → SendResult). Add the lane to the drained-lanes list too, or it
-  never flushes.
-- **Don't coalesce publishes.** `OutboxCoalescer.decide` only special-cases the
-  message/reaction/prefs kinds; everything else (incl. PUBLISH_STORY) falls to
-  `Enqueue`. Give each publish a fresh `pending_<uuid>` targetId so two stories
-  stay independent rows.
-- **R import is the module Gradle namespace, NOT the package.** `feature:stories`
-  Kotlin lives in `me.meeshy.app.stories` but the generated `R` is
-  `me.meeshy.feature.stories.R` (the module `namespace`). Always
-  `import me.meeshy.feature.stories.R` — copy it from a sibling screen.
-- **`Modifier.weight` is a scope member, never import it.** Importing
-  `androidx.compose.foundation.layout.weight` pulls the *internal* RowColumn
-  extension and fails with "it is internal in file". Inside a `Column { }` /
-  `Row { }` content lambda, `Modifier.weight(1f)` resolves on the scope receiver
-  with no import.
-- **Nav route collisions are silent.** `story_composer` (literal) must not be
-  `story/compose` — that pattern-matches `story/{userId}` with userId="compose".
-  Use a slash-free literal for a sibling of a parameterised route.
-- **`WorkManager` is a per-feature dependency.** `feature:stories` needed
-  `implementation(libs.work.runtime)` added before the VM could `workManager
-  .enqueue(OutboxFlushWorker.buildRequest())` (chat already had it). `buildRequest()`
-  builds a `OneTimeWorkRequest` fine in a plain JVM unit test (no Robolectric).
-
-## Lessons — slice `story-publish-retry` (2026-06-27)
-- **`combine` only emits once ALL source flows have emitted.** When the VM's
-  combined repository flows changed, every test (and every hand-rolled mock) had to
-  stub the new flow (here `publishQueue()`) — a relaxed mockk returns a Flow that
-  never emits, so `combine` silently never collected and the VM state stayed at its
-  default. Symptom: a previously-green assertion fails for no obvious reason. Always
-  stub *every* combined flow (default `flowOf(...)`).
-- **A "row vanished from the pending queue" is ambiguous.** Both a *delivered*
-  publish (row deleted) and a *failed* one (row → `EXHAUSTED`, dropped from
-  `pendingPublishes`) disappear from the live queue. The optimistic-tray
-  reconciler originally treated any disappearance as delivery and fired a spurious
-  `refresh()`. Disambiguate by also tracking the failed set: a temp id now failed
-  exhausted (surface it), only a temp id in neither set delivered.
-- **Don't disambiguate across two separately-subscribed flows — they race.**
-  First cut combined `pendingPublishes()` + `failedPublishes()` as two `combine`
-  args, but each independently re-subscribes `observeAll()`, so a `PENDING →
-  EXHAUSTED` change fires both and `combine` emits an intermediate frame where the
-  row is in *neither* set → the exact spurious `refresh()` we were fixing,
-  reintroduced by timing. Fix: a **single** `publishQueue(): Flow<{pending, failed}>`
-  mapping one `observeAll()` emission into both lists, so the transition is atomic
-  to the consumer; `pendingPublishes`/`failedPublishes` became thin `.map`
-  projections. Rule: when two derived views must stay mutually consistent, derive
-  them from **one** source emission, never two subscriptions.
-- **`OutboxRepository.retry(cmid)` already existed** (revive EXHAUSTED → PENDING,
-  fresh budget) but had no caller — wiring it through `StoryRepository.retryPublish`
-  + a VM intent that kicks `OutboxFlushWorker` is all the recovery loop needed.
-  Added a sibling `discard(cmid)` (plain `deleteAll`, emits no outcome — a user
-  removal is not a delivery outcome) so a permanently-failing publish isn't a dead end.
-- **A public `UiState` can't hold an `internal` nested type.** `StoriesUiState`
-  (public, read by the screen + exposed via the public VM `StateFlow`) carries
-  `List<StoryPublishFailures.Item>`, so `StoryPublishFailures` had to be public
-  (matches `StoryCountDots`). "Function 'public' exposes its 'internal' parameter
-  type" is the compiler telling you a public surface leaks an internal type.
-
-## Decisions (cont.)
-- **A module pins `build-tools;34.0.0`.** The env recipe installs `35.0.0` only;
-  the first `:feature:stories:testDebugUnitTest` failed with "Failed to install
-  build-tools;34.0.0" (Gradle's auto-install can't reach the SDK repo through the
-  proxy). Fix once per fresh container: `sdkmanager "build-tools;34.0.0"`. Tracked:
-  align the pinned build-tools across modules (or add 34.0.0 to the ROUTINE recipe).
-- **Photo/video picker = `ActivityResultContracts.PickVisualMedia`, not legacy
-  `GET_CONTENT`.** Needs `implementation(libs.androidx.activity.compose)` on the
-  feature module for `rememberLauncherForActivityResult`. Keep the VM testable by
-  passing it a clean `MediaUploadItem` (bytes already read) — the `ContentResolver`
-  read (bytes/MIME/`OpenableColumns.DISPLAY_NAME`) stays in the Composable on
-  `Dispatchers.IO`; filename/MIME defaulting lives downstream in `MediaUpload`, so
-  the reader is a thin, exempt glue function with no branch logic worth a JVM test.
-- **Story media product rule lives in the VM, not the SDK.** `onMediaPicked`
-  encodes "when to upload / append vs replace / gate publish while uploading / how
-  to surface each failure" → `:feature:stories`. `MediaRepository.upload` +
-  `MediaUpload` part-builder + wire→domain mapper stay opaque building blocks in
-  `:sdk-core`/`:core:*`. Draft `canPublish` admits **text OR media** so a caption-
-  less image story is valid (iOS-surpassing — iOS has no story media composer).
-- **Media cap belongs in the pure draft, enforced at the VM upload-gate.** `MAX_MEDIA`
-  + `remainingMediaSlots` (clamped ≥0) live on `StoryComposerDraft`; the cap also
-  gates `canPublish` so an over-cap draft can never publish. `onMediaPicked` reads the
-  free slots and `items.take(remaining)` BEFORE the upload — truncating the pick, not
-  the result, so we never spend an upload on media that won't fit, and the cap holds
-  even if a future multi-pick hands in more than `remaining`. Surface a warning + skip
-  the network entirely when already full (`remaining <= 0`).
-- **#979 was held on a pre-existing `main` red, not its own.** When the ONLY red CI job
-  is failing on `origin/main` itself (verify: `git show origin/main:<test-file>` shows
-  the same breakage) AND the PR diff touches zero files in that job's scope, merging an
-  `apps/android`-only PR cannot regress `main`. The "never merge past red CI" rule
-  guards against *introducing* a regression; a pre-existing, out-of-scope red that the
-  run directive tells you to merge through is the documented exception. Always re-confirm
-  the red is pre-existing + out-of-diff before merging, and record the proof in the log.
-
-- **`dependsOn` was persisted but never honoured (fixed in `outbox-dependency-gating`).**
-  `OutboxEntity.dependsOn` + `OutboxMutation.dependsOn` shipped with the outbox runtime
-  but `OutboxDrainer.drainLane` ignored it — a chain was a no-op. The gate is now a pure
-  `OutboxDependencies.verdict(prerequisiteState)`: **gone (null) = SATISFIED** (a chain is
-  enqueued prerequisite-first, so an absent row has already succeeded), `PENDING`/`INFLIGHT`
-  = BLOCKED (hold the lane, dependent stays PENDING for the next pass), `EXHAUSTED` = FAILED
-  (cascade-exhaust the dependent — it can never run). The prerequisite can live on **another
-  lane** (`OutboxRepository.stateOf(cmid)` looks it up by cmid, lane-agnostic), which is the
-  point: an upload on the `MEDIA` lane, a publish on `STORY` that `dependsOn` it. BLOCKED
-  *stops the lane* (like a transient failure) rather than skipping — preserves the strict
-  FIFO-per-lane invariant uniformly; message rows never carry `dependsOn` so this branch
-  only ever affects the upload/publish lanes. Remaining gap for the real chain: the upload's
-  returned real `mediaId` must be written into the dependent publish's payload before the
-  gate opens (next slice) — gating alone holds the order but doesn't yet rewrite the id.
-
-- **Durable bytes need their own table — the outbox payload is a `String`
-  (`media-blob-store`).** An `UPLOAD_MEDIA` row can't carry raw file bytes in the
-  outbox; persist them in a dedicated `MediaBlobEntity`/`MediaBlobDao` keyed by the
-  upload row's `cmid` and read them back in the `MEDIA`-lane sender. The
-  `MediaBlobStore` wrapper deliberately reuses `MediaUploadItem` (single bytes shape —
-  the store persists exactly what `MediaRepository.upload` consumes, no second type).
-  Two Room footguns confirmed: (1) a `ByteArray` field makes a `data class` equals/
-  hashCode reference-compare the array — use a **plain `class`** (same call already
-  made on `MediaUploadItem`); (2) adding an entity bumps `@Database(version=…)` (5→6
-  here) — safe with the existing `fallbackToDestructiveMigration()` since an in-flight
-  blob is transient (it re-queues), no bespoke migration needed. Assert bytes with
-  `assertThat(actual.bytes).isEqualTo(expected)` (Truth does an array content compare),
-  not entity equality.
-
-- **Worker senders stay thin; the *decision* moves to a pure object
-  (`media-upload-sender`).** `OutboxFlushWorker`'s sender lambdas aren't unit-tested
-  (they're WorkManager glue). For a sender with real branching (blob gone / offline /
-  empty result / real id), extract a pure `MediaUploadSender.send(item, upload)` that
-  returns a `SendResult` and unit-test all four arms with a fake `upload` lambda; the
-  worker lambda is then just "look the blob up → `send` → `remove` on any non-transient
-  outcome". The producer-half enqueue (`MediaUploadQueue.enqueue`) writes the blob
-  **before** the outbox row so a queued upload never lacks its bytes, and shares **one
-  `cmid`** across blob + row + (future) dependent publish placeholder. Blob cleanup is
-  symmetric: drop it on `SuccessWithId`/`PermanentFailure` in the sender glue **and** in
-  `onExhausted` (repeated transient → exhausted keeps the bytes until the give-up), or it
-  leaks. Gotchas: `UploadedMedia` lives in `me.meeshy.sdk.model` (not `.media`); and
-  `:sdk-core`'s `media` package does **not** use `explicitApi`-style `public` modifiers
-  (bare `class`/`object`) while the `outbox` package does — match the *package-local*
-  convention, don't blindly add `public`.
-
-- **Offline-media composer fallback (`story-composer-offline-media`).** The "when to
-  fall back to the durable chain" decision is a **product policy → app-side**: a pure
-  `MediaUploadRetryPolicy.isQueueable(ApiError)` in `:feature:stories` (null status /
-  429 / 5xx → queueable; other 4xx → dead end), NOT in the SDK. Adding an optional param
-  to an SDK function consumed via mockk (`enqueuePublish(req, dependsOn = null)`) **breaks
-  existing mockk stubs** silently: `coEvery { f(capture(s)) }` no longer matches the now
-  2-arg call, the relaxed mock returns the default, and the slot never captures →
-  "slot not captured". Fix = extend every stub/verify to the new arity
-  (`f(capture(s), any())`), which is *adapting* not weakening. **`io.mockk.captureNullable`
-  is not in this mockk version** — to capture a nullable param whose actual value is
-  non-null, use a plain `slot<String>()` + `capture(slot)` (non-null actual ⇒ matches).
-  Keep the offline path **single-pending**: the outbox `dependsOn` is one cmid, so one
-  pending upload per publish stays provably correct; reject a 2nd pick + multi-item batches
-  rather than ship a broken multi-`dependsOn` chain. Centralise the combined wire ids in
-  **one** derivation (`UiState.draftMediaIds = attachments.ids + pending?.cmid`) and feed
-  `withMediaIds(next.draftMediaIds)` from every mutator (applyUploaded/queueDurably/remove)
-  — else a later success silently drops the pending placeholder. The pending preview tile
-  renders the held `ByteArray` straight through Coil (`AsyncImage(model = bytes)`); make it
-  removable so it's never a dead end.
-
-- **Multi-dependency outbox gate (`outbox-multi-dependency`).** The single-pending constraint
-  above was a deliberate *temporary* guard until the gate could express **several** prerequisites.
-  It now can: `OutboxMutation.dependsOn` is a `Set<String>` encoded into the **one** `dependsOn`
-  TEXT column by `OutboxDependencyKey` — wrapped-delimited (`{a,b}`→`"|a|b|"`, `'|'` reserved/absent
-  from a `cmid`), so a *membership* test is a substring `LIKE`. Two gotchas that shaped the design:
-  (1) a `cmid` is `cmid_<uuid>` and contains `_`, a `LIKE` wildcard — `likePattern` **escapes** it
-  and the DAO query must use `ESCAPE '\'` (Kotlin string: `"… ESCAPE '\\'"`), else `cmid_a` spuriously
-  matches `cmidXa`; a regression test (`up` must NOT match member `upload`) guards it. (2) `decode`
-  must tolerate a **bare** value with no delimiter → singleton, so existing single-dep rows/tests keep
-  resolving — that let every prior drainer test keep its behaviour while only the *storage format*
-  changed (no schema/migration: same column). Gate priority: in `verdictAll`, **`FAILED` dominates
-  `BLOCKED`** — one exhausted prerequisite means the dependent can never run, so cascade-exhaust now
-  rather than wait on the others. Keep the key/gate **pure in `:sdk-core`** (no product policy); the
-  composer's "when to queue / how many pending" rule stays app-side. Changing `enqueuePublish`'s param
-  `String? → List<String>` again rippled into mockk stubs — `slot<String>()` → `slot<List<String>>()`
-  and `isEqualTo("x")` → `containsExactly("x")` (same adapting-not-weakening pattern as the offline
-  slice). The composer **UX** relaxation (`pendingUploads: List`, drop the single-pending guard) is a
-  separate slice — splitting the SDK primitive from the UI kept this diff thin and every prior test green.
-
-## 2026-06-28 — multi-slide composer foundation (`story-slide-deck`)
-- **Open a big feature with its pure structural model, not its UI.** The multi-slide composer
-  (feature-parity §E line 433) is large; the first slice is `StorySlideDeck` — an immutable
-  reducer owning the slide CRUD rules — with **no wiring yet** (same "primitive first, UX next
-  slice" pattern as `outbox-multi-dependency` / `media-blob-store`). Keeps the diff tiny and the
-  rules 100% JVM-tested before any Compose canvas glue exists to obscure a bug.
-- **Two invariants, enforced in `init`:** a deck always holds **≥1 slide** and **≤`MAX_SLIDES`=10**
-  (iOS `maxSlides`). `init { require(slides.isNotEmpty()); require(slides.any{it.id==selectedId}) }`
-  — construction-time guards mean every op can assume a valid deck (no defensive nulls downstream).
-  `selectedIndex`/`selectedSlide` are total because the selected id is invariant-present.
-- **Total functions over throwing.** Every op returns `this` (same instance) when inapplicable —
-  cap reached (`addSlide`/`duplicate`), last slide or unknown id (`removeSlide`), unknown id / no-op
-  (`move`/`select`). Tests assert `isSameInstanceAs(deck)` for the inert arms — a strong, cheap
-  behavioural check that the reducer didn't allocate a spurious new state. Mirrors the iOS
-  composer's silent-guard CRUD without porting its mutable `@MainActor` state (the deprecated
-  `StorySlideManager` was an explicit SSoT violation — Android uses one pure model from the start).
-- **Caller-supplied ids keep the reducer pure.** `addSlide(newId)`/`duplicate(sourceId, newId)`
-  take the new id as a param rather than minting a UUID inside — no `Math.random`/clock, so the
-  reducer is deterministic and the ViewModel (next slice) owns id minting. `removeSlide` reselects
-  the slide that **takes the removed one's place** (`next[index.coerceAtMost(lastIndex)]`), i.e. the
-  former neighbour, and the new-last when the selected last is removed — the natural carousel UX.
-- **Placement = `:feature:stories` (product), not `:sdk-core`.** The deck encodes composer UX rules
-  ("when can I add", "always keep one", "what gets selected after a remove") → product orchestration,
-  same module as `StoryComposerDraft`. An SDK atom would be agnostic to those policies. Grain test
-  from `packages/MeeshySDK/CLAUDE.md` applied.
-
-## `story-canvas-transform` — pure 2D pan/zoom that *persists* per slide (2026-06-29)
-- **Persisted, not ephemeral.** The fullscreen image viewer's `ImageViewerTransform` (in `:sdk-ui`)
-  is throwaway per-session viewer state. The story canvas transform is **part of the slide's
-  identity** — it survives slide switches, is carried by `duplicate`, and rides into publish. So it
-  lives on `StorySlide.transform` in `:feature:stories` (product state), NOT as an SDK atom and NOT
-  in transient Compose `remember`. Same shape of clamp math, opposite lifecycle — don't conflate them.
-- **Clamp the offset to the *new* scale inside `apply`.** Order matters: compute `nextScale` first,
-  then clamp the translated offset to `maxOffset(size, nextScale)`. This makes a pinch-out tighten the
-  pan range *and* snap a now-out-of-range offset back toward centre in the same gesture. Clamping to
-  the old scale would let the content drift off-edge for one frame.
-- **`maxOffset = (size·scale − size)/2`** — the symmetric half-overflow of the scaled content. No
-  division anywhere, so a not-yet-measured 0px canvas just yields `0` (no div-by-zero guard needed);
-  a unit test pins this (`apply(.., canvasWidth=0f, canvasHeight=0f)` → offset 0).
-- **Composable stays glue.** All math is in the pure object; `StoryCanvasSurface` only measures the
-  canvas (`onSizeChanged`), forwards each `detectTransformGestures` callback verbatim to
-  `onCanvasTransform`, and applies the result via `graphicsLayer`. Zero testable decisions in Compose
-  → nothing lost to the JVM coverage gate. `isIdentity` lets it skip the layer at rest.
-- **Default field keeps existing tests byte-identical.** Adding `transform = IDENTITY` to `StorySlide`
-  with a default means every prior `StorySlide(id=..)` / deck test still constructs the same value —
-  only genuinely new per-slide-transform behaviour needed new tests.
-
-## `story-text-element-transform` — per-element pinch/rotate (2026-06-29)
-- **Extend `normalised()`, don't bolt clamps onto every mutator.** Adding `scale`/`rotationDeg` to
-  `StoryTextElement`, I made `normalised()` re-pull *all* continuous fields (x/y/scale/rotation) into
-  range. Because the deck's `updateTextElement` already calls `.normalised()` after every transform,
-  every reducer (move/style/transform) re-clamps for free — one place, no per-mutator clamp drift.
-  `transformed()` still clamps directly too (mirrors `nudged`), so the value is sane even if called
-  raw; `normalised()` is then idempotent.
-- **Non-finite is a real gesture input.** A `detectTransformGestures` zoom can be `0`/`NaN` on a
-  degenerate pinch. `clampScale` guards `isFinite()` → `DEFAULT_SCALE` (coerceIn would pass `NaN`
-  straight through — `NaN.coerceIn` returns `NaN` because every comparison is false). `normaliseRotation`
-  guards the same. Both have a unit test pinning the non-finite arm.
-- **Rotation wrap = `(-180, 180]`.** `% 360` then `+360` if `<= -180`, `-360` if `> 180`. `-180` maps
-  to `180` so `±180` are one canonical value; `360`→`0`, `540`→`180`, `270`→`-90`. Tested each arm.
-- **One gesture, three effects.** Switching the per-element `detectDragGestures` → `detectTransformGestures`
-  lets a single two-finger gesture pan (→ `onTextElementMoved`) *and* pinch-scale + rotate (→
-  `onTextElementTransform`). Single-finger drag still pans. More natural than separate handle chips
-  (CLAUDE.md UX rule). The Composable forwards `zoom`/`rotation` verbatim — zero testable decision lost
-  to the JVM gate; `graphicsLayer { scaleX/scaleY/rotationZ }` renders around the layer centre while the
-  `offset` keeps using the *unscaled* measured size, so centring stays correct under scale.
-- **Wire fields already existed.** `StoryTextObject.scale`/`rotation` were on the `:core:model` port
-  from day one but always left at defaults; this slice is purely `:feature:stories` consuming them — no
-  SDK/model change, keeps the diff `apps/android`-only.
-
-## `story-canvas-snap-guides` — magnetic snap + safe-zone on drag (2026-06-30)
-- **Snap the delta, reuse the reducer.** Rather than add an absolute `placeTextElement` reducer (which
-  would orphan `moveTextElement`/`nudged`), the snap-aware `onTextElementMoved` computes the resolver's
-  snapped centre, then moves by `snap.x - element.x` / `snap.y - element.y` through the **existing**
-  `StorySlideDeck.moveTextElement` delta path. One reducer, no orphan, the canvas clamp still lives in
-  `nudged`. The existing corner-clamp test (`drag 0.9,-0.9 → (1,0)`) stays green untouched because the
-  far corner is beyond every guide's threshold (snapping is a no-op there) — proof a magnetic enhancement
-  need not break the raw-move contract.
-- **Per-axis independent snap.** `resolve` snaps x against vertical guides and y against horizontal guides
-  separately, so an element can lock to the centre column while its row slides free — matches iOS. Guides
-  are `[1/3, 0.5, 2/3]` on each axis (rule-of-thirds + centre). Min guide gap (0.167) ≫ threshold (0.025),
-  so a centre is ever within threshold of at most one guide — `minByOrNull` then a single threshold check
-  is enough; no tie-breaking needed.
-- **`coerceIn` doesn't guard `NaN` (again).** Snap's `clampCoord` does `if (value.isFinite()) coerceIn(0,1)
-  else CENTER`. A `NaN`/∞ drag candidate (degenerate gesture) collapses to the canvas centre instead of
-  poisoning the position. Same lesson as `clampScale` — pin the non-finite arm with a test.
-- **Transient feedback, cleared on lift.** Guide lines + the out-of-bounds verdict live in
-  `StoryComposerUiState.snapFeedback: SnapFeedback?` — set during drag, cleared by `onTextElementDragEnd()`.
-  It's *transient UI feedback*, never persisted on the element; the element only carries its snapped x/y.
-- **Compose drag-end without reimplementing `detectTransformGestures`.** That detector never returns (its
-  internal `awaitEachGesture` loops forever), so you can't append an `onEnd` after it, and a parallel
-  detector on the **Main** pass would see consumed events and cancel early. Pattern that works: a second
-  `pointerInput` running `awaitEachGesture { awaitFirstDown(false); do { awaitPointerEvent(Final) } while
-  (changes.any { pressed }) ; onDragEnd() }`. The **`Final`** pass observes events *after* the transform
-  detector consumed them and only watches `pressed`, so it fires exactly on lift without stealing the
-  gesture. Pure glue (JVM-exempt); the testable decision (clear vs keep) is the VM's `onTextElementDragEnd`.
-
-## `story-text-element-zorder` — z-order restack (2026-06-30)
-- **The list order IS the z-order.** The canvas renders `slide.elements.forEach { TextElementLayer(...) }`,
-  so later items paint on top → index 0 = back, `lastIndex` = front. Z-order needs **no new field on the
-  element** — restacking is a pure list move within the holding slide. `TO_BACK`→0, `TO_FRONT`→lastIndex,
-  `BACKWARD`→from-1, `FORWARD`→from+1, all `coerceIn(0, lastIndex)`; `target == from` ⇒ inert (same
-  instance). This keeps the model minimal and the publish serialisation unchanged (order already rides).
-- **Same-`when`, four arms, one `coerceIn` covers all boundaries.** Mapping each `StoryZOrder` to a target
-  index then a single clamp + `target == from` guard collapses "already at front/back" and "single
-  element" into one inert path — no per-op boundary branches to miss. Test sweep: 4 op-arms × (move +
-  inert-at-extreme) + unknown-id + single-element + cross-slide isolation = full branch coverage in 13
-  reducer tests.
-- **VM must guard `copy` to keep the same-instance contract.** `_state.update { it.copy(deck = reducer(...)) }`
-  always mints a NEW `UiState` even when the reducer returned the same deck — so `isSameInstanceAs(before)`
-  would fail and an inert tap churns recomposition. Pattern: `val deck = state.deck.reorder(...); if (deck
-  === state.deck) state else state.copy(deck = deck)`. Same shape as `onTextElementDragEnd`'s null-guard.
-  Always pair a "returns same instance when inert" reducer with this guard at the VM edge.
-- **Step-0 conflict recovery (PR #1048).** A prior slice's PR can still be **open with conflicts** when
-  main advanced past its base. Recipe: `git fetch origin main <pr-branch>`; `git checkout -B <pr-branch>
-  origin/<pr-branch>`; `git rebase origin/main`; resolve keeping **both** sides (additive state fields /
-  imports / doc entries); `meeshy.sh check`; `git push --force-with-lease` (fall back to a plain `push -u`
-  if the remote ref was deleted out from under you → "couldn't find remote ref"). Verify with the merge
-  tool; the maintainer may merge it concurrently — re-`get` the PR to confirm `merged:true` before moving on.
-- **Reuse canvas geometry across element types (`story-sticker-elements`).** A new on-canvas object
-  (sticker) shares the *exact* clamp/wrap rules of `StoryTextElement` (coord `0..1`, scale `0.3..4`,
-  rotation `(-180,180]`). Don't re-derive them — call `StoryTextElement.clampCoord`/`clampScale`/
-  `normaliseRotation` from the new model so the geometry lives in **one** unit-tested place. Reads slightly
-  oddly ("a sticker using a text-element companion") but it's pure canvas math and keeps single-source-of-
-  truth. Mirror the deck reducer family verbatim (`add*ToSelected`/`remove*`/`update*`/`move*`/`transform*`)
-  so most behaviour falls out of the established, tested pattern.
-- **`when(tile)` exhaustiveness is your friend.** Adding `ComposerContentTile.STICKER` made the screen's
-  `when (tile)` non-exhaustive → compiler error until the new branch was wired. Free guarantee that a new
-  enum content-tile can't be silently unrendered (a dead-end tile). Same for any `when` over a sealed/enum.
-- **Grid `items` vs list `items` import clash.** `StoryComposerScreen` already imports
-  `androidx.compose.foundation.lazy.items` (LazyRow). For a `LazyVerticalGrid` use
-  `import androidx.compose.foundation.lazy.grid.items as gridItems` to disambiguate — importing both
-  un-aliased compiles but is fragile; the alias is explicit.
-- **Mutually-exclusive canvas selection.** When two selectable object kinds share a canvas (text element vs
-  sticker), each select/add intent must clear the *other*'s selection (`selectedTextElementId = null` when
-  selecting a sticker and vice-versa), and `mirrorDraftToSelection` must drop *both* stale ids on a slide
-  switch — otherwise a slide change can leave a phantom remove-handle on an object not on the visible slide.
-
-## Decisions (cont.) — Calls area kickoff (2026-06-30)
-- **Calls started with the pure FSM, not the WebRTC plumbing.** First Calls brick = a pure
-  call-lifecycle reducer (`core:model` `me.meeshy.sdk.model.call`: `CallState`/`CallEndReason`/
-  `CallEvent`/`CallStateMachine.reduce`). Faithful port of iOS `CallManager.CallState` +
-  `WebRTCTypes.CallEndReason`. The transition table is THE thing to get right (iOS only validates it
-  informally — a real FSM validator is a P1 todo in `tasks/calls-sota-plan-2026-06-05.md`), so it's the
-  highest-leverage, most-testable first slice. WebRTC/Telecom/FCM plumbing is glue-heavy → comes after.
-- **Why `core:model` and not a new `:feature:calls` module yet.** SDK-purity grain test: the FSM is a
-  stateless, parameter-driven building block agnostic to product orchestration → it belongs with the
-  codebase's other pure domain logic (`EmojiUsageRanker`, `ConversationFilter`, `LanguageResolver`),
-  not behind new-module wiring. The `:feature:calls` VM + screen that *consume* it (giving it a real,
-  non-orphan consumer) are the very next slice. A pure FSM in `core:model` is NOT a dead-end screen —
-  the reviewer's "no dead-end screens" is about navigation/UX, and SDK-purity explicitly endorses
-  stateless building blocks.
-- **FSM shape that keeps branch coverage honest + safe:** model phase only (media-type/mute live
-  alongside, never inside the state — matches iOS); make every inapplicable (state, event) pair
-  **inert** (return the same state) so the machine is total and idempotent; let terminal `Ended` leave
-  only via `Settle`→`Idle` so it always settles and never loops. A shared `terminal(event)` helper maps
-  the from-any-active-phase enders (LocalHangUp/RemoteHangUp/ConnectionFailed) so each per-state `when`
-  stays short. Reconnect budget (`attempt >= maxReconnectAttempts`, default 3 per iOS) → boundary tests
-  at both default max=3 and max=1.
-- **Merge-gate: unblock-then-merge a stale ⚠-blocked PR before the new slice.** PR #1135 had been
-  blocked on a pre-existing red `main` (web a11y test). Step 0 each run: if the prior PR is blocked on
-  `main`, re-check `main`'s latest CI — once green, rebase the blocked branch onto it
-  (`git rebase origin/main`, force-with-lease push), re-run CI, and squash-merge once green. Never merge
-  past red CI; the red must be gone (fixed on `main`), not bypassed.
+## Slice `chat-composer-prefill-draft` (2026-08-11)
+- **`android.net.Uri.decode(...)` silently returns `null` — not a thrown exception — in a plain
+  JVM unit test module (no Robolectric), which turns a real decode call into a quiet no-op rather
+  than a visible crash.** Wrote `initialDraft = savedStateHandle.get<String>(DRAFT_ARG)
+  ?.let(Uri::decode)?.takeIf { it.isNotBlank() }` first; the RED test failed with `expected:
+  Thanks! but was an empty string` — no stack trace, no exception, just a plain assertion mismatch
+  that looked exactly like a logic bug in the seeding code itself. The actual cause: this app
+  module's unit-test config runs under Android Gradle Plugin's default `returnDefaultValues`
+  posture for un-mocked framework classes, so `Uri.decode("Thanks!")` returns `null` (the "default
+  value" for a `String?`-returning method) instead of either working or throwing — silently
+  collapsing the whole `?.let{}` chain to `null`. Switching to `java.net.URLDecoder.decode(text,
+  "UTF-8")` (a real JVM class, not an Android framework stub) fixed it immediately and made the
+  decode step itself unit-testable without Robolectric. **Lesson generalizes**: any
+  `android.*`-package call inside code that's exercised by a plain (non-Robolectric) JVM test
+  class is a candidate for this exact silent-null trap — prefer a `java.*`/Kotlin-stdlib
+  equivalent when one exists (here, `URLDecoder` vs `Uri.decode` — near-identical behavior for
+  plain percent-encoded text, the only real difference being `+`-as-space handling, irrelevant for
+  this call site's short canned-reply text), rather than reaching for Robolectric just to make one
+  static call resolve.
+- **`DraftAutosave.restore`'s existing idle guard (`currentDraft.isNotBlank() -> null`) already
+  encodes the exact precedence rule a new "seed the composer from elsewhere" feature needs, with
+  zero changes.** Wanted an incoming deep-link draft (a future Quick Reply tap) to win over
+  whatever a stale per-conversation persisted draft would otherwise restore. Before writing a new
+  precedence decision, re-read `DraftAutosave.restore`'s own doc comment: it already refuses to
+  restore over a non-blank composer ("never clobbers an in-flight edit nor text the user has
+  already begun typing"). Seeding the ViewModel's INITIAL `_state.draft` value from the nav arg
+  (before the async `draftStore.load()` restore coroutine ever runs) means that guard does 100% of
+  the precedence work for free — the incoming draft simply IS the "already begun typing" state
+  from the guard's own point of view. Zero new branches added to `DraftAutosave`; the only new
+  code is the wiring that populates the initial value. Worth checking whether an existing pure
+  decision function's guard already covers a new feature's precedence need before writing a
+  parallel rule next to it — this is the same "check whether an adjacent mechanism is already
+  complete and just unreachable" lesson from the `outbox-message-lane-discovery` slice, applied to
+  a much smaller case.

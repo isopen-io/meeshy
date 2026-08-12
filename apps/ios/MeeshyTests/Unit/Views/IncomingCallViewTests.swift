@@ -109,4 +109,21 @@ final class IncomingCallViewTests: XCTestCase {
             "(.accessibilityHidden(true)) to avoid polluting the accessibility tree."
         )
     }
+
+    // MARK: - Dead code
+
+    func test_doesNotDeclareUnusedColorSchemeReader() throws {
+        // Neither `colorScheme` nor the derived `isDark` is read anywhere in
+        // this file — IncomingCallView never overrides or branches on the
+        // color scheme itself.
+        let source = try incomingCallViewSource()
+        XCTAssertFalse(
+            source.contains("colorScheme"),
+            "IncomingCallView must not declare an unused @Environment(\\.colorScheme) reader."
+        )
+        XCTAssertFalse(
+            source.contains("isDark"),
+            "IncomingCallView must not declare an unused isDark computed property."
+        )
+    }
 }

@@ -21,7 +21,8 @@
     "like": "J’aime",
     "comment": "Commenter",
     "share": "Partager",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "repostedFrom": "Republié depuis"
   },
   "feed": {
     "loadingReels": "Chargement des reels…",

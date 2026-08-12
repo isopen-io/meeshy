@@ -5,6 +5,7 @@ import {
   normalizeNotificationLanguage,
   notificationString,
   buildNotificationDisplay,
+  formatFileSizeI18n,
 } from '../../utils/notification-strings.js';
 
 describe('normalizeNotificationLanguage', () => {
@@ -73,6 +74,20 @@ describe('notificationString — interpolation', () => {
     expect(notificationString('de', 'call.missed', { callIcon: '📹', callType: 'video' }))
       .toBe('📹 Verpasster Videoanruf');
   });
+  it('localise le push d’appel entrant à la langue résolue du callee (Prisme)', () => {
+    expect(notificationString('fr', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice vous appelle');
+    expect(notificationString('en', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice is calling you');
+    expect(notificationString('zh-Hans', 'call.incoming.title', { actor: '小明' }))
+      .toBe('小明 来电');
+    expect(notificationString('fr', 'call.incoming.body', { callType: 'video' }))
+      .toBe('Appel vidéo');
+    expect(notificationString('en', 'call.incoming.body', { callType: 'audio' }))
+      .toBe('Audio call');
+    expect(notificationString('de', 'call.incoming.body', { callType: 'video' }))
+      .toBe('Videoanruf');
+  });
   it('retombe sur fr pour une langue hors catalogue', () => {
     expect(notificationString('ja', 'mention')).toBe('vous a mentionné');
   });
@@ -82,6 +97,23 @@ describe('notificationString — interpolation', () => {
     expect(result).toContain('Alice');
     expect(result).toContain('❤️');
     expect(result).toContain('Bob');
+  });
+  it('résout le contexte de reaction.commentVerbose par postType (REEL / STATUS)', () => {
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL' }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le réel de Bob');
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'STATUS' }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le statut de Bob');
+    expect(notificationString('en', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL' }))
+      .toBe('Alice reacted ❤️ to your comment on Bob’s reel');
+  });
+  it('postType a priorité sur isStory dans reaction.commentVerbose', () => {
+    // Un REEL ne doit jamais s’effondrer vers « post » — postType gagne sur le booléen legacy.
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL', isStory: false }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le réel de Bob');
   });
   it('remplace les tokens manquants par une chaîne vide (branche v===undefined)', () => {
     // A key that uses {possObj} tokens without providing postType → token undefined → ''
@@ -180,8 +212,12 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     // Nouveau contenu d'un ami (post / réel / humeur).
     expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G' }))
       .toEqual({ title: 'G a publié un nouveau post', subtitle: 'Nouvelle publication' });
-    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }).subtitle)
-      .toBe('Nouveau réel');
+    // Un réel (variante de post) reste conscient de l'entité sur le titre ET le
+    // sous-titre — pas de « a publié un nouveau post » contredit par « Nouveau réel ».
+    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }))
+      .toEqual({ title: 'G a publié un nouveau réel', subtitle: 'Nouveau réel' });
+    expect(buildNotificationDisplay('en', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }))
+      .toEqual({ title: 'G shared a new reel', subtitle: 'New reel' });
     expect(buildNotificationDisplay('fr', { type: 'friend_new_mood', actorName: 'G' }).title)
       .toBe('G a publié une nouvelle humeur');
 
@@ -202,3 +238,24 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
       .toBe('En réponse à votre commentaire');
   });
 });
+
+describe('formatFileSizeI18n — unités d’octets localisées', () => {
+  it('garde la notation octet française (o / Ko / Mo)', () => {
+    expect(formatFileSizeI18n('fr', 512)).toBe('512 o');
+    expect(formatFileSizeI18n('fr', 500_000)).toBe('488 Ko');
+    // Bascule sur la valeur ARRONDIE au bord du mébioctet (jamais « 1024 Ko »).
+    expect(formatFileSizeI18n('fr', 1_048_500)).toBe('1.0 Mo');
+  });
+  it('localise B / KB / MB pour les langues non françaises', () => {
+    expect(formatFileSizeI18n('en', 512)).toBe('512 B');
+    expect(formatFileSizeI18n('en', 500_000)).toBe('488 KB');
+    expect(formatFileSizeI18n('en', 15_000_000)).toBe('14.3 MB');
+    expect(formatFileSizeI18n('de', 500_000)).toBe('488 KB');
+  });
+  it('normalise les variantes régionales avant de choisir l’unité', () => {
+    expect(formatFileSizeI18n('fr-FR', 500_000)).toBe('488 Ko');
+    expect(formatFileSizeI18n('en-US', 500_000)).toBe('488 KB');
+    // Langue inconnue → repli fr (parité normalizeNotificationLanguage).
+    expect(formatFileSizeI18n('ja', 500_000)).toBe('488 Ko');
+  });
+})

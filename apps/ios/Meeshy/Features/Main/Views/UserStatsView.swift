@@ -7,6 +7,13 @@ import Charts
 
 struct UserStatsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -32,10 +39,10 @@ struct UserStatsView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                Image(systemName: "chevron.backward")
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
@@ -43,12 +50,14 @@ struct UserStatsView: View {
             Spacer()
 
             Text(String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
             Color.clear.frame(width: 24, height: 24)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -59,6 +68,23 @@ struct UserStatsView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
+                if let errorMessage = viewModel.errorMessage {
+                    HStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(MeeshyColors.error)
+                            .accessibilityHidden(true)
+                        Text(errorMessage)
+                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .foregroundColor(MeeshyColors.error)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(MeeshyColors.error.opacity(0.1))
+                    )
+                }
                 statsCards
                 if !viewModel.timeline.isEmpty {
                     timelineChart
@@ -92,6 +118,8 @@ struct UserStatsView: View {
 
     private func statCard(value: String, label: String, color: String, icon: String) -> some View {
         HStack(spacing: 12) {
+            // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
+            // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(Color(hex: color))
@@ -100,14 +128,15 @@ struct UserStatsView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
 
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -122,6 +151,7 @@ struct UserStatsView: View {
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Timeline Chart
@@ -130,14 +160,17 @@ struct UserStatsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "chart.xyaxis.line")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.info)
+                    .accessibilityHidden(true)
                 Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITE", bundle: .main))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             StatsTimelineChart(timeline: viewModel.timeline, color: "3498DB")
                 .frame(height: 180)
@@ -159,14 +192,17 @@ struct UserStatsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "trophy.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
+                    .accessibilityHidden(true)
                 Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.warning)
                     .tracking(1.2)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(viewModel.stats?.achievements ?? []) { achievement in
@@ -184,6 +220,7 @@ final class UserStatsViewModel: ObservableObject {
     @Published var stats: UserStats?
     @Published var timeline: [TimelinePoint] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "stats")
 
@@ -227,10 +264,12 @@ final class UserStatsViewModel: ObservableObject {
             let (s, t) = try await (statsTask, timelineTask)
             stats = s
             timeline = t
+            errorMessage = nil
             try? await CacheCoordinator.shared.stats.save([s], for: userId)
             try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
         } catch {
             UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
         }
         isLoading = false
     }

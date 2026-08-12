@@ -45,18 +45,21 @@ WS1 (proportions) → WS5 (structure/Prisme) → WS3 (autoplay, +WS3.7) → WS4 
 - [x] WS5.1 Persister `originalLanguage` dans publish offline/queue (champ optionnel + threading + migrator + bootstrap)
 - [x] WS5.2 Payload Timeline publish = `[StorySlide]` (pas `TimelineProject`) → match unique décodeur
 - [x] WS5.3 Préserver type vidéo dans converters offline (sniff extension)
-- [ ] WS5.4 `toRenderableSlide` : garder bg statique quand `effects.resolvedBackgroundMedia == nil` — ⚠️ TENTÉ PUIS REVERTÉ (`b39a4c15f`, cassait le rendu) ; à reprendre proprement
+- [~] WS5.4 fond legacy — SPLIT en 2 :
+  - [x] **(a) SAFE** `StoryRenderer.renderBackground` : le fond legacy `slide.mediaURL` routait `slide.id` (clé non-média que le resolver `mediaList.first{ $0.id==postId }` ne matche jamais) → fond blanc/noir. Fix : router l'URL directe via `postMediaId` (résolue par `directURLIfAny` file://+http(s)://), miroir de la branche image `isBackground`. +2 tests SDK (`test_renderBackground_legacyMediaURL_routesDirectURLNotSlideID`, `_noMediaNoHex_fallsBackToSolidBlack`).
+  - [ ] **(b) DEFERRED** `toRenderableSlide` : promouvoir `media[0]` non-flaggé en bg statique quand `resolvedBackgroundMedia == nil` — ⚠️ cas produit-ambigu, cassait en NOIR (revert `b39a4c15f`) ; nécessite une règle produit pour ne pas masquer le fallback couleur unie.
 
 ## WS6 — Refactor < 1000 LOC (req 5) [MEDIUM, SDK, mécanique behavior-preserving]
 Cible : Canvas 3771→~700 · ComposerView 2566→~700 · ComposerVM 1788→~620. 26 fichiers (extensions même-type).
-- [ ] WS6.0 **Commit access-control AVANT déplacement** : private→internal cross-fichier + critique : `registerAsActiveAndPreemptOthers`/`unregisterFromActive`/`activePlayingCanvases`, préserver `nonisolated(unsafe)`, `mode` en `internal(set)`
-- [ ] WS6.1 Types libres : StoryCanvasNotifications, ThreeFingerPinch, ComposerSupportTypes, ComposerChildViews, ComposerProviding, Array helper
-- [ ] WS6.2 ViewModel : +Repost,+Lifecycle,+Slides,+ZOrder,+Elements,+Timeline → tests SDK
-- [ ] WS6.3 Canvas : +ContextMenu,+PointerAndDelegates (cut/paste) ; +Accessibility,+Core,+Audio,+Rendering,+ContentReadiness,+Lifecycle,+Playback,+Gestures,+Manipulation (parité rendu avant/après)
-- [ ] WS6.4 View en DERNIER : +TopBar,+SlideStrip,+SyncRestore,+Media,+Publication,+Canvas (garder body/sheetModifiers primaire)
-- [ ] WS6.5 Clean build + smoke + `git diff` = déplacement pur + élargissements d'accès
+- [x] WS6.0 `d9245bc71` access-control private→internal (3 cibles) ; `mode`→`public internal(set)` ; `nonisolated(unsafe)` + registre préservés
+- [x] WS6.1 `6ac32b19d` types libres : StoryCanvasNotifications, CanvasManipulationLayer, ThreeFingerPinch (Canvas) ; StoryComposerSupportTypes, StoryComposerChildViews (View). SPM auto-glob → 0 modif pbxproj
+- [x] WS6.2 `ff2428486` VM **1795→214** : types libres (ToolModes, CanvasElement, MediaAsset, StoryComposerProviding, ArraySafeAccess) + +Elements/+Slides/+ZOrder/+Timeline/+Lifecycle/+Repost. Stored props/init/deinit/nested types restés
+- [x] WS6.3 Canvas **3712→657** : +Core/+Rendering/+Audio/+ContentReadiness/+Lifecycle/+Playback/+Gestures/+Manipulation/+Accessibility + +ContextMenu + +PointerAndDelegates (`a71e200a4`)
+- [x] WS6.4 View **2566→233** : +Canvas/+TopBar/+SlideStrip/+SyncRestore/+Media/+Publication (body/init/stored state restés) (`7c7e0e0b3`)
+- [x] WS6.5 `ab141d920` docs relocalisés vers extensions + MARK orphelins retirés ; **clean build à froid SUCCEEDED** ; suite **4542 tests / 0 échec** ; diff pur vérifié (209 méthodes conservées, 0 ligne code ajoutée aux principaux)
 
 ## Vérification
 - `meeshy.sh build` → grep `BUILD SUCCEEDED` · `xcodebuild test -scheme MeeshySDK-Package` 18.2 → xcresult · parité rendu pixel · smoke device audio/vidéo
 
 ## Review (post-impl)
+**WS6 COMPLET** (branche `feat/story-ws6-refactor`, worktree isolé depuis `c8063196a`). Refactor mécanique behavior-preserving, 7 commits (WS6.0→6.5), 23 nouveaux fichiers d'extension. Cibles atteintes : Canvas 3712→657, VM 1795→214, ComposerView 2566→233. Méthode : cartographie par subagent (props stockées/init/deinit/types imbriqués = STAY ; méthodes/computed = MOVE bucketées) → extraction par script Python (indices d'origine, tri+validation non-chevauchement) → build incrémental vert par lot → cleanup orphelins → clean build à froid + suite complète. Aucune modif pbxproj (cible SPM MeeshyUI auto-glob). Reste : décision d'intégration (merge main / PR).

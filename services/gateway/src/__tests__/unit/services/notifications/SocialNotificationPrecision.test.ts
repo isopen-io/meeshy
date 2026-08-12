@@ -48,6 +48,11 @@ const makePrismaMock = () => ({
   conversation: {
     findUnique: jest.fn(),
   },
+  // Audience du post declaree PUBLIC : les notifications a destinataire unique du
+  // fil (reponse, like, reaction sur commentaire) verifient desormais que le
+  // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
+  // la langue et le payload push — pas sur le droit de voir.
+  post: { findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
   userPreferences: {
     findUnique: jest.fn().mockResolvedValue(null),
   },
@@ -244,6 +249,51 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
     });
   });
 
+  // Réagir à un commentaire est le MÊME geste produit que « liker » un
+  // commentaire — seul le transport diffère (socket `comment:reaction-add` →
+  // type `comment_reaction` ; REST `POST .../like` → type `comment_like`). Les
+  // deux DOIVENT honorer la même préférence `commentLikeEnabled`. Sinon un
+  // destinataire ayant coupé les notifs de like-commentaire les reçoit quand
+  // même par le chemin socket (le type `comment_reaction` retombait sur
+  // `default: return true`).
+  describe('createCommentReactionNotification — gating préférence', () => {
+    it('respecte commentLikeEnabled:false (aucune notification émise)', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { commentLikeEnabled: false },
+      });
+
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '🔥',
+        commentPreview: 'Mon avis sur la question',
+      });
+
+      expect(payloadOfType(mockIO, 'comment_reaction')).toBeUndefined();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('émet quand la préférence est active (défaut produit)', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { commentLikeEnabled: true },
+      });
+
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '🔥',
+        postType: 'REEL',
+      });
+
+      const payload = payloadOfType(mockIO, 'comment_reaction');
+      expect(payload).toBeDefined();
+    });
+  });
+
   describe('createPostRepostNotification', () => {
     it('wording typé « a partagé votre story » + extrait en subtitle', async () => {
       await service.createPostRepostNotification({
@@ -347,12 +397,15 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createStoryCommentNotificationsBatch — subtitles + postType', () => {
+    // `visibility` est REQUIS depuis le cycle 31 — ces cas portent sur le
+    // wording, pas sur l'audience, et déclarent donc le post public.
     const baseParams = {
       postId: POST_ID,
       commentId: COMMENT_ID,
       storyAuthorId: RECIPIENT_ID,
       commenterId: ACTOR_ID,
       commentExcerpt: 'Super moment !',
+      visibility: 'PUBLIC',
     };
 
     beforeEach(() => {

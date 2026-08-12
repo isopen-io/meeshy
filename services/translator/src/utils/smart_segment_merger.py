@@ -57,7 +57,15 @@ EMOJI_PATTERN = re.compile(
     "\U0001FA00-\U0001FA6F"  # Chess symbols
     "\U0001FA70-\U0001FAFF"  # Symbols and pictographs extended-A
     "\U00002702-\U000027B0"  # Dingbats
-    "\U000024C2-\U0001F251"  # Enclosed characters
+    # Enclosed characters — NE PAS écrire "\U000024C2-\U0001F251" : ce serait une
+    # PLAGE U+24C2..U+1F251 qui avale les blocs CJK (U+4E00..U+9FFF), Hiragana/
+    # Katakana (U+3040..U+30FF) et Hangul (U+AC00..U+D7AF) → tout texte chinois/
+    # japonais/coréen serait détecté comme « emoji ». On liste les seuls code points
+    # emoji réellement visés, sans plage traversant les idéogrammes.
+    "\U0001F100-\U0001F1FF"  # Enclosed Alphanumeric Supplement (regional indicators)
+    "\U0001F200-\U0001F251"  # Enclosed Ideographic Supplement
+    "\U000024C2"             # Ⓜ Circled Latin M
+    "\U00003297\U00003299"   # ㊗ ㊙ enclosed ideographs
     "]+"
 )
 

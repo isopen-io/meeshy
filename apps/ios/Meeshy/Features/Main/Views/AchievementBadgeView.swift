@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct AchievementBadgeView: View {
     let achievement: Achievement
@@ -10,7 +11,7 @@ struct AchievementBadgeView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             ZStack {
                 Circle()
                     .stroke(
@@ -28,6 +29,7 @@ struct AchievementBadgeView: View {
                     .rotationEffect(.degrees(-90))
 
                 Image(systemName: achievement.icon)
+                    // doctrine 86i — icône bornée par le cercle de progression fixe 56×56
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(
                         achievement.isUnlocked
@@ -37,23 +39,23 @@ struct AchievementBadgeView: View {
             }
 
             Text(achievement.name)
-                .font(.system(size: 11, weight: .bold))
+                .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundColor(
                     achievement.isUnlocked ? Color(hex: achievement.color) : theme.textMuted
                 )
                 .lineLimit(1)
 
             Text("\(achievement.current)/\(achievement.threshold)")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(9, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, MeeshySpacing.md)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: achievement.isUnlocked ? achievement.color : "808080"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(
                             achievement.isUnlocked
                                 ? Color(hex: achievement.color).opacity(0.3)

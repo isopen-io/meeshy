@@ -75,27 +75,52 @@ final class PushNotificationManagerTests: XCTestCase {
     @MainActor
     func test_noteMessageActivity_messageType_emitsConversationId() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "message", "conversationId": "conv-1"])
         c.cancel()
-        XCTAssertEqual(received, ["conv-1"])
+        XCTAssertEqual(received.map(\.conversationId), ["conv-1"])
     }
 
     @MainActor
     func test_noteMessageActivity_messageIdPresent_emitsConversationId() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["messageId": "msg-9", "conversationId": "conv-2"])
         c.cancel()
-        XCTAssertEqual(received, ["conv-2"])
+        XCTAssertEqual(received.map(\.conversationId), ["conv-2"])
+    }
+
+    /// Le signal DOIT transporter l'identifiant du message : sans lui, la liste
+    /// de conversations ne peut pas distinguer « un message que j'affiche déjà »
+    /// (chemin socket arrivé une seconde plus tôt) d'un message inconnu — et
+    /// écrase l'aperçu du premier avec une facette neutre.
+    @MainActor
+    func test_noteMessageActivity_carriesMessageId() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["messageId": "msg-9", "conversationId": "conv-2"])
+        c.cancel()
+        XCTAssertEqual(received.first?.messageId, "msg-9")
+    }
+
+    @MainActor
+    func test_noteMessageActivity_emptyMessageId_carriesNilMessageId() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message", "conversationId": "conv-3", "messageId": ""])
+        c.cancel()
+        XCTAssertEqual(received.count, 1)
+        XCTAssertNil(received.first?.messageId)
     }
 
     @MainActor
     func test_noteMessageActivity_friendRequest_emitsNothing() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "friend_request", "conversationId": "conv-1"])
         c.cancel()
@@ -105,7 +130,7 @@ final class PushNotificationManagerTests: XCTestCase {
     @MainActor
     func test_noteMessageActivity_missingConversationId_emitsNothing() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "message"])
         c.cancel()
@@ -133,6 +158,50 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertEqual(sut.pendingNotificationPayload?.conversationId, "conv-42")
         XCTAssertEqual(sut.pendingNotificationPayload?.messageId, "msg-7")
         XCTAssertEqual(sut.pendingNotificationPayload?.type, "new_message")
+    }
+
+    /// Guideline 5 (MIIT) — China-region incoming-call push routed via the
+    /// standard 'apns' alert type. RootView.navigateFromNotification needs
+    /// these fields to drive CallManager.handleIncomingCallNotification
+    /// instead of a plain conversation deep-link.
+    @MainActor
+    func test_handleNotification_callType_setsPendingPayloadWithCallFields() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "call",
+            "conversationId": "conv-42",
+            "callId": "call-1",
+            "callerUserId": "user-9",
+            "callerName": "Alice",
+            "isVideo": "true",
+            "iceServers": "[{\"urls\":\"turn:t:3478\",\"username\":\"u\",\"credential\":\"c\"}]"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.type, "call")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callId, "call-1")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callerUserId, "user-9")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callerName, "Alice")
+        XCTAssertEqual(sut.pendingNotificationPayload?.isVideoCall, true)
+        XCTAssertNotNil(sut.pendingNotificationPayload?.iceServersJSON)
+    }
+
+    /// `isVideo` arrives from APNs as a string ("true"/"false") because custom
+    /// payload keys must be JSON-serializable primitives — must not silently
+    /// default to false for a real video call.
+    @MainActor
+    func test_handleNotification_callType_missingIsVideo_defaultsToFalse() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "call",
+            "callId": "call-2"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.isVideoCall, false)
+        XCTAssertNil(sut.pendingNotificationPayload?.iceServersJSON)
     }
 
     /// A tapped social comment push must carry the comment ids so the app can
@@ -224,7 +293,7 @@ final class PushNotificationManagerTests: XCTestCase {
     // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
 
     @MainActor
-    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #file, line: UInt = #line)
+    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #filePath, line: UInt = #line)
     -> (sut: PushNotificationManager, defaults: UserDefaults, keychain: MockKeychainStore, suiteName: String)
     {
         let suiteName = "test.push.\(UUID().uuidString)"

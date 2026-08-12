@@ -210,16 +210,22 @@ async function buildApp(opts: {
   if (withNotificationService) {
     app.decorate('notificationService', {
       createPasswordChangedNotification: jest.fn<any>().mockResolvedValue(undefined),
+      emitUserUpdated: jest.fn<any>().mockResolvedValue(undefined),
     });
   } else {
     app.decorate('notificationService', null as any);
   }
 
   if (withSocketIOHandler) {
+    // Stable manager mock so tests can assert on its methods across calls
+    // (a fresh object per getManager() call would lose the jest.fn identity).
+    const managerMock = {
+      refreshUserResolvedLanguages: jest.fn(),
+      refreshUserTypingIdentity: jest.fn(),
+    };
+    (app as any)._socketManagerMock = managerMock;
     app.decorate('socketIOHandler', {
-      getManager: jest.fn(() => ({
-        refreshUserResolvedLanguages: jest.fn(),
-      })),
+      getManager: jest.fn(() => managerMock),
     });
   } else {
     app.decorate('socketIOHandler', null as any);
@@ -358,6 +364,109 @@ describe('PATCH /users/me — with language change fires socketIO refresh', () =
   });
 });
 
+describe('PATCH /users/me — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the whole name group when displayName/firstName/lastName change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob', lastName: 'Jones', displayName: 'Bob Jones' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+    });
+    await app.close();
+  });
+
+  // Le défaut que ce groupe ferme : un `firstName` seul est irrecomposable chez
+  // le destinataire, qui ne stocke que le nom DÉJÀ composé. Sans `displayName`
+  // il ne sait pas si le prénom compte, sans `username` il ne sait pas sur quoi
+  // retomber. Un delta d'un seul champ le laissait donc afficher l'ancien nom.
+  it('emits the other three name components even when a single one changed', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+    });
+    await app.close();
+  });
+
+  // `null` = EFFACÉ, et c'est la seule façon pour le client de faire retomber le
+  // nom sur le composant suivant. Omettre la clé se lirait « inchangé » et
+  // figerait l'ancien nom d'affichage.
+  it('emits a cleared displayName as null rather than omitting the key', async () => {
+    const prisma = makePrisma({
+      user: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockUser),
+        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, displayName: null }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { displayName: '' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: null, username: 'alice' },
+    });
+    await app.close();
+  });
+
+  it('does not emit USER_UPDATED when only private fields (bio, language) change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { bio: 'New bio', systemLanguage: 'en' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('invalidates the cached typing identity when displayName/name changes', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { displayName: 'Bob Jones' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('does not invalidate the typing identity when only private fields (bio, language) change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { bio: 'New bio', systemLanguage: 'en' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 // ─── PATCH /users/me/avatar ───────────────────────────────────────────────────
 
 describe('PATCH /users/me/avatar — unauthenticated', () => {
@@ -380,6 +489,28 @@ describe('PATCH /users/me/avatar — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/avatar — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the new avatar URL', async () => {
+    const prisma = makePrisma({
+      user: {
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: 'https://example.com/avatar.jpg' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserAvatar], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/avatar',
+      payload: { avatar: 'https://example.com/avatar.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { avatar: 'https://example.com/avatar.jpg' },
+    });
     await app.close();
   });
 });
@@ -437,6 +568,28 @@ describe('PATCH /users/me/banner — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/banner — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the new banner URL', async () => {
+    const prisma = makePrisma({
+      user: {
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: 'https://example.com/banner.jpg' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserBanner], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/banner',
+      payload: { banner: 'https://example.com/banner.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { banner: 'https://example.com/banner.jpg' },
+    });
     await app.close();
   });
 });
@@ -674,6 +827,78 @@ describe('PATCH /users/me/username — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.username).toBe('bob');
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/username — realtime propagation to conversation partners', () => {
+  // `username` n'est le nom RENDU que si `displayName` et « Prénom Nom » sont
+  // vides — un destinataire qui reçoit le handle seul ne peut pas savoir si son
+  // affichage doit bouger. Même règle de groupe que `PATCH /users/me`.
+  it('emits USER_UPDATED with the whole name group, not the handle alone', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue({
+          id: USER_ID, username: 'bob', displayName: null, firstName: null, lastName: null,
+        }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { username: 'bob', displayName: null, firstName: null, lastName: null },
+    });
+    await app.close();
+  });
+
+  // Les trois autres composants doivent être SÉLECTIONNÉS : le `select` d'origine
+  // ne ramenait que `{ id, username }`, donc les envoyer aurait produit trois
+  // `undefined` — un groupe qui ment.
+  it('selects the three other name components alongside the username', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const update = jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' });
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update,
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withNotificationService: true });
+    await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(update.mock.calls[0][0].select).toEqual(
+      expect.objectContaining({ displayName: true, firstName: true, lastName: true }),
+    );
+    await app.close();
+  });
+
+  it('invalidates the cached typing identity on username change', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).toHaveBeenCalledWith(USER_ID);
     await app.close();
   });
 });

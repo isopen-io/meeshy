@@ -188,7 +188,7 @@ function injectBufferedOffer(handler: CallEventsHandler, signalFrom: string, sig
       sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',
     },
   };
-  (handler as any).bufferedOffers.set(CALL_ID, { signal: offer, bufferedAt: Date.now() });
+  (handler as any).bufferedOffers.set(`${CALL_ID}:${signalTo}`, { signal: offer, bufferedAt: Date.now() });
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
     });
 
     it('clears the buffered offer from the map so it cannot replay again', () => {
-      const buffered = (handler as any).bufferedOffers.get(CALL_ID);
+      const buffered = (handler as any).bufferedOffers.get(`${CALL_ID}:${CALLEE_ID}`);
       expect(buffered).toBeUndefined();
     });
   });
@@ -297,5 +297,142 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
       const signalCalls = directEmit.mock.calls.filter(([ev]) => ev === CALL_EVENTS.SIGNAL);
       expect(signalCalls).toHaveLength(0);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4.6 follow-up — buffered ANSWER replay to the (re)joining caller
+//
+// The offer/answer buffer is keyed `${callId}:${to}` (independent per
+// recipient) precisely so a buffered offer for the callee and a buffered
+// answer for the caller can coexist on the same call without one
+// overwriting the other. This proves the replay path (call:join) delivers
+// a buffered answer just like it already delivers a buffered offer.
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — buffered ANSWER replay on (re)join', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  function injectBufferedAnswer(handler: CallEventsHandler, signalFrom: string, signalTo: string): void {
+    const answer = {
+      callId: CALL_ID,
+      signal: {
+        type: 'answer' as const,
+        from: signalFrom,
+        to: signalTo,
+        sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',
+      },
+    };
+    (handler as any).bufferedOffers.set(`${CALL_ID}:${signalTo}`, { signal: answer, bufferedAt: Date.now() });
+  }
+
+  it('replays a buffered answer to the (re)joining caller', async () => {
+    // Callee (sender of the answer) is still active
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+
+    const prisma = makePrisma();
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    injectBufferedAnswer(handler, CALLEE_ID, CALLER_ID);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    const signalCalls = directEmit.mock.calls.filter(([ev]: any[]) => ev === CALL_EVENTS.SIGNAL);
+    expect(signalCalls).toHaveLength(1);
+    expect(signalCalls[0][1].signal.type).toBe('answer');
+  });
+
+  it('does not replay a buffered offer meant for the callee to the (re)joining caller', async () => {
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+
+    const prisma = makePrisma();
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    // Offer buffered for the CALLEE's slot — the CALLER joining must not see it.
+    injectBufferedOffer(handler, CALLER_ID, CALLEE_ID);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    const signalCalls = directEmit.mock.calls.filter(([ev]: any[]) => ev === CALL_EVENTS.SIGNAL);
+    expect(signalCalls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ringing timer ownership (item F follow-up — chaos-2 re-test)
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — call:join leaves the ringing timer alone', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  it('does NOT clear the ringing timer on join — only the SDP answer settles the ring', async () => {
+    // The callee EARLY-joins while still ringing (the offer must flow during
+    // the ring). Clearing the timer in the join handler's finally left NO
+    // server-side bound on the ring after any join, and wiped the timer the
+    // boot rehydration had just re-armed after a mid-ring restart — the call
+    // then decayed via the GC tier (~150s) instead of resolving missed at its
+    // nominal remaining budget. The answer path (call:signal answer) and the
+    // terminal paths (leave/end/service-level, item I) already own the clear.
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, () => CALLEE_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C8 — last join wins: evict stale same-user sockets from the call room
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — C8 same-user socket dedup on join', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  function makeRemoteSocket(id: string) {
+    return { id, leave: jest.fn<any>() };
+  }
+
+  it('evicts older sockets of the SAME user from the call room on join', async () => {
+    // Prod audit C8 (callIds 6a4607a9…/6a4607bb…): a user re-joining from a
+    // NEW socket (churn, second tab) left stale sockets of the same user in
+    // the room — every targeted signal then fanned out to N sockets
+    // (targetSockets:2, glare risk, double analytics). A P2P call has exactly
+    // one signaling endpoint per user: last join wins.
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const staleOwn = makeRemoteSocket('stale-own-socket');
+    const peerSocket = makeRemoteSocket('peer-socket');
+    const { io } = makeIo();
+    (io as any).in = jest.fn(() => ({
+      fetchSockets: jest.fn<any>().mockResolvedValue([staleOwn, peerSocket, { id: socket.id, leave: jest.fn() }]),
+    }));
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, (sid: string) =>
+      sid === 'peer-socket' ? CALLER_ID : CALLEE_ID
+    );
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    expect(staleOwn.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
+    expect(peerSocket.leave).not.toHaveBeenCalled();
   });
 });

@@ -4,45 +4,23 @@ import MeeshyUI
 
 /// P3 wire-up invariant tests.
 ///
-/// Two services created in Sprint 4 must be wired into the launch sequence
-/// alongside `CrashDiagnosticsManager.shared.install(...)`:
-/// - `StoryFilteredLayer.preheatAllPipelines()` — compiles every Metal
-///   compute pipeline state process-wide so the first user-visible frame
-///   in the composer / reader does NOT pay the compile cost.
-/// - `MeeshyMetricsSubscriber.shared.register()` — attaches to
-///   `MXMetricManager` so the `MXSignpostMetric` entries produced by
-///   `TimelineSignposter` are actually aggregated into the 24h rolling
-///   window. Without this call the entries appear in Instruments but no
-///   payload is ever delivered to `didReceive(_:)`.
+/// `MeeshyMetricsSubscriber.shared.register()` must be wired into the launch
+/// sequence alongside `CrashDiagnosticsManager.shared.install(...)`: it attaches
+/// to `MXMetricManager` so the `MXSignpostMetric` entries produced by
+/// `TimelineSignposter` are actually aggregated into the 24h rolling window.
+/// Without this call the entries appear in Instruments but no payload is ever
+/// delivered to `didReceive(_:)`.
 ///
-/// Neither service exposes a public "wasInvoked" introspection knob:
-/// - `StoryFilteredLayer` has `_hasCachedPipelineForTesting` but the
-///   pipeline cache is process-wide, so a different test populating it
-///   would falsely satisfy a "is cached" assertion.
-/// - `MeeshyMetricsSubscriber` guards its registration state with a
-///   private `OSAllocatedUnfairLock<Bool>` — there is no public getter,
-///   and `MXMetricManager.shared` doesn't expose its subscriber list.
-///
-/// The pragmatic invariant — and the one that catches the actual
-/// regression (a developer accidentally removing the call) — is a
-/// source-scan of `AppDelegate.swift`. This mirrors the approach taken
+/// `MeeshyMetricsSubscriber` guards its registration state with a private
+/// `OSAllocatedUnfairLock<Bool>` — no public getter, and `MXMetricManager.shared`
+/// doesn't expose its subscriber list. The pragmatic invariant — and the one
+/// that catches the actual regression (a developer accidentally removing the
+/// call) — is a source-scan of `AppDelegate.swift`, mirroring the approach taken
 /// by `SingleSourceOfTruthTests` for the optimistic-mutation invariant.
 @MainActor
 final class AppInitWireupTests: XCTestCase {
 
     // MARK: - Source-scan invariants
-
-    func test_app_init_calls_preheatAllPipelines() throws {
-        let body = try appDelegateLaunchBody()
-        XCTAssertTrue(
-            body.contains("StoryFilteredLayer.preheatAllPipelines()"),
-            "P3 wire-up regression: AppDelegate.application(_:didFinishLaunchingWithOptions:) "
-                + "must call StoryFilteredLayer.preheatAllPipelines() so Metal compute "
-                + "pipeline states are compiled process-wide before the first composer / "
-                + "reader frame. Without this call the first frame drops while the kernel "
-                + "compiles on the main thread."
-        )
-    }
 
     func test_app_init_calls_metricsSubscriber_register() throws {
         let body = try appDelegateLaunchBody()
@@ -56,32 +34,25 @@ final class AppInitWireupTests: XCTestCase {
     }
 
     func test_wireup_lives_in_same_MainActor_hop_as_crashDiagnostics() throws {
-        // Both calls are @MainActor-isolated. They MUST share the MainActor
-        // hop that already installs CrashDiagnosticsManager so we don't
-        // multiply the number of trampolines into MainActor at cold start.
-        // The order inside the hop is also load-bearing — crash diagnostics
-        // first (so any crash during preheat is captured), then the two P3
-        // services, then AnalyticsManager.
+        // The metrics register is @MainActor-isolated. It MUST share the
+        // MainActor hop that already installs CrashDiagnosticsManager so we
+        // don't multiply the number of trampolines into MainActor at cold
+        // start. The order inside the hop is also load-bearing — crash
+        // diagnostics first (so any crash during wire-up is captured), then
+        // the metrics subscriber, then AnalyticsManager.
         let body = try appDelegateLaunchBody()
         guard let crashRange = body.range(of: "CrashDiagnosticsManager.shared.install"),
-              let preheatRange = body.range(of: "StoryFilteredLayer.preheatAllPipelines"),
               let registerRange = body.range(of: "MeeshyMetricsSubscriber.shared.register"),
               let analyticsRange = body.range(of: "AnalyticsManager.shared.syncCollectionState")
         else {
-            XCTFail("Could not locate the four MainActor-hop calls in AppDelegate.swift")
+            XCTFail("Could not locate the three MainActor-hop calls in AppDelegate.swift")
             return
         }
         XCTAssertLessThan(
             crashRange.lowerBound,
-            preheatRange.lowerBound,
-            "CrashDiagnosticsManager.install must run BEFORE preheatAllPipelines so any "
-                + "Metal-compile crash is captured by the observer."
-        )
-        XCTAssertLessThan(
-            preheatRange.lowerBound,
             registerRange.lowerBound,
-            "preheatAllPipelines should run before MeeshyMetricsSubscriber.register so "
-                + "the MetricKit subscriber doesn't aggregate the preheat signposts."
+            "CrashDiagnosticsManager.install must run BEFORE MeeshyMetricsSubscriber.register "
+                + "so any crash during launch wire-up is captured by the observer."
         )
         XCTAssertLessThan(
             registerRange.lowerBound,
@@ -93,21 +64,166 @@ final class AppInitWireupTests: XCTestCase {
 
     // MARK: - Runtime smoke (symbol availability)
 
-    /// Cheap proof that the two symbols exist with the expected signatures
-    /// from the imported targets. If a future refactor renames or removes
-    /// either symbol the source-scan tests above still pass, but this test
-    /// fails at compile time — making the breakage impossible to miss.
+    /// Cheap proof that the symbol exists with the expected signature from the
+    /// imported target. If a future refactor renames or removes it the
+    /// source-scan tests above still pass, but this test fails at compile time —
+    /// making the breakage impossible to miss.
     @MainActor
     func test_wireup_symbols_are_callable() {
-        // Verified via launch instrumentation in production; this call site
-        // is a compile-time guard, not a behaviour assertion. Both calls are
-        // idempotent so invoking them in the test harness is a no-op after
-        // the first execution.
-        StoryFilteredLayer.preheatAllPipelines()
+        // Verified via launch instrumentation in production; this call site is a
+        // compile-time guard, not a behaviour assertion. The call is idempotent
+        // so invoking it in the test harness is a no-op after the first run.
         MeeshyMetricsSubscriber.shared.register()
     }
 
+    // MARK: - Gate iOS : `meeshy.sh test` doit exécuter les tests du SDK
+
+    /// `./apps/ios/meeshy.sh test` est LE gate exigé avant tout commit iOS
+    /// (CLAUDE.md racine). Il ne lançait que le bundle de l'app
+    /// (`-only-testing:MeeshyTests`) : n'importe quel test rouge sous
+    /// `packages/MeeshySDK/Tests/**` restait invisible en local et n'apparaissait
+    /// qu'au push, dans `sdk-tests.yml`. Deux tests de `LocationModelsTests` ont
+    /// ainsi survécu à trois commits.
+    func test_meeshyShTestGate_runsTheMeeshySDKPackageSuite() throws {
+        let body = try scriptBody(of: "do_test() {", upTo: "# ─── Setup")
+
+        XCTAssertTrue(
+            body.contains("-scheme MeeshySDK-Package"),
+            "meeshy.sh test doit lancer la suite du package MeeshySDK (scheme MeeshySDK-Package) : "
+                + "sinon les tests de packages/MeeshySDK/Tests ne sont exercés que par sdk-tests.yml, au push."
+        )
+        XCTAssertTrue(
+            body.contains("p0 != 0"),
+            "L'exit code de la suite SDK doit entrer dans le verdict du gate — une phase dont "
+                + "l'échec ne fait pas rougir le script ne prouve rien (cf. le `|| true` des UI tests)."
+        )
+    }
+
+    // MARK: - Composer de story : le sélecteur de lieu vient de l'app
+
+    /// Le composer de story vit au SDK ; le sélecteur de lieu, non (MapKit,
+    /// CoreLocation, `MediaPermissionCoordinator`, catalogue `.main`). Le SDK
+    /// expose donc `\.storyLocationPicker` et l'app l'alimente. Un site de
+    /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
+    /// pastille redevient inatteignable, sans le moindre signal.
+    func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
+        for path in Self.storyComposerPresentationSites {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                injections, presentations,
+                "\(path) : chaque présentation du composer doit injecter le picker de lieu "
+                    + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
+            )
+        }
+    }
+
+    /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
+    /// permissions) et la pellicule (PhotoKit) restent app-side, le composer
+    /// SDK expose deux points d'injection. Un site de présentation qui les
+    /// oublie fait disparaître les amorces de la page blanche SANS le moindre
+    /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
+    /// interdit.
+    func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
+        for path in Self.storyComposerPresentationSites {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                occurrences(of: ".storyCameraCaptureProvided()", in: src), presentations,
+                "\(path) : sans injection caméra, l'amorce « Caméra » n'est pas rendue."
+            )
+            XCTAssertEqual(
+                occurrences(of: ".storyRecentCameraRollProvided()", in: src), presentations,
+                "\(path) : sans injection pellicule, la vignette « dernière photo » n'est pas rendue."
+            )
+        }
+    }
+
+    /// Tous les fichiers qui MONTENT un composer de story. `StoryTrayActions`
+    /// s'y est ajouté quand le cover de création est remonté au niveau racine :
+    /// un site oublié par ce garde-fou est un site où les amorces de page
+    /// blanche disparaissent sans le moindre signal.
+    private static let storyComposerPresentationSites = [
+        "Meeshy/Features/Main/Views/StoryTrayView.swift",
+        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
+        "Meeshy/Features/Main/Views/StoryViewerView.swift"
+    ]
+
+    /// R4 — le cover du composer de création n'est monté qu'UNE fois par racine.
+    ///
+    /// `StoryTrayView` le montait, et elle est instanciée par
+    /// `ConversationListView`, `FeedView` et `RootViewComponents` ; sur iPhone la
+    /// feuille de feed recouvre la liste sans la démonter, donc deux trays
+    /// vivantes présentaient le même cover sur le même `@Published`
+    /// (« Attempt to present … which is already presenting »). C'est la course
+    /// que les `Task.sleep(350 ms)` masquaient.
+    func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
+        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
+                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        for path in mounts {
+            XCTAssertEqual(
+                occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,
+                "\(path) : une racine, un montage."
+            )
+        }
+        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+                     "Meeshy/Features/Main/Views/RootViewComponents.swift",
+                     "Meeshy/Features/Main/Views/FeedView.swift",
+                     "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            XCTAssertEqual(
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                0,
+                "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
+            )
+        }
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    /// Source d'un fichier de l'app, commentaires `//` retirés — un `.contains`
+    /// qui matche un commentaire ne prouve rien (et les doc-comments de ces deux
+    /// vues NOMMENT les composers qu'on compte ici).
+    private func appSource(_ relativePath: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let raw = try String(contentsOfFile: "\(projectRoot)/\(relativePath)", encoding: .utf8)
+        return raw
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "//") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
+
     // MARK: - Helpers
+
+    /// Extrait une portion de `apps/ios/meeshy.sh`, commentaires `#` retirés :
+    /// une assertion qui matche un commentaire ne prouve rien.
+    private func scriptBody(of startMarker: String, upTo endMarker: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let source = try String(contentsOfFile: "\(projectRoot)/meeshy.sh", encoding: .utf8)
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("meeshy.sh ne contient plus « \(startMarker) »")
+            return ""
+        }
+        let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "#") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
 
     /// Returns the body of `application(_:didFinishLaunchingWithOptions:)`
     /// from `AppDelegate.swift`. Mirrors the file-path resolution used by
@@ -125,11 +241,11 @@ final class AppInitWireupTests: XCTestCase {
             return ""
         }
         // Strip `//` line comments before scanning. The launch sequence carries
-        // an explanatory comment block that NAMES the very symbols we order-check
-        // (`preheatAllPipelines()`, `register()`); without stripping, the first
-        // `range(of:)` match lands inside that comment — above the real call —
-        // and the ordering assertions read a bogus position. We only need the
-        // executable lines, so drop everything from `//` onward per line.
+        // an explanatory comment block that NAMES the very symbol we order-check
+        // (`register()`); without stripping, the first `range(of:)` match lands
+        // inside that comment — above the real call — and the ordering assertions
+        // read a bogus position. We only need the executable lines, so drop
+        // everything from `//` onward per line.
         let executable = String(source[methodStart.lowerBound...])
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { line -> Substring in

@@ -1,7 +1,19 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
-import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
+import {
+  resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil,
+  getUserLanguagePreferences as getUserLanguagePreferencesUtil,
+} from '@/utils/user-language-preferences';
 import { LRUCache } from '@/lib/lru-cache';
+
+const TRANSLATION_MODEL_RANK: Record<TranslationModel, number> = {
+  premium: 3,
+  medium: 2,
+  basic: 1,
+};
+
+const translationModelRank = (model?: string): number =>
+  (model && TRANSLATION_MODEL_RANK[model as TranslationModel]) || 0;
 
 type RawTranslation = {
   targetLanguage?: string;
@@ -67,35 +79,29 @@ export function useMessageTranslations({
   }, [currentUser]);
 
   /**
-   * Obtient toutes les langues configurées par l'utilisateur
+   * Obtient toutes les langues configurées par l'utilisateur.
+   * Délègue à getUserLanguagePreferences() depuis utils/user-language-preferences —
+   * source de vérité unique qui lowercase et garde les codes (parité avec
+   * resolveUserLanguagesOrdered). L'ancienne copie locale ajoutait
+   * inconditionnellement `systemLanguage` (potentiellement undefined) et ne
+   * lowercasait pas ('EN' ≠ 'en'), provoquant des demandes de traduction
+   * redondantes pour une langue déjà présente.
    */
   const getUserLanguagePreferences = useCallback((): string[] => {
-    const languages = new Set<string>();
-    
-    // Langue système (toujours incluse)
-    languages.add(currentUser.systemLanguage);
-    
-    // Langue régionale si différente
-    if (currentUser.regionalLanguage &&
-        currentUser.regionalLanguage !== currentUser.systemLanguage) {
-      languages.add(currentUser.regionalLanguage);
-    }
-
-    // Langue personnalisée si différente
-    if (currentUser.customDestinationLanguage &&
-        currentUser.customDestinationLanguage !== currentUser.systemLanguage &&
-        currentUser.customDestinationLanguage !== currentUser.regionalLanguage) {
-      languages.add(currentUser.customDestinationLanguage);
-    }
-    
-    return Array.from(languages);
+    return getUserLanguagePreferencesUtil(currentUser);
   }, [currentUser]);
 
   /**
    * Traite un message brut et le convertit en BubbleStreamMessage avec traductions
    */
   const processMessageWithTranslations = useCallback((message: RawMessage): BubbleStreamMessage => {
-    const cacheKey = `${message.id}:${(message.translations || []).length}:${message.updatedAt}`;
+    // La langue préférée fait partie de la clé de cache : `displayContent`,
+    // `isTranslated` et `translatedFrom` sont calculés pour CETTE langue. Le cache
+    // (useRef LRU) survit aux changements de `currentUser` ; sans la langue dans la
+    // clé, un basculement de langue renverrait le contenu figé dans l'ancienne langue
+    // (violation du Prisme Linguistique) jusqu'à ce que `updatedAt` change ou remount.
+    const preferredLanguage = resolveUserPreferredLanguage();
+    const cacheKey = `${message.id}:${(message.translations || []).length}:${message.updatedAt}:${preferredLanguage}`;
     const cached = processedCacheRef.current.get(cacheKey);
     if (cached) return cached;
 
@@ -130,11 +136,17 @@ export function useMessageTranslations({
         const content = t.translatedContent || t.content;
         const currentTimestamp = new Date(t.createdAt || message.createdAt);
         
-        // CORRECTION: Améliorer la logique de déduplication des traductions
+        // Dédup ordre-indépendant : la qualité du modèle prime (premium > medium >
+        // basic), la récence ne départage que les ex æquo de qualité. Empêche une
+        // traduction basic/medium plus récente de rétrograder une premium déjà retenue.
         const existingTranslation = translationsMap.get(language ?? '');
+        const currentRank = translationModelRank(t.translationModel);
+        const existingRank = existingTranslation
+          ? translationModelRank(existingTranslation.translationModel)
+          : -1;
         const shouldReplace = !existingTranslation ||
-          currentTimestamp > new Date(existingTranslation.timestamp) ||
-          (t.translationModel === 'premium' && existingTranslation.confidence < 0.95);
+          currentRank > existingRank ||
+          (currentRank === existingRank && currentTimestamp > new Date(existingTranslation.timestamp));
 
         if (shouldReplace) {
           const translation: BubbleTranslation = {
@@ -154,8 +166,7 @@ export function useMessageTranslations({
     const translations: BubbleTranslation[] = Array.from(translationsMap.values());
 
     const originalLanguage = message.originalLanguage || 'fr';
-    const preferredLanguage = resolveUserPreferredLanguage();
-    
+
     // Déterminer le contenu à afficher selon les préférences utilisateur
     let displayContent = message.content;
     let isTranslated = false;

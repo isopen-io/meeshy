@@ -21,9 +21,22 @@ export function startOfLocalDayMs(ms: number): number {
 }
 
 /**
+ * Index de jour calendaire local canonique : le triplet (année, mois, jour) local
+ * projeté sur une échelle UTC sans DST. Deux jours consécutifs sont toujours espacés
+ * d'exactement `DAY_MS`, ce que la différence de deux minuits *locaux* ne garantit pas
+ * lors des transitions heure d'été/hiver (jour de 23 h ou 25 h).
+ */
+const localDayIndex = (ms: number): number => {
+  const d = new Date(ms);
+  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
+};
+
+/**
  * Nombre de jours calendaires entre `targetMs` et `nowMs` (positif = dans le passé).
- * Compare les minuits locaux, donc insensible à l'heure de la journée.
+ * Compare les jours calendaires locaux, donc insensible à l'heure de la journée **et**
+ * aux transitions DST : le lendemain d'un passage à l'heure d'été (jour de 23 h) reste
+ * bien à 1 jour d'écart, là où une soustraction de minuits locaux tombait à 0.
  */
 export function calendarDayDiff(targetMs: number, nowMs: number): number {
-  return Math.floor((startOfLocalDayMs(nowMs) - startOfLocalDayMs(targetMs)) / DAY_MS);
+  return localDayIndex(nowMs) - localDayIndex(targetMs);
 }

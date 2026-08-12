@@ -9,6 +9,7 @@ import {
 function createMockSubscriber() {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
   return {
+    connect: jest.fn().mockResolvedValue(undefined),
     subscribe: jest.fn().mockResolvedValue(1),
     unsubscribe: jest.fn().mockResolvedValue(1),
     quit: jest.fn().mockResolvedValue('OK'),
@@ -143,6 +144,39 @@ describe('AgentAdminRelay', () => {
     } finally {
       if (saved !== undefined) process.env.REDIS_URL = saved;
     }
+  });
+
+  it('connects the lazy subscriber before subscribing (enableOfflineQueue:false rejects otherwise)', async () => {
+    // Reproduit la sémantique ioredis de prod : le subscriber est créé avec
+    // lazyConnect:true + enableOfflineQueue:false → tout subscribe() émis
+    // avant que connect() ait établi le stream est rejeté. C'est l'erreur
+    // observée à CHAQUE boot gateway en prod (relay admin jamais démarré).
+    let connected = false;
+    const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    const lazySubscriber = {
+      connect: jest.fn(async () => {
+        connected = true;
+      }),
+      subscribe: jest.fn(async (_channel: string) => {
+        if (!connected) {
+          throw new Error("Stream isn't writeable and enableOfflineQueue options is false");
+        }
+        return 1;
+      }),
+      unsubscribe: jest.fn().mockResolvedValue(1),
+      quit: jest.fn().mockResolvedValue('OK'),
+      on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+        const list = listeners.get(event) ?? [];
+        list.push(listener);
+        listeners.set(event, list);
+      }),
+    };
+    const relay = new AgentAdminRelay(mockIO.io, () => lazySubscriber as never);
+
+    await expect(relay.start()).resolves.toBeUndefined();
+
+    expect(lazySubscriber.connect).toHaveBeenCalled();
+    expect(lazySubscriber.subscribe).toHaveBeenCalledWith(AGENT_ADMIN_EVENT_CHANNEL);
   });
 
   it('logs redis error events without throwing', async () => {

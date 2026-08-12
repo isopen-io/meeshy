@@ -138,7 +138,9 @@ describe('createPostRouteRateLimitConfig', () => {
     ['like', 30],
     ['view', 60],
     ['comment', 20],
-    ['impression', 10],
+    // Une impression par APPARITION à l'écran (et non plus une par post et par
+    // session) : un aller-retour de scroll produit légitimement plusieurs lots.
+    ['impression', 30],
     ['engagement', 20],
   ];
 
@@ -312,28 +314,48 @@ describe('registerGlobalRateLimiter', () => {
       expect(opts.keyGenerator(req)).toBe('global:7.7.7.7');
     });
 
-    it('skip returns true for health paths', async () => {
+    /**
+     * ⚠ Ces quatre tests portaient sur `opts.skip`, une option que
+     * `@fastify/rate-limit` v10 **ne lit jamais** (index.js:88 et :225 — seul
+     * `allowList` existe). Ils vérifiaient donc une fonction morte : le
+     * comportement décrit n'avait jamais lieu, et les sondes subissaient bel et
+     * bien le quota global.
+     */
+    it('no `skip` option is passed — the plugin would ignore it', async () => {
       const opts = await getOpts();
-      expect(opts.skip({ url: '/health', ip: '8.8.8.8' })).toBe(true);
-      expect(opts.skip({ url: '/healthz', ip: '8.8.8.8' })).toBe(true);
-      expect(opts.skip({ url: '/ready', ip: '8.8.8.8' })).toBe(true);
+      expect(opts.skip).toBeUndefined();
+      expect(typeof opts.allowList).toBe('function');
     });
 
-    it('skip returns true for local IPs', async () => {
-      (isLocalIp as jest.Mock).mockReturnValueOnce(true);
+    it('allowList returns true for health paths', async () => {
       const opts = await getOpts();
-      expect(opts.skip({ url: '/api/v1/messages', ip: '127.0.0.1' })).toBe(true);
+      expect(opts.allowList({ url: '/health', ip: '8.8.8.8' })).toBe(true);
+      expect(opts.allowList({ url: '/healthz', ip: '8.8.8.8' })).toBe(true);
+      expect(opts.allowList({ url: '/ready', ip: '8.8.8.8' })).toBe(true);
     });
 
-    it('skip returns false for normal API paths from non-local IPs', async () => {
+    /**
+     * L'ancienne clause mettait aussi les IP privées en liste blanche. Reprise
+     * telle quelle, elle aurait DÉSACTIVÉ tout le rate limiting : sans
+     * `trustProxy`, le gateway derrière Traefik voit une adresse `172.x` pour
+     * chaque requête. Le renommage naïf était pire que le bug.
+     */
+    it('allowList does NOT whitelist private IPs', async () => {
+      (isLocalIp as jest.Mock).mockReturnValue(true);
+      const opts = await getOpts();
+      expect(opts.allowList({ url: '/api/v1/messages', ip: '172.18.0.4' })).toBe(false);
+      expect(opts.allowList({ url: '/api/v1/messages', ip: '127.0.0.1' })).toBe(false);
+    });
+
+    it('allowList returns false for normal API paths', async () => {
       (isLocalIp as jest.Mock).mockReturnValue(false);
       const opts = await getOpts();
-      expect(opts.skip({ url: '/api/v1/messages', ip: '9.9.9.9' })).toBe(false);
+      expect(opts.allowList({ url: '/api/v1/messages', ip: '9.9.9.9' })).toBe(false);
     });
 
-    it('skip ignores query strings when checking path', async () => {
+    it('allowList ignores query strings when checking path', async () => {
       const opts = await getOpts();
-      expect(opts.skip({ url: '/health?ts=123', ip: '5.5.5.5' })).toBe(true);
+      expect(opts.allowList({ url: '/health?ts=123', ip: '5.5.5.5' })).toBe(true);
     });
 
     it('errorResponseBuilder returns 429 shape', async () => {

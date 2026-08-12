@@ -12,16 +12,16 @@ final class UserProfileViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         mockAuthManager = nil
         mockBlockService = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory
@@ -90,6 +90,35 @@ final class UserProfileViewModelTests: XCTestCase {
         let sut = makeSUT()
 
         XCTAssertFalse(sut.isBlocked)
+    }
+
+    /// P1 — regression: BlockService (canonical, live-updated) is the
+    /// source of truth, not the stale login-time snapshot. A block
+    /// performed elsewhere during the session (or a prior session) must be
+    /// reflected the next time this profile sheet is opened for the user,
+    /// even though `currentUser.blockedUserIds` never changes after login.
+    func test_init_setsIsBlockedTrue_whenBlockServiceReportsBlocked_evenIfLoginSnapshotSaysNotBlocked() {
+        let currentUser = makeCurrentUser(blockedUserIds: [])
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        mockBlockService.blockedUserIds = ["target-user-001"]
+
+        let sut = makeSUT()
+
+        XCTAssertTrue(sut.isBlocked,
+            "BlockService (canonical, injected) must be consulted — not just the login snapshot.")
+    }
+
+    /// The login snapshot remains a valid fallback for the brief window
+    /// right after login, before BlockService's async refreshCache() has
+    /// hydrated `blockedUserIds`.
+    func test_init_setsIsBlockedTrue_fromLoginSnapshot_whenBlockServiceCacheIsCold() {
+        let currentUser = makeCurrentUser(blockedUserIds: ["target-user-001"])
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        // BlockService cache not yet hydrated (default empty state).
+
+        let sut = makeSUT()
+
+        XCTAssertTrue(sut.isBlocked)
     }
 
     func test_init_setsDefaultState() {
@@ -175,6 +204,21 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.blockUser()
 
         XCTAssertTrue(sut.isBlocked)
+    }
+
+    /// R6-4 — le block optimiste doit AUSSI flipper la blocklist canonique
+    /// (`BlockService.blockedUserIds`), pas seulement le `isBlocked` local du
+    /// VM : les swipe labels de la liste lisent `BlockService.isBlocked`, donc
+    /// sans ça ils restaient périmés jusqu'au prochain refresh réseau.
+    func test_blockUser_updatesCanonicalBlockedUserIds() async {
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let sut = makeSUT()
+        XCTAssertFalse(mockBlockService.isBlocked(userId: "target-user-001"))
+
+        await sut.blockUser()
+
+        XCTAssertTrue(mockBlockService.isBlocked(userId: "target-user-001"),
+            "block must flip the canonical BlockService blocklist read by swipe labels")
     }
 
     func test_blockUser_skipsWhenUserIdIsNil() async {

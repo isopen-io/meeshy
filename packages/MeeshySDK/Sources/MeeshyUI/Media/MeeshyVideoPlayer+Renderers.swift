@@ -116,7 +116,12 @@ internal struct _InlineRenderer: View {
             Color.black
 
             if isThisActive, let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: manager.isMuted)
+                MeeshyVideoSurface(
+                    player: p,
+                    gravity: .resizeAspect,
+                    isMuted: manager.isMuted,
+                    enablesPip: Self.surfaceEnablesPip(controls: player.controls)
+                )
                     .onTapGesture { toggleControls() }
                 if isLoadingAsset {
                     loadingIndicator
@@ -240,6 +245,10 @@ internal struct _InlineRenderer: View {
         thumbnailAspectRatio = size.width / size.height
     }
 
+    /// Facteur d'échelle des glyphes/anneau du bouton play, dérivé du diamètre
+    /// opaque `playButtonDiameter` (référence historique : 64pt).
+    private var playButtonScale: CGFloat { player.playButtonDiameter / 64 }
+
     private var playButton: some View {
         Button(action: handlePlayTap) {
             ZStack {
@@ -248,7 +257,7 @@ internal struct _InlineRenderer: View {
                 playButtonContent
                 downloadProgressRing
             }
-            .frame(width: 64, height: 64)
+            .frame(width: player.playButtonDiameter, height: player.playButtonDiameter)
             .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
             .shadow(color: Color(hex: player.accentColor).opacity(0.45), radius: 12, y: 4)
         }
@@ -261,31 +270,31 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 22 * playButtonScale, weight: .bold))
                 .foregroundColor(.white)
-                .offset(x: 2)
+                .offset(x: 2 * playButtonScale)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundColor(.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 16 * playButtonScale, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10 * playButtonScale, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                 } else {
-                    ProgressView().tint(.white).scaleEffect(0.6)
+                    ProgressView().tint(.white).scaleEffect(0.6 * playButtonScale)
                 }
             }
         }
@@ -296,9 +305,9 @@ internal struct _InlineRenderer: View {
         if case .downloading(let progress) = player.availability {
             Circle()
                 .trim(from: 0, to: progress > 0 ? progress : 0.05)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 3 * playButtonScale, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .frame(width: 60, height: 60)
+                .frame(width: player.playButtonDiameter - 4, height: player.playButtonDiameter - 4)
                 .animation(.linear(duration: 0.2), value: progress)
         }
     }
@@ -337,8 +346,12 @@ internal struct _InlineRenderer: View {
 
     private func startPlayback() {
         HapticFeedback.light()
-        manager.attachmentId = player.attachment.id
-        manager.load(urlString: player.attachment.fileUrl)
+        // `attachmentId` MUST be the `load()` argument, not set beforehand —
+        // `load()` calls `cleanup()` internally, which wipes `attachmentId` to
+        // `nil` before the new value could apply. Passing it as a parameter
+        // (applied AFTER `cleanup()`) is what keeps `reportWatchProgress`
+        // firing. See `SharedAVPlayerManagerAttachmentTrackingTests`.
+        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
         manager.play()
         scheduleControlsHide()
     }
@@ -354,6 +367,16 @@ internal struct _InlineRenderer: View {
         isCallActive: Bool
     ) -> Bool {
         autoplayOnAppear && isReady && isOnScreen && !isCallActive
+    }
+
+    /// Décision pure (§ B.2) : une surface sans bouton PiP visible ne doit
+    /// jamais configurer le PiP — `configurePip` arme implicitement
+    /// `canStartPictureInPictureAutomaticallyFromInline`. Miroir de
+    /// `ReelVideoSurface.enablesPip` ; source de vérité unique avec
+    /// `_InlineOverlayControls.showsPipButton` (même `ControlSet` pilote les
+    /// deux — impossible d'avoir l'un sans l'autre).
+    nonisolated static func surfaceEnablesPip(controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        controls.contains(.pip)
     }
 
     private func autoplayIfNeeded() {
@@ -512,8 +535,11 @@ internal struct _FullscreenRenderer: View {
                         // replay of the just-watched video.
                         guard !didInitialLoad else { return }
                         didInitialLoad = true
-                        manager.attachmentId = player.attachment.id
-                        manager.load(urlString: player.attachment.fileUrl)
+                        // See `startPlayback()` above — `attachmentId` must be
+                        // passed as the `load()` argument, applied AFTER the
+                        // internal `cleanup()`, or it is silently wiped and
+                        // watch-progress tracking never fires.
+                        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
                         manager.play()
                     }
             }
@@ -524,7 +550,13 @@ internal struct _FullscreenRenderer: View {
                     controls: player.controls,
                     fileName: player.fileName,
                     onClose: { closePlayer() },
-                    onSave: { saveToPhotos() },
+                    onSave: {
+                        if let onSaveRequested = player.onSaveRequested {
+                            onSaveRequested()
+                        } else {
+                            saveToPhotos()
+                        }
+                    },
                     onShare: player.onShare,
                     saveState: saveState
                 )
@@ -570,15 +602,16 @@ internal struct _FullscreenRenderer: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 6) {
-                if let avatarUrl = author.avatarUrl,
-                   let url = MeeshyConfig.resolveMediaURL(avatarUrl) {
-                    AsyncImage(url: url) { img in
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle().fill(Color.white.opacity(0.3))
-                    }
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
+                if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
+                    // CachedAvatarImage : échec silencieux (initiales + accent
+                    // du player), zéro bouton retry sur un chip 24pt — l'avatar
+                    // auteur est déjà dans le DiskCacheStore (MeeshyAvatar l'y a mis).
+                    CachedAvatarImage(
+                        urlString: avatarUrl,
+                        name: author.displayName,
+                        size: 24,
+                        accentColor: player.accentColor
+                    )
                 }
                 Text(author.displayName)
                     .font(.system(size: 12, weight: .semibold))
@@ -756,16 +789,22 @@ internal struct _FullscreenRenderer: View {
         let currentSec = manager.currentTime
         let totalSec = manager.duration
         let attId = player.attachment.id
-        Task {
-            let body = AttachmentStatusBody(
-                action: "watched",
-                playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
-                durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
-                complete: complete
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status", body: body
-            )
+        let body = AttachmentStatusBody(
+            action: "watched",
+            playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
+            durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
+            complete: complete
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
+
+        // Resume-where-you-stopped on dismiss — the manager's own
+        // `reportWatchProgress` never fires here (this path only reports the
+        // partial-watch on disappear, see the BUG B fix note above).
+        guard !currentSec.isNaN, !totalSec.isNaN, !totalSec.isInfinite else { return }
+        if complete || !SharedAVPlayerManager.isResumable(currentSec, totalDuration: totalSec) {
+            VideoPlaybackPositionStore.shared.clear(for: attId)
+        } else {
+            VideoPlaybackPositionStore.shared.save(currentSec, for: attId)
         }
     }
 
@@ -775,12 +814,19 @@ internal struct _FullscreenRenderer: View {
         HapticFeedback.light()
         Task {
             do {
-                // Pull from URLSession.download (streams to disk) — avoids
-                // double-loading a 200MB file into memory like .data(from:) would.
-                let (tempURL, _) = try await URLSession.shared.download(from: url)
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                if let cached = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
+                    // Cache-first : l'état .ready qui a permis la lecture implique
+                    // que le fichier est déjà dans le DiskCacheStore vidéo — le
+                    // copier évite de re-télécharger un média déjà sur disque.
+                    try FileManager.default.copyItem(at: cached, to: tempFile)
+                } else {
+                    // Pull from URLSession.download (streams to disk) — avoids
+                    // double-loading a 200MB file into memory like .data(from:) would.
+                    let (tempURL, _) = try await URLSession.shared.download(from: url)
+                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                }
                 let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
                 try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {

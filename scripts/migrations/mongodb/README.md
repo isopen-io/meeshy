@@ -177,8 +177,23 @@ scripts/migrations/mongodb/
 ├── 004_report_missing_audio_duration.js                 # Report missing duration
 ├── 005_extract_audio_duration.sh                        # Extract duration with ffprobe
 ├── 006_remove_encryptionMode_from_message_attachment.js # Remove encryptionMode from Message/Attachment
-└── 007_migrate_snake_case_to_camel_case.js              # Migrate snake_case to CamelCase collections
+├── 007_migrate_snake_case_to_camel_case.js              # Migrate snake_case to CamelCase collections
+├── 008_add_email_verification_code.js                   # Add email verification code fields
+├── 009_partial_index_post_originalRepostOfId.js         # Partial-filter index on reposts
+└── 010_notification_expiry_index.js                     # Notification [userId, isRead, expiresAt]
 ```
+
+### 010_notification_expiry_index.js
+
+Replaces `Notification[userId, isRead]` with `[userId, isRead, expiresAt]`
+(the old key is a prefix of the new one, so nothing loses its plan).
+
+Inbox reads now hide notifications whose `expiresAt` has passed — a
+notification must not outlive the ephemeral message it announces. Without
+`expiresAt` in the index that filter forces a document fetch per candidate on
+`emitCountsUpdate`, which runs once per recipient of every message; with it,
+the counts stay index-only. Idempotent, and a no-op on a database created by
+`prisma db push` from the current schema.
 
 ## Expected Results After Migration
 

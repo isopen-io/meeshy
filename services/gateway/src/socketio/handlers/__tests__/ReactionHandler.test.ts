@@ -25,9 +25,14 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   },
 }));
 
-jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
-}));
+jest.mock('../../../utils/logger-enhanced', () => {
+  const sharedLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+  return { enhancedLogger: { child: () => sharedLogger } };
+});
+
+// `child()` returns the same stable instance the handler binds at import time,
+// so tests can assert on the exact logger the ReactionHandler writes to.
+const mockLogger = require('../../../utils/logger-enhanced').enhancedLogger.child();
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn((schema: any, data: any) => ({ success: true, data })),
@@ -76,6 +81,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    conversation: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }),
     },
     ...overrides,
   } as unknown as PrismaClient;
@@ -83,7 +92,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
 
 function makeReactionService(overrides: Record<string, any> = {}) {
   return {
-    addReaction: jest.fn<any>().mockResolvedValue({ id: 'reaction-1', emoji: '👍' }),
+    addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
     removeReaction: jest.fn<any>().mockResolvedValue(true),
     getMessageReactions: jest.fn<any>().mockResolvedValue([]),
     createUpdateEvent: jest.fn<any>().mockResolvedValue({ messageId: MESSAGE_ID }),
@@ -115,10 +124,11 @@ function buildHandler(overrides: Record<string, any> = {}) {
   const notificationService = { sendNotification: jest.fn<any>() } as any;
   const reactionService = makeReactionService(overrides.reactionService);
   const prisma = makePrisma(overrides.prisma);
-  const io = makeIo();
+  const io = overrides.io ?? makeIo();
   const connectedUsers = overrides.connectedUsers ?? makeConnectedUsers();
   const socketToUser = overrides.socketToUser ?? makeSocketToUser();
 
+  const deliveryQueue = overrides.deliveryQueue;
   const handler = new ReactionHandler({
     io: io as any,
     prisma,
@@ -126,8 +136,9 @@ function buildHandler(overrides: Record<string, any> = {}) {
     reactionService,
     connectedUsers,
     socketToUser,
+    deliveryQueue,
   });
-  return { handler, prisma, reactionService, io, connectedUsers, socketToUser };
+  return { handler, prisma, reactionService, io, connectedUsers, socketToUser, deliveryQueue };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -198,6 +209,28 @@ describe('ReactionHandler', () => {
       expect(io.to).toHaveBeenCalled();
     });
 
+    it('replies success (not failure) when the post-write aggregation read throws — reaction already persisted', async () => {
+      // addReaction committed the reaction to the DB; createUpdateEvent (an
+      // aggregation READ, ReactionService.getEmojiAggregation) then throws on
+      // transient load. The ACK must reflect the PERSISTED state — otherwise the
+      // client rolls back an optimistic 👍 that is actually in the DB, and no peer
+      // hears about it until the next reaction:sync. Mirrors the fire-and-forget
+      // contract the file already applies to broadcast/notification failures.
+      const { handler } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
+          createUpdateEvent: jest.fn<any>().mockRejectedValue(new Error('aggregation read timeout')),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { id: 'reaction-1', emoji: '👍' } }));
+    });
+
     it('calls reactionService.addReaction with resolved participantId', async () => {
       const { handler, reactionService } = buildHandler();
 
@@ -206,6 +239,100 @@ describe('ReactionHandler', () => {
       expect(reactionService.addReaction).toHaveBeenCalledWith(
         expect.objectContaining({ messageId: MESSAGE_ID, emoji: '❤️', participantId: PARTICIPANT_ID })
       );
+    });
+
+    it('broadcasts reaction:removed for each replaced emoji before reaction:added (single-reaction swap)', async () => {
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_messageId: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler, io } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-2', emoji: '🔥' },
+            replacedEmojis: ['👍'],
+          }),
+          createUpdateEvent,
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+      // Broadcasts are fire-and-forget promises — let them settle.
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String), USER_ID);
+      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
+      expect(emitted).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),
+        expect.objectContaining({ event: 'reaction:added', payload: expect.objectContaining({ emoji: '🔥' }) }),
+      ]));
+    });
+
+    it('routes a swap-remove broadcast rejection to logger.error instead of an escaping unhandled rejection', async () => {
+      // Single-reaction swap: the REACTION_REMOVED broadcast for the replaced
+      // emoji is `async` (it awaits normalizeConversationId, then emits). If the
+      // emit itself rejects — e.g. socket.io fails to encode the packet — that
+      // rejection must reach the handler's `.catch`, exactly like the sibling
+      // REACTION_ADDED broadcast a few lines below. Otherwise it floats free as
+      // an unhandledRejection (gateway crash under Node's default handler) and
+      // the failure is never logged. This asserts parity between the two paths.
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_messageId: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const emit = jest.fn<any>((event: string) => {
+        if (event === 'reaction:removed') throw new Error('packet encode failed');
+      });
+      const io = { to: jest.fn<any>().mockReturnValue({ emit }), _emit: emit };
+      const { handler } = buildHandler({
+        io,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-2', emoji: '🔥' },
+            replacedEmojis: ['👍'],
+          }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn<any>());
+      // Let the fire-and-forget broadcast promises settle.
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'reaction:add replaced-emoji broadcast failed',
+        expect.objectContaining({ conversationId: CONV_ID }),
+      );
+    });
+
+    it('replies idempotent success without broadcasting or notifying when addReaction reports unchanged (no-op re-react)', async () => {
+      // A duplicate reaction:add for an emoji the participant already has
+      // (optimistic double-fire, socket retry after a lost ACK, second device
+      // echo) is a DB no-op. The handler must reply success but skip both the
+      // REACTION_ADDED broadcast and the author notification — otherwise every
+      // participant gets a redundant fan-out and the author is re-notified for
+      // a reaction that never changed. Mirrors the already-absent remove guard.
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler, io } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-1', emoji: '👍' },
+            replacedEmojis: [],
+            unchanged: true,
+          }),
+          createUpdateEvent: jest.fn<any>(),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { id: 'reaction-1', emoji: '👍' } }));
+      // Nothing changed — no broadcast to the conversation room, no notification.
+      expect(io.to).not.toHaveBeenCalled();
+      expect(notifyReactionAdded).not.toHaveBeenCalled();
     });
 
     it('returns error on service exception without crashing', async () => {
@@ -268,15 +395,22 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
-      const { handler } = buildHandler({
+    it('replies idempotent success when removeReaction returns false (reaction already absent)', async () => {
+      // Contract 6b5ca4448: an un-react whose reaction is already gone has
+      // reached the caller's desired end-state — replying an error made the
+      // client roll back its optimistic removal and re-show a dead reaction.
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
+      );
+      // Nothing changed — no broadcast to the conversation room.
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {
@@ -287,6 +421,26 @@ describe('ReactionHandler', () => {
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(io.to).toHaveBeenCalled();
+    });
+
+    it('replies success (not failure) when the post-write aggregation read throws — reaction already removed', async () => {
+      // removeReaction committed the removal; createUpdateEvent then throws on a
+      // transient aggregation-read failure. The ACK must reflect the persisted
+      // state — replying failure makes the client roll its optimistic un-react
+      // back and re-show a reaction that is already gone from the DB.
+      const { handler } = buildHandler({
+        reactionService: {
+          removeReaction: jest.fn<any>().mockResolvedValue(true),
+          createUpdateEvent: jest.fn<any>().mockRejectedValue(new Error('aggregation read timeout')),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('returns error on service exception (Error instance)', async () => {
@@ -397,6 +551,26 @@ describe('ReactionHandler', () => {
       await expect(handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback)).resolves.toBeUndefined();
       // Callback still reported success — notification failure is fire-and-forget
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('notifies with the resolved Participant.id, not the User.id', async () => {
+      // reactorParticipantId must be a Participant.id — notifyReactionAdded looks
+      // it up via `prisma.participant.findUnique({ where: { id: reactorParticipantId } })`.
+      // Passing the User.id here means that lookup always misses and the message
+      // author never receives a reaction notification over the socket path.
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+
+      expect(notifyReactionAdded).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: PARTICIPANT_ID })
+      );
+      expect(notifyReactionAdded).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: USER_ID })
+      );
     });
   });
 
@@ -581,6 +755,82 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith({ success: true, data: reactions });
     });
 
+    // ── Cross-conversation membership gating (IDOR) ────────────────────────
+    //
+    // An anonymous Participant is bound to exactly ONE conversation. The
+    // resolver must verify the target message belongs to that conversation
+    // before trusting the in-memory participantId — otherwise an anon that
+    // joined conversation A can pass a foreign messageId (conversation B) and
+    // read B's reactor list (display names, avatars) via reaction:request-sync,
+    // or mutate reactions it should never reach. `participant.findFirst`
+    // returning null models "this anon is not an active member of the message's
+    // conversation".
+    function buildAnonHandlerForForeignMessage(reactionOverrides: Record<string, any> = {}) {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: ANON_PARTICIPANT_ID,
+        language: 'fr',
+      });
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      const FOREIGN_CONV_ID = '507f191e810c19729de860ff';
+      return buildHandler({
+        connectedUsers: anonUsers,
+        socketToUser: anonSocketToUser,
+        reactionService: makeReactionService(reactionOverrides),
+        prisma: {
+          message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: FOREIGN_CONV_ID }) },
+          // Anon is NOT an active participant of the message's conversation.
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+        },
+      });
+    }
+
+    it('anonymous user cannot sync reactions for a message outside their conversation', async () => {
+      const { handler, reactionService } = buildAnonHandlerForForeignMessage({
+        getMessageReactions: jest.fn<any>().mockResolvedValue([{ emoji: '👋', count: 1 }]),
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, callback);
+
+      expect(reactionService.getMessageReactions).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
+    });
+
+    it('anonymous user cannot add a reaction to a message outside their conversation', async () => {
+      const { handler, reactionService } = buildAnonHandlerForForeignMessage();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
+    });
+
+    it('anonymous sync verifies the anon participant is active in the message conversation', async () => {
+      const { handler, prisma } = buildAnonHandlerForForeignMessage();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, jest.fn());
+
+      expect((prisma.message.findUnique as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: MESSAGE_ID } })
+      );
+      expect((prisma.participant.findFirst as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: ANON_PARTICIPANT_ID, isActive: true }),
+        })
+      );
+    });
+
     it('anonymous user without participantId cannot add reaction', async () => {
       const anonUsers = new Map<string, any>();
       anonUsers.set(ANON_SESSION_TOKEN, {
@@ -602,6 +852,233 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(
         expect.objectContaining({ success: false, error: 'Could not resolve participant' })
       );
+    });
+  });
+
+  // ── Offline reaction delivery queue ──────────────────────────────────────
+  //
+  // Symmetry with MessageHandler edit/delete enqueue (Leçon 77/78): a reaction
+  // added or removed while a participant is offline is broadcast only to the
+  // live conversation room, so the offline peer never learns of it until an
+  // unrelated full refetch. Reactions must be enqueued for offline peers and
+  // replayed on reconnect via `_drainedEventName` → REACTION_ADDED/REMOVED.
+
+  describe('offline reaction delivery queue', () => {
+    const OFFLINE_USER = 'user-offline';
+    const OFFLINE_PARTICIPANT = '607f191e810c19729de860f1';
+    const ONLINE_PEER_USER = 'user-online-peer';
+    const ONLINE_PEER_PARTICIPANT = '607f191e810c19729de860f2';
+
+    function makeDeliveryQueue() {
+      return { enqueue: jest.fn<any>().mockResolvedValue(undefined) } as any;
+    }
+
+    function makeConnectedUsersWith(peerOnline: boolean) {
+      const users = new Map<string, any>();
+      users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'en' });
+      if (peerOnline) {
+        users.set(ONLINE_PEER_USER, { id: ONLINE_PEER_USER, socketId: 'socket-peer', isAnonymous: false, language: 'en' });
+      }
+      return users;
+    }
+
+    function makePrismaWithParticipants() {
+      return {
+        message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { id: PARTICIPANT_ID, userId: USER_ID },
+            { id: OFFLINE_PARTICIPANT, userId: OFFLINE_USER },
+            { id: ONLINE_PEER_PARTICIPANT, userId: ONLINE_PEER_USER },
+          ]),
+        },
+        conversation: { findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }) },
+      } as unknown as PrismaClient;
+    }
+
+    const flush = () => new Promise(resolve => setImmediate(resolve));
+
+    it('enqueues a reaction-added event for offline participants only', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      // Exactly one enqueue: the offline peer. Actor (online + self) and the
+      // online peer are both skipped.
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({
+          messageId: MESSAGE_ID,
+          conversationId: CONV_ID,
+          eventType: 'reaction-added',
+        })
+      );
+    });
+
+    it('scopes the delivery-queue dedup key to the reactor and emoji, not just the message', async () => {
+      // RedisDeliveryQueue's default dedup is (messageId, eventType) — without a
+      // per-reactor dedupKey, two different participants adding a reaction to
+      // the same message would collapse into a single queued entry for an
+      // offline peer, silently dropping every reactor after the first.
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({
+          dedupKey: `${MESSAGE_ID}:${PARTICIPANT_ID}:👍`,
+        })
+      );
+    });
+
+    it('does not enqueue for the reacting actor even if they were offline', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      // Actor's user id is NOT in connectedUsers → the only guard keeping them
+      // out of the queue is the explicit actor-participant exclusion.
+      const usersWithoutActor = new Map<string, any>();
+      usersWithoutActor.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'en' });
+      const { handler } = buildHandler({
+        prisma: {
+          message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+          participant: {
+            findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+            findMany: jest.fn<any>().mockResolvedValue([{ id: PARTICIPANT_ID, userId: USER_ID }]),
+          },
+          conversation: { findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }) },
+        },
+        connectedUsers: usersWithoutActor,
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('enqueues a reaction-removed event for offline participants on un-react', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({ eventType: 'reaction-removed', messageId: MESSAGE_ID })
+      );
+    });
+
+    it('also enqueues a reaction-removed for a replaced emoji during a single-reaction swap', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_m: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
+      await flush();
+
+      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
+      // Both enqueues target the offline peer only.
+      for (const call of deliveryQueue.enqueue.mock.calls) {
+        expect(call[0]).toBe(OFFLINE_USER);
+      }
+    });
+
+    it('still propagates the replaced-emoji removal (degraded) when its aggregation read rejects', async () => {
+      // The swap is already persisted by addReaction, so the removal MUST reach
+      // peers. If createUpdateEvent('remove', …) rejects (aggregation DB read
+      // fails) the handler falls back to a degraded REACTION_REMOVED rather than
+      // dropping it — otherwise every peer shows the actor's stale 👍 forever.
+      const deliveryQueue = makeDeliveryQueue();
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_m: string, emoji: string, action: string) =>
+          action === 'remove'
+            ? Promise.reject(new Error('aggregation read timeout'))
+            : Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler, io } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
+      await flush();
+      await flush();
+
+      // Live peers still receive the removal broadcast for the replaced emoji…
+      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
+      expect(emitted).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍', action: 'remove' }) }),
+      ]));
+      // …and offline peers get the removal enqueued, not just the addition.
+      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
+    });
+
+    it('is a no-op when no delivery queue is wired (does not throw)', async () => {
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        // deliveryQueue omitted
+      });
+
+      await expect(
+        handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn())
+      ).resolves.toBeUndefined();
+      await flush();
+    });
+
+    it('does not enqueue on an idempotent no-op re-react', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r1', emoji: '👍' }, replacedEmojis: [], unchanged: true }),
+          createUpdateEvent: jest.fn<any>(),
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
     });
   });
 });

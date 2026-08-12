@@ -11,7 +11,7 @@ import MeeshySDK
 ///   • .sendMessage / .editMessage / .deleteMessage / .sendReaction
 ///     with corrupt payload            → silent drop (flusher removes row)
 ///   • .sendMessage with unknown id prefix → silent drop (stale row)
-///   • All other kinds with corrupt payload → NSError 400 (decodePayload wraps)
+///   • All other kinds with corrupt payload → MeeshyError.server(400, _) (decodePayload wraps)
 ///   • .deleteComment / .toggleLikeComment with sentinel conversationId → silent drop
 final class OutboxDispatcherTests: XCTestCase {
 
@@ -149,196 +149,183 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 
-    // MARK: - markAsRead: corrupt payload → NSError 400
+    // MARK: - markAsRead: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_markAsRead_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .markAsRead, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt markAsRead payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt markAsRead payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - blockUser: corrupt payload → NSError 400
+    // MARK: - blockUser: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_blockUser_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .blockUser, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt blockUser payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt blockUser payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - unblockUser: corrupt payload → NSError 400
+    // MARK: - unblockUser: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_unblockUser_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .unblockUser, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt unblockUser payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt unblockUser payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - sendFriendRequest: corrupt payload → NSError 400
+    // MARK: - sendFriendRequest: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_sendFriendRequest_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .sendFriendRequest, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt sendFriendRequest payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt sendFriendRequest payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - respondFriendRequest: corrupt payload → NSError 400
+    // MARK: - respondFriendRequest: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_respondFriendRequest_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .respondFriendRequest, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt respondFriendRequest payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt respondFriendRequest payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - updateProfile: corrupt payload → NSError 400
+    // MARK: - updateProfile: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_updateProfile_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .updateProfile, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt updateProfile payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt updateProfile payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - createConversation: corrupt payload → NSError 400
+    // MARK: - createConversation: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_createConversation_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .createConversation, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt createConversation payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt createConversation payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - updateConversation: corrupt payload → NSError 400
+    // MARK: - updateConversation: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_updateConversation_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .updateConversation, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt updateConversation payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt updateConversation payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - updateSettings: corrupt payload → NSError 400
+    // MARK: - updateSettings: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_updateSettings_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .updateSettings, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt updateSettings payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt updateSettings payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - createPost: corrupt payload → NSError 400
+    // MARK: - createPost: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_createPost_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .createPost, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt createPost payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt createPost payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - toggleLikePost: corrupt payload → NSError 400
+    // MARK: - toggleLikePost: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_toggleLikePost_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .toggleLikePost, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt toggleLikePost payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt toggleLikePost payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - createComment: corrupt payload → NSError 400
+    // MARK: - createComment: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_createComment_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .createComment, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt createComment payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt createComment payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
     }
 
-    // MARK: - deleteComment: corrupt payload → NSError 400
+    // MARK: - deleteComment: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_deleteComment_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .deleteComment, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt deleteComment payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt deleteComment payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
@@ -367,16 +354,15 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 
-    // MARK: - toggleLikeComment: corrupt payload → NSError 400
+    // MARK: - toggleLikeComment: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_toggleLikeComment_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .toggleLikeComment, payload: corrupt)
         do {
             try await makeSUT().dispatch(record)
-            XCTFail("Expected NSError 400 for corrupt toggleLikeComment payload")
-        } catch let error as NSError {
-            XCTAssertEqual(error.domain, "OutboxDispatcher")
-            XCTAssertEqual(error.code, 400)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt toggleLikeComment payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }

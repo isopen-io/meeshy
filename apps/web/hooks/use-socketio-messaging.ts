@@ -21,7 +21,7 @@ export interface UseSocketIOMessagingOptions {
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
   onUserTyping?: (userId: string, username: string, isTyping: boolean, conversationId: string) => void;
-  onUserStatus?: (userId: string, username: string, isOnline: boolean) => void;
+  onUserStatus?: (userId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => void;
   onTranslation?: (messageId: string, translations: any[]) => void;
   onTranslationFailed?: (data: TranslationFailedEventData) => void;
   onConversationStats?: (data: any) => void;
@@ -62,10 +62,17 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     const hasAuthToken = typeof window !== 'undefined' && !!authManager.getAuthToken();
     const hasSessionToken = typeof window !== 'undefined' && !!authManager.getAnonymousSession()?.token;
 
-    if (hasAuthToken || hasSessionToken) {
-      // Forcer la connexion initiale dès le montage du composant
-      meeshySocketIOService.reconnect();
-    }
+    if (!hasAuthToken && !hasSessionToken) return;
+
+    // `reconnect()` n'est PAS un « connecte si ce n'est pas déjà fait » : c'est
+    // `disconnect()` suivi d'une reconnexion différée par backoff (1 à 2,5 s au
+    // premier essai). Cinq composants montent ce hook — ouvrir un profil
+    // coupait donc une connexion saine pendant ce délai. Même garde que
+    // l'étape 1C juste en dessous, qui fait le même geste correctement.
+    const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
+    if (diagnostics?.isConnected || diagnostics?.isConnecting) return;
+
+    meeshySocketIOService.reconnect();
   }, []); // Exécuter une seule fois au montage
 
   // ÉTAPE 1B: Définir l'utilisateur courant dans le service quand disponible
@@ -147,7 +154,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserStatus) {
       const unsub = meeshySocketIOService.onUserStatus((event: UserStatusEvent) => {
-        onUserStatus(event.userId, event.username, event.isOnline);
+        onUserStatus(event.userId, event.username, event.isOnline, event.lastActiveAt);
       });
       unsubscribers.push(unsub);
     }

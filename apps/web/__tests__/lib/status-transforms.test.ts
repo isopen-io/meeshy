@@ -35,6 +35,23 @@ describe('postToStatusItem', () => {
     expect(item.originalLanguage).toBe('fr');
   });
 
+  it('falls back to username when displayName is empty or whitespace', () => {
+    expect(
+      postToStatusItem(makeStatusPost({ author: { id: 'author-1', username: 'marie', displayName: '', avatar: 'a.png' } }), 'me').author.name,
+    ).toBe('marie');
+    expect(
+      postToStatusItem(makeStatusPost({ author: { id: 'author-1', username: 'marie', displayName: '   ', avatar: 'a.png' } }), 'me').author.name,
+    ).toBe('marie');
+  });
+
+  it('normalizes an empty-string avatar to undefined', () => {
+    const item = postToStatusItem(
+      makeStatusPost({ author: { id: 'author-1', username: 'marie', displayName: 'Marie D.', avatar: '' } }),
+      'me',
+    );
+    expect(item.author.avatar).toBeUndefined();
+  });
+
   it('marks isOwn when the viewer authored the status', () => {
     expect(postToStatusItem(makeStatusPost({ authorId: 'me' }), 'me').isOwn).toBe(true);
     expect(postToStatusItem(makeStatusPost({ authorId: 'other' }), 'me').isOwn).toBe(false);

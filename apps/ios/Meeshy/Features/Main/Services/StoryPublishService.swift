@@ -53,10 +53,27 @@ final class StoryPublishService: ObservableObject {
     /// badges — pattern used by WhatsApp, Telegram for offline messaging.
     @Published private(set) var pendingCount: Int = 0
 
+    /// Permanently-failed items waiting for a manual retry or discard,
+    /// surfaced by `MyStoriesView` alongside the published stories. Mirrors
+    /// `StoryPublishQueue.failedPendingItems` — refreshed at the same points
+    /// as `pendingCount` (see `refreshQueueState`).
+    @Published private(set) var failedItems: [StoryPublishQueueItem] = []
+
     /// Executor that actually runs queued uploads. Set by the view that owns
     /// the StoryViewModel (typically RootView via .onAppear). Held weakly so
     /// a logout / view-rebuild does not trap stale references.
     weak var executor: StoryPublishExecutor?
+
+    /// Magasin des brouillons — injectable pour les tests (même patron que
+    /// `StoryDraftsViewModel`/`StoryViewModel.resumeFailedItem`). Consomme le
+    /// `draftId` porté par `StoryPublishSuccess`/`StoryPublishFailure` : le
+    /// brouillon gelé au hand-off (`freezeCurrentDraftForPublish`) ne
+    /// disparaît qu'au succès serveur CONFIRMÉ ; un échec PERMANENT le rend
+    /// éditable avec son erreur. Ce chemin couvre les publications passées
+    /// PAR LA FILE (offline, ou reprise au cold-start) — le succès online
+    /// direct (piloté par `StoryViewModel.launchUploadTask`, silencieux côté
+    /// queue) est consommé là-bas, et l'édition dans `runStoryUpdate`.
+    var draftStore: StoryDraftStore = .shared
 
     private let logger = Logger(subsystem: "me.meeshy.app", category: "story-publish-service")
     private var cancellables = Set<AnyCancellable>()
@@ -74,9 +91,65 @@ final class StoryPublishService: ObservableObject {
     /// called before the StoryViewModel mounted : the M5 auto-drain on
     /// setPublishHandler would fire with a nil executor and burn retry
     /// budget on a guaranteed-to-fail handler.
+    /// E10 — cœur PUR du balayage des dossiers orphelins (testable) : un
+    /// dossier de `meeshy_offline_queue/` sans item de queue vivant ET plus
+    /// vieux que `cutoff` est un reliquat (fuite pré-it.16 ou crash entre
+    /// dequeue et rm). La garde d'âge évite la course avec un enqueue en
+    /// cours (dossier créé AVANT l'insertion de l'item).
+    nonisolated static func orphanedQueueDirectories(
+        children: [URL],
+        liveTempIds: Set<String>,
+        cutoff: Date,
+        modificationDate: (URL) -> Date?
+    ) -> [URL] {
+        children.filter { dir in
+            guard !liveTempIds.contains(dir.lastPathComponent) else { return false }
+            let mtime = modificationDate(dir) ?? .distantPast
+            return mtime < cutoff
+        }
+    }
+
+    /// E10 — balayage one-shot au boot, best-effort et hors chemin critique.
+    private func sweepOrphanedQueueMediaDirectories() {
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let root = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("meeshy_offline_queue")
+            guard let children = try? fm.contentsOfDirectory(
+                at: root, includingPropertiesForKeys: [.contentModificationDateKey]
+            ) else { return }
+            let liveTempIds = Set(await StoryPublishQueue.shared.pendingItems.map(\.tempStoryId))
+            let orphans = Self.orphanedQueueDirectories(
+                children: children,
+                liveTempIds: liveTempIds,
+                cutoff: Date().addingTimeInterval(-3600),
+                modificationDate: { url in
+                    (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                }
+            )
+            for dir in orphans {
+                fm.removeItemLogging(at: dir, context: "stale story staging dir")
+            }
+        }
+    }
+
     func configure() {
         guard !configured else { return }
         configured = true
+        // E6 — draine l'ancien fichier `StoryOfflineQueue` (JSON legacy sous
+        // applicationSupport/) dans la queue unifiée AVANT tout le reste :
+        // les items migrés doivent exister quand `setExecutor` enregistre le
+        // handler (dont l'auto-drain M5 publie la queue). One-shot idempotent
+        // (no-op sans fichier legacy ; JSON corrompu quarantainé) — c'était
+        // écrit et testé mais jamais appelé en prod.
+        Task {
+            let migrated = await StoryQueueMigrator.migrateLegacyOfflineQueue()
+            if migrated > 0 {
+                Logger.stories.info("StoryQueueMigrator: \(migrated) legacy item(s) migrated into StoryPublishQueue")
+            }
+            await self.refreshQueueState()
+        }
+        sweepOrphanedQueueMediaDirectories()
 
         // Subscribe to the success / failure streams. The publishers are
         // exposed as nonisolated SendablePassthrough so we can subscribe
@@ -100,11 +173,11 @@ final class StoryPublishService: ObservableObject {
         // is accurate whether the user just unlocked the device or relaunched
         // the app.
         Task { [weak self] in
-            await self?.refreshPendingCount()
+            await self?.refreshQueueState()
         }
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
             .sink { [weak self] _ in
-                Task { await self?.refreshPendingCount() }
+                Task { await self?.refreshQueueState() }
             }
             .store(in: &cancellables)
 
@@ -137,7 +210,24 @@ final class StoryPublishService: ObservableObject {
     /// today since users have no way to recover lost drafts after this.
     func clearAll() async {
         await StoryPublishQueue.shared.clearAll()
-        await refreshPendingCount()
+        await refreshQueueState()
+    }
+
+    /// Moves a permanently-failed item back into the active retry queue and
+    /// kicks off an immediate drain attempt. Called from `MyStoriesView`'s
+    /// failed-items history row.
+    func retry(_ item: StoryPublishQueueItem) async {
+        await StoryPublishQueue.shared.retryFailedItem(item.id)
+        await refreshQueueState()
+    }
+
+    /// Abandons a failed item for good : removes it from the history and
+    /// deletes its local media. The caller must also clear any optimistic
+    /// `pending_<uuid>` row still referencing `item.tempStoryId` (see
+    /// `StoryViewModel.removeOptimisticStories`).
+    func discard(_ item: StoryPublishQueueItem) async {
+        await StoryPublishQueue.shared.discardFailedItem(item.id)
+        await refreshQueueState()
     }
 
     // MARK: - Handler registration
@@ -170,7 +260,13 @@ final class StoryPublishService: ObservableObject {
                    defaultValue: "Story enfin publiée",
                    bundle: .main)
         )
-        Task { await refreshPendingCount() }
+        // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul événement qui
+        // efface le brouillon gelé au hand-off. `nil` = item legacy (queue
+        // persistée avant ce champ) : rien à faire, comportement inchangé.
+        if let draftId = payload.draftId {
+            draftStore.delete(draftId: draftId)
+        }
+        Task { await refreshQueueState() }
     }
 
     private func handleFailure(_ payload: StoryPublishFailure) {
@@ -193,14 +289,21 @@ final class StoryPublishService: ObservableObject {
         }
         logger.error("Story \(payload.tempStoryId, privacy: .public) publish failed : \(message, privacy: .public)")
         FeedbackToastManager.shared.showError(message)
-        Task { await refreshPendingCount() }
+        // Échec PERMANENT (budget de retry épuisé, média local disparu, ou
+        // rejet serveur non retryable) : le brouillon revient éditable, avec
+        // cette erreur affichable — et dégelé (`recordPublishFailure` retire
+        // `pendingPublishAt`), donc à nouveau visible dans les reprises.
+        if let draftId = payload.draftId {
+            draftStore.recordPublishFailure(draftId: draftId, message: message)
+        }
+        Task { await refreshQueueState() }
     }
 
-    // MARK: - Pending count cache
+    // MARK: - Pending / failed state cache
 
-    private func refreshPendingCount() async {
-        let count = await StoryPublishQueue.shared.count
-        pendingCount = count
+    private func refreshQueueState() async {
+        pendingCount = await StoryPublishQueue.shared.count
+        failedItems = await StoryPublishQueue.shared.failedPendingItems
     }
 }
 

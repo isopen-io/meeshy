@@ -49,10 +49,10 @@ struct MentionSuggestionPanel: View {
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(MeeshyFont.relative(14, weight: .semibold))
                                         .foregroundColor(theme.textPrimary)
                                     Text("@\(candidate.username)")
-                                        .font(.system(size: 12))
+                                        .font(MeeshyFont.relative(12))
                                         .foregroundColor(theme.textSecondary)
                                 }
                                 Spacer()
@@ -76,7 +76,7 @@ struct MentionSuggestionPanel: View {
         // above the composer is input-assistance chrome (like the QuickType
         // bar), not conversation content — an accent tint would read as content.
         // Accent tint stays reserved for message-content surfaces (e.g. the
-        // long-press ContextActionMenu).
+        // long-press MessageActionsMenu).
         .adaptiveGlass(in: Rectangle())
     }
 

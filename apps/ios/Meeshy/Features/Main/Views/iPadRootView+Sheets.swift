@@ -13,6 +13,7 @@ extension iPadRootView {
                     user: user,
                     moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                    presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                     postsContent: { uid in
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.deepLinkProfileUser = nil
@@ -92,6 +93,8 @@ extension iPadRootView {
                 .environmentObject(conversationViewModel)
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
+                // U1 inc.2 — parité zoom sur le cover legacy du tray in-chat.
+                .zoomTransitionDestination(sourceID: selectedStoryUserIdFromConv ?? "", in: storyZoomNamespace)
             }
             // Coordinator-driven viewer cover used by
             // `StoryNotificationTargetScreen` → `StoryActiveBridge`. Mirrors
@@ -112,10 +115,13 @@ extension iPadRootView {
                         handleStoryReply(replyContext)
                     },
                     singleGroup: request.singleGroup,
+                    postId: request.postId,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
                 )
+                // U1 inc.2 — zoom depuis la bulle enregistrée (fallback standard sinon).
+                .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 // Re-inject env objects required by StoryViewerView for its
                 // internal SharePickerView sheet. fullScreenCover does NOT
                 // inherit EnvironmentObjects automatically.
@@ -125,36 +131,74 @@ extension iPadRootView {
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
             }
-            // Mirror RootView's split call presentation: `.fullScreen`
-            // mode → cover; `.pip` mode → overlay pill. Swiping the cover
-            // down minimizes instead of ending the call.
-            .fullScreenCover(isPresented: Binding(
-                get: {
-                    CallState.shouldPresentFullScreenCover(
-                        callState: callManager.callState,
-                        displayMode: callManager.displayMode
+            // Composer de CRÉATION — monté au niveau racine, comme le viewer
+            // ci-dessus et comme sur iPhone : `StoryTrayView` est instanciée par
+            // plusieurs hôtes qui observent le même `showStoryComposer`, et
+            // chacun présentait son propre cover. Détail dans
+            // `StoryComposerCover`.
+            .storyComposerCover(
+                viewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                statusViewModel: statusViewModel
+            )
+            // Lecteur de réels immersif. `ReelsPresenter` est un singleton
+            // partagé : toucher un réel (carte du feed, écran Favoris) posait
+            // `launch` et SEUL `RootView` (iPhone) le rendait — sur iPad le tap
+            // ne produisait rien, en silence.
+            //
+            // Pas de `ReelsRevealContainer` ici : sa vague d'ouverture naît aux
+            // coordonnées du bouton feed flottant, qui n'existe pas sur iPad.
+            // Une présentation plein écran donne le même écran d'arrivée sans
+            // ancre fantôme.
+            .fullScreenCover(item: $reelsPresenter.launch) { launch in
+                // Encarts réels lus sur la fenêtre de présentation : le média est
+                // plein cadre (`ignoresSafeArea`) et sa barre d'actions doit
+                // dégager la barre d'état — des encarts nuls la colleraient
+                // dessous.
+                GeometryReader { proxy in
+                    ReelsPlayerView(
+                        seedPosts: launch.seedPosts,
+                        startId: launch.startId,
+                        commentTargetId: launch.commentId,
+                        commentParentTargetId: launch.parentCommentId,
+                        revealCompleted: true,
+                        safeArea: proxy.safeAreaInsets,
+                        onClose: { reelsPresenter.dismiss() },
+                        onOpenProfile: { userId, username in
+                            reelsPresenter.dismiss()
+                            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                        },
+                        onOpenStory: { userId in
+                            reelsPresenter.dismiss()
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: userId,
+                                startAtFirstUnviewed: true,
+                                singleGroup: true
+                            ))
+                        },
+                        onOpenDetail: { postId in
+                            reelsPresenter.dismiss()
+                            router.push(.postDetail(postId))
+                        },
+                        authorHasStory: { userId in
+                            storyViewModel.storyRingState(forUserId: userId) != .none
+                        }
                     )
-                },
-                set: { if !$0 { callManager.displayMode = .pip } }
-            )) {
-                CallView()
-            }
-            .overlay(alignment: .top) {
-                FloatingCallPillView()
-                    .padding(.top, 8)
-            }
-            // §7.6 — call-waiting banner (2nd incoming call during an active one).
-            .overlay(alignment: .top) {
-                if callManager.showCallWaitingBanner {
-                    CallWaitingBannerView(
-                        callerName: callManager.pendingIncomingCall?.fromUsername
-                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                        isVisible: $callManager.showCallWaitingBanner,
-                        onReject: { callManager.rejectPendingCall() },
-                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
-                    )
-                    .padding(.top, 8)
+                    .ignoresSafeArea()
                 }
+                // Idem story viewer : un fullScreenCover n'hérite pas des
+                // EnvironmentObject du parent.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
+                .environmentObject(storyViewModel)
             }
+            // Présentation d'appel (cover + PiP + pastille + bulle + bannière
+            // call-waiting) extraite dans `CallPresentationLayer` (partagé avec
+            // RootView) : découple le churn CallManager de `iPadRootView.body` —
+            // même correctif watchdog 0x8BADF00D. Toute la logique détaillée vit
+            // dans le ViewModifier (cf. RootView.swift).
+            .modifier(CallPresentationLayer())
     }
 }

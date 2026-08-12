@@ -275,7 +275,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     var isConnected: Bool = false
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
-    var audioEffectsService: CallAudioEffectsServiceProviding?
     let videoFilterPipeline = VideoFilterPipeline()
 
     var configureCallCount = 0
@@ -329,13 +328,15 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var disconnectAfterFlushingPendingSendCallCount = 0
+    func disconnectAfterFlushingPendingSend() {
+        disconnectAfterFlushingPendingSendCallCount += 1
+        disconnect()
+    }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
-    func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
 @MainActor
@@ -482,7 +483,6 @@ final class CallManagerRTPGateTests: XCTestCase {
 
     func test_qualityThresholds_rtpGate_constants() {
         XCTAssertEqual(QualityThresholds.rtpGatePollIntervalSeconds, 2.0)
-        XCTAssertEqual(QualityThresholds.rtpGateMaxAttempts, 5)
         XCTAssertEqual(QualityThresholds.rtpGateRequiredPackets, 5)
     }
 
@@ -542,17 +542,20 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found")
             return
         }
-        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+        // [Fix 2026-07-02] the join is now dispatched via joinCallRoomReliably
+        // (connect-if-needed + ACK + retry) — same ordering contract: it must
+        // be kicked off BEFORE the media warmup.
+        guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in handleIncomingCallNotification")
+            XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in handleIncomingCallNotification")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
-            "startLocalMedia) in handleIncomingCallNotification, otherwise the caller stays in .ringing(true) " +
-            "until the callee's camera/mic warmup completes."
+            "Bug 2 guard: joinCallRoomReliably MUST be dispatched before kicking off performLocalMediaStart " +
+            "(which awaits startLocalMedia) in handleIncomingCallNotification, otherwise the caller stays in " +
+            ".ringing(true) until the callee's camera/mic warmup completes."
         )
     }
 
@@ -562,16 +565,17 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found")
             return
         }
-        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+        guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in reportIncomingVoIPCall")
+            XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in reportIncomingVoIPCall")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
-            "startLocalMedia) in reportIncomingVoIPCall."
+            "Bug 2 guard: joinCallRoomReliably MUST be dispatched before kicking off performLocalMediaStart " +
+            "(which awaits startLocalMedia) in reportIncomingVoIPCall — on a VoIP cold start it also forces " +
+            "the socket connection that a bare emitCallJoin silently lost."
         )
     }
 
@@ -586,6 +590,155 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         let voipBody = body(of: "func reportIncomingVoIPCall", in: source) ?? ""
         XCTAssertTrue(incomingBody.contains("localMediaTask = Task"), "handleIncomingCallNotification must store the local media Task in localMediaTask.")
         XCTAssertTrue(voipBody.contains("localMediaTask = Task"), "reportIncomingVoIPCall must store the local media Task in localMediaTask.")
+    }
+
+    /// The dedup ring in `VoIPPushManager` already recorded this callId as
+    /// "seen" when the push arrived (before CallKit had a chance to report
+    /// or refuse it). If `reportNewIncomingCall` genuinely fails, the call is
+    /// torn down locally — without evicting the callId, a legitimate APNs
+    /// retry within the dedup TTL would be silently phantom-acked as a
+    /// duplicate instead of re-ringing the callee.
+    func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportIncomingVoIPCall's CallKit-report-failure closure must evict the callId from the " +
+            "dedup ring so a genuine APNs retry is not dropped as a duplicate."
+        )
+    }
+
+    /// Mirrors `test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure`
+    /// for the `guard callState == .idle else { ... }` busy branch a few lines
+    /// above: a second VoIP push arriving mid-call is reported-then-immediately-
+    /// ended, but the completion handler used to discard the error entirely
+    /// (`{ _ in }`). If CallKit refuses that report (two call groups already
+    /// used, restricted mode, a transient error), the dedup ring — already
+    /// populated for this callId before this method ran — was never evicted,
+    /// so a legitimate APNs retry within the TTL got silently phantom-acked
+    /// instead of re-ringing the callee.
+    func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure_busyPath() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+            XCTFail("Expected the busy-path guard in reportIncomingVoIPCall")
+            return
+        }
+        guard let reportRange = body.range(
+            of: "reportNewIncomingCall(with: uuid, update: update) { error in",
+            range: busyGuardRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected the busy-path reportNewIncomingCall closure in reportIncomingVoIPCall")
+            return
+        }
+        guard let endedAtRange = body.range(
+            of: "reportCall(with: uuid, endedAt: Date(), reason: .unanswered)",
+            range: reportRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected reportCall(...endedAt: Date()...) after the busy-path report closure")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])
+        XCTAssertTrue(
+            closureBody.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportIncomingVoIPCall's BUSY-path CallKit-report-failure closure must also evict the callId " +
+            "from the dedup ring — otherwise a genuine APNs retry while the user is on another call is " +
+            "dropped as a duplicate, leaving the callee with zero call UI."
+        )
+    }
+
+    /// Audit 2026-07-10 — when `reportNewIncomingCall` itself fails (two call
+    /// groups already used, restricted mode, a transient CallKit error), the
+    /// non-busy failure closure used to call `endCallInternal` directly, which
+    /// never reports back to CallKit. Every OTHER failure path in this file
+    /// routes through `failCall`, which reports `.failed` to CallKit before
+    /// tearing down — omitting it here left a partially-registered system
+    /// Recents entry that nothing ever explicitly ends.
+    func test_reportIncomingVoIPCall_reportsFailureToCallKit_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("failCall("),
+            "reportIncomingVoIPCall's CallKit-report-failure closure must route through failCall so the " +
+            "failed report is also reflected back to CallKit (reportCall(...reason: .failed)), not just torn " +
+            "down locally via endCallInternal."
+        )
+    }
+
+    /// Mirrors `test_reportIncomingVoIPCall_reportsFailureToCallKit_onCallKitReportFailure`
+    /// for the socket-originated incoming-call path — same bug, same fix.
+    func test_handleIncomingCallNotification_reportsFailureToCallKit_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the reportNewIncomingCall failure closure in handleIncomingCallNotification")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("failCall("),
+            "handleIncomingCallNotification's CallKit-report-failure closure must route through failCall so " +
+            "the failed report is also reflected back to CallKit, not just torn down locally via endCallInternal."
+        )
+    }
+
+    /// Vague 100 — `startCall`'s `callController.request` completion already
+    /// captures `[weak self]` (the outer closure), but the nested
+    /// `Task { @MainActor in ... }` it spawns on CallKit failure did NOT repeat
+    /// the weak capture: an unstructured `Task` closure captures whatever it
+    /// references independently of its enclosing closure's capture list, so
+    /// omitting `[weak self]` there re-strongly-captures `self` for the task's
+    /// lifetime — the exact convention `apps/ios/CLAUDE.md`'s "Common Retain
+    /// Cycle Traps" section calls out for `DispatchQueue`/`Task` closures.
+    func test_startCall_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func startCall(conversationId: String", in: source) else {
+            XCTFail("startCall not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
+            "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
+            "callController.request closure — an unstructured Task does not inherit its enclosing " +
+            "closure's capture list."
+        )
+    }
+
+    /// Mirrors `test_startCall_callKitFailureTask_capturesSelfWeakly` for the
+    /// incoming-call `reportNewIncomingCall` failure Task in
+    /// `handleIncomingCallNotification` — same bug, same fix.
+    func test_handleIncomingCallNotification_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.failCall(\"CallKit error\") }"),
+            "handleIncomingCallNotification's reportNewIncomingCall failure Task must capture [weak self]."
+        )
     }
 
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
@@ -923,6 +1076,84 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
             .retry
         )
     }
+
+    // --- Remote-end idempotence (call:ended dedup — native + REST broadcast, P1-B) ---
+
+    func test_shouldProcessRemoteEnd_matchingCallIdOnConnected_returnsTrue() {
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duplicateWhileEnded_returnsFalse() {
+        // Second `call:ended` (native hangup + REST end/leave broadcast) while
+        // already terminal must be a no-op.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ended(reason: .remote)))
+    }
+
+    func test_shouldProcessRemoteEnd_differentCallId_returnsFalse() {
+        // An event for another call must never tear down the current one.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c2", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_nilCurrentCallId_returnsFalse() {
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: nil, incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duringRing_returnsTrue() {
+        // A remote cancel during the ring must still be processed.
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ringing(isOutgoing: true)))
+    }
+}
+
+// MARK: - CallEndReasonMapper (rawReason → CXCallEndedReason + CallEndReason)
+
+final class CallEndReasonMapperTests: XCTestCase {
+
+    func test_map_missedVariants_returnUnansweredMissed() {
+        // camelCase + snake_case + case-insensitivity (mapper lowercases).
+        for raw in ["missed", "no_answer", "unanswered", "MISSED", "No_Answer"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .unanswered, "raw=\(raw)")
+            XCTAssertEqual(r.local, .missed, "raw=\(raw)")
+        }
+    }
+
+    func test_map_rejectedVariants_returnDeclinedElsewhereRejected() {
+        for raw in ["rejected", "declined"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .declinedElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .rejected, "raw=\(raw)")
+        }
+    }
+
+    func test_map_answeredElsewhereVariants_returnAnsweredElsewhereRemote() {
+        for raw in ["answeredElsewhere", "answered_elsewhere"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .answeredElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw)")
+        }
+    }
+
+    func test_map_failedVariants_returnFailedConnectionLost() {
+        for raw in ["failed", "connectionLost"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .failed, "raw=\(raw)")
+            XCTAssertEqual(r.local, .connectionLost, "raw=\(raw)")
+        }
+    }
+
+    func test_map_unknownOrNil_defaultsToRemoteEnded() {
+        let inputs: [String?] = [nil, "completed", "garbage", ""]
+        for raw in inputs {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .remoteEnded, "raw=\(raw ?? "nil")")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw ?? "nil")")
+        }
+    }
 }
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
@@ -946,9 +1177,14 @@ final class CallPillStatusMinimisedTests: XCTestCase {
                        "a ringing call must NOT show a running 00:00 timer")
     }
 
-    func test_offeringAndConnecting_mapToConnecting_notConnected() {
-        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+    func test_offering_mapsToRinging_connecting_mapsToConnecting_bothNotConnected() {
+        // Audit 2026-07-10 — `.offering` (SDP offer sent, awaiting answer) is
+        // still the callee's phone physically ringing; CallView already shows
+        // outgoingRingingView ("Sonnerie…") for this state. The pill must
+        // agree — see FloatingCallPillView.CallPillStatus.from.
+        XCTAssertEqual(CallPillStatus.from(.offering), .ringing)
         XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+        XCTAssertFalse(CallPillStatus.from(.offering).isConnected)
         XCTAssertFalse(CallPillStatus.from(.connecting).isConnected)
     }
 
@@ -1316,6 +1552,40 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
             "shows the avatar placeholder immediately (before the renegotiation round-trip)."
         )
     }
+
+    /// Audit finding — the thermal-critical downgrade previously called
+    /// `webRTCService.downgradeFromVideo()` directly, unserialized against
+    /// `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`. A thermal event
+    /// firing mid-toggle (or mid-hold/unhold) could run a fourth, concurrent
+    /// camera/transceiver actuation — exactly what `toggleVideo`/`handleHold`/
+    /// `applySurvivalVideoSend` chain onto the previous task to prevent.
+    func test_thermalCritical_serializesWithOtherVideoActuationTasks() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("let previousToggle = self.videoToggleTask") &&
+            body.contains("let previousHold = self.holdVideoTask") &&
+            body.contains("let previousSurvival = self.survivalVideoTask"),
+            "The thermal-critical downgrade must capture all three in-flight video-transition tasks " +
+            "before actuating, mirroring toggleVideo/handleHold/applySurvivalVideoSend."
+        )
+        XCTAssertTrue(
+            body.contains("await previousToggle?.value") &&
+            body.contains("await previousHold?.value") &&
+            body.contains("await previousSurvival?.value"),
+            "The thermal-critical downgrade must await all three prior tasks before calling " +
+            "downgradeFromVideo() — upgradeToVideo/downgradeFromVideo never check cancellation " +
+            "mid-flight, so two concurrent actuations would corrupt state."
+        )
+        guard let assignRange = body.range(of: "self.videoToggleTask = Task"),
+              let awaitRange = body.range(of: "await previousToggle?.value", range: assignRange.upperBound..<body.endIndex),
+              let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
+            XCTFail("Expected videoToggleTask = Task, await previousToggle?.value, then downgradeFromVideo() in that order"); return
+        }
+        XCTAssertLessThan(
+            awaitRange.lowerBound, downgradeRange.lowerBound,
+            "The thermal-critical branch must await the previous tasks' completion BEFORE calling downgradeFromVideo()"
+        )
+    }
 }
 
 // MARK: - Post-call diagnostics persistence
@@ -1600,26 +1870,36 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
     }
 
-    /// `attemptReconnection` must cancel any previous task before starting a new
-    /// one. A second reconnection attempt (e.g. the watchdog fires mid-backoff)
-    /// must kill the sleeping first attempt to prevent two concurrent offers.
+    /// Every (re-)arm of the ICE restart must cancel any previous task before
+    /// starting a new one. A second reconnection trigger (e.g. the watchdog
+    /// fires mid-backoff, or a coalesced NWPath edge re-arms the in-flight
+    /// attempt) must kill the sleeping first attempt to prevent two concurrent
+    /// offers. Since the trigger-arbitration refactor the single seam is
+    /// `scheduleICERestart` — `attemptReconnection` delegates to it for both
+    /// new cycles and coalesced re-arms.
     func test_attemptReconnection_cancelsExistingTaskBeforeStartingNew() throws {
         let src = try callManagerSource()
-        guard let funcRange = src.range(of: "func attemptReconnection()") else {
-            XCTFail("attemptReconnection() not found in CallManager.swift"); return
+        guard let funcRange = src.range(of: "func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found in CallManager.swift"); return
         }
         let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
             ?? src.endIndex
         let body = String(src[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
             body.contains("iceRestartTask?.cancel()"),
-            "attemptReconnection must cancel the previous iceRestartTask before creating a " +
+            "scheduleICERestart must cancel the previous iceRestartTask before creating a " +
             "new one — two concurrent Tasks sending restart offers corrupt perfect negotiation."
         )
         XCTAssertTrue(
             body.contains("iceRestartTask = Task"),
-            "attemptReconnection must assign the new Task to iceRestartTask so subsequent " +
+            "scheduleICERestart must assign the new Task to iceRestartTask so subsequent " +
             "calls can cancel it."
+        )
+        // attemptReconnection must route every arm through that single seam.
+        XCTAssertTrue(
+            src.contains("scheduleICERestart(attempt: reconnectAttempt"),
+            "attemptReconnection must delegate to scheduleICERestart — a second, direct " +
+            "iceRestartTask assignment would bypass the cancel-before-arm contract."
         )
     }
 
@@ -1641,6 +1921,34 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         XCTAssertTrue(
             body.contains("iceRestartTask = nil"),
             "endCallInternal must nil iceRestartTask after cancelling to release the Task object."
+        )
+    }
+
+    /// Audit 2026-07-02: `performICERestart()` can still be awaiting when the
+    /// call ends (or a fresher reconnect cycle takes over). Its `nil` branch
+    /// must re-check `Task.isCancelled`/`callState` — exactly like the
+    /// success branch two lines below it — before calling
+    /// `attemptReconnection(escalate:)`. Without that guard, a stale restart
+    /// failure resurrects an already-ended call or clobbers a newer cycle's
+    /// `.reconnecting` state.
+    func test_scheduleICERestart_nilOfferBranch_guardsStaleAttemptBeforeEscalating() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        guard let nilBranchStart = body.range(of: "performICERestart() else {")?.upperBound,
+              let nilBranchEnd = body.range(of: "attemptReconnection(escalate: true)")?.upperBound else {
+            XCTFail("Expected the nil-offer branch calling attemptReconnection(escalate:) in scheduleICERestart"); return
+        }
+        let nilBranch = String(body[nilBranchStart..<nilBranchEnd])
+        XCTAssertTrue(
+            nilBranch.contains("Task.isCancelled") && nilBranch.contains("case .reconnecting"),
+            "The nil-offer branch of scheduleICERestart must guard on Task.isCancelled and the " +
+            "current .reconnecting(attempt:) generation before calling attemptReconnection(escalate:) " +
+            "— otherwise a superseded/ended reconnect cycle can resurrect a dead call."
         )
     }
 }
@@ -1694,28 +2002,47 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// `CXAnswerCallAction.fulfill()` must appear BEFORE the `Task {` that calls
-    /// `answerCallReady()` — not inside it. The Task is for async media setup;
-    /// the action settlement tells CallKit the call is answered at the UI layer.
-    func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
+    /// [Fix 2026-07-02] The answer action is HELD (`holdPendingAnswerAction`)
+    /// and settled at `.connected` so the CallKit elapsed timer reflects the
+    /// REAL connection, not the tap (user-reported "0:00 before the connection
+    /// exists"). The settlement sites must exist: fulfill at connect, fail on
+    /// pre-connect teardown, safety net inside holdPendingAnswerAction
+    /// (QualityThresholds.pendingAnswerActionSafetyNetSeconds — kept strictly
+    /// greater than sdpOfferTimeoutSeconds so it can never fire first).
+    ///
+    /// [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` dispatches on
+    /// CallKit's own private serial queue, NOT main — a `Thread.isMainThread`
+    /// branch is always false in production and must never gate the hold.
+    /// The hand-off must unconditionally hop to the MainActor via `Task`.
+    func test_cxAnswerCallAction_heldUntilConnected() throws {
         let src = try callManagerSource()
-        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+        // Corps équilibré, pas `prefix(1600)` : `holdPendingAnswerAction`
+        // vit à 2 778 caractères de l'accolade, derrière le préambule qui
+        // explique les correctifs 2026-07-02 et 07-03.
+        guard let bodyFragment = DeclarationBodyScanner.body(
+            containing: "perform action: CXAnswerCallAction", in: src
+        ) else {
             XCTFail("CXAnswerCallAction handler not found"); return
         }
-        // Find the end of this function body (next top-level `}` after the function
-        // header). We look for the pattern after the function opening brace.
-        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        let bodyFragment = String(src[bodyStart...].prefix(400))
 
-        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
-        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
-        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXAnswerCallAction handler")
-        XCTAssertNotNil(taskOffset, "Task { must exist in CXAnswerCallAction handler for async setup")
-        if let f = fulfillOffset, let t = taskOffset {
-            XCTAssertTrue(f < t,
-                "CXAnswerCallAction: action.fulfill() must appear BEFORE Task { — " +
-                "settling inside the Task is async and may never fire if manager is nil or Task is cancelled.")
-        }
+        XCTAssertTrue(bodyFragment.contains("holdPendingAnswerAction(action)"),
+            "CXAnswerCallAction: the action must be handed to the manager (holdPendingAnswerAction) " +
+            "so the CallKit timer starts at the real connection, not at tap time.")
+        XCTAssertTrue(bodyFragment.contains("Task { @MainActor"),
+            "CXAnswerCallAction: the hand-off must unconditionally hop to the MainActor — the delegate " +
+            "queue is CallKit's own private serial queue (setDelegate(_:queue: nil)), never main, so a " +
+            "Thread.isMainThread branch would never engage the hold in production.")
+        XCTAssertFalse(bodyFragment.contains("Thread.isMainThread"),
+            "CXAnswerCallAction: must NOT branch on Thread.isMainThread — CallKit's nil-queue delegate " +
+            "callback never runs on main, so that branch is always false and defeats the hold.")
+        XCTAssertTrue(bodyFragment.contains("action.fulfill()"),
+            "CXAnswerCallAction: the defensive fallback (nil manager) must still fulfill immediately " +
+            "so the action can never be lost.")
+
+        XCTAssertTrue(src.contains("settlePendingAnswerAction(fulfilled: true, reason: \"connected\")"),
+            "transitionToConnected must fulfill the held answer action at the real connection.")
+        XCTAssertTrue(src.contains("settlePendingAnswerAction(fulfilled: false, reason: \"teardown before connect\")"),
+            "endCallInternal must fail the held answer action when the call dies before connecting.")
     }
 
     /// `CXEndCallAction.fulfill()` must appear BEFORE the `Task {` that calls
@@ -1738,6 +2065,126 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
                 "CXEndCallAction: action.fulfill() must appear BEFORE Task { — " +
                 "settling inside the Task creates a CallKit timeout window if manager deallocs mid-flight.")
         }
+    }
+}
+
+/// `reportIncomingVoIPCall`'s busy path reports a SECOND, distinct CXCallUpdate/UUID
+/// via `reportNewIncomingCall` while a primary call is already active (`maximumCallGroups
+/// = 2` exists to let CallKit accept it), then immediately retires it with
+/// `reportCall(endedAt:)`. `activeCallUUID` only ever tracks the primary call. Every
+/// CXProviderDelegate handler that mutates shared call state on the manager's behalf must
+/// therefore validate `action.callUUID == activeCallUUID` before acting — otherwise a
+/// system-originated action tagged with the phantom busy-call UUID (or any other stale
+/// UUID CallKit still remembers) would be misapplied to the real, active call.
+final class CallKitActionCallUUIDGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Corps ENTIER du handler, accolades équilibrées.
+    ///
+    /// Prenait auparavant `prefix(2000)` : une fenêtre devinée, que chaque
+    /// commentaire ajouté au-dessus du code surveillé repoussait hors de
+    /// portée. Le garde `callUUID` de `CXEndCallAction` s'est retrouvé à
+    /// 2 399 caractères de l'accolade et la garde a viré au rouge alors que le
+    /// code de production était juste. Le paramètre `length` a disparu : un
+    /// corps équilibré n'a pas de longueur à deviner.
+    private func handlerBody(_ src: String, marker: String) throws -> String {
+        guard let body = DeclarationBodyScanner.body(containing: marker, in: src) else {
+            XCTFail("\(marker) handler not found"); return ""
+        }
+        return body
+    }
+
+    func test_activeCallUUID_isFileprivate_soCallKitDelegateProxyCanReadIt() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(src.contains("fileprivate var activeCallUUID: UUID?"),
+            "activeCallUUID must be fileprivate — CallKitDelegateProxy (a separate type in the " +
+            "same file) needs to read it to validate actions, and `private` would not be visible " +
+            "across the type boundary even within the same file.")
+    }
+
+    func test_cxEndCallAction_guardsOnActiveCallUUIDBeforeEndingCall() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXEndCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let endCallOffset = body.range(of: "manager.endCall()")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXEndCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(endCallOffset, "CXEndCallAction must call manager.endCall()")
+        if let g = guardOffset, let e = endCallOffset {
+            XCTAssertTrue(g < e, "CXEndCallAction: the callUUID guard must run BEFORE endCall() is invoked.")
+        }
+    }
+
+    func test_cxSetMutedCallAction_guardsOnActiveCallUUIDBeforeTogglingMute() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetMutedCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let toggleOffset = body.range(of: "toggleMute(reportToCallKit: false)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXSetMutedCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(toggleOffset, "CXSetMutedCallAction must call manager.toggleMute(reportToCallKit: false)")
+        if let g = guardOffset, let t = toggleOffset {
+            XCTAssertTrue(g < t, "CXSetMutedCallAction: the callUUID guard must run BEFORE toggleMute is invoked.")
+        }
+    }
+
+    func test_cxSetHeldCallAction_guardsOnActiveCallUUIDBeforeHandlingHold() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetHeldCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let holdOffset = body.range(of: "manager.handleHold(isOnHold)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXSetHeldCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(holdOffset, "CXSetHeldCallAction must call manager.handleHold(isOnHold)")
+        if let g = guardOffset, let h = holdOffset {
+            XCTAssertTrue(g < h, "CXSetHeldCallAction: the callUUID guard must run BEFORE handleHold is invoked.")
+        }
+    }
+
+    func test_cxPlayDTMFCallAction_guardsOnActiveCallUUIDBeforeSendingDTMF() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXPlayDTMFCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let dtmfOffset = body.range(of: "manager.sendDTMF(digits: digits)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXPlayDTMFCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(dtmfOffset, "CXPlayDTMFCallAction must call manager.sendDTMF(digits:)")
+        if let g = guardOffset, let d = dtmfOffset {
+            XCTAssertTrue(g < d, "CXPlayDTMFCallAction: the callUUID guard must run BEFORE sendDTMF is invoked.")
+        }
+    }
+
+    /// `CXAnswerCallAction` was the one mutating CX*Action handler a1206ca3 left
+    /// unguarded: `holdPendingAnswerAction` unconditionally supersedes-and-fails
+    /// whatever answer action it currently holds, with no identity check of its own.
+    /// A busy-path phantom/stale-UUID CXAnswerCallAction reaching this handler would
+    /// therefore fail the REAL, active call's genuinely pending answer action instead
+    /// of being declined itself — the most destructive of the five to leave unguarded.
+    /// A longer `handlerBody` window is required here: this handler's pre-existing
+    /// doc comment (the `[Fix 2026-07-02]`/`[Fix 2026-07-03]` history) plus the new
+    /// guard's own comment push the guard past the other handlers' default 2000-char
+    /// window.
+    func test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction() throws {
+        // `length: 3500` a disparu : c'était une fenêtre déjà élargie à la main
+        // une première fois quand le handler avait grossi. Le corps équilibré
+        // rend ce rattrapage inutile.
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let holdOffset = body.range(of: "manager.holdPendingAnswerAction(action)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXAnswerCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(holdOffset, "CXAnswerCallAction must call manager.holdPendingAnswerAction(action)")
+        if let g = guardOffset, let h = holdOffset {
+            XCTAssertTrue(g < h, "CXAnswerCallAction: the callUUID guard must run BEFORE holdPendingAnswerAction is invoked.")
+        }
+        // On a mismatch, CallKit still requires the action to be settled — but as
+        // `.fail()`, not `.fulfill()`: CallKit already knows this call ended
+        // (reportCall(endedAt:) in the busy path), so completing it as "answered"
+        // would be a lie, unlike the identity-matched success path which holds it
+        // for a later fulfill in transitionToConnected.
+        XCTAssertTrue(body.contains("action.fail()"),
+            "CXAnswerCallAction must fail() the action on a callUUID mismatch — CallKit requires every " +
+            "CX*Action to eventually be completed, and fulfilling would falsely claim the call was answered.")
     }
 }
 
@@ -1764,7 +2211,17 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         )
     }
 
-    func test_handleHold_cancelsPreviousTask_beforeCreatingNew() throws {
+    func test_handleHold_chainsOntoPreviousTask_insteadOfRelyingOnCancel() throws {
+        // `Task.cancel()` is cooperative and `disableLocalVideo`/`enableLocalVideo`
+        // never check `Task.isCancelled` mid-flight (they simply await
+        // `stopCapture`/`startCapture`) — cancelling the previous holdVideoTask and
+        // immediately firing a new one does NOT stop the in-flight camera/
+        // transceiver mutation, so a rapid hold→unhold could run a cancelled
+        // downgrade concurrently with a fresh upgrade. handleHold must instead
+        // await the previous task's `.value` before starting its own, serializing
+        // every hold transition — and must ALSO serialize with `toggleVideo` and
+        // the network-survival controller (`applySurvivalVideoSend`), since all
+        // three actuate the same camera/transceiver.
         let source = try callManagerSource()
         guard let funcRange = source.range(of: "func handleHold") else {
             XCTFail("handleHold not found"); return
@@ -1776,14 +2233,42 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         ].compactMap { $0 }.min() ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        guard let cancelRange = body.range(of: "holdVideoTask?.cancel()"),
-              let assignRange = body.range(of: "holdVideoTask = Task") else {
-            XCTFail("handleHold must cancel then assign holdVideoTask"); return
+        let previousHoldCaptures = body.components(separatedBy: "let previousHold = holdVideoTask").count - 1
+        XCTAssertEqual(
+            previousHoldCaptures, 2,
+            "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
+        )
+        let previousToggleCaptures = body.components(separatedBy: "let previousToggle = videoToggleTask").count - 1
+        XCTAssertEqual(
+            previousToggleCaptures, 2,
+            "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
+            "a hold transition actuates the same camera/transceiver."
+        )
+        let previousSurvivalCaptures = body.components(separatedBy: "let previousSurvival = survivalVideoTask").count - 1
+        XCTAssertEqual(
+            previousSurvivalCaptures, 2,
+            "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
+            "suspend/resume racing a hold transition actuates the same camera/transceiver."
+        )
+
+        let awaitedHold = body.components(separatedBy: "await previousHold?.value").count - 1
+        XCTAssertEqual(
+            awaitedHold, 2,
+            "Both branches must await the previous hold task's completion before mutating the camera/transceiver"
+        )
+        let awaitedToggle = body.components(separatedBy: "await previousToggle?.value").count - 1
+        XCTAssertEqual(awaitedToggle, 2, "Both branches must await the previous toggle task's completion")
+        let awaitedSurvival = body.components(separatedBy: "await previousSurvival?.value").count - 1
+        XCTAssertEqual(awaitedSurvival, 2, "Both branches must await the previous survival task's completion")
+
+        guard let assignRange = body.range(of: "holdVideoTask = Task"),
+              let awaitRange = body.range(of: "await previousHold?.value", range: assignRange.upperBound..<body.endIndex),
+              let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
+            XCTFail("Expected holdVideoTask = Task, await previousHold?.value, then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
-            cancelRange.lowerBound,
-            assignRange.lowerBound,
-            "holdVideoTask?.cancel() must appear before holdVideoTask = Task to prevent concurrent hold/unhold video operations"
+            awaitRange.lowerBound, downgradeRange.lowerBound,
+            "The hold branch must await the previous task's completion BEFORE calling downgradeFromVideo()"
         )
     }
 
@@ -1798,6 +2283,60 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         XCTAssertTrue(
             body.contains("holdVideoTask?.cancel()"),
             "endCallInternal must cancel holdVideoTask to avoid dangling video ops after call teardown"
+        )
+    }
+
+    // MARK: - Unhold video-recovery error handling (audit finding)
+
+    /// Regression guard: the unhold branch previously discarded
+    /// `upgradeToVideo()`'s error via `try? … else { return }`, which — since
+    /// `isVideoSuspendedByHold` is flipped to `false` before the task starts —
+    /// left `isVideoEnabled == true` with no video track, no peer correction,
+    /// and no user feedback on a camera-permission failure (e.g. permission
+    /// revoked while the call was on hold). Must mirror the do/catch handling
+    /// used by `toggleVideo()` and `actuateSurvivalVideoSend`.
+    private func unholdBranchBody(_ source: String) throws -> String {
+        guard let elseRange = source.range(of: "} else {\n            if isVideoSuspendedByHold {") else {
+            XCTFail("unhold branch (`} else { if isVideoSuspendedByHold {`) not found in handleHold"); return ""
+        }
+        let end = source.range(of: "\n    }\n\n    // MARK: - DTMF Forwarding", range: elseRange.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[elseRange.lowerBound..<end])
+    }
+
+    func test_handleHold_unhold_doesNotSwallowUpgradeToVideoErrorViaTryQuestionMark() throws {
+        let body = try unholdBranchBody(try callManagerSource())
+        XCTAssertFalse(
+            body.contains("try? await self.webRTCService.upgradeToVideo()"),
+            "The unhold branch must not use `try?` to discard upgradeToVideo()'s error — " +
+            "a camera-permission failure must not silently leave isVideoEnabled stuck at true."
+        )
+        XCTAssertTrue(
+            body.contains("try await self.webRTCService.upgradeToVideo()"),
+            "The unhold branch must call upgradeToVideo() inside a do/catch so errors are handled explicitly."
+        )
+    }
+
+    func test_handleHold_unhold_catchesCameraPermissionDenied_andDisablesVideo() throws {
+        let body = try unholdBranchBody(try callManagerSource())
+        guard let catchRange = body.range(of: "catch WebRTCError.cameraPermissionDenied {") else {
+            XCTFail("unhold branch must catch WebRTCError.cameraPermissionDenied"); return
+        }
+        let catchBody = String(body[catchRange.lowerBound...])
+        XCTAssertTrue(
+            catchBody.contains("self.isVideoEnabled = false"),
+            "On camera-permission denial during unhold recovery, isVideoEnabled must be corrected to false " +
+            "— otherwise the app believes video is active with no track and no way to recover."
+        )
+        XCTAssertTrue(
+            catchBody.contains("MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)"),
+            "On camera-permission denial during unhold recovery, the peer must be told video is off — " +
+            "it was already optimistically told `enabled: true` when the unhold branch started."
+        )
+        XCTAssertTrue(
+            catchBody.contains("FeedbackToastManager.shared.showError("),
+            "On camera-permission denial during unhold recovery, the user must see a tappable error " +
+            "so they can grant access via Settings — silence was the original bug."
         )
     }
 }
@@ -1891,6 +2430,25 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
         )
     }
 
+    func test_freshness_guardsOnRingingState_beforeEndingCall() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        // Regression: activeCallUUID alone is unchanged across ringing→connecting→
+        // connected (only cleared in endCallInternal), so it cannot distinguish "user
+        // hasn't answered yet" from "user just answered while this REST check — up to
+        // voipFreshnessTimeoutSeconds — was still in flight". A stale/racy terminal
+        // response must never tear down a call the user is actively connecting/on.
+        let occurrences = body.components(separatedBy: "activeCallUUID == uuid, case .ringing = callState").count - 1
+        XCTAssertEqual(
+            occurrences, 2,
+            "Bug D follow-up: BOTH the 404 branch and the terminal-status branch must guard " +
+            "on `case .ringing = callState` in addition to activeCallUUID, or an answered call " +
+            "racing a slow freshness check gets killed out from under the user"
+        )
+    }
+
     func test_freshness_uses_configuredTimeout() throws {
         let source = try callManagerSource()
         guard let body = freshnessBody(in: source) else {
@@ -1910,6 +2468,27 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
         XCTAssertLessThanOrEqual(
             QualityThresholds.voipFreshnessTimeoutSeconds, 10,
             "voipFreshnessTimeoutSeconds must be ≤10s — a slow freshness check delays the CallKit UI"
+        )
+    }
+
+    func test_freshness_usesCertificatePinnedSession_notURLSessionShared() throws {
+        // Every other network call in the app goes through APIClient.shared,
+        // whose URLSession is built with CertificatePinningDelegate. This is
+        // the one call in the whole call stack that carries the user's live
+        // bearer token — it must not fall back to the plain, unpinned
+        // URLSession.shared, or a MITM behind a device-trusted rogue CA can
+        // harvest the token / spoof the terminal-status response.
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertFalse(
+            body.contains("URLSession.shared"),
+            "Security: VoIP freshness check must not use the unpinned URLSession.shared"
+        )
+        XCTAssertTrue(
+            body.contains("APIClient.shared.urlSession"),
+            "Security: VoIP freshness check must route through APIClient.shared's certificate-pinned session"
         )
     }
 }
@@ -1951,19 +2530,31 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         )
     }
 
-    func test_endCurrentAndAnswerPending_clearsPendingInsideTask() throws {
+    /// Superseded 2026-07-07 (Finding 1 fix): `pendingIncomingCall` is now
+    /// cleared SYNCHRONOUSLY at the top of `endCurrentAndAnswerPending`,
+    /// before `endCall()` runs — not inside the settle Task. This is a
+    /// *stronger* re-entrancy guard than the original (which cleared it only
+    /// after the Task completed 0.5s later): a second `endCurrentAndAnswerPending()`
+    /// call during that window now sees `pendingIncomingCall == nil` immediately
+    /// and no-ops via its own leading guard, instead of racing to re-read a
+    /// value that was still populated. Revalidation-before-answering is now
+    /// the dedicated `answeringPendingCallId` token's job (see
+    /// `test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering`).
+    func test_endCurrentAndAnswerPending_clearsPendingSynchronouslyBeforeEndCall() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
-        guard let taskRange = body.range(of: "Task {") else {
-            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
+        guard let clearRange = body.range(of: "pendingIncomingCall = nil"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected pendingIncomingCall to be cleared before endCall()"); return
         }
-        let insideTask = String(body[taskRange.lowerBound...])
-        XCTAssertTrue(
-            insideTask.contains("pendingIncomingCall = nil"),
-            "pendingIncomingCall must be cleared INSIDE the Task, after handleIncomingCallNotification, " +
-            "to avoid a second endCurrentAndAnswerPending() racing with the first"
+        XCTAssertLessThan(
+            clearRange.lowerBound,
+            endCallRange.lowerBound,
+            "pendingIncomingCall must be cleared BEFORE endCall() runs, so a re-entrant " +
+            "endCurrentAndAnswerPending() call during the settle sleep no-ops immediately " +
+            "via its own leading guard rather than racing on a still-populated value."
         )
     }
 
@@ -1980,6 +2571,179 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
             guardRange.lowerBound,
             endCallRange.lowerBound,
             "endCurrentAndAnswerPending must guard that a pending call exists before ending the current call"
+        )
+    }
+
+    /// Audit 2026-07-02 (bug 3 follow-up), corrected 2026-07-07 (Finding 1):
+    /// the waiting call can be ended, answered elsewhere, or replaced by a
+    /// newer incoming call during the 0.5s settle sleep. The Task must
+    /// re-validate before routing it to `handleIncomingCallNotification` —
+    /// otherwise it answers a torn-down or wrong call, presenting a phantom
+    /// ringing/connecting UI.
+    ///
+    /// The original guard read `self.pendingIncomingCall?.callId`, but
+    /// `endCall()` (invoked earlier in this same function) synchronously
+    /// drives `endCallInternal`, which unconditionally nils
+    /// `pendingIncomingCall` for an unrelated reason (dropping a stale busy
+    /// banner when the ACTIVE call ends). That made the guard compare `nil
+    /// == pending.callId`, which is always false — "End & Answer" never
+    /// answered the waiting call, on every single invocation. The guard must
+    /// use a dedicated token (`answeringPendingCallId`) that survives
+    /// `endCall()`'s side effect.
+    func test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let taskRange = body.range(of: "Task {"),
+              let handleRange = body.range(of: "handleIncomingCallNotification(") else {
+            XCTFail("Expected Task { ... handleIncomingCallNotification(...) in endCurrentAndAnswerPending"); return
+        }
+        let beforeHandle = String(body[taskRange.upperBound..<handleRange.lowerBound])
+        XCTAssertTrue(
+            beforeHandle.contains("self.answeringPendingCallId == pending.callId"),
+            "endCurrentAndAnswerPending's Task must guard `self.answeringPendingCallId == " +
+            "pending.callId` (NOT `self.pendingIncomingCall?.callId`, which endCall() already " +
+            "nils as a side effect) before calling handleIncomingCallNotification."
+        )
+        XCTAssertFalse(
+            beforeHandle.contains("self.pendingIncomingCall?.callId == pending.callId"),
+            "endCurrentAndAnswerPending's revalidation guard must NOT read pendingIncomingCall — " +
+            "endCall() nils it synchronously before the Task runs, making that guard always false."
+        )
+    }
+
+    /// The revalidation token must be set BEFORE endCall() runs (endCall's
+    /// synchronous CallKit/socket teardown must not race a not-yet-armed
+    /// guard), and endCall() itself must not clear it — only the settle
+    /// Task (on success) or clearPendingIncomingCall (on remote cancellation)
+    /// may consume it.
+    func test_endCurrentAndAnswerPending_armsTokenBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let armRange = body.range(of: "answeringPendingCallId = pending.callId"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected answeringPendingCallId to be armed before endCall()"); return
+        }
+        XCTAssertLessThan(
+            armRange.lowerBound,
+            endCallRange.lowerBound,
+            "answeringPendingCallId must be armed with pending.callId BEFORE endCall() runs."
+        )
+    }
+
+    func test_clearPendingIncomingCall_alsoClearsAnsweringToken() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func clearPendingIncomingCall", in: source) else {
+            XCTFail("clearPendingIncomingCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("answeringPendingCallId = nil"),
+            "clearPendingIncomingCall (the remote-cancellation path) must also clear " +
+            "answeringPendingCallId, or a stale token could let a torn-down call be answered."
+        )
+    }
+}
+
+// MARK: - Call waiting: superseding a still-pending call
+
+/// Audit 2026-07-07 (Finding 2): `pendingIncomingCall` holds a single waiting
+/// call, not a queue. Both busy-path incoming-call sites used to overwrite it
+/// unconditionally — if a third caller arrived while a second was already
+/// waiting, the second caller's call was silently dropped locally (no signal
+/// sent, left ringing until the gateway's own ~60s timeout). Both sites must
+/// now reject the call being displaced via the same socket signal
+/// `rejectPendingCall()` already uses, before overwriting `pendingIncomingCall`.
+///
+/// Audit 2026-08-10 (Vague 87 fix): the original fix above landed
+/// `rejectSupersededPendingCall` calling the raw
+/// `MessageSocketManager.shared.emitCallEnd(callId:)` instead of the
+/// `emitCallReject(callId:)` helper `rejectPendingCall()` itself uses five
+/// lines above it — despite this file's own doc comment claiming to mirror
+/// it. `emitCallReject` sends `reason: "rejected"` (the raw `emitCallEnd`
+/// sends none, which the gateway resolves to `missed`) and defers+replays
+/// when the socket is down (the raw call is silently dropped by the SDK
+/// instead). `test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd`
+/// below locked in the buggy call — updated to assert the correct one.
+@MainActor
+final class CallWaitingSupersedeTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func rejectSupersededPendingCall", in: source) else {
+            XCTFail("rejectSupersededPendingCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId: superseded.callId)"),
+            "rejectSupersededPendingCall must go through emitCallReject(callId:) — same helper " +
+            "rejectPendingCall() uses — so the displaced caller's call:end carries reason=\"rejected\" " +
+            "(a bare emitCallEnd() resolves to CallStatus.missed on the gateway) and survives a " +
+            "socket-down window via the deferred-reconciliation path (a bare emitCallEnd() is " +
+            "silently dropped by the SDK when the socket isn't connected)."
+        )
+        XCTAssertFalse(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)"),
+            "rejectSupersededPendingCall must NOT call the raw MessageSocketManager.emitCallEnd " +
+            "directly — it bypasses the reason=\"rejected\" tagging and the socket-down deferral " +
+            "emitCallReject(callId:) provides."
+        )
+        XCTAssertTrue(
+            body.contains("superseded.callId != newCallId"),
+            "rejectSupersededPendingCall must not reject the same call it's about to become (idempotent re-delivery)."
+        )
+    }
+
+    func test_reportIncomingVoIPCall_busyPath_rejectsSupersededBeforeOverwriting() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found"); return
+        }
+        guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
+              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: callerUserId") else {
+            XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
+        }
+        XCTAssertLessThan(
+            rejectRange.lowerBound,
+            overwriteRange.lowerBound,
+            "reportIncomingVoIPCall must reject any already-waiting call BEFORE overwriting pendingIncomingCall."
+        )
+    }
+
+    func test_handleIncomingCallNotification_busyPath_rejectsSupersededBeforeOverwriting() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found"); return
+        }
+        guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
+              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: fromUserId") else {
+            XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
+        }
+        XCTAssertLessThan(
+            rejectRange.lowerBound,
+            overwriteRange.lowerBound,
+            "handleIncomingCallNotification must reject any already-waiting call BEFORE overwriting pendingIncomingCall."
         )
     }
 }
@@ -2655,14 +3419,19 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        // Find the already-answered handler in CallManager
-        guard let range = source.range(of: "already-answered") else {
-            XCTFail("call:already-answered handler not found in CallManager.swift — required for multi-device dismissal")
+        // Anchor on the SUBSCRIBER (`socket.callAlreadyAnswered`), not on the
+        // first textual occurrence of "already-answered" — doc comments
+        // elsewhere in the file (e.g. endRingingAnsweredElsewhere's docstring,
+        // added 2026-07-03) legitimately mention the event name and would
+        // hijack the analysis window (CI-only failure: the local targeted run
+        // didn't include this suite).
+        guard let range = source.range(of: "socket.callAlreadyAnswered") else {
+            XCTFail("call:already-answered subscriber not found in CallManager.swift — required for multi-device dismissal")
             return
         }
         // Grab surrounding context
         let start = source.index(range.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
-        let end = source.index(range.upperBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.upperBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
         let context = String(source[start ..< end])
 
         let endsCall = context.contains("endCallInternal") || context.contains("callState = .ended") || context.contains("endCall")
@@ -2736,79 +3505,15 @@ final class CallStateReconnectingTests: XCTestCase {
 }
 
 // MARK: - handleRemoteEnd rawReason Mapping
-
-@MainActor
-final class CallManagerHandleRemoteEndTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_handlesBothVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        XCTAssertTrue(
-            switchBlock.contains("\"answeredelsewhere\""),
-            "handleRemoteEnd must handle 'answeredelsewhere' (camelCase lowercased) from legacy gateway payloads"
-        )
-        XCTAssertTrue(
-            switchBlock.contains("\"answered_elsewhere\""),
-            "handleRemoteEnd must handle 'answered_elsewhere' (snake_case) — the gateway uses " +
-            "snake_case for multi-word event reasons as documented in CLAUDE.md"
-        )
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_casesShareSameOutcome() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        guard let camelIdx = switchBlock.range(of: "\"answeredelsewhere\"")?.lowerBound,
-              let snakeIdx = switchBlock.range(of: "\"answered_elsewhere\"")?.lowerBound else {
-            XCTFail("Both 'answeredelsewhere' and 'answered_elsewhere' variants must be present"); return
-        }
-        // They must appear in the same case pattern (within 60 chars of each other)
-        let distance = switchBlock.distance(from: min(camelIdx, snakeIdx), to: max(camelIdx, snakeIdx))
-        XCTAssertLessThan(distance, 60, "Both 'answeredelsewhere' variants must be in the same case pattern")
-    }
-
-    func test_handleRemoteEnd_missed_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"missed\""), "handleRemoteEnd must handle 'missed'")
-        XCTAssertTrue(switchBlock.contains("\"no_answer\""), "handleRemoteEnd must handle 'no_answer'")
-        XCTAssertTrue(switchBlock.contains("\"unanswered\""), "handleRemoteEnd must handle 'unanswered'")
-    }
-
-    func test_handleRemoteEnd_rejected_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"rejected\""), "handleRemoteEnd must handle 'rejected'")
-        XCTAssertTrue(switchBlock.contains("\"declined\""), "handleRemoteEnd must handle 'declined'")
-    }
-}
+//
+// The former source-guard tests (CallManagerHandleRemoteEndTests) string-matched
+// the `switch rawReason?.lowercased()` INSIDE handleRemoteEnd. That switch was
+// extracted to the pure `CallEndReasonMapper` (2026-07-12) — so those guards
+// broke on the refactor ("handleRemoteEnd switch not found"), the exact
+// fragility the audit flagged. They are replaced by `CallEndReasonMapperTests`
+// above, which assert the SAME variants at BEHAVIOUR (missed/no_answer/unanswered,
+// rejected/declined, answeredElsewhere/answered_elsewhere → identical outcome,
+// + nil/unknown default) instead of matching source text.
 
 // MARK: - DTMF Validation
 
@@ -3189,6 +3894,7 @@ final class RejectPendingCallTests: XCTestCase {
         let nextFunc = [
             source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
             source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    public func ", range: range.upperBound..<source.endIndex)?.lowerBound,
             source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
         ].compactMap { $0 }.min() ?? source.endIndex
         return String(source[range.lowerBound..<nextFunc])
@@ -3209,18 +3915,20 @@ final class RejectPendingCallTests: XCTestCase {
         )
     }
 
-    func test_rejectPendingCall_emitsCallEndWithPendingCallId() throws {
-        // rejectPendingCall() must emit call:end (emitCallEnd) so the gateway
-        // tears down the pending call session and notifies the waiting peer.
-        // Missing this emit would leave the peer's call ringing indefinitely.
+    func test_rejectPendingCall_emitsCallRejectWithPendingCallId() throws {
+        // rejectPendingCall() must emit call:end via emitCallReject so the gateway
+        // tears down the pending call session AND records reason=rejected —
+        // a plain emitCallEnd pre-answer resolves to `missed`, sending a false
+        // "missed call" notification to the very user who just declined (2026-07-12).
         let source = try callManagerSource()
         guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
             XCTFail("rejectPendingCall() not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("emitCallEnd(callId: pending.callId)"),
-            "rejectPendingCall() must call emitCallEnd(callId: pending.callId) — " +
-            "the gateway needs call:end to tear down the waiting call and notify the peer."
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall() must call emitCallReject(callId: pending.callId) — " +
+            "the gateway needs call:end {reason: rejected} to tear down the waiting call, " +
+            "notify the peer, and record the decline as rejected (not missed)."
         )
     }
 
@@ -3252,24 +3960,353 @@ final class RejectPendingCallTests: XCTestCase {
         )
     }
 
-    func test_rejectPendingCall_emitCallEnd_beforeClearingPending() throws {
-        // emitCallEnd must happen before pendingIncomingCall is cleared so the callId
+    func test_rejectPendingCall_emitCallReject_beforeClearingPending() throws {
+        // emitCallReject must happen before pendingIncomingCall is cleared so the callId
         // is still available when the socket event fires. Reversing this order would
         // emit call:end with a nil/stale callId.
         let source = try callManagerSource()
         guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
             XCTFail("rejectPendingCall() not found in CallManager.swift"); return
         }
-        guard let emitRange = body.range(of: "emitCallEnd(callId: pending.callId)"),
+        guard let emitRange = body.range(of: "emitCallReject(callId: pending.callId)"),
               let clearRange = body.range(of: "pendingIncomingCall = nil") else {
-            XCTFail("Expected emitCallEnd and pendingIncomingCall = nil in rejectPendingCall()"); return
+            XCTFail("Expected emitCallReject and pendingIncomingCall = nil in rejectPendingCall()"); return
         }
         XCTAssertLessThan(
             emitRange.lowerBound,
             clearRange.lowerBound,
-            "rejectPendingCall() must emit call:end BEFORE clearing pendingIncomingCall — " +
+            "rejectPendingCall() must emit call:end (reject) BEFORE clearing pendingIncomingCall — " +
             "callId must still be available when the socket emit fires."
         )
+    }
+
+    func test_sdkEmitCallReject_emitsCallEndWithRejectedReason() throws {
+        // Closes the loop on the two guards above: emitCallReject is only a valid
+        // substitute for emitCallEnd if it actually emits `call:end` — carrying
+        // reason=rejected so the gateway records the decline as rejected, not missed
+        // (parity with Android emitEnd(callId, reason) and web handleRejectCall).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let body = functionBody(of: "func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in MessageSocketManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("\"call:end\""),
+            "emitCallReject must emit the call:end event — the gateway tears the call down on call:end."
+        )
+        XCTAssertTrue(
+            body.contains("\"rejected\""),
+            "emitCallReject must carry reason=rejected — without it the gateway resolves a " +
+            "pre-answer end to `missed` and notifies the decliner of a call they just refused."
+        )
+    }
+}
+
+// MARK: - Lock-screen decline = reject (§arc reject 2026-07-12)
+
+/// A CallKit `CXEndCallAction` on an INCOMING ringing call is the lock-screen
+/// « Refuser » button — the single decline path for background calls. It routes
+/// through `endCall()`, not `rejectCall()`: without a dedicated branch there,
+/// the end reaches the gateway without reason=rejected, the server resolves the
+/// pre-answer end to `missed`, and the decliner gets the false "missed call"
+/// notification the reject arc just eliminated on every other path.
+final class EndCallLockScreenDeclineTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCall_detectsPreAnswerIncomingDecline() throws {
+        // endCall() must distinguish a pre-answer INCOMING call (lock-screen
+        // decline via CXEndCallAction) from a regular hang-up.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".ringing(isOutgoing: false)"),
+            "endCall() must detect the pre-answer incoming state — a CXEndCallAction " +
+            "on a ringing incoming call is the lock-screen decline, not a hang-up."
+        )
+    }
+
+    func test_endCall_declineBranchEmitsCallReject() throws {
+        // The decline branch must emit call:end {reason: rejected} via
+        // emitCallReject — a plain end resolves to `missed` server-side.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId:"),
+            "endCall() must route the pre-answer incoming decline through " +
+            "emitCallReject — otherwise the lock-screen decline resolves to `missed` " +
+            "and the decliner is notified of a call they just refused."
+        )
+    }
+
+    func test_endCall_declineEmit_beforeEndCallInternal() throws {
+        // The reject emit must fire BEFORE endCallInternal tears down local
+        // state — mirroring the emit-then-teardown order of the regular path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallReject(callId:"),
+              let teardownRange = body.range(of: "endCallInternal(") else {
+            XCTFail("Expected emitCallReject and endCallInternal in endCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            teardownRange.lowerBound,
+            "endCall() must emit the reject BEFORE endCallInternal — teardown clears " +
+            "the identifiers the emit needs."
+        )
+    }
+
+    func test_endCall_declineTeardownCarriesRejectedReason() throws {
+        // Local teardown must record .rejected (journal/analytics coherence with
+        // rejectCall) instead of .local when the end is a decline.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".rejected"),
+            "endCall()'s decline branch must pass .rejected to endCallInternal — " +
+            "the decliner's own journal must not label a refusal as a local hang-up."
+        )
+    }
+}
+
+// MARK: - Deferred reject reconciliation (§arc reject 2026-07-12, parité Android DeclinedCallStore)
+
+/// A decline while the socket is down (VoIP push wakes the app cold, the user
+/// declines within seconds — before the socket handshake lands) must NOT be
+/// dropped: the caller would keep ringing the full 60 s window and the server
+/// would resolve `missed`. Android defers via DeclinedCallStore and drains on
+/// connect; iOS already defers plain hang-ups via pendingEndReconciliationCallId
+/// — the reject path must ride the same mechanism, reason included.
+final class RejectDeferredReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_emitCallReject_defersWhenSocketDown() throws {
+        // The private reject helper must mirror emitCallEndReliably's socket-down
+        // deferral — an emit into a dead socket is silently dropped by the SDK.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard MessageSocketManager.shared.isConnected"),
+            "emitCallReject must defer when the socket is down — a dropped reject leaves " +
+            "the caller ringing 60 s and the server resolving `missed`."
+        )
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "the deferred reject must be remembered in pendingEndReconciliationCallId " +
+            "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_emitCallReject_usesAtLeastOnceWithAck_notFireAndForget() throws {
+        // 2026-08-11: the socket-down guard above only protects the "socket is
+        // OBSERVABLY disconnected" case. A socket that LOOKS connected at the
+        // moment of decline can still drop the emit in flight — a blip that
+        // self-heals before connectionState ever publishes the disconnect. The
+        // decliner has already torn down locally (endCallInternal ran before
+        // this call), so a silently-dropped reject leaves the caller ringing
+        // until the gateway's own timeout, which resolves to `missed` — the
+        // exact mislabel the arc reject 2026-07-12 fix eliminated on every
+        // OTHER decline path. Mirrors emitCallEndReliably's ACK'd-with-fallback
+        // shape (§6.3 precedent: test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget).
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallRejectWithAck"),
+            "emitCallReject must await the ACK'd reject path — a plain fire-and-forget " +
+            "emit gives no signal that the gateway ever received it."
+        )
+        XCTAssertTrue(
+            body.contains("if !acked"),
+            "emitCallReject must branch on ACK failure, mirroring emitCallEndReliably."
+        )
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallReject(callId: callId)"),
+            "on ACK failure, emitCallReject must still emit the fire-and-forget fallback — " +
+            "the gateway's end handler is idempotent, a duplicate is a no-op."
+        )
+        let rejectedReasonCount = body.components(separatedBy: "pendingEndReconciliationReason = \"rejected\"").count - 1
+        XCTAssertEqual(
+            rejectedReasonCount, 2,
+            "emitCallReject must arm pendingEndReconciliationReason = \"rejected\" on BOTH the " +
+            "socket-down guard AND the ACK-failure fallback — an unacked-but-emitted reject needs " +
+            "replay too, or the caller keeps ringing until the gateway's own timeout mislabels it `missed`."
+        )
+    }
+
+    func test_reconnectReplay_preservesRejectedReason() throws {
+        // The reconnect observer must replay a deferred DECLINE as a reject —
+        // replaying it as a plain end would resurrect the `missed` mislabel the
+        // reject arc eliminated.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("emitCallReject(callId: pending)"),
+            "the connectionState reconciliation must route a deferred reject through " +
+            "emitCallReject(callId:) — a plain replay loses reason=rejected."
+        )
+    }
+
+    func test_rejectPendingCall_routesThroughDeferralCapableHelper() throws {
+        // rejectPendingCall must use the private helper (deferral-capable), not
+        // the SDK singleton directly — a direct emit bypasses the socket-down path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertFalse(
+            body.contains("MessageSocketManager.shared.emitCallReject"),
+            "rejectPendingCall must not call the SDK emitCallReject directly — route " +
+            "through the private emitCallReject(callId:) helper to inherit the " +
+            "socket-down deferral."
+        )
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall must still emit the reject for the pending callId."
+        )
+    }
+}
+
+// MARK: - Retry-on-failure (« Réessayer », parité web/Android)
+
+/// Source-guards for the transient-failure retry: `canRetryCall` gates on the
+/// shared [CallRetryPolicy], `retryCall()` re-dials the captured outgoing
+/// context, and a retryable end holds the ended screen longer so the user can
+/// tap « Réessayer » before it auto-dismisses.
+final class RetryCallSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    var ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_canRetryCall_gatesOnPolicyAndOutgoingContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "var canRetryCall: Bool", in: source) else {
+            XCTFail("canRetryCall not found"); return
+        }
+        XCTAssertTrue(body.contains("CallRetryPolicy.isRetryable(reason)"),
+            "canRetryCall must gate on the shared CallRetryPolicy (one rule, 3 platforms).")
+        XCTAssertTrue(body.contains("lastOutgoingContext != nil"),
+            "canRetryCall must require a captured outgoing context — an incoming-call " +
+            "failure has nothing to re-dial.")
+    }
+
+    func test_retryCall_reDialsTheCapturedContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func retryCall()", in: source) else {
+            XCTFail("retryCall() not found"); return
+        }
+        XCTAssertTrue(body.contains("guard canRetryCall"),
+            "retryCall must be inert unless canRetryCall — a normal hangup must never re-dial.")
+        XCTAssertTrue(body.contains("startCall("),
+            "retryCall must re-enter startCall with the captured dial context.")
+    }
+
+    func test_startCall_capturesTheOutgoingContextForRetry() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
+            XCTFail("startCall not found"); return
+        }
+        XCTAssertTrue(body.contains("lastOutgoingContext = (conversationId, userId, displayName, isVideo)"),
+            "startCall must snapshot the dial context so a transient failure is retryable.")
+    }
+
+    func test_endCallInternal_holdsARetryableFailureLongerBeforeAutoSettle() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        XCTAssertTrue(body.contains("callEndRetryableSettleSeconds"),
+            "a retryable failure must use the longer settle window so « Réessayer » " +
+            "isn't yanked before the user can tap it.")
+    }
+
+    func test_endCallInternal_settleDelayReusesCanRetryCall_notADuplicateExpression() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        // Ancré sur l'ASSIGNATION (pas sur « canRetryCall ? » mono-ligne) :
+        // le reformatage multi-ligne du ternaire par f0091d146 a cassé
+        // l'ancienne forme alors que le comportement était intact.
+        XCTAssertTrue(body.contains("let settleDelay = canRetryCall"),
+            "the settleDelay branch must reuse `canRetryCall` — by this point `callState` " +
+            "is already `.ended(reason: reason)`, so re-deriving " +
+            "`CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil` inline is a " +
+            "byte-for-byte duplicate of canRetryCall that can silently drift from it.")
+        XCTAssertFalse(body.contains("CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil"),
+            "the inline duplicate of canRetryCall's condition must be gone.")
     }
 }
 
@@ -3352,10 +4389,16 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
         guard let body = refreshBody(source) else {
             XCTFail("scheduleTURNCredentialRefresh body not found"); return
         }
+        // The floor-clamp lives in CallReliabilityPolicy.turnRefreshDelay
+        // (unit-tested in TurnRefreshDelayPolicyTests): a degenerate TTL clamps
+        // to turnMinRefreshDelaySeconds instead of disarming the refresh — the
+        // old `guard ttl >= 60 else return` skipped scheduling entirely and let
+        // mid-call credentials expire with no refresh armed.
         XCTAssertTrue(
-            body.contains("guard ttl >= 60") || body.contains("ttl < 60"),
-            "scheduleTURNCredentialRefresh must guard against TTL < 60s to prevent " +
-            "a tight request loop when the gateway sends a malformed or zero TTL."
+            body.contains("CallReliabilityPolicy.turnRefreshDelay"),
+            "scheduleTURNCredentialRefresh must compute its delay via " +
+            "CallReliabilityPolicy.turnRefreshDelay — the policy owns the minimum-TTL " +
+            "clamp that prevents a tight request loop on a malformed or zero TTL."
         )
     }
 
@@ -3376,10 +4419,15 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
         guard let body = refreshBody(source) else {
             XCTFail("scheduleTURNCredentialRefresh body not found"); return
         }
+        // The 80%-of-TTL computation moved into CallReliabilityPolicy.turnRefreshDelay,
+        // where it is behaviour-tested (TurnRefreshDelayPolicyTests
+        // .test_turnRefreshDelay_nominalTTL_is80Percent). Here we guard the wiring:
+        // the scheduler must delegate to the policy with the gateway TTL.
         XCTAssertTrue(
-            body.contains("ttl * 0.8"),
-            "scheduleTURNCredentialRefresh must schedule the refresh at 80% of TTL " +
-            "to ensure credentials are renewed before they expire (leaving a 20% safety window)."
+            body.contains("CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)"),
+            "scheduleTURNCredentialRefresh must delegate its delay to " +
+            "CallReliabilityPolicy.turnRefreshDelay(ttl:) so credentials are renewed at " +
+            "80% of TTL (20% safety window) with the minimum-delay clamp applied."
         )
     }
 
@@ -3392,6 +4440,368 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
             body.contains("callState.isActive"),
             "The deferred TURN refresh Task must guard `callState.isActive` before emitting — " +
             "a refresh emitted after call end would waste a TURN credential request."
+        )
+    }
+}
+
+// MARK: - Immediate TURN Request on STUN-Only Fallback (§armTurnCredentialsAfterConfigure)
+
+/// Source-level guards verifying that when an incoming call's VoIP push/notification
+/// payload carries no usable ICE servers (missing/malformed/all dropped by the
+/// credential-length guard in `VoIPPushManager.parseIceServers`), CallManager requests
+/// real per-user TURN credentials immediately instead of waiting for the periodic
+/// scheduler — a STUN-only peer connection reliably fails to connect behind
+/// symmetric/CGNAT (common on cellular carriers).
+@MainActor
+final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(_ source: String, signature: String) -> String? {
+        guard let start = source.range(of: signature) else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_armTurnCredentialsAfterConfigure_requestsImmediately_whenNoIceServers() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        guard let guardRange = body.range(of: "guard let iceServers, !iceServers.isEmpty else {") else {
+            XCTFail("armTurnCredentialsAfterConfigure must guard on a nil-or-empty iceServers array"); return
+        }
+        let guardBody = String(body[guardRange.upperBound...])
+        XCTAssertTrue(
+            guardBody.contains("requestFreshTurnCredentials(callId: callId)"),
+            "When the call has no usable ICE servers, armTurnCredentialsAfterConfigure must " +
+            "request fresh TURN credentials immediately rather than waiting for the periodic " +
+            "scheduler — a STUN-only connection reliably fails behind symmetric/CGNAT."
+        )
+    }
+
+    func test_armTurnCredentialsAfterConfigure_schedulesPeriodicRefresh_whenIceServersPresent() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)"),
+            "When the push already carries usable ICE servers, armTurnCredentialsAfterConfigure " +
+            "must fall back to the periodic scheduler — no immediate re-request is needed."
+        )
+    }
+
+    func test_incomingCallPaths_routeThroughArmTurnCredentialsAfterConfigure() throws {
+        let source = try callManagerSource()
+        // Both incoming-call entry points (VoIP push and socket/notification-only)
+        // must decide via armTurnCredentialsAfterConfigure right after configuring
+        // WebRTC — neither should call scheduleTURNCredentialRefresh directly, which
+        // would always wait for the periodic cadence even with a STUN-only fallback.
+        let signatures = [
+            "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil)",
+            "func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil)"
+        ]
+        for signature in signatures {
+            guard let body = functionBody(source, signature: signature) else {
+                XCTFail("\(signature) not found in CallManager.swift"); continue
+            }
+            XCTAssertTrue(
+                body.contains("armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)"),
+                "\(signature) must call armTurnCredentialsAfterConfigure after webRTCService.configure."
+            )
+        }
+    }
+}
+
+// MARK: - TURN Refresh Retry Watchdog (§requestFreshTurnCredentials)
+
+/// Source-level guards verifying every `call:request-ice-servers` requester
+/// routes through the shared watchdog helper, so a single dropped emit/reply
+/// (the emit carries no ACK) can't silently kill TURN renewal for the rest of
+/// a long call. Behavior of the retry bound itself is unit-tested in
+/// `TurnRefreshRetryPolicyTests` (CallReconnectPolicyTests.swift).
+@MainActor
+final class CallManagerTURNRefreshWatchdogTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(_ source: String, signature: String) -> String? {
+        guard let start = source.range(of: signature) else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_requestFreshTurnCredentials_existsAndArmsWatchdog() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func requestFreshTurnCredentials(callId: String)") else {
+            XCTFail("requestFreshTurnCredentials not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitRequestIceServers(callId: callId)"),
+            "requestFreshTurnCredentials must emit call:request-ice-servers"
+        )
+        XCTAssertTrue(
+            body.contains("armTurnRefreshWatchdog(callId: callId)"),
+            "requestFreshTurnCredentials must arm the retry watchdog after every emit — " +
+            "otherwise a dropped reply is never retried."
+        )
+    }
+
+    func test_armTurnRefreshWatchdog_retriesViaPolicy() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnRefreshWatchdog(callId: String)") else {
+            XCTFail("armTurnRefreshWatchdog not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("CallReliabilityPolicy.turnRefreshShouldRetry"),
+            "armTurnRefreshWatchdog must delegate the retry-bound decision to " +
+            "CallReliabilityPolicy.turnRefreshShouldRetry (unit-tested in isolation)."
+        )
+        XCTAssertTrue(
+            body.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            "armTurnRefreshWatchdog must retry by re-emitting via requestFreshTurnCredentials, " +
+            "not a bare emitRequestIceServers call, so the retry itself is also watchdog-armed."
+        )
+        XCTAssertTrue(
+            body.contains("self.scheduleTURNCredentialRefresh(ttl:"),
+            "Once retries are exhausted, armTurnRefreshWatchdog must still re-arm the next " +
+            "periodic refresh cycle instead of leaving the call with no refresh armed at all."
+        )
+    }
+
+    func test_allRequestIceServersCallSites_routeThroughWatchdogHelper() throws {
+        let source = try callManagerSource()
+        // Every direct `emitRequestIceServers` call must live inside
+        // `requestFreshTurnCredentials` itself — every other call site (the
+        // periodic scheduler, socket-reconnect resync, reconnection-cycle
+        // refresh) must call the wrapping helper instead of emitting directly,
+        // so none of them can bypass the retry watchdog.
+        let directEmitOccurrences = source.components(separatedBy: "MessageSocketManager.shared.emitRequestIceServers(callId:").count - 1
+        XCTAssertEqual(
+            directEmitOccurrences, 1,
+            "MessageSocketManager.shared.emitRequestIceServers must be called from exactly one " +
+            "place (requestFreshTurnCredentials) — every other TURN-refresh trigger must route " +
+            "through requestFreshTurnCredentials(callId:) so it's covered by the retry watchdog."
+        )
+    }
+
+    func test_scheduleTURNCredentialRefresh_resetsWatchdogState() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func scheduleTURNCredentialRefresh(ttl: TimeInterval)") else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshWatchdogTask?.cancel()"),
+            "scheduleTURNCredentialRefresh must cancel any in-flight watchdog before starting " +
+            "a fresh cycle — otherwise a stale watchdog from the previous cycle can fire " +
+            "against the new one's callId."
+        )
+        XCTAssertTrue(
+            body.contains("turnRefreshRetryAttempt = 0"),
+            "scheduleTURNCredentialRefresh must reset the retry counter for the new cycle."
+        )
+    }
+}
+
+// MARK: - Busy-Call Feedback (§startCall rejection)
+
+/// Source-level guards verifying `startCall` tells the user when it rejects a
+/// dial because another call is already active. Every entry point (conversation
+/// header, call-summary "call back", conversation-list context menu,
+/// CallStarter) previously called this in a fire-and-forget way — a tap that
+/// visibly did nothing, indistinguishable from a dead button.
+@MainActor
+final class CallManagerBusyFeedbackTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func startCallBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func startCall(conversationId: String") else { return nil }
+        let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_startCall_isDiscardableResultReturningBool() throws {
+        let source = try callManagerSource()
+        guard let declRange = source.range(of: "func startCall(conversationId: String") else {
+            XCTFail("startCall not found in CallManager.swift"); return
+        }
+        let precedingDistance = min(80, source.distance(from: source.startIndex, to: declRange.lowerBound))
+        let precedingStart = source.index(declRange.lowerBound, offsetBy: -precedingDistance)
+        let precedingLines = source[precedingStart..<declRange.lowerBound]
+        XCTAssertTrue(
+            precedingLines.contains("@discardableResult"),
+            "startCall must be @discardableResult — most call sites intentionally ignore " +
+            "the return value and must not be forced to handle it."
+        )
+        let declLine = source[declRange.lowerBound...].prefix(while: { $0 != "\n" })
+        XCTAssertTrue(
+            declLine.contains("-> Bool"),
+            "startCall must return Bool so CallStarter (and any future caller) can detect " +
+            "a rejected dial instead of only ever seeing a fire-and-forget no-op."
+        )
+    }
+
+    func test_startCall_busyGuard_surfacesToastAndReturnsFalse() throws {
+        let source = try callManagerSource()
+        guard let body = startCallBody(source) else {
+            XCTFail("startCall body not found"); return
+        }
+        guard let guardRange = body.range(of: "guard callState == .idle else {") else {
+            XCTFail("startCall busy guard not found"); return
+        }
+        let guardBlockEnd = body.range(of: "\n        }", range: guardRange.upperBound..<body.endIndex)?.upperBound ?? body.endIndex
+        let guardBlock = String(body[guardRange.lowerBound..<guardBlockEnd])
+        XCTAssertTrue(
+            guardBlock.contains("FeedbackToastManager.shared.showError"),
+            "The busy guard must surface a FeedbackToastManager error toast — per the " +
+            "two-tier toast rule (apps/ios/CLAUDE.md), a local-action failure like this " +
+            "goes through FeedbackToastManager, never NotificationToastManager."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return false"),
+            "The busy guard must return false so callers can detect the rejection."
+        )
+    }
+}
+
+// MARK: - Rejoin Active Call (crash/reconnect recovery, user-requested 2026-07-11)
+
+/// Source-level guards for `rejoinActiveCall` — silently resuming a call the
+/// server still considers active after this device's own `CallManager`
+/// session was lost (app relaunch, crash). Not instantiable end-to-end in a
+/// unit test host (real WebRTC/CallKit dependencies), same constraint as
+/// `startCall`/`handleIncomingCallNotification` elsewhere in this file.
+@MainActor
+final class CallManagerRejoinActiveCallTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func rejoinBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func rejoinActiveCall(callId: String") else { return nil }
+        let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_rejoinActiveCall_isDiscardableResultReturningBool() throws {
+        let source = try callManagerSource()
+        guard let declRange = source.range(of: "func rejoinActiveCall(callId: String") else {
+            XCTFail("rejoinActiveCall not found in CallManager.swift"); return
+        }
+        let precedingDistance = min(80, source.distance(from: source.startIndex, to: declRange.lowerBound))
+        let precedingStart = source.index(declRange.lowerBound, offsetBy: -precedingDistance)
+        let precedingLines = source[precedingStart..<declRange.lowerBound]
+        XCTAssertTrue(
+            precedingLines.contains("@discardableResult"),
+            "rejoinActiveCall must be @discardableResult, matching startCall's convention."
+        )
+    }
+
+    func test_rejoinActiveCall_guardsOnIdleState() throws {
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard callState == .idle else {"),
+            "rejoinActiveCall must only proceed from .idle — a device already in a call " +
+            "(including one already rejoining) must not be knocked into a new negotiation."
+        )
+        XCTAssertTrue(
+            body.contains("return false"),
+            "rejoinActiveCall must return false when the idle guard rejects the call."
+        )
+    }
+
+    func test_rejoinActiveCall_setsConnectingState_notRinging() throws {
+        // The call was already accepted once (by this device or the peer)
+        // before the session was lost — there's nothing left to ring/accept,
+        // only media to resume. Going through .ringing would show the wrong
+        // UI (incoming-call accept/reject) for a call already in progress.
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState = .connecting"),
+            "rejoinActiveCall must set callState directly to .connecting."
+        )
+        XCTAssertFalse(
+            body.contains("callState = .ringing"),
+            "rejoinActiveCall must never set .ringing — this isn't a new incoming call to accept."
+        )
+    }
+
+    func test_rejoinActiveCall_neverTouchesCallKit() throws {
+        // This isn't a new system-level call event (CallKit already knows
+        // about this call from whenever it was originally answered) — no
+        // reportNewIncomingCall/CXStartCallAction transaction.
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertFalse(
+            body.contains("callProvider.report") || body.contains("CXStartCallAction") || body.contains("callController.request"),
+            "rejoinActiveCall must not start any CallKit transaction."
+        )
+    }
+
+    func test_rejoinActiveCall_reusesExistingJoinAndMediaPipeline() throws {
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("joinCallRoomReliably(callId: callId)"),
+            "rejoinActiveCall must reuse joinCallRoomReliably — the same ACK-aware call:join " +
+            "path already used for incoming calls and VoIP cold starts."
+        )
+        XCTAssertTrue(
+            body.contains("performLocalMediaStart(isVideo: isVideo, callId: callId)"),
+            "rejoinActiveCall must reuse performLocalMediaStart to bring local media up."
+        )
+        XCTAssertTrue(
+            body.contains("applyNegotiationRole()"),
+            "rejoinActiveCall must call applyNegotiationRole() to reset the negotiation epoch."
         )
     }
 }
@@ -3465,8 +4875,11 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
         guard let body = reconnectHandlerBody(source) else {
             XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
         }
+        // Routed through requestFreshTurnCredentials (not a bare emitRequestIceServers)
+        // so this refresh is also covered by the retry watchdog — see
+        // CallManagerTURNRefreshWatchdogTests.test_allRequestIceServersCallSites_routeThroughWatchdogHelper.
         XCTAssertTrue(
-            body.contains("emitRequestIceServers"),
+            body.contains("requestFreshTurnCredentials"),
             "Socket reconnect handler must request fresh TURN credentials — " +
             "the socket may have been down long enough for credentials to near expiry."
         )
@@ -3552,7 +4965,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
     }
 
     /// `emitCallAnalyticsIfNeeded` must be called in `endCallInternal` BEFORE
-    /// `activeAudioEffect = nil` and `callStartDate = nil` — it reads these live values.
+    /// `callStartDate = nil` — it reads this live value.
     func test_endCallInternal_emitsAnalyticsBeforeStateReset() throws {
         let source = try callManagerSource()
         guard let body = endCallInternalBody(in: source) else {
@@ -3561,13 +4974,13 @@ final class CallManagerAnalyticsTests: XCTestCase {
         guard let analyticsIdx = body.range(of: "emitCallAnalyticsIfNeeded(reason:")?.lowerBound else {
             XCTFail("emitCallAnalyticsIfNeeded not found in endCallInternal"); return
         }
-        guard let effectIdx = body.range(of: "activeAudioEffect = nil")?.lowerBound else {
-            XCTFail("activeAudioEffect = nil not found in endCallInternal"); return
+        guard let stateResetIdx = body.range(of: "callStartDate = nil")?.lowerBound else {
+            XCTFail("callStartDate = nil not found in endCallInternal"); return
         }
         XCTAssertTrue(
-            analyticsIdx < effectIdx,
-            "emitCallAnalyticsIfNeeded must fire before activeAudioEffect = nil — " +
-            "analytics reads the active effect state to include in the payload."
+            analyticsIdx < stateResetIdx,
+            "emitCallAnalyticsIfNeeded must fire before callStartDate = nil — " +
+            "analytics reads the live call state to include in the payload."
         )
     }
 
@@ -3594,13 +5007,24 @@ final class CallManagerAnalyticsTests: XCTestCase {
 
     /// The `emitCallAnalytics` socket call must pass `callId` in the payload so the
     /// gateway can associate the analytics with the correct call document.
+    /// 2026-07-03 — the emit moved into `emitCallAnalyticsSnapshot` (shared by
+    /// the periodic in_progress snapshots and the final teardown emit); the
+    /// invariant survives through the delegation chain.
     func test_emitCallAnalyticsIfNeeded_passesCallIdToSocket() throws {
         let source = try callManagerSource()
         guard let body = emitAnalyticsBody(in: source) else {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("emitCallAnalytics(callId: callId"),
+            body.contains("emitCallAnalyticsSnapshot(callId: callId"),
+            "The final emit must forward the current callId to the shared snapshot builder."
+        )
+        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
+            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
+        }
+        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
+        XCTAssertTrue(
+            snapshotBody.contains("emitCallAnalytics(callId: callId"),
             "Analytics must be emitted via emitCallAnalytics(callId:payload:) with the " +
             "current callId so the gateway can correlate them with the call record."
         )
@@ -3653,6 +5077,134 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "so the gateway can recognize and route iOS analytics payloads."
         )
     }
+
+    // MARK: - Regression 2026-07-05: reconnectionCount must reflect the WHOLE
+    // call's reconnection history, not just the live FSM retry budget.
+
+    private func attemptReconnectionBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func attemptReconnection(escalate:") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func transitionToConnectedBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func transitionToConnected() {") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `reconnectAttempt` is the live FSM retry budget (capped at
+    /// `maxReconnectAttempts`, zeroed on every reconnect success) — using it
+    /// directly for the "reconnectionCount" analytics field means a call that
+    /// recovered from several network blips and then ended normally reports 0,
+    /// identical to a trouble-free call. A separate cumulative counter must be
+    /// incremented alongside it and used for the analytics field instead.
+    func test_attemptReconnection_incrementsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = attemptReconnectionBody(in: source) else {
+            XCTFail("attemptReconnection not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects += 1"),
+            "attemptReconnection must increment analyticsTotalReconnects alongside " +
+            "reconnectAttempt, so the cumulative count survives across reconnect cycles."
+        )
+    }
+
+    /// `transitionToConnected` zeroes the live `reconnectAttempt` budget on
+    /// EVERY successful (re)connect — including a mid-call ICE-restart recovery,
+    /// not just call start. `analyticsTotalReconnects` must NOT be reset here,
+    /// or a call with multiple recoveries would only ever report its last
+    /// recovery cycle's count.
+    func test_transitionToConnected_doesNotResetAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = transitionToConnectedBody(in: source) else {
+            XCTFail("transitionToConnected not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("reconnectAttempt = 0"),
+            "transitionToConnected must still reset the live reconnectAttempt budget."
+        )
+        XCTAssertFalse(
+            body.contains("analyticsTotalReconnects"),
+            "transitionToConnected must NOT reset analyticsTotalReconnects — it accumulates " +
+            "across the whole call and is only cleared in endCallInternal."
+        )
+    }
+
+    /// `analyticsTotalReconnects` must be reset only once the call has fully
+    /// ended, mirroring `reconnectAttempt`'s reset in the same method.
+    func test_endCallInternal_resetsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects = 0"),
+            "endCallInternal must reset analyticsTotalReconnects so the next call starts clean."
+        )
+    }
+
+    /// The analytics payload's "reconnectionCount" must read the cumulative
+    /// counter, not the live per-cycle FSM budget. The payload dict itself is
+    /// built in `emitCallAnalyticsSnapshot` (shared by periodic in-progress
+    /// snapshots and the final teardown emit — see
+    /// test_emitCallAnalyticsIfNeeded_passesCallIdToSocket above), not in
+    /// `emitCallAnalyticsIfNeeded` itself.
+    func test_emitCallAnalyticsSnapshot_usesTotalReconnectsForReconnectionCount() throws {
+        let source = try callManagerSource()
+        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
+            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
+        }
+        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
+        XCTAssertTrue(
+            snapshotBody.contains("\"reconnectionCount\":   analyticsTotalReconnects"),
+            "The analytics payload must report analyticsTotalReconnects (cumulative), not " +
+            "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
+        )
+    }
+
+    // MARK: - Regression 2026-07-08: analyticsEffectsUsed was declared and
+    // serialized into every analytics payload but no call site ever inserted
+    // into it, so `effectsUsed` silently reported `[]` for every call regardless
+    // of which video filters were active. The quality-tick handler already polls
+    // `webRTCService.videoFilters.config` once per sample (see
+    // analyticsVideoFiltersUsed above) — that is the only natural hook point,
+    // since the filter UI mutates the config directly via bindings with no
+    // dedicated CallManager setter to intercept.
+
+    private func didCollectStatsBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "didCollectStats stats: CallStats") else { return nil }
+        let bodyEnd = source.range(
+            of: "\n    nonisolated static func connectionQualityLabel",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_didCollectStats_populatesAnalyticsEffectsUsedFromFilterConfig() throws {
+        let source = try callManagerSource()
+        guard let body = didCollectStatsBody(in: source) else {
+            XCTFail("didCollectStats not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("backgroundBlur")"#),
+            "didCollectStats must insert \"backgroundBlur\" into analyticsEffectsUsed when " +
+            "filterConfig.backgroundBlurEnabled is set — otherwise the field stays empty forever."
+        )
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("skinSmoothing")"#),
+            "didCollectStats must insert \"skinSmoothing\" into analyticsEffectsUsed when " +
+            "filterConfig.skinSmoothingEnabled is set."
+        )
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("colorFilter")"#),
+            "didCollectStats must insert \"colorFilter\" into analyticsEffectsUsed when a " +
+            "color-grading preset (filterConfig.isEnabled) is active."
+        )
+    }
 }
 
 // MARK: - CXCallUpdate hasVideo on A/V toggle (audit Phase 3)
@@ -3700,6 +5252,144 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             toggleBody.contains("callUsesCallKit"),
             "toggleVideo must guard CXCallUpdate reporting behind callUsesCallKit to avoid " +
             "calling CXProvider methods when CallKit is not active (Mac / foreground in-app calls)."
+        )
+    }
+
+    /// `answerCall()` is the in-app (non-CallKit) answer path fired from
+    /// `IncomingCallView` — reached precisely when `handleIncomingCallNotification` set
+    /// `callUsesCallKit = false` (foreground call / iOS-app-on-Mac never calls
+    /// `reportNewIncomingCall`). Without this guard, `CXAnswerCallAction` is requested
+    /// against a UUID CallKit was never told about — a guaranteed-to-fail transaction
+    /// on every single foreground/Mac call answer.
+    func test_answerCall_guardsCXAnswerCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func answerCall()") else {
+            XCTFail("answerCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func scheduleSdpOfferTimeout",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "answerCall() must guard CXAnswerCallAction behind callUsesCallKit — a foreground " +
+            "in-app call (or iOS-app-on-Mac) never calls reportNewIncomingCall, so requesting " +
+            "CXAnswerCallAction for its UUID is guaranteed to fail and only adds log noise."
+        )
+    }
+
+    /// Same rationale as `answerCall()`: `rejectCall()` must not fire `CXEndCallAction`
+    /// for a UUID CallKit never heard about.
+    func test_rejectCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func rejectCall()") else {
+            XCTFail("rejectCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - End Call",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "rejectCall() must guard CXEndCallAction behind callUsesCallKit — same rationale " +
+            "as answerCall(): the UUID was never reported to CallKit for foreground/Mac calls."
+        )
+    }
+
+    /// Same rationale as `answerCall()`/`rejectCall()`: `endCall()` must not fire
+    /// `CXEndCallAction` for a UUID CallKit never heard about. `callUsesCallKit` is
+    /// captured BEFORE `endCallInternal()` — mirroring the existing `endUUID` local
+    /// capture — since `endCallInternal` may reset call-scoped state.
+    func test_endCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCall()") else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - System Picture-in-Picture",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let endUUID, endUsedCallKit {"),
+            "endCall() must guard CXEndCallAction behind callUsesCallKit — same rationale as " +
+            "answerCall()/rejectCall()."
+        )
+    }
+
+    /// `reportIncomingVoIPCall`'s busy path (VoIP push arrives while already on a call)
+    /// synthesizes an immediate reportCall — `endedAt` must be `Date()`, not `nil`.
+    /// `nil` means "unknown" to CallKit and produces an inaccurate/missing Recents
+    /// timestamp; every other reportCall site in the file passes `Date()`.
+    func test_reportIncomingVoIPCall_busyPath_reportsCallEndedNowNotUnknown() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func reportIncomingVoIPCall(") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func checkVoIPCallFreshness",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertFalse(
+            body.contains("endedAt: nil"),
+            "reportIncomingVoIPCall must never pass endedAt: nil to reportCall — nil means " +
+            "'unknown' to CallKit, producing an inaccurate/missing Recents timestamp."
+        )
+    }
+
+    /// `cancel()` on `videoToggleTask` is cooperative — `upgradeToVideo`/
+    /// `downgradeFromVideo` never check `Task.isCancelled` mid-flight, so a rapid
+    /// double-tap could otherwise run two camera/transceiver actuations
+    /// concurrently and corrupt state. `toggleVideo` must serialize on the
+    /// previous task's completion before starting its own actuation — the same
+    /// fix already shipped in `handleHold` (CallKit hold path).
+    func test_toggleVideo_serializesOnPreviousTask_beforeActuating() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            toggleFunc.contains("let previousToggle = videoToggleTask"),
+            "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
+            "so the new Task can await its completion."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousToggle?.value"),
+            "toggleVideo must await the previous toggle task's completion before invoking " +
+            "upgradeToVideo/downgradeFromVideo, otherwise two toggles can actuate the " +
+            "camera/transceiver concurrently (cancel() alone does not stop in-flight work)."
+        )
+        // Regression guard: toggleVideo also must serialize with CallKit hold/unhold
+        // and the network-survival controller — a hold landing exactly as a manual
+        // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
+        XCTAssertTrue(
+            toggleFunc.contains("let previousHold = holdVideoTask"),
+            "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousHold?.value"),
+            "toggleVideo must await the previous hold task's completion too."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("let previousSurvival = survivalVideoTask"),
+            "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousSurvival?.value"),
+            "toggleVideo must await the previous survival task's completion too."
         )
     }
 }
@@ -3778,5 +5468,1542 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
             "CXProvider.didActivate must re-apply the 20 ms preferred I/O buffer duration " +
             "after CallKit activates the audio session."
         )
+    }
+}
+
+// MARK: - Local SDP Failure Notifies Peer (audit fix)
+
+/// A local SDP generation failure (createOffer/createAnswer returning nil, or the
+/// remote offer never arriving before the timeout) is invisible to the peer unless
+/// we explicitly emit `call:end`. Without it, the peer sits in .ringing/.connecting
+/// until the gateway's CallCleanupService cron reaps the zombie call (~60s later).
+/// These tests guard against regressing that notification on each local-failure path.
+final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_handleSignalOffer_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {", in: source) else {
+            XCTFail("handleSignalOffer(callId:sdp:generation:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "handleSignalOffer's late-offer createAnswer failure must emit call:end — " +
+            "otherwise the caller is left waiting for an answer that will never arrive."
+        )
+    }
+
+    func test_answerCall_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func answerCall() {", in: source) else {
+            XCTFail("answerCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "answerCall()'s createAnswer failure and SDP-offer-timeout paths must emit " +
+            "call:end — otherwise the caller is left ringing/connecting indefinitely."
+        )
+    }
+
+    func test_answerCallReady_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func answerCallReady() async {", in: source) else {
+            XCTFail("answerCallReady() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "answerCallReady()'s createAnswer failure and SDP-offer-timeout paths must " +
+            "emit call:end — otherwise the caller is left ringing/connecting indefinitely."
+        )
+    }
+
+    func test_listenForParticipantJoined_createOfferFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func listenForParticipantJoined(callId: String, toUserId: String, isVideo: Bool) {", in: source) else {
+            XCTFail("listenForParticipantJoined(callId:toUserId:isVideo:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "listenForParticipantJoined()'s createOffer failure must emit call:end — " +
+            "the callee already joined the room and is waiting for an offer that will never arrive."
+        )
+    }
+}
+
+// MARK: - Call-waiting hygiene + CallKit failure teardown (audit 2026-07-02, bugs 1-3)
+
+@MainActor
+final class CallWaitingAndFailureTeardownTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    // MARK: Bug 3 — remote hangup of the WAITING call must dismiss the banner
+
+    func test_clearPendingIncomingCall_helperExists_andClearsBothFields() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func clearPendingIncomingCall(ifMatching", in: source) else {
+            XCTFail(
+                "clearPendingIncomingCall(ifMatching:) missing — when the caller of the WAITING " +
+                "call hangs up (call:ended/missed/force-leave for pendingIncomingCall.callId), the " +
+                "banner must be dismissed instead of lingering 15s and offering End & Answer on a dead call"
+            )
+            return
+        }
+        XCTAssertTrue(body.contains("pendingIncomingCall = nil"), "helper must clear pendingIncomingCall")
+        XCTAssertTrue(body.contains("showCallWaitingBanner = false"), "helper must hide the banner")
+    }
+
+    func test_terminalSocketListeners_routeEventsThroughPendingCallCheck() throws {
+        let source = try callManagerSource()
+        // Definition + at least callEnded, callMissed, callForcedLeave and
+        // callAlreadyAnswered call sites. Each of those listeners guards on
+        // currentCallId (the ACTIVE call) and early-returns for the waiting
+        // call's callId — the pending-call check must run before/independently
+        // of that guard.
+        let occurrences = source.components(separatedBy: "clearPendingIncomingCall(ifMatching").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 5,
+            "expected the 4 terminal socket listeners (callEnded, callMissed, callForcedLeave, " +
+            "callAlreadyAnswered) to route their event through clearPendingIncomingCall(ifMatching:) " +
+            "— found \(occurrences - 1 >= 0 ? occurrences : 0) occurrence(s) total (incl. definition)"
+        )
+    }
+
+    // MARK: Bug 2 — TURN credentials must survive the call-waiting hand-off
+
+    func test_pendingIncomingCall_carriesIceServers() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("iceServers: [IceServer]?, conversationId: String?)?"),
+            "pendingIncomingCall must store the iceServers that arrived with the waiting call — " +
+            "otherwise End & Answer configures the PeerConnection STUN-only and CGNAT/symmetric-NAT " +
+            "callers get no media after the hand-off"
+        )
+    }
+
+    func test_busyPaths_storeIceServersInPendingCall() throws {
+        let source = try callManagerSource()
+        let occurrences = source.components(separatedBy: "iceServers: iceServers, conversationId: conversationId)").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 2,
+            "both busy paths (reportIncomingVoIPCall + handleIncomingCallNotification) must persist " +
+            "the received iceServers into pendingIncomingCall"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_forwardsIceServers() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("iceServers: pending.iceServers"),
+            "endCurrentAndAnswerPending must forward the stored iceServers to " +
+            "handleIncomingCallNotification — the 2nd call's TURN credentials are otherwise lost"
+        )
+    }
+
+    // MARK: Bug 1 — failure teardowns must inform CallKit
+
+    func test_failCall_reportsFailureToCallKitBeforeTeardown() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func failCall(", in: source) else {
+            XCTFail(
+                "failCall(_:) missing — failure teardowns (initiate-ACK failure, local-media failure, " +
+                "setRemoteDescription failure, connecting watchdog, call:error, createOffer failure) " +
+                "must report the end to CallKit or the system call UI stays stranded"
+            )
+            return
+        }
+        guard let reportRange = body.range(of: "reportCall(with:"),
+              let teardownRange = body.range(of: "endCallInternal(reason: .failed(") else {
+            XCTFail("failCall must reportCall(ended) to CallKit then run endCallInternal(.failed)"); return
+        }
+        XCTAssertLessThan(
+            reportRange.lowerBound, teardownRange.lowerBound,
+            "failCall must report to CallKit BEFORE endCallInternal nils activeCallUUID"
+        )
+    }
+
+    func test_noDirectFailedTeardown_outsideFailCallAndCallKitErrorCallbacks() throws {
+        let source = try callManagerSource()
+        let offenders = source
+            .components(separatedBy: "\n")
+            .filter { $0.contains("endCallInternal(reason: .failed") }
+            .filter { !$0.contains("CallKit error") && !$0.contains(".failed(reasonMessage)") }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "every failure teardown must go through failCall(_:) so CallKit is informed. " +
+            "Direct endCallInternal(.failed) is only allowed inside failCall itself and in the " +
+            "reportNewIncomingCall/CXStartCallAction error callbacks (\"CallKit error\" — CallKit " +
+            "never accepted the call). Offending lines: \(offenders)"
+        )
+    }
+}
+
+// MARK: - Degraded-signaling indicator wiring (EXIGENCE №1)
+
+@MainActor
+final class SignalingDegradedIndicatorTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_callManager_declaresIsSignalingDegraded() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("@Published private(set) var isSignalingDegraded"),
+            "CallManager must expose the degraded-signaling flag for CallView — a socket drop " +
+            "during an established call is invisible otherwise (media is P2P and keeps flowing)"
+        )
+    }
+
+    func test_callManager_observesConnectionState_readOnly() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("socket.$connectionState"),
+            "setupSocketListeners must observe the socket connectionState publisher to drive the indicator"
+        )
+        XCTAssertTrue(
+            source.contains("CallReliabilityPolicy.signalingDegraded("),
+            "the indicator must be computed by the pure policy (testable, no lifecycle side effects)"
+        )
+    }
+
+    func test_endCallInternal_resetsIsSignalingDegraded() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("isSignalingDegraded = false"),
+            "endCallInternal must reset the indicator so it never leaks into the next call"
+        )
+    }
+
+    func test_callView_surfacesSignalingDegradedState_viaDiscreetStatusPill() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Views/CallView.swift")
+        XCTAssertTrue(
+            source.contains("callManager.isSignalingDegraded"),
+            "CallView must still react to the signaling-degraded state"
+        )
+        XCTAssertTrue(
+            source.contains("call.status.signaling"),
+            "the state must be surfaced by the discreet inline status pill « Serveur déconnecté »"
+        )
+        XCTAssertFalse(
+            source.contains("signalingDegradedBanner"),
+            "the intrusive pop-up banner was removed (user feedback 2026-07-13) — no more transient pop-up for network weakness"
+        )
+    }
+}
+
+// MARK: - call:error non-fatal whitelist (chaos-test prod 2026-07-02)
+
+@MainActor
+final class CallErrorNonFatalWhitelistTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_targetNotFound_isNonFatal() throws {
+        // Chaos-test prod (callId 6a466e05a081f94fac47159e): after a gateway
+        // restart, the peer's socket churned and a relayed signal drew
+        // call:error TARGET_NOT_FOUND — the callee tore down a call whose P2P
+        // media was perfectly healthy, then the peer's ICE-restart offers hit
+        // "Signal offer for unknown call" and the caller died on its watchdog.
+        // A transient relay failure must NEVER end an established call.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("event.code == \"TARGET_NOT_FOUND\""),
+            "call:error TARGET_NOT_FOUND (peer momentarily has no socket in the room — churn or " +
+            "reconnect in flight) must be whitelisted as non-fatal like INVALID_SIGNAL and " +
+            "RATE_LIMIT_EXCEEDED; ICE is redundant by design and the answer path retries"
+        )
+        guard let checkRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+              let teardownRange = source.range(of: "self.failCall(message)") else {
+            XCTFail("expected the whitelist check and the call:error teardown to coexist"); return
+        }
+        XCTAssertLessThan(
+            checkRange.lowerBound, teardownRange.lowerBound,
+            "the TARGET_NOT_FOUND early-return must guard BEFORE the call:error teardown"
+        )
+    }
+
+    func test_callErrorForADifferentCall_isIgnored_beforeAnyCodeSpecificHandling() throws {
+        // Root-cause fix for the class of bug behind test_targetNotFound_isNonFatal
+        // above: TARGET_NOT_FOUND/RATE_LIMIT_EXCEEDED/INVALID_SIGNAL were each
+        // whitelisted one prod incident at a time because `CallError` carried no
+        // callId — every code had to be manually proven safe. Any error naming a
+        // DIFFERENT call than the one currently active must be ignored regardless
+        // of its code, and this guard must run before the per-code whitelist so a
+        // future/unlisted code can't still tear down an unrelated healthy call.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("errorCallId != self.currentCallId"),
+            "call:error must guard on event.callId vs currentCallId — an error for a different " +
+            "call must never affect this device's active, healthy call"
+        )
+        guard let callIdGuardRange = source.range(of: "errorCallId != self.currentCallId"),
+              let targetNotFoundRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+              let teardownRange = source.range(of: "self.failCall(message)") else {
+            XCTFail("expected the callId guard, the per-code whitelist, and the teardown to coexist"); return
+        }
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, targetNotFoundRange.lowerBound,
+            "the callId scoping guard must run BEFORE the per-code whitelist checks"
+        )
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, teardownRange.lowerBound,
+            "the callId scoping guard must run BEFORE the call:error teardown"
+        )
+    }
+}
+
+// MARK: - Local teardown must materialise server-side (chaos-test prod 2026-07-02)
+
+@MainActor
+final class LocalTeardownServerReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    // Proof from prod gateway logs (window 13:56-13:59Z): the callee tore down
+    // locally on an error and NO call:end/leave ever reached the gateway — the
+    // caller stayed in a zombie call for ~48s until its own watchdogs fired.
+
+    func test_emitCallEndReliably_defersWhenSocketDown_andReconcilesOnReconnect() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallEndReliably(", in: source) else {
+            XCTFail(
+                "emitCallEndReliably(callId:) missing — every local teardown must materialise " +
+                "server-side (ACK + fallback), and a hang-up during a signaling outage must be " +
+                "remembered and re-emitted on the next socket connect (mission: reconciliation)"
+            )
+            return
+        }
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "when the socket is down, the callId must be remembered for reconciliation"
+        )
+        XCTAssertTrue(
+            body.contains("emitCallEndWithAck"),
+            "when the socket is up, the ACK-first path must be used"
+        )
+        XCTAssertTrue(
+            source.contains("let pending = self.pendingEndReconciliationCallId"),
+            "the socket connectionState observer must replay the deferred call:end on reconnect"
+        )
+    }
+
+    func test_failCall_emitsCallEndToServer_beforeLocalTeardown() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func failCall(", in: source) else {
+            XCTFail("failCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEndReliably("),
+            "failCall must inform the gateway — a silent local teardown leaves the peer in a " +
+            "zombie call the gateway keeps relaying re-joins for"
+        )
+        guard let emitRange = body.range(of: "emitCallEndReliably("),
+              let teardownRange = body.range(of: "endCallInternal(reason: .failed(") else {
+            XCTFail("expected both the server emit and the local teardown in failCall"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound, teardownRange.lowerBound,
+            "the emit must capture currentCallId BEFORE endCallInternal nils it"
+        )
+    }
+
+    func test_endCall_usesSharedReliableEmit() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEndReliably("),
+            "endCall must route through the shared reliable emit so a hang-up during a " +
+            "signaling outage is reconciled on reconnect instead of silently lost"
+        )
+    }
+}
+
+// MARK: - ACK-failure must also reconcile (chaos-test 2, callId 6a4690a2…)
+
+@MainActor
+final class AckFailureReconciliationTests: XCTestCase {
+
+    func test_emitCallEndReliably_remembersCallId_whenAckFails() throws {
+        // Chaos-test 2: the caller's ring-timeout call:end had its ACK fail
+        // during the post-restart churn — the socket LOOKED connected so the
+        // deferred-reconciliation path never armed, the fire-and-forget
+        // fallback was lost, and the CallSession decayed to failed/91s via the
+        // GC instead of resolving missed. An unacked end must be remembered
+        // and replayed on the next connect exactly like a socket-down end
+        // (the gateway end handler is idempotent).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let fnRange = source.range(of: "private func emitCallEndReliably(") else {
+            XCTFail("emitCallEndReliably not found"); return
+        }
+        let body = String(source[fnRange.lowerBound...].prefix(1600))
+        let occurrences = body.components(separatedBy: "pendingEndReconciliationCallId = callId").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 2,
+            "emitCallEndReliably must arm the reconciliation in BOTH branches: socket known down " +
+            "AND ACK failure (socket believed up but the emit never materialised server-side)"
+        )
+    }
+}
+
+// MARK: - call_cancel background push → end ringing policy (phantom-ring hardening)
+
+/// Pure decision for the `call_cancel` silent push: it may ONLY kill a
+/// still-ringing INCOMING call whose callId matches the push. A late or
+/// replayed cancel must never touch a connected call, an outgoing ring, or
+/// an unrelated call.
+@MainActor
+final class CallCancellationPolicyTests: XCTestCase {
+
+    func test_matchingIncomingRing_ends() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_callIdMismatch_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c2", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_noCurrentCall_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: nil, callState: .idle
+        ))
+    }
+
+    func test_connectedCall_neverEndedByLateCancel() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .connected
+        ))
+    }
+
+    func test_outgoingRing_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: true)
+        ))
+    }
+
+    /// Source-guards: the wiring exists end-to-end — AppDelegate routes the
+    /// silent push, CallManager gates on the policy and reports CallKit end.
+    func test_wiring_appDelegateRoutesCancel_andManagerReportsCallKitEnd() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_cancel") && appDelegate.contains("endRingingFromCancellation"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_cancel to CallManager.endRingingFromCancellation"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
+            XCTFail("CallManager.endRingingFromCancellation not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingFromCancellation must gate on CallReliabilityPolicy.shouldEndRingingOnCancellation"
+        )
+        XCTAssertTrue(
+            body.contains(".remoteEnded"),
+            "endRingingFromCancellation must report the CallKit end with reason .remoteEnded"
+        )
+    }
+}
+
+// MARK: - call_answered_elsewhere silent push (multi-device socketless)
+
+/// Miroir du call_cancel pour le multi-device : quand un autre device du même
+/// compte décroche, le device secondaire SOCKETLESS (réveillé par push VoIP,
+/// WebSocket jamais monté) ne reçoit pas `call:already-answered` — la push
+/// background `call_answered_elsewhere` doit couper sa sonnerie avec la raison
+/// CallKit `.answeredElsewhere` (Recents : « répondu sur un autre appareil »).
+@MainActor
+final class CallAnsweredElsewherePushTests: XCTestCase {
+
+    func test_wiring_appDelegateRoutesAnsweredElsewhere_andManagerReportsAnsweredElsewhere() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_answered_elsewhere") && appDelegate.contains("endRingingAnsweredElsewhere"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_answered_elsewhere to CallManager.endRingingAnsweredElsewhere"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
+            XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingAnsweredElsewhere must gate on the same pure policy as call_cancel (exact callId + incoming ring only)"
+        )
+        XCTAssertTrue(
+            body.contains(".answeredElsewhere"),
+            "endRingingAnsweredElsewhere must report the CallKit end with reason .answeredElsewhere (Recents parity with the socket path)"
+        )
+    }
+}
+
+// MARK: - Call setup metrics (ring vs negotiation split)
+
+/// `setupTimeMs` (initiated→connected) inclut le temps de sonnerie HUMAIN —
+/// 23 s observés en prod, inutilisable pour détecter une régression du setup
+/// WebRTC. `negotiationTimeMs` (answer/join→connected) isole la partie
+/// technique. Fonction pure : -1 dès qu'un ancrage manque, jamais de 0 menteur.
+@MainActor
+final class CallSetupMetricsTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func test_bothAnchors_present_splitsRingFromNegotiation() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0,
+            negotiationStartAt: t0.addingTimeInterval(20),   // 20 s de sonnerie
+            connectedAt: t0.addingTimeInterval(21.5)          // 1.5 s de négo
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 21_500)
+        XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
+    }
+
+    func test_neverConnected_bothMinusOne() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(5), connectedAt: nil
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingNegotiationAnchor_negotiationMinusOne_setupStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(3)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 3_000)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingInitiatedAnchor_setupMinusOne_negotiationStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.addingTimeInterval(2)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, 2_000)
+    }
+
+    /// Câblage : le payload analytics porte negotiationTimeMs et les DEUX
+    /// ancrages existent (answerCall côté appelé, participant-joined côté
+    /// appelant), avec reset per-call.
+    func test_wiring_payloadCarriesNegotiationTime_andAnchorsAreSet() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("\"negotiationTimeMs\""),
+            "call:analytics payload must carry negotiationTimeMs"
+        )
+        XCTAssertTrue(
+            source.contains("callSetupMetrics"),
+            "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
+        )
+        let anchorCount = source.components(separatedBy: "analyticsNegotiationStartDate = Date()").count - 1
+        XCTAssertGreaterThanOrEqual(
+            anchorCount, 2,
+            "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
+        )
+        XCTAssertTrue(
+            source.contains("analyticsNegotiationStartDate = nil"),
+            "The negotiation anchor must be reset per call"
+        )
+    }
+}
+
+// MARK: - Analytics quality distribution (pure) + periodic snapshots
+
+/// L'appel réel du 2026-07-03 (29 min 40) a perdu la row analytics du côté
+/// dont l'app a été TUÉE en background avant l'émission de teardown. Les
+/// snapshots périodiques « in_progress » (60 s, écrasés côté gateway par
+/// updateMany) garantissent qu'un kill ne perd au pire que la dernière
+/// minute. La distribution est calculée PUREMENT (fenêtre de niveau ouverte
+/// incluse virtuellement, aucune mutation des accumulateurs).
+@MainActor
+final class CallAnalyticsSnapshotTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 2_000_000)
+
+    func test_distribution_includesOpenWindow_withoutMutation() {
+        let accumulated: [VideoQualityLevel: Double] = [.excellent: 60]
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: accumulated,
+            openWindowLevel: .poor,
+            openWindowSince: t0,
+            now: t0.addingTimeInterval(40)
+        )
+        XCTAssertEqual(dist["excellent"] ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(dist["poor"] ?? 0, 0.4, accuracy: 0.001)
+        XCTAssertEqual(accumulated[.excellent], 60, "the input accumulator must never be mutated")
+    }
+
+    func test_distribution_mergesCriticalIntoPoor() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.poor: 10, .critical: 10, .good: 80],
+            openWindowLevel: nil, openWindowSince: nil, now: t0
+        )
+        XCTAssertEqual(dist["poor"] ?? 0, 0.2, accuracy: 0.001)
+        XCTAssertEqual(dist["good"] ?? 0, 0.8, accuracy: 0.001)
+    }
+
+    func test_distribution_emptyCall_defaultsToExcellent() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [:], openWindowLevel: nil, openWindowSince: nil, now: t0
+        )
+        XCTAssertEqual(dist["excellent"], 1.0)
+    }
+
+    func test_distribution_clockSkew_neverNegative() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.excellent: 10],
+            openWindowLevel: .poor,
+            openWindowSince: t0.addingTimeInterval(100),   // "since" dans le futur
+            now: t0
+        )
+        XCTAssertEqual(dist["excellent"] ?? 0, 1.0, accuracy: 0.001)
+    }
+
+    /// Câblage : snapshots périodiques armés à connected, annulés au teardown,
+    /// label « in_progress » ; l'émission finale ne mute plus les accumulateurs.
+    func test_wiring_periodicSnapshots_andPureFinalEmit() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("analyticsSnapshotTask") && source.contains("\"in_progress\""),
+            "CallManager must run periodic in_progress analytics snapshots so an app kill loses at most the last window"
+        )
+        XCTAssertTrue(
+            source.contains("analyticsSnapshotTask?.cancel()"),
+            "The periodic snapshot task must be cancelled at call teardown"
+        )
+        guard let fnRange = source.range(of: "private func emitCallAnalyticsIfNeeded(") else {
+            XCTFail("emitCallAnalyticsIfNeeded not found"); return
+        }
+        let body = String(source[fnRange.lowerBound...].prefix(900))
+        XCTAssertFalse(
+            body.contains("analyticsQualitySeconds[prevLevel, default: 0] +="),
+            "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
+        )
+    }
+}
+
+// MARK: - System PiP placeholder on remote camera toggle (source guard)
+
+@MainActor
+final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The system PiP window renders the raw remote track directly onto an
+    /// `AVSampleBufferDisplayLayer`, bypassing the SwiftUI placeholder branch
+    /// that `videoStream(local:)` already uses for the in-app floating pill.
+    /// Without this call, a peer turning their camera off mid-PiP leaves the
+    /// floating window showing their last live frame frozen indefinitely.
+    func test_callMediaToggled_video_forwardsMuteStateToSystemPiP() throws {
+        let source = try callManagerSource()
+        guard let toggledRange = source.range(of: "socket.callMediaToggled") else {
+            XCTFail("callMediaToggled subscription not found"); return
+        }
+        guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
+            XCTFail("\"video\" case not found in callMediaToggled handler"); return
+        }
+        // Borné sur la fin réelle du `case "video":` plutôt que sur un nombre de
+        // caractères : une fenêtre fixe se casse dès qu'un commentaire ou une
+        // ligne s'ajoute dans le case, et échoue alors sur un code correct.
+        let rest = source[videoCaseRange.lowerBound...]
+        let caseEnd = rest.range(of: "case \"audio\":")?.lowerBound ?? rest.endIndex
+        let body = String(rest[..<caseEnd])
+        XCTAssertTrue(
+            body.contains("self.isRemoteVideoEnabled = event.enabled"),
+            "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
+        )
+        XCTAssertTrue(
+            body.contains("self.pip.setRemoteVideoMuted(!event.enabled)"),
+            "The video case must forward the inverse of event.enabled to the system PiP controller so it swaps " +
+            "to a generic placeholder instead of freezing on the peer's last frame"
+        )
+    }
+}
+
+// MARK: - Bubble Position State (Call Banner Swipe-to-Collapse)
+
+@MainActor
+final class CallManagerBubblePositionTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_bubbleEdge_defaultsToTrailing() {
+        XCTAssertEqual(CallManager.shared.bubbleEdge, .trailing)
+    }
+
+    func test_bubbleVerticalFraction_defaultsNearTop() {
+        XCTAssertEqual(CallManager.shared.bubbleVerticalFraction, 0.08, accuracy: 0.0001)
+    }
+
+    func test_bubbleSizeTier_defaultsToCircle() {
+        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .circle)
+    }
+
+    /// `resetEndedStateForNewCall` is private and touches live singleton/CallKit
+    /// state — exercising it end-to-end would require mocking WebRTC/CallKit far
+    /// beyond this feature's scope. Source-guard instead (same technique as
+    /// `AudioRouteChangeStateReconciliationTests` above in this file): assert the
+    /// reset lines exist in the function body, so a new call never inherits the
+    /// previous call's dragged bubble position.
+    func test_resetEndedStateForNewCall_resetsBubblePositionToDefaults() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "private func resetEndedStateForNewCall()") else {
+            XCTFail("resetEndedStateForNewCall not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(
+            of: "\n    /// Starts an outgoing call",
+            range: range.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("bubbleEdge = .trailing"),
+            "resetEndedStateForNewCall must reset bubbleEdge to .trailing so a new call starts at the default bubble position"
+        )
+        XCTAssertTrue(
+            body.contains("bubbleVerticalFraction = 0.08"),
+            "resetEndedStateForNewCall must reset bubbleVerticalFraction to its default — a new call must not inherit the previous call's dragged position"
+        )
+    }
+
+    /// `resetEndedStateForNewCall`'s reset (above) only fires if a new call
+    /// starts WITHIN the 1.5s post-hangup settle window (`callState` still
+    /// `.ended`). The ordinary case — any call started later, once
+    /// `callState` has already settled to `.idle` — never reaches that guard.
+    /// `endCallInternal` has an existing "reset inconditionnel" block (video
+    /// state) for exactly this reason; the bubble reset must live there too,
+    /// unconditionally, not only in the conditional settle-window path.
+    func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "private func endCallInternal(reason: CallEndReason) {") else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(
+            of: "\n    // MARK: - Audio Session",
+            range: range.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("bubbleEdge = .trailing"),
+            "endCallInternal must unconditionally reset bubbleEdge to .trailing — otherwise a call started " +
+            "more than 1.5s after the previous one silently inherits its dragged bubble position"
+        )
+        XCTAssertTrue(
+            body.contains("bubbleVerticalFraction = 0.08"),
+            "endCallInternal must unconditionally reset bubbleVerticalFraction to its default"
+        )
+    }
+}
+
+// MARK: - Renegotiation Task Serialization
+
+/// Audit finding: `videoToggleTask`, `holdVideoTask`, and `survivalVideoTask` chain
+/// onto each other's `.value` before actuating a video transition (see the
+/// doc-comment on `survivalVideoTask`), but `iceRestartTask` — a fourth path that
+/// also calls into `webRTCService.createOffer()` via `performICERestart()` — was
+/// never part of that chain. `P2PWebRTCClient.createOffer()` has no re-entrancy
+/// guard: a second concurrent call re-enters `pc.offer(for:)`/`setLocalDescription`
+/// while the first is still in flight, corrupting the perfect-negotiation glare
+/// guard. This is directly reachable: a `CXSetHeldCallAction` (hold) firing at the
+/// same moment as an `NWPathMonitor` interface change (Wi-Fi↔cellular handoff, the
+/// exact trigger a GSM call causes) fires `handleHold`'s renegotiation and
+/// `attemptReconnection`'s ICE-restart renegotiation concurrently.
+///
+/// These are source-level guards (same technique as `CallManagerEarlyJoinTests`
+/// above): exercising the actual concurrent-Task race end-to-end would require
+/// mocking WebRTC's async continuation timing, far beyond this feature's scope.
+@MainActor
+final class CallManagerRenegotiationSerializationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("Marker not found: \(startMarker)")
+            throw XCTSkip()
+        }
+        let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    // MARK: scheduleICERestart must await the video-transition family
+
+    func test_scheduleICERestart_awaitsVideoToggleTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousToggle?.value") || body.contains("await previousVideoToggle?.value"),
+            "scheduleICERestart must await the in-flight videoToggleTask before calling performICERestart() — " +
+            "otherwise a manual video toggle and an ICE restart can call createOffer() concurrently."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsHoldVideoTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousHold?.value"),
+            "scheduleICERestart must await the in-flight holdVideoTask before calling performICERestart() — " +
+            "a CallKit hold and a WiFi↔cellular-triggered ICE restart can otherwise race createOffer()."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsSurvivalVideoTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousSurvival?.value"),
+            "scheduleICERestart must await the in-flight survivalVideoTask before calling performICERestart()."
+        )
+    }
+
+    /// `.cancel()` alone is cooperative and `createOffer()`/`performICERestart()`
+    /// have no `Task.isCancelled` checks — without also awaiting the PREVIOUS
+    /// `iceRestartTask` instance, a coalesced reconnect trigger (same `attempt`,
+    /// `attemptReconnection`'s `.coalesce` path) can re-arm this task while the
+    /// previous one is still mid-flight inside `createOffer()`, and both can call
+    /// `pc.offer(for:)`/`setLocalDescription` concurrently — the exact race this
+    /// PR fixes for the other three video-transition tasks, left open here.
+    func test_scheduleICERestart_awaitsPreviousIceRestartTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "scheduleICERestart must await the PREVIOUS in-flight iceRestartTask (not just .cancel() it) before " +
+            "calling performICERestart() — cancellation is cooperative and createOffer() has no isCancelled check."
+        )
+    }
+
+    // MARK: The video-transition family must await iceRestartTask
+
+    func test_toggleVideo_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "func toggleVideo() {",
+            to: "func switchCamera() {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "toggleVideo must await the in-flight iceRestartTask before calling createOffer() — otherwise a " +
+            "manual A/V toggle landing mid-ICE-restart runs two concurrent renegotiations."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsIceRestartTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousICERestart?.value") || holdBranch.contains("await previousIceRestart?.value"),
+            "handleHold's hold branch must await the in-flight iceRestartTask — a CallKit hold firing during an " +
+            "ICE restart (WiFi↔cellular handoff) must not run two concurrent createOffer() calls."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsIceRestartTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousICERestart?.value") || unholdBranch.contains("await previousIceRestart?.value"),
+            "handleHold's unhold branch must await the in-flight iceRestartTask before renegotiating."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "applySurvivalVideoSend must await the in-flight iceRestartTask before actuating a survival " +
+            "downgrade/upgrade — a network-quality-triggered ICE restart can otherwise race it."
+        )
+    }
+
+    func test_thermalCritical_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "Thermal-critical video downgrade must await the in-flight iceRestartTask, matching the other " +
+            "three video-transition sites."
+        )
+    }
+
+    /// Companion to the race fix above: unlike `toggleVideo`/`handleHold`, the
+    /// thermal-critical task never rechecked `Task.isCancelled` after its
+    /// `downgradeFromVideo()` await. If the user re-enables video while this task
+    /// is in flight, `toggleVideo()` cancels it but it runs to completion anyway,
+    /// sending a stale "video off" offer to the peer right after the newer task's
+    /// "video on" offer — a real, avoidable renegotiation glitch and peer-visible
+    /// flicker.
+    func test_thermalCritical_rechecksCancellationAfterDowngrade() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        guard let downgradeRange = body.range(of: "let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") else {
+            XCTFail("Expected downgradeFromVideo() call in thermal-critical handler")
+            return
+        }
+        // The match ends right after the closing `)`, so the remainder starts with
+        // the newline that terminates THIS line — drop it first, otherwise the
+        // first "line" extracted below is always the empty string before it.
+        let afterDowngrade = String(body[downgradeRange.upperBound...]).drop(while: { $0 == "\n" })
+        let nextLine = afterDowngrade
+            .split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? ""
+        XCTAssertTrue(
+            nextLine.contains("Task.isCancelled"),
+            "The line right after downgradeFromVideo() in the thermal-critical handler must recheck " +
+            "Task.isCancelled, mirroring toggleVideo/handleHold — otherwise a cancelled thermal downgrade " +
+            "still emits a stale renegotiation offer after being superseded."
+        )
+    }
+
+    // MARK: - handleSignalOffer must join the renegotiation-serialization chain
+
+    /// Audit finding: `handleSignalOffer`'s `.connecting` (late-offer) and
+    /// `.connected`/`.reconnecting` (mid-call renegotiation) branches called
+    /// `webRTCService.createAnswer()` directly, unserialized against the
+    /// `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask`
+    /// family. `createOffer()` has no glare check against an in-flight
+    /// `createAnswer()` (only `createAnswer()` checks `makingOffer`), so a
+    /// peer-initiated renegotiation offer landing while a local hold/toggle/
+    /// ICE-restart is mid-`createOffer()` could run both concurrently on the
+    /// same `RTCPeerConnection` — a race the perfect-negotiation guard alone
+    /// does not catch.
+    func test_signalOfferAnswerTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var signalOfferAnswerTask: Task<Void, Never>?"),
+            "CallManager must declare `signalOfferAnswerTask` to track handleSignalOffer's " +
+            "in-flight createAnswer() so it can be chained with the other renegotiation tasks."
+        )
+    }
+
+    private func handleSignalOfferBranch(from startMarker: String, to endMarker: String) throws -> String {
+        let fnBody = try body(
+            from: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {",
+            to: "// MARK: - Reliable call:join (incoming paths)",
+            in: try callManagerSource()
+        )
+        guard let start = fnBody.range(of: startMarker) else {
+            XCTFail("Marker not found in handleSignalOffer: \(startMarker)")
+            throw XCTSkip()
+        }
+        let end = fnBody.range(of: endMarker, range: start.upperBound..<fnBody.endIndex)?.lowerBound ?? fnBody.endIndex
+        return String(fnBody[start.lowerBound..<end])
+    }
+
+    func test_handleSignalOffer_connectingBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
+        for expected in [
+            "await previousToggleConnecting?.value",
+            "await previousHoldConnecting?.value",
+            "await previousSurvivalConnecting?.value",
+            "await previousICERestartConnecting?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "handleSignalOffer's .connecting branch must \(expected) before calling createAnswer() — " +
+                "otherwise a late-offer answer can race a concurrent local renegotiation."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "handleSignalOffer's .connecting branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    func test_handleSignalOffer_renegotiationBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "handleSignalOffer's mid-call renegotiation branch must \(expected) before calling " +
+                "createAnswer() — createOffer() has no glare check against an in-flight answer."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "handleSignalOffer's renegotiation branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    // MARK: The video-transition family must await signalOfferAnswerTask
+
+    func test_toggleVideo_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "func toggleVideo() {",
+            to: "func switchCamera() {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "toggleVideo must await the in-flight signalOfferAnswerTask before calling createOffer() — " +
+            "a peer-initiated renegotiation answer in flight must not race a manual toggle's offer."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsSignalOfferAnswerTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousAnswer?.value"),
+            "handleHold's hold branch must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsSignalOfferAnswerTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousAnswer?.value"),
+            "handleHold's unhold branch must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "applySurvivalVideoSend must await the in-flight signalOfferAnswerTask before actuating."
+        )
+    }
+
+    func test_thermalCritical_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "Thermal-critical video downgrade must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "scheduleICERestart must await the in-flight signalOfferAnswerTask before calling " +
+            "performICERestart() — a peer-initiated renegotiation answer can otherwise race it."
+        )
+    }
+
+    func test_endCallInternal_cancelsSignalOfferAnswerTask() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("signalOfferAnswerTask?.cancel()") && source.contains("signalOfferAnswerTask = nil"),
+            "endCallInternal must cancel and nil signalOfferAnswerTask on teardown, matching the other " +
+            "renegotiation tasks."
+        )
+    }
+
+    // MARK: - answerCall/answerCallReady must join the renegotiation-serialization chain
+
+    /// Audit finding: `answerCall()` and `answerCallReady()`'s buffered-offer
+    /// branches called `webRTCService.createAnswer()` directly, unserialized
+    /// against the `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/
+    /// `iceRestartTask`/`signalOfferAnswerTask` family — the only two
+    /// `createAnswer()` call sites left out of the chain that `handleSignalOffer`
+    /// already joined. A CallKit hold firing on a ringing video call (e.g. a
+    /// GSM call pre-empting it) starts `holdVideoTask` mutating the video
+    /// transceiver; if the user answers before that settles, the untracked
+    /// answer Task races it on the same `RTCPeerConnection`, which can bake a
+    /// wrong transceiver direction into the SDP answer (one-way/silent video).
+    func test_answerCall_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "answerCall's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "answerCall's buffered-offer branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    func test_answerCallReady_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "answerCallReady's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = answerTask") && branch.contains("await answerTask.value"),
+            "answerCallReady's buffered-offer branch must track its createAnswer() work in " +
+            "signalOfferAnswerTask (so later renegotiations can chain onto it) and await it before returning."
+        )
+    }
+
+    // MARK: - cameraSwitchTask joins the renegotiation-serialization chain (privacy race fix)
+
+    /// Audit finding (Vague 65) — `switchCamera()`/`selectCamera(id:)` drive the SAME
+    /// `RTCCameraVideoCapturer` as `toggleVideo`/`handleHold`/`applySurvivalVideoSend`/the
+    /// thermal-critical downgrade via `stopCapture()`/`startCapture()`, but were never part
+    /// of this chain. Concretely: a video-toggle tap immediately followed by a camera flip
+    /// could let the flip's `startCapture()` finish AFTER a concurrent downgrade's
+    /// `stopCapture()`, leaving the camera physically on (LED lit, streaming) while
+    /// `isVideoEnabled == false` — a privacy regression, not just a UI desync. Fixed by
+    /// adding `cameraSwitchTask` to the bidirectional chain: `switchCamera()`/
+    /// `selectCamera(id:)` await the other five before actuating, and each of the ten
+    /// existing task-creation sites now also awaits `cameraSwitchTask`.
+    func test_cameraSwitchTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var cameraSwitchTask: Task<Void, Never>?"),
+            "CallManager must declare `cameraSwitchTask` to track switchCamera()/selectCamera(id:) so " +
+            "it can be chained with the other renegotiation/video-transition tasks."
+        )
+    }
+
+    func test_switchCamera_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func switchCamera() {", to: "func refreshAvailableCameras() {", in: try callManagerSource())
+        for expected in [
+            "await previousCameraSwitch?.value",
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "switchCamera() must \(expected) before actuating the camera switch — otherwise a video " +
+                "toggle/hold/survival/ICE-restart/renegotiation in flight can interleave stopCapture()/" +
+                "startCapture() on the same RTCCameraVideoCapturer."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("cameraSwitchTask = Task"),
+            "switchCamera() must track its work in cameraSwitchTask so later camera switches and other " +
+            "video-transition tasks can chain onto it."
+        )
+        XCTAssertTrue(
+            branch.contains("withCheckedContinuation"),
+            "switchCamera() must bridge webRTCService.switchCamera(completion:) via a continuation so " +
+            "cameraSwitchTask.value only resolves once the switch has actually completed, not merely once " +
+            "it has been enqueued."
+        )
+    }
+
+    func test_selectCamera_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func selectCamera(id: String) {", to: "func toggleTranscription() {", in: try callManagerSource())
+        for expected in [
+            "await previousCameraSwitch?.value",
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "selectCamera(id:) must \(expected) before actuating the camera switch — same rationale " +
+                "as switchCamera()."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("cameraSwitchTask = Task"),
+            "selectCamera(id:) must track its work in cameraSwitchTask."
+        )
+    }
+
+    func test_toggleVideo_awaitsCameraSwitchTask() throws {
+        let body = try body(from: "func toggleVideo() {", to: "func switchCamera() {", in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "toggleVideo must await the in-flight cameraSwitchTask before calling upgradeToVideo()/" +
+            "downgradeFromVideo() — both drive the same RTCCameraVideoCapturer as switchCamera()."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsCameraSwitchTask() throws {
+        let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousCameraSwitch?.value"),
+            "handleHold's hold branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsCameraSwitchTask() throws {
+        let fullBody = try body(from: "func handleHold(_ isOnHold: Bool) {", to: "func sendDTMF(digits: String) {", in: try callManagerSource())
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousCameraSwitch?.value"),
+            "handleHold's unhold branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "applySurvivalVideoSend must await the in-flight cameraSwitchTask before actuating."
+        )
+    }
+
+    func test_thermalCritical_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "Thermal-critical video downgrade must await the in-flight cameraSwitchTask — it is a 6th " +
+            "site driving the same capturer, previously missed by an earlier audit's site enumeration."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsCameraSwitchTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousCameraSwitch?.value"),
+            "scheduleICERestart must await the in-flight cameraSwitchTask before calling performICERestart()."
+        )
+    }
+
+    func test_handleSignalOffer_connectingBranch_awaitsCameraSwitchTask() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitchConnecting?.value"),
+            "handleSignalOffer's .connecting branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_handleSignalOffer_renegotiationBranch_awaitsCameraSwitchTask() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "handleSignalOffer's mid-call renegotiation branch must await the in-flight cameraSwitchTask."
+        )
+    }
+
+    func test_answerCall_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
+        let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "answerCall's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
+        )
+    }
+
+    func test_answerCallReady_bufferedOfferBranch_awaitsCameraSwitchTask() throws {
+        let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
+        XCTAssertTrue(
+            branch.contains("await previousCameraSwitch?.value"),
+            "answerCallReady's buffered-offer branch must await the in-flight cameraSwitchTask before calling createAnswer()."
+        )
+    }
+
+    func test_endCallInternal_cancelsCameraSwitchTask() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("cameraSwitchTask?.cancel()") && source.contains("cameraSwitchTask = nil"),
+            "endCallInternal must cancel and nil cameraSwitchTask on teardown, matching the other " +
+            "renegotiation/video-transition tasks."
+        )
+    }
+}
+
+@MainActor
+final class CallManagerTranscriptionMappingTests: XCTestCase {
+
+    func test_makeTranscriptionSegment_keepsOriginalText_separateFromTranslation() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour", "text must stay the ORIGINAL — never overwritten by the translation")
+        XCTAssertEqual(segment.translatedText, "Hello")
+        XCTAssertEqual(segment.translatedLanguage, "en")
+        XCTAssertEqual(segment.speakerId, "user-1")
+        XCTAssertEqual(segment.startTime, 0)
+        XCTAssertEqual(segment.endTime, 1.5)
+        XCTAssertTrue(segment.isFinal)
+        XCTAssertEqual(segment.confidence, 0.95, accuracy: 0.001)
+        XCTAssertEqual(segment.language, "en")
+        XCTAssertEqual(segment.capturedAt.timeIntervalSinceNow, 0, accuracy: 2.0,
+                        "capturedAt must be stamped at receipt time (wall clock), not derived from the ASR-relative startMs/endMs")
+    }
+
+    func test_makeTranscriptionSegment_withoutTranslation_translatedFieldsAreNil() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1000,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "fr",
+                "confidence": 0.9
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour")
+        XCTAssertNil(segment.translatedText)
+        XCTAssertNil(segment.translatedLanguage)
     }
 }

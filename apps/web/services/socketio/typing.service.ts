@@ -10,6 +10,7 @@
 
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '@/utils/logger';
+import { useUserStore } from '@/stores/user-store';
 import type { TypingEvent } from '@/types';
 import type {
   TypedSocket,
@@ -48,6 +49,15 @@ export class TypingService {
    * Handle typing start event
    */
   private handleTypingStart(event: TypingEvent): void {
+    // Typing = signal de présence le plus fort : l'émetteur est actif LÀ,
+    // MAINTENANT. On force son état online localement pour que le dot vert
+    // reste cohérent avec « X écrit… » même si le dernier user:status date
+    // (le gateway ne rebroadcaste pas lastActiveAt sur typing:start).
+    useUserStore.getState().updateUserStatus(event.userId, {
+      isOnline: true,
+      lastActiveAt: new Date(),
+    });
+
     // Add user to typing users for this conversation
     if (!this.typingUsers.has(event.conversationId)) {
       this.typingUsers.set(event.conversationId, new Set());

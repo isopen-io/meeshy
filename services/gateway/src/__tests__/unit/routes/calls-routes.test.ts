@@ -27,6 +27,9 @@ const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
 const mockGetActiveCallForConversation = jest.fn<any>();
 const mockListHistory = jest.fn<any>();
+const mockFinalizeCallSummary = jest.fn<any>();
+const mockBroadcastCallEndedIfTerminal = jest.fn<any>();
+const mockInvalidateSignalCache = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -47,6 +50,9 @@ jest.mock('../../../services/CallService', () => ({
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),
     listHistory: (...args: any[]) => mockListHistory(...args),
+    finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
+    broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
+    invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
   })),
 }));
 
@@ -461,6 +467,11 @@ describe('callRoutes', () => {
 
       expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:end — le pair est notifié en temps réel via call:ended.
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
+      // Parité socket call:end — le cache de session `call:signal` (TTL 2s)
+      // est invalidé immédiatement après l'écriture de `leftAt` par endCall().
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
     });
 
     it('allows an admin member to end the call', async () => {
@@ -517,7 +528,13 @@ describe('callRoutes', () => {
       expect(mockEndCall).not.toHaveBeenCalled();
     });
 
-    it('returns 403 when caller is a regular member and not the initiator', async () => {
+    it('allows a regular member (not initiator/admin/moderator) to end the call — parity with socket call:end', async () => {
+      // The route must NOT re-implement a stricter initiator/admin/moderator-only
+      // gate: CallService.endCall() itself is the single source of truth for
+      // "who may end this call" (P2P: any active participant), and the socket
+      // `call:end` path already delegates to it with no extra gate. A plain
+      // conversation member who IS an active call participant must be able to
+      // end their own call via REST exactly like they can via the socket.
       const session = makeCallSession({ initiatorId: 'other-user-id' });
       const membership = makeMembership({ role: 'member' });
 
@@ -527,12 +544,34 @@ describe('callRoutes', () => {
       });
 
       mockGetCallSession.mockResolvedValueOnce(session);
+      mockEndCall.mockResolvedValueOnce(session);
 
       const req = makeRequest({ params: { callId: CALL_ID } });
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      expect(reply._body).toMatchObject({ success: true, data: session });
+    });
+
+    it('surfaces NOT_A_PARTICIPANT from CallService.endCall when the member is a conversation member but not an active call participant', async () => {
+      // Authorization for "must be an active participant of THIS call" still
+      // happens — just inside CallService.endCall(), not duplicated in the route.
+      const session = makeCallSession({ initiatorId: 'other-user-id' });
+      const membership = makeMembership({ role: 'member' });
+
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockEndCall.mockRejectedValueOnce(new Error('NOT_A_PARTICIPANT: You are not in this call'));
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+
+      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      expect(reply._body?.success).toBe(false);
     });
 
     it('uses membership.id for endParticipantId when authContext.participantId absent', async () => {
@@ -737,8 +776,13 @@ describe('callRoutes', () => {
 
   describe('DELETE /calls/:callId/participants/:participantId — leaveCall', () => {
     it('allows a user to leave their own participation (participantId === userId)', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
       const session = makeCallSession();
+      mockGetCallSession.mockResolvedValueOnce(session);
       mockLeaveCall.mockResolvedValueOnce(session);
 
       const req = makeRequest({
@@ -756,10 +800,48 @@ describe('callRoutes', () => {
         participantId: PART_ID,
       });
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:leave — call:ended diffusé si le leave a terminé l'appel
+      // (broadcastCallEndedIfTerminal auto-gardé sur le statut terminal).
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
+      // Parité socket call:leave — le cache de session `call:signal` (TTL 2s)
+      // est invalidé immédiatement après l'écriture de `leftAt` par leaveCall().
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('invalidates the signal cache even when the call stays non-terminal (group call continues)', async () => {
+      // Unlike broadcastCallEndedIfTerminal (auto-guarded on terminal status),
+      // invalidateSignalCache must fire unconditionally: a group-call leave
+      // that does NOT end the session still writes `leftAt` for the departing
+      // participant, and the stale cached snapshot could still let call:signal
+      // relay ICE/SDP targeting them within the 2s TTL.
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      const session = makeCallSession({ status: 'active', endedAt: null });
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockLeaveCall.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: USER_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
     });
 
     it('uses authContext.participantId for leaveParticipantId even when leaving own slot', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
       const req = makeRequest({
@@ -781,8 +863,13 @@ describe('callRoutes', () => {
       );
     });
 
-    it('uses params.participantId for leaveParticipantId when authContext.participantId absent', async () => {
-      const { routes, reply } = setup();
+    it('resolves leaveParticipantId from the caller\'s own membership when authContext.participantId absent (registered self-leave)', async () => {
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
       const req = makeRequest({
@@ -796,16 +883,51 @@ describe('callRoutes', () => {
       );
 
       expect(mockLeaveCall).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: USER_ID })
+        expect.objectContaining({ participantId: membership.id })
       );
     });
 
-    it('allows a moderator to remove another participant', async () => {
+    it('returns 403 when a non-member self-leaves a call they have no relation to', async () => {
+      // Security regression guard (2026-07-10): a caller with no Participant
+      // row in this call's conversation must be rejected outright, never
+      // silently resolved to their raw userId and passed into
+      // CallService.leaveCall() — that fallback previously let ANY
+      // authenticated user end an arbitrary direct call by targeting their
+      // own userId as `participantId`, with zero conversation relationship
+      // required.
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: USER_ID },
+        authContext: { userId: USER_ID, participantId: undefined, type: 'registered' },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('allows a moderator to remove another participant, using the TARGET participant id (not the moderator\'s own)', async () => {
       const session = makeCallSession();
       const modMembership = makeMembership({ role: 'moderator' });
+      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: jest.fn<any>().mockResolvedValue(modMembership) },
+        participant: { findFirst: participantFindFirst },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -821,15 +943,29 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(mockLeaveCall).toHaveBeenCalled();
+      // Regression guard: a moderator kicking someone else must never end up
+      // marking the MODERATOR's own participation as "left" (PART_ID is the
+      // moderator's own id per `makeMembership()`/default authContext).
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
+      );
+      expect(mockLeaveCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: PART_ID })
+      );
     });
 
-    it('allows an admin to remove another participant', async () => {
+    it('allows an admin to remove another participant, using the TARGET participant id (not the admin\'s own)', async () => {
       const session = makeCallSession();
       const adminMembership = makeMembership({ role: 'admin' });
+      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(adminMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: jest.fn<any>().mockResolvedValue(adminMembership) },
+        participant: { findFirst: participantFindFirst },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -845,7 +981,12 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(mockLeaveCall).toHaveBeenCalled();
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
+      );
+      expect(mockLeaveCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: PART_ID })
+      );
     });
 
     it('returns 403 when regular member tries to remove another participant', async () => {
@@ -892,8 +1033,12 @@ describe('callRoutes', () => {
         reply
       );
 
+      // The unconditional caller-membership gate (added 2026-07-10) now
+      // rejects with NOT_A_PARTICIPANT before ever reaching the
+      // moderator-role check below it.
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
     it('returns 404 on CALL_NOT_FOUND error', async () => {
@@ -917,7 +1062,12 @@ describe('callRoutes', () => {
     });
 
     it('returns 400 on leaveCall error', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockRejectedValueOnce(new Error('NOT_IN_CALL: not a participant'));
 
       const req = makeRequest({
@@ -934,7 +1084,12 @@ describe('callRoutes', () => {
     });
 
     it('uses fallback message on error without message', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockRejectedValueOnce({});
 
       const req = makeRequest({
@@ -1091,7 +1246,9 @@ describe('callRoutes', () => {
             participants: {
               some: {
                 participant: { userId: USER_ID },
-                leftAt: null,
+                // Audit C5 — Prisma-on-Mongo: null alone misses documents
+                // where the field is absent (historical CallParticipant).
+                OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
               },
             },
           }),

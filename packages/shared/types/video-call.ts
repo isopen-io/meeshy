@@ -29,6 +29,20 @@ export type CallStatus =
   | 'failed';
 
 /**
+ * Statuts TERMINAUX — un call dans l'un de ces états est résolu : aucun
+ * chemin (leave, disconnect-grace, force-end) ne doit plus réécrire son
+ * statut/endReason/duration ni re-poster de summary.
+ * Mirror runtime : `TERMINAL_STATUSES` dans services/gateway CallService
+ * (typée sur l'enum Prisma) — garder les deux listes synchronisées.
+ */
+export const CALL_TERMINAL_STATUSES: readonly CallStatus[] = [
+  'ended',
+  'missed',
+  'rejected',
+  'failed',
+] as const;
+
+/**
  * Raison de fin d'appel — synced with Prisma CallEndReason enum
  * @see schema.prisma CallEndReason
  */
@@ -517,6 +531,12 @@ export interface CallQualityFeedback {
 
 export interface CallAnalytics {
   readonly setupTimeMs: number
+  /**
+   * answer/join → connected : la négociation WebRTC seule, SANS le temps de
+   * sonnerie humain inclus dans `setupTimeMs`. Optionnel (absent des builds
+   * iOS < 2026-07-03) ; -1 = jamais connecté / ancrage manquant.
+   */
+  readonly negotiationTimeMs?: number
   readonly iceMethod: 'direct' | 'stun' | 'turn'
   readonly codec: { readonly audio: string; readonly video: string }
   readonly averageRtt: number
@@ -821,7 +841,6 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
-  TOGGLE_SCREEN_SHARE: 'call:toggle-screen-share',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)
@@ -845,6 +864,11 @@ export const CALL_EVENTS = {
   PARTICIPANT_JOINED: 'call:participant-joined',
   PARTICIPANT_LEFT: 'call:participant-left',
   SIGNAL_RECEIVED: 'call:signal',
+  /**
+   * @deprecated Jamais émis par le gateway (audit appels 2026-07-11 #4) —
+   * le mode `sfu` est renvoyé dans les ACKs sans média SFU derrière. Ne pas
+   * s'y abonner ; sera supprimé si le mode SFU est formellement abandonné.
+   */
   MODE_CHANGED: 'call:mode-changed',
   MEDIA_TOGGLED: 'call:media-toggled',
   ENDED: 'call:ended',
@@ -857,11 +881,20 @@ export const CALL_EVENTS = {
   ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
 
   // Transcription & Translation (Phase 2/3)
+  // Seuls TRANSCRIPTION_SEGMENT (client → serveur) et TRANSLATED_SEGMENT
+  // (serveur → clients) sont câblés dans CallEventsHandler. Les 4 autres
+  // sont un contrat déclaré jamais émis (audit appels 2026-07-11 #4) —
+  // conservés uniquement parce que le design leader/follower est suspendu,
+  // pas abandonné. Ne pas s'y abonner tant qu'un émetteur n'existe pas.
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION: 'call:transcription',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSLATION: 'call:translation',
   TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   TRANSLATED_SEGMENT: 'call:translated-segment',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_ROLE: 'call:transcription-role',
 } as const;
 
@@ -876,6 +909,14 @@ export interface CallError {
   readonly code: CallErrorCode;
   readonly message: string;
   readonly details?: Record<string, unknown>;
+  /**
+   * The call this error pertains to, when known. Clients with an active call
+   * MUST ignore any `call:error` whose `callId` is present and does not match
+   * their current call — an error for call A must never tear down an
+   * unrelated, healthy call B on the same device. Absent only for errors that
+   * occur before a call context exists (auth failures, generic rate limits).
+   */
+  readonly callId?: string;
 }
 
 /**
@@ -906,7 +947,9 @@ export const CALL_ERROR_CODES = {
   UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
   ALREADY_IN_CALL: 'ALREADY_IN_CALL',
   NOT_IN_CALL: 'NOT_IN_CALL',
-  
+  /** Optimistic-locking conflict on CallSession.version persisted after retry (see CallService.joinCall). */
+  CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
+
   // Media control errors
   MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
 

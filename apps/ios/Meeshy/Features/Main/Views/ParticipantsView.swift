@@ -72,7 +72,7 @@ struct ParticipantsView: View {
                         memberList
                         leaveGroupButton
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 }
             }
             .navigationTitle(String(localized: "participants.title", defaultValue: "Membres", bundle: .main))
@@ -83,7 +83,7 @@ struct ParticipantsView: View {
                         HapticFeedback.light()
                         dismiss()
                     } label: {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
@@ -154,6 +154,7 @@ struct ParticipantsView: View {
                     Task { await loadParticipants() }
                 }
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .alert(String(localized: "participants.remove.title", defaultValue: "Retirer ce membre ?", bundle: .main), isPresented: Binding(
                 get: { confirmRemoveUserId != nil },
@@ -166,9 +167,9 @@ struct ParticipantsView: View {
                     }
                 }
             } message: {
-                Text(String(localized: "participants.remove.message", defaultValue: "Cette personne ne pourra plus acceder a la conversation.", bundle: .main))
+                Text(String(localized: "participants.remove.message", defaultValue: "Cette personne ne pourra plus accéder à la conversation.", bundle: .main))
             }
-            .alert(String(localized: "participants.role.title", defaultValue: "Changer le role ?", bundle: .main), isPresented: Binding(
+            .alert(String(localized: "participants.role.title", defaultValue: "Changer le rôle ?", bundle: .main), isPresented: Binding(
                 get: { roleChangeTarget != nil },
                 set: { if !$0 { roleChangeTarget = nil } }
             )) {
@@ -214,6 +215,7 @@ struct ParticipantsView: View {
             Image(systemName: "person.2.fill")
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
                 .font(MeeshyFont.relative(14, weight: .semibold))
@@ -231,12 +233,12 @@ struct ParticipantsView: View {
     @ViewBuilder
     private var memberList: some View {
         if isLoading {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ForEach(0..<4, id: \.self) { _ in
                     skeletonRow
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
         } else if participants.isEmpty {
             emptyState
         } else {
@@ -328,6 +330,8 @@ struct ParticipantsView: View {
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.sm + 2)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
     }
 
     // MARK: - Role Badge
@@ -487,6 +491,45 @@ struct ParticipantsView: View {
 
     // MARK: - Display Helpers
 
+    private func participantAccessibilityLabel(
+        _ participant: PaginatedParticipant,
+        isCurrentUser: Bool,
+        presence: PresenceState
+    ) -> String {
+        var parts: [String] = []
+
+        parts.append(isCurrentUser
+            ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))"
+            : participant.name)
+
+        if let role = participant.conversationRole,
+           let memberRole = MemberRole(rawValue: role.lowercased()),
+           memberRole != .member {
+            parts.append(roleDisplayLabel(role))
+        }
+
+        if let presenceLabel = presenceAccessibilityLabel(presence) {
+            parts.append(presenceLabel)
+        }
+
+        if let username = participant.username {
+            parts.append("@\(username)")
+        }
+
+        if let joinedAt = participant.joinedAt {
+            let since = String(localized: "participants.since", defaultValue: "Depuis", bundle: .main)
+            parts.append("\(since) \(shortDate(joinedAt))")
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    // Présence annoncée seulement quand un dot est visible (online/away/idle).
+    // `offline` reste muet — parité avec le visuel (offline = pas de dot).
+    private func presenceAccessibilityLabel(_ presence: PresenceState) -> String? {
+        presence.showsIndicator ? presence.localizedLabel : nil
+    }
+
     private func roleDisplayLabel(_ role: String) -> String {
         let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
         return memberRole.displayName
@@ -501,8 +544,13 @@ struct ParticipantsView: View {
         }
     }
 
-    private func relativeTime(from date: Date) -> String {
-        date.formatted(.relative(presentation: .numeric))
+    /// Delegates to the SSOT `RelativeTimeFormatter` (`.long` style — detail
+    /// surfaces) instead of the raw `Date.formatted(.relative(...))` API,
+    /// which RelativeTimeFormatter's own header comment explicitly lists
+    /// "participants" as a surface it replaced. `static` + injectable `now`
+    /// so it's unit-testable without a live view.
+    static func relativeTime(from date: Date, now: Date = Date()) -> String {
+        RelativeTimeFormatter.longString(for: date, now: now)
     }
 
     private func shortDate(_ date: Date) -> String {

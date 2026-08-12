@@ -65,13 +65,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/migrations/migrate-from-legacy.ts`
 
-## routes  (1/30 have a test)
+## routes  (2/30 have a test)
 
 - [ ] `services/gateway/src/routes/affiliate.ts`
 - [ ] `services/gateway/src/routes/anonymous.ts`
 - [ ] `services/gateway/src/routes/attachments.ts`
 - [x] `services/gateway/src/routes/calls.ts`
-- [ ] `services/gateway/src/routes/communities.ts`
+- [x] `services/gateway/src/routes/communities.ts`
 - [x] `services/gateway/src/routes/community-preferences.ts`
 - [x] `services/gateway/src/routes/conversation-encryption.ts`
 - [x] `services/gateway/src/routes/conversation-preferences.ts`
@@ -139,14 +139,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
 - [x] `services/gateway/src/routes/auth/types.ts`
 
-## routes/communities  (0/6 have a test)
+## routes/communities  (6/6 have a test)
 
-- [ ] `services/gateway/src/routes/communities/core.ts`
-- [ ] `services/gateway/src/routes/communities/index.ts`
-- [ ] `services/gateway/src/routes/communities/members.ts`
-- [ ] `services/gateway/src/routes/communities/search.ts`
-- [ ] `services/gateway/src/routes/communities/settings.ts`
-- [ ] `services/gateway/src/routes/communities/types.ts`
+- [x] `services/gateway/src/routes/communities/core.ts`
+- [x] `services/gateway/src/routes/communities/index.ts`
+- [x] `services/gateway/src/routes/communities/members.ts`
+- [x] `services/gateway/src/routes/communities/search.ts`
+- [x] `services/gateway/src/routes/communities/settings.ts`
+- [x] `services/gateway/src/routes/communities/types.ts`
 
 ## routes/conversations  (2/15 have a test)
 

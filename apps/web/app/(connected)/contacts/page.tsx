@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { getInitials } from '@/utils/initials';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
 import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
 import type { ContactV2 } from '@/hooks/v2/use-contacts-v2';
 import { useUser } from '@/stores';
@@ -26,6 +27,8 @@ import { useI18n } from '@/hooks/useI18n';
 import { apiService } from '@/services/api.service';
 import type { ContactTab, ContactSortOption, FriendRequest } from '@/types/contacts';
 import type { BlockedUser, User } from '@meeshy/shared/types';
+import { getUserDisplayName } from '@/utils/user-display-name';
+import { formatLastSeenLabel } from '@/utils/presence-format';
 import {
   Users,
   UserCheck,
@@ -45,31 +48,6 @@ import {
   CheckCircle,
 } from 'lucide-react';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-type TFn = (key: string, params?: Record<string, unknown>) => string;
-
-function userDisplayName(u?: User | null): string {
-  if (!u) return '';
-  const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
-  return u.displayName || full || u.username || '';
-}
-
-function formatLastSeen(t: TFn, locale: string, isOnline: boolean, lastActiveAt?: string): string {
-  if (isOnline) return t('status.online');
-  if (!lastActiveAt) return t('status.neverSeen');
-  const last = new Date(lastActiveAt).getTime();
-  if (Number.isNaN(last)) return t('status.offline');
-  const diffMin = Math.floor((Date.now() - last) / 60_000);
-  if (diffMin < 1) return t('status.justNow');
-  if (diffMin < 60) return t('status.minutesAgo', { count: diffMin });
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return t('status.hoursAgo', { count: diffH });
-  const diffD = Math.floor(diffH / 24);
-  if (diffD < 7) return t('status.daysAgo', { count: diffD });
-  return t('status.lastSeenDate', { date: new Date(lastActiveAt).toLocaleDateString(locale) });
-}
-
 // ─── Row primitives (links dashboard-v1 aesthetic) ─────────────────────────
 
 function RowShell({
@@ -77,16 +55,24 @@ function RowShell({
   name,
   username,
   meta,
+  userId,
   isOnline,
+  lastActiveAt,
   actions,
 }: {
   avatar?: string | null;
   name: string;
   username?: string;
   meta?: string;
+  userId?: string;
   isOnline?: boolean;
+  lastActiveAt?: Date | string | null;
   actions?: React.ReactNode;
 }) {
+  const status = useLiveUserStatus(
+    userId,
+    typeof isOnline === 'boolean' ? { isOnline, lastActiveAt } : null
+  );
   return (
     <li className="flex items-center gap-4 p-4">
       <div className="relative flex-shrink-0">
@@ -96,7 +82,7 @@ function RowShell({
         </Avatar>
         {typeof isOnline === 'boolean' && (
           <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-white dark:ring-gray-950">
-            <OnlineIndicator isOnline={isOnline} size="md" />
+            <OnlineIndicator isOnline={status === 'online'} status={status} size="md" />
           </span>
         )}
       </div>
@@ -223,8 +209,10 @@ export default function ContactsPage() {
           avatar={contact.avatar}
           name={contact.name}
           username={contact.username}
-          meta={formatLastSeen(t, locale, contact.isOnline, contact.lastActiveAt)}
+          meta={formatLastSeenLabel({ isOnline: contact.isOnline, lastActiveAt: contact.lastActiveAt, t, locale })}
+          userId={contact.id}
           isOnline={contact.isOnline}
+          lastActiveAt={contact.lastActiveAt}
           actions={
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -275,14 +263,16 @@ export default function ContactsPage() {
       const isIncoming = request.receiverId === user?.id;
       const other: User | undefined = isIncoming ? request.sender : request.receiver;
       const otherId = isIncoming ? request.senderId : request.receiverId;
-      const name = userDisplayName(other) || otherId;
+      const name = getUserDisplayName(other, '') || otherId;
       return (
         <RowShell
           key={request.id}
           avatar={other?.avatar}
           name={name}
           username={other?.username ? `@${other.username}` : undefined}
+          userId={otherId}
           isOnline={other?.isOnline}
+          lastActiveAt={other?.lastActiveAt}
           actions={
             <div className="flex items-center gap-2">
               {variant === 'pending' && isIncoming && (

@@ -211,7 +211,7 @@ public struct CommunitySettingsView: View {
 
             // Color picker
             VStack(alignment: .leading, spacing: 10) {
-                Text("Couleur")
+                Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textSecondary)
 
@@ -230,7 +230,7 @@ public struct CommunitySettingsView: View {
                 TextField("🏘️", text: $viewModel.localEmoji)
                     .font(.system(size: 22))
                     .foregroundColor(theme.textPrimary)
-                    .onChange(of: viewModel.localEmoji) { newValue in
+                    .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
                         let trimmed = String(newValue.unicodeScalars.prefix(2))
                         if trimmed != newValue { viewModel.localEmoji = trimmed }
                     }
@@ -240,15 +240,15 @@ public struct CommunitySettingsView: View {
 
     @ViewBuilder
     private var communityBannerView: some View {
-        if !viewModel.bannerUrl.isEmpty, let url = URL(string: viewModel.bannerUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    communityBannerPlaceholder
-                }
+        if !viewModel.bannerUrl.isEmpty {
+            // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+            // la bannière n'est téléchargée qu'une fois par installation.
+            // showsStatusOverlays: false — echec silencieux vers le gradient
+            // deja fourni ; pas de bouton retry sur une banniere decorative.
+            CachedAsyncImage(url: viewModel.bannerUrl, showsStatusOverlays: false) {
+                communityBannerPlaceholder
             }
+            .scaledToFill()
         } else {
             communityBannerPlaceholder
         }
@@ -359,7 +359,7 @@ public struct CommunitySettingsView: View {
                     viewModel.showLeaveConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.right.square.fill")
+                        Image(systemName: "arrow.forward.square.fill")
                         Text(String(localized: "community.settings.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))

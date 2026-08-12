@@ -16,6 +16,8 @@ import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
+from config.settings import LANGUAGE_MAPPINGS
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -188,17 +190,12 @@ class TranslatorEngine:
         self._pipeline_cache = LRUPipelineCache(max_size=cache_size)
         self._pipeline_lock = threading.Lock()
 
-        # Mapping des codes de langues NLLB
-        self.lang_codes = {
-            'fr': 'fra_Latn',
-            'en': 'eng_Latn',
-            'es': 'spa_Latn',
-            'de': 'deu_Latn',
-            'pt': 'por_Latn',
-            'zh': 'zho_Hans',
-            'ja': 'jpn_Jpan',
-            'ar': 'arb_Arab'
-        }
+        # Mapping des codes de langues NLLB — source unique : LANGUAGE_MAPPINGS
+        # (config/settings.py). L'ancien dict codé en dur ne couvrait que 8 des 40
+        # langues déclarées dans SUPPORTED_LANGUAGES ; les 32 autres tombaient sur
+        # le défaut `.get(code, 'eng_Latn'/'fra_Latn')` aux call sites de traduction
+        # → une demande de russe renvoyait silencieusement du français.
+        self.lang_codes = dict(LANGUAGE_MAPPINGS)
 
         logger.info("⚙️ TranslatorEngine initialisé")
 

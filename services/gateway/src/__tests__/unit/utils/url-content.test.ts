@@ -34,4 +34,27 @@ describe('isUrlOnly', () => {
     expect(isUrlOnly('mailto:a@b.com')).toBe(false);
     expect(isUrlOnly('ftp://server/file')).toBe(false);
   });
+
+  it('returns false when CJK text is glued to a URL with no space (translation must run)', () => {
+    expect(isUrlOnly('https://example.com你好世界')).toBe(false);
+    expect(isUrlOnly('你好世界https://example.com')).toBe(false);
+  });
+
+  it('returns false when Thai text is glued to a URL with no space', () => {
+    expect(isUrlOnly('https://example.comสวัสดีชาวโลก')).toBe(false);
+  });
+
+  it('still returns true for a bare URL and for comma-joined URLs', () => {
+    expect(isUrlOnly('https://example.com')).toBe(true);
+    expect(isUrlOnly('https://a.com,https://b.com')).toBe(true);
+  });
+
+  it('treats an auto-capitalized/uppercase scheme as URL-only (RFC 3986 §3.1)', () => {
+    // Mobile keyboards auto-capitalize the first letter of a message, so a bare
+    // link commonly arrives as "Https://…". The scheme is case-insensitive, so
+    // this must still skip translation (else NLLB corrupts the link).
+    expect(isUrlOnly('Https://youtu.be/_AnF5eskiNQ')).toBe(true);
+    expect(isUrlOnly('HTTPS://EXAMPLE.COM')).toBe(true);
+    expect(isUrlOnly('HTTP://example.com/path')).toBe(true);
+  });
 });

@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -45,52 +46,73 @@ export function registerDeleteForMeRoutes(
 
       // If caller is CREATOR, transfer ownership
       if (participant.role === 'creator') {
-        // Try moderator first, then oldest active member
-        let successor = await prisma.participant.findFirst({
-          where: {
-            conversationId,
-            isActive: true,
-            userId: { not: userId },
-            role: 'moderator',
-          },
-          orderBy: { joinedAt: 'asc' },
-        })
+        // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
+        // quand le champ est present-et-null que quand il est ABSENT (legacy,
+        // jamais backfillé) — impossible de distinguer les deux cas côté JS
+        // via un simple `select` + négation. On requête donc directement le
+        // state present-et-null (seul état correspondant à un DM "genuinely
+        // empty") via `count`, qui ne matche jamais un document où le champ
+        // est absent — `type: 'direct'` est filtré dans la même requête.
+        const isEmptyDirect = (await prisma.conversation.count({
+          where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
+        })) > 0
 
-        if (!successor) {
-          successor = await prisma.participant.findFirst({
-            where: {
-              conversationId,
-              isActive: true,
-              userId: { not: userId },
-            },
-            orderBy: { joinedAt: 'asc' },
-          })
-        }
-
-        if (successor) {
-          await prisma.participant.update({
-            where: { id: successor.id },
-            data: { role: 'creator' },
-          })
-
-          const io = socketIOHandler?.getManager()?.getIO()
-          if (io) {
-            io.to(ROOMS.conversation(conversationId)).emit(
-              SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
-              {
-                conversationId,
-                userId: successor.userId,
-                newRole: 'creator',
-                updatedBy: userId,
-              }
-            )
-          }
-        } else {
-          // No other active members — close conversation
+        if (isEmptyDirect) {
+          // DM vide jamais utilisé : rien à préserver pour un successeur qui
+          // ne l'a pas demandé (Prisme design doc 2026-08-04) — fermer
+          // plutôt que transférer, même s'il reste un autre participant actif.
           await prisma.conversation.update({
             where: { id: conversationId },
             data: { isActive: false },
           })
+        } else {
+          // Try moderator first, then oldest active member
+          let successor = await prisma.participant.findFirst({
+            where: {
+              conversationId,
+              isActive: true,
+              userId: { not: userId },
+              role: 'moderator',
+            },
+            orderBy: { joinedAt: 'asc' },
+          })
+
+          if (!successor) {
+            successor = await prisma.participant.findFirst({
+              where: {
+                conversationId,
+                isActive: true,
+                userId: { not: userId },
+              },
+              orderBy: { joinedAt: 'asc' },
+            })
+          }
+
+          if (successor) {
+            await prisma.participant.update({
+              where: { id: successor.id },
+              data: { role: 'creator' },
+            })
+
+            const io = socketIOHandler?.getManager()?.getIO()
+            if (io) {
+              io.to(ROOMS.conversation(conversationId)).emit(
+                SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
+                {
+                  conversationId,
+                  userId: successor.userId,
+                  newRole: 'creator',
+                  updatedBy: userId,
+                }
+              )
+            }
+          } else {
+            // No other active members — close conversation
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { isActive: false },
+            })
+          }
         }
       }
 
@@ -100,6 +122,7 @@ export function registerDeleteForMeRoutes(
         where: { id: participant.id },
         data: { deletedForMe: now, isActive: false },
       })
+      invalidateParticipantLookup(participant.id, conversationId)
 
       // Remove user from socket room silently
       const manager = socketIOHandler?.getManager()

@@ -74,7 +74,13 @@ export function sanitizeText(input: string | null | undefined): string {
 
   // Remove control characters and zero-width chars
   const cleaned = sanitized
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars
+    // Strip only the truly-invisible zero-width space (U+200B) and BOM/ZWNBSP
+    // (U+FEFF). Do NOT strip ZWNJ (U+200C) or ZWJ (U+200D): they are
+    // semantically significant \u2014 ZWJ joins emoji sequences (family, flags,
+    // profession emoji), ZWNJ is orthographically required in Persian/Farsi,
+    // and both drive conjunct formation in Indic scripts. Stripping them
+    // corrupts legitimate user content in a multilingual product.
+    .replace(/[\u200B\uFEFF]/g, '') // Zero-width space + BOM only
     // Keep \t (U+0009), \n (U+000A) and \r (U+000D): they are legitimate text
     // whitespace (message line breaks), NOT dangerous control characters.
     // Stripping the whole C0 range silently deleted every line break on edit.

@@ -10,15 +10,18 @@ name: Release
 
 on:
   push:
+    # main UNIQUEMENT : la numérotation appartient à la branche de publication.
+    # Avec dev ici, l'auto-changeset fabriquait des bumps/tags « fantômes »
+    # (v1.23.0 le 2026-08-09, v1.24.0 le 2026-08-11) qui réservaient les
+    # numéros suivants et faisaient échouer la release de main sur
+    # « Tag vX existe déjà sur un autre commit ».
     branches:
       - main
-      - dev
     paths:
       - '.changeset/**'
       - 'apps/*/package.json'
       - 'services/*/package.json'
       - 'packages/*/package.json'
-
   workflow_dispatch:
     inputs:
       force_release:
@@ -31,6 +34,14 @@ on:
         required: false
         type: boolean
         default: false
+
+# Sérialise les releases par branche : deux pushes rapprochés déclenchaient
+# des runs concurrents qui se volaient le push de version (non fast-forward).
+# Pas de cancel-in-progress : une release entamée va au bout, la suivante
+# trouve les changesets déjà consommés et skip proprement.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -91,13 +102,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # A tag pushed with the default GITHUB_TOKEN does NOT trigger other
-          # workflows (GitHub's anti-recursion rule), so the `v*` tag created
-          # below would never fire ios-release.yml (`on: push: tags: v*`).
-          # Prefer a PAT (repo + workflow scope) when configured so cutting a
-          # release also kicks the iOS release; fall back to GITHUB_TOKEN
-          # (version bump still works, iOS release then run manually via its
-          # workflow_dispatch).
+          # ios-release.yml is manual-only (workflow_dispatch) — cutting this
+          # release's `v*` tag never triggers an iOS build/upload, regardless
+          # of token. RELEASE_PAT is kept (falling back to GITHUB_TOKEN) only
+          # so the version-bump commit/tag push itself isn't blocked by branch
+          # protection; it no longer serves to chain into another workflow.
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Setup bun
@@ -106,7 +115,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -172,7 +181,11 @@ jobs:
       - name: Get new version
         id: get-version
         run: |
-          VERSION=$(jq -r '.version' package.json)
+          # Le package.json racine n'est PAS versionné par changesets (figé à
+          # 1.0.0 → « tag already exists » à chaque release). La version de
+          # release = max des trois services livrés ; updateInternalDependencies:
+          # patch garantit qu'un bump de packages/shared propage un bump ici.
+          VERSION=$(jq -r '.version' apps/web/package.json services/gateway/package.json services/translator/package.json | sort -V | tail -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "📌 New version: $VERSION"
@@ -184,6 +197,15 @@ jobs:
         run: |
           git add -A
           git commit -m "chore(release): version packages [skip ci]" || echo "No changes to commit"
+          # Le push peut être rejeté (non fast-forward) si main a avancé entre le
+          # checkout du runner et ce push : rebase puis retry au lieu d'échouer.
+          for attempt in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then
+              exit 0
+            fi
+            echo "⚠️  Push rejeté (tentative $attempt) — rebase sur origin/$BRANCH_NAME..."
+            git pull --rebase origin "$BRANCH_NAME"
+          done
           git push origin "$BRANCH_NAME"
 
       - name: Create Git tag
@@ -191,6 +213,17 @@ jobs:
         env:
           TAG_NAME: ${{ steps.get-version.outputs.tag }}
         run: |
+          # Idempotent : un re-run/race peut retrouver un tag déjà posé. S'il
+          # pointe sur HEAD c'est la même release (skip) ; sinon c'est un vrai
+          # conflit de version → échec explicite (le build checkout ce tag).
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            if [ "$(git rev-parse "$TAG_NAME^{commit}")" = "$(git rev-parse HEAD)" ]; then
+              echo "ℹ️  Tag $TAG_NAME déjà posé sur HEAD — skip"
+              exit 0
+            fi
+            echo "::error::Tag $TAG_NAME existe déjà sur un autre commit"
+            exit 1
+          fi
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin "$TAG_NAME"
 
@@ -273,12 +306,34 @@ jobs:
             type=raw,value=${{ github.ref_name }},enable=${{ github.ref != 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
 
+      - name: Determine build platforms
+        id: platforms
+        run: |
+          # Translator: AMD64 only. sentencepiece==0.1.97 (pinned transitively by
+          # espnet==202412 — cf. requirements.txt) ships no cp311/cp312 wheel for
+          # ANY platform, so uv always compiles it from source — including on
+          # native amd64 runners, where the g++ toolchain handles it fine. Under
+          # QEMU arm64 emulation the same compile fails deterministically
+          # ("Relocations in generic ELF (EM: 62)" / "file in wrong format" /
+          # collect2 exit 1) — reproduced identically in 3 separate release.yml
+          # runs (2026-07-28 10:09, 2026-07-28 16:20, 2026-08-03 13:30).
+          # docker.yml already carves out this same exception (see its
+          # "Determine build platforms" step) and has stayed green on main;
+          # release.yml built translator via the blanket $PLATFORMS
+          # (linux/amd64,linux/arm64) with no override, hence the divergence.
+          if [[ "${{ matrix.service }}" == "translator" ]]; then
+            echo "value=linux/amd64" >> $GITHUB_OUTPUT
+            echo "⚠️ Translator: building AMD64 only (ARM64 QEMU cannot compile sentencepiece==0.1.97 from source)"
+          else
+            echo "value=${{ env.PLATFORMS }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ env.PLATFORMS }}
+          platforms: ${{ steps.platforms.outputs.value }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -344,7 +399,7 @@ jobs:
           echo "$CHANGELOG" > /tmp/changelog.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
         with:

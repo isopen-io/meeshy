@@ -20,6 +20,7 @@ const mockAddReaction = jest.fn<any>();
 const mockRemoveReaction = jest.fn<any>();
 const mockGetMessageReactions = jest.fn<any>();
 const mockGetParticipantReactions = jest.fn<any>();
+const mockGetUserReactions = jest.fn<any>();
 const mockCreateUpdateEvent = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
@@ -61,6 +62,7 @@ jest.mock('../../../services/ReactionService', () => ({
     removeReaction: (...args: any[]) => mockRemoveReaction(...args),
     getMessageReactions: (...args: any[]) => mockGetMessageReactions(...args),
     getParticipantReactions: (...args: any[]) => mockGetParticipantReactions(...args),
+    getUserReactions: (...args: any[]) => mockGetUserReactions(...args),
     createUpdateEvent: (...args: any[]) => mockCreateUpdateEvent(...args),
   })),
 }));
@@ -118,7 +120,15 @@ type RouteHandler = (req: any, reply: any) => Promise<any>;
 const mockEmit = jest.fn();
 const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
 const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
-const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO });
+// The offline-replay audience. REST is the PRIMARY reaction transport for iOS
+// (`ReactionService.swift` → POST /reactions, DELETE /reactions/:id/:emoji), so
+// a reaction that only reaches the live conversation room is lost forever for
+// any participant offline at that instant.
+const mockEnqueueOfflineReaction = jest.fn<any>(async (_params: any) => {});
+const mockGetManager = jest.fn().mockReturnValue({
+  getIO: mockGetIO,
+  enqueueOfflineReactionMutation: mockEnqueueOfflineReaction,
+});
 
 function createMockFastify(withSocket = true) {
   const routes: Record<string, Record<string, RouteHandler>> = {};
@@ -231,7 +241,11 @@ describe('reactionRoutes', () => {
     // Restore default mock implementations after clearAllMocks
     mockTo.mockReturnValue({ emit: mockEmit });
     mockGetIO.mockReturnValue({ to: mockTo });
-    mockGetManager.mockReturnValue({ getIO: mockGetIO });
+    mockEnqueueOfflineReaction.mockResolvedValue(undefined);
+    mockGetManager.mockReturnValue({
+      getIO: mockGetIO,
+      enqueueOfflineReactionMutation: mockEnqueueOfflineReaction,
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -252,7 +266,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -273,7 +287,7 @@ describe('reactionRoutes', () => {
 
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
       fastify.prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
 
       const req = makeRequest({
         body: { messageId: MESSAGE_ID, emoji: '👍' },
@@ -434,7 +448,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup(true);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       // findUnique for socket broadcast returns null → skip emit
       fastify.prisma.message.findUnique.mockResolvedValue(null);
 
@@ -478,7 +492,7 @@ describe('reactionRoutes', () => {
       const handler = getHandler(fastify, 'POST', '/reactions');
 
       const updateEvent = { messageId: MESSAGE_ID, emoji: '👍', action: 'add' };
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       mockCreateUpdateEvent.mockResolvedValue(updateEvent);
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
@@ -489,11 +503,116 @@ describe('reactionRoutes', () => {
       expect(mockEmit).toHaveBeenCalledWith('reaction:added', updateEvent);
     });
 
+    it('queues REACTION_ADDED for participants who are offline, not just the live room', async () => {
+      // The live room emit only reaches participants currently sitting in
+      // `conversation:<id>`. Anyone offline gets nothing, so their cached
+      // reaction counts stay stale until an unrelated full refetch. The socket
+      // handler has always queued the replay; REST — the iOS transport — did not.
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      const updateEvent = { messageId: MESSAGE_ID, emoji: '👍', action: 'add' };
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockCreateUpdateEvent.mockResolvedValue(updateEvent);
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith({
+        conversationId: CONV_ID,
+        actorParticipantId: PARTICIPANT_ID,
+        eventType: 'reaction-added',
+        messageId: MESSAGE_ID,
+        emoji: '👍',
+        payload: updateEvent,
+      });
+    });
+
+    it('queues the single-reaction swap removal for offline peers too', async () => {
+      // One reaction per user: adding 🎉 over 👍 persists a REMOVAL of 👍. An
+      // offline peer that only ever replays the addition keeps showing the
+      // actor's stale 👍 forever.
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: ['👍'] });
+      mockCreateUpdateEvent.mockImplementation(async (_m: any, emoji: any, action: any) => ({
+        messageId: MESSAGE_ID,
+        emoji,
+        action,
+      }));
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '🎉' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'reaction-removed', emoji: '👍' }),
+      );
+      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'reaction-added', emoji: '🎉' }),
+      );
+    });
+
+    it('does not queue an offline replay for an idempotent re-react (nothing changed)', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [], unchanged: true });
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEnqueueOfflineReaction).not.toHaveBeenCalled();
+    });
+
+    it('still returns 201 when the offline enqueue rejects — the reaction is committed', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+      mockEnqueueOfflineReaction.mockRejectedValue(new Error('redis down'));
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(reply.statusCode).toBe(201);
+    });
+
+    it('skips broadcast and notification when addReaction reports unchanged (idempotent re-react)', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      // The participant already had this exact emoji — a duplicate POST (client
+      // retry / offline outbox replay) is a DB no-op. The route must return the
+      // existing reaction WITHOUT broadcasting REACTION_ADDED or firing a push,
+      // otherwise every participant gets a redundant fan-out and the author is
+      // re-notified for a reaction that never changed. 200, not 201 — nothing
+      // was created.
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [], unchanged: true });
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEmit).not.toHaveBeenCalled();
+      expect(mockNotifyReactionAdded).not.toHaveBeenCalled();
+      expect(reply.statusCode).toBe(200);
+    });
+
     it('skips socket broadcast when socketIOHandler is absent', async () => {
       const { fastify, reply } = setup(false);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -508,7 +627,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -532,7 +651,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue(reactionData);
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
       mockNotifyReactionAdded.mockRejectedValue(new Error('push failed'));
 
@@ -581,6 +700,41 @@ describe('reactionRoutes', () => {
       expect(reply.statusCode).toBe(200);
     });
 
+    it('queues REACTION_REMOVED for participants who are offline, not just the live room', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
+
+      mockRemoveReaction.mockResolvedValue(true);
+      mockCreateUpdateEvent.mockResolvedValue(updateEvent);
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ params: { messageId: MESSAGE_ID, emoji: encodedEmoji } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith({
+        conversationId: CONV_ID,
+        actorParticipantId: PARTICIPANT_ID,
+        eventType: 'reaction-removed',
+        messageId: MESSAGE_ID,
+        emoji: '👍',
+        payload: updateEvent,
+      });
+    });
+
+    it('does not queue an offline replay when the reaction was already absent', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
+
+      mockRemoveReaction.mockResolvedValue(false);
+
+      const req = makeRequest({ params: { messageId: MESSAGE_ID, emoji: encodedEmoji } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEnqueueOfflineReaction).not.toHaveBeenCalled();
+    });
+
     it('returns 403 when no participantId and anonymous without userId', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
@@ -602,19 +756,25 @@ describe('reactionRoutes', () => {
       );
     });
 
-    it('returns 404 when removeReaction returns false', async () => {
+    it('is idempotent — returns success (not 404) when the reaction is already absent', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
 
-      mockRemoveReaction.mockResolvedValue(false);
+      mockRemoveReaction.mockResolvedValue(false); // no matching reaction row
 
       const req = makeRequest({
         params: { messageId: MESSAGE_ID, emoji: encodedEmoji },
       });
       await handler(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Reaction not found');
-      expect(reply.statusCode).toBe(404);
+      // DELETE is idempotent: the desired end-state (reaction absent) is already
+      // achieved, so return success. A 404 makes the iOS outbox treat it as a
+      // permanent reject and roll the optimistic un-react back, re-showing a
+      // reaction that is gone. Mirrors the add path's idempotent P2002 handling.
+      expect(mockSendNotFound).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { message: 'Reaction already absent' });
+      // Nothing changed → no broadcast.
+      expect(mockEmit).not.toHaveBeenCalledWith('reaction:removed', expect.anything());
     });
 
     it('returns 400 when service throws "Invalid emoji format"', async () => {
@@ -820,16 +980,19 @@ describe('reactionRoutes', () => {
       expect(reply.statusCode).toBe(403);
     });
 
-    it('returns 200 for anonymous user who is a participant (id matches sessionToken)', async () => {
+    it('returns 200 for anonymous participant (participant id is an ObjectId, not the sessionToken)', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/:messageId');
 
+      // Realistic anonymous shape: createAnonymousUserContext sets
+      // participantId to the Participant.id (an ObjectId) and keeps the raw
+      // sessionToken separate. PARTICIPANT_ID !== SESSION_TOKEN by construction.
       fastify.prisma.message.findUnique.mockResolvedValue({
         id: MESSAGE_ID,
         conversationId: CONV_ID,
         conversation: {
           participants: [
-            { id: SESSION_TOKEN, userId: null, isActive: true },
+            { id: PARTICIPANT_ID, userId: null, isActive: true },
           ],
         },
       });
@@ -839,8 +1002,8 @@ describe('reactionRoutes', () => {
         params: { messageId: MESSAGE_ID },
         authContext: makeAuthContext({
           isAnonymous: true,
-          userId: undefined,
-          participantId: undefined,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
           sessionToken: SESSION_TOKEN,
         }),
       });
@@ -854,11 +1017,12 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/:messageId');
 
+      const otherParticipantId = '507f1f77bcf86cd799439066';
       fastify.prisma.message.findUnique.mockResolvedValue({
         id: MESSAGE_ID,
         conversationId: CONV_ID,
         conversation: {
-          participants: [{ id: 'some-other-anon-id', userId: null, isActive: true }],
+          participants: [{ id: otherParticipantId, userId: null, isActive: true }],
         },
       });
 
@@ -866,8 +1030,8 @@ describe('reactionRoutes', () => {
         params: { messageId: MESSAGE_ID },
         authContext: makeAuthContext({
           isAnonymous: true,
-          userId: undefined,
-          participantId: undefined,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
           sessionToken: SESSION_TOKEN,
         }),
       });
@@ -964,7 +1128,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/user/:userId');
 
-      mockGetParticipantReactions.mockResolvedValue(userReactions);
+      mockGetUserReactions.mockResolvedValue(userReactions);
 
       const req = makeRequest({
         params: { userId: USER_ID },
@@ -972,7 +1136,7 @@ describe('reactionRoutes', () => {
       });
       await handler(req, reply);
 
-      expect(mockGetParticipantReactions).toHaveBeenCalledWith(USER_ID);
+      expect(mockGetUserReactions).toHaveBeenCalledWith(USER_ID);
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, userReactions);
       expect(reply.statusCode).toBe(200);
     });
@@ -981,7 +1145,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/user/:userId');
 
-      mockGetParticipantReactions.mockRejectedValue(new Error('redis down'));
+      mockGetUserReactions.mockRejectedValue(new Error('redis down'));
 
       const req = makeRequest({
         params: { userId: USER_ID },

@@ -156,7 +156,7 @@ describe('GET /posts/feed — service error', () => {
 describe('GET /posts/feed/stories — success', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockGetStories.mockResolvedValue([]);
+    mockGetStories.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
     app = await buildApp();
   });
   afterAll(async () => { await app.close(); });

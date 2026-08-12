@@ -32,14 +32,12 @@ function makePrefs(over: Partial<PrivacyPreferences> = {}): PrivacyPreferences {
 function makeMocks(opts: {
   blocked?: boolean;
   friend?: boolean;
-  affiliate?: boolean;
   sharesConversation?: boolean;
   prefs?: Partial<PrivacyPreferences>;
 } = {}) {
   const prisma = {
     user: { findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null) },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.friend ? { id: 'fr' } : null) },
-    affiliateRelation: { findFirst: jest.fn<any>().mockResolvedValue(opts.affiliate ? { id: 'af' } : null) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(opts.sharesConversation ? [{ conversationId: 'c1' }] : []),
       findFirst: jest.fn<any>().mockResolvedValue(opts.sharesConversation ? { id: 'p1' } : null),
@@ -78,10 +76,11 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
     expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
   });
 
-  it('shows presence to an affiliate even without friendship', async () => {
-    const { service } = makeMocks({ friend: false, affiliate: true });
+  it('hides presence for an affiliate relation without an accepted friendship', async () => {
+    const { service, prisma } = makeMocks({ friend: false });
     const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
-    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(prisma.friendRequest.findFirst).toHaveBeenCalled();
   });
 
   it('hides the timestamp for a friend when showLastSeen is off', async () => {
@@ -136,7 +135,6 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
 
 function makeBatchMocks(state: {
   friendIds?: string[];
-  affiliateIds?: string[];
   blockedTargetIds?: string[];
   viewerBlocks?: string[];
   deactivatedIds?: string[];
@@ -155,9 +153,6 @@ function makeBatchMocks(state: {
     },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue((state.friendIds ?? []).map((id) => ({ senderId: id, receiverId: VIEWER }))),
-    },
-    affiliateRelation: {
-      findMany: jest.fn<any>().mockResolvedValue((state.affiliateIds ?? []).map((id) => ({ affiliateUserId: VIEWER, referredUserId: id }))),
     },
     participant: {
       findMany: jest.fn<any>().mockImplementation(({ where }: any) =>
@@ -185,6 +180,16 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
     expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
   });
 
+  it('hides a deactivated target even from a moderator, matching resolveForTarget', async () => {
+    const { service } = makeBatchMocks({ deactivatedIds: ['stranger'] });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, IDS);
+    // Deactivation is "en amont" of the privilege bypass (design §8 + the pure
+    // policy's targetIsDeactivated guard) — the single-target path already hides
+    // it, so the batch list path must not leak the deactivated user's presence.
+    expect(map.get('stranger')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('friend')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
   it('resolves per-id visibility for a regular viewer', async () => {
     const { service } = makeBatchMocks({
       friendIds: ['friend'],
@@ -204,5 +209,24 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
     const { service } = makeBatchMocks({ friendIds: ['friend'] });
     const map = await service.resolveForTargets(null, IDS);
     expect(map.get('friend')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+});
+
+describe('PresenceVisibilityService.resolvePrefsOnly', () => {
+  function svcWithPrefs(prefsById: Record<string, Partial<PrivacyPreferences>>) {
+    const privacy = {
+      getPreferencesForUsers: jest.fn<any>().mockImplementation((arr: Array<{ id: string }>) =>
+        Promise.resolve(new Map(arr.map(({ id }) => [id, makePrefs(prefsById[id] ?? {})]))),
+      ),
+    } as any;
+    return new PresenceVisibilityService({} as any, privacy);
+  }
+
+  it('shows presence but applies the preference cascade, without any relation lookup', async () => {
+    const svc = svcWithPrefs({ off: { showOnlineStatus: false }, noseen: { showLastSeen: false } });
+    const map = await svc.resolvePrefsOnly(['normal', 'off', 'noseen']);
+    expect(map.get('normal')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('off')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('noseen')).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 });

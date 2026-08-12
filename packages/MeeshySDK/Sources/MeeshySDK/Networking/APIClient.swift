@@ -102,12 +102,48 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: CursorPagination?
     public let error: String?
+    public let meta: APIResponseMeta?
 
-    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?) {
+    /// `meta` par défaut à `nil` : les call sites qui fabriquent une page à la
+    /// main (tests, chemins optimistes) restent inchangés.
+    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?,
+                meta: APIResponseMeta? = nil) {
         self.success = success
         self.data = data
         self.pagination = pagination
         self.error = error
+        self.meta = meta
+    }
+}
+
+/// Métadonnées hors-page d'une réponse paginée.
+///
+/// `data` ne peut dire que ce qui EXISTE ; certaines informations portent sur
+/// ce qui a disparu, et n'ont donc nulle part où tenir dans la page elle-même.
+public struct APIResponseMeta: Decodable, Sendable {
+    /// Tombstones du delta-sync des stories (`GET /posts/feed/stories?updatedSince`) :
+    /// ids des stories disparues depuis le curseur — supprimées par leur auteur,
+    /// ou périmées puis balayées côté serveur.
+    ///
+    /// Le merge delta client étant purement additif, c'est le SEUL canal par
+    /// lequel un client ayant manqué l'event socket `story:deleted` (app fermée
+    /// ou hors-ligne, aucun replay) apprend qu'il doit purger son cache.
+    public let deletedStoryIds: [String]?
+
+    /// `deletedStoryIds` a débordé son plafond serveur : des disparitions plus
+    /// anciennes n'ont PAS été rendues.
+    ///
+    /// Les tombstones n'ont aucun curseur de reprise — il n'y a donc pas de
+    /// « page suivante » de disparitions à demander. Le seul recours est un
+    /// fetch complet, dont le remplacement du tray purge les fantômes.
+    ///
+    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
+    /// de troncature », c'est-à-dire exactement le comportement d'avant.
+    public let deletedStoryIdsTruncated: Bool?
+
+    public init(deletedStoryIds: [String]? = nil, deletedStoryIdsTruncated: Bool? = nil) {
+        self.deletedStoryIds = deletedStoryIds
+        self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
     }
 }
 
@@ -236,6 +272,38 @@ extension APIClientProviding {
 public final class APIClient: APIClientProviding, @unchecked Sendable {
     public static let shared = APIClient()
 
+    // MARK: - 401 Mapping (pure)
+
+    /// How a 401 response on `endpoint` should be surfaced. Extracted as a
+    /// pure decision so the credential-vs-session distinction is unit
+    /// testable without driving a real `URLSession` — see
+    /// `APIClientAuthMappingTests`.
+    enum UnauthorizedMapping: Equatable {
+        /// Wrong password / 2FA code / stale magic link — NOT a session
+        /// problem, so callers must NOT tear down or refresh anything.
+        case invalidCredentials(message: String)
+        /// A real session-expiry: refresh-token rejected, or a regular
+        /// endpoint whose retried-refresh attempt also 401'd.
+        case sessionExpired
+    }
+
+    /// P1 — a 401 on `/auth/login` or `/auth/login/2fa` means "these
+    /// credentials are wrong", never "your session expired" (there is no
+    /// session yet on these endpoints).
+    /// `/auth/refresh` is deliberately EXCLUDED: a 401 there means the
+    /// refresh token itself is dead, which is genuinely `.sessionExpired`.
+    /// `/auth/register` and `/auth/magic-link/*` are also deliberately
+    /// EXCLUDED — the gateway never returns 401 on either (both surface
+    /// every error as 400 via `sendBadRequest`; verified against
+    /// `services/gateway/src/routes/auth/register.ts` and
+    /// `services/gateway/src/routes/magic-link.ts`, zero `sendUnauthorized`
+    /// call sites in either file). Including them here would be scope creep
+    /// beyond the audited root cause (wrong password / 2FA code).
+    nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
+        guard endpoint.hasPrefix("/auth/login") else { return .sessionExpired }
+        return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
+    }
+
     public var baseURL: String {
         MeeshyConfig.shared.apiBaseURL
     }
@@ -268,7 +336,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // pagination. The serial queue + single reused decoder are race-free; the value
     // is smuggled back through an unchecked box so callers keep plain `Decodable`
     // (non-Sendable) response types.
-    private static let offMainDecoder: JSONDecoder = {
+    private static let offMainDecoder: JSONDecoder = makeAPIPayloadDecoder()
+
+    /// Décodeur canonique des payloads REST du gateway : le serveur émet des
+    /// dates ISO 8601 AVEC fractions de seconde (`2026-07-29T10:00:00.000Z`),
+    /// que la stratégie `.iso8601` de Foundation REFUSE
+    /// (`dataCorrupted("Expected date string to be ISO8601-formatted")`).
+    /// `internal` (pas `private`) pour que les tests décodent avec la stratégie
+    /// de PRODUCTION au lieu d'en réinventer une plus stricte que le serveur.
+    nonisolated static func makeAPIPayloadDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -278,7 +354,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return decoder
-    }()
+    }
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.api.decode", qos: .userInitiated)
     private struct DecodeBox<V>: @unchecked Sendable { let value: V }
 
@@ -308,8 +384,39 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }.value
     }
 
-    public var authToken: String?
-    public var anonymousSessionToken: String?
+    // net-09 — les deux tokens étaient des vars nues sur une classe
+    // @unchecked Sendable : data race lecture header / écriture refresh, et
+    // paire mixte observable au switch (13 paires déchirées mesurées par le
+    // test de stress sur l'implémentation non verrouillée). Un seul verrou
+    // pour la PAIRE : les getters/setters existants restent source-compatibles
+    // (protocole APIClientProviding inchangé), setTokens/currentTokens
+    // offrent la lecture/écriture atomique du couple. Prior art du pattern :
+    // CallManager.isCallActiveFlag.
+    private let tokenLock = OSAllocatedUnfairLock<(auth: String?, anon: String?)>(initialState: (nil, nil))
+
+    public var authToken: String? {
+        get { tokenLock.withLock { $0.auth } }
+        set { tokenLock.withLock { $0.auth = newValue } }
+    }
+
+    public var anonymousSessionToken: String? {
+        get { tokenLock.withLock { $0.anon } }
+        set { tokenLock.withLock { $0.anon = newValue } }
+    }
+
+    /// Écriture atomique de la paire — à préférer aux deux setters séparés
+    /// quand les deux tokens changent ensemble (switch de compte).
+    public func setTokens(auth: String?, anonymous: String?) {
+        tokenLock.withLock { pair in
+            pair.auth = auth
+            pair.anon = anonymous
+        }
+    }
+
+    /// Lecture atomique de la paire — jamais un mélange de deux écritures.
+    public func currentTokens() -> (auth: String?, anon: String?) {
+        tokenLock.withLock { $0 }
+    }
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -334,14 +441,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             delegateQueue: nil
         )
 
-        self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = Self.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = Self.isoFormatter.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
+        self.decoder = Self.makeAPIPayloadDecoder()
+    }
+
+    /// T15b — purge le cache HTTP de la session (bodies ETag/304 des réponses
+    /// REST). Appelé au logout : aucun payload d'un compte ne doit survivre
+    /// sur disque à travers les sessions (même contrat que
+    /// `CacheCoordinator.reset` / `clearAllMessagesForLogout`).
+    public func clearHTTPCache() {
+        urlSession.configuration.urlCache?.removeAllCachedResponses()
     }
 
     // MARK: - Retry Helper
@@ -498,6 +606,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     let errorMsg = errBody?.message ?? errBody?.error
 
                     if statusCode == 401 {
+                        if case .invalidCredentials(let message) = Self.mapUnauthorized(endpoint: endpoint, serverMessage: errorMsg) {
+                            // P1 — wrong password / 2FA code / stale magic
+                            // link. There is no active session here, so we
+                            // must NOT call `handleUnauthorized()` (which
+                            // would kick off a pointless background refresh
+                            // of a DIFFERENT, still-valid session if one
+                            // exists) and must NOT show "Session expirée".
+                            throw MeeshyError.auth(.invalidCredentialsWithMessage(message))
+                        }
                         if shouldAttemptRefresh && !hasRefreshedOn401 {
                             hasRefreshedOn401 = true
                             do {

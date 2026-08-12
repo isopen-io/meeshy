@@ -95,10 +95,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -155,6 +158,14 @@ function makeNotif(type: string) {
 function makeFriendRequest(senderId: string, receiverId: string) {
   return { senderId, receiverId };
 }
+
+/** Amis en nombre — pour éprouver le plafond de fan-out et sa ligne témoin. */
+const friendAt = (n: number) => `607f1f77bcf86cd7994${String(n).padStart(5, '0')}`;
+
+const warnMock = () =>
+  (jest.requireMock('../../../utils/logger-enhanced') as {
+    notificationLogger: { warn: jest.Mock };
+  }).notificationLogger.warn;
 
 // -------------------------------------------------------
 // Tests
@@ -281,6 +292,27 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(call).toBeDefined();
       expect(call![0].data.type).toBe('friend_new_mood');
     });
+
+    it('test_createFriendContentNotificationsBatch_REEL_createsFriendNewPost', async () => {
+      // REEL borrows the friend_new_post type (variante de post) but keeps its
+      // own entity-aware wording; the type must still map to friend_new_post.
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { type: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call).toBeDefined();
+      expect(call![0].data.type).toBe('friend_new_post');
+    });
   });
 
   // =====================================================
@@ -322,6 +354,27 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       >;
       const call = calls.find((c) => c[0].data.userId === FRIEND_1);
       expect(call![0].data.content).toBe('a publié un nouveau post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_noExcerpt_REEL_usesReelFallbackPhrase', async () => {
+      // A friend's new reel must announce itself as a reel, not a post — the
+      // REEL discriminant is kept in metadata precisely for this display.
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; subtitle: string | null; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('a publié un nouveau réel');
+      expect(call![0].data.subtitle).toBe('Nouveau réel');
     });
 
     it('test_createFriendContentNotificationsBatch_noExcerpt_STATUS_usesMoodFallbackPhrase', async () => {
@@ -420,7 +473,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       );
     });
 
-    it('test_createFriendContentNotificationsBatch_friendQueryCappedAt500', async () => {
+    it('test_createFriendContentNotificationsBatch_friendQueryCappedAt500PlusWitnessRow', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.createFriendContentNotificationsBatch({
@@ -430,8 +483,51 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       });
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 500 })
+        expect.objectContaining({ take: 501 })
       );
+    });
+
+    // Le cycle 32 a rendu la troncature observable ; la ligne témoin la rend
+    // EXACTE. Un auteur à exactement 500 amis a un seau COMPLET — le déclarer
+    // tronqué le ferait crier au loup à chacune de ses publications.
+    it('test_createFriendContentNotificationsBatch_exactlyCapFriends_staysSilent', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
+        Array.from({ length: 500 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
+      );
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+        visibility: 'PUBLIC',
+      });
+
+      expect(warnMock()).not.toHaveBeenCalled();
+    });
+
+    it('test_createFriendContentNotificationsBatch_witnessRow_countedThenDropped', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue(
+        Array.from({ length: 501 }, (_, i) => makeFriendRequest(AUTHOR_ID, friendAt(i)))
+      );
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+        visibility: 'PUBLIC',
+      });
+
+      expect(warnMock()).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ postId: POST_ID, authorId: AUTHOR_ID, cap: 500 })
+      );
+      // Le témoin compte, il ne diffuse pas : sans le `slice`, la borne
+      // passerait silencieusement de 500 à 501.
+      const notified = (prisma.notification.create as jest.Mock).mock.calls.map(
+        (call) => call[0].data.userId
+      );
+      expect(notified).toHaveLength(500);
+      expect(notified).not.toContain(friendAt(500));
     });
 
     it('test_createFriendContentNotificationsBatch_friendQueryOrderedByUpdatedAtDesc', async () => {
@@ -722,6 +818,46 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       const call = calls.find((c) => c[0].data.userId === FRIEND_1);
       expect(call![0].data.metadata.contentType).toBe('REEL');
     });
+
+    // `postType` est la clé que lisent le payload push (`data.postType`) et le
+    // routage client. Sans ce miroir, un réel d'ami arrivait sans discriminant
+    // et ouvrait le détail de post plat au lieu du lecteur immersif.
+    it('test_createFriendContentNotificationsBatch_REEL_mirrorsDiscriminantIntoPostType', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { postType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.postType).toBe('REEL');
+    });
+
+    it('test_createFriendContentNotificationsBatch_STORY_mirrorsDiscriminantIntoPostType', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { postType?: string; contentType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.postType).toBe('STORY');
+      expect(call![0].data.metadata.contentType).toBe('STORY');
+    });
   });
 
   // =====================================================
@@ -1010,6 +1146,80 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       const recipientIds = calls.map((c) => c[0].data.userId);
       expect(recipientIds).not.toContain(AUTHOR_ID);
       expect(recipientIds).toContain(FRIEND_1);
+    });
+  });
+
+  // =====================================================
+  // GW2 — friendContentEnabled preference gating
+  // =====================================================
+
+  describe('friendContentEnabled preference', () => {
+    const disabledPrefs = { notification: { friendContentEnabled: false } };
+
+    it.each([
+      ['POST', 'friend_new_post'],
+      ['STORY', 'friend_new_story'],
+      ['MOOD', 'friend_new_mood'],
+    ] as const)(
+      'test_createFriendContentNotificationsBatch_%s_friendContentDisabled_skipsRecipient',
+      async (contentType) => {
+        (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+          makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        ]);
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(disabledPrefs);
+
+        await service.createFriendContentNotificationsBatch({
+          postId: POST_ID,
+          authorId: AUTHOR_ID,
+          contentType,
+        });
+
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      }
+    );
+
+    it('test_createFriendContentNotificationsBatch_friendContentAbsent_defaultsToEnabled', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: {},
+      });
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string; type: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call).toBeDefined();
+      expect(call![0].data.type).toBe('friend_new_post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_friendContentDisabled_doesNotAffectOtherTypes', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(disabledPrefs);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: FRIEND_1,
+        username: 'liker',
+        displayName: 'Liker',
+        avatar: null,
+        systemLanguage: 'fr',
+      });
+      (prisma.postComment.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.createPostLikeNotification({
+        actorId: FRIEND_1,
+        postId: POST_ID,
+        postAuthorId: AUTHOR_ID,
+        emoji: '❤️',
+        postType: 'POST',
+      });
+
+      expect(prisma.notification.create).toHaveBeenCalled();
     });
   });
 });

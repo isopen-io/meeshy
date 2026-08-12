@@ -8,6 +8,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { Badge } from '@/components/ui/badge';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 // Modal building blocks reused from the v2 design system.
@@ -22,9 +23,11 @@ import {
   LanguageOrb,
 } from '@/components/v2';
 import { getInitials } from '@/utils/initials';
+import { formatCompactNumber } from '@/utils/format-number';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
 import {
   Pencil,
   Settings,
@@ -38,9 +41,7 @@ import {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function formatNumber(num: number): string {
-  return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
-}
+const formatNumber = formatCompactNumber;
 
 // ─── Modals ────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,7 @@ export default function ProfilePage() {
   const { addToast } = useToast();
   const { profile, stats, isLoading, error, isCurrentUser, updateProfile, isUpdating } = useProfileV2();
   const { t } = useI18n('settings');
+  const presenceStatus = useLiveUserStatus(profile?.id, profile);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -234,7 +236,7 @@ export default function ProfilePage() {
           className="h-40 md:h-52"
           style={{
             background: profile.banner
-              ? `url(${profile.banner}) center/cover`
+              ? `url(${buildAttachmentUrl(profile.banner)}) center/cover`
               : 'linear-gradient(135deg, #2563eb, #7c3aed)',
           }}
         />
@@ -248,7 +250,7 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
               <span className="absolute bottom-2 right-2">
-                <OnlineIndicator isOnline={profile.isOnline} size="lg" />
+                <OnlineIndicator isOnline={presenceStatus === 'online'} status={presenceStatus} size="lg" />
               </span>
             </div>
             {isCurrentUser && (

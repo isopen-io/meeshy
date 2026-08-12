@@ -96,6 +96,20 @@ final class PendingStatusQueueTests: XCTestCase {
         return (sut, client)
     }
 
+    /// Awaits the actor-isolated `pendingCount()` and asserts it equals `expected`.
+    /// Hoists the `await` out of the `XCTAssertEqual` autoclosure (autoclosures do
+    /// not support concurrency). Forwards `file`/`line` so failures point at the caller.
+    private func assertPendingCount(
+        _ expected: Int,
+        in sut: PendingStatusQueue,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let actual = await sut.pendingCount()
+        XCTAssertEqual(actual, expected, message(), file: file, line: line)
+    }
+
     override func setUp() async throws {
         UserDefaults.standard.removeObject(forKey: testKey)
     }
@@ -221,16 +235,13 @@ final class PendingStatusQueueTests: XCTestCase {
     func test_pendingCount_matchesEnqueuedCount() async {
         let (sut, _) = makeSUT()
 
-        let initialCount = await sut.pendingCount()
-        XCTAssertEqual(initialCount, 0)
+        await assertPendingCount(0, in: sut)
 
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
-        let countAfterFirst = await sut.pendingCount()
-        XCTAssertEqual(countAfterFirst, 1)
+        await assertPendingCount(1, in: sut)
 
         await sut.enqueue(.init(conversationId: "c2", type: "received", timestamp: Date()))
-        let countAfterSecond = await sut.pendingCount()
-        XCTAssertEqual(countAfterSecond, 2)
+        await assertPendingCount(2, in: sut)
     }
 
     // MARK: - clearAll()
@@ -242,8 +253,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c2", type: "read", timestamp: Date()))
         await sut.clearAll()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        await assertPendingCount(0, in: sut)
     }
 
     // MARK: - flush()
@@ -276,8 +286,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        await assertPendingCount(0, in: sut)
     }
 
     func test_flush_retainsFailedActions_whenAPIThrows() async {
@@ -287,9 +296,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 1,
-                       "failed actions must remain for next retry")
+        await assertPendingCount(1, in: sut, "failed actions must remain for next retry")
     }
 
     func test_flush_dropsActionsWithEmptyConversationId() async {
@@ -302,8 +309,7 @@ final class PendingStatusQueueTests: XCTestCase {
 
         XCTAssertEqual(client.callCount, 0,
                        "empty conversationId actions must be silently dropped")
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        await assertPendingCount(0, in: sut)
     }
 
     func test_flush_dropsExpiredActions_olderThan24h() async {
@@ -315,8 +321,7 @@ final class PendingStatusQueueTests: XCTestCase {
 
         XCTAssertEqual(client.callCount, 0,
                        "expired actions (> 24h old) must be discarded without API calls")
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        await assertPendingCount(0, in: sut)
     }
 
     func test_flush_processesMultipleActions_inOrder() async {
@@ -352,9 +357,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "fail-conv", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 2,
-                       "all actions must be retained when all API calls fail")
+        await assertPendingCount(2, in: sut, "all actions must be retained when all API calls fail")
         XCTAssertEqual(client.callCount, 2,
                        "both endpoints must be attempted even though both fail")
     }

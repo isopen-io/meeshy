@@ -27,6 +27,7 @@ function makePost(overrides: Partial<PostReplySnapshotablePost> = {}): PostReply
     shareCount: 1,
     createdAt: new Date('2026-06-14T10:00:00.000Z'),
     media: [{ thumbnailUrl: 'https://cdn/thumb.jpg' }],
+    author: { id: 'user-1', username: 'btano', displayName: 'Belva Tano' },
     ...overrides,
   };
 }
@@ -115,5 +116,65 @@ describe('postReplyToFromMetadata — lecture depuis le blob metadata', () => {
     expect(postReplyToFromMetadata({ callSummary: { direction: 'incoming' } })).toBeNull();
     expect(postReplyToFromMetadata(null)).toBeNull();
     expect(postReplyToFromMetadata({})).toBeNull();
+  });
+});
+
+describe('buildPostReplyTo — auteur du post cité', () => {
+  it('gèle le nom d’affichage de l’auteur', () => {
+    const snap = buildPostReplyTo(makePost({ type: 'STATUS', moodEmoji: '❤️' }));
+    expect(snap.authorId).toBe('user-1');
+    expect(snap.authorName).toBe('Belva Tano');
+  });
+
+  it('retombe sur le username quand displayName est absent', () => {
+    const snap = buildPostReplyTo(
+      makePost({ author: { id: 'user-2', username: 'wnh', displayName: null } })
+    );
+    expect(snap.authorName).toBe('wnh');
+  });
+
+  it('retombe sur le username quand displayName est vide', () => {
+    const snap = buildPostReplyTo(
+      makePost({ author: { id: 'user-3', username: 'jdoe', displayName: '   ' } })
+    );
+    expect(snap.authorName).toBe('jdoe');
+  });
+
+  it('tolère un post sans auteur chargé', () => {
+    const snap = buildPostReplyTo(makePost({ author: null }));
+    expect(snap.authorId).toBeNull();
+    expect(snap.authorName).toBe('');
+  });
+});
+
+describe('normalizePostReplyTo — rétro-compatibilité de l’auteur', () => {
+  it('accepte un snapshot ANCIEN sans champ auteur sans l’invalider', () => {
+    // Les messages déjà en base n'ont pas ces champs. Les rejeter ferait
+    // disparaître toutes les citations existantes.
+    const legacy = normalizePostReplyTo({
+      id: 'post-9',
+      type: 'STATUS',
+      moodEmoji: '😴',
+      previewText: 'en forme',
+      thumbnailUrl: null,
+      reactionCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: '2026-06-14T10:00:00.000Z',
+    });
+    expect(legacy).not.toBeNull();
+    expect(legacy!.id).toBe('post-9');
+    expect(legacy!.authorId).toBeNull();
+    expect(legacy!.authorName).toBe('');
+  });
+
+  it('relit l’auteur d’un snapshot récent', () => {
+    const fresh = normalizePostReplyTo({
+      id: 'post-10',
+      authorId: 'user-1',
+      authorName: 'Belva Tano',
+    });
+    expect(fresh!.authorId).toBe('user-1');
+    expect(fresh!.authorName).toBe('Belva Tano');
   });
 });

@@ -112,22 +112,55 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
                 }
             }
 
-        case .expired, .empty:
-            await MainActor.run { setLoadState(.loading) }
-            do {
-                let data = try await fetch()
+        case .expired:
+            // cache-04 — le disque a peut-être encore la dernière donnée
+            // connue : la peindre en .cachedStale au lieu d'un skeleton, et
+            // la GARDER si le fetch échoue (offline après TTL ≠ écran vide).
+            if let recovered = await store.loadIgnoringExpiry(for: key), !recovered.items.isEmpty {
                 await MainActor.run {
-                    apply(data)
-                    setLoadState(.loaded)
+                    apply(recovered.items)
+                    setLoadState(.cachedStale)
                 }
+                await revalidate(fetch: fetch, setLoadState: setLoadState, apply: apply)
+                return nil
+            }
+            await MainActor.run { setLoadState(.loading) }
+            await revalidate(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return nil
+
+        case .empty:
+            await MainActor.run { setLoadState(.loading) }
+            await revalidate(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return nil
+        }
+    }
+
+    /// cache-04 — revalidation inline partagée par `.expired`/`.empty`. Le
+    /// `save` vit HORS du `do` du fetch : un échec de PERSISTANCE ne doit pas
+    /// régresser un état déjà peint (`.loaded`) vers `.error`.
+    private func revalidate(
+        fetch: @Sendable @escaping () async throws -> Items,
+        setLoadState: @MainActor @Sendable @escaping (LoadState) -> Void,
+        apply: @MainActor @Sendable @escaping (Items) -> Void
+    ) async {
+        do {
+            let data = try await fetch()
+            await MainActor.run {
+                apply(data)
+                setLoadState(.loaded)
+            }
+            do {
                 try await store.save(data, for: key)
             } catch {
-                let isOnline = networkMonitor.isOnline
-                await MainActor.run {
-                    setLoadState(isOnline ? .error(error.localizedDescription) : .offline)
-                }
+                Logger.cache.error(
+                    "CacheFirstLoader failed to persist fresh fetch for \(String(describing: self.key), privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             }
-            return nil
+        } catch {
+            let isOnline = networkMonitor.isOnline
+            await MainActor.run {
+                setLoadState(isOnline ? .error(error.localizedDescription) : .offline)
+            }
         }
     }
 }

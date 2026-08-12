@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_status_incoming">Llamada entrante…</string>
+    <string name="call_status_ringing">Llamando…</string>
+    <string name="call_status_connecting">Conectando…</string>
+    <string name="call_status_connected">Conectado</string>
+    <string name="call_status_reconnecting">Reconectando (%1$d)…</string>
+    <string name="call_ended">Llamada finalizada</string>
+    <string name="call_ended_missed">Llamada perdida</string>
+    <string name="call_ended_declined">Llamada rechazada</string>
+    <string name="call_ended_connection_lost">Conexión perdida</string>
+    <string name="call_ended_failed">Error en la llamada</string>
+    <string name="call_action_accept">Aceptar</string>
+    <string name="call_action_decline">Rechazar</string>
+    <string name="call_action_hang_up">Colgar</string>
+    <string name="call_action_mute">Silenciar</string>
+    <string name="call_action_camera">Cámara</string>
+    <string name="call_action_close">Cerrar</string>
+    <string name="call_action_retry">Reintentar</string>
+    <string name="call_action_minimize">Minimizar llamada</string>
+    <string name="call_pill_ongoing">Llamada en curso con %1$s</string>
+    <string name="call_pill_reopen">Volver a la llamada</string>
+    <string name="call_start_audio">Llamada de audio</string>
+    <string name="call_start_video">Videollamada</string>
+    <string name="call_history_title">Llamadas</string>
+    <string name="call_history_filter_all">Todas</string>
+    <string name="call_history_filter_missed">Perdidas</string>
+    <string name="call_history_empty">Aún no hay llamadas</string>
+    <string name="call_history_empty_missed">Sin llamadas perdidas</string>
+    <string name="call_history_yesterday">Ayer</string>
+    <string name="call_history_incoming">Llamada entrante</string>
+    <string name="call_history_outgoing">Llamada saliente</string>
+    <string name="call_history_missed">Llamada perdida</string>
+    <string name="call_history_retry">Reintentar</string>
+    <string name="call_quality_excellent">Conexión excelente</string>
+    <string name="call_quality_good">Buena conexión</string>
+    <string name="call_quality_fair">Conexión regular</string>
+    <string name="call_quality_poor">Conexión débil</string>
+    <string name="call_waiting_subtitle">Llamada entrante…</string>
+    <string name="call_waiting_banner_a11y">Llamada entrante de %1$s</string>
+    <string name="call_waiting_reject_a11y">Rechazar la llamada de %1$s</string>
+    <string name="call_waiting_answer_a11y">Colgar y responder a %1$s</string>
+    <string name="call_peer_quality_degraded">La conexión de %1$s es inestable</string>
+    <string name="call_peer_screen_capturing">%1$s está capturando la pantalla</string>
+    <string name="call_peer_muted">%1$s ha silenciado su micrófono</string>
+    <string name="call_peer_camera_off">%1$s ha desactivado su cámara</string>
+</resources>

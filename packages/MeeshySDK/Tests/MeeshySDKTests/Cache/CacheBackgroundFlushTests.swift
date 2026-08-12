@@ -78,4 +78,64 @@ final class CacheBackgroundFlushTests: XCTestCase {
     func test_taskIdentifier_matchesInfoPlistConvention() {
         XCTAssertEqual(CacheBackgroundFlushTask.identifier, "me.meeshy.cache.background-flush")
     }
+
+    // MARK: - cache-01 — flushAll/evict/dirtyCount couvrent TOUS les stores
+
+    private func makeNotification(id: String) -> APINotification {
+        APINotification(
+            id: id,
+            userId: "u1",
+            type: "new_message",
+            priority: nil,
+            title: "Titre",
+            subtitle: "Sous-titre",
+            content: "Contenu",
+            actor: nil,
+            context: NotificationContext(conversationId: nil, postId: nil),
+            metadata: nil,
+            state: NotificationState(
+                isRead: false,
+                readAt: nil,
+                createdAt: "2026-07-31T09:00:00.000Z",
+                expiresAt: nil
+            ),
+            delivery: nil
+        )
+    }
+
+    func test_flushAll_notificationsStoreDirty_drainsDirtySetToZero() async throws {
+        let db = try makeDB()
+        let coordinator = CacheCoordinator(messageSocket: MockMessageSocket(), socialSocket: MockSocialSocket(), db: db)
+        await coordinator.notifications.seedDirtyForTest(items: [("n1", [makeNotification(id: "n1")])])
+        let seeded = await coordinator.notifications.dirtyKeyCount()
+        XCTAssertEqual(seeded, 1, "precondition: notifications dirty")
+
+        await coordinator.flushAll(deadline: nil)
+
+        let remaining = await coordinator.notifications.dirtyKeyCount()
+        XCTAssertEqual(remaining, 0,
+                       "l'état lu des notifications (dirty-débounce 2s) doit être drainé par le flush lifecycle — sinon il se perd au kill")
+    }
+
+    func test_dirtyCountForTest_notificationsStoreDirty_countsIt() async throws {
+        let db = try makeDB()
+        let coordinator = CacheCoordinator(messageSocket: MockMessageSocket(), socialSocket: MockSocialSocket(), db: db)
+        await coordinator.notifications.seedDirtyForTest(items: [("n1", [makeNotification(id: "n1")])])
+
+        let total = await coordinator.dirtyCountForTest()
+
+        XCTAssertEqual(total, 1, "le compteur de test doit couvrir les mêmes stores que le flush")
+    }
+
+    func test_evictUnderMemoryPressure_notificationsDirty_flushesBeforeEvicting() async throws {
+        let db = try makeDB()
+        let coordinator = CacheCoordinator(messageSocket: MockMessageSocket(), socialSocket: MockSocialSocket(), db: db)
+        await coordinator.notifications.seedDirtyForTest(items: [("n1", [makeNotification(id: "n1")])])
+
+        await coordinator.evictUnderMemoryPressure()
+
+        let remaining = await coordinator.notifications.dirtyKeyCount()
+        XCTAssertEqual(remaining, 0, "l'éviction sous pression doit flusher la victime dirty avant de la jeter")
+    }
+
 }

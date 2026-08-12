@@ -72,9 +72,9 @@
 **Cons**: Fragilit du bash (whitespace, quoting), macOS+Xcode obligatoire
 
 ## 2025-02: Dpendances - 5 librairies SPM
-**Statut**: Accept (rvis 2026-05 — Kingfisher retir)
+**Statut**: Accept (rvis 2026-05 — Kingfisher retir ; 2026-07 — WhisperKit retir, jamais import)
 **Contexte**: Dpendances minimales, Swift Package Manager natif
-**Decision**: Firebase 12.12+, Socket.IO 16.1+, WebRTC 141.0+, WhisperKit 0.9+
+**Decision**: Firebase 12.12+, Socket.IO 16.1+, WebRTC 141.0+ ; reconnaissance vocale on-device via Apple Speech framework (SFSpeechRecognizer), pas de dpendance tierce
 **Alternatives rejet**: CocoaPods (ncessite Ruby, pas natif)
 **Cons**: Firebase + WebRTC ajoutent ~30MB au binaire, vendor lock-in Firebase
 
@@ -215,3 +215,27 @@ Le body d'une bulle a lien heberge un `LinkPreviewCard` dont le `.frame(minHeigh
 - **Capper `LinkPreviewCard` avec un `maxHeight` ou `.fixedSize(vertical:)`** : masque le symptome sur un seul composant ; d'autres enfants flexibles futurs re-declencheraient le bug. Le fix au niveau du `Layout` traite la source unique de la divergence (et c'est la maniere SOTA de mesurer une hauteur intrinseque d'enfant).
 
 **Voir aussi**: [[feedback-swiftui-layout-sizethatfits-height-nil]] (memoire). Lie au piege [[feedback-swiftui-layout-cache-recycled-cells]] (Layout.Cache perime au recyclage) — meme famille « custom Layout + cellule recyclee + mesure ».
+
+## 2026-07-04 : Calling architecture — decisions.md pointe vers les specs superpowers (pas de duplication)
+
+**Statut**: Accepte
+
+**Contexte**: Un audit du sous-systeme d'appel (WebRTC/CallKit/PushKit, `CallManager.swift`, `P2PWebRTCClient.swift`, `WebRTCService.swift`, `WebRTCTypes.swift`) a note que ce fichier ne contenait aucune entree dediee a l'architecture d'appel, alors que le sujet a deja fait l'objet de plusieurs rondes de conception formelles ailleurs dans le repo.
+
+**Decision**: Les ADR canoniques pour le systeme d'appel vivent dans `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` (section 10 — 7 ADRs : moteur media libwebrtc, facade `@MainActor CallManager` + `actor CallEventQueue` pour serialiser les entrees concurrentes socket/CallKit/WebRTC/reseau, verrouillage optimiste Prisma `version` sur `CallSession`, `setCodecPreferences` plutot que SDP munging sauf pour `transport-cc`, session audio `.voiceChat` pour la Voice Isolation OS, appels anonymes limites au socket actif sans PushKit, bus `MediaPipelineHook` pour extensibilite future). Ce fichier ne duplique pas ces decisions — il pointe vers la source, conformement a l'esprit "decisions.md par package" mais sans re-ecrire un contenu deja arbitre ailleurs. Voir aussi `docs/superpowers/specs/2026-03-29-webrtc-p2p-calling-design.md` (spec Phase 1) et `docs/superpowers/specs/2026-06-20-ios-call-pip-and-hardening-design.md` (PiP + hardening).
+
+**Verification faite lors de l'audit** (aucun changement de code requis) :
+- `P2PWebRTCClient.swift` contient deux declarations de `final class P2PWebRTCClient` (ligne ~37 et ~1602) correctement isolees par `#if canImport(WebRTC) / #else / #endif` — pas un doublon accidentel.
+- `WebRTCService.swift` (@MainActor, 613 lignes) n'est pas un legacy dupliquant `P2PWebRTCClient.swift` (1650 lignes) : c'est la couche de politique/isolation d'acteur (ADR-2 ci-dessus) qui delegue au `client: any WebRTCClientProviding`. Les deux fichiers ont des responsabilites distinctes et doivent coexister.
+
+**Alternatives rejetees**: dupliquer le contenu des specs superpowers dans ce fichier — rejete, cree un risque de divergence entre deux sources de verite pour la meme decision.
+
+## 2026-08-06 : ADR-2 amende — pas d'`actor CallEventQueue` distinct, serialisation via hops `@MainActor`
+
+**Statut**: Accepte
+
+**Contexte**: Un audit du sous-systeme d'appel a grep `CallEventQueue` sur tout `apps/ios` (zero occurrence) alors qu'ADR-2 (voir entree du 2026-07-04 ci-dessus) et ce meme fichier decrivent explicitement une facade `@MainActor CallManager` + un `actor CallEventQueue` prive pour serialiser les entrees concurrentes socket/CallKit/WebRTC/reseau. En pratique, `CallManager` serialise ses transitions d'etat directement via des dizaines de `Task { @MainActor [weak self] in ... }` au point d'entree de chaque callback delegate/socket (ex. `CallManager.swift:4840-4931`) — ce qui empeche bien les data races (MainActor est un executeur serie), mais n'est pas l'acteur dedie decrit par l'ADR.
+
+**Decision**: Amender ADR-2 pour refleter le code livre : la serialisation des evenements d'appel repose sur le fait que `CallManager` est lui-meme `@MainActor` et que chaque callback externe (delegate WebRTC, event socket, callback CallKit) re-entre via un hop `Task { @MainActor in }` avant de muter l'etat — pas sur un `actor CallEventQueue` distinct. Ce pattern est fonctionnellement equivalent pour la garantie recherchee (pas de race sur l'etat d'appel) et deja couvert par les tests de concurrence existants (`P2PWebRTCClientConcurrencySourceTests`, etc.). Aucun changement de code n'est requis par cette entree — elle corrige uniquement la documentation pour qu'elle cesse de decrire un composant qui n'existe pas.
+
+**Alternatives rejetees**: implementer un `actor CallEventQueue` distinct pour faire correspondre le code a l'ADR d'origine — rejete pour cette passe : reecrire le point d'entree de synchronisation d'un sous-systeme d'appel mature et en production (voir historique de fixes de race conditions dans `services/gateway/decisions.md` et les commits recents `fix(calls/...)`) sans un besoin fonctionnel identifie serait un changement architectural a haut risque pour un benefice non demontre. A reconsiderer si un futur besoin (ex. group calls / SFU) exige une vraie serialisation d'acteur.

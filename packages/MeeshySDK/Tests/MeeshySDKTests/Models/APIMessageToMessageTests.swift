@@ -117,6 +117,51 @@ final class APIMessageToMessageTests: XCTestCase {
         XCTAssertFalse(msg2.isMe)
     }
 
+    // MARK: - own message with a stripped sender envelope falls back to the local identity
+
+    func test_toMessage_senderEnvelopeMissing_ownMessage_usesLocalIdentity() {
+        let api = makeAPIMessage(senderId: "user-42")
+
+        let msg = api.toMessage(
+            currentUserId: "user-42",
+            currentUsername: "jcnm",
+            currentUserDisplayName: "Jean-Charles"
+        )
+
+        XCTAssertTrue(msg.isMe)
+        XCTAssertEqual(msg.senderName, "Jean-Charles")
+        XCTAssertEqual(msg.senderUsername, "jcnm")
+    }
+
+    func test_toMessage_senderEnvelopeMissing_otherAuthor_keepsSenderNil() {
+        let api = makeAPIMessage(senderId: "user-99")
+
+        let msg = api.toMessage(
+            currentUserId: "user-42",
+            currentUsername: "jcnm",
+            currentUserDisplayName: "Jean-Charles"
+        )
+
+        XCTAssertFalse(msg.isMe)
+        XCTAssertNil(msg.senderName)
+        XCTAssertNil(msg.senderUsername)
+    }
+
+    func test_toMessage_serverSenderName_winsOverLocalIdentity() {
+        let api = makeAPIMessage(senderId: "user-42", extraFields: [
+            "sender": makeSenderJSON(displayName: "Server Name", userId: "user-42", username: "server_user"),
+        ])
+
+        let msg = api.toMessage(
+            currentUserId: "user-42",
+            currentUsername: "jcnm",
+            currentUserDisplayName: "Jean-Charles"
+        )
+
+        XCTAssertEqual(msg.senderName, "Server Name")
+        XCTAssertEqual(msg.senderUsername, "server_user")
+    }
+
     // MARK: - senderUserId preserved
 
     func test_toMessage_preservesSenderUserId() {
@@ -127,6 +172,24 @@ final class APIMessageToMessageTests: XCTestCase {
         let msg = api.toMessage(currentUserId: "someone-else")
 
         XCTAssertEqual(msg.senderUserId, "user-77")
+    }
+
+    // MARK: - editedAt decoded (server's clock, used to order `message:edited` events)
+
+    func test_decode_preservesEditedAt() {
+        let editedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let api = makeAPIMessage(extraFields: [
+            "isEdited": true,
+            "editedAt": ISO8601DateFormatter().string(from: editedAt),
+        ])
+
+        XCTAssertEqual(api.editedAt, editedAt)
+    }
+
+    func test_decode_editedAtNilWhenAbsent() {
+        let api = makeAPIMessage()
+
+        XCTAssertNil(api.editedAt)
     }
 
     // MARK: - senderUsername preserved

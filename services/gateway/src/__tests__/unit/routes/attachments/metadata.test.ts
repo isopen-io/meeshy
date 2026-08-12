@@ -78,7 +78,9 @@ async function buildApp(opts: {
   const authContext = auth === 'authenticated'
     ? { isAuthenticated: true, isAnonymous: false, userId, registeredUser: { id: userId, role } }
     : auth === 'anonymous'
-    ? { isAuthenticated: false, isAnonymous: true, userId: 'anon-1', registeredUser: null }
+    // Un participant anonyme muni d'un jeton de session valide porte
+    // `isAuthenticated: true` ; seul le visiteur nu a `false`.
+    ? { isAuthenticated: true, isAnonymous: true, userId: 'anon-1', participantId: 'anon-1', registeredUser: null }
     : null;
 
   const authRequired = async (req: FastifyRequest) => {

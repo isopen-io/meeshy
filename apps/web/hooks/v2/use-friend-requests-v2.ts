@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import type { FriendRequest, FriendRequestsData } from '@/types/contacts';
 
 export interface UseFriendRequestsV2Options {
@@ -132,6 +133,43 @@ export function useFriendRequestsV2(
       if (notification.type === 'friend_request' || notification.type === 'contact_request') {
         invalidateAll();
       }
+    });
+  }, [enabled, invalidateAll]);
+
+  // Invalidate when the OTHER party cancels/removes a pending request — this
+  // path never creates a persisted notification, so it needs its own signal
+  // (otherwise the counterpart's list stays stale until their next full reload).
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestCancelled(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
+  // Typed counterparts of NOTIFICATION_NEW(type=friend_request/friend_accepted)
+  // and the reject system notification. The `onNotification` listener above
+  // only re-invalidates on `friend_request`/`contact_request` — the sender's
+  // `sent` list previously had NO live signal when the receiver accepted or
+  // rejected, staying stale until the next full reload. These typed events
+  // close that gap (dual-emitted alongside the legacy notifications).
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestNew(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestAccepted(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestRejected(() => {
+      invalidateAll();
     });
   }, [enabled, invalidateAll]);
 

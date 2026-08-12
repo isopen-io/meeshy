@@ -9,7 +9,6 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { isLocalIp } from '../utils/rate-limiter';
 import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
 
@@ -73,11 +72,19 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // fail-open sur erreur Redis (availability) — alignement avec l'ancien
     // store custom qui laissait passer en cas d'erreur Redis.
     skipOnError: true,
-    skip: (request: FastifyRequest) => {
+    // `allowList`, PAS `skip` : @fastify/rate-limit v10 ne lit jamais `skip`
+    // (index.js:88 et :225 — seul `allowList` existe). L'ancienne clause était
+    // donc silencieusement ignorée, et les sondes subissaient le quota : un
+    // flood faisait échouer `/health` et redémarrer le conteneur.
+    //
+    // Le test `isLocalIp` de cette clause N'EST PAS repris, délibérément :
+    // Fastify tourne sans `trustProxy` derrière Traefik sur un réseau Docker,
+    // donc `request.ip` est une adresse privée `172.x` pour TOUT LE MONDE.
+    // Réactiver la clause telle quelle aurait désactivé le rate limiting
+    // entier — un renommage naïf était bien pire que le bug.
+    allowList: (request: FastifyRequest) => {
       const path = request.url.split('?')[0];
-      if (path === '/health' || path === '/healthz' || path === '/ready') return true;
-      if (isLocalIp(request.ip)) return true;
-      return false;
+      return path === '/health' || path === '/healthz' || path === '/ready';
     },
     errorResponseBuilder: (request, context) => {
       return {
@@ -97,8 +104,8 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
 export function validateMentionCount(content: string): { valid: boolean; error?: string } {
   const MAX_MENTIONS_PER_MESSAGE = 50;
 
-  // Extraire les mentions
-  const mentionMatches = content.match(/@(\w+)/g);
+  // Extraire les mentions (tiret inclus : charset username /^[a-zA-Z0-9_-]+$/)
+  const mentionMatches = content.match(/@([\w-]+)/g);
   const mentionCount = mentionMatches ? mentionMatches.length : 0;
 
   if (mentionCount > MAX_MENTIONS_PER_MESSAGE) {
@@ -148,7 +155,10 @@ export async function messageValidationHook(
  * - POST /posts/:id/like : 30/min — accommoder le toggle rapide
  * - POST /posts/:id/view : 60/min — un viewer parcourt vite plusieurs stories
  * - POST /posts/:id/comments : 20/min
- * - POST /posts/impressions/batch : 10/min — par lot de 50 ids max
+ * - POST /posts/impressions/batch : 30/min — par lot de 50 OCCURRENCES max.
+ *   Une impression est comptée par apparition à l'écran, donc un aller-retour
+ *   de scroll produit plusieurs lots (le client les regroupe sur 3 s) ; 10/min
+ *   déclenchait des 429 en usage normal.
  */
 export function createPostRouteRateLimitConfig(
   type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
@@ -158,7 +168,7 @@ export function createPostRouteRateLimitConfig(
     like: { max: 30, label: 'like' },
     view: { max: 60, label: 'view' },
     comment: { max: 20, label: 'comment' },
-    impression: { max: 10, label: 'impression' },
+    impression: { max: 30, label: 'impression' },
     engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];
@@ -173,6 +183,48 @@ export function createPostRouteRateLimitConfig(
     errorResponseBuilder: () => ({
       success: false,
       error: `Trop de requetes (posts/${cfg.label}). Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
+/**
+ * Limites par route de la bibliothèque de sons.
+ *
+ * Le `keyGenerator` EXPLICITE est le point capital. `mergeParams` du plugin est
+ * un `Object.assign` : une config de route sans `keyGenerator` hérite du global,
+ * soit `global:${request.ip}`. Or Fastify tourne sans `trustProxy` derrière
+ * Traefik sur un réseau Docker — `request.ip` est l'IP du conteneur proxy,
+ * IDENTIQUE pour tout le monde. Une limite « 20/min » serait alors 20/min pour
+ * la plateforme entière, et un seul utilisateur en priverait tous les autres.
+ *
+ * - upload  : 20/min — écrit un fichier, la route la plus coûteuse du lot
+ * - list    : 60/min — liste publique triée par popularité
+ * - stream  : 240/min — une story enchaîne plusieurs pistes, cache client 1 h
+ * - detail  : 120/min · patch : 30/min
+ */
+export function createSoundRouteRateLimitConfig(
+  type: 'upload' | 'list' | 'stream' | 'detail' | 'patch'
+): object {
+  const configs = {
+    upload: { max: 20, label: 'upload' },
+    list: { max: 60, label: 'list' },
+    stream: { max: 240, label: 'stream' },
+    detail: { max: 120, label: 'detail' },
+    patch: { max: 30, label: 'patch' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 minute',
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `sounds:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de requetes (sounds/${cfg.label}). Veuillez patienter.`,
       statusCode: 429,
     }),
   };

@@ -20,6 +20,29 @@ public struct GlassCard: ViewModifier {
     }
 }
 
+// MARK: - Glass Control Foreground (lisibilité light + dark)
+
+/// Foreground adaptatif pour une icône / un label posé sur une surface glass ou
+/// material (barre, capsule, menu). Blanc en mode sombre, `indigo950` en mode
+/// clair : le glass seul ne garantit pas le contraste d'un contenu **blanc** sur
+/// fond clair, d'où les boutons du composer illisibles en light mode. Miroir du
+/// pattern déjà éprouvé dans `ComposerToolPanelHost` / `ComposerBottomBand`.
+public struct GlassControlForeground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    public init() {}
+    public func body(content: Content) -> some View {
+        content.foregroundStyle(colorScheme == .dark ? Color.white : MeeshyColors.indigo950)
+    }
+}
+
+public extension View {
+    /// Applique un foreground adaptatif (blanc en sombre, `indigo950` en clair)
+    /// pour rester lisible sur une surface glass dans les deux thèmes.
+    func glassControlForeground() -> some View {
+        modifier(GlassControlForeground())
+    }
+}
+
 // MARK: - Glowing Border
 
 public struct GlowingBorder: ViewModifier {
@@ -361,5 +384,49 @@ extension View {
 
     public func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+// MARK: - Zoom Transition (iOS 18+) — U1 story-sota
+
+/// Namespace partagé pour les transitions zoom source→destination (iOS 18
+/// `matchedTransitionSource` / `navigationTransition(.zoom)`). Injecté par
+/// l'hôte qui présente (ex. RootView), lu par la surface source (ex. bulle
+/// du story tray) et la destination (contenu du cover). `nil` = pas de zoom
+/// (fallback transition système, iOS 16-17 inclus) — atome agnostique, la
+/// décision « quelles surfaces zooment » reste app-side.
+private struct ZoomTransitionNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+public extension EnvironmentValues {
+    var zoomTransitionNamespace: Namespace.ID? {
+        get { self[ZoomTransitionNamespaceKey.self] }
+        set { self[ZoomTransitionNamespaceKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Marque la vue comme SOURCE d'une transition zoom (no-op < iOS 18 ou
+    /// sans namespace — jamais de régression 16-17).
+    @ViewBuilder
+    func zoomTransitionSource(id: String, in namespace: Namespace.ID?) -> some View {
+        if #available(iOS 18.0, *), let namespace {
+            self.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
+    /// Applique la transition zoom à la DESTINATION présentée (sheet/cover).
+    /// No-op < iOS 18 ou sans namespace ; si aucune source enregistrée pour
+    /// `sourceID`, iOS retombe sur la transition système standard.
+    @ViewBuilder
+    func zoomTransitionDestination(sourceID: String, in namespace: Namespace.ID?) -> some View {
+        if #available(iOS 18.0, *), let namespace {
+            self.navigationTransition(.zoom(sourceID: sourceID, in: namespace))
+        } else {
+            self
+        }
     }
 }

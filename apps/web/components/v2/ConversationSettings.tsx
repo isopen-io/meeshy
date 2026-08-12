@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { getUserStatus } from '@/lib/user-status';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Badge } from './Badge';
@@ -17,6 +19,7 @@ export interface Participant {
   avatar?: string;
   role: 'admin' | 'moderator' | 'member';
   isOnline: boolean;
+  lastActiveAt?: Date | string | null;
 }
 
 export interface ConversationStats {
@@ -138,7 +141,7 @@ export function ConversationSettings({
           {/* Banner */}
           <div
             className="h-32 relative cursor-pointer group transition-colors duration-300"
-            style={{ background: banner ? `url(${banner}) center/cover` : 'var(--gp-surface)' }}
+            style={{ background: banner ? `url(${buildAttachmentUrl(banner)}) center/cover` : 'var(--gp-surface)' }}
             onClick={() => document.getElementById('banner-input')?.click()}
           >
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
@@ -164,7 +167,7 @@ export function ConversationSettings({
           {/* Avatar */}
           <div
             className="absolute -bottom-10 left-4 w-20 h-20 rounded-2xl border-4 border-[var(--gp-surface-elevated)] cursor-pointer group overflow-hidden transition-colors duration-300"
-            style={{ background: avatar ? `url(${avatar}) center/cover` : 'var(--gp-deep-teal)' }}
+            style={{ background: avatar ? `url(${buildAttachmentUrl(avatar)}) center/cover` : 'var(--gp-deep-teal)' }}
             onClick={() => document.getElementById('avatar-input')?.click()}
           >
             {!avatar && (
@@ -294,6 +297,7 @@ export function ConversationSettings({
                       name={participant.name}
                       size="md"
                       isOnline={participant.isOnline}
+                      presence={getUserStatus({ isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt })}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-[var(--gp-text-primary)] transition-colors duration-300">

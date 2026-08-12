@@ -2,6 +2,25 @@
  * Utilitaires pour formater l'affichage du dernier message d'une conversation
  */
 import React from 'react';
+import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
+
+/**
+ * Prisme Linguistique de la ligne de liste (cycle 61).
+ *
+ * Ces champs vivent au niveau CONVERSATION, pas sur le message : le gateway les
+ * pose là (`GET /conversations`) parce que la carte compacte
+ * `{ langue: aperçu }` n'a pas la forme de `Message.translations`. C'est donc
+ * l'appelant — la ligne de liste, qui tient la conversation ET le lecteur — qui
+ * les apporte ici.
+ *
+ * Optionnel de bout en bout : sans options, le rendu est identique à celui
+ * d'avant le prisme (l'original), ce qui EST la règle #3.
+ */
+type LastMessagePrismOptions = {
+  translations?: Readonly<Record<string, string>> | null;
+  originalLanguage?: string | null;
+  preferredLanguages?: readonly string[];
+};
 
 /**
  * Formater la durée d'un fichier audio avec millisecondes
@@ -25,8 +44,13 @@ function formatAudioDuration(milliseconds: number): string {
 function formatVideoDuration(milliseconds: number): string {
   const totalSeconds = Math.floor(milliseconds / 1000);
   const ms = Math.floor((milliseconds % 1000) / 10); // Centièmes
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  if (hours > 0) {
+    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+  }
   return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
 }
 
@@ -166,7 +190,10 @@ function formatGenericAttachment(): React.JSX.Element {
 /**
  * Formater l'affichage du dernier message d'une conversation
  */
-export function formatLastMessage(lastMessage: unknown): React.ReactNode {
+export function formatLastMessage(
+  lastMessage: unknown,
+  prism?: LastMessagePrismOptions
+): React.ReactNode {
   // Si le message a un attachement et pas de contenu texte, afficher les détails de l'attachement
   if (lastMessage.attachments && lastMessage.attachments.length > 0 && !lastMessage.content) {
     const attachment = lastMessage.attachments[0];
@@ -200,5 +227,12 @@ export function formatLastMessage(lastMessage: unknown): React.ReactNode {
     );
   }
 
-  return lastMessage.content;
+  // Le prisme ne s'applique qu'au TEXTE : la branche pièce jointe ci-dessus ne
+  // se déclenche qu'en l'absence de contenu, donc il n'y a rien à traduire là.
+  return resolveLastMessagePreview({
+    preview: lastMessage.content,
+    translations: prism?.translations,
+    originalLanguage: prism?.originalLanguage,
+    preferredLanguages: prism?.preferredLanguages ?? [],
+  });
 }

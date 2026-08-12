@@ -18,6 +18,7 @@ import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
+import { toCallSessionResponse } from '../utils/call-session-response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -69,8 +70,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // Get decorated prisma instance
   const prisma = fastify.prisma;
 
-  // Initialize CallService
-  const callService = new CallService(prisma);
+  // Reuse the Socket.IO layer's CallService (shares its in-memory
+  // ringingTimeouts/heartbeats/backgroundedParticipants maps with
+  // CallEventsHandler and CallCleanupService) so a call initiated via REST
+  // gets its ringing timeout tracked on the same instance that later reads
+  // it. Falls back to a fresh instance only if routes register before
+  // setupSocketIO() decorates it (should not happen in normal boot order —
+  // see Server.setupSocketIO/setupRoutes call sequence — but keeps this
+  // route usable in isolation, e.g. targeted route tests).
+  const callService = fastify.callService ?? new CallService(prisma);
 
   // Authentication middleware (required for all routes)
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
@@ -197,7 +205,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings
       });
 
-      return sendSuccess(reply, callSession, { statusCode: 201 });
+      return sendSuccess(reply, toCallSessionResponse(callSession), { statusCode: 201 });
     } catch (error: any) {
       logger.error('❌ REST: Error initiating call', error);
 
@@ -305,7 +313,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // CVE-003: Pass requesting user ID for authorization check
       const callSession = await callService.getCallSession(callId, userId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting call', error);
 
@@ -333,7 +341,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     preValidation: [requiredAuth, createValidationMiddleware(endCallSchema)],
     ...ROUTE_RATE_LIMITS.callOperations,
     schema: {
-      description: 'Force end an active call session. Only the call initiator or conversation moderators/admins can end a call. This will disconnect all participants and finalize call metrics.',
+      description: 'Force end an active call session. P2P: any active participant can end the call for everyone. SFU (Phase 2): restricted to the initiator or conversation moderators/admins. This will disconnect all participants and finalize call metrics.',
       tags: ['calls'],
       summary: 'End call',
       params: {
@@ -375,7 +383,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           ...errorResponseSchema
         },
         403: {
-          description: 'Forbidden - Only initiator or moderators can end the call',
+          description: 'Forbidden - Anonymous users cannot end calls, or the requester is not an active participant of this call',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },
@@ -423,7 +431,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // Get call to verify permissions
       const call = await callService.getCallSession(callId);
 
-      // Verify user is initiator or admin/moderator of conversation
+      // Resolve conversation membership (needed for endParticipantId below).
+      // Authorization on WHO may end the call is enforced by
+      // callService.endCall() itself — P2P: any active participant may end
+      // for everyone; SFU (Phase 2): initiator/moderator only. This route
+      // must mirror that single policy rather than re-implement a stricter
+      // initiator/admin/moderator-only gate here: the socket `call:end` path
+      // has no such extra gate, so a plain P2P callee ending their own call
+      // via REST previously got PERMISSION_DENIED while the identical action
+      // via the socket succeeded — an authorization inconsistency between
+      // the two transports for the exact same operation.
       const membership = await prisma.participant.findFirst({
         where: {
           conversationId: call.conversationId,
@@ -436,20 +453,23 @@ export default async function callRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
-      // Only initiator or admin/moderator can end call
-      const canEndCall =
-        call.initiatorId === userId ||
-        membership.role === 'admin' ||
-        membership.role === 'moderator';
-
-      if (!canEndCall) {
-        return sendForbidden(reply, 'PERMISSION_DENIED');
-      }
-
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
+      // Parité socket call:end — invalide le cache de session `call:signal`
+      // (TTL 2s) immédiatement après l'écriture de `leftAt`, comme tous les
+      // handlers socket (call:end/call:leave/call:force-leave). Sans ceci,
+      // un `call:signal` reçu dans la fenêtre TTL relaie encore de l'ICE/SDP
+      // pour un appel déjà terminé côté REST.
+      callService.invalidateSignalCache(callId);
+      // Contrairement au handler socket `call:end`, cette route REST ne poste
+      // pas le call-summary elle-même : sans ceci la bulle « Appel … en cours »
+      // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
+      callService.finalizeCallSummary(callId);
+      // Parité socket call:end — diffuse `call:ended` au pair (WebRTC/CallKit
+      // tear-down temps réel) au lieu d'attendre le GC ~120s. Auto-gardé terminal.
+      callService.broadcastCallEndedIfTerminal(callSession, userId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error ending call', error);
 
@@ -595,7 +615,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings,
       });
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error joining call', error);
 
@@ -715,34 +735,88 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Leaving call', { callId, participantId, userId });
 
+      const call = await callService.getCallSession(callId);
+
+      // Resolve the caller's own conversation membership FIRST, unconditionally
+      // — this is the only authorization check on this route, so it must run
+      // whether the caller is leaving their own slot or removing someone else.
+      // Previously this query only ran when `participantId !== userId`, so a
+      // request targeting the caller's own userId (trivial for any client to
+      // construct) skipped authorization entirely and reached
+      // `callService.leaveCall()` unchecked — which unconditionally ends a
+      // direct (1:1) call it doesn't recognize the participant of.
+      const callerMembership = await prisma.participant.findFirst({
+        where: {
+          conversationId: call.conversationId,
+          userId,
+          isActive: true
+        }
+      });
+
+      if (!callerMembership) {
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+      }
+
       // Verify user is leaving their own participation or has moderator rights
       if (participantId !== userId) {
-        // Check if user is moderator
-        const call = await callService.getCallSession(callId);
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: call.conversationId,
-            userId,
-            isActive: true
-          }
-        });
-
         const isModerator =
-          membership?.role === 'admin' || membership?.role === 'moderator';
+          callerMembership.role === 'admin' || callerMembership.role === 'moderator';
 
         if (!isModerator) {
           return sendForbidden(reply, 'PERMISSION_DENIED');
         }
       }
 
-      const leaveParticipantId = authRequest.authContext.participantId || participantId;
+      // `authContext.participantId` is populated only for anonymous sessions
+      // (see middleware/auth.ts) and is trustworthy ONLY when leaving one's
+      // OWN slot — it is the CALLER's conversation Participant.id. Registered
+      // users never populate it, and a moderator removing someone else must
+      // NEVER fall back to it here: `CallParticipant.participantId` must be
+      // the TARGET's Participant.id, or the moderator's own participation
+      // gets marked as "left" instead of the target's (kick silently no-ops
+      // or ends the wrong side of the call). Resolve the target's real
+      // Participant.id from their userId whenever we can't trust the shortcut.
+      let leaveParticipantId: string;
+      if (participantId === userId && authRequest.authContext.participantId) {
+        leaveParticipantId = authRequest.authContext.participantId;
+      } else if (participantId === userId) {
+        leaveParticipantId = callerMembership.id;
+      } else {
+        const targetParticipant = await prisma.participant.findFirst({
+          where: { conversationId: call.conversationId, userId: participantId, isActive: true },
+          select: { id: true }
+        });
+        // Do NOT fall back to the raw, unresolved `participantId` string here
+        // — that fallback is what previously let a caller with no real
+        // relationship to this call's conversation reach
+        // `callService.leaveCall()`'s idempotent-leave path, which
+        // unconditionally ends a direct call it doesn't recognize the
+        // participant of.
+        if (!targetParticipant) {
+          return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+        }
+        leaveParticipantId = targetParticipant.id;
+      }
+
       const callSession = await callService.leaveCall({
         callId,
         userId: participantId,
         participantId: leaveParticipantId,
       });
+      // Parité socket call:leave — invalide le cache de session `call:signal`
+      // (TTL 2s), inconditionnellement comme le handler socket (un leave de
+      // groupe qui ne termine pas l'appel écrit quand même `leftAt` pour le
+      // partant — voir le commentaire sur invalidateSignalCache).
+      callService.invalidateSignalCache(callId);
+      // Idem que la route end : la route REST leave ne poste pas le summary.
+      // No-op si l'appel de groupe continue (createCallSummaryMessage se garde
+      // sur le statut terminal), finalise la bulle si l'appel s'est terminé.
+      callService.finalizeCallSummary(callId);
+      // Parité socket call:leave — diffuse `call:ended` au pair UNIQUEMENT si le
+      // leave a rendu l'appel terminal (broadcastCallEndedIfTerminal auto-gardé).
+      callService.broadcastCallEndedIfTerminal(callSession, participantId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error leaving call', error);
 
@@ -791,12 +865,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
           // FIX 2026-05-12 — `oneOf: [callSessionSchema, { type: 'null' }]`
           // déclenchait `TypeError: The value of '#/properties/data' does not
           // match schema definition.` sur fast-json-stringify quand data===null
-          // (limitation connue de la lib pour oneOf+null). On retire la
-          // contrainte de schema sur `data` côté serializer (additionalProperties
-          // true), la doc OpenAPI reste correcte via description.
-          additionalProperties: true,
+          // (limitation connue de la lib pour oneOf+null). `nullable: true` sur
+          // le schema objet directement (au lieu d'un oneOf) évite ce bug tout
+          // en gardant `data` comme whitelist de champs — la version précédente
+          // (`additionalProperties: true` sans schema sur `data`) désactivait
+          // tout filtrage et laissait fuiter des champs Prisma bruts non
+          // destinés au client (ex: `CallParticipant.analytics`, télémétrie
+          // privée d'un AUTRE participant) à tout membre de la conversation.
           properties: {
-            success: { type: 'boolean', example: true }
+            success: { type: 'boolean', example: true },
+            data: { ...callSessionSchema, nullable: true }
           }
         },
         400: {
@@ -879,7 +957,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         conversationId
       );
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
@@ -970,7 +1048,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
               participant: {
                 userId: userId,
               },
-              leftAt: null,
+              // Audit C5 (2026-07-02) — Prisma-on-Mongo: `leftAt: null` misses
+              // historical documents where the field is absent entirely.
+              OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
             },
           },
         },
@@ -994,7 +1074,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'NO_ACTIVE_CALL');
       }
 
-      return sendSuccess(reply, activeCall);
+      return sendSuccess(reply, toCallSessionResponse(activeCall));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 

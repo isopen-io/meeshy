@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Ghost } from 'lucide-react';
 import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
-import { getUserStatus } from '@/lib/user-status';
+import { getUserStatus, isPresenceActive } from '@/lib/user-status';
 import { useUserStore, useUserStatusTick } from '@/stores/user-store';
 
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
@@ -14,6 +14,7 @@ type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkI
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface ConversationParticipantsProps {
   conversationId: string;
@@ -55,14 +56,14 @@ export function ConversationParticipants({
   const getUserById = useUserStore(state => state.getUserById);
   const _tick = useUserStatusTick();
 
-  // Listes en ligne / hors-ligne via getUserStatus (temps reel)
+  // Listes actifs (dot rendu : online + away + idle, < 5min) / hors ligne via getUserStatus (temps reel)
   const onlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+    return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const _offlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+    return !isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const _recentActiveParticipants = onlineAll.slice(0, 3);
 
@@ -108,7 +109,7 @@ export function ConversationParticipants({
         conversationId,
         type: 'user' as const,
         userId: currentUser.id,
-        displayName: currentUser.displayName || `${currentUser.firstName} ${currentUser.lastName}`,
+        displayName: getUserDisplayName(currentUser),
         avatar: currentUser.avatar,
         role: MemberRole.MEMBER as string,
         language: currentUser.systemLanguage || 'fr',

@@ -126,6 +126,20 @@ function seedFeed(queryClient: QueryClient) {
   });
 }
 
+function seedReels(queryClient: QueryClient, posts = [mockPost], seed = 'foryou') {
+  queryClient.setQueryData(['posts', 'list', 'reels', seed], {
+    pages: [{ data: posts }],
+    pageParams: [undefined],
+  });
+}
+
+function getReels(queryClient: QueryClient, seed = 'foryou'): Array<typeof mockPost> {
+  const data = queryClient.getQueryData<{ pages: { data: Array<typeof mockPost> }[] }>([
+    'posts', 'list', 'reels', seed,
+  ]);
+  return data?.pages.flatMap((p) => p.data) ?? [];
+}
+
 function seedMultiPostFeed(queryClient: QueryClient) {
   const post2 = { ...mockPost, id: 'post-2', likeCount: 0, bookmarkCount: 0 };
   queryClient.setQueryData(['posts', 'list', 'infinite', 'feed'], {
@@ -231,6 +245,37 @@ describe('useDeletePostMutation', () => {
     const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'list', 'infinite', 'feed']);
     expect(data?.pages[0].data).toHaveLength(1);
   });
+
+  it('optimistically removes post from reels threads', async () => {
+    const qc = createQueryClient();
+    const reel2 = { ...mockPost, id: 'post-2' };
+    seedReels(qc, [mockPost, reel2]);
+    mockDeletePost.mockResolvedValue({ success: true, data: { deleted: true } });
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
+    expect(getReels(qc).map((p) => p.id)).toEqual(['post-2']);
+  });
+
+  it('restores reels threads on error', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+    mockDeletePost.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getReels(qc).map((p) => p.id)).toEqual(['post-1']);
+  });
 });
 
 describe('useLikePostMutation', () => {
@@ -311,6 +356,35 @@ describe('useUnlikePostMutation', () => {
     await waitFor(() => {
       const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
       expect(data?.pages[0].data[0].likeCount).toBe(4);
+    });
+  });
+
+  it('removes the emoji from reactionSummary when its count drops to zero (no residual "0" chip)', async () => {
+    const qc = createQueryClient();
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{
+        data: [{
+          ...mockPost,
+          likeCount: 1,
+          reactionSummary: { '❤️': 1 } as Record<string, number>,
+          currentUserReactions: ['❤️'] as string[],
+        }],
+        meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ postId: 'post-1', emoji: '❤️' }); });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { reactionSummary: Record<string, number> }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].reactionSummary).toEqual({});
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBeUndefined();
     });
   });
 });
@@ -465,6 +539,45 @@ describe('useUpdatePostMutation', () => {
 
     const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
     expect(data?.pages[0].data[0].content).toBe('Hello world');
+  });
+
+  it('optimistically patches post content in reels threads', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+
+    let resolveUpdate: (v: unknown) => void;
+    mockUpdatePost.mockImplementation(() => new Promise(r => { resolveUpdate = r; }));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Reel content' } });
+    });
+
+    await waitFor(() => {
+      const reel = getReels(qc)[0];
+      expect(reel.content).toBe('Reel content');
+      expect(reel.isEdited).toBe(true);
+    });
+
+    await act(async () => {
+      resolveUpdate!({ success: true, data: {} });
+    });
+  });
+
+  it('restores reels threads on error', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+    mockUpdatePost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Updated' } });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getReels(qc)[0].content).toBe('Hello world');
   });
 
   it('invalidates detail and list queries on settled', async () => {
@@ -1050,5 +1163,369 @@ describe('useLikePostMutation - socket ack error (no error message → default)'
     await act(async () => { result.current.mutate({ postId: 'post-1' }); });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error?.message).toBe('Failed to add reaction');
+  });
+});
+
+// =============================================================================
+// useBookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useBookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockBookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: true } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useBookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
+
+// =============================================================================
+// useUnbookmarkPostMutation - detail cache invalidation
+// =============================================================================
+
+describe('useUnbookmarkPostMutation - detail cache invalidation', () => {
+  it('invalidates post detail query on success', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    qc.setQueryData(['posts', 'detail', 'post-1'], mockPost);
+    mockUnbookmarkPost.mockResolvedValue({ success: true, data: { bookmarked: false } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['posts', 'detail', 'post-1'] })
+    );
+  });
+});
+
+// =============================================================================
+// useCreatePostMutation - optimistic media (media-only publish no longer
+// flashes an empty card while the server round-trips)
+// =============================================================================
+
+describe('useCreatePostMutation - optimistic media', () => {
+  const mockMedia = [{
+    id: 'media-1',
+    mimeType: 'audio/webm',
+    fileUrl: 'blob:http://localhost/temp-audio',
+    order: 0,
+  }];
+
+  it('includes the optimistic media placeholder on the prepended post', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveCreate: (v: unknown) => void;
+    mockCreatePost.mockImplementation(() => new Promise((r) => { resolveCreate = r; }));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'], optimisticMedia: mockMedia });
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { media?: typeof mockMedia }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].media).toEqual(mockMedia);
+    });
+
+    await act(async () => {
+      resolveCreate!({ success: true, data: { ...mockPost, id: 'real-1', media: mockMedia } });
+    });
+  });
+
+  it('does not forward optimisticMedia to postsService.createPost', async () => {
+    const qc = createQueryClient();
+    mockCreatePost.mockResolvedValue({ success: true, data: { ...mockPost, id: 'new-2' } });
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'], optimisticMedia: mockMedia });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockCreatePost).toHaveBeenCalledWith({ type: 'POST', visibility: 'PUBLIC', mediaIds: ['media-1'] });
+  });
+
+  it('omits media on the optimistic post when optimisticMedia is not provided', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveCreate: (v: unknown) => void;
+    mockCreatePost.mockImplementation(() => new Promise((r) => { resolveCreate = r; }));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ content: 'Text only' });
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { media?: unknown }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].media).toBeUndefined();
+    });
+
+    await act(async () => {
+      resolveCreate!({ success: true, data: { ...mockPost, id: 'real-2' } });
+    });
+  });
+});
+
+// =============================================================================
+// useLikePostMutation / useUnlikePostMutation — nested repostOf cache patches
+// =============================================================================
+
+function seedFeedWith(qc: QueryClient, posts: unknown[]) {
+  qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+    pages: [{
+      data: posts,
+      meta: { pagination: { total: posts.length, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    }],
+    pageParams: [undefined],
+  });
+}
+
+type RepostOfPost = typeof mockPost & { isQuote?: boolean; repostOf?: { id: string; likeCount?: number; commentCount?: number } | null };
+
+function getFeedPost(qc: QueryClient, id: string): RepostOfPost | undefined {
+  const data = qc.getQueryData<{ pages: { data: RepostOfPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+  return data?.pages.flatMap((p) => p.data).find((p) => p.id === id);
+}
+
+function ackSuccess() {
+  mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+    cb({ success: true });
+  });
+}
+
+function ackFailure() {
+  mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+    cb({ success: false, error: 'Network error' });
+  });
+}
+
+describe('useLikePostMutation - direction 1: liking the original bumps nested repostOf', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('bumps repostOf.likeCount on every feed entry embedding the liked original', async () => {
+    const qc = createQueryClient();
+    const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [original, repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => {
+      expect(getFeedPost(qc, 'original-1')?.likeCount).toBe(6);
+      expect(getFeedPost(qc, 'repost-1')?.repostOf?.likeCount).toBe(6);
+    });
+  });
+
+  it('bumps repostOf.likeCount on every reels entry embedding the liked original', async () => {
+    const qc = createQueryClient();
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedReels(qc, [repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => {
+      const reel = getReels(qc)[0] as unknown as RepostOfPost;
+      expect(reel.repostOf?.likeCount).toBe(6);
+    });
+  });
+
+  it('rolls back the nested repostOf.likeCount bump on socket error', async () => {
+    const qc = createQueryClient();
+    const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [original, repostEntry]);
+    ackFailure();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    await act(async () => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getFeedPost(qc, 'repost-1')?.repostOf?.likeCount).toBe(5);
+  });
+
+  it('leaves an unrelated repost (of a different original) untouched', async () => {
+    const qc = createQueryClient();
+    const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+    const unrelatedRepost: RepostOfPost = {
+      ...mockPost, id: 'repost-2', likeCount: 0, isQuote: false,
+      repostOf: { id: 'other-original', likeCount: 9, commentCount: 1 },
+    };
+    seedFeedWith(qc, [original, unrelatedRepost]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => expect(getFeedPost(qc, 'original-1')?.likeCount).toBe(6));
+    expect(getFeedPost(qc, 'repost-2')?.repostOf?.likeCount).toBe(9);
+  });
+});
+
+describe('useLikePostMutation - direction 2: liking a displayed simple repost bumps its own repostOf', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('bumps the repost own repostOf.likeCount (the UI-rendered number) alongside the top-level count', async () => {
+    const qc = createQueryClient();
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'repost-1' }); });
+
+    await waitFor(() => {
+      const patched = getFeedPost(qc, 'repost-1');
+      expect(patched?.likeCount).toBe(1);
+      expect(patched?.repostOf?.likeCount).toBe(6);
+    });
+  });
+
+  it('rolls back both the top-level and nested repostOf counts on socket error', async () => {
+    const qc = createQueryClient();
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [repostEntry]);
+    ackFailure();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    await act(async () => { result.current.mutate({ postId: 'repost-1' }); });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    const patched = getFeedPost(qc, 'repost-1');
+    expect(patched?.likeCount).toBe(0);
+    expect(patched?.repostOf?.likeCount).toBe(5);
+  });
+
+  it('does NOT bump repostOf.likeCount for a quote — its own counter is what is displayed', async () => {
+    const qc = createQueryClient();
+    const quoteEntry: RepostOfPost = {
+      ...mockPost, id: 'quote-1', likeCount: 0, isQuote: true,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [quoteEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'quote-1' }); });
+
+    await waitFor(() => expect(getFeedPost(qc, 'quote-1')?.likeCount).toBe(1));
+    expect(getFeedPost(qc, 'quote-1')?.repostOf?.likeCount).toBe(5);
+  });
+});
+
+describe('useUnlikePostMutation - nested repostOf cache patches', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('direction 1: unliking the original decrements repostOf.likeCount on every embedding entry', async () => {
+    const qc = createQueryClient();
+    const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [original, repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => {
+      expect(getFeedPost(qc, 'original-1')?.likeCount).toBe(4);
+      expect(getFeedPost(qc, 'repost-1')?.repostOf?.likeCount).toBe(4);
+    });
+  });
+
+  it('direction 2: unliking a displayed simple repost decrements its own repostOf.likeCount', async () => {
+    const qc = createQueryClient();
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 1, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'repost-1' }); });
+
+    await waitFor(() => {
+      const patched = getFeedPost(qc, 'repost-1');
+      expect(patched?.likeCount).toBe(0);
+      expect(patched?.repostOf?.likeCount).toBe(4);
+    });
+  });
+
+  it('nested repostOf.likeCount never drops below 0', async () => {
+    const qc = createQueryClient();
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 0, commentCount: 0 },
+    };
+    seedFeedWith(qc, [repostEntry]);
+    ackSuccess();
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+    act(() => { result.current.mutate({ postId: 'repost-1' }); });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getFeedPost(qc, 'repost-1')?.repostOf?.likeCount).toBe(0);
+  });
+
+  it('rolls back the nested repostOf.likeCount decrement on socket error', async () => {
+    const qc = createQueryClient();
+    const original = { ...mockPost, id: 'original-1', likeCount: 5 };
+    const repostEntry: RepostOfPost = {
+      ...mockPost, id: 'repost-1', likeCount: 0, isQuote: false,
+      repostOf: { id: 'original-1', likeCount: 5, commentCount: 2 },
+    };
+    seedFeedWith(qc, [original, repostEntry]);
+    ackFailure();
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+    await act(async () => { result.current.mutate({ postId: 'original-1' }); });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getFeedPost(qc, 'repost-1')?.repostOf?.likeCount).toBe(5);
   });
 });

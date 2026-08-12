@@ -133,6 +133,61 @@ final class PiPVideoRendererTests: XCTestCase {
         )
     }
 
+    // MARK: - Remote video mute → placeholder (never the frozen last frame)
+
+    func test_consume_dropsLiveFramesWhileMuted() {
+        XCTAssertTrue(
+            Self.source.contains("guard !isRemoteVideoMuted else { return }"),
+            "consume() must drop live frames while isRemoteVideoMuted so a placeholder-then-late-real-frame race " +
+            "can't slip a live frame in right after the peer re-enables video mid-processing"
+        )
+    }
+
+    func test_setRemoteVideoMuted_dispatchesOnSerialQueue() {
+        XCTAssertTrue(
+            Self.source.contains("func setRemoteVideoMuted"),
+            "PiPVideoRenderer must expose setRemoteVideoMuted so PiPCallController can forward the peer's camera state"
+        )
+        guard let range = Self.source.range(of: "func setRemoteVideoMuted") else { return }
+        let bodyFragment = String(Self.source[range.lowerBound...].prefix(300))
+        XCTAssertTrue(
+            bodyFragment.contains("queue.async"),
+            "setRemoteVideoMuted must hop onto the serial render queue — isRemoteVideoMuted is only safe to " +
+            "mutate there, same as every other piece of renderer state"
+        )
+    }
+
+    func test_setRemoteVideoMuted_enqueuesPlaceholderOnMute() {
+        XCTAssertTrue(
+            Self.source.contains("enqueuePlaceholder()"),
+            "Muting must eagerly enqueue a placeholder frame — otherwise the PiP window keeps showing whatever " +
+            "the last live frame was until the next real frame arrives (which may never happen)"
+        )
+        XCTAssertTrue(
+            Self.source.contains("VideoFrameConverter.makePlaceholderPixelBuffer()"),
+            "enqueuePlaceholder must build its frame from the shared, WebRTC-independent placeholder factory"
+        )
+    }
+
+    // MARK: - Detach flush ordering (no cross-thread race on the display layer)
+
+    func test_flushOnQueue_existsAndUsesQueueSync() {
+        XCTAssertTrue(
+            Self.source.contains("func flushOnQueue()"),
+            "PiPVideoRenderer must expose flushOnQueue() so callers on another thread " +
+            "(PiPCallController.detachRenderer, on MainActor) can flush the display layer " +
+            "without racing an in-flight consume() call on the renderer's own queue"
+        )
+        guard let range = Self.source.range(of: "func flushOnQueue()") else { return }
+        let bodyFragment = String(Self.source[range.lowerBound...].prefix(200))
+        XCTAssertTrue(
+            bodyFragment.contains("queue.sync"),
+            "flushOnQueue must use queue.sync (not queue.async) — the caller needs the flush to have " +
+            "actually completed before it returns, so a fast re-attach creating a new renderer/queue " +
+            "on the same persistent surface can't race a still-pending async flush from the old one"
+        )
+    }
+
     // MARK: - Rotation callback
 
     func test_rotation_debounced() {

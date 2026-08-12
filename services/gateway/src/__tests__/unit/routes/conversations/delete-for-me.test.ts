@@ -11,9 +11,14 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockResolveConversationId = jest.fn<any>().mockResolvedValue('conv-resolved-id');
+const mockInvalidateParticipantLookup = jest.fn();
 
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
+}));
+
+jest.mock('../../../../utils/participant-lookup-cache', () => ({
+  invalidateParticipantLookup: (...args: any[]) => mockInvalidateParticipantLookup(...args),
 }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
@@ -70,6 +75,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+      // Default: not a genuinely-empty direct DM (matches the default 'group'
+      // scenarios in this file — the `count` query filters `type: 'direct'`
+      // itself, so a non-direct conversation would also resolve to 0 here).
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     ...overrides,
   };
@@ -156,6 +165,76 @@ describe('DELETE /conversations/:id/delete-for-me — creator with successor (mo
   });
 });
 
+describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM', () => {
+  it('returns 200 and closes the conversation instead of transferring ownership', async () => {
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+        // Present-and-null (a genuinely empty post-migration DM) — the `count`
+        // guard matches this state, unlike an absent field (see regression
+        // test below).
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.count).toHaveBeenCalledWith({
+      where: { id: 'conv-resolved-id', type: 'direct', firstMessageSentAt: null },
+    });
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isActive: false } })
+    );
+    expect(prisma.participant.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { role: 'creator' } })
+    );
+    await app.close();
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM with firstMessageSentAt ABSENT', () => {
+  // Regression — Prisma-Mongo absent-vs-null (corrigé en revue pré-merge,
+  // 2026-08-10). The Prisma JS client returns `null` for `firstMessageSentAt`
+  // both when the field is present-and-null AND when it is ABSENT (every
+  // pre-migration `direct` conversation, never backfilled) — the two states
+  // are indistinguishable once passed through a `select` + JS negation. The
+  // fix queries the DB directly for the present-and-null state via `count`,
+  // which — on a real Mongo connector — never matches an absent field. We
+  // simulate that real behaviour here by resolving `count` to 0: a legacy DM
+  // MUST take the ownership-transfer path, never the close-conversation path.
+  it('treats an absent (legacy, pre-migration) firstMessageSentAt as NOT empty and transfers ownership', async () => {
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const successor = { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce(creatorParticipant) // caller's participant
+          .mockResolvedValueOnce(successor),          // moderator successor
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        count: jest.fn<any>().mockResolvedValue(0),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SUCCESSOR_ID }, data: { role: 'creator' } })
+    );
+    expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isActive: false } })
+    );
+    await app.close();
+  });
+});
+
 describe('DELETE /conversations/:id/delete-for-me — creator with no other members', () => {
   it('returns 200 and deactivates the conversation', async () => {
     const creatorParticipant = { ...mockParticipant, role: 'creator' };
@@ -180,6 +259,16 @@ describe('DELETE /conversations/:id/delete-for-me — success with socket events
     const app = await buildApp({ withSocket: true });
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — participant lookup cache invalidation', () => {
+  it('invalidates the cached participant lookup for the deleting user', async () => {
+    mockInvalidateParticipantLookup.mockClear();
+    const app = await buildApp();
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(mockInvalidateParticipantLookup).toHaveBeenCalledWith(PART_ID, 'conv-resolved-id');
     await app.close();
   });
 });

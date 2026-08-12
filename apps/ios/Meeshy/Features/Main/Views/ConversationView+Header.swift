@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 import os
@@ -23,8 +24,8 @@ extension ConversationView {
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
-    var headerAvatarView: some View {
-        ConversationHeaderAvatarView(
+    var headerAvatarView: AnyView {
+        AnyView(ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
             conversation: conversation,
@@ -41,7 +42,7 @@ extension ConversationView {
                     router.deepLinkProfileUser = profileUser
                 }
             }
-        )
+        ))
     }
 
     // MARK: - Header Call Buttons (audio + video)
@@ -190,12 +191,47 @@ private struct HeaderCallButtonsView: View {
     let secondaryColor: String
 
     @ObservedObject private var callManager = CallManager.shared
+    /// Set when the SERVER (not this device's own `CallManager`) reports an
+    /// active call for this conversation — the case `callManager.callState`
+    /// alone can't detect: this device's own session was lost (app relaunch,
+    /// crash) while the call is still ongoing. User-requested 2026-07-11 —
+    /// "il faut permettre... l'indicateur minuteur vert... doit être présent
+    /// avec la possibilité au touché de rejoindre l'appel". Reconciliation
+    /// itself (the REST call) is an SDK atom (`ActiveCallService`); deciding
+    /// WHEN to call it and how it changes this button is app orchestration.
+    @State private var reconciledActiveCall: ActiveCallSession?
 
     var body: some View {
-        if callManager.callState.isActive {
-            returnToCallIndicator
-        } else {
-            startCallButtons
+        Group {
+            if callManager.callState.isActive {
+                returnToCallIndicator
+            } else if let activeCall = reconciledActiveCall {
+                rejoinCallIndicator(activeCall)
+            } else {
+                startCallButtons
+            }
+        }
+        // Re-reconciles whenever the conversation changes (task id) — not on
+        // every body re-eval, which would otherwise fire on every callState
+        // tick (e.g. once a rejoin succeeds and callDuration starts ticking).
+        .task(id: conversationId) {
+            await reconcileActiveCall()
+        }
+        // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
+        // user-rooms de TOUS les membres de la conversation
+        // (resolveCallEndedRooms) — un viewer non-participant le reçoit donc
+        // aussi. Sans ça, la pill « Rejoindre » (posée une seule fois au
+        // .task ci-dessus) resterait pointée sur un appel mort jusqu'au
+        // prochain passage dans la conversation, et un tap déclencherait un
+        // call:join rejeté « This call has already ended ». Match par callId :
+        // un appel qui finit dans une AUTRE conversation ne doit pas effacer
+        // la pill de celle-ci. Hop main obligatoire : le publisher émet
+        // depuis la queue du socket (classe SIGTRAP connue des surfaces
+        // d'appel).
+        .onReceive(MessageSocketManager.shared.callEnded.receive(on: DispatchQueue.main)) { event in
+            if reconciledActiveCall?.id == event.callId {
+                reconciledActiveCall = nil
+            }
         }
     }
 
@@ -227,6 +263,61 @@ private struct HeaderCallButtonsView: View {
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
     }
 
+    /// Same visual family as `returnToCallIndicator` (green pill, same glyph)
+    /// but no live duration — this device hasn't rejoined the media session
+    /// yet, so there's nothing ticking to show. Tapping calls
+    /// `CallManager.rejoinActiveCall`, which resumes the WebRTC session
+    /// directly into `.connecting` — once that lands, `callManager.callState.isActive`
+    /// flips true and this view naturally swaps to `returnToCallIndicator`.
+    private func rejoinCallIndicator(_ activeCall: ActiveCallSession) -> some View {
+        Button {
+            callManager.rejoinActiveCall(
+                callId: activeCall.id,
+                conversationId: conversationId,
+                remoteUserId: userId,
+                remoteUsername: calleeName,
+                isVideo: activeCall.isVideo
+            )
+            HapticFeedback.medium()
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(MeeshyColors.success)
+                    .frame(width: 7, height: 7)
+                Image(systemName: "phone.fill")
+                    .font(MeeshyFont.relative(10, weight: .semibold))
+                Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+            }
+            .foregroundColor(MeeshyColors.success)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(MeeshyColors.success.opacity(0.15))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+            )
+        }
+        .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
+    }
+
+    /// Reconciles with the server on every conversation open — this
+    /// device's own `callManager.callState` can't tell the difference
+    /// between "no call" and "a call is active but this session lost it".
+    /// Skipped when `callManager` already knows locally (no need to hit the
+    /// network, and avoids a race that could momentarily contradict local
+    /// state) or for non-direct conversations (no single peer to rejoin).
+    private func reconcileActiveCall() async {
+        guard !callManager.callState.isActive else { return }
+        // try? flattens the throws+Optional combination (SE-0230) — a
+        // network error and "no active call" both collapse to nil here,
+        // which is the right behavior: reconciliation is best-effort and
+        // silent, never surfaced as an error to the user.
+        guard let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId),
+              session.conversationId == conversationId else { return }
+        reconciledActiveCall = session
+    }
+
     /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
     /// menu contextuel (au lieu de deux boutons séparés). Le glyphe adopte le verre
     /// adaptatif (Liquid Glass iOS 26, repli `.ultraThinMaterial` en deçà) teinté à
@@ -234,12 +325,12 @@ private struct HeaderCallButtonsView: View {
     private var startCallButtons: some View {
         Menu {
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false) }
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
@@ -253,16 +344,25 @@ private struct HeaderCallButtonsView: View {
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(13, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 30, height: 30)
-            .meeshyTapTarget()
+            // Matches expandedHeaderSearchButton's circle exactly (28×28,
+            // font 13) — user-requested 2026-07-11: the two header buttons
+            // must read as the same size. `.adaptiveGlass` MUST come before
+            // `.meeshyTapTarget()`, not after (bug found 2026-07-11): glass
+            // is a Circle sized to the CURRENT view bounds at that point in
+            // the chain — applying it after meeshyTapTarget's `.frame(minWidth:
+            // 44, minHeight: 44)` drew the visible circle at 44pt instead of
+            // 28pt, even though both buttons declared identical numbers.
+            // expandedHeaderSearchButton already has the correct order.
+            .frame(width: 28, height: 28)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
+            .meeshyTapTarget()
     }
 }
 

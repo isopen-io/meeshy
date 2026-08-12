@@ -12,8 +12,11 @@ export * from './language-normalize.js';
 export * from './notification-strings.js';
 export * from './duration-format.js';
 export * from './relative-time.js';
+export * from './time-remaining.js';
 export * from './calendar-date.js';
 export * from './presence-visibility.js';
+export * from './participant-helpers.js';
+export * from './reel-composition.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,

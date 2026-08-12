@@ -32,6 +32,7 @@ jest.mock('../../../utils/sanitize.js', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerSettingsRoutes } from '../../../routes/communities/settings';
+import { generateIdentifier } from '../../../routes/communities/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,55 @@ describe('PUT /communities/:id — success', () => {
     const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { name: 'Updated Name' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+});
+
+describe('PUT /communities/:id — description only (no name)', () => {
+  let app: FastifyInstance;
+  const mockUpdate = jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, name: 'old', creator: {}, _count: { members: 0, Conversation: 0 } });
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, createdBy: USER_ID, identifier: 'old-identifier' }),
+        findUnique: jest.fn<any>().mockResolvedValue(null),
+        update: mockUpdate,
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and sanitizes description when name is omitted', async () => {
+    const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { description: 'A new description' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ name: undefined, description: 'A new description' }) })
+    );
+  });
+});
+
+describe('PUT /communities/:id — identifier change without conflict, no name', () => {
+  let app: FastifyInstance;
+  const mockUpdate = jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, name: 'old', creator: {}, _count: { members: 0, Conversation: 0 } });
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, createdBy: USER_ID, identifier: 'old-identifier' }),
+        findUnique: jest.fn<any>().mockResolvedValue(null),
+        update: mockUpdate,
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200, falling back to an empty name when generating the identifier', async () => {
+    const res = await app.inject({ method: 'PUT', url: `/communities/${COMMUNITY_ID}`, payload: { identifier: 'new-id' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ identifier: 'new-identifier' }) })
+    );
+    expect(generateIdentifier).toHaveBeenCalledWith('', 'new-id');
   });
 });
 

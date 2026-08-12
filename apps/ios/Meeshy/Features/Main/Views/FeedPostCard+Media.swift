@@ -13,8 +13,11 @@ extension FeedPostCard {
         let spacing: CGFloat = 3
 
         if count == 1, let media = mediaList.first {
+            // Aucun cadre de hauteur ici : image et vidéo portent la leur via
+            // `fittedMediaHeight`. Le `.frame(height: 220)` qui vivait ici
+            // écrasait ce calcul et letterboxait les clips verticaux.
+            // L'audio et les documents restent compacts et s'auto-dimensionnent.
             singleMediaView(media)
-                .frame(height: mediaIsCompact(media) ? nil : 220)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
         } else if count == 2 {
             // Two images side by side - equal width
@@ -131,8 +134,9 @@ extension FeedPostCard {
                         if count > 5 {
                             Color.black.opacity(0.6)
                             Text("+\(count - 5)")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
@@ -201,7 +205,7 @@ extension FeedPostCard {
                 )
             }
 
-            // Video overlay
+            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
             if media.type == .video {
                 VStack(spacing: 6) {
                     ZStack {
@@ -211,6 +215,7 @@ extension FeedPostCard {
                         Circle()
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
+                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
                         Image(systemName: "play.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
@@ -218,27 +223,29 @@ extension FeedPostCard {
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
@@ -251,15 +258,11 @@ extension FeedPostCard {
         HapticFeedback.light()
     }
 
-    // Check if media should be compact (audio, document, location)
-    func mediaIsCompact(_ media: FeedMedia) -> Bool {
-        switch media.type {
-        case .audio, .document, .location:
-            return true
-        default:
-            return false
-        }
-    }
+    // `mediaIsCompact` vivait ici pour décider si `mediaPreview` devait imposer
+    // une hauteur de 220 pt. Ce cadre a disparu le 2026-08-10 — il écrasait le
+    // calcul de ratio des cellules image/vidéo et letterboxait les clips
+    // verticaux. L'audio et les documents s'auto-dimensionnent, le prédicat
+    // n'avait donc plus d'appelant.
 
     @ViewBuilder
     func singleMediaView(_ media: FeedMedia) -> some View {
@@ -272,17 +275,11 @@ extension FeedPostCard {
             audioMediaView(media)
         case .document:
             documentMediaView(media)
-        case .location:
-            locationMediaView(media)
         }
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        let aspectRatio: CGFloat? = {
-            guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
-            return CGFloat(w) / CGFloat(h)
-        }()
-        return ProgressiveCachedImage(
+        ProgressiveCachedImage(
             thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
             fullUrl: media.url,
@@ -291,8 +288,10 @@ extension FeedPostCard {
             Color(hex: media.thumbnailColor)
                 .shimmer()
         }
-        .aspectRatio(aspectRatio, contentMode: .fill)
-        .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
+        // Pas de ratio explicite : l'image remplit le cadre que
+        // `fittedMediaHeight` lui donne, et le débord est rogné.
+        .aspectRatio(contentMode: .fill)
+        .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { openFullscreen(media) }
@@ -305,14 +304,48 @@ extension FeedPostCard {
     func audioMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
         return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            AudioPlayerView(
-                attachment: attachment,
-                context: .feedPost,
-                accentColor: media.thumbnailColor,
-                transcription: media.transcription,
-                availability: availability,
-                onDownload: onDownload
-            )
+            CoordinatedAudioPlayer(
+                attachmentId: attachment.id,
+                nowPlayingName: post.author,
+                nowPlayingArtworkURL: post.authorAvatarURL,
+                makeQueuedAudio: {
+                    QueuedAudio(
+                        attachmentId: attachment.id,
+                        messageId: post.id,
+                        conversationId: post.id,
+                        fileUrl: attachment.fileUrl,
+                        durationMs: attachment.duration ?? 0,
+                        senderName: post.author,
+                        senderAvatarURL: post.authorAvatarURL,
+                        receivedAt: post.timestamp
+                    )
+                }
+            ) { external, onPlay in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .feedPost,
+                    accentColor: media.thumbnailColor,
+                    transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        audioFullscreen = .fromFeed(
+                            media: media,
+                            author: ProfileSheetUser.from(feedPost: post),
+                            originalLanguage: post.originalLanguage,
+                            caption: post.content,
+                            createdAt: post.timestamp,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE post doit être vu comme
+                            // la même session coordinator.
+                            conversationId: post.id
+                        )
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    externalPlayer: external,
+                    onPlayRequest: onPlay
+                )
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -326,30 +359,32 @@ extension FeedPostCard {
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
+                // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
-                Text(media.fileName ?? "Document")
-                    .font(.system(size: 14, weight: .semibold))
+                Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
 
                     if let pages = media.pageCount {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
-                        Text("\(pages) pages")
-                            .font(.system(size: 12))
+                        Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))")
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -368,57 +403,6 @@ extension FeedPostCard {
         )
     }
 
-    func locationMediaView(_ media: FeedMedia) -> some View {
-        let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
-            // Map placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: media.thumbnailColor).opacity(0.3), Color(hex: media.thumbnailColor).opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-
-                Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color(hex: media.thumbnailColor))
-            }
-
-            // Location info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(media.locationName ?? "Location")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(2)
-
-                if let lat = media.latitude, let lon = media.longitude {
-                    Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.textMuted)
-                }
-            }
-
-            Spacer()
-
-            // Open in maps
-            Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 28))
-                .foregroundColor(Color(hex: media.thumbnailColor))
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
 }
 
 // MARK: - Feed video cell (fills the card width, aspect-ratio driven height)
@@ -433,15 +417,6 @@ private struct FeedVideoMediaCell: View {
     let media: FeedMedia
     let accentColor: String
     let onExpand: () -> Void
-
-    @State private var measuredWidth: CGFloat = 0
-
-    /// Source ratio (width / height), portrait capped at 1.6× width so a single
-    /// clip can't swallow the whole feed.
-    private var ratio: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 16.0 / 9.0 }
-        return max(CGFloat(w) / CGFloat(h), 1.0 / 1.6)
-    }
 
     var body: some View {
         let attachment = media.toMessageAttachment()
@@ -458,21 +433,7 @@ private struct FeedVideoMediaCell: View {
                 onExpand: onExpand
             )
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: measuredWidth > 0 ? measuredWidth / ratio : nil)
+        .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: FeedVideoWidthKey.self, value: geo.size.width)
-            }
-        )
-        .onPreferenceChange(FeedVideoWidthKey.self) { width in
-            if width > 0, abs(width - measuredWidth) > 0.5 { measuredWidth = width }
-        }
     }
-}
-
-private struct FeedVideoWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

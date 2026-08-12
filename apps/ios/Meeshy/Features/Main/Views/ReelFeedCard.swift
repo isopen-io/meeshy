@@ -30,6 +30,12 @@ struct ReelFeedCardContainer: View {
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
+    /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible,
+    /// masquée du menu (même convention de gating que `FeedPostCard`).
+    var onEdit: ((FeedPost) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
+    var onReport: ((String) -> Void)? = nil
+    var onPin: ((String) -> Void)? = nil
 
     var body: some View {
         ReelFeedCard(
@@ -50,7 +56,11 @@ struct ReelFeedCardContainer: View {
             onRepost: onRepost,
             onBookmark: onBookmark,
             onShare: onShare,
-            onTapAuthor: onTapAuthor
+            onTapAuthor: onTapAuthor,
+            onEdit: onEdit,
+            onDelete: onDelete,
+            onReport: onReport,
+            onPin: onPin
         )
         .equatable()
     }
@@ -83,6 +93,11 @@ struct ReelFeedCard: View, Equatable {
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
+    /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
+    var onEdit: ((FeedPost) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
+    var onReport: ((String) -> Void)? = nil
+    var onPin: ((String) -> Void)? = nil
 
     static func == (lhs: ReelFeedCard, rhs: ReelFeedCard) -> Bool {
         lhs.post.id == rhs.post.id
@@ -103,7 +118,17 @@ struct ReelFeedCard: View, Equatable {
     // Repost-aware: a republished reel has no media on the outer post — resolve
     // from the reposted reel so the card shows the original content, not blank.
     private var media: FeedMedia? { post.primaryReelDisplayMedia }
+    /// Visuel de fond — DISTINCT de `media`, qui porte le média JOUÉ (et donc
+    /// `kind`, l'autoplay et « Sauvegarder »). Un réel audio à couverture
+    /// affiche ainsi son image sans cesser d'être lu comme un audio.
+    private var backgroundMedia: FeedMedia? { post.reelBackgroundMedia }
     private var accentHex: String { post.authorColor }
+    /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
+    @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
+    /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
+    /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
@@ -150,11 +175,25 @@ struct ReelFeedCard: View, Equatable {
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
+        .fullScreenCover(item: $reelCardFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentHex,
+                senderName: displayAuthor
+            )
+        }
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
-    // pour fixer la hauteur du conteneur avant mesure).
-    private var cardWidthEstimate: CGFloat { UIScreen.main.bounds.width - 32 }
+    // pour fixer la hauteur du conteneur avant mesure). Mesurée sur la FENÊTRE
+    // et non sur le display : en Split View l'estimation prise sur `UIScreen`
+    // valait plusieurs fois la largeur réelle, et la hauteur dérivée du ratio
+    // d'aspect sautait à la première mesure du GeometryReader.
+    private var cardWidthEstimate: CGFloat { DeviceLayout.windowSize.width - 32 }
 
     // MARK: - Background média (aspect-fill)
 
@@ -170,7 +209,25 @@ struct ReelFeedCard: View, Equatable {
                 Color(hex: accentHex).opacity(0.5)
             }
         case .audio:
-            ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
+            // Un réel audio avec image de couverture montre sa couverture ; le
+            // dégradé animé n'est le repli que lorsqu'il n'y a aucun visuel.
+            if let cover = backgroundMedia,
+               cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil {
+                ProgressiveCachedImage(
+                    thumbHash: cover.thumbHash,
+                    thumbnailUrl: cover.thumbnailUrl,
+                    fullUrl: cover.url,
+                    autoLoad: true
+                ) {
+                    Color(hex: cover.thumbnailColor)
+                        .shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
+            }
         case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
                 ProgressiveCachedImage(
@@ -191,18 +248,21 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
-    // MARK: - Logo Réel (coin haut-droit) — tap → page détail du poste
+    // MARK: - Logo Réel (coin haut-droit) — menu « … » (parité avec le rail bas)
 
+    /// Second point d'accès au menu « … » (même contenu que `moreOptionsMenu`,
+    /// factorisé via `moreOptionsMenuContent`) — remplace l'ancien bouton
+    /// mono-action « ouvrir le détail » : cette action vit maintenant en tête
+    /// du menu (« Ouvrir »).
     private var reelGlyph: some View {
         VStack {
             HStack {
                 Spacer()
-                Button {
-                    onTapGlyph()
-                    HapticFeedback.light()
+                Menu {
+                    moreOptionsMenuContent
                 } label: {
-                    Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 15, weight: .bold))
+                    Image(systemName: "ellipsis")
+                        .font(MeeshyFont.relative(15, weight: .bold))
                         .foregroundColor(.white)
                         .padding(8)
                         .background(Circle().fill(.ultraThinMaterial))
@@ -210,9 +270,9 @@ struct ReelFeedCard: View, Equatable {
                         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
                 .padding(10)
-                .accessibilityLabel(String(localized: "feed.reel.open_detail.a11y", defaultValue: "Ouvrir le détail du réel", bundle: .main))
+                .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+                .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
             }
             Spacer()
         }
@@ -232,11 +292,28 @@ struct ReelFeedCard: View, Equatable {
             }
             authorRow
             if !displayCaption.isEmpty {
-                Text(displayCaption)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
+                // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
+                // variantes `isDark: true` au lieu de suivre le thème de l'app —
+                // les variantes light (indigo600/800) seraient illisibles ici.
+                MessageTextRenderer.render(displayCaption,
+                    fontSize: 15,
+                    color: .white,
+                    mentionColor: MeeshyColors.mentionColor(isDark: true),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: true),
+                    accentColor: .white,
+                    usesRelativeFont: true
+                )
+                    .tint(.white)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            }
+            // Indicateur de position type sticker (constat user 2026-07-30) —
+            // cliquable, il gagne sur le tap-média de la carte (Button >
+            // onTapGesture). Même pill que story/feed/player.
+            if let place = post.location {
+                FeedPostLocationSticker(place: place) {
+                    reelCardFullscreenPlace = BubbleFullscreenPlace(place: place)
+                }
             }
             actionsRow
         }
@@ -294,7 +371,7 @@ struct ReelFeedCard: View, Equatable {
                 metricInline(icon: "chart.bar.fill", count: post.impressionCount,
                              a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
-                metricInline(icon: "eye.fill", count: post.postOpenCount,
+                metricInline(icon: "eye.fill", count: post.viewCount,
                              a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
         }
@@ -306,7 +383,7 @@ struct ReelFeedCard: View, Equatable {
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
             Text(Self.compactCount(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
@@ -345,13 +422,94 @@ struct ReelFeedCard: View, Equatable {
                        label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
-            Spacer()
-            reelButton(outline: "square.and.arrow.up", filled: "square.and.arrow.up",
-                       tint: .white,
-                       count: displayShareCount,
-                       label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main),
-                       hint: String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main)) { onShare(post.id) }
+            // Partager et le menu « … » restent disponibles via `reelGlyph`
+            // (coin haut-droit) — un seul trigger, pas de doublon en bas.
         }
+    }
+
+    /// Contenu partagé du menu « … » — déclenché uniquement par `reelGlyph`
+    /// (glyphe coin haut-droit), seul trigger de la carte.
+    @ViewBuilder
+    private var moreOptionsMenuContent: some View {
+        Button {
+            onTapGlyph()
+            HapticFeedback.light()
+        } label: {
+            Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+        }
+        Button {
+            UIPasteboard.general.string = post.content
+            HapticFeedback.success()
+        } label: {
+            Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+        }
+        Button {
+            onShare(post.id)
+            HapticFeedback.light()
+        } label: {
+            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+        }
+        if media != nil {
+            Button {
+                requestSaveMedia()
+            } label: {
+                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
+            }
+        }
+        if let onPin {
+            Button {
+                onPin(post.id)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+            }
+        }
+        if let onEdit {
+            Button {
+                onEdit(post)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+            }
+        }
+        if let onDelete {
+            Divider()
+            Button(role: .destructive) {
+                onDelete(post.id)
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        }
+        if let onReport {
+            Divider()
+            Button(role: .destructive) {
+                onReport(post.id)
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
+    /// (pas le poste — un réel n'a de sens à « enregistrer » que par son
+    /// image/vidéo). No-op si le réel n'a pas de média résolvable.
+    private func requestSaveMedia() {
+        guard let media, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when
@@ -361,11 +519,11 @@ struct ReelFeedCard: View, Equatable {
     private func actionGlyph(outline: String, filled: String, tint: Color, participated: Bool) -> some View {
         ZStack {
             Image(systemName: participated ? filled : outline)
-                .font(.system(size: 18))
+                .font(MeeshyFont.relative(18))
                 .foregroundColor(participated ? tint : .white)
             if participated {
                 Image(systemName: outline)
-                    .font(.system(size: 18))
+                    .font(MeeshyFont.relative(18))
                     .foregroundColor(Color(hex: accentHex))
             }
         }

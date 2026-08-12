@@ -12,7 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { startOfLocalDayMs } from '@meeshy/shared/utils/calendar-date';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -162,7 +162,10 @@ function resolveContentRoute(notification: Notification): '/post' | '/story' | '
   const type = notification.type;
   if (typeof type === 'string') {
     if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
-    if (type === NotificationTypeEnum.FRIEND_NEW_STORY || type.startsWith('story')) return '/story';
+    // Tous les types portant `story` visent une story — y compris les variantes
+    // préfixées (`friend_story_comment`) que `startsWith('story')` manquait,
+    // ce qui les routait par erreur vers `/post`.
+    if (type.includes('story')) return '/story';
   }
   return '/post';
 }
@@ -189,8 +192,13 @@ export function getNotificationLink(notification: Notification): string | null {
   const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
   if (postId) {
     const commentId = context?.commentId ?? metadata?.commentId;
+    // Quand la cible est une RÉPONSE, le parent top-level voyage en query
+    // (`?parent=<id>`) : la page de destination chasse le parent dans les
+    // pages top-level, déplie son thread puis cible la réponse via l'ancre.
+    const parentCommentId = context?.parentCommentId ?? metadata?.parentCommentId;
+    const parentQuery = commentId && parentCommentId ? `?parent=${parentCommentId}` : '';
     const anchor = commentId ? `#comment-${commentId}` : '';
-    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+    return `${resolveContentRoute(notification)}/${postId}${parentQuery}${anchor}`;
   }
 
   // 3. Amis / contacts
@@ -265,15 +273,18 @@ export function formatContentPublishedAt(
   if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
 
   const diffHours = Math.floor(diffMinutes / 60);
-  const startOfToday = startOfLocalDayMs(now.getTime());
-  const startOfYesterday = startOfToday - 86400000;
+  // DST-safe : compter les jours calendaires locaux plutôt qu'un delta fixe de
+  // 24 h. Un jour de transition heure d'été/hiver dure 23 h ou 25 h, donc
+  // `startOfToday − 86_400_000` ne retombe pas sur le minuit local d'hier. On
+  // réutilise la SSOT `calendarDayDiff`, déjà employée par groupNotificationsByDate.
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-  if (date.getTime() >= startOfToday) {
+  if (dayDiff === 0) {
     return t('timeAgo.hour').replace('{count}', String(diffHours));
   }
 
-  if (date.getTime() >= startOfYesterday) {
+  if (dayDiff === 1) {
     return t('timeAgo.yesterdayAt').replace('{time}', time);
   }
 
@@ -288,16 +299,31 @@ export function formatContentPublishedAt(
 /**
  * Groups notifications by date period.
  * Returns entries in order: today, yesterday, this week, this month, older.
+ *
+ * Le découpage jour-à-jour (today / yesterday / this week) s'appuie sur
+ * {@link calendarDayDiff} — la SSOT DST-safe déjà utilisée par
+ * `formatContentPublishedAt` dans ce fichier — plutôt que sur une soustraction
+ * de millisecondes ancrée à un jour calendaire de la semaine.
+ *
+ * « This week » est une fenêtre glissante de 7 jours (jours J-2 à J-6), pas une
+ * semaine calendaire ancrée au dimanche. L'ancien calcul
+ * `startOfToday - getDay()*jour` s'effondrait le jour d'ancrage : `getDay()`
+ * valant 0 le dimanche, `startOfWeek` retombait sur `startOfToday`, rendant le
+ * bucket « This week » structurellement inatteignable ce jour-là et renvoyant
+ * toute notification vieille de 2 à 6 jours dans « This month ». La fenêtre
+ * glissante supprime cet effet de bord et rend le regroupement cohérent quel
+ * que soit le jour de la semaine et la locale (dimanche vs lundi).
+ *
+ * Le « maintenant » est injectable (`now`) pour rendre le regroupement
+ * déterministe en test — même convention que `calendarDayDiff(nowMs)`.
  */
 export function groupNotificationsByDate(
   notifications: Notification[],
-  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string }
+  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string },
+  now: Date = new Date()
 ): Array<{ label: string; notifications: Notification[] }> {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getDay() * 86400000);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nowMs = now.getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const groups = new Map<string, Notification[]>([
     [labels.today, []],
@@ -313,14 +339,15 @@ export function groupNotificationsByDate(
       : new Date(notification.state.createdAt);
 
     const time = createdAt.getTime();
+    const dayDiff = calendarDayDiff(time, nowMs);
 
-    if (time >= startOfToday.getTime()) {
+    if (dayDiff <= 0) {
       groups.get(labels.today)!.push(notification);
-    } else if (time >= startOfYesterday.getTime()) {
+    } else if (dayDiff === 1) {
       groups.get(labels.yesterday)!.push(notification);
-    } else if (time >= startOfWeek.getTime()) {
+    } else if (dayDiff <= 6) {
       groups.get(labels.thisWeek)!.push(notification);
-    } else if (time >= startOfMonth.getTime()) {
+    } else if (time >= startOfMonth) {
       groups.get(labels.thisMonth)!.push(notification);
     } else {
       groups.get(labels.older)!.push(notification);

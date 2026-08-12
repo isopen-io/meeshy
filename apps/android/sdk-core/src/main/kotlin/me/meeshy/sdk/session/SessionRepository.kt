@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ProfileEditApply
+import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
@@ -32,9 +34,26 @@ class SessionRepository @Inject constructor(
     val currentUserId: String?
         get() = _currentUser.value?.id
 
-    /** Adopt the identity returned by a fresh login or register. */
+    /**
+     * Adopt the identity returned by a fresh login or register. Mirrors the id into
+     * [TokenStore.userId] alongside the in-memory publish — the persisted copy is
+     * what a cold, widget-triggered process (which never runs this app's normal
+     * startup flow) reads back.
+     */
     fun adopt(user: MeeshyUser) {
         _currentUser.value = user
+        tokenStore.userId = user.id
+    }
+
+    /**
+     * Applies a profile edit onto the signed-in identity for an instant optimistic
+     * paint (ARCHITECTURE.md §4). Merges via [ProfileEditApply] so the local result
+     * matches the gateway `PATCH /users/me` exactly, then republishes so every
+     * surface observing [currentUser] re-renders. Inert when no session is active.
+     */
+    fun applyProfileEdit(request: UpdateProfileRequest) {
+        val current = _currentUser.value ?: return
+        _currentUser.value = ProfileEditApply.apply(current, request)
     }
 
     /**
@@ -48,7 +67,10 @@ class SessionRepository @Inject constructor(
             return
         }
         when (val result = apiCall { authApi.me() }) {
-            is NetworkResult.Success -> _currentUser.value = result.data
+            is NetworkResult.Success -> {
+                _currentUser.value = result.data.user
+                tokenStore.userId = result.data.user.id
+            }
             is NetworkResult.Failure -> Unit
         }
     }
@@ -56,5 +78,6 @@ class SessionRepository @Inject constructor(
     /** Drop the identity on logout / account switch. */
     fun clear() {
         _currentUser.value = null
+        tokenStore.userId = null
     }
 }

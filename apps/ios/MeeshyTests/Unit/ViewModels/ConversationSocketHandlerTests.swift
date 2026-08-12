@@ -227,9 +227,14 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // 2. UI signals on delegate are still expected.
         XCTAssertNotNil(delegate.lastUnreadMessage)
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "newmsg")
+        // Read-exactness (2026-07-24 read-exactness-design): "Lu = affiché".
+        // The socket handler no longer marks a message read on arrival — a
+        // bubble is reported read only once actually displayed
+        // (MessageListViewController willDisplay → SeenMessageAccumulator →
+        // markAsRead(messageIds:)). The arrival path must NOT fire markAsRead.
         XCTAssertEqual(
-            delegate.markAsReadCallCount, 1,
-            "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
+            delegate.markAsReadCallCount, 0,
+            "Inbound message must NOT be marked read on arrival — the visibility layer owns read receipts (read-exactness)"
         )
     }
 
@@ -447,6 +452,78 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(updated?.content, "Edited content", "Edited content must propagate to DB")
         XCTAssertTrue(updated?.isEdited == true, "isEdited flag must be set after socket edit")
         XCTAssertNotNil(updated?.editedAt)
+    }
+
+    /// Message d'appel (metadata call) : l'édition serveur est la transition
+    /// live → terminal. Elle doit ré-appliquer content ET callSummaryJson via
+    /// `applyCallNoticeUpdate`, SANS poser isEdited/editedAt — une transition
+    /// d'état n'est pas une édition utilisateur (pas de badge « modifié »).
+    func test_messageEdited_withCallSummary_reappliesMetadata_withoutEditFlags() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = MessageRecord(
+            localId: "msg-call", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Appel audio en cours", originalLanguage: "fr",
+            messageType: "system", messageSource: "system", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        record.callSummaryJson = try JSONSerialization.data(withJSONObject: [
+            "kind": "call-live", "callId": "call_1", "initiatorId": otherUserId,
+            "callType": "audio", "outcome": "completed", "durationSeconds": 0,
+            "bytesEstimated": false,
+        ])
+        try await actor.insertOptimistic(record)
+
+        let editedApiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-call",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "content":"Appel audio · 04:32",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "updatedAt":"2026-03-06T12:05:00.000Z",
+            "metadata":{"kind":"call","callId":"call_1","initiatorId":"\(otherUserId)","callType":"audio","outcome":"completed","durationSeconds":272,"bytesEstimated":false}
+        }
+        """)
+        socket.simulateMessageEdited(editedApiMsg)
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg-call")
+        }
+        XCTAssertEqual(updated?.content, "Appel audio · 04:32")
+        XCTAssertFalse(updated?.isEdited ?? true, "une transition d'état n'est pas une édition utilisateur")
+        XCTAssertNil(updated?.editedAt)
+        let stored = try XCTUnwrap(updated?.callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive, "la métadonnée stockée doit être passée au terminal")
+        XCTAssertEqual(decoded.durationSeconds, 272)
     }
 
     func test_messageEdited_unknownMessage_noEffect() async throws {
@@ -718,13 +795,38 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_typingStopped_removesUsernameFromDelegate() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Alice"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         socket.typingStopped.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty)
+    }
+
+    // Regression test: the typing roster is keyed by `userId`, not display
+    // name. Two participants sharing a display name (e.g. two uncustomized
+    // "John Smith"s in a group) must be tracked independently — one user's
+    // typing:stop must not clear the other's still-active entry.
+    func test_typingStopped_sameDisplayName_differentUsers_doesNotClearOther() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let userA = "same-name-user-a"
+        let userB = "same-name-user-b"
+
+        socket.typingStarted.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        socket.typingStarted.send(TypingEvent(userId: userB, username: "john.b", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith", "John Smith"], "Both same-name users should be tracked independently")
+
+        socket.typingStopped.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith"], "User B must still show as typing after User A stops")
     }
 
     // MARK: - readStatusUpdated
@@ -950,12 +1052,122 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
     }
 
+    // MARK: - attachmentStatusUpdated — media consumption tracking
+
+    func test_attachmentStatusUpdated_withPositionFields_recordsMediaConsumptionFraction() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":2500,
+            "durationMs":10000,
+            "percentage":25
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.fraction(for: attachmentId), 0.25)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_completedPlayback_recordsCompleteConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"watched",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":10000,
+            "durationMs":10000,
+            "percentage":100
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.consumption(for: attachmentId)?.complete, true)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_withoutPositionFields_doesNotRecordConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"downloaded",
+            "updatedAt":"2099-12-31T23:59:59.000Z"
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
+    }
+
+    func test_attachmentStatusUpdated_fromOtherParticipant_doesNotRecordMediaConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":8000,
+            "durationMs":10000,
+            "percentage":80
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(
+            MediaConsumptionStore.shared.fraction(for: attachmentId),
+            "Another participant's playback progress must never tint the local user's own view of this attachment"
+        )
+    }
+
     // MARK: - messageReceived clears typing indicator for sender
 
     func test_messageReceived_clearsTypingForSender() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Bob"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, senderUsername: "bob", senderDisplayName: "Bob")
         socket.simulateMessage(apiMsg)
@@ -1102,6 +1314,35 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "Reconnect must clear stale typing indicators (remote peers will re-emit if still typing)")
     }
 
+    func test_deinit_clearsStaleTypingIndicatorsOnDelegate() async throws {
+        // Regression test: `deinit` used to launch `Task { @MainActor [weak
+        // self] in self?.delegate?.typingUsernames.removeAll() }` — capturing
+        // `self` weakly from inside its OWN `deinit` is dead code, because
+        // ARC has already zeroed weak references to `self` by the time the
+        // Task body runs. The delegate's typing roster was therefore never
+        // actually cleared when a handler was torn down mid-"typing…".
+        let delegate = MockConversationSocketDelegate()
+        do {
+            let socket = MockMessageSocket()
+            let sut = ConversationSocketHandler(
+                conversationId: conversationId,
+                currentUserId: currentUserId,
+                messageSocket: socket,
+                isApplicationActive: { true }
+            )
+            sut.delegate = delegate
+            sut.armSocketSubscriptions()
+            delegate.typingUsernames = ["Alice"]
+            _ = sut
+        }
+        // `sut` has no other strong referrers, so it deallocates here.
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(delegate.typingUsernames.isEmpty,
+            "Handler teardown must clear stale typing indicators on the delegate")
+    }
+
     func test_willEnterForeground_triggersSyncMissedMessages() async throws {
         let (sut, delegate, _) = makeSUT()
         _ = sut
@@ -1118,6 +1359,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // MARK: - armSocketSubscriptions idempotency
 
     func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {
+        let (db, actor) = try makeDB()
         let socket = MockMessageSocket()
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
@@ -1127,6 +1369,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
+        sut.persistence = actor
+        await actor.start()
         sut.armSocketSubscriptions()
         sut.armSocketSubscriptions()
 
@@ -1138,12 +1382,19 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.simulateMessage(apiMsg)
 
         await Task.yield()
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(nanoseconds: 800_000_000)
 
-        // Post Sprint 2: delegate.messages is no longer mutated. `markAsRead`
-        // fires exactly once per inbound message — `armSocketSubscriptions`
-        // early-returns on the second call so only one subscription is wired.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        // `armSocketSubscriptions` early-returns on the second call
+        // (guard cancellables.isEmpty), so only one subscription is wired and
+        // the inbound message is processed exactly once. Read-exactness moved
+        // read receipts off the arrival path, so single delivery is asserted on
+        // the persistence side: exactly one row lands in GRDB, never a duplicate.
+        let records = try await db.read { db in
+            try MessageRecord.filter(Column("localId") == "duptest").fetchAll(db)
+        }
+        XCTAssertEqual(records.count, 1, "Inbound message must be persisted exactly once despite double armSocketSubscriptions()")
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "duptest", "The message must still be delivered as an unread anchor")
+        _ = sut
     }
 
     // MARK: - Persistence Actor Integration
@@ -1179,10 +1430,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 800_000_000)
 
         // Post Sprint 2: delegate.messages is no longer appended to. The
-        // socket handler emits UI signals (lastUnreadMessage, markAsRead) and
-        // writes the full APIMessage through persistence — the view layer
-        // surfaces it via store observation. We verify the persistence side.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "inbound message must auto-fire markAsRead")
+        // socket handler emits the UI signal (lastUnreadMessage) and writes the
+        // full APIMessage through persistence — the view layer surfaces it via
+        // store observation. Read-exactness moved read receipts off the arrival
+        // path, so markAsRead must NOT fire here. We verify the persistence side.
+        XCTAssertEqual(delegate.markAsReadCallCount, 0, "read-exactness: arrival must NOT mark read — the visibility layer does")
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "persist_new", "lastUnreadMessage must be set")
 
         // Verify the record was written to the database

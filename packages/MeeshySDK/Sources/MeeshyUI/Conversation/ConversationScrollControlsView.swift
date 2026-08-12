@@ -24,7 +24,13 @@ public struct ConversationScrollControlsView: View {
     public var isSearchingQuotedMessage: Bool
     public var accentColor: String
     public var secondaryColor: String
-    
+    /// SF Symbol du dernier message non lu quand c'est une notice d'appel
+    /// (téléphone / caméra). `nil` quand le dernier non-lu n'est pas un appel.
+    public var unreadCallSymbol: String? = nil
+    /// Teinte hex du glyphe d'appel (ex. "F87171"). Même convention que
+    /// `accentColor`/`secondaryColor`. `nil` → pas de teinte spécifique.
+    public var unreadCallTint: String? = nil
+
     public var onScrollToBottom: () -> Void
     public var onPlayAudio: () -> Void
     
@@ -44,6 +50,8 @@ public struct ConversationScrollControlsView: View {
         isSearchingQuotedMessage: Bool = false,
         accentColor: String,
         secondaryColor: String,
+        unreadCallSymbol: String? = nil,
+        unreadCallTint: String? = nil,
         onScrollToBottom: @escaping () -> Void,
         onPlayAudio: @escaping () -> Void
     ) {
@@ -62,6 +70,8 @@ public struct ConversationScrollControlsView: View {
         self.isSearchingQuotedMessage = isSearchingQuotedMessage
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
+        self.unreadCallSymbol = unreadCallSymbol
+        self.unreadCallTint = unreadCallTint
         self.onScrollToBottom = onScrollToBottom
         self.onPlayAudio = onPlayAudio
     }
@@ -102,9 +112,51 @@ public struct ConversationScrollControlsView: View {
     /// d'animation dans la sous-vue" ; le garde sur hasTypingIndicator evite tout
     /// tick utile quand personne ne tape.
     @State private var typingDotPhase: Int = 0
-    private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
+    // every time ConversationView reconstructs this leaf view (any unrelated
+    // body re-evaluation — the very churn this view was pulled out to avoid,
+    // see comment above), handing `.onReceive` a brand-new, not-yet-ticked
+    // Timer.publish().autoconnect() each time. If reconstructions happen
+    // faster than the 0.5s interval, the publisher never survives long enough
+    // to fire and the typing-dot animation freezes. `@State`'s initial-value
+    // expression runs once per view identity, preserving the same connected
+    // publisher instance across re-renders.
+    @State private var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
+    /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
+    /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
+    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
+    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
+    /// la teinte neutral500 est sombre, le blanc reste lisible.
+    private var contentColor: Color {
+        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
+    }
+
+    /// Repos = cercle parfait ; contenu riche/hors-ligne/recherche = capsule
+    /// ovale. Extrait en fonction pure testable (même pattern que
+    /// `shouldShowAttachmentPreview` plus bas) car XCTest ne peut pas
+    /// introspecter la `Shape` passée à un modificateur SwiftUI — seule la
+    /// DÉCISION est vérifiable, pas le rendu.
+    nonisolated static func isCompactShape(hasUnreadContent: Bool, isOffline: Bool, isSearchingQuotedMessage: Bool) -> Bool {
+        hasUnreadContent || isOffline || isSearchingQuotedMessage
+    }
 
     public var body: some View {
+        if Self.isCompactShape(hasUnreadContent: hasUnreadContent, isOffline: isOffline, isSearchingQuotedMessage: isSearchingQuotedMessage) {
+            pill(shape: Capsule())
+        } else {
+            pill(shape: Circle())
+        }
+    }
+
+    /// `Circle()` et `Capsule()` sont deux `Shape` distincts : `adaptiveGlass(in:)`
+    /// est générique sur `S: Shape`, donc `isCompact ? Circle() : Capsule()` ne
+    /// compile pas (branches de types incompatibles). Le branchement vit donc
+    /// au niveau de `body` (deux appels concrets à cette même fonction
+    /// générique) plutôt qu'un ternaire ici — c'est un cross-fade à l'identité
+    /// de vue au changement d'état, pas un morph de rayon animé (AnyShape
+    /// exclu : plancher iOS 16 ; décision spec).
+    private func pill<S: Shape>(shape: S) -> some View {
         Button {
             onScrollToBottom()
         } label: {
@@ -120,33 +172,30 @@ public struct ConversationScrollControlsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 13, weight: .bold))
-                        Text("Hors ligne")
+                        Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(contentColor)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 } else {
-                    // Simple chevron-only pill
+                    // Chevron-only pill au repos : frame CARRÉE explicite avant
+                    // .adaptiveGlass(in: Circle()) — sans elle le disque peint
+                    // (inscrit dans les bounds ~37×32 laissées par padding(12))
+                    // est plus étroit que le glyphe et déborde horizontalement.
+                    // 44×44 atteint au passage la cible tactile HIG.
                     Image(systemName: "chevron.down")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(12)
+                        .foregroundColor(contentColor)
+                        .frame(width: 44, height: 44)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                isOffline ? MeeshyColors.neutral400 : Color(hex: accentColor).opacity(0.95),
-                                isOffline ? MeeshyColors.neutral500 : Color(hex: secondaryColor).opacity(0.9)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: isOffline ? MeeshyColors.neutral400.opacity(0.4) : Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
+            // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
+            // FORTE pour préserver le contraste du contenu blanc (badge non-lus,
+            // aperçu pièce jointe) — toutes les infos restent visibles.
+            .adaptiveGlass(
+                in: shape,
+                tint: isOffline ? MeeshyColors.neutral500.opacity(0.9) : Color(hex: accentColor).opacity(0.85)
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)
@@ -165,7 +214,7 @@ public struct ConversationScrollControlsView: View {
                 .scaleEffect(searchPulse ? 1.15 : 0.85)
                 .opacity(searchPulse ? 1.0 : 0.6)
 
-            Text("Recherche…")
+            Text(String(localized: "conversation.searching", defaultValue: "Recherche…", bundle: .module))
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
 
@@ -187,7 +236,7 @@ public struct ConversationScrollControlsView: View {
                 }
             }
         }
-        .foregroundColor(.white)
+        .foregroundColor(contentColor)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: 180)
@@ -200,13 +249,34 @@ public struct ConversationScrollControlsView: View {
     }
     
     /// Whether the last unread message carries a renderable attachment preview
-    /// (audio control, image/video thumbnail, or a type glyph).
+    /// (audio control, image/video thumbnail, a type glyph, or a call notice).
     private var hasAttachmentPreview: Bool {
+        Self.hasAttachmentPreview(
+            unreadAttachmentIsAudio: unreadAttachmentIsAudio,
+            unreadAttachmentThumbHash: unreadAttachmentThumbHash,
+            unreadAttachmentThumbnailUrl: unreadAttachmentThumbnailUrl,
+            unreadAttachmentFullUrl: unreadAttachmentFullUrl,
+            unreadAttachmentSymbol: unreadAttachmentSymbol,
+            unreadCallSymbol: unreadCallSymbol
+        )
+    }
+
+    /// Extracted `nonisolated static` so it's unit-testable without a full view
+    /// instance — same pattern as `shouldShowAttachmentPreview` below.
+    nonisolated static func hasAttachmentPreview(
+        unreadAttachmentIsAudio: Bool,
+        unreadAttachmentThumbHash: String?,
+        unreadAttachmentThumbnailUrl: String?,
+        unreadAttachmentFullUrl: String?,
+        unreadAttachmentSymbol: String?,
+        unreadCallSymbol: String?
+    ) -> Bool {
         unreadAttachmentIsAudio
             || unreadAttachmentThumbHash != nil
             || unreadAttachmentThumbnailUrl != nil
             || unreadAttachmentFullUrl != nil
             || unreadAttachmentSymbol != nil
+            || unreadCallSymbol != nil
     }
 
     /// Whether the rich attachment preview should appear on the scroll-to-bottom
@@ -245,7 +315,7 @@ public struct ConversationScrollControlsView: View {
 
                 // Count headline — only when more than one message is pending.
                 if unreadCount > 1 {
-                    Text("\(unreadCount) messages")
+                    Text(String(localized: "conversation.unread_messages", defaultValue: "\(unreadCount) messages", bundle: .module))
                         .font(.system(size: 13, weight: .heavy))
                         .lineLimit(1)
                 }
@@ -267,7 +337,7 @@ public struct ConversationScrollControlsView: View {
                     .font(.system(size: 11, weight: .bold))
             }
         }
-        .foregroundColor(.white)
+        .foregroundColor(contentColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: 260)
@@ -340,6 +410,17 @@ public struct ConversationScrollControlsView: View {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
+        } else if let callSymbol = unreadCallSymbol {
+            // Notice d'appel (en cours/manqué/rejeté/annulé/échoué) : même
+            // gabarit que le glyphe générique ci-dessus, mais teinté par
+            // `unreadCallTint` (hex fourni app-side) plutôt que du blanc fixe —
+            // `nil` (ex. appel en cours, pastille déjà teintée accent) retombe
+            // sur `contentColor` pour rester lisible.
+            Image(systemName: callSymbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(unreadCallTint.map { Color(hex: $0) } ?? contentColor)
                 .frame(width: 36, height: 36)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
         } else {

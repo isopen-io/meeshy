@@ -90,14 +90,7 @@ extension UniversalComposerBar {
         let tiles = carouselTiles
 
         return VStack(spacing: 0) {
-            // Grab handle — mirrors the system keyboard affordance and hints at
-            // the swipe-down-to-dismiss gesture.
-            Capsule()
-                .fill(mutedColor.opacity(0.4))
-                .frame(width: 36, height: 4)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-                .accessibilityHidden(true)
+            mediaPanelGrabHandle
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -117,8 +110,10 @@ extension UniversalComposerBar {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
                     accentColor: accentColor,
-                    onOpenLibrary: { fire { onPhotoLibrary?() } },
-                    onSelect: onRecentMediaSelected
+                    onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
+                    onSelect: onRecentMediaSelected,
+                    onEdit: onRecentMediaEdit,
+                    onSelectionChanged: { recentStripSelectionIds = $0 }
                 )
             } else {
                 Spacer(minLength: 0)
@@ -130,6 +125,114 @@ extension UniversalComposerBar {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pi\u{00E8}ces jointes", bundle: .main))
+    }
+
+    // MARK: - Grab Handle
+
+    /// Poignée du panneau. Décorative tant qu'il n'y a pas d'aperçu photothèque
+    /// en dessous ; dès que le strip est monté, elle devient le raccourci vers
+    /// la photothèque COMPLÈTE — celle du système, avec ses onglets Photos /
+    /// Albums en haut, exactement le picker que le composer de story ouvre.
+    ///
+    /// Le geste est directionnel et reprend la grammaire de la feuille système :
+    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 19 vignettes à
+    /// toute la photothèque), tirer vers le BAS referme le panneau. Sans la branche
+    /// « bas », la poignée avalerait le drag et casserait le swipe-to-dismiss
+    /// que le geste global de `expandedComposer` assure partout ailleurs.
+    ///
+    /// La sélection multiple en cours est reportée au picker : partir vers la
+    /// photothèque ne doit jamais faire perdre ses choix à l'utilisateur — même
+    /// invariant que la tuile « + » du strip.
+    @ViewBuilder
+    var mediaPanelGrabHandle: some View {
+        // Branche explicite plutôt que `highPriorityGesture(optionnel)` : la
+        // surcharge qui accepte un geste `nil` n'existe qu'à partir d'iOS 18 et
+        // l'app plancher à 16.
+        if onRecentMediaSelected != nil {
+            grabHandleCapsule(emphasis: 0.55)
+                // Bande tactile confortable : 4 pt de haut ne s'attrapent pas.
+                .contentShape(Rectangle().inset(by: -12))
+                // `highPriority` : sans ça, le `DragGesture` global de
+                // `expandedComposer` gagne l'arbitrage et le geste vers le haut
+                // n'arrive jamais jusqu'ici.
+                .highPriorityGesture(mediaPanelHandleDrag)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poign\u{00E9}e du panneau", bundle: .main))
+                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la phototh\u{00E8}que", bundle: .main))
+                // VoiceOver ne peut pas produire le drag : il lui faut l'action
+                // nommée, sinon le raccourci n'existe que pour la souris/doigt.
+                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))) {
+                    openFullPhotoLibrary(preselecting: recentStripSelectionIds)
+                }
+        } else {
+            grabHandleCapsule(emphasis: 0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func grabHandleCapsule(emphasis: Double) -> some View {
+        Capsule()
+            .fill(mutedColor.opacity(emphasis))
+            .frame(width: 36, height: 4)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+    }
+
+    /// La décision vit dans `ComposerPanelHandleLaw` (pure, testée) ; ce geste
+    /// ne fait que lui passer position et vélocité projetée, puis exécuter.
+    private var mediaPanelHandleDrag: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                switch ComposerPanelHandleLaw.outcome(
+                    translation: value.translation.height,
+                    predicted: value.predictedEndTranslation.height
+                ) {
+                case .openFullLibrary:
+                    HapticFeedback.medium()
+                    openFullPhotoLibrary(preselecting: recentStripSelectionIds)
+                case .closePanel:
+                    closeAttachMenu()
+                case .ignore:
+                    break
+                }
+            }
+    }
+
+    /// Point unique d'ouverture de la photothèque système, partagé par la tuile
+    /// « + » du strip, la poignée et l'action VoiceOver.
+    ///
+    /// Le panneau s'étire vers le haut pendant le délai qui précède la
+    /// présentation, au lieu de se refermer vers le bas : la feuille système
+    /// prolonge alors le geste au lieu de le contredire (cf.
+    /// `ComposerLibraryHandoff`). Il est ensuite retiré SOUS la feuille qui
+    /// monte — au retour du picker le composer est propre, exactement comme
+    /// avec l'ancien chemin `fire(_:)`.
+    ///
+    /// Reduce Motion garde le chemin direct : l'étirement est une animation
+    /// décorative, pas une information.
+    func openFullPhotoLibrary(preselecting ids: [String]) {
+        let present: () -> Void = {
+            if let onPhotoLibraryPreselecting {
+                onPhotoLibraryPreselecting(ids)
+            } else {
+                onPhotoLibrary?()
+            }
+        }
+        guard !reduceMotion else {
+            fire(present)
+            return
+        }
+        // Deux déclencheurs (poignée puis tuile « + ») ne doivent pas empiler
+        // deux présentations sur un seul étirement.
+        guard !isExpandingToLibrary else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            isExpandingToLibrary = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ComposerLibraryHandoff.expandDelay) {
+            present()
+            closeAttachMenu()
+            isExpandingToLibrary = false
+        }
     }
 
     /// The attachment types offered by the carousel. Each tile is included only
@@ -306,6 +409,30 @@ extension UniversalComposerBar {
     // MARK: - Clipboard Content Handling
 
     func handleClipboardCheck(_ newText: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
+        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
+        // le double de la croissance réelle et dont le seuil ne doit pas
+        // bouger) : seule une INSERTION assez grande pour contenir
+        // « file:// » déclenche la détection — un utilisateur qui tape ces
+        // caractères un par un n'a jamais une insertion de cette taille.
+        let insertedCount = newText.count - text.count
+        if insertedCount >= "file://".count, newText.contains("file://") {
+            let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
+            if !urls.isEmpty {
+                // Le champ garde le texte débarrassé des URLs ; les fichiers
+                // partent par `onIngest`, comme un dépôt.
+                DispatchQueue.main.async {
+                    text = cleaned
+                }
+                ingestPastedFileURLs(urls)
+                HapticFeedback.medium()
+                // Pas de tuile presse-papier pour un collage de fichiers :
+                // la spec exige « une pièce jointe — pas du texte, pas une
+                // tuile presse-papier ».
+                return
+            }
+        }
+
         // Detect if a paste of 2000+ chars just happened
         let delta = newText.count - (text.count - (newText.count - text.count))
         if newText.count > 2000 && delta > 500 {
@@ -384,8 +511,6 @@ extension UniversalComposerBar {
     }
 
     func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+        Int64(bytes).formatted(.byteCount(style: .file))
     }
 }

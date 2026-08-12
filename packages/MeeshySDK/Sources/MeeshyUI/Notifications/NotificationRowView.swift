@@ -45,14 +45,14 @@ public struct NotificationRowView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onDelete {
                 Button(role: .destructive) { onDelete() } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !notification.isRead, let onMarkRead {
                 Button { onMarkRead() } label: {
-                    Label("Lu", systemImage: "envelope.open")
+                    Label(String(localized: "notifications.mark_read", defaultValue: "Lu", bundle: .module), systemImage: "envelope.open")
                 }
                 .tint(Color(hex: "4338CA"))
             }
@@ -109,7 +109,7 @@ public struct NotificationRowView: View {
                     }
                 }
                 .font(MeeshyFont.relative(11))
-                .foregroundColor(notification.isLinkedContentExpired ? Color(hex: "F87171") : theme.textMuted)
+                .foregroundColor(notification.isLinkedContentExpired ? MeeshyColors.error : theme.textMuted)
                 .padding(.top, 1)
             }
 
@@ -130,7 +130,9 @@ public struct NotificationRowView: View {
     /// visuel de CE qui a été commenté / réagi, sans ouvrir l'app. 44×44,
     /// coins arrondis, alignée sur l'avatar en tête de ligne.
     private func postThumbnail(_ urlString: String) -> some View {
-        CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44)) {
+        // showsStatusOverlays: false — echec silencieux vers le fond teinte
+        // deja fourni ; pas de bouton retry sur une vignette 44pt.
+        CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44), showsStatusOverlays: false) {
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(accentColor.opacity(0.12))
         }

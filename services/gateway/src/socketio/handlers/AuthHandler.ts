@@ -1,8 +1,9 @@
 import type { Socket } from 'socket.io';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
 import { CallService } from '../../services/CallService';
+import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -30,6 +31,34 @@ export interface AuthHandlerDependencies {
    * (rétrocompat).
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  /**
+   * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
+   * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
+   * `io` and `CallEventsHandler`), curried down to
+   * `CallEventsHandler.broadcastParticipantLeftResult`. Optional so unit tests
+   * constructing AuthHandler directly don't need to stub Socket.IO — leaveCall
+   * itself still runs unconditionally either way, only the broadcast fanout is
+   * skipped when absent.
+   */
+  broadcastCallParticipantLeft?: (opts: {
+    leftSession: Awaited<ReturnType<CallService['leaveCall']>>;
+    participation: DisconnectParticipation;
+    userId: string;
+  }) => Promise<void>;
+  /**
+   * CALL-RESILIENCE — force-cleanup fallback when `leaveCall` rejects for one
+   * of the participations below, curried down to
+   * `CallEventsHandler.forceCleanupParticipationAfterLeaveFailure`. The
+   * registered-user path already had this fallback (a failed leave stamps
+   * `leftAt` directly and force-ends the session); this anonymous path only
+   * logged, so a guest whose leave hit a DB error stayed a zombie participant
+   * until the ~120s GC. Optional, same rationale as the callback above.
+   */
+  forceCleanupCallParticipant?: (opts: {
+    participation: DisconnectParticipation;
+    userId: string;
+    leaveError: unknown;
+  }) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -41,6 +70,8 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
+  private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -51,6 +82,8 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
+    this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
+    this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -184,8 +217,13 @@ export class AuthHandler {
       userId: user.id
     };
 
-    this._registerUser(user.id, socketUser, socket);
-
+    // Join every room this socket needs to receive messages in BEFORE
+    // registering the user as "connected". Delivery code (MessageHandler,
+    // MeeshySocketIOManager) gates the offline-delivery queue purely on
+    // `connectedUsers.has(userId)`: if we registered first, a message could
+    // arrive in the gap between registration and these awaited room joins
+    // completing, be skipped from the offline queue (recipient looks
+    // online), and never reach the room broadcast either — permanently lost.
     try {
       if (user.id && typeof user.id === 'string') {
         await Promise.allSettled([
@@ -197,8 +235,6 @@ export class AuthHandler {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
-    this.statusService.markConnected(user.id, false);
-    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
     await this._joinUserConversations(socket, user.id, false);
 
     try {
@@ -206,6 +242,11 @@ export class AuthHandler {
     } catch (error) {
       logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
     }
+
+    this._registerUser(user.id, socketUser, socket);
+
+    this.statusService.markConnected(user.id, false);
+    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -262,17 +303,24 @@ export class AuthHandler {
       sessionToken
     };
 
-    this._registerUser(participant.id, socketUser, socket);
-
+    // Join rooms before registering — see matching comment in
+    // _authenticateJWTUser for why registration must come last.
+    // The personal room MUST use ROOMS.user(...) — the same convention the JWT
+    // path uses (`socket.join(ROOMS.user(user.id))`) and, critically, the only
+    // room every personal-event emitter targets (`io.to(ROOMS.user(participant
+    // .userId ?? participant.id))` for CONVERSATION_UNREAD_UPDATED, mentions,
+    // etc.). Joining the bare `socketUser.id` room left the anonymous socket in
+    // a room no emitter ever addresses, so `conversation:unread-updated` (and
+    // any other personal broadcast that falls back to `participant.id`) never
+    // reached anonymous participants — their unread badge stayed stale until a
+    // manual REST refetch.
     try {
       if (socketUser.id && typeof socketUser.id === 'string') {
-        await socket.join(socketUser.id);
+        await socket.join(ROOMS.user(socketUser.id));
       }
     } catch (error) {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
     }
-
-    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     try {
       await socket.join(ROOMS.conversation(participant.conversationId));
@@ -283,6 +331,10 @@ export class AuthHandler {
         error,
       });
     }
+
+    this._registerUser(participant.id, socketUser, socket);
+
+    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -338,49 +390,99 @@ export class AuthHandler {
     this.userSockets.delete(userIdOrToken);
     this.statusService.markDisconnected(userIdOrToken, isAnonymous);
 
-    try {
-      const activeParticipations = await this.prisma.callParticipant.findMany({
-        where: {
-          leftAt: null,
-          participant: isAnonymous
-            ? { id: userIdOrToken }
-            : { userId: userIdOrToken }
-        },
-        include: {
-          callSession: true
-        }
-      });
-
-      if (activeParticipations.length > 0) {
-        logger.debug('disconnect-cleanup: active call participations found', {
-          socketId: socket.id,
-          userId: userIdOrToken,
-          count: activeParticipations.length,
-          callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
+    // CALL-RESILIENCE — call lifecycle on disconnect is owned by
+    // CallEventsHandler's per-socket disconnect handler (reconnect grace for
+    // answered calls, immediate leave pre-answer, shutdown guard). Leaving
+    // calls here too marked answered CallSessions ended in DB while their P2P
+    // media was still alive (socket blip / gateway restart on a single-device
+    // user), defeating that grace window. Anonymous participants are the one
+    // case that handler cannot resolve (its lookup is keyed on
+    // participant.userId) and they get no reconnect grace (ADR-6) — the
+    // immediate auto-leave stays for them only.
+    if (isAnonymous) {
+      try {
+        const activeParticipations = await this.prisma.callParticipant.findMany({
+          where: {
+            // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+            // whose leftAt field was never written (pre-C5 participants).
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { id: userIdOrToken }
+          },
+          include: {
+            callSession: true
+          }
         });
-      }
 
-      for (const participation of activeParticipations) {
-        try {
-          await this.callService.leaveCall({
-            callId: participation.callSessionId,
+        if (activeParticipations.length > 0) {
+          logger.debug('disconnect-cleanup: active call participations found', {
+            socketId: socket.id,
             userId: userIdOrToken,
-            participantId: participation.participantId
+            count: activeParticipations.length,
+            callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
           });
-        } catch (error) {
-          logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
         }
+
+        for (const participation of activeParticipations) {
+          try {
+            const leftSession = await this.callService.leaveCall({
+              callId: participation.callSessionId,
+              userId: userIdOrToken,
+              participantId: participation.participantId,
+              // CALL-RESILIENCE (Vague 43) — this loop only ever runs on socket
+              // `disconnect` (see the comment above), never a deliberate
+              // call:leave/call:end. Mirrors CallEventsHandler
+              // .leaveParticipationAndBroadcast's identical Vague 42 fix: without
+              // this hint, leaveCall() defaults to endReason 'completed',
+              // misrecording an involuntary drop as a normal hangup.
+              endReasonHint: CallEndReason.connectionLost
+            });
+            // CALL-RESILIENCE (Vague 44) — leaveCall alone never told the other
+            // party the guest left: this loop is the only cleanup path for
+            // anonymous participants (CallEventsHandler's own disconnect flow
+            // is keyed on participant.userId, always null here), and it never
+            // broadcast PARTICIPANT_LEFT/call:ended, leaving the other side's
+            // UI "in call" until CallCleanupService's ~120s GC.
+            await this.broadcastCallParticipantLeft?.({
+              leftSession,
+              participation: participation as unknown as DisconnectParticipation,
+              userId: userIdOrToken
+            });
+          } catch (error) {
+            logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
+            // Parity with the registered-user path: a rejected leaveCall used
+            // to leave this participation open until the ~120s GC. The
+            // fallback itself never rejects, but a missing/failing injection
+            // must not abort the loop over the remaining participations.
+            try {
+              await this.forceCleanupCallParticipant?.({
+                participation: participation as unknown as DisconnectParticipation,
+                userId: userIdOrToken,
+                leaveError: error
+              });
+            } catch (forceError) {
+              logger.error('force cleanup failed after leaveCall error on disconnect', {
+                callId: participation.callSessionId,
+                error: forceError
+              });
+            }
+          }
+        }
+      } catch (error) {
+        logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
       }
-    } catch (error) {
-      logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
-    // Guard: a new socket may have reconnected while async cleanup was in progress.
-    // Only delete the connectedUsers entry if no new sockets exist for this user.
+    // Guard: a new socket may have reconnected while async cleanup (the
+    // anonymous call-participation lookup above awaits Prisma) was in
+    // progress. That reconnect's own auth flow already broadcast the correct
+    // isOnline:true and repopulated userSockets/connectedUsers — broadcasting
+    // isOnline:false below would be a stale last-write-wins clobber of both
+    // the room presence event and the DB flag. Bail out entirely in that case.
     const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
-    if (!stillHasSockets) {
-      this.connectedUsers.delete(userIdOrToken);
+    if (stillHasSockets) {
+      return;
     }
+    this.connectedUsers.delete(userIdOrToken);
 
     try {
       if (isAnonymous) {
@@ -409,17 +511,60 @@ export class AuthHandler {
       const user = this.connectedUsers.get(userIdOrToken);
       if (!user) return;
 
-      this.statusService.updateLastSeen(userIdOrToken, user.isAnonymous);
-
-      if (!user.isAnonymous) {
-        await this.prisma.user.update({
-          where: { id: userIdOrToken },
-          data: { lastActiveAt: new Date() }
-        });
-      }
+      // Throttled 60s inside StatusService — a passive-connected socket keeps
+      // lastActiveAt fresh (at most one DB write per minute) so it stays
+      // 'online' under the 5min anti-stale guard of the 1/3/5 presence rule.
+      // No per-beat unthrottled Prisma write here.
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
     } catch (error) {
-      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+      logger.debug('heartbeat presence refresh failed (best-effort)', { userId: userIdOrToken, error });
     }
+  }
+
+  // Engine-level pong (Socket.IO ping/pong, every ~25s on EVERY client
+  // platform). The applicative CLIENT_EVENTS.HEARTBEAT above only exists on
+  // web (90s) and iOS (30s) — Android emits none, so without this path a
+  // passive-connected Android user would fall past the 5min anti-stale guard
+  // of the 1/3/5 presence rule and read offline while the socket is alive.
+  // Throttled 60s inside StatusService: at most one DB write + broadcast/min.
+  handleEnginePong(socket: Socket): void {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+
+    const user = this.connectedUsers.get(userIdOrToken);
+    if (!user) return;
+
+    try {
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
+    } catch (error) {
+      logger.debug('engine pong presence refresh failed (best-effort)', { userId: userIdOrToken, error });
+    }
+  }
+
+  // Retries beyond the initial attempt for a rejected conversation room join.
+  // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
+  // broken adapter can never spin forever; each retry re-attempts only the rooms
+  // that STILL failed, so a room that joined on the first try is never re-joined.
+  private static readonly JOIN_RETRY_ATTEMPTS = 2;
+
+  /**
+   * Joins the socket to each conversation room, retrying only the rooms whose
+   * join rejected (transient adapter hiccup). Returns the conversation ids that
+   * remained un-joined after all retries were exhausted.
+   *
+   * A failed-and-un-retried join is silent message loss: the delivery gate
+   * (`connectedUsers.has(userId)`) treats the recipient as online and skips the
+   * offline queue, yet the missed room means the live `message:new` never
+   * arrives either. Retrying closes the common transient case.
+   */
+  private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
+    const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
+    let pending = conversationIds;
+    for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
+      const results = await Promise.allSettled(pending.map(id => socket.join(ROOMS.conversation(id))));
+      pending = pending.filter((_, i) => results[i].status === 'rejected');
+    }
+    return pending;
   }
 
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
@@ -438,12 +583,22 @@ export class AuthHandler {
         });
       }
 
-      const joinResults = await Promise.allSettled(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
-      const failedJoins = joinResults.filter(r => r.status === 'rejected');
-      if (failedJoins.length > 0) {
-        logger.warn('some conversation room joins failed', { userId, failed: failedJoins.length, total: conversations.length });
+      const conversationIds = conversations.map(conv => conv.conversationId);
+      const stillFailed = await this._joinConversationRoomsWithRetry(socket, conversationIds);
+      if (stillFailed.length > 0) {
+        // Escalated to error: after retries, these room joins are genuinely
+        // broken. Because delivery gates the offline queue purely on
+        // `connectedUsers.has(userId)`, this recipient now looks online but is
+        // absent from these rooms — a message sent to them lands nowhere (no
+        // live emit, no offline enqueue) until a later reconnect re-joins them.
+        logger.error('conversation room joins failed after retries — recipient may miss live messages until reconnect', {
+          userId,
+          failed: stillFailed.length,
+          total: conversationIds.length,
+          conversationIds: stillFailed,
+        });
       }
-      logger.debug('user joined conversation rooms', { userId, count: conversations.length - failedJoins.length });
+      logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
     }

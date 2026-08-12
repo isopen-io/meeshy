@@ -110,7 +110,11 @@ export function createTranslationJSON(params: {
  *
  * @param messageId - ID du message
  * @param translations - Objet JSON des traductions
- * @param targetLanguage - Langue cible
+ * @param targetLanguage - Langue cible. Résolution insensible à la casse
+ *   (cohérente avec `transformTranslationsToArray`) : un match exact est
+ *   privilégié, sinon la première clé égale à la casse près est retenue. La
+ *   `targetLanguage` retournée reflète la clé stockée (représentation
+ *   canonique).
  * @returns MessageTranslation ou undefined si pas trouvée
  */
 export function getTranslationFromJSON(
@@ -118,15 +122,24 @@ export function getTranslationFromJSON(
   translations: Record<string, MessageTranslationJSON> | null | undefined,
   targetLanguage: string
 ): MessageTranslation | undefined {
-  if (!translations || !translations[targetLanguage]) {
+  if (!translations) {
     return undefined;
   }
 
-  const data = translations[targetLanguage];
+  const target = targetLanguage.toLowerCase();
+  const matchedKey = translations[targetLanguage]
+    ? targetLanguage
+    : Object.keys(translations).find((lang) => lang.toLowerCase() === target);
+
+  if (!matchedKey) {
+    return undefined;
+  }
+
+  const data = translations[matchedKey];
   return {
-    id: `${messageId}-${targetLanguage}`,
+    id: `${messageId}-${matchedKey}`,
     messageId,
-    targetLanguage,
+    targetLanguage: matchedKey,
     translatedContent: data.text,
     translationModel: data.translationModel,
     confidenceScore: data.confidenceScore,

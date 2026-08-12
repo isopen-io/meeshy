@@ -71,8 +71,8 @@ function makePrisma(overrides: Partial<{
 function makeService(summaryOverride?: unknown) {
   return {
     resolveConversationId: jest.fn().mockResolvedValue(VALID_CONV_ID),
-    addAttachmentReaction: jest.fn().mockResolvedValue(undefined),
-    removeAttachmentReaction: jest.fn().mockResolvedValue(undefined),
+    addAttachmentReaction: jest.fn().mockResolvedValue({ changed: true }),
+    removeAttachmentReaction: jest.fn().mockResolvedValue(true),
     getReactionSummary: jest.fn().mockResolvedValue(summaryOverride ?? []),
   } as unknown as import('../../../services/AttachmentReactionService').AttachmentReactionService;
 }
@@ -304,13 +304,42 @@ describe('AttachmentReactionHandler', () => {
       );
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
+
+    it('idempotent no-op re-add (changed:false) — replies success but does NOT re-broadcast', async () => {
+      const fakeIo = makeIo();
+      const service = makeService();
+      (service.addAttachmentReaction as jest.Mock).mockResolvedValue({ changed: false });
+      const deps = makeDeps({ service, io: fakeIo.io as any });
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+
+      await handler.handleAdd(makeSocket(), makePayload(), cb);
+
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('idempotent already-absent remove (returns false) — replies success but does NOT broadcast', async () => {
+      const fakeIo = makeIo();
+      const service = makeService();
+      (service.removeAttachmentReaction as jest.Mock).mockResolvedValue(false);
+      const deps = makeDeps({ service, io: fakeIo.io as any });
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+
+      await handler.handleRemove(makeSocket(), makePayload(), cb);
+
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: true });
+    });
   });
 
   // ─── anonymous user path ──────────────────────────────────────────────────────
 
   describe('anonymous user path', () => {
-    it('uses participantId from connectedUser directly (no DB lookup for participant)', async () => {
-      const fakeIo = makeIo();
+    function makeAnonConnectedUsers() {
       const anonUser = {
         id: USER_ID,
         userId: USER_ID,
@@ -320,17 +349,59 @@ describe('AttachmentReactionHandler', () => {
       };
       const connectedUsers = new Map<string, unknown>();
       connectedUsers.set(USER_ID, anonUser);
+      return connectedUsers;
+    }
+
+    it('reacts when the anonymous participant is active in the target conversation', async () => {
+      const fakeIo = makeIo();
       const service = makeService();
-      const deps = makeDeps({ service, io: fakeIo.io as any, connectedUsers: connectedUsers as any });
+      // The anon participant IS a member of this conversation → the membership
+      // lookup echoes its own id (query is by { id, conversationId, isActive }).
+      const prisma = makePrisma({
+        participantFindFirst: { id: 'anon-participant-id', displayName: 'Guest', nickname: null },
+      });
+      const deps = makeDeps({
+        prisma,
+        service,
+        io: fakeIo.io as any,
+        connectedUsers: makeAnonConnectedUsers() as any,
+      });
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
 
       await handler.handleAdd(makeSocket(), makePayload(), cb);
 
+      // Security: identity is verified against the DB, scoped to the conversation.
+      expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'anon-participant-id', conversationId: VALID_CONV_ID, isActive: true },
+        })
+      );
       expect(service.addAttachmentReaction).toHaveBeenCalledWith(
         expect.objectContaining({ participantId: 'anon-participant-id' })
       );
       expect(cb).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('rejects when the anonymous participant is not a member of the conversation', async () => {
+      const fakeIo = makeIo();
+      const service = makeService();
+      // No active row for this (participant, conversation) → cross-conversation attempt.
+      const prisma = makePrisma({ participantFindFirst: null });
+      const deps = makeDeps({
+        prisma,
+        service,
+        io: fakeIo.io as any,
+        connectedUsers: makeAnonConnectedUsers() as any,
+      });
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+
+      await handler.handleAdd(makeSocket(), makePayload(), cb);
+
+      expect(service.addAttachmentReaction).not.toHaveBeenCalled();
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
     });
   });
 

@@ -19,9 +19,11 @@ import { usersService, conversationsService, type UserStats } from '@/services';
 import { type User } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { useUser } from '@/stores';
+import { useUserStatusTick } from '@/stores/user-store';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
@@ -48,6 +50,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const { t } = useI18n('profile');
   const { t: tCommon } = useI18n('common');
   const { t: tContacts, locale } = useI18n('contacts');
+  // Re-render sur tick de présence : fait vieillir le libellé relatif
+  // (« Vu il y a 5 min » → « 6 min ») et sa couleur sans recharger la page.
+  useUserStatusTick();
 
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -58,9 +63,15 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   // Hook pour écouter les changements de statut en temps réel
   const { } = useSocketIOMessaging({
-    onUserStatus: (statusUserId: string, username: string, isOnline: boolean) => {
+    onUserStatus: (statusUserId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => {
       if (statusUserId === userId) {
-        setUser(prevUser => prevUser ? { ...prevUser, isOnline } : null);
+        setUser(prevUser => prevUser
+          ? {
+              ...prevUser,
+              isOnline,
+              lastActiveAt: lastActiveAt ?? (isOnline ? new Date() : prevUser.lastActiveAt),
+            }
+          : null);
       }
     }
   });
@@ -343,7 +354,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                     <Avatar className="h-24 w-24">
                       <AvatarImage src={user.avatar} />
                       <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                        {getUserDisplayName(user).slice(0, 2).toUpperCase()}
+                        {getUserInitials(user)}
                       </AvatarFallback>
                     </Avatar>
                     {/* Pastille de présence — masquée si la présence n'est pas montrable (isOnline null) */}

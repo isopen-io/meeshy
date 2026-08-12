@@ -15,30 +15,67 @@ public struct RulerView: View, Equatable {
     public let isDark: Bool
     public let height: CGFloat
     public let onTapTime: (Float) -> Void
+    /// Called once when a drag on the ruler starts. Hosts wire this to
+    /// `TimelineViewModel.beginScrub()` so continuous `onTapTime` callbacks
+    /// seek with sub-50ms tolerance instead of freezing on GOP decompression.
+    public let onScrubBegan: () -> Void
+    /// Called once when the drag ends. Hosts wire this to
+    /// `TimelineViewModel.endScrub()` so the release frame is re-seeked
+    /// frame-accurately.
+    public let onScrubEnded: () -> Void
 
     public init(
         totalDuration: Float,
         geometry: TimelineGeometry,
         isDark: Bool,
         height: CGFloat = 24,
-        onTapTime: @escaping (Float) -> Void
+        onTapTime: @escaping (Float) -> Void,
+        onScrubBegan: @escaping () -> Void = {},
+        onScrubEnded: @escaping () -> Void = {}
     ) {
         self.totalDuration = totalDuration
         self.geometry = geometry
         self.isDark = isDark
         self.height = height
         self.onTapTime = onTapTime
+        self.onScrubBegan = onScrubBegan
+        self.onScrubEnded = onScrubEnded
     }
 
+    /// DragGesture has no `.onBegan` — synthesized from the first `.onChanged`
+    /// of the current drag, mirroring `PlayheadView.dragInFlight`.
+    @State private var dragInFlight: Bool = false
+
+    /// Graduations candidates, de la plus fine à la plus grossière. Valeurs
+    /// « rondes » au sens de l'horloge : 1-2-5 sous la seconde, puis les
+    /// paliers que l'œil lit sans calculer (15 s, 30 s, la minute, ses
+    /// multiples).
+    public nonisolated static let tickLadder: [Double] = [
+        0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900
+    ]
+
+    /// Écart minimal entre deux graduations pour que leurs libellés ne se
+    /// chevauchent pas. Dérivé de la largeur d'un libellé (`labelHalfWidth`
+    /// × 2 ≈ « 500ms »), plus une respiration.
+    ///
+    /// Constante DÉRIVÉE, pas choisie : c'est ce qui empêche la graduation de
+    /// redevenir un réglage à la main qui dérive quand les bornes de zoom
+    /// bougent.
+    public nonisolated static var minLabelSpacing: CGFloat { labelHalfWidth * 2 + 8 }
+
+    /// Plus fine graduation dont les libellés tiennent encore côte à côte.
+    ///
+    /// Remplace une table figée (`pps < 20 → 5 s`) écrite pour une plage de
+    /// zoom qui allait de 25 % à 400 %. Élargie à 5 %–800 % le 2026-07-20, la
+    /// table n'a pas suivi : à 5 %, une graduation toutes les 5 s tombait tous
+    /// les 12,5 pt pour des libellés larges de ~24 pt, et la règle devenait
+    /// une bouillie illisible — précisément au zoom censé « embrasser une
+    /// timeline de plusieurs minutes d'un coup d'œil ».
     public static func tickInterval(for zoom: CGFloat) -> Double {
         let pps = Double(TimelineGeometry.basePixelsPerSecond * zoom)
-        switch pps {
-        case ..<20:    return 5.0
-        case 20..<40:  return 2.0
-        case 40..<80:  return 1.0
-        case 80..<500: return 0.2
-        default:       return 0.05
-        }
+        guard pps > 0 else { return tickLadder.last ?? 1 }
+        let required = Double(minLabelSpacing) / pps
+        return tickLadder.first { $0 >= required } ?? (tickLadder.last ?? 1)
     }
 
     public static func formatTick(_ seconds: Double) -> String {
@@ -65,7 +102,7 @@ public struct RulerView: View, Equatable {
     /// The leftmost label is shifted right by this margin so it doesn't clip
     /// at the ruler's leading edge, while the tick line itself stays anchored
     /// to the correct time position so it remains aligned with clips below.
-    public static let labelHalfWidth: CGFloat = 14
+    public nonisolated static let labelHalfWidth: CGFloat = 14
 
     public var body: some View {
         let interval = Self.tickInterval(for: geometry.zoomScale)
@@ -84,10 +121,22 @@ public struct RulerView: View, Equatable {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { v in onTapTime(geometry.time(forX: max(0, v.location.x))) }
+                .onChanged { v in
+                    if !dragInFlight {
+                        dragInFlight = true
+                        onScrubBegan()
+                    }
+                    onTapTime(geometry.time(forX: max(0, v.location.x)))
+                }
+                .onEnded { _ in
+                    if dragInFlight {
+                        dragInFlight = false
+                        onScrubEnded()
+                    }
+                }
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ruler")
+        .accessibilityLabel(String(localized: "story.timeline.ruler.a11y", defaultValue: "Règle", bundle: .module))
     }
 
     /// `lineX` is the actual time anchor (kept aligned with clips below).

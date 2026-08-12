@@ -22,7 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
-import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
 import type { ConnectionStatus } from './socketio/types';
@@ -362,12 +362,36 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationNew(listener);
   }
 
+  public onFriendRequestCancelled(listener: (data: { friendRequestId: string; cancelledBy: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestCancelled(listener);
+  }
+
+  public onFriendRequestNew(listener: (data: { friendRequestId: string; senderId: string; receiverId: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestNew(listener);
+  }
+
+  public onFriendRequestAccepted(listener: (data: { friendRequestId: string; accepterId: string; conversationId?: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestAccepted(listener);
+  }
+
+  public onFriendRequestRejected(listener: (data: { friendRequestId: string; rejecterId: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestRejected(listener);
+  }
+
+  public onUserUpdated(listener: (data: { userId: string; changes: Record<string, unknown> }) => void): () => void {
+    return this.orchestrator.onUserUpdated(listener);
+  }
+
   public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
     return this.orchestrator.onConversationDeleted(listener);
   }
 
   public onConversationUpdated(listener: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void): () => void {
     return this.orchestrator.onConversationUpdated(listener);
+  }
+
+  public onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantJoined(listener);
   }
 
   public onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): () => void {
@@ -398,7 +422,7 @@ class MeeshySocketIOService {
     return this.orchestrator.onPendingMessagesDelivered(listener);
   }
 
-  public onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): () => void {
+  public onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): () => void {
     return this.orchestrator.onLinkMessageNew(listener);
   }
 

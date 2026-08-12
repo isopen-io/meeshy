@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
 
@@ -47,8 +48,12 @@ export function useHeaderActions(conversationId: string, t: (key: string, fallba
           text: fullMessage,
         });
       } else {
-        await navigator.clipboard.writeText(fullMessage);
-        toast.success(t('conversationHeader.linkCopied', 'Link copied!'));
+        const { success } = await copyToClipboard(fullMessage);
+        if (success) {
+          toast.success(t('conversationHeader.linkCopied', 'Link copied!'));
+        } else {
+          toast.error(t('conversationHeader.linkCopyError', 'Error copying link'));
+        }
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {

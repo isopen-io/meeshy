@@ -20,11 +20,17 @@ const mockGenerateIceServers = jest.fn<any>().mockReturnValue([
   { urls: 'turn:turn.example.com:3478', username: 'user', credential: 'pass' },
 ]);
 const mockGetIceServerTtl = jest.fn<any>().mockReturnValue(480);
+// Backs `resolveActiveCallParticipantId` (authz upgrade — audit gateway prod
+// 2026-07-02, backlog item "authz call:request-ice-servers"): the handler now
+// verifies an ACTIVE CallParticipant of this specific call via
+// `callService.getCallSession`, not merely conversation membership.
+const mockGetCallSession = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     generateIceServers: mockGenerateIceServers,
     getIceServerTtl: mockGetIceServerTtl,
+    getCallSession: mockGetCallSession,
   })),
 }));
 
@@ -95,19 +101,21 @@ const REQUEST_DATA = { callId: CALL_ID };
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makePrisma({ isActiveParticipant = false }: { isActiveParticipant?: boolean } = {}) {
+function makePrisma() {
   return {
-    callSession: {
-      findUnique: jest.fn<any>().mockResolvedValue(
-        isActiveParticipant ? { conversationId: 'conversation-id-1' } : null
-      ),
-    },
-    participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(
-        isActiveParticipant ? { id: 'participant-id-1' } : null
-      ),
-    },
+    callSession: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
+}
+
+// Configures `resolveActiveCallParticipantId`'s underlying
+// `callService.getCallSession` lookup for the requesting USER_ID.
+function configureActiveParticipant(isActiveParticipant: boolean) {
+  mockGetCallSession.mockResolvedValue({
+    participants: isActiveParticipant
+      ? [{ participantId: 'participant-id-1', leftAt: null, participant: { userId: USER_ID } }]
+      : []
+  });
 }
 
 function makeSocket({ inCallRoom = true }: { inCallRoom?: boolean } = {}) {
@@ -152,6 +160,7 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
       { urls: 'turn:turn.example.com:3478', username: 'user', credential: 'pass' },
     ]);
     mockGetIceServerTtl.mockReturnValue(480);
+    configureActiveParticipant(false);
   });
 
   // -------------------------------------------------------------------------
@@ -162,7 +171,8 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      const prisma = makePrisma({ isActiveParticipant: true });
+      configureActiveParticipant(true);
+      const prisma = makePrisma();
       const { socket, handlers, directEmit: emit } = makeSocket({ inCallRoom: true });
       directEmit = emit;
       const { io } = makeIo();
@@ -215,7 +225,8 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      const prisma = makePrisma({ isActiveParticipant: false });
+      configureActiveParticipant(false);
+      const prisma = makePrisma();
       const { socket, handlers, directEmit: emit } = makeSocket({ inCallRoom: true });
       directEmit = emit;
       const { io } = makeIo();

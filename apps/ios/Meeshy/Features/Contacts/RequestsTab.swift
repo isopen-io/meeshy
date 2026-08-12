@@ -31,6 +31,7 @@ struct RequestsTab: View {
         HStack(spacing: 10) {
             ForEach(RequestFilter.allCases, id: \.self) { filter in
                 let count = filter == .received ? viewModel.receivedRequests.count : viewModel.sentRequests.count
+                let isSelected = activeFilter == filter
                 Button {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         activeFilter = filter
@@ -38,29 +39,44 @@ struct RequestsTab: View {
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {
-                        Text(filter.rawValue)
+                        Text(filterTitle(filter))
                             .font(.footnote.weight(.semibold))
                         if count > 0 {
                             Text("(\(count))")
                                 .font(.caption.weight(.bold))
                         }
                     }
-                    .foregroundColor(activeFilter == filter ? .white : MeeshyColors.indigo500)
+                    .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(
-                        Capsule().fill(activeFilter == filter ? MeeshyColors.indigo500 : Color.clear)
+                        Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
                     )
                     .overlay(
-                        Capsule().stroke(activeFilter == filter ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
                     )
                 }
-                .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filter.rawValue, count))
+                .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filterTitle(filter), count))
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// Localized display title for a request filter. `RequestFilter.rawValue`
+    /// stays the stable identity/persistence key (raw FR literals); this helper
+    /// is the only shipped-to-screen surface, so it goes through `String(localized:)`
+    /// with properly accented French defaults. Mirrors the 176i `tabTitle(_:)`
+    /// doctrine for `ContactsHubView`.
+    private func filterTitle(_ filter: RequestFilter) -> String {
+        switch filter {
+        case .received:
+            return String(localized: "contacts.requests.filter.received", defaultValue: "Reçues", bundle: .main)
+        case .sent:
+            return String(localized: "contacts.requests.filter.sent", defaultValue: "Envoyées", bundle: .main)
+        }
     }
 
     // MARK: - Content
@@ -70,13 +86,21 @@ struct RequestsTab: View {
         switch activeFilter {
         case .received:
             if viewModel.receivedRequests.isEmpty {
-                emptyState(icon: "person.2.slash", text: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande recue", bundle: .main))
+                emptyState(
+                    icon: "person.2.slash",
+                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact reçues apparaîtront ici", bundle: .main)
+                )
             } else {
                 receivedList
             }
         case .sent:
             if viewModel.sentRequests.isEmpty {
-                emptyState(icon: "paperplane", text: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyee", bundle: .main))
+                emptyState(
+                    icon: "paperplane",
+                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaîtront ici", bundle: .main)
+                )
             } else {
                 sentList
             }
@@ -263,18 +287,19 @@ struct RequestsTab: View {
 
     // MARK: - Empty State
 
-    private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+    // Delegates to the shared `AdaptiveContentUnavailableView` (native
+    // `ContentUnavailableView` on iOS 17+, faithful iOS 16 fallback) instead of
+    // a hand-rolled VStack — parity with the twin `FriendRequestListView` (175i)
+    // and `StarredMessagesView`. The primitive groups icon + title + subtitle as
+    // one VoiceOver element and adds a guidance subtitle the bespoke version
+    // lacked. maxHeight fill keeps it vertically centred like the former Spacer
+    // sandwich.
+    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+        AdaptiveContentUnavailableView(
+            title,
+            systemImage: icon,
+            description: Text(subtitle)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

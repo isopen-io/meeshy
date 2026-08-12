@@ -15,7 +15,7 @@ public protocol ConversationPreferenceWriting: Sendable {
         request: UpdateConversationPreferencesRequest
     ) async throws -> APIConversationPreferences
 
-    /// Batch reorder (`POST /user-preferences/conversations/reorder`). Used by
+    /// Batch reorder (`POST /user-preferences/reorder`). Used by
     /// the Store's `reorderConversations` composite (drag-to-reorder).
     func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws
 }
@@ -160,9 +160,14 @@ public actor ConversationStore {
     /// jamais évincé) restaient résidents pendant toute la session de
     /// l'utilisateur B. Les publishers per-conv encore détenus par une UI en
     /// cours de teardown deviennent orphelins (plus d'émission) — attendu.
-    public func reset() {
+    public func reset() async {
         conversations.removeAll()
         subjects.removeAll()
+        // outbox-03 — l'outbox SQLite réhydrate ses rows à chaque boot et les
+        // flushe `force: true` sous le token courant : la purge mémoire seule
+        // laissait les mutations de A (dont .leave/.deleteForUser) se rejouer
+        // sous le compte B. Purge via l'outbox INJECTÉ (testabilité).
+        await outbox.purgeAll()
     }
 
     // MARK: - Read
@@ -413,22 +418,59 @@ public actor ConversationStore {
     /// Apply a `conversation:updated` socket event. Updates conversation
     /// metadata and/or the last-message fields used for bump-to-top list
     /// reordering. Only non-nil fields are applied (nil = "not provided by
-    /// this payload variant"). `lastMessageAt` is monotone: an incoming
-    /// value older than the current one is silently skipped so a stale
-    /// broadcast can't push a conversation down the list, while any other
-    /// fields in the same event (e.g. `title`) are still applied. No-op
-    /// for an unknown conversation (the next list refresh will catch up).
+    /// this payload variant"). `lastMessageAt`, `lastMessageId` and
+    /// `lastMessagePreview` — plus the Prisme pair `lastMessageTranslations` /
+    /// `lastMessageOriginalLanguage` — are monotone as a group: an incoming
+    /// `lastMessageAt` older than the current one means the whole payload
+    /// describes a stale message, so the id/preview are skipped along with
+    /// the timestamp (otherwise a delayed broadcast for an older message
+    /// would leave the row showing the newest timestamp paired with the
+    /// older message's text). An EQUAL timestamp is the same message, not a
+    /// stale one — that is an edit, and it applies. Fields unrelated to
+    /// message ordering (e.g.
+    /// `title`) are still applied regardless. No-op for an unknown
+    /// conversation (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
-        guard var conv = conversations[event.conversationId] else { return }
+        guard let conv = conversations[event.conversationId],
+              let merged = Self.merging(conv, with: event) else { return }
+        commit(merged)
+    }
 
+    /// Pure merge rule behind `applyConversationUpdated`, returning `nil` when
+    /// the payload changes nothing. Lifted out of the actor so the disk-cache
+    /// writer (`ConversationSyncEngine`) applies the SAME rule instead of
+    /// re-deriving it — the RAM store and the persisted list must never
+    /// disagree on what a `conversation:updated` means.
+    public nonisolated static func merging(
+        _ conversation: MeeshyConversation,
+        with event: ConversationUpdatedStoreEvent
+    ) -> MeeshyConversation? {
+        var conv = conversation
         var changed = false
 
-        if let incoming = event.lastMessageAt, incoming > conv.lastMessageAt {
-            conv.lastMessageAt = incoming
-            changed = true
+        // `>=` et non `>` : la règle DOCUMENTÉE ci-dessus est « un `lastMessageAt`
+        // plus ANCIEN décrit un message périmé ». Un `>` strict rejetait aussi
+        // l'ÉGALITÉ — c'est-à-dire le même message, qui n'est pas périmé du tout.
+        // C'est exactement ce que produit une ÉDITION : le contenu change, le
+        // message (donc son `createdAt`) ne change pas. Tout le groupe d'aperçu
+        // était donc silencieusement jeté sur le seul chemin qui en avait besoin.
+        // Ré-appliquer les mêmes valeurs sur un doublon d'événement est idempotent.
+        let lastMessageIsCurrent = event.lastMessageAt.map { $0 >= conv.lastMessageAt } ?? true
+        if lastMessageIsCurrent {
+            if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
+            if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
+            if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+            // Le Prisme fait partie du MÊME groupe monotone : le résolveur
+            // préfère la traduction à l'aperçu brut, donc poser l'un sans
+            // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+            // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
+            // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
+            if case .replaced(let map) = event.lastMessageTranslations {
+                conv.lastMessageTranslations = map.isEmpty ? nil : map
+                conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
+                changed = true
+            }
         }
-        if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
-        if let v = event.lastMessagePreview { conv.lastMessagePreview = v; changed = true }
         if let v = event.title { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
         if let v = event.description { conv.description = v; changed = true }
@@ -438,7 +480,63 @@ public actor ConversationStore {
         if let v = event.slowModeSeconds { conv.slowModeSeconds = v; changed = true }
         if let v = event.autoTranslateEnabled { conv.autoTranslateEnabled = v; changed = true }
 
-        if changed { commit(conv) }
+        return changed ? conv : nil
+    }
+
+    /// Apply a `user:updated` socket event — un CONTACT a changé son profil
+    /// public (nom, avatar, bannière). Ne touche QUE les conversations
+    /// directes dont ce contact est l'interlocuteur : dans un groupe, la ligne
+    /// porte l'identité du GROUPE, pas celle d'un membre.
+    public func applyUserUpdated(_ event: UserUpdatedEvent) {
+        // Snapshot AVANT la boucle : `commit` réécrit `conversations`, et itérer
+        // la vue `.values` d'un dictionnaire qu'on mute est un comportement
+        // indéfini.
+        for conv in Array(conversations.values) {
+            guard let merged = Self.merging(conv, withUserUpdate: event) else { continue }
+            commit(merged)
+        }
+    }
+
+    /// Pure merge rule behind `applyUserUpdated`, returning `nil` when the
+    /// payload changes nothing for this conversation. Lifted out of the actor
+    /// for the same reason as `merging(_:with:)` — le cache disque doit
+    /// appliquer LA MÊME règle que le store RAM.
+    ///
+    /// La ligne d'une conversation directe est hydratée par le REST depuis le
+    /// participant d'en face : `title` ← `APIConversationUser.name`,
+    /// `participantAvatarURL` ← `resolvedAvatar`, etc. Le socket rejoue
+    /// exactement ces champs-là, avec le même résolveur de nom, sinon la ligne
+    /// dirait deux choses différentes selon le transport qui l'a remplie.
+    public nonisolated static func merging(
+        _ conversation: MeeshyConversation,
+        withUserUpdate event: UserUpdatedEvent
+    ) -> MeeshyConversation? {
+        guard conversation.type == .direct,
+              conversation.participantUserId == event.userId else { return nil }
+
+        var conv = conversation
+        var changed = false
+
+        if let name = event.resolvedDisplayName, name != conv.title {
+            conv.title = name
+            changed = true
+        }
+        if event.hasNameGroup, let handle = event.username, handle != conv.participantUsername {
+            conv.participantUsername = handle
+            changed = true
+        }
+        // `.replaced(nil)` = photo RETIRÉE : poser `nil` est le but, pas un
+        // no-op. Un `if let` ici aurait gardé l'ancienne image pour toujours.
+        if case .replaced(let url) = event.avatar, url != conv.participantAvatarURL {
+            conv.participantAvatarURL = url
+            changed = true
+        }
+        if case .replaced(let url) = event.banner, url != conv.participantBanner {
+            conv.participantBanner = url
+            changed = true
+        }
+
+        return changed ? conv : nil
     }
 
     // MARK: - Composite mutations
@@ -753,6 +851,12 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let lastMessageAt: Date?
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Prisme de la ligne de liste. Tri-état — voir
+    /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
+    /// `.replaced([:])` (carte périmée par le serveur) ne sont PAS le même
+    /// ordre, et c'est la seule façon de rendre une édition applicable.
+    public let lastMessageTranslations: LastMessagePreviewTranslations
+    public let lastMessageOriginalLanguage: String?
     public let title: String?
     public let avatar: String?
     public let description: String?
@@ -767,6 +871,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
+        lastMessageOriginalLanguage: String? = nil,
         title: String? = nil,
         avatar: String? = nil,
         description: String? = nil,
@@ -780,6 +886,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageTranslations = lastMessageTranslations
+        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.title = title
         self.avatar = avatar
         self.description = description

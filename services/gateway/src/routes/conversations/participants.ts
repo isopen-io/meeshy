@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -8,9 +9,16 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import {
+  resolveConversationEntry,
+  REJOIN_PARTICIPANT_STATE
+} from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 /**
@@ -132,7 +140,6 @@ export function registerParticipantsRoutes(
               lastName: true,
               displayName: true,
               avatar: true,
-              email: true,
               role: true,
               isOnline: true,
               lastActiveAt: true,
@@ -162,6 +169,13 @@ export function registerParticipantsRoutes(
         }
       });
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
+      );
+
       const formattedParticipants = paginatedParticipants.map(participant => ({
         id: participant.id,
         participantId: participant.id,
@@ -171,13 +185,12 @@ export function registerParticipantsRoutes(
         firstName: participant.user?.firstName ?? participant.displayName,
         lastName: participant.user?.lastName ?? '',
         displayName: participant.displayName,
-        avatar: participant.avatar ?? participant.user?.avatar ?? null,
-        email: participant.user?.email ?? '',
+        avatar: resolveParticipantAvatar(participant),
         role: participant.user?.role ?? 'USER',
         conversationRole: participant.role,
         joinedAt: participant.joinedAt,
-        isOnline: participant.isOnline,
-        lastActiveAt: participant.lastActiveAt,
+        isOnline: presenceVis.get(participant.userId ?? '')?.showOnline === false ? false : participant.isOnline,
+        lastActiveAt: presenceVis.get(participant.userId ?? '')?.showLastSeenTimestamp === false ? null : participant.lastActiveAt,
         systemLanguage: participant.user?.systemLanguage ?? participant.language,
         regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
         customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
@@ -304,39 +317,61 @@ export function registerParticipantsRoutes(
         return sendNotFound(reply, 'User not found');
       }
 
-      const existingParticipant = await prisma.participant.findFirst({
-        where: {
-          conversationId: conversationId,
-          userId: userId,
-          isActive: true
-        }
-      });
+      // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
+      // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
+      // fabriquait une ligne neuve et active, ce qui défaisait le bannissement
+      // sans passer par `POST …/unban` — laquelle exige le rang `admin` là où
+      // cette route s'ouvre aussi aux `moderator`, et écrit une trace. Voir
+      // `services/conversations/conversationEntryAdmission.ts`.
+      const entry = await resolveConversationEntry({ prisma, conversationId, userId });
 
-      if (existingParticipant) {
+      if (entry.outcome === 'banned') {
+        return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
+      }
+
+      if (entry.outcome === 'already-member') {
         return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
       }
 
-      await prisma.participant.create({
-        data: {
-          conversationId: conversationId,
-          userId: userId,
-          type: 'user',
-          displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
-          avatar: userToAdd.avatar,
-          role: 'member',
-          language: userToAdd.systemLanguage ?? 'en',
-          permissions: {
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true,
-            canSendAudios: true,
-            canSendVideos: true,
-            canSendLocations: false,
-            canSendLinks: false
-          },
-          joinedAt: new Date()
+      const addedMemberFields = {
+        type: 'user',
+        displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
+        avatar: userToAdd.avatar,
+        role: 'member',
+        language: userToAdd.systemLanguage ?? 'en',
+        permissions: {
+          canSendMessages: true,
+          canSendFiles: true,
+          canSendImages: true,
+          canSendAudios: true,
+          canSendVideos: true,
+          canSendLocations: false,
+          canSendLinks: false
         }
-      });
+      };
+
+      // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
+      // départ : les deux doivent s'accorder. Un rejoin conserve son `joinedAt`
+      // d'origine en base — l'événement, lui, date l'ADHÉSION qu'il annonce,
+      // c'est-à-dire maintenant.
+      const joinedAt = new Date();
+
+      if (entry.outcome === 'rejoin' && entry.participantId) {
+        await prisma.participant.update({
+          where: { id: entry.participantId },
+          data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        });
+        invalidateParticipantLookup(entry.participantId, conversationId);
+      } else {
+        await prisma.participant.create({
+          data: {
+            conversationId: conversationId,
+            userId: userId,
+            ...addedMemberFields,
+            joinedAt
+          }
+        });
+      }
 
       // R6-1 — broadcast so other members' devices refresh the participant list
       // in real time (the POST previously created the row silently → stale member
@@ -349,6 +384,54 @@ export function registerParticipantsRoutes(
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId,
           userId,
+        });
+
+        // `conversation:joined` ci-dessus ne peut PAS porter l'effectif : le
+        // même nom, le même payload `{conversationId, userId}`, servent l'ack
+        // self-only qu'un socket reçoit en REJOIGNANT LA ROOM
+        // (`ConversationHandler`) — que produit chaque ouverture de fil, et qui
+        // ne change aucune appartenance. Compter dessus gonflerait le compteur
+        // à chaque ouverture ; c'est pourquoi aucun client n'incrémentait, et
+        // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
+        // bannissement −1, ajout rien).
+        //
+        // D'où l'événement dédié, symétrique de `conversation:participant-left`
+        // jusque dans son payload, et adressé comme lui aux rooms PERSONNELLES :
+        // le compteur se lit sur l'écran de liste, que ses lecteurs regardent
+        // précisément quand ils ne sont pas dans la room de conversation.
+        //
+        // Le nouvel arrivant est ÉCARTÉ de l'éventail : il reçoit
+        // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
+        // compte DÉJÀ. L'incrémenter en plus le mettrait en trop. (Le client
+        // écarte la même identité de son côté — l'auto-join de room ci-dessous
+        // est asynchrone et pourrait le faire entrer dans la room de
+        // conversation avant cet emit.)
+        const audience = await prisma.participant.findMany({
+          where: { conversationId, isActive: true, NOT: { userId } },
+          select: { id: true, userId: true },
+        });
+        emitToConversationParticipants({
+          io,
+          conversationId,
+          participants: audience,
+          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED],
+          payload: {
+            conversationId,
+            userId,
+            displayName: addedMemberFields.displayName,
+            joinedAt: joinedAt.toISOString(),
+            // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
+            // rattrape jamais d'un événement manqué (hors ligne, trou de
+            // reconnexion), et les deux clients PERSISTENT la dérive (cache
+            // disque iOS, `staleTime: Infinity` web). Un total se rattrape au
+            // suivant.
+            //
+            // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il
+            // est actif depuis l'écriture juste au-dessus, donc il compte, mais
+            // il ne figure pas dans `audience`. Une seconde requête ne rendrait
+            // rien de plus.
+            memberCount: audience.length + 1,
+          },
         });
       }
       // Auto-join the added user's currently-connected sockets to the conversation
@@ -398,15 +481,19 @@ export function registerParticipantsRoutes(
           where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
           select: { userId: true },
         });
-        for (const member of existingMembers) {
-          if (member.userId) {
-            notificationService.createMemberJoinedNotification({
-              recipientUserId: member.userId,
-              newMemberUserId: userId,
-              conversationId,
-              joinMethod: 'invited' as const,
-            }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
-          }
+        // Une seule diffusion pour toute l'audience : le profil du nouveau
+        // membre, la conversation et l'effectif sont les mêmes pour chacun, et
+        // le mute se demande en une requête. La boucle d'appels unitaires qui
+        // précédait les relisait par destinataire.
+        const recipientUserIds = existingMembers
+          .map((member) => member.userId)
+          .filter((id): id is string => !!id);
+        if (recipientUserIds.length > 0) {
+          notificationService.createMemberJoinedNotificationsBatch(recipientUserIds, {
+            newMemberUserId: userId,
+            conversationId,
+            joinMethod: 'invited' as const,
+          }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
         }
       }
 
@@ -498,7 +585,7 @@ export function registerParticipantsRoutes(
       // write and the emit so they agree.
       const removedParticipant = await prisma.participant.findFirst({
         where: { conversationId, userId, isActive: true },
-        select: { displayName: true }
+        select: { id: true, displayName: true }
       });
       const leftAt = new Date();
 
@@ -513,6 +600,9 @@ export function registerParticipantsRoutes(
           leftAt
         }
       });
+      if (removedParticipant) {
+        invalidateParticipantLookup(removedParticipant.id, conversationId);
+      }
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE
@@ -524,11 +614,28 @@ export function registerParticipantsRoutes(
         const socketManager = fastify.socketIOHandler?.getManager();
         const io = socketManager?.getIO();
         if (io) {
-          io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
+          // Même raison qu'au départ volontaire (`leave.ts`) : l'effectif se lit
+          // sur l'écran de LISTE, dont les lecteurs ont quitté la room de
+          // conversation. La room reste en tête de chaîne, donc le retiré —
+          // encore dedans jusqu'à l'éviction ci-dessous — garde son signal.
+          const remaining = await prisma.participant.findMany({
+            where: { conversationId, isActive: true },
+            select: { id: true, userId: true }
+          });
+          emitToConversationParticipants({
+            io,
             conversationId,
-            userId,
-            displayName: removedParticipant?.displayName ?? '',
-            leftAt: leftAt.toISOString()
+            participants: remaining,
+            events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT],
+            payload: {
+              conversationId,
+              userId,
+              displayName: removedParticipant?.displayName ?? '',
+              leftAt: leftAt.toISOString(),
+              // Compte ABSOLU — `remaining` est déjà chargé pour nommer les
+              // rooms, et un delta ne rattrape jamais un événement manqué.
+              memberCount: remaining.length
+            }
           });
 
           const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
@@ -710,6 +817,14 @@ export function registerParticipantsRoutes(
 
       const manager = fastify.socketIOHandler?.getManager();
       if (manager) {
+        // Thread-only À JUSTE TITRE, vérifié plutôt que déduit — noté ici pour
+        // qu'un prochain balayage de `to(ROOMS.conversation(` ne le rouvre pas.
+        // Aucune ligne de liste ne rend un rôle : les seuls consommateurs sont
+        // les écrans de participants (web `use-participants`, iOS
+        // `ParticipantsView` / `ConversationSocketHandler`), tous ouverts DANS
+        // la conversation. Élargir l'audience coûterait une requête et
+        // diffuserait la hiérarchie d'un groupe à des écrans qui ne l'affichent
+        // pas. À revoir seulement si la ligne de liste se met à montrer un rang.
         manager.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
           conversationId,
           userId,

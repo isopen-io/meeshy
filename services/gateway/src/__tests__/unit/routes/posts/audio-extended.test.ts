@@ -59,12 +59,17 @@ function makeRequiredAuth(authenticated: boolean) {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    storyBackgroundAudio: {
+    // `...overrides` EN PREMIER : en dernier il écrasait l'objet `sound` entier.
+    ...overrides,
+    sound: {
       create: jest.fn<any>().mockResolvedValue(mockAudio),
       findMany: jest.fn<any>().mockResolvedValue([mockAudio]),
+      // `POST /stories/audio` cherche un envoi identique avant de créer :
+      // `null` = aucun, donc création. Sans ce mock, la route tombe en 500.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({ ...mockAudio, usageCount: 1 }),
+      ...(overrides['sound'] ?? {}),
     },
-    ...overrides,
   } as any;
 }
 
@@ -196,7 +201,18 @@ describe('POST /stories/audio — success with title, isPublic, duration (lines 
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(prisma.storyBackgroundAudio.create).toHaveBeenCalled();
+    expect(prisma.sound.create).toHaveBeenCalled();
+  });
+
+  it('persists durationMs — the field the DTO serves — not only the deprecated seconds', async () => {
+    // `duration` (secondes) est DÉPRÉCIÉ ; `durationMs` est CE QUE LIT toDTO.
+    // N'écrire que les secondes rendait durationSeconds nul côté client : la
+    // piste posée sur une story n'avait aucune fenêtre temporelle et la story
+    // durait 6 s sous un audio de 90 s (prod 2026-08-02, « Meeshy Go »).
+    await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(prisma.sound.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ duration: 45, durationMs: 45000 }),
+    }));
   });
 });
 

@@ -72,9 +72,9 @@ final class StoryExporter_ProgressTests: XCTestCase {
         let slide = ProgressTestFixture.makeStaticSlide(duration: 1.0)
 
         try await Task.detached(priority: .userInitiated) {
-            try await StoryExporter.export(slide, to: outputURL) { value in
+            try await StoryExporter.export(slide, to: outputURL, progress: { value in
                 Task { await collector.record(value) }
-            }
+            })
         }.value
 
         // Give the @MainActor record() tasks a moment to drain so we don't
@@ -117,9 +117,9 @@ final class StoryExporter_ProgressTests: XCTestCase {
         let slide = ProgressTestFixture.makeStaticSlide(duration: 1.0)
 
         try await Task.detached(priority: .userInitiated) {
-            try await StoryExporter.export(slide, to: outputURL) { value in
+            try await StoryExporter.export(slide, to: outputURL, progress: { value in
                 Task { await collector.record(value) }
-            }
+            })
         }.value
 
         // Drain pending actor tasks (the inner `Task { await record(...) }`
@@ -160,9 +160,9 @@ final class StoryExporter_ProgressTests: XCTestCase {
 
         let exportStart = Date()
         try await Task.detached(priority: .userInitiated) {
-            try await StoryExporter.export(slide, to: outputURL) { value in
+            try await StoryExporter.export(slide, to: outputURL, progress: { value in
                 Task { await collector.record(value) }
-            }
+            })
         }.value
         let elapsedSeconds = Date().timeIntervalSince(exportStart)
 

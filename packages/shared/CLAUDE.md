@@ -24,6 +24,13 @@ prisma/
   client/           → Generated Prisma client
 ```
 
+## Schema Field Notes
+
+### `Conversation.firstMessageSentAt: DateTime?`
+`null` on a `direct` conversation means no message has been sent yet — the DM stays silent/invisible to every participant except its creator until the first message flips the field (see `services/gateway/decisions.md` § "Un DM direct créé sans message reste silencieux jusqu'au premier envoi", 2026-08-10). Non-`direct` conversations never set this field.
+
+**Absent vs `null` trap**: this field was added by migration and never backfilled — every `Conversation` document created before 2026-08-10 has the field **ABSENT**, not `null`. On the MongoDB connector, Prisma's `{ firstMessageSentAt: null }` matches ONLY documents where the field is present-and-null; it does NOT match documents where the field is absent. Crucially, negating it does not fix this: `NOT: { firstMessageSentAt: null }` ALSO excludes absent-field documents on this connector (Prisma wraps scalar filters, negated or not, so absent-field documents never match either form) — it only matches documents where the field is explicitly present-and-non-null. A query deciding DM visibility therefore MUST be written as an OR of both cases: `OR: [{ NOT: { firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }]` (already-set ⇒ visible OR absent-legacy ⇒ visible) — same idiom as `deletedForMe` in `services/gateway/src/routes/conversations/core.ts`. A bare positive `firstMessageSentAt: null` check alone would incorrectly hide every pre-migration conversation, and a bare `NOT: { firstMessageSentAt: null }` alone would incorrectly hide them too (this was a real pre-merge bug, corrected 2026-08-10). The guarded writes that flip the field on first message (the null-guard CAS pattern) correctly use the positive form instead, since they intentionally target ONLY conversations that had the field explicitly initialized to `null` at creation time — a legacy conversation with the field absent is not a candidate for the flip and does not need one (it's already visible via the OR-based read-side check above).
+
 ## Socket.IO Event Convention
 **Format**: `entity:action-word` (colons + hyphens, NEVER underscores)
 

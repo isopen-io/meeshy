@@ -31,6 +31,7 @@ import { conversationsCrudService } from '@/services/conversations/crud.service'
 import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface AgentConfigDialogProps {
   open: boolean;
@@ -210,7 +211,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <button
                     className="font-mono text-gray-600 dark:text-gray-300 hover:text-indigo-600 transition-colors truncate max-w-full text-left"
                     title={tCommon('copy')}
-                    onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success(tCommon('copied')); }}
+                    onClick={async () => { const { success } = await copyToClipboard(convMeta.id); if (success) toast.success(tCommon('copied')); }}
                   >
                     {convMeta.id}
                   </button>

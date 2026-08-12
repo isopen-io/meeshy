@@ -27,6 +27,10 @@ struct MeeshyApp: App {
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
+    /// True once we've actually reached `.background` (socket suspended), so the
+    /// next `.active` knows to rearm. A transient `.inactive→.active` leaves it
+    /// false → no needless socket churn (#11).
+    @State private var didEnterBackground = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -39,6 +43,24 @@ struct MeeshyApp: App {
     private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
+        // Prisme Linguistique — l'utilisateur consomme TOUT dans sa langue
+        // préférée, y compris le chrome de l'app (menus, boutons, libellés
+        // système). Applique l'override de langue UI (mis en cache au dernier
+        // login/refresh) le plus TÔT possible, avant la 1re vue. iOS lit
+        // `AppleLanguages` une SEULE fois au démarrage du process → l'override
+        // prend effet au (re)lancement, ce qui est acceptable (l'app est
+        // relancée aux tests). Garde-fous stricts dans `applyIfNeeded` : no-op
+        // si le cache est nil/vide/non-supporté (iOS garde alors la locale
+        // appareil), ne crashe jamais.
+        UILanguageOverride.applyIfNeeded()
+
+        #if DEBUG
+        // Filet de diagnostic dev : capture la stack des SIGSEGV que
+        // ReportCrash throttle et que MetricKit tronque (stack overflows du
+        // décodeur de métadonnées — cf. ConversationFirstRenderWarmup).
+        CrashStackDumper.install()
+        #endif
+
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
         // `application(_:didFinishLaunchingWithOptions:)` returns, which
@@ -172,6 +194,11 @@ struct MeeshyApp: App {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
+                    // Miroir de l'environnement pour les extensions (NSE +
+                    // partage), qui n'ont pas accès à MeeshyConfig. À poser
+                    // APRÈS restoreEnvironment, sinon on publierait la valeur
+                    // par défaut au lieu de l'environnement restauré.
+                    WidgetDataManager.shared.publishAPIBaseURL()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
                     NotificationToastManager.shared.focusFilterProvider = {
@@ -182,6 +209,12 @@ struct MeeshyApp: App {
                     // local App Group, jamais le titre brut serveur.
                     NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
                         WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
+                    }
+                    // « Vibrations » : le SDK gate sur `vibrationEnabled` et
+                    // appelle ce player à l'apparition d'un toast — l'haptique
+                    // vit app-side (le SDK core n'importe pas UIKit).
+                    NotificationToastManager.shared.hapticPlayer = {
+                        HapticFeedback.light()
                     }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
@@ -198,9 +231,12 @@ struct MeeshyApp: App {
                     // monitor would first start at the gate and still report the
                     // optimistic `online` default, defeating the offline fast-path.
                     _ = NetworkMonitor.shared
-                    // Wire StoryOfflineQueue publish handler + network-reconnect
-                    // flush. Idempotent — safe to call on every cold start.
-                    StoryOfflineQueueBootstrap.shared.start()
+                    // `StoryOfflineQueueBootstrap` a été supprimé : son
+                    // gestionnaire de publication ré-enfilait l'item dans la
+                    // MÊME file (`StoryPublishQueue`), et sa vidange sur retour
+                    // réseau doublait l'observateur de connexion que la file
+                    // possède déjà. Le seul gestionnaire légitime est posé par
+                    // `StoryPublishService.setExecutor`, depuis les racines.
                     // Wire the outbox pool so OfflineQueue can persist every
                     // outbox kind (sendMessage, sendReaction, edit/delete,
                     // and the 14 non-message mutations) to SQLite on enqueue.
@@ -215,6 +251,22 @@ struct MeeshyApp: App {
                     // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
+
+                    // Partages que l'extension n'a pas pu envoyer : ils
+                    // rejoignent l'outbox dès qu'il est capable d'enfiler,
+                    // donc juste APRÈS `configure(pool:)` — plus tôt, chaque
+                    // enfilement échouerait sur `poolNotConfigured`. Non
+                    // bloquant pour le boot ; un échec laisse le relais sur
+                    // disque pour la reprise en avant-plan.
+                    Task { await SharePendingSendConsumer.shared.consumeAll() }
+
+                    // Wire preference mutations to flush the outbox immediately after
+                    // enqueue so changes don't get stuck `.pending` until boot/foreground
+                    // transition. The SDK cannot import app-side OutboxFlushTrigger
+                    // (SDK purity), so we inject this Sendable closure at boot.
+                    UserPreferencesManager.shared.onSettingsMutationEnqueued = {
+                        Task { await OutboxFlushTrigger.flushNow() }
+                    }
 
                     // Phase 4 §6.1.1 — boot crash recovery. Any record left
                     // `.inflight` from a previous process (the app was killed
@@ -253,7 +305,8 @@ struct MeeshyApp: App {
                                 forwardedFromId: item.forwardedFromId,
                                 forwardedFromConversationId: item.forwardedFromConversationId,
                                 attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId
+                                clientMessageId: item.clientMessageId,
+                                location: item.location
                             )
                             let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request
@@ -274,10 +327,30 @@ struct MeeshyApp: App {
                                 body: action.payload
                             )
                             return true
-                        } catch APIError.serverError(let code, _) where code >= 400 && code < 500 {
-                            // Treat client-side validation errors as terminal —
-                            // replaying the same payload won't help. Drop the
-                            // action so the queue doesn't bounce forever.
+                        } catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code) {
+                            // P1 — `APIClient.request` only ever throws `MeeshyError`
+                            // (never the legacy `APIError`), so this catch NEVER
+                            // matched and every 4xx (validation error, etc.) fell
+                            // through to the generic `catch` below and was kept
+                            // queued — replayed forever against a payload that can
+                            // never succeed. Treat client-side validation errors as
+                            // terminal — replaying the same payload won't help. Drop
+                            // the action so the queue doesn't bounce forever.
+                            //
+                            // 429 is deliberately EXCLUDED from this set — mirrors
+                            // `OutboxFlusher.permanentRejectionStatusCodes`
+                            // (packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift),
+                            // which documents 408/429/503 as retryable (APIClient's
+                            // own `retryableStatusCodes` already treats 429 as
+                            // transient). An unfiltered `(400..<500)` range here
+                            // would silently sweep 429 into "terminal", permanently
+                            // dropping a queued settings mutation that only failed
+                            // because of rate limiting.
+                            return true
+                        } catch MeeshyError.forbidden {
+                            // 403 is also a terminal client-side error (thrown as
+                            // its own `MeeshyError` case rather than `.server`) —
+                            // same "drop, don't replay" treatment as the other 4xx.
                             return true
                         } catch {
                             // Transient (5xx / connectivity): keep the action
@@ -314,8 +387,20 @@ struct MeeshyApp: App {
                         // cycle triggers BackgroundTransitionCoordinator which also
                         // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
                         // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start.
-                        _ = try? await OfflineQueue.shared.bootRecovery()
+                        // path is skipped on cold start. P2 — do/catch + log
+                        // instead of a silent `try?`: BackgroundTransitionCoordinator's
+                        // own `resumeFromBackground()` call to `bootRecovery()`
+                        // (on the next foreground) is an independent retry
+                        // path, so a failure here is not fatal, but it MUST
+                        // be visible — a silent failure here previously left
+                        // crash-orphaned `.inflight` rows invisible to
+                        // flush() for the rest of THIS cold start with zero
+                        // trace in the logs.
+                        do {
+                            _ = try await OfflineQueue.shared.bootRecovery()
+                        } catch {
+                            Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
+                        }
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
@@ -336,6 +421,11 @@ struct MeeshyApp: App {
                         // backoff timer armed, so without this it waits for an
                         // incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
+                        // outbox-04 — wake the flusher immediately after any
+                        // social mutation is enqueued online (like/post/
+                        // comment), instead of leaving it `.pending` until the
+                        // next incidental lifecycle event.
+                        await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
                     }
 
                     // Engagement outbox boot: recover orphan .open sessions
@@ -360,6 +450,10 @@ struct MeeshyApp: App {
                     Task { await FriendshipCache.shared.hydrate() }
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
+                    // Prisme Linguistique — mémorise la langue UI (langue
+                    // principale de l'utilisateur) dès que la session cold-start
+                    // est résolue, pour l'appliquer au prochain lancement.
+                    UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
                     // Splash gating : trois bornes temporelles concurrentes
                     //   floor   1.0s — laisse l'intro jouer : à 1.0s logo/title
                     //                    sont posés et le sous-titre (spring lancé
@@ -383,6 +477,14 @@ struct MeeshyApp: App {
                     let maxSplashDuration: Duration = .seconds(5)
 
                     if authManager.isAuthenticated {
+                        // P1 — prime SessionManager's `lastKnownUserId` cache
+                        // on EVERY cold start with an already-restored session,
+                        // not just on a fresh login transition. Without this,
+                        // a session restored at launch that is torn down via
+                        // `logout()` before any E2EE activity in this process
+                        // (no DM sent/received) would leave `clearSessions()`
+                        // with no userId to scope its Keychain wipe against.
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         // Précharge le cache liste — SQLite read instantané,
                         // retourne `.empty` au tout premier install.
                         let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
@@ -396,8 +498,10 @@ struct MeeshyApp: App {
                         // après que la vue principale soit affichée.
                         Task { [authManager] in
                             _ = authManager  // capture explicite (lint)
-                            await requestPushPermissionIfNeeded()
-                            VoIPPushManager.shared.register()
+                            await Self.runPushBootstrapSequence(
+                                voipRegister: { VoIPPushManager.shared.register() },
+                                requestPushPermission: requestPushPermissionIfNeeded
+                            )
                             await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
@@ -450,14 +554,23 @@ struct MeeshyApp: App {
                     // GRDB on every cold start. The server remains the source of
                     // truth — purged messages can be re-fetched via pagination.
                     // Runs at background priority so it never blocks the UI.
-                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
+                    // une seconde instance relançait le write worker ET le GC
+                    // outbox exhausted à chaque boot. purgeOldMessages n'a
+                    // aucune dépendance à start().
+                    let retentionPersistence = dependencies.messagePersistence
                     Task.detached(priority: .background) {
-                        await retentionPersistence.start()
-                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                        do {
+                            let count = try await retentionPersistence.purgeOldMessages()
                             if count > 0 {
                                 Logger(subsystem: "com.meeshy.app", category: "retention")
                                     .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
                             }
+                        } catch {
+                            // grdb-02 — le try? avaleur a masqué pendant des
+                            // mois un rollback à 100 % de la rétention.
+                            Logger(subsystem: "com.meeshy.app", category: "retention")
+                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
                         }
                     }
                 }
@@ -469,11 +582,23 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
-                        Task { await handleForegroundTransition() }
+                        Task { await AuthManager.shared.refreshCurrentUserProfile() }
+                        // Only rearm the socket + backfill if we ACTUALLY backgrounded.
+                        // A transient .inactive→.active (Control Center, notification
+                        // banner, app-switcher peek, Face ID) never suspended the
+                        // socket, so force-reconnecting a healthy socket here is pure
+                        // churn — disconnect/reconnect + the presence-refresh loop (#11).
+                        // Cold launch also lands here with the flag false: RootView's
+                        // own connect() handles the initial connection.
+                        if didEnterBackground {
+                            didEnterBackground = false
+                            Task { await handleForegroundTransition() }
+                        }
                         // Drain any mark-as-read actions the user tapped from the
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
+                        didEnterBackground = true
                         // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
                         // FIRST (while the socket is still alive, before the
                         // coordinator may suspend it) so incoming calls fall back to
@@ -491,15 +616,6 @@ struct MeeshyApp: App {
                         // truncated session at next boot (no network flush here —
                         // background time is too scarce, the resume/boot paths flush).
                         Task { await EngagementTracker.shared.checkpointAll() }
-                        // Compact free pages and refresh query-planner stats on
-                        // every background transition. Runs at background priority
-                        // so the system can defer or kill it under memory pressure.
-                        // Capture dbPool before crossing the actor boundary.
-                        let pool = dependencies.dbPool
-                        Task.detached(priority: .background) {
-                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                            try? DatabaseMaintenance.runOptimize(on: pool)
-                        }
                     case .inactive:
                         break
                     @unknown default:
@@ -523,6 +639,9 @@ struct MeeshyApp: App {
                         // publishers would be left without subscribers.
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
+                        // A5.3 — resync notifications quand SyncSeqTracker
+                        // détecte un trou de séquence (_seq) sur notification:new.
+                        NotificationGapResyncCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
                         // SOTA audit Pilier 22 V2 — register the publish-queue
                         // handler + listeners so any pending stories from a
@@ -591,15 +710,40 @@ struct MeeshyApp: App {
                         // namespaced by userId and would otherwise expose
                         // user A's data to user B on the next login.
                         Task { await CacheCoordinator.shared.reset() }
+                        // Purge the device's VoIP registration (PushKit +
+                        // keychain-backed token record) — without this, a
+                        // different user logging in on this device inherits
+                        // user A's VoIP push registration until the
+                        // registration cooldown naturally expires.
+                        Task { await VoIPPushManager.shared.unregisterAndClearToken() }
+                        // End any active call before the sockets go down —
+                        // otherwise the call is orphaned locally: the peer
+                        // keeps ringing/connecting to a device that vanished
+                        // without sending a hangup signal.
+                        if CallManager.shared.callState.isActive {
+                            CallManager.shared.endCall()
+                        }
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
                         // Drop the store subscriptions so an event from user A
                         // can't mutate the store after logout.
                         ConversationStoreSocketBridge.shared.deactivate()
+                        // startup-08 — une BGTask soumise avant le logout ne
+                        // doit pas survivre pour réveiller un appareil
+                        // déconnecté (delta sync 401 en boucle, prefetch sur
+                        // cache vidé).
+                        BackgroundTaskManager.shared.cancelAllScheduled()
                     }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
+                }
+                // Prisme Linguistique — dès que la langue principale de
+                // l'utilisateur change (login, changement de préférence), on la
+                // met en cache pour l'override de langue UI appliqué au prochain
+                // lancement (cf. `UILanguageOverride`).
+                .adaptiveOnChange(of: authManager.currentUser?.systemLanguage) { _, newLanguage in
+                    UILanguageOverride.cache(from: newLanguage)
                 }
             }
         }
@@ -665,6 +809,22 @@ struct MeeshyApp: App {
         }
     }
 
+    /// VoIP registration must run unconditionally, before the notification-
+    /// permission request. PushKit needs no user permission at all, but
+    /// `requestPushPermission` awaits the system permission alert, which can
+    /// stay on screen indefinitely if the user backgrounds the app instead
+    /// of dismissing it. Sequencing it first previously left `PKPushRegistry`
+    /// uncreated — and no VoIP token registered with the backend — for as
+    /// long as that alert was pending, silently dropping any call placed to
+    /// the device in that window (most commonly right after a fresh install).
+    static func runPushBootstrapSequence(
+        voipRegister: () -> Void,
+        requestPushPermission: () async -> Void
+    ) async {
+        voipRegister()
+        await requestPushPermission()
+    }
+
     // MARK: - Crash Diagnostics Surfacing
 
     /// Drains the queue of crash/hang reports captured since the last
@@ -679,9 +839,8 @@ struct MeeshyApp: App {
         let reports = CrashDiagnosticsManager.shared.consumePending()
         guard let mostRecent = reports.first else { return }
 
-        let isoFormatter = ISO8601DateFormatter()
         for report in reports {
-            let when = isoFormatter.string(from: report.timestamp)
+            let when = report.timestamp.formatted(.iso8601)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \
@@ -692,17 +851,17 @@ struct MeeshyApp: App {
 
         crashReportsToShow = reports
 
-        let kindLabel: String
-        switch mostRecent.kind {
-        case .nsException: kindLabel = "Exception"
-        case .crash: kindLabel = "Crash"
-        case .hang: kindLabel = "Blocage"
-        case .cpuException: kindLabel = "Pic CPU"
-        case .diskWriteException: kindLabel = "Ecriture disque"
-        }
+        let kindLabel = mostRecent.kind.localizedLabel
         let extra = reports.count > 1 ? " (+\(reports.count - 1))" : ""
         toastManager.show(
-            "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
+            String(
+                format: String(
+                    localized: "crash.toast.previous",
+                    defaultValue: "%1$@ précédent%2$@ : %3$@",
+                    bundle: .main
+                ),
+                kindLabel, extra, mostRecent.summary
+            ),
             type: .info
         ) { [self] in
             showCrashSheet = true
@@ -779,6 +938,19 @@ struct MeeshyApp: App {
     /// (`handleGuestDeepLink`) so both report success/failure identically.
     private func validateMagicLinkToken(_ token: String) {
         Task {
+            // P0 — a magic link tapped while ALREADY authenticated (possibly
+            // as a DIFFERENT account) must never `applySession(B)` on top of
+            // account A without a full teardown first: A's caches, sockets
+            // (still carrying A's JWT), and E2EE session keys would all leak
+            // into B's session. `applySession`'s `isTokenRotation` only
+            // special-cases the SAME user re-authenticating — a magic link
+            // for a different account is a genuine account switch, so we log
+            // out completely before validating. The cold-launch path
+            // (`handleGuestDeepLink`) already only reaches here while
+            // unauthenticated, so this is a no-op there.
+            if authManager.isAuthenticated {
+                await authManager.logout()
+            }
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
@@ -787,6 +959,114 @@ struct MeeshyApp: App {
                 toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
             }
         }
+    }
+}
+
+// MARK: - UI Language Override (Prisme Linguistique)
+
+/// Force le chrome de l'app (menus, boutons, libellés système) dans la langue
+/// principale configurée de l'utilisateur (`MeeshyUser.systemLanguage`) plutôt
+/// que la locale de l'appareil — le Prisme Linguistique appliqué au chrome :
+/// l'utilisateur consomme TOUT dans sa langue préférée.
+///
+/// Mécanisme : on écrit `AppleLanguages` dans `UserDefaults`. iOS lit cette clé
+/// UNE seule fois au démarrage du process → l'override prend effet au prochain
+/// (re)lancement (acceptable : l'app est relancée aux tests).
+///
+/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit —
+/// sinon `String(localized:)` afficherait la source française à côté de
+/// libellés traduits, et l'écran deviendrait un panachage de deux langues.
+/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS garde la locale appareil).
+/// Aucune de ces opérations ne peut crasher.
+enum UILanguageOverride {
+    /// Langues réellement traduites dans les catalogues. Toute langue hors de
+    /// cet ensemble est refusée.
+    ///
+    /// La liste est explicite plutôt que dérivée de `Bundle.main.localizations` :
+    /// une langue peut être déclarée dans le bundle bien avant d'être traduite,
+    /// et c'est la traduction — pas la déclaration — qui décide si l'affichage
+    /// tient debout. `LocalizationCatalogGuardTests` vérifie que les deux
+    /// restent d'accord, pour que cette liste ne puisse pas se périmer en
+    /// silence comme elle l'a fait pour l'allemand et le portugais.
+    ///
+    /// `it` et `ar` rejoignent la liste le 2026-07-25 : les deux catalogues
+    /// (app + SDK), l'extension de notification et les descriptions
+    /// d'autorisation y sont complets à 100 %.
+    /// `nonisolated` : une simple liste de codes, lue aussi bien depuis
+    /// `MeeshyApp.init()` que depuis les tests, hors du main actor.
+    nonisolated static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR", "it", "ar"]
+
+    private static let cacheKey = "meeshy.ui.language"
+    private static let appleLanguagesKey = "AppleLanguages"
+    private static let explicitKey = "meeshy.ui.language.explicit"
+
+    /// Sentinelle « suivre la langue principale » — un choix, pas une langue.
+    nonisolated static let automaticCode = "auto"
+
+    /// Langues proposées dans les Réglages, hors sentinelle. Dérivée de ce que
+    /// l'app sait réellement afficher : la liste des choix ne peut pas
+    /// s'écarter des catalogues.
+    nonisolated static var selectableCodes: [String] { supportedUICodes }
+
+    /// Langue d'affichage retenue : le choix explicite de l'auteur s'il est
+    /// posé ET livré, sinon la langue principale du compte.
+    ///
+    /// Le repli n'est pas un détail. `AppearancePreferences.interfaceLanguage`
+    /// vaut « en » par défaut pour tout le monde : faire primer cette
+    /// préférence telle quelle aurait basculé en anglais l'interface de chaque
+    /// utilisateur qui n'y a jamais touché. Le choix explicite vit donc à part,
+    /// et son absence rend la main à la langue principale.
+    nonisolated static func resolvedCode(explicit: String?, fallback: String?) -> String? {
+        if let explicit, explicit != automaticCode, let code = normalized(explicit) {
+            return code
+        }
+        return normalized(fallback)
+    }
+
+    /// Choix explicite de langue d'interface. `nil` = automatique.
+    static var explicitChoice: String? {
+        get { UserDefaults.standard.string(forKey: explicitKey) }
+        set {
+            if let newValue, newValue != automaticCode, normalized(newValue) != nil {
+                UserDefaults.standard.set(newValue, forKey: explicitKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: explicitKey)
+            }
+        }
+    }
+
+    /// Normalise un code de langue vers un code UI supporté, ou `nil`.
+    /// - Comparaison insensible à la casse contre `supportedUICodes`.
+    /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
+    /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
+    nonisolated static func normalized(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if let exact = supportedUICodes.first(where: { $0.lowercased() == lower }) {
+            return exact
+        }
+        let base = lower.split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first.map(String.init) ?? lower
+        if base == "pt" { return "pt-BR" }
+        return supportedUICodes.first(where: { $0.lowercased() == base })
+    }
+
+    /// Mémorise la langue UI depuis la préférence utilisateur. No-op si la
+    /// langue n'est pas supportée (la valeur précédente / la locale appareil
+    /// reste en place).
+    static func cache(from systemLanguage: String?) {
+        guard let code = normalized(systemLanguage) else { return }
+        UserDefaults.standard.set(code, forKey: cacheKey)
+    }
+
+    /// Applique l'override au tout début du lancement (à appeler depuis
+    /// `MeeshyApp.init()`). No-op si rien n'est choisi ni mis en cache.
+    static func applyIfNeeded() {
+        guard let code = resolvedCode(explicit: explicitChoice,
+                                      fallback: UserDefaults.standard.string(forKey: cacheKey))
+        else { return }
+        UserDefaults.standard.set([code], forKey: appleLanguagesKey)
     }
 }
 

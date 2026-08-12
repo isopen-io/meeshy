@@ -83,7 +83,7 @@ struct ReportUserView: View {
 
     private var reasonSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Report reason", bundle: .main), icon: "exclamationmark.triangle.fill", color: "F59E0B")
+            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Report reason", bundle: .main), icon: "exclamationmark.triangle.fill", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
                 ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -123,7 +123,7 @@ struct ReportUserView: View {
                     .accessibilityAddTraits(selectedReason == reason ? .isSelected : [])
                 }
             }
-            .background(sectionBackground(tint: "F59E0B"))
+            .background(sectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
@@ -131,7 +131,7 @@ struct ReportUserView: View {
 
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Details (optional)", bundle: .main), icon: "text.alignleft", color: "3498DB")
+            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Details (optional)", bundle: .main), icon: "text.alignleft", color: MeeshyColors.infoHex)
 
             VStack(spacing: 8) {
                 TextEditor(text: $details)
@@ -142,11 +142,11 @@ struct ReportUserView: View {
                     .padding(10)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.surfaceGradient(tint: "3498DB"))
+                            .fill(theme.surfaceGradient(tint: MeeshyColors.infoHex))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.border(tint: "3498DB"), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.infoHex), lineWidth: 1)
                     )
                     .adaptiveOnChange(of: details) { _, newValue in
                         if newValue.count > 500 {
@@ -155,9 +155,7 @@ struct ReportUserView: View {
                     }
                     .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Report details", bundle: .main))
 
-                Text("\(details.count)/500")
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(details.count >= 450 ? MeeshyColors.error : theme.textMuted)
+                CharacterCountLabel(count: details.count, limit: 500, warningThreshold: 450)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }

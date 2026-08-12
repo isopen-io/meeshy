@@ -226,6 +226,15 @@ describe('mentionsService.hasMentions', () => {
   it('returns false for empty string', () => {
     expect(mentionsService.hasMentions('')).toBe(false);
   });
+
+  it('detects an accented @DisplayName (Unicode parity with parseMentions)', () => {
+    expect(mentionsService.hasMentions('coucou @Éric')).toBe(true);
+    expect(mentionsService.hasMentions('salut @André Tabeth')).toBe(true);
+  });
+
+  it('does not treat an email address (@ followed by space) as a mention', () => {
+    expect(mentionsService.hasMentions('write to test@ domain.com')).toBe(false);
+  });
 });
 
 describe('mentionsService.extractMentions', () => {
@@ -247,5 +256,13 @@ describe('mentionsService.extractMentions', () => {
 
   it('handles underscore and digits in username', () => {
     expect(mentionsService.extractMentions('@user_42 hello')).toEqual(['user_42']);
+  });
+
+  it('extracts a hyphenated username without truncating at the hyphen', () => {
+    expect(mentionsService.extractMentions('salut @marie-claire')).toEqual(['marie-claire']);
+  });
+
+  it('lowercases and dedups (shared SSOT parity)', () => {
+    expect(mentionsService.extractMentions('@Alice @alice')).toEqual(['alice']);
   });
 });
