@@ -132,6 +132,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     var getPostViewsCallCount = 0
     var getUserPostsCallCount = 0
+    /// Curseur reçu par le dernier `getUserPosts` — vérifie la reprise au
+    /// curseur persisté (pagination du profil).
+    var lastGetUserPostsCursor: String?
+    /// File de résultats page-par-page pour `getUserPosts` ; vide → repli sur
+    /// `getFeedResult` (comportement historique).
+    var getUserPostsResultsQueue: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
     var getCommentRepliesCallCount = 0
     var lastGetCommentRepliesPostId: String?
     var lastGetCommentRepliesCommentId: String?
@@ -386,6 +392,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getUserPostsCallCount += 1
+        lastGetUserPostsCursor = cursor
+        if !getUserPostsResultsQueue.isEmpty {
+            return try getUserPostsResultsQueue.removeFirst().get()
+        }
         return try getFeedResult.get()
     }
 
@@ -550,6 +560,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastViewPostId = nil
         getPostViewsCallCount = 0
         getUserPostsCallCount = 0
+        lastGetUserPostsCursor = nil
+        getUserPostsResultsQueue = []
         getCommentRepliesCallCount = 0
         lastGetCommentRepliesPostId = nil
         lastGetCommentRepliesCommentId = nil

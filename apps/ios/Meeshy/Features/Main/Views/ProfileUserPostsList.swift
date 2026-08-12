@@ -160,22 +160,31 @@ struct ProfileUserPostsList: View {
 
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
-                        .onAppear { viewModel.trackImpression(post.id) }
+                        .onAppear {
+                            viewModel.trackImpression(post.id)
+                            // Prefetch anticipé : charge la suite dès qu'une
+                            // carte à ≤3 de la fin apparaît — auto-ré-armé,
+                            // contrairement à la sentinelle one-shot qui
+                            // mourait quand la fenêtre ne bougeait plus.
+                            viewModel.loadMoreIfNeeded(currentPost: post)
+                        }
                 }
                 .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
-                    // Infinite-scroll sentinel — reveals more cached cards first
-                    // (cheap), then fetches the next network page when the cache
-                    // is exhausted. Works inside the parent LazyVStack.
+                    // Sentinelle de secours (le déclencheur principal est le
+                    // onAppear par carte ci-dessus) — couvre le cas où moins de
+                    // 3 cartes sont rendues.
                     Color.clear
                         .frame(height: 1)
                         .onAppear {
                             Task { await viewModel.revealOrLoadMore() }
                         }
-                    if viewModel.isLoading {
+                    if viewModel.isLoadingMore {
                         ProgressView().padding()
                     }
+                } else if case .exhausted = viewModel.paginationState, !viewModel.posts.isEmpty {
+                    endOfContentFooter
                 }
             }
         }
@@ -339,6 +348,31 @@ struct ProfileUserPostsList: View {
         shareableLink = ShareableLink(url: url)
     }
 
+    // MARK: - End of content
+
+    /// Zone de fin de liste : la pagination est ÉPUISÉE — on a atteint le tout
+    /// premier contenu publié par ce profil. Ancre visuelle explicite (l'ancien
+    /// comportement — la sentinelle disparaît sans signal — se lisait comme un
+    /// blocage de chargement).
+    private var endOfContentFooter: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "checkmark.seal")
+                .font(MeeshyFont.relative(20))
+                .foregroundColor(theme.textSecondary)
+            Text(String(localized: "profile.posts.endOfContent", defaultValue: "Vous avez tout vu", bundle: .main))
+                .font(.footnote.weight(.medium))
+                .foregroundColor(theme.textSecondary)
+            if let firstPublished = viewModel.posts.last?.timestamp {
+                Text(String(format: String(localized: "profile.posts.firstPublishedAt", defaultValue: "Premier contenu publié le %@", bundle: .main), firstPublished.formatted(date: .abbreviated, time: .omitted)))
+                    .font(.caption)
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .accessibilityElement(children: .combine)
+    }
+
     // Empty state deferred to the shared design-system `EmptyStateView`
     // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
     // rather than a hand-rolled VStack — same pattern the peer lists
@@ -440,8 +474,15 @@ final class PostViewThrottle {
 @MainActor
 final class ProfileUserPostsViewModel: ObservableObject {
     @Published private(set) var posts: [FeedPost] = []
+    /// Chargement INITIAL uniquement (plein écran). La page suivante vit dans
+    /// `isLoadingMore` — un seul flag pour les deux forçait la vue à afficher
+    /// des sémantiques opposées (plein écran vs pied de liste).
     @Published var isLoading = false
+    @Published var isLoadingMore = false
     @Published var hasMore = true
+    /// État de pagination consommé par le pied de liste : `.exhausted` rend la
+    /// zone « plus de contenu » (on a atteint le tout premier contenu publié).
+    @Published private(set) var paginationState: PaginationState = .idle
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
@@ -516,15 +557,33 @@ final class ProfileUserPostsViewModel: ObservableObject {
     func loadInitial() async {
         guard posts.isEmpty, !isLoading else { return }
 
+        // Restaure le curseur persisté AVANT de servir la page cachée (ordre
+        // imposé — cf. ConversationListViewModel) : sans lui, un cache `.fresh`
+        // laissait `nextCursor` à nil pour toute la vie de la vue et la
+        // pagination se coinçait définitivement à la frontière du cache.
+        var cursorRestored = false
+        if let cursor = await CacheCoordinator.shared.feed.loadCursor(for: cacheKey) {
+            nextCursor = cursor.nextCursor
+            hasMore = cursor.hasMore
+            if !cursor.hasMore { paginationState = .exhausted }
+            cursorRestored = true
+        }
+
         let cached = await CacheCoordinator.shared.feed.load(for: cacheKey)
         switch cached {
         case .fresh(let data, _):
             posts = data
-            await CacheCoordinator.shared.feed.touch(for: cacheKey)
+            // `touch` re-fraîchit la fenêtre SWR à chaque visite : ne le faire
+            // QUE si un curseur a été restauré — sinon un profil rouvert
+            // régulièrement ne repassait JAMAIS par le réseau et le blocage de
+            // pagination devenait permanent (le seul recours était l'expiration
+            // à 7 jours).
+            if cursorRestored {
+                await CacheCoordinator.shared.feed.touch(for: cacheKey)
+            }
             return
         case .stale(let data, _):
             posts = data
-            await CacheCoordinator.shared.feed.touch(for: cacheKey)
             Task { [weak self] in await self?.fetchFromNetwork() }
             return
         case .expired, .empty:
@@ -533,7 +592,18 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
         isLoading = true
         defer { isLoading = false }
-        await fetchFromNetwork()
+        _ = await fetchFromNetwork()
+    }
+
+    /// Prefetch anticipé par carte : déclenche la révélation/chargement dès
+    /// qu'une carte à ≤3 de la fin de la fenêtre rendue apparaît — le contenu
+    /// suivant charge AVANT que l'utilisateur n'atteigne le bas, et le
+    /// déclencheur se ré-arme tout seul (contrairement à la sentinelle
+    /// one-shot, qui mourait dès que la fenêtre ne bougeait plus).
+    func loadMoreIfNeeded(currentPost post: FeedPost) {
+        guard let index = visiblePosts.firstIndex(where: { $0.id == post.id }) else { return }
+        guard index >= visiblePosts.count - 3 else { return }
+        Task { await revealOrLoadMore() }
     }
 
     /// Sentinel handler: reveal more already-cached cards first (cheap), then
@@ -552,13 +622,31 @@ final class ProfileUserPostsViewModel: ObservableObject {
     }
 
     func loadMore() async {
-        guard hasMore, !isLoading, nextCursor != nil else { return }
-        isLoading = true
-        defer { isLoading = false }
-        await fetchFromNetwork()
+        // Pas de garde `nextCursor != nil` — même correctif que
+        // `FeedViewModel.loadMoreIfNeeded` et `BookmarksViewModel` : un cache
+        // `.fresh` ne produit jamais de curseur, et `cursor: nil` signifie
+        // « page 1 », exactement ce qu'il faut pour récupérer un vrai curseur.
+        // `hasMore` seul est une garde sûre (posé avec le curseur par
+        // `fetchFromNetwork`).
+        guard hasMore, !isLoading, !isLoadingMore else { return }
+        isLoadingMore = true
+        paginationState = .loadingMore
+        defer { isLoadingMore = false }
+        let countBefore = posts.count
+        let succeeded = await fetchFromNetwork()
+        // Garde zéro-progrès : une page entièrement dupliquée (curseur qui ne
+        // progresse pas) laisserait `hasMore == true` avec une liste inchangée
+        // → boucle réseau infinie sur le déclencheur auto-ré-armé. On déclare
+        // la pagination épuisée plutôt que de marteler le gateway.
+        if succeeded, hasMore, posts.count == countBefore, countBefore > 0 {
+            hasMore = false
+            paginationState = .exhausted
+            await CacheCoordinator.shared.feed.saveCursor(nextCursor: nil, hasMore: false, for: cacheKey)
+        }
     }
 
-    private func fetchFromNetwork() async {
+    @discardableResult
+    private func fetchFromNetwork() async -> Bool {
         do {
             let response = try await postService.getUserPosts(userId: userId, cursor: nextCursor, limit: 20)
             let preferred = preferredLanguages
@@ -569,14 +657,28 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 payload.map { $0.toFeedPost(preferredLanguages: preferred) }
             }.value
 
-            if nextCursor == nil {
+            if nextCursor == nil, posts.isEmpty {
                 posts = fetched
+            } else if nextCursor == nil {
+                // Recovery « page 1 » par-dessus une liste cachée : FUSIONNER,
+                // jamais remplacer — un remplacement faisait rétrécir 100
+                // cartes en 20 sous le doigt de l'utilisateur (et
+                // `renderWindow > posts.count` cassait `visiblePosts`). La page
+                // serveur (newest-first) prime ; la queue cachée plus ancienne
+                // est conservée derrière.
+                let fetchedIds = Set(fetched.map(\.id))
+                let olderTail = posts.filter { !fetchedIds.contains($0.id) }
+                posts = fetched + olderTail
             } else {
                 let existing = Set(posts.map(\.id))
                 posts.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             }
             nextCursor = response.pagination?.nextCursor
-            hasMore = response.pagination?.hasMore ?? false
+            // Défaut sûr quand le bloc pagination est strippé de la réponse :
+            // un curseur présent vaut « il y a une suite » (forme ReelsViewModel)
+            // — `?? false` figeait la pagination définitivement sans recours.
+            hasMore = response.pagination?.hasMore ?? (response.pagination?.nextCursor != nil)
+            paginationState = hasMore ? .idle : .exhausted
 
             // Drop any override / share delta whose value now matches server
             // truth, and prune entries for posts no longer present.
@@ -596,14 +698,24 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // (oldest, posts are newest-first) so we persist `prefix(100)` to
             // avoid trimming the newest posts on cold start.
             try? await CacheCoordinator.shared.feed.save(Array(posts.prefix(100)), for: cacheKey)
+            // Persisté À CÔTÉ de la page (même clé) : la prochaine instance du
+            // VM reprend au curseur profond au lieu de se coincer sur un cache
+            // `.fresh` sans curseur.
+            await CacheCoordinator.shared.feed.saveCursor(nextCursor: nextCursor, hasMore: hasMore, for: cacheKey)
+            return true
         } catch {
+            // Échec réseau : `hasMore`/`nextCursor` restent intacts (retenter la
+            // même page), le déclencheur par carte se ré-arme au prochain scroll.
+            paginationState = .error(String(localized: "profile.posts.loadError", defaultValue: "Erreur lors du chargement des publications", bundle: .main))
             FeedbackToastManager.shared.showError(String(localized: "profile.posts.loadError", defaultValue: "Erreur lors du chargement des publications", bundle: .main))
+            return false
         }
     }
 
     func refresh() async {
         nextCursor = nil
         hasMore = true
+        paginationState = .idle
         renderWindow = Self.initialRenderWindow
         await CacheCoordinator.shared.feed.invalidate(for: cacheKey)
         await fetchFromNetwork()
