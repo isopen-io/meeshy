@@ -5,7 +5,7 @@
  * handler that needs to gate access by post visibility).
  */
 
-import { PrismaClient, PostVisibility } from '@meeshy/shared/prisma/client';
+import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { NOT_DELETED } from './softDelete';
@@ -239,10 +239,11 @@ export async function canUserInteractWithPost(
 /**
  * Tranche ACL + redirection d'un post CANDIDAT à une interaction sociale
  * (like/réaction, commentaire). Porte, en plus de `PostVisibilityRecord`, les
- * trois champs qui décident SI ce post redirige vers sa racine.
+ * champs qui décident SI ce post redirige vers sa racine.
  */
 export type PostRedirectRecord = PostVisibilityRecord & {
   id: string;
+  type: PostType;
   isQuote: boolean;
   repostOfId: string | null;
   originalRepostOfId: string | null;
@@ -253,6 +254,7 @@ const POST_REDIRECT_SELECT = {
   authorId: true,
   visibility: true,
   visibilityUserIds: true,
+  type: true,
   isQuote: true,
   repostOfId: true,
   originalRepostOfId: true,
@@ -267,6 +269,32 @@ async function loadPostRedirectRecord(
     select: POST_REDIRECT_SELECT,
   });
   return post ?? null;
+}
+
+/**
+ * Charge la racine SANS filtrer `deletedAt` en `where` : décider si elle est
+ * ÉPHÉMÈRE (`type`) doit rester possible même une fois soft-supprimée par
+ * `ExpiredStoriesCleanupService` (~7j après l'expiry d'une STORY/STATUS) —
+ * sinon un repost qui la source redeviendrait socialement mort au moment
+ * précis où l'exclusion éphémère (voir `resolveRedirectTarget`) doit
+ * continuer de s'appliquer (review task-9, critique #1). `deletedAt` est donc
+ * vérifié manuellement plus bas, uniquement pour une racine qui s'avère NON
+ * éphémère.
+ */
+async function loadPostRedirectRoot(
+  prisma: PostAclPrisma,
+  postId: string,
+): Promise<(PostRedirectRecord & { deletedAt: Date | null }) | null> {
+  const post = await prisma.post.findFirst({
+    where: { id: postId },
+    select: { ...POST_REDIRECT_SELECT, deletedAt: true },
+  });
+  return post ?? null;
+}
+
+/** STORY (21h) et STATUS (1h) : les deux types éphémères de `PostType`. */
+export function isEphemeralPostType(type: PostType): boolean {
+  return type === PostType.STORY || type === PostType.STATUS;
 }
 
 /**
@@ -292,6 +320,19 @@ async function loadPostRedirectRecord(
  * repost simple est elle-même absente/supprimée/invisible pour lui. La
  * redirection ne doit JAMAIS outrepasser la visibilité de la racine : pas de
  * crédit silencieux sur un post que l'acteur ne peut pas voir.
+ *
+ * EXCLUSION ÉPHÉMÈRE (review task-9, critique #1) : quand la racine est une
+ * STORY/STATUS, la redirection NE S'APPLIQUE PAS — le repost porte son propre
+ * instantané (média/audio/storyEffects dupliqués à la création,
+ * `PostService.repostPost` § isEphemeralSourceRepost, car la source expire
+ * puis est nettoyée) et garde donc SA PROPRE vie sociale, jamais celle de la
+ * racine. Sans cette exclusion : (a) chaque like/commentaire d'un repost de
+ * story misroutait tant que la story vivait encore (broadcast
+ * `story:reacted`/notifications typées story pour une action sur une carte de
+ * FEED), et (b) le repost — pourtant PERMANENT et toujours affiché —
+ * devenait socialement mort dès qu'`ExpiredStoriesCleanupService`
+ * soft-supprimait la racine (~7j après expiry) : like/unlike/commentaire 404
+ * pour toujours sur une carte encore visible côté client.
  */
 async function resolveRedirectTarget(
   prisma: PostAclPrisma,
@@ -308,8 +349,11 @@ async function resolveRedirectTarget(
   const rootId = post.originalRepostOfId ?? post.repostOfId!;
   if (rootId === post.id) return post;
 
-  const root = await loadPostRedirectRecord(prisma, rootId);
-  if (!root || !(await verdict(prisma, root, userId))) return null;
+  const root = await loadPostRedirectRoot(prisma, rootId);
+  if (!root) return null;
+  if (isEphemeralPostType(root.type)) return post;
+
+  if (root.deletedAt != null || !(await verdict(prisma, root, userId))) return null;
   return root;
 }
 

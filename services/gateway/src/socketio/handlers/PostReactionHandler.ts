@@ -30,7 +30,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { canUserViewPost, resolveInteractionTarget } from '../../services/posts/postVisibility.js';
+import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
@@ -441,22 +441,26 @@ export class PostReactionHandler {
         return;
       }
 
-      const post = await this.prisma.post.findUnique({
-        where: { id: validated.postId },
-        select: { id: true, authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
-      });
-
-      if (!post || post.deletedAt !== null) {
+      // Rejoindre suit la MÊME redirection que la lecture du fil
+      // (`comments.ts` GET, `resolveConsumptionTarget`) : un repost simple
+      // n'a pas de room propre — sa room est celle de sa racine, là où
+      // vivent réellement les broadcasts `post:liked`/`comment:added` depuis
+      // la redirection tâche 9. Sans ceci, un viewer qui ouvre le fil d'un
+      // repost simple rejoignait la room DU REPOST mais ne recevait plus
+      // AUCUN événement — ils partent tous vers la room de la racine
+      // désormais (review task-9, important #1). `resolveConsumptionTarget`
+      // exclut aussi les racines ÉPHÉMÈRES (STORY/STATUS, critique #1) : un
+      // repost qui les source garde sa PROPRE room, comme sa propre vie
+      // sociale. Refus indistinct (`null`) pour post absent/supprimé/
+      // invisible — jamais de distinction 404/403 qui divulguerait
+      // l'existence d'un post restreint.
+      const target = await resolveConsumptionTarget(this.prisma, validated.postId, userId);
+      if (!target) {
+        this.logger.warn('[PostReactionHandler] post:join denied (visibility)', { userId, postId: validated.postId });
         return callback?.({ success: false, error: 'Post not found' });
       }
 
-      const canView = await canUserViewPost(this.prisma, post, userId);
-      if (!canView) {
-        this.logger.warn('[PostReactionHandler] post:join denied (visibility)', { userId, postId: validated.postId });
-        return callback?.({ success: false, error: 'Forbidden' });
-      }
-
-      await socket.join(ROOMS.post(validated.postId));
+      await socket.join(ROOMS.post(target.id));
       callback?.({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
@@ -497,7 +501,20 @@ export class PostReactionHandler {
         return;
       }
 
-      await socket.leave(ROOMS.post(validated.postId));
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const userId = userResult?.realUserId || userIdOrToken;
+
+      // Symétrique de `handleJoinPost` : la room réellement rejointe est
+      // celle de la CIBLE résolue (racine d'un repost simple, sauf source
+      // éphémère) — jamais `validated.postId` brut, sinon `leave` cible une
+      // room où le socket n'a jamais mis les pieds et la vraie room (celle de
+      // la racine) ne se libère jamais — fuite d'abonnement (review task-9,
+      // important #1). Si la résolution échoue (racine devenue invisible
+      // depuis le join), on retombe sur l'id brut en best-effort : `leave`
+      // sur une room absente est un no-op, jamais une erreur visible pour
+      // l'appelant.
+      const target = await resolveConsumptionTarget(this.prisma, validated.postId, userId);
+      await socket.leave(ROOMS.post(target?.id ?? validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });
