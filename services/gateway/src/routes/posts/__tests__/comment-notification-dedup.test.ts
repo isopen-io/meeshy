@@ -61,7 +61,9 @@ jest.mock('../../../utils/withMutationLog', () => ({
 
 const notif = {
   createCommentReplyNotification: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
-  createCommentMentionNotificationsBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  // Typé avec ses arguments : l'audience transmise (auteur + visibilité du post)
+  // fait partie de ce que ces cas vérifient.
+  createCommentMentionNotificationsBatch: jest.fn<(params: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined),
   createPostCommentNotification: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
   createStoryCommentNotificationsBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 };
@@ -69,9 +71,23 @@ const notif = {
 const prismaPostFindUnique = jest.fn<() => Promise<unknown>>();
 const prismaCommentFindUnique = jest.fn<() => Promise<unknown>>();
 
+/**
+ * Audience déclarée PUBLIC : les routes du fil consultent désormais
+ * `Post.visibility` avant d'écrire (`loadPostAcl`). Ce fichier porte sur la
+ * PRIORITÉ entre notifications (user_mentioned > comment_reply > post_comment),
+ * pas sur le droit de voir — couvert par `unit/routes/posts/comments-audience`.
+ */
+const PUBLIC_ACL = { authorId: 'user-bob', visibility: 'PUBLIC', visibilityUserIds: [] };
+
 const prisma = {
-  post: { findUnique: prismaPostFindUnique },
-  postComment: { findUnique: prismaCommentFindUnique },
+  post: {
+    findUnique: prismaPostFindUnique,
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(PUBLIC_ACL),
+  },
+  postComment: {
+    findUnique: prismaCommentFindUnique,
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: 'post-1', post: PUBLIC_ACL }),
+  },
 } as unknown as PrismaClient;
 
 const COMMENTER_ID = 'user-commenter';
@@ -200,5 +216,52 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
     expect(resp.statusCode).toBe(201);
     expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledTimes(1);
     expect(notif.createPostCommentNotification).not.toHaveBeenCalled();
+  });
+
+  // Un commentaire n'a pas d'audience propre : il hérite de celle du POST. Le
+  // lot ne peut décider qui a le droit d'être prévenu que si la route lui
+  // transmet l'auteur ET la visibilité du post commenté.
+  it('transmet l’audience du POST au lot de mention', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-2', content: '@carol bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue({
+      ...post('POST', 'user-bob'),
+      visibility: 'ONLY',
+      visibilityUserIds: ['user-dave'],
+    });
+    mockExtractMentions.mockReturnValue(['carol']);
+    mockResolveUsernames.mockResolvedValue(new Map([['carol', { id: 'user-carol' }]]));
+
+    const resp = await app.inject({
+      method: 'POST',
+      url: '/posts/post-1/comments',
+      body: { content: '@carol bravo' },
+    });
+
+    expect(resp.statusCode).toBe(201);
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postAuthorId: 'user-bob',
+        visibility: 'ONLY',
+        visibilityUserIds: ['user-dave'],
+      })
+    );
+  });
+
+  // Sans le post, l'audience est inconnue — donc on ne prévient personne plutôt
+  // que de pousser un extrait à l'aveugle.
+  it('ne notifie aucune mention quand le post commenté est introuvable', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-3', content: '@carol bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(null);
+    mockExtractMentions.mockReturnValue(['carol']);
+    mockResolveUsernames.mockResolvedValue(new Map([['carol', { id: 'user-carol' }]]));
+
+    const resp = await app.inject({
+      method: 'POST',
+      url: '/posts/post-1/comments',
+      body: { content: '@carol bravo' },
+    });
+
+    expect(resp.statusCode).toBe(201);
+    expect(notif.createCommentMentionNotificationsBatch).not.toHaveBeenCalled();
   });
 });

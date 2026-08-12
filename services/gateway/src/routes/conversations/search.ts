@@ -1,7 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import {
+  generateDefaultConversationTitle,
+  resolveUserLanguagesOrdered
+} from '@meeshy/shared/utils/conversation-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -12,6 +15,11 @@ import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import {
+  buildLastMessagePreviewTranslations,
+  truncateMessagePreview
+} from './utils/last-message-preview';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -158,6 +166,27 @@ export function registerSearchRoutes(
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
         : new Map<string, number>();
 
+      // Prisme Linguistique du lecteur : systemLanguage → regionalLanguage →
+      // customDestinationLanguage → deviceLocale. Résolu UNE fois pour la page,
+      // depuis l'utilisateur déjà chargé par le middleware d'auth — aucune
+      // requête supplémentaire. `resolveUserLanguagesOrdered` est la seule
+      // autorité du dépôt sur cet ordre : ne jamais le réimplémenter ici.
+      // Même code que `GET /conversations` (core.ts), volontairement — les deux
+      // routes servent la MÊME ligne de liste et doivent la résoudre pareil.
+      const viewerPrefs = authRequest.authContext.registeredUser as
+        | {
+            systemLanguage?: string | null;
+            regionalLanguage?: string | null;
+            customDestinationLanguage?: string | null;
+            deviceLocale?: string | null;
+          }
+        | undefined;
+      const viewerLanguages = viewerPrefs
+        ? resolveUserLanguagesOrdered(viewerPrefs, {
+            deviceLocale: viewerPrefs.deviceLocale ?? undefined
+          })
+        : [];
+
       // Présence des expéditeurs de lastMessage : gate showOnlineStatus —
       // même règle que GET /conversations (cf. core.ts).
       const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
@@ -192,9 +221,19 @@ export function registerSearchRoutes(
         // AND a hand-mapped object like this one drops anything we don't
         // copy explicitly — both layers can blank the field. Mirror exactly
         // what `core.ts` does via `{ ...msg }`.
+        // Lot 3 : `metadata` (donc `metadata.location`) est déjà récupéré par
+        // le `include` Prisma ci-dessus (aucun `select` restrictif sur
+        // `messages`), mais était jusqu'ici jeté par cette reconstruction
+        // manuelle — la donnée était payée puis perdue. Hisser explicitement.
+        const place = sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
         const lastMessage = msg ? {
           id: msg.id,
-          content: msg.content,
+          // Même borne que `GET /conversations` : la carte d'aperçu traduite
+          // ci-dessous est tronquée par `buildLastMessagePreviewTranslations`,
+          // et servir l'original en entier ferait dépendre le poids de la ligne
+          // de la langue du lecteur. Le contenu complet passe toujours par
+          // `GET /conversations/:id/messages`.
+          content: truncateMessagePreview(msg.content),
           senderId: msg.senderId,
           messageType: msg.messageType,
           createdAt: msg.createdAt,
@@ -202,7 +241,7 @@ export function registerSearchRoutes(
             id: sender.id,
             userId: sender.userId,
             username: sender.user?.username ?? null,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
             isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
               ? false
@@ -210,6 +249,7 @@ export function registerSearchRoutes(
           } : null,
           attachments: msg.attachments || [],
           _count: (msg as any)._count,
+          ...(place ? { location: place } : {}),
         } : null;
 
         return {
@@ -223,6 +263,22 @@ export function registerSearchRoutes(
           communityId: conversation.communityId,
           memberCount: (conversation as any)._count?.participants ?? 0,
           lastMessage,
+          // Prisme Linguistique de la ligne de liste — jumeau de `core.ts`.
+          // Les deux colonnes vivent dans le MÊME document Mongo que le message
+          // et le `include` ci-dessus (sans `select` restrictif) les rapportait
+          // déjà : la donnée était payée puis jetée par ce mapping manuel,
+          // exactement comme `metadata.location` avant le Lot 3. Elles sont
+          // posées au niveau CONVERSATION et non dans `lastMessage` parce que
+          // c'est là que les clients les lisent
+          // (`MeeshyConversation.resolvedLastMessagePreview`,
+          // `formatLastMessage` côté web) et que la carte compacte
+          // `{ langue: aperçu }` n'a pas la forme de `Message.translations`.
+          lastMessageOriginalLanguage: msg?.originalLanguage ?? null,
+          lastMessageTranslations: buildLastMessagePreviewTranslations({
+            translations: (msg as { translations?: unknown } | undefined)?.translations,
+            originalLanguage: msg?.originalLanguage,
+            viewerLanguages
+          }),
           lastMessageAt: conversation.lastMessageAt,
           createdAt: conversation.createdAt,
           unreadCount,

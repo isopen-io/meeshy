@@ -1,0 +1,490 @@
+/**
+ * GW3 — per-conversation mute applied to notification fan-out.
+ *
+ * UserConversationPreferences.isMuted was written by conversation-preferences
+ * routes but never read by the send pipeline. Contract:
+ *  - new_message, message_reply, message_reaction fan-out EXCLUDE muted
+ *    recipients (filterMutedRecipients helper — single rule site);
+ *  - user_mentioned PIERCES the mute (WhatsApp convention);
+ *  - non-muted recipients are unaffected.
+ *
+ * @jest-environment node
+ */
+
+jest.mock('isomorphic-dompurify', () => ({
+  __esModule: true,
+  default: { sanitize: (input: string) => input?.replace(/<[^>]*>/g, '') ?? '' },
+}));
+
+jest.mock('../../../../utils/sanitize', () => ({
+  SecuritySanitizer: {
+    sanitizeText: jest.fn((s: string) => s ?? ''),
+    sanitizeUsername: jest.fn((s: string) => s ?? ''),
+    sanitizeURL: jest.fn((s: string) => s ?? null),
+    sanitizeJSON: jest.fn((x: unknown) => x),
+    isValidNotificationType: jest.fn(() => true),
+    isValidPriority: jest.fn(() => true),
+  },
+}));
+
+jest.mock('../../../../utils/logger-enhanced', () => ({
+  notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  securityLogger: { logViolation: jest.fn() },
+  enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
+}));
+
+jest.mock('@meeshy/shared/prisma/client', () => {
+  const mockPrisma = {
+    notification: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
+    conversation: { findUnique: jest.fn() },
+    message: { findUnique: jest.fn() },
+    participant: { count: jest.fn() },
+    userPreferences: { findUnique: jest.fn() },
+    userConversationPreferences: { findMany: jest.fn() },
+  };
+  return { PrismaClient: jest.fn(() => mockPrisma) };
+});
+
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { NotificationService } from '../../../../services/notifications/NotificationService';
+import { filterMutedRecipients } from '../../../../services/notifications/mutedRecipients';
+
+const CONV_ID = '507f1f77bcf86cd799439011';
+const AUTHOR_ID = '507f1f77bcf86cd799439022';
+const ACTOR_ID = '507f1f77bcf86cd799439033';
+const OTHER_ID = '507f1f77bcf86cd799439044';
+const MSG_ID = '507f1f77bcf86cd799439055';
+
+// ─── filterMutedRecipients (pure helper) ─────────────────────────────────────
+
+describe('filterMutedRecipients', () => {
+  let prisma: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = new PrismaClient();
+  });
+
+  it('returns all userIds when nobody muted the conversation', async () => {
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+
+    const result = await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID, OTHER_ID]);
+
+    expect(result).toEqual([AUTHOR_ID, OTHER_ID]);
+  });
+
+  it('removes recipients with isMuted=true, keeps the others in order', async () => {
+    prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+    const result = await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID, OTHER_ID]);
+
+    expect(result).toEqual([OTHER_ID]);
+  });
+
+  it('queries only muted rows scoped to the conversation and candidates', async () => {
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+
+    await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID]);
+
+    expect(prisma.userConversationPreferences.findMany).toHaveBeenCalledWith({
+      where: { conversationId: CONV_ID, userId: { in: [AUTHOR_ID] }, isMuted: true },
+      select: { userId: true },
+    });
+  });
+
+  it('returns [] without querying when userIds is empty', async () => {
+    const result = await filterMutedRecipients(prisma, CONV_ID, []);
+
+    expect(result).toEqual([]);
+    expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
+  });
+
+  // ─── Repli OUVERT ─────────────────────────────────────────────────────────
+  //
+  // Le mute est une préférence de CONFORT ; la notification est une obligation
+  // de LIVRAISON. Quand on ne sait plus laquelle des deux s'applique, laisser
+  // passer coûte un ping de trop, taire coûte un message jamais annoncé — et
+  // sur un incident Mongo transitoire, il les tait TOUS d'un coup pour tout le
+  // monde. Même arbitrage que les trois voisins qui l'ont déjà tranché et le
+  // disent : `loadNotificationPrefs` (« fail open »),
+  // `_loadReadReceiptOptOuts` (« everyone stays visible »),
+  // `PrivacyPreferencesService.fetchFromDatabase`.
+
+  it('returns every candidate when the preference read fails (fail open)', async () => {
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    const result = await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID, OTHER_ID]);
+
+    expect(result).toEqual([AUTHOR_ID, OTHER_ID]);
+  });
+
+  it('logs the failed preference read instead of swallowing it silently', async () => {
+    const { notificationLogger } = require('../../../../utils/logger-enhanced');
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    await filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID]);
+
+    expect(notificationLogger.error).toHaveBeenCalled();
+  });
+
+  it('never rejects — the caller reads a list, not an exception', async () => {
+    prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+
+    await expect(filterMutedRecipients(prisma, CONV_ID, [AUTHOR_ID])).resolves.toEqual([AUTHOR_ID]);
+  });
+});
+
+// ─── NotificationService fan-out sites ───────────────────────────────────────
+
+describe('NotificationService — mute applied to reaction/reply fan-out', () => {
+  let service: NotificationService;
+  let prisma: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = new PrismaClient();
+
+    prisma.notification.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: `n-${Math.random()}`,
+        ...data,
+        delivery: { emailSent: false, pushSent: false },
+      })
+    );
+    prisma.user.findUnique.mockResolvedValue({ username: 'u', displayName: 'U', avatar: null });
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findUnique.mockResolvedValue({ title: 'c', type: 'direct' });
+    prisma.message.findUnique.mockResolvedValue({ content: 'msg' });
+    prisma.participant.count.mockResolvedValue(3);
+    prisma.userPreferences.findUnique.mockResolvedValue(null);
+    prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+
+    service = new NotificationService(prisma);
+  });
+
+  describe('createReactionNotification', () => {
+    const params = {
+      messageAuthorId: AUTHOR_ID,
+      reactorUserId: ACTOR_ID,
+      messageId: MSG_ID,
+      conversationId: CONV_ID,
+      reactionEmoji: '❤️',
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createReactionNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createReactionNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('muted-conversation reactions do not consume the pair throttle budget', async () => {
+      // The mute is deterministic and durable — it must be checked BEFORE the
+      // mutating anti-spam throttle. Otherwise 5 suppressed reactions in a
+      // muted conversation fill the sender→recipient bucket and silently drop
+      // a legitimate reaction notification in another conversation.
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+      for (let i = 0; i < 5; i += 1) {
+        expect(await service.createReactionNotification(params)).toBeNull();
+      }
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+
+      prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+      const result = await service.createReactionNotification({
+        ...params,
+        conversationId: '507f1f77bcf86cd799439099',
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('createReplyNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      replierUserId: ACTOR_ID,
+      messageId: MSG_ID,
+      conversationId: CONV_ID,
+      messagePreview: 'a reply',
+      originalMessageId: '507f1f77bcf86cd799439066',
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createReplyNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createReplyNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Les allées et venues sont de l'activité AMBIANTE ──────────────────────
+  //
+  // Un membre qui rejoint, qu'on exclut, ou qui part n'est pas un événement
+  // ADRESSÉ au destinataire : c'est le bruit de fond de la conversation, la
+  // même famille que `new_message` / `message_reply` / `message_reaction`. Le
+  // mute par conversation les couvrait déjà tous les trois ; ces trois-là lui
+  // échappaient, si bien qu'une conversation muette continuait de sonner à
+  // chaque va-et-vient — et d'autant plus fort qu'elle est active, donc
+  // précisément dans le cas qui a motivé le mute.
+
+  describe('createMemberJoinedNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      newMemberUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+      joinMethod: 'invited' as const,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberJoinedNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('does not even load the member/conversation snapshot for a muted recipient', async () => {
+      // La suppression doit précéder la lecture : sinon un ajout de membre dans
+      // une conversation que tout le monde a mise en sourdine paie quand même
+      // ses trois requêtes par destinataire, pour rien.
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      await service.createMemberJoinedNotification(params);
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+      expect(prisma.participant.count).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberJoinedNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_joined');
+    });
+  });
+
+  describe('createMemberRemovedNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      removedByUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberRemovedNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberRemovedNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_removed');
+    });
+  });
+
+  describe('createMemberLeftNotification', () => {
+    const params = {
+      recipientUserId: AUTHOR_ID,
+      memberUserId: ACTOR_ID,
+      conversationId: CONV_ID,
+    };
+
+    it('suppresses the notification when the recipient muted the conversation', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const result = await service.createMemberLeftNotification(params);
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the notification for a non-muted recipient', async () => {
+      const result = await service.createMemberLeftNotification(params);
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_left');
+    });
+  });
+
+  // ─── Ce qui PERCE le mute, et pourquoi ─────────────────────────────────────
+  //
+  // Frontière de la règle ci-dessus, verrouillée pour qu'elle ne dérive pas :
+  // ces trois événements portent sur l'appartenance DU DESTINATAIRE lui-même
+  // (« on t'a ajouté », « on t'a retiré », « ton rôle a changé »). Ils sont
+  // adressés, pas ambiants — même famille que la mention, qui perce déjà le
+  // mute par convention WhatsApp. Mettre une conversation en sourdine dit « ne
+  // me raconte pas ce qui s'y passe », pas « ne me dis pas que j'en suis
+  // sorti ».
+
+  describe('les événements portant sur le destinataire lui-même percent le mute', () => {
+    beforeEach(() => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+    });
+
+    it('added_to_conversation still notifies a muted recipient', async () => {
+      const result = await service.createAddedToConversationNotification({
+        recipientUserId: AUTHOR_ID,
+        addedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('added_to_conversation');
+    });
+
+    it('removed_from_conversation still notifies a muted recipient', async () => {
+      const result = await service.createRemovedFromConversationNotification({
+        recipientUserId: AUTHOR_ID,
+        removedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('removed_from_conversation');
+    });
+
+    it('member_role_changed still notifies a muted recipient', async () => {
+      const result = await service.createMemberRoleChangedNotification({
+        recipientUserId: AUTHOR_ID,
+        changedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+        newRole: 'ADMIN',
+        previousRole: 'MEMBER',
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('member_promoted');
+    });
+  });
+
+  // ─── Un incident de lecture ne doit pas faire taire cinq familles ─────────
+  //
+  // `isConversationMutedFor` garde l'entrée de cinq familles de notifications,
+  // et `createMemberJoinedNotificationsBatch` celle d'un éventail entier. Si la
+  // lecture des préférences lève, toutes tombent en même temps et pour tout le
+  // monde. Le repli ouvert se vérifie donc ICI, au niveau du service, pas
+  // seulement sur le helper.
+
+  describe('la lecture du mute en échec ne supprime aucune notification', () => {
+    beforeEach(() => {
+      prisma.userConversationPreferences.findMany.mockRejectedValue(new Error('Mongo timeout'));
+    });
+
+    it('la réaction est notifiée quand même', async () => {
+      const result = await service.createReactionNotification({
+        messageAuthorId: AUTHOR_ID,
+        reactorUserId: ACTOR_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        reactionEmoji: '❤️',
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it('la réponse est notifiée quand même', async () => {
+      const result = await service.createReplyNotification({
+        recipientUserId: AUTHOR_ID,
+        replierUserId: ACTOR_ID,
+        messageId: MSG_ID,
+        conversationId: CONV_ID,
+        messagePreview: 'a reply',
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'arrivée d'un membre est notifiée quand même", async () => {
+      const result = await service.createMemberJoinedNotification({
+        recipientUserId: AUTHOR_ID,
+        newMemberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'exclusion d'un tiers est notifiée quand même", async () => {
+      const result = await service.createMemberRemovedNotification({
+        recipientUserId: AUTHOR_ID,
+        removedByUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("le départ d'un membre est notifié quand même", async () => {
+      const result = await service.createMemberLeftNotification({
+        recipientUserId: AUTHOR_ID,
+        memberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(result).not.toBeNull();
+    });
+
+    it("l'éventail d'arrivée atteint TOUTE son audience, pas zéro", async () => {
+      const count = await service.createMemberJoinedNotificationsBatch([AUTHOR_ID, OTHER_ID], {
+        newMemberUserId: ACTOR_ID,
+        conversationId: CONV_ID,
+      });
+
+      expect(count).toBe(2);
+    });
+  });
+
+  describe('createMentionNotificationsBatch — mentions pierce the mute', () => {
+    it('still notifies a muted recipient who was @mentioned (WhatsApp convention)', async () => {
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+
+      const count = await service.createMentionNotificationsBatch(
+        [AUTHOR_ID],
+        {
+          senderId: ACTOR_ID,
+          messageContent: 'hello @you',
+          conversationId: CONV_ID,
+          messageId: MSG_ID,
+        },
+        [AUTHOR_ID, ACTOR_ID]
+      );
+
+      expect(count).toBe(1);
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.create.mock.calls[0][0].data.type).toBe('user_mentioned');
+    });
+  });
+});

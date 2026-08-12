@@ -85,6 +85,29 @@ object FeedRealtimeReducer {
     }
 
     /**
+     * The viewer's own post just published successfully (`FeedViewModel.publishPost`).
+     * Prepended at the head like a socket arrival — but, unlike [accept], **never**
+     * bumps [FeedRealtimeHead.newPostsCount]: the post is already visible at the top of
+     * the feed the instant this returns, so there is nothing to acknowledge (no "N new
+     * posts" pill for content the viewer just wrote). Port of iOS
+     * `FeedViewModel.createPost` doing `posts.insert(feedPost, at: 0)` directly, outside
+     * the arrival-count accounting. Releases a prior tombstone (republish after a local
+     * delete) and is a defensive no-op for a blank id or an id already at the head — the
+     * gateway's own `post:created` echo of this same publish, received moments later via
+     * [accept], is then correctly inert too (`state.posts.any { it.id == id }` already
+     * true), so the post is never rendered twice.
+     */
+    fun created(state: FeedRealtimeHead, post: ApiPost): FeedRealtimeHead {
+        val id = post.id
+        if (id.isBlank()) return state
+        if (state.posts.any { it.id == id }) return state
+        return state.copy(
+            posts = listOf(post) + state.posts,
+            removedIds = if (id in state.removedIds) state.removedIds - id else state.removedIds,
+        )
+    }
+
+    /**
      * A socket `post:deleted` arrived. Tombstones the id so the feed hides it, drops it
      * from the buffered head if it was a still-unseen arrival (decrementing the banner
      * count — never below zero — so the banner never claims a post that is gone), and is

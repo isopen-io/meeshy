@@ -25,7 +25,7 @@ import type {
   ReactionUpdateEventData,
   ReactionSyncEventData,
 } from '@meeshy/shared/types';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
 import {
   reactionSchema,
   reactionSummarySchema,
@@ -192,37 +192,50 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         emoji,
         'add',
         participantId,
-        message?.conversationId ?? messageId
+        message?.conversationId ?? messageId,
+        userId
       );
 
-      // Broadcast via Socket.IO à tous les participants de la conversation
-      if (socketIOHandler) {
-
-        if (message) {
-          const io = fastify.socketIOHandler.getManager()?.getIO();
-          if (io) {
-            // Swap 1-réaction-par-user : signaler la disparition de l'ancien
-            // emoji avant l'ajout du nouveau, pour que les autres clients le
-            // retirent (chaque event porte son agrégation recalculée).
-            for (const removedEmoji of replacedEmojis) {
-              const removeEvent = await reactionService.createUpdateEvent(
-                messageId,
-                removedEmoji,
-                'remove',
-                participantId,
-                message.conversationId
-              );
-              io.to(ROOMS.conversation(message.conversationId)).emit(
-                SERVER_EVENTS.REACTION_REMOVED,
-                removeEvent
-              );
-            }
-            io.to(ROOMS.conversation(message.conversationId)).emit(
-              SERVER_EVENTS.REACTION_ADDED,
-              updateEvent
-            );
-          }
+      // Diffusion aux DEUX audiences (room live + file d'attente hors ligne)
+      // via la source unique `broadcastReactionMutation`. Cette route est le
+      // transport PRIMAIRE des réactions sur iOS : tant qu'elle n'émettait que
+      // vers la room, toute réaction posée depuis un iPhone était définitivement
+      // perdue pour un pair hors ligne à cet instant.
+      if (socketIOHandler && message) {
+        const manager = fastify.socketIOHandler.getManager();
+        // Swap 1-réaction-par-user : signaler la disparition de l'ancien
+        // emoji avant l'ajout du nouveau, pour que les autres clients le
+        // retirent (chaque event porte son agrégation recalculée).
+        for (const removedEmoji of replacedEmojis) {
+          const removeEvent = await reactionService.createUpdateEvent(
+            messageId,
+            removedEmoji,
+            'remove',
+            participantId,
+            message.conversationId,
+            userId
+          );
+          await broadcastReactionMutation({
+            manager,
+            conversationId: message.conversationId,
+            actorParticipantId: participantId,
+            eventType: 'reaction-removed',
+            messageId,
+            emoji: removedEmoji,
+            payload: removeEvent as unknown as Record<string, unknown>,
+            onError: (error) => fastify.log.error({ error }, 'REST reaction swap-removal broadcast failed'),
+          });
         }
+        await broadcastReactionMutation({
+          manager,
+          conversationId: message.conversationId,
+          actorParticipantId: participantId,
+          eventType: 'reaction-added',
+          messageId,
+          emoji,
+          payload: updateEvent as unknown as Record<string, unknown>,
+          onError: (error) => fastify.log.error({ error }, 'REST reaction broadcast failed'),
+        });
       }
 
       // Notifier l'auteur du message — PARITÉ avec le handler socket `reaction:add`
@@ -376,18 +389,22 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         decodedEmoji,
         'remove',
         removeParticipantId,
-        message?.conversationId ?? messageId
+        message?.conversationId ?? messageId,
+        userId
       );
 
-      // Broadcast via Socket.IO
-      if (socketIOHandler) {
-
-        if (message) {
-          fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(message.conversationId)).emit(
-            SERVER_EVENTS.REACTION_REMOVED,
-            updateEvent
-          );
-        }
+      // Diffusion aux DEUX audiences — cf. la route d'ajout ci-dessus.
+      if (socketIOHandler && message) {
+        await broadcastReactionMutation({
+          manager: fastify.socketIOHandler.getManager(),
+          conversationId: message.conversationId,
+          actorParticipantId: removeParticipantId,
+          eventType: 'reaction-removed',
+          messageId,
+          emoji: decodedEmoji,
+          payload: updateEvent as unknown as Record<string, unknown>,
+          onError: (error) => fastify.log.error({ error }, 'REST reaction removal broadcast failed'),
+        });
       }
 
       return sendSuccess(reply, { message: 'Reaction removed successfully' });

@@ -35,7 +35,6 @@ final class AudioRecordingTests: XCTestCase {
     func test_audioRecordingSettings_standard_hasCorrectValues() {
         let settings = AudioRecordingSettings.standard
 
-        XCTAssertNil(settings.maxDuration)
         XCTAssertEqual(settings.minimumDuration, 0.5)
         XCTAssertEqual(settings.sampleRate, 44100)
         XCTAssertEqual(settings.numberOfChannels, 1)
@@ -45,7 +44,9 @@ final class AudioRecordingTests: XCTestCase {
     func test_audioRecordingSettings_story_hasCorrectValues() {
         let settings = AudioRecordingSettings.story
 
-        XCTAssertEqual(settings.maxDuration, 60)
+        // Plus de plafond de durée : `.story` en portait un de 60 s, retiré
+        // sur directive produit 2026-07-26 (aucune limite, quelle que soit la
+        // surface — story, message, post, réel).
         XCTAssertEqual(settings.minimumDuration, 0.5)
         XCTAssertEqual(settings.sampleRate, 44100)
         XCTAssertEqual(settings.numberOfChannels, 1)
@@ -55,7 +56,6 @@ final class AudioRecordingTests: XCTestCase {
     func test_audioRecordingSettings_voiceSample_hasCorrectValues() {
         let settings = AudioRecordingSettings.voiceSample
 
-        XCTAssertNil(settings.maxDuration)
         XCTAssertEqual(settings.minimumDuration, 10)
         XCTAssertEqual(settings.sampleRate, 44100)
         XCTAssertEqual(settings.numberOfChannels, 1)
@@ -66,14 +66,12 @@ final class AudioRecordingTests: XCTestCase {
 
     func test_audioRecordingSettings_customInit_setsAllValues() {
         let settings = AudioRecordingSettings(
-            maxDuration: 30,
             minimumDuration: 2.0,
             sampleRate: 22050,
             numberOfChannels: 2,
             bitRate: 128000
         )
 
-        XCTAssertEqual(settings.maxDuration, 30)
         XCTAssertEqual(settings.minimumDuration, 2.0)
         XCTAssertEqual(settings.sampleRate, 22050)
         XCTAssertEqual(settings.numberOfChannels, 2)
@@ -81,7 +79,7 @@ final class AudioRecordingTests: XCTestCase {
     }
 
     func test_audioRecordingSettings_customInit_defaultSampleRateAndChannels() {
-        let settings = AudioRecordingSettings(maxDuration: nil, minimumDuration: 1.0)
+        let settings = AudioRecordingSettings(minimumDuration: 1.0)
 
         XCTAssertEqual(settings.sampleRate, 44100)
         XCTAssertEqual(settings.numberOfChannels, 1)
@@ -107,10 +105,9 @@ final class AudioRecordingTests: XCTestCase {
 
     func test_defaultSDKAudioRecorder_configure_updatesSettings() {
         let recorder = DefaultSDKAudioRecorder()
-        let customSettings = AudioRecordingSettings(maxDuration: 15.0, minimumDuration: 2.0)
+        let customSettings = AudioRecordingSettings(minimumDuration: 2.0)
         recorder.configure(with: customSettings)
 
-        XCTAssertEqual(recorder.settings.maxDuration, 15.0)
         XCTAssertEqual(recorder.settings.minimumDuration, 2.0)
     }
 
@@ -140,7 +137,7 @@ final class AudioRecordingTests: XCTestCase {
     }
 
     func test_audioRecordingSettings_customInit_defaultsCodecToAAC() {
-        let settings = AudioRecordingSettings(maxDuration: nil, minimumDuration: 1.0)
+        let settings = AudioRecordingSettings(minimumDuration: 1.0)
         XCTAssertEqual(settings.codec, .aac)
     }
 

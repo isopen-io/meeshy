@@ -11,6 +11,14 @@ final class MeeshyVideoPlayerControlSetTests: XCTestCase {
         XCTAssertTrue(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.expand))
     }
 
+    func test_inlineDefault_includesPip() {
+        XCTAssertTrue(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.pip))
+    }
+
+    func test_inlineDefault_includesAirplay() {
+        XCTAssertTrue(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.airplay))
+    }
+
     func test_fullscreenDefault_includesNewFullscreenControls() {
         let fs = MeeshyVideoPlayer.ControlSet.fullscreenDefault
         XCTAssertTrue(fs.contains(.mute))

@@ -11,6 +11,8 @@
     <string name="chat_record_voice">Gravar mensagem de voz</string>
     <string name="chat_effects_open">Efeitos da mensagem</string>
     <string name="chat_attach_file">Anexar arquivo</string>
+    <string name="chat_composer_read_only">Você não pode enviar mensagens nesta conversa</string>
+    <string name="chat_slow_mode_wait">Modo lento · aguarde %1$ds</string>
     <string name="chat_effects_title">Efeitos da mensagem</string>
     <string name="chat_effects_done">Concluído</string>
     <string name="chat_effects_section_behavior">Comportamento</string>
@@ -78,6 +80,8 @@
     <string name="chat_cancel_edit">Cancelar edição</string>
     <string name="chat_react_with">Reagir com %1$s</string>
     <string name="chat_message_actions">Ações da mensagem</string>
+    <string name="chat_unread_separator">Mensagens não lidas</string>
+    <string name="chat_encryption_notice">As mensagens desta conversa são criptografadas de ponta a ponta. Ninguém, nem mesmo o Meeshy, pode lê-las.</string>
     <string name="chat_date_today">Hoje</string>
     <string name="chat_date_yesterday">Ontem</string>
     <string name="chat_date_day_before_yesterday">Anteontem</string>
@@ -139,4 +143,20 @@
     <string name="report_reason_hate_speech">Discurso de ódio</string>
     <string name="report_reason_impersonation">Falsidade ideológica</string>
     <string name="report_reason_other">Outro</string>
+    <!-- Conversation settings (admin) -->
+    <string name="conversation_settings_title">Configurações da conversa</string>
+    <string name="conversation_settings_saved">Configurações salvas</string>
+    <string name="conversation_settings_write_role">Quem pode enviar mensagens</string>
+    <string name="conversation_settings_announcement">Modo anúncio</string>
+    <string name="conversation_settings_slow_mode">Modo lento</string>
+    <string name="conversation_settings_auto_translate">Tradução automática</string>
+    <string name="conversation_settings_error">Não foi possível salvar. Tente novamente.</string>
+    <string name="conversation_settings_save">Salvar</string>
+    <string name="conversation_settings_role_creator">Somente o criador</string>
+    <string name="conversation_settings_role_admin">Administradores e acima</string>
+    <string name="conversation_settings_role_moderator">Moderadores e acima</string>
+    <string name="conversation_settings_role_member">Todos</string>
+    <string name="conversation_settings_slow_mode_off">Desativado</string>
+    <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
+    <string name="chat_create_share_link">Criar link de partilha</string>
 </resources>

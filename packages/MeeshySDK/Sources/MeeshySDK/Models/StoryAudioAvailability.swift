@@ -54,6 +54,24 @@ public enum StoryAudioAvailability {
         (effects?.mediaObjects ?? []).filter { $0.kind == .video && $0.volume > 0 }
     }
 
+    /// Enregistre le résultat d'un probe de piste audio.
+    ///
+    /// `probedTrackCount == nil` signifie **probe impossible** (URL pas encore
+    /// résolue, asset injoignable) — surtout pas « vidéo muette ». La table
+    /// reste alors inchangée pour que le probe soit retenté : les appelants
+    /// sautent toute clé déjà présente, si bien qu'un `false` écrit sur un
+    /// échec transitoire condamnait le bouton son pour toute la session, y
+    /// compris à la réouverture de la story (bug 2026-07-25, vidéo AAC de 9 Mo
+    /// dont le premier probe n'aboutissait pas).
+    public static func merging(_ table: [String: Bool],
+                               id: String,
+                               probedTrackCount: Int?) -> [String: Bool] {
+        guard let probedTrackCount else { return table }
+        var next = table
+        next[id] = probedTrackCount > 0
+        return next
+    }
+
     /// Single source of truth for whether a slide **carries** a background
     /// audio track — used by the header's music-note indicator, which signals
     /// PRESENCE (not playback state, not mute state: directive user
@@ -81,6 +99,15 @@ public enum StoryAudioAvailability {
                                                 backgroundAudio: StoryBackgroundAudioEntry?) -> Bool {
         if backgroundAudio != nil { return true }
         guard let effects else { return false }
-        return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
+        if effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0 {
+            return true
+        }
+        // Piste enregistrée/importée posée en FOND via l'éditeur timeline
+        // (`isBackground`) : un fond audio au même titre qu'une piste de
+        // bibliothèque. Les pistes foreground gardent leur chip dédié dans le
+        // reader et ne déclenchent pas cet indicateur.
+        return effects.audioPlayerObjects?.contains {
+            $0.isBackground == true && $0.volume > 0
+        } ?? false
     }
 }

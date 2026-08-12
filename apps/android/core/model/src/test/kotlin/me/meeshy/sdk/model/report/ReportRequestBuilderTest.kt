@@ -108,4 +108,16 @@ class ReportRequestBuilderTest {
         val padded = "   " + "c".repeat(ReportRequestBuilder.MAX_DETAILS_LENGTH + 10) + "   "
         assertThat(ReportRequestBuilder.sanitizeDetails(padded)).hasLength(ReportRequestBuilder.MAX_DETAILS_LENGTH)
     }
+
+    // Le gateway accepte 'post' et 'story' dans le meme schema que 'user'/'message' :
+    // les builders portent le type wire exact, avec les memes gardes d'inertie.
+    @Test
+    fun `forPost and forStory carry their wire types and share the blank-id guard`() {
+        assertThat(ReportRequestBuilder.forPost("p1", ReportReason.SPAM, null)!!.reportedType)
+            .isEqualTo("post")
+        assertThat(ReportRequestBuilder.forStory("s1", ReportReason.SPAM, null)!!.reportedType)
+            .isEqualTo("story")
+        assertThat(ReportRequestBuilder.forPost("   ", ReportReason.SPAM, null)).isNull()
+        assertThat(ReportRequestBuilder.forStory("", ReportReason.SPAM, null)).isNull()
+    }
 }

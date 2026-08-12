@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 const logger = enhancedLogger.child({ module: 'CleanupExpiredTokens' });
 
@@ -101,11 +102,13 @@ export class CleanupExpiredTokens {
       revokedTokens
     ] = await Promise.all([
       this.prisma.passwordResetToken.count(),
+      // `usedAt: null` rendait toujours 0 : la colonne est ABSENTE du document
+      // d'un jeton vierge, pas nulle. Voir `utils/prisma-unset.ts`.
       this.prisma.passwordResetToken.count({
         where: {
           expiresAt: { gt: now },
-          usedAt: null,
-          isRevoked: false
+          isRevoked: false,
+          ...unsetOrNull('usedAt')
         }
       }),
       this.prisma.passwordResetToken.count({

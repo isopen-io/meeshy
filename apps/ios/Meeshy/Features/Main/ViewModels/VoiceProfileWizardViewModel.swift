@@ -36,22 +36,44 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         }
     }
 
+    /// Étape 1 → 2 : après acceptation des conditions, on passe à la saisie de la
+    /// date de naissance (l'ordre de l'enum est consent → ageVerification →
+    /// recording). Le consentement n'est envoyé qu'APRÈS la vérification d'âge.
+    func proceedToAgeVerification() {
+        error = nil
+        currentStep = .ageVerification
+    }
+
+    /// Étape 2 → 3 : envoie le consentement AVEC la date de naissance saisie
+    /// (YYYY-MM-DD) pour que le gateway porte la vérification d'âge (mineurs),
+    /// puis passe à l'enregistrement. Appelé depuis le bouton « Confirmer » de
+    /// l'étape de vérification d'âge.
     func grantConsent() async {
         isLoading = true
         defer { isLoading = false }
         error = nil
 
         do {
-            _ = try await service.grantConsent(voiceCloningConsent: false, birthDate: nil)
+            _ = try await service.grantConsent(
+                voiceCloningConsent: false,
+                birthDate: Self.formatBirthDate(birthDate)
+            )
+            ageVerified = true
             currentStep = .recording
         } catch {
-            self.error = "Erreur lors de l'enregistrement du consentement."
+            self.error = String(localized: "voice.profile.wizard.error.consent", defaultValue: "Erreur lors de l'enregistrement du consentement.", bundle: .main)
         }
     }
 
-    func confirmAgeVerification() {
-        ageVerified = true
-        currentStep = .consent
+    /// Formate une date en `YYYY-MM-DD` (calendrier grégorien, UTC, POSIX) —
+    /// le format attendu par le gateway pour `VoiceConsentRequest.birthDate`.
+    static func formatBirthDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     func uploadSamples(_ audioDataList: [Data]) async {
@@ -74,7 +96,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
             profile = fetchedProfile
             currentStep = .complete
         } catch {
-            self.error = "Erreur lors de l'envoi des echantillons vocaux."
+            self.error = String(localized: "voice.profile.wizard.error.uploadSamples", defaultValue: "Erreur lors de l'envoi des échantillons vocaux.", bundle: .main)
             currentStep = .recording
         }
 

@@ -152,7 +152,7 @@ final class StateSyncHostModel: ObservableObject {
 }
 
 /// Wraps `ClipInspector` so the test can mutate the `clip` parameter through
-/// the SwiftUI lifecycle (mirrors how `QuickTimelineView` / `ProTimelineView`
+/// the SwiftUI lifecycle (mirrors how `StoryTimelineView` / `ProTimelineView`
 /// pass `vm.selectedClipSnapshot` down). The probe view sibling reports the
 /// inspector's current `_stateSnapshot` after each render via `.onAppear` and
 /// `.onChange(of: model.clip)` — both points where the `@State` is settled.

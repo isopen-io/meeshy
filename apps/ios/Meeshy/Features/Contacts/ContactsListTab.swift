@@ -66,6 +66,7 @@ struct ContactsListTab: View {
                 )
         }
         .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre: %@%@", bundle: .main), filter.rawValue, countSuffix))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     // MARK: - Content
@@ -108,6 +109,7 @@ struct ContactsListTab: View {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main), text: Binding(
                 get: { viewModel.searchQuery },
@@ -126,6 +128,7 @@ struct ContactsListTab: View {
                         .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -142,6 +145,11 @@ struct ContactsListTab: View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
         let isOnline = user.isOnline ?? false
+        let presence = PresenceManager.shared.resolvedState(
+            userId: user.id,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt
+        )
 
         return Button {
             router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
@@ -153,7 +161,7 @@ struct ContactsListTab: View {
                     accentColor: color,
                     avatarURL: user.avatar,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
-                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                    presenceState: presence,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -180,7 +188,7 @@ struct ContactsListTab: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
@@ -189,24 +197,31 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(isOnline ? String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main) : String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))")
+        .accessibilityLabel(contactRowAccessibilityLabel(user, isOnline: isOnline))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
+    }
+
+    private func contactRowAccessibilityLabel(_ user: FriendRequestUser, isOnline: Bool) -> String {
+        var parts = [user.name, "@\(user.username)"]
+        if isOnline {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        } else if let lastActive = user.lastActiveAt {
+            parts.append(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
+        } else {
+            parts.append(String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "person.2.slash")
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(viewModel.searchQuery.isEmpty ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main) : String(localized: "contacts.list.no-results", defaultValue: "Aucun resultat", bundle: .main))
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(
+            icon: "person.2.slash",
+            title: viewModel.searchQuery.isEmpty
+                ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main)
+                : String(localized: "contacts.list.no-results", defaultValue: "Aucun resultat", bundle: .main),
+            subtitle: ""
+        )
     }
 }

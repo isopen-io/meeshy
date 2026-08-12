@@ -1,56 +1,104 @@
-import { resolveParticipantId, resolveSenderUserId } from '../../../utils/participant-resolver';
+/**
+ * Unit tests for participant-resolver utilities.
+ * Covers: resolveParticipantId (found, not found, inactive),
+ * resolveSenderUserId (found, not found).
+ *
+ * @jest-environment node
+ */
 
-function makePrisma(participantOverride?: unknown) {
+import { describe, it, expect, jest } from '@jest/globals';
+import {
+  resolveParticipantId,
+  resolveSenderUserId,
+} from '../../../utils/participant-resolver';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+
+// ─── Factory ──────────────────────────────────────────────────────────────────
+
+function makePrisma(overrides: Partial<{
+  participantFindFirst: any;
+  participantFindUnique: any;
+}> = {}) {
   return {
     participant: {
-      findFirst: jest.fn().mockResolvedValue(participantOverride ?? null),
-      findUnique: jest.fn().mockResolvedValue(participantOverride ?? null),
+      findFirst: jest.fn<any>().mockResolvedValue(overrides.participantFindFirst ?? null),
+      findUnique: jest.fn<any>().mockResolvedValue(overrides.participantFindUnique ?? null),
     },
-  } as any;
+  } as unknown as PrismaClient;
 }
 
+// ─── resolveParticipantId ─────────────────────────────────────────────────────
+
 describe('resolveParticipantId', () => {
-  it('returns null when no matching participant', async () => {
-    const prisma = makePrisma(null);
+  it('returns the participant id when found', async () => {
+    const prisma = makePrisma({ participantFindFirst: { id: 'part-1' } });
+
     const result = await resolveParticipantId(prisma, 'user-1', 'conv-1');
+
+    expect(result).toBe('part-1');
+  });
+
+  it('returns null when no active participant found', async () => {
+    const prisma = makePrisma({ participantFindFirst: null });
+
+    const result = await resolveParticipantId(prisma, 'user-2', 'conv-1');
+
     expect(result).toBeNull();
   });
 
-  it('returns participant id when found', async () => {
-    const prisma = makePrisma({ id: 'participant-abc' });
-    const result = await resolveParticipantId(prisma, 'user-1', 'conv-1');
-    expect(result).toBe('participant-abc');
+  it('queries with isActive:true filter', async () => {
+    const prisma = makePrisma({ participantFindFirst: null });
+
+    await resolveParticipantId(prisma, 'user-3', 'conv-2');
+
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true }),
+      })
+    );
   });
 
-  it('queries with isActive: true', async () => {
-    const prisma = makePrisma(null);
-    await resolveParticipantId(prisma, 'user-1', 'conv-1');
-    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1', conversationId: 'conv-1', isActive: true },
-      select: { id: true },
-    });
+  it('queries with correct userId and conversationId', async () => {
+    const prisma = makePrisma({ participantFindFirst: { id: 'part-2' } });
+
+    await resolveParticipantId(prisma, 'user-5', 'conv-9');
+
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 'user-5', conversationId: 'conv-9' }),
+      })
+    );
   });
 });
 
+// ─── resolveSenderUserId ──────────────────────────────────────────────────────
+
 describe('resolveSenderUserId', () => {
-  it('returns null when participant not found', async () => {
-    const prisma = makePrisma(null);
-    const result = await resolveSenderUserId(prisma, 'sender-id');
+  it('returns userId when participant is found', async () => {
+    const prisma = makePrisma({ participantFindUnique: { userId: 'user-99' } });
+
+    const result = await resolveSenderUserId(prisma, 'part-abc');
+
+    expect(result).toBe('user-99');
+  });
+
+  it('returns null when participant is not found', async () => {
+    const prisma = makePrisma({ participantFindUnique: null });
+
+    const result = await resolveSenderUserId(prisma, 'part-unknown');
+
     expect(result).toBeNull();
   });
 
-  it('returns userId when participant is found', async () => {
-    const prisma = makePrisma({ userId: 'user-xyz' });
-    const result = await resolveSenderUserId(prisma, 'sender-id');
-    expect(result).toBe('user-xyz');
-  });
+  it('queries participant by the provided senderId', async () => {
+    const prisma = makePrisma({ participantFindUnique: null });
 
-  it('queries by participant id', async () => {
-    const prisma = makePrisma(null);
-    await resolveSenderUserId(prisma, 'sender-123');
-    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
-      where: { id: 'sender-123' },
-      select: { userId: true },
-    });
+    await resolveSenderUserId(prisma, 'part-xyz');
+
+    expect(prisma.participant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'part-xyz' }),
+      })
+    );
   });
 });

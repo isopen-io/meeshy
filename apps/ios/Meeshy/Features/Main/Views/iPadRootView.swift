@@ -44,13 +44,18 @@ struct iPadRootView: View {
     // CallManager n'est PLUS observé ici : la présentation d'appel passe par
     // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
     // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
-    @ObservedObject var networkMonitor = NetworkMonitor.shared
     @ObservedObject var notificationManager = NotificationToastManager.shared
+    /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
+    /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
+    /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
+    @ObservedObject var reelsPresenter = ReelsPresenter.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) var systemColorScheme
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
+    /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
+    @State private var republishStatusEntry: StatusEntry?
     @State var showStoryViewerFromConv = false
     @State var selectedStoryUserIdFromConv: String?
     @State var showSharePicker = false
@@ -91,6 +96,30 @@ struct iPadRootView: View {
                 }
 
                 overlays
+            }
+            // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPad :
+            // couvre les DEUX colonnes dans un seul repère. Les colonnes sont
+            // des vues SŒURS — un hôte par colonne rendait DEUX bulles,
+            // chacune convertissant l'ancre globale dans son propre repère
+            // (bug 2026-07-30). Les sheets gardent leur propre pose.
+            .withStatusBubble()
+            // Popover contextuel : fermé dès que le panneau droit navigue.
+            .adaptiveOnChange(of: rightPanelRoute) { _, _ in
+                if StatusBubbleController.shared.currentEntry != nil {
+                    StatusBubbleController.shared.dismiss()
+                }
+            }
+            .sheet(item: $republishStatusEntry) { entry in
+                StatusComposerView(
+                    viewModel: statusViewModel,
+                    initialEmoji: entry.moodEmoji,
+                    initialText: entry.content,
+                    viaUsername: entry.username,
+                    repostOfId: entry.id,
+                    repostAudioUrl: entry.audioUrl
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .environmentObject(router)
             .environmentObject(storyViewModel)
@@ -135,6 +164,10 @@ struct iPadRootView: View {
                 // personne n'est sink'é sur `socialSocket.storyCreated` → la
                 // story n'arrive jamais dans `storyGroups`.
                 storyViewModel.subscribeToSocketEvents()
+                // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+                // écrivain disque des posts, commentaires et réactions.
+                // `arm()` est idempotent — jamais désarmé (miroir de RootView).
+                DependencyContainer.shared.feedSocketHandler.arm()
                 await ConversationSyncEngine.shared.startSocketRelay()
 
                 Task.detached(priority: .background) {
@@ -143,6 +176,13 @@ struct iPadRootView: View {
                 }
 
                 conversationViewModel.observeSync()
+
+                #if DEBUG
+                // Pré-résout à pile courte les métadonnées du 1er rendu de
+                // ConversationView (classe de crashs stack-overflow du décodeur
+                // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
+                ConversationFirstRenderWarmup.run()
+                #endif
 
                 // Réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
                 // le composer (voir RootView pour l'équivalent iPhone).
@@ -154,6 +194,26 @@ struct iPadRootView: View {
                         conversationListViewModel: conversationViewModel
                     )
                 }
+
+                // Republication d'un mood depuis la bulle (hôte racine) —
+                // même câblage que RootView.
+                StatusBubbleController.shared.onRepublish = { entry in
+                    republishStatusEntry = entry
+                }
+
+                // Exécuteur de la file de publication des stories. `setExecutor`
+                // enregistre AUSSI le `publishHandler` de la file, dans le même
+                // appel : sans lui, `StoryPublishQueue.processNext` journalise
+                // « No publish handler set, skipping process » et rend la main à
+                // chaque passage. Une story publiée depuis un iPad restait donc
+                // en file INDÉFINIMENT, sans jamais partir.
+                //
+                // Ce câblage n'existait que dans `RootView` (iPhone). Il doit
+                // vivre dans les DEUX racines, et non dans `MeeshyApp` : le
+                // handler doit être posé de façon atomique avec l'exécuteur,
+                // sinon le drain se déclenche sur un exécutif nul et brûle le
+                // budget de reprise (cf. StoryPublishService.setExecutor).
+                StoryPublishService.shared.setExecutor(storyViewModel)
 
                 await storyViewModel.loadStories()
                 await statusViewModel.loadStatuses()
@@ -173,6 +233,17 @@ struct iPadRootView: View {
                 guard let payload, AuthManager.shared.isAuthenticated else { return }
                 handlePushNotificationTap(payload)
                 PushNotificationManager.shared.clearPendingNotification()
+            }
+            // Navigation par id demandée par une vue sans accès aux helpers de
+            // résolution (StarredMessagesView) — highlight scopé déjà parké.
+            .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
+                guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
+                navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
+            }
+            // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
+            // ramène vers la conversation et le message audio en cours de lecture.
+            .nowPlayingReturnNavigation(router: router) { conversationId in
+                conversationViewModel.conversations.contains { $0.id == conversationId }
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)
@@ -245,7 +316,38 @@ struct iPadRootView: View {
             .navigationBarHidden(true)
             .onAppear { router.pendingReplyContext = nil }
         } else if let route = rightPanelRoute {
-            rightPanelContent(for: route)
+            // `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink`
+            // interne à un écran du panneau est inerte (lignes de
+            // TrackingLinksView / ShareLinksView / CommunityLinksView vers leur
+            // vue de détail — mortes sur iPad jusqu'au 2026-07-29). `.id(route)`
+            // vide la pile locale quand on change de route, sinon la vue de
+            // détail poussée survivrait au changement d'écran racine.
+            NavigationStack {
+                rightPanelContent(for: route)
+                    // Filet de sécurité pour les écrans qui délèguent leur
+                    // chrome à la barre système (Messages favoris, membres
+                    // d'une communauté…) : racine du panneau, ils n'ont ni
+                    // bouton retour propre ni geste de retour, donc aucune
+                    // sortie. Les écrans à en-tête maison posent
+                    // `.navigationBarHidden(true)` et ne voient jamais ce
+                    // bouton — pas de doublon.
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                HapticFeedback.light()
+                                rightPanelRoute = nil
+                            } label: {
+                                Image(systemName: "chevron.backward")
+                            }
+                            .accessibilityLabel(String(localized: "root.ipad.close_panel", defaultValue: "Fermer", bundle: .main))
+                        }
+                    }
+            }
+            .id(route)
+            // Rend `dismiss()` opérant pour les écrans racine du panneau : ils
+            // ne sont ni poussés ni présentés, leur bouton retour n'avait donc
+            // aucun effet. Cf. `PanelBackAction`.
+            .environment(\.meeshyPanelDismiss, { rightPanelRoute = nil })
         } else {
             iPadConversationList(showFeedButton: false)
         }
@@ -261,8 +363,14 @@ struct iPadRootView: View {
             feedIsVisible: $feedIsVisible,
             onSelect: { conversation in openConversation(conversation) },
             onStoryViewRequest: { userId, _ in
-                selectedStoryUserIdFromConv = userId
-                showStoryViewerFromConv = true
+                // Chemin coordinator (`fullScreenCover(item:)`) : la requête
+                // porte son uid, contrairement au couple @State legacy
+                // (`selectedStoryUserIdFromConv` + `isPresented`) dont la
+                // course de commit présentait le viewer avec un uid vide —
+                // l'écran « Story introuvable » du tray de la colonne conv.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+                )
             },
             onNewConversation: { showNewConversation = true },
             iPadNotificationCount: notificationManager.unreadCount,

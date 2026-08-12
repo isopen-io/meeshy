@@ -35,7 +35,7 @@ struct PeopleDiscoveryView: View {
     var body: some View {
         VStack(spacing: 0) {
             CollapsibleHeader(
-                title: String(localized: "discovery.title", defaultValue: "Decouvrir", bundle: .main),
+                title: String(localized: "discovery.title", defaultValue: "Découvrir", bundle: .main),
                 scrollOffset: scrollOffset,
                 onBack: { router.pop() },
                 titleColor: theme.textPrimary,
@@ -85,7 +85,7 @@ struct PeopleDiscoveryView: View {
                     Image(systemName: tab.icon)
                         .font(.footnote.weight(.medium))
 
-                    Text(tab.rawValue)
+                    Text(tabTitle(tab))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
@@ -107,8 +107,24 @@ struct PeopleDiscoveryView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel(tab.rawValue)
+        .accessibilityLabel(tabTitle(tab))
         .accessibilityValue(badge > 0 ? "\(badge)" : "")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// Localized display name for a discovery sub-tab. The raw enum value stays
+    /// the stable French key used for `.tag`/Hashable/deep-link routing
+    /// (`Route.peopleDiscovery(DiscoveryTab)`); VoiceOver and the visible label
+    /// read this localized string instead. Mirrors `ContactsHubView.tabTitle`.
+    private func tabTitle(_ tab: DiscoveryTab) -> String {
+        switch tab {
+        case .discover:
+            return String(localized: "discovery.tab.discover", defaultValue: "Découvrir", bundle: .main)
+        case .requests:
+            return String(localized: "discovery.tab.requests", defaultValue: "Demandes", bundle: .main)
+        case .blocked:
+            return String(localized: "discovery.tab.blocked", defaultValue: "Bloqués", bundle: .main)
+        }
     }
 
     private func subBadge(for tab: DiscoveryTab) -> Int {

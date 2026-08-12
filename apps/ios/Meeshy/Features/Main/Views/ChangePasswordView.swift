@@ -57,19 +57,21 @@ struct ChangePasswordView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(.subheadline.weight(.semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.subheadline.weight(.medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
             Text(String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -189,6 +191,10 @@ struct ChangePasswordView: View {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
                 .font(.subheadline)
                 .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
+                // Statut porté par la couleur (vert=rempli) + la forme du glyphe. VoiceOver
+                // ne doit pas relire l'icône : l'état passe par le trait `.isSelected` de la
+                // rangée ci-dessous (« ne jamais reposer sur la couleur seule »).
+                .accessibilityHidden(true)
 
             Text(text)
                 .font(.footnote.weight(.medium))
@@ -196,6 +202,10 @@ struct ChangePasswordView: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        // Trait système (localisé « sélectionné » par iOS) → l'état rempli/non-rempli est
+        // annoncé à VoiceOver sans dépendre de la couleur ni introduire de clé i18n.
+        .accessibilityAddTraits(met ? .isSelected : [])
     }
 
     // MARK: - Save Button
@@ -243,14 +253,19 @@ struct ChangePasswordView: View {
 
     private var successOverlay: some View {
         VStack(spacing: 12) {
+            // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
+            // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
+        // Confirmation transitoire (auto-dismiss 1,5 s) → un seul élément VoiceOver lisible.
+        .accessibilityElement(children: .combine)
         .padding(MeeshySpacing.xxxl)
         .background(
             RoundedRectangle(cornerRadius: 20)
@@ -276,6 +291,9 @@ struct ChangePasswordView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        // Parité DeleteAccountView : titre de section navigable au rotor VoiceOver.
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func secureField(
@@ -295,17 +313,34 @@ struct ChangePasswordView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                // Glyphe décoratif : le sens du champ est porté par son
+                // accessibilityLabel ci-dessous → jamais relu par VoiceOver.
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
+                    // Libellé visuel doublon : masqué de VoiceOver, son rôle
+                    // est réassigné au SecureField via accessibilityLabel
+                    // (doctrine 186i « stop placeholder-as-name »).
+                    .accessibilityHidden(true)
 
                 SecureField(placeholder, text: text)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
-                    .textContentType(.password)
+                    // Le champ « actuel » est `.password` (AutoFill le
+                    // pré-remplit depuis le trousseau) ; les deux champs de
+                    // saisie du nouveau mot de passe sont `.newPassword`, ce qui
+                    // déclenche la proposition de mot de passe fort ET la mise à
+                    // jour de l'entrée existante au trousseau. Les trois étaient
+                    // `.password`, donc iOS ne mettait jamais l'entrée à jour.
+                    .textContentType(field == .current ? .password : .newPassword)
                     .focused($focusedField, equals: field)
+                    // VoiceOver annonce le rôle du champ ("Nouveau mot de
+                    // passe, champ de texte sécurisé") au lieu du seul
+                    // placeholder qui disparaît dès la première frappe.
+                    .accessibilityLabel(title)
             }
 
             Spacer()
@@ -336,18 +371,14 @@ struct ChangePasswordView: View {
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 dismiss()
-            } catch let error as APIError {
-                HapticFeedback.error()
-                switch error {
-                case .serverError(400, _):
-                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
-                default:
-                    errorMessage = error.errorDescription
-                }
             } catch let error as MeeshyError {
                 HapticFeedback.error()
-                if case .server(_, let msg) = error {
-                    errorMessage = msg
+                // Le stack réseau ne lève que MeeshyError (pas APIError) : un 400
+                // = « mot de passe actuel incorrect » → message localisé dédié.
+                if case .server(let statusCode, let msg) = error {
+                    errorMessage = statusCode == 400
+                        ? String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
+                        : msg
                 } else {
                     errorMessage = error.localizedDescription
                 }

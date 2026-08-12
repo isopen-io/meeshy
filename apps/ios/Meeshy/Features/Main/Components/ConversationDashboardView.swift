@@ -29,9 +29,25 @@ struct ConversationDashboardView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     enum ChartPeriod: String, CaseIterable {
-        case week = "7j"
-        case month = "30j"
-        case all = "Tout"
+        case week
+        case month
+        case all
+
+        var shortLabel: String {
+            switch self {
+            case .week: return String(localized: "dashboard.period.week.short", defaultValue: "7j", bundle: .main)
+            case .month: return String(localized: "dashboard.period.month.short", defaultValue: "30j", bundle: .main)
+            case .all: return String(localized: "dashboard.period.all.short", defaultValue: "Tout", bundle: .main)
+            }
+        }
+
+        var accessibilityLabel: String {
+            switch self {
+            case .week: return String(localized: "dashboard.period.week", defaultValue: "7 derniers jours", bundle: .main)
+            case .month: return String(localized: "dashboard.period.month", defaultValue: "30 derniers jours", bundle: .main)
+            case .all: return String(localized: "dashboard.period.all", defaultValue: "Depuis le début", bundle: .main)
+            }
+        }
     }
 
     // MARK: - Body
@@ -105,6 +121,13 @@ struct ConversationDashboardView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
+                    // VoiceOver : la jauge d'arc + son libellé « Santé » forment un seul
+                    // score. Sans regroupement, VoiceOver lisait « 78 » nu (dans l'arc) puis
+                    // « Santé » séparément. Un élément unique « Santé : 78 » (clé déjà
+                    // localisée, valeur brute — 0 clé i18n neuve, cohérent avec StatRing).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
+                    .accessibilityValue("\(health)")
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
                         HStack(spacing: 10) {
@@ -386,7 +409,7 @@ struct ConversationDashboardView: View {
                     }
                     HapticFeedback.light()
                 } label: {
-                    Text(period.rawValue)
+                    Text(period.shortLabel)
                         .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .padding(.horizontal, 10)
@@ -395,6 +418,11 @@ struct ConversationDashboardView: View {
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
                 }
+                .accessibilityLabel(period.accessibilityLabel)
+                // Selection is otherwise signalled by fill + weight only — the
+                // `.isSelected` trait lets VoiceOver announce the active period
+                // (mirror of CallsTab.chip / GlobalSearchView.tabButton doctrine).
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
         .padding(3)
@@ -1180,6 +1208,13 @@ private struct StatRing: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
+        // VoiceOver : la bague est une donnée, pas deux libellés séparés. Sans ce
+        // regroupement, VoiceOver lit « 1,2k » (valeur abrégée) puis « MESSAGES »
+        // (capitales épelées) en deux arrêts. On expose un seul élément « Messages : 1234 »
+        // — la valeur brute non abrégée, le libellé déjà localisé (pas de capitales).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(value)")
     }
 }
 

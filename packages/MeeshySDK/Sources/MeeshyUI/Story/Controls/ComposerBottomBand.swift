@@ -10,6 +10,7 @@ struct ComposerBottomBand: View {
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    @Binding var showSoundLibrary: Bool
 
     let onTapTile: (StoryToolMode) -> Void
     let onBackFromToolPanel: () -> Void
@@ -19,6 +20,7 @@ struct ComposerBottomBand: View {
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
     var onOpenStickerPicker: (() -> Void)? = nil
+    var onOpenLocationPicker: (() -> Void)? = nil
 
     /// Non-nil (mode dessin) → le grabber devient un handle de RESIZE : drag vertical
     /// ajuste cette hauteur de panneau (clampée), pilotée via `panelHeight`. Le canvas
@@ -94,12 +96,15 @@ struct ComposerBottomBand: View {
                         fgMediaItem: $fgMediaItem,
                         showAudioDocumentPicker: $showAudioDocumentPicker,
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                        showSoundLibrary: $showSoundLibrary,
                         onBack: onBackFromToolPanel,
                         // Délègue à `onTapTile` qui est l'unique chemin de
                         // commutation d'éditeur (cf. `ComposerControlsLayer`) :
-                        //   .timeline → `viewModel.isTimelineVisible = true`
-                        //   sinon     → `bandStateMachine.tapTile(tool)` +
-                        //               `viewModel.selectTool(tool)`
+                        //   .timeline → `bandStateMachine.openTimeline(isTimelineVisible:)`
+                        //               (intention UNIQUE d'ouverture, S4)
+                        //   sinon     → `viewModel.isTimelineVisible = false` +
+                        //               `bandStateMachine.tapTile(tool)`
+                        // puis, dans les deux cas, `viewModel.selectTool(tool)`.
                         // Sans ce relai, le chip ne changerait QUE
                         // `viewModel.activeTool` — le BandStateMachine
                         // resterait sur `.toolPanel(.media)` et le panel
@@ -108,6 +113,7 @@ struct ComposerBottomBand: View {
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onOpenStickerPicker: onOpenStickerPicker,
+                        onOpenLocationPicker: onOpenLocationPicker,
                         onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline,
                         panelHeightOverride: resizableHeight?.wrappedValue
@@ -147,6 +153,11 @@ struct ComposerBottomBand: View {
         .padding(.bottom, 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
         .background(bandBackground)
+        // `.compositingGroup()` aplatit le band en UNE silhouette avant
+        // l'ombre : sans lui, `.shadow` se propage à CHAQUE sous-vue opaque —
+        // le bloc timeline pleine largeur projetait sa propre ligne d'ombre
+        // au-dessus du transport (capture user 2026-07-20).
+        .compositingGroup()
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
     }
@@ -204,7 +215,14 @@ struct ComposerBottomBand: View {
             .padding(.top, 10)
             .padding(.bottom, 6)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
-            .contentShape(Rectangle())
+            // 5 + 10 + 6 = 21 pt de haut, sous le minimum HIG (même technique que
+            // `fabRestoreHandle`/`canvasZoomResetButton`/`CanvasLayerIndicator` :
+            // `composerHitTarget()` élargit la boîte de layout à 44 pt SANS
+            // toucher au rendu de la poignée elle-même. La band gagne 23 pt sur
+            // CHAQUE panneau (assumé, comme les 2 pt de la topbar) — le contenu du
+            // panel reste plafonné par `bandMaxHeight`/`maxHeight`, indépendant de
+            // la hauteur du grabber.
+            .composerHitTarget()
             .accessibilityLabel(String(
                 localized: "story.composer.grabber",
                 defaultValue: "Poignée de la barre d'outils", bundle: .module

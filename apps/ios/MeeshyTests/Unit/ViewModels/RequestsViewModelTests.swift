@@ -403,6 +403,22 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(cacheValue?.map(\.id), ["r1"])
     }
 
+    /// cache-04 — offline au-delà du TTL : la dernière donnée persistée est
+    /// peinte au lieu d'un écran vide (récupération .expired du
+    /// CacheFirstLoader, verrou d'intégration bout-en-bout).
+    func test_loadReceived_expiredCacheAndNetworkFailure_paintsPersistedRequests() async throws {
+        let (sut, mock) = makeSUT()
+        let request = FriendRequestFixture.make(id: "req-expired", status: "pending")
+        try await CacheCoordinator.shared.friendRequests.save([request], for: "requests:received")
+        await CacheCoordinator.shared.friendRequests.debugRewindFetchTimestamp(by: 25 * 3600, for: "requests:received")
+        mock.receivedRequestsResult = .failure(MeeshyError.network(.noConnection))
+
+        await sut.loadReceived()
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["req-expired"],
+                       "après TTL + réseau KO, la donnée disque doit être servie — jamais un écran vide")
+    }
+
     /// `loadSent` follows the same cache-first pipeline; pending-only filter
     /// is applied at the network layer so the cache only ever stores pending
     /// items.

@@ -282,7 +282,7 @@ final class AttachmentPreparationService {
         do {
             compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context)
             if deleteSource, compressedURL != sourceURL {
-                try? FileManager.default.removeItem(at: sourceURL)
+                FileManager.default.removeItemLogging(at: sourceURL, context: "post-compression source cleanup", logger: log)
             }
         } catch {
             log.error("video compression failed: \(error.localizedDescription) — falling back to source")
@@ -296,6 +296,7 @@ final class AttachmentPreparationService {
         prep.stage = .hashing
         let thumbHash = thumb?.toThumbHash()
         let thumbnailData = thumb?.jpegData(compressionQuality: 0.8)
+        let durationMs = await Self.videoDurationMs(url: compressedURL)
 
         let fileSize = Self.fileSize(at: compressedURL)
         let attachment = MessageAttachment(
@@ -306,6 +307,7 @@ final class AttachmentPreparationService {
             fileSize: fileSize,
             fileUrl: compressedURL.absoluteString,
             thumbHash: thumbHash,
+            duration: durationMs,
             thumbnailColor: prep.accentColor
         )
 
@@ -381,6 +383,23 @@ final class AttachmentPreparationService {
         do {
             let cgImage = try await generator.image(at: .zero).image
             return UIImage(cgImage: cgImage)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Feeds `ReelComposition`'s 3-second qualification floor (règle produit
+    /// durée minimale) — a video attachment carried no duration before this,
+    /// so a short clip could never be told apart from a long one at the
+    /// composer level. `nil` on read failure (non-blocking, same posture as
+    /// `generateVideoThumbnail` above): the gateway's own ffprobe-derived
+    /// `PostMedia.duration` remains the authoritative check either way.
+    static func videoDurationMs(url: URL) async -> Int? {
+        let asset = AVURLAsset(url: url)
+        do {
+            let duration = try await asset.load(.duration)
+            guard duration.isValid, !duration.isIndefinite else { return nil }
+            return Int(CMTimeGetSeconds(duration) * 1000)
         } catch {
             return nil
         }

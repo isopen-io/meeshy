@@ -17,56 +17,47 @@ struct MessageLanguageDetailView: View {
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
 
+    /// In-flight language codes for THIS message — owned by
+    /// `ConversationViewModel` (survives this view being torn down when the
+    /// sheet is dismissed), not local `@State`. See `onRequestTextTranslation`.
+    var translatingTextLanguages: Set<String> = []
+    var translatingAudioLanguages: Set<String> = []
+    var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
+    var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
+    var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
     // Translation state
     @State private var translations: [String: String] = [:]
-    @State private var translatingLanguages: Set<String> = []
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
     @State private var translationError: String? = nil
     @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
-    @State private var translatingAudioLanguages: Set<String> = []
 
-    static let supportedLanguages: [(code: String, flag: String, name: String)] = [
-        ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
-        ("en", "\u{1F1EC}\u{1F1E7}", "English"),
-        ("es", "\u{1F1EA}\u{1F1F8}", "Espa\u{00f1}ol"),
-        ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
-        ("ar", "\u{1F1F8}\u{1F1E6}", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}"),
-        ("zh", "\u{1F1E8}\u{1F1F3}", "\u{4E2D}\u{6587}"),
-        ("pt", "\u{1F1F5}\u{1F1F9}", "Portugu\u{00EA}s"),
-        ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
-        ("ja", "\u{1F1EF}\u{1F1F5}", "\u{65E5}\u{672C}\u{8A9E}"),
-        ("ko", "\u{1F1F0}\u{1F1F7}", "\u{D55C}\u{AD6D}\u{C5B4}"),
-        ("ru", "\u{1F1F7}\u{1F1FA}", "\u{0420}\u{0443}\u{0441}\u{0441}\u{043A}\u{0438}\u{0439}"),
-        ("hi", "\u{1F1EE}\u{1F1F3}", "\u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"),
-        ("tr", "\u{1F1F9}\u{1F1F7}", "T\u{00FC}rk\u{00e7}e"),
-        ("nl", "\u{1F1F3}\u{1F1F1}", "Nederlands"),
-        ("pl", "\u{1F1F5}\u{1F1F1}", "Polski"),
-        ("vi", "\u{1F1FB}\u{1F1F3}", "Ti\u{1EBF}ng Vi\u{1EC7}t"),
-        ("th", "\u{1F1F9}\u{1F1ED}", "\u{0E44}\u{0E17}\u{0E22}"),
-        ("sv", "\u{1F1F8}\u{1F1EA}", "Svenska")
-    ]
+    /// Fallback in-flight tracking for callers that don't supply
+    /// `onRequestTextTranslation`/`onRequestAudioTranslation` (currently
+    /// `AudioFullscreenView`'s embedded language sheet, which has no
+    /// `ConversationViewModel` to delegate to — see its own file comment on
+    /// being deliberately decoupled). Preserves this call site's PRE-EXISTING
+    /// behavior unchanged; only callers that wire the closures get the fix
+    /// where the in-flight flag survives the sheet being dismissed/reopened.
+    @State private var localTranslatingLanguages: Set<String> = []
+    @State private var localTranslatingAudioLanguages: Set<String> = []
 
     var body: some View {
         content
             .onAppear { Task { await loadExistingTranslations() } }
+            .onChange(of: textTranslations) { _ in syncTranslationsFromProps() }
+            .onChange(of: translatedAudios) { _ in syncTranslatedAudiosFromProps() }
             .onReceive(
-                MessageSocketManager.shared.translationFailed
+                (translationRequestFailedPublisher ?? Empty().eraseToAnyPublisher())
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingLanguages = []
-            }
-            .onReceive(
-                MessageSocketManager.shared.audioTranslationFailed
-                    .filter { $0.messageId == message.id }
-                    .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingAudioLanguages = []
+            ) { failure in
+                translationError = failure.message
             }
     }
 
@@ -142,10 +133,17 @@ struct MessageLanguageDetailView: View {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.subheadline)
+                            // « X » en cercle Liquid Glass (glyphe nu dans un cercle
+                            // verre) — parité avec les autres boutons de fermeture.
+                            Image(systemName: "xmark")
+                                .font(.caption.weight(.bold))
                                 .foregroundColor(theme.textMuted)
+                                .frame(width: 28, height: 28)
+                                .adaptiveGlass(in: Circle())
+                                .contentShape(Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
                     }
 
                     Text(translated)
@@ -171,7 +169,7 @@ struct MessageLanguageDetailView: View {
                 .frame(height: 0.5)
 
             // Language list
-            ForEach(Self.supportedLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
+            ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
 
@@ -189,10 +187,11 @@ struct MessageLanguageDetailView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: translations.count)
     }
 
-    private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
+    private func languageRow(_ lang: LanguageDisplay, originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
-        let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
+        let isTranslating = translatingTextLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
+            || localTranslatingLanguages.contains(lang.code) || localTranslatingAudioLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
 
         return Button {
@@ -232,11 +231,22 @@ struct MessageLanguageDetailView: View {
                 } else {
                     onSelectAudioLanguage?(nil)
                 }
-            } else {
-                if transcription != nil {
-                    Task { await translateAudioTo(lang.code) }
+            } else if let audioAttachmentId = Self.resolveAudioAttachmentId(
+                cachedTranscriptionAttachmentId: transcription?.attachmentId,
+                attachments: message.attachments
+            ) {
+                translationError = nil
+                if let onRequestAudioTranslation {
+                    onRequestAudioTranslation(lang.code, audioAttachmentId)
                 } else {
-                    Task { await translateTo(lang.code, from: originalLang) }
+                    Task { await translateAudioToLocal(lang.code, attachmentId: audioAttachmentId) }
+                }
+            } else {
+                translationError = nil
+                if let onRequestTextTranslation {
+                    onRequestTextTranslation(lang.code, originalLang)
+                } else {
+                    Task { await translateToLocal(lang.code, from: originalLang) }
                 }
             }
         } label: {
@@ -268,14 +278,20 @@ struct MessageLanguageDetailView: View {
                         .frame(maxWidth: 180, alignment: .trailing)
 
                     Button {
-                        Task { await translateTo(lang.code, from: originalLang) }
+                        translationError = nil
+                        if let onRequestTextTranslation {
+                            onRequestTextTranslation(lang.code, originalLang)
+                        } else {
+                            Task { await translateToLocal(lang.code, from: originalLang) }
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+                    .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
@@ -291,7 +307,7 @@ struct MessageLanguageDetailView: View {
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else {
@@ -313,17 +329,45 @@ struct MessageLanguageDetailView: View {
             )
         }
         .disabled(isTranslating)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    // MARK: - Network Actions
+    // MARK: - Reacting to ViewModel-owned translation state
 
-    private func translateTo(_ targetLang: String, from sourceLang: String) async {
-        // Audio messages have empty `content`; text translation only applies
-        // when there is text. (Audio messages are handled by the audio branch.)
+    /// The actual network request now runs in `ConversationViewModel`
+    /// (`requestTextTranslation`/`requestAudioTranslation`) so it — and the
+    /// in-flight loader — survive this view being torn down when the sheet
+    /// is dismissed. This view only mirrors the result back into its local
+    /// display caches when the VM-owned props change.
+    private func syncTranslationsFromProps() {
+        for t in textTranslations {
+            let isNewlyArrived = translations[t.targetLanguage] == nil
+            translations[t.targetLanguage] = t.translatedContent
+            if isNewlyArrived {
+                withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = t.targetLanguage }
+                onSelectTranslation?(t)
+                HapticFeedback.success()
+            }
+        }
+    }
+
+    private func syncTranslatedAudiosFromProps() {
+        let known = Set(mergedTranslatedAudios.map { $0.targetLanguage.lowercased() })
+        mergedTranslatedAudios = translatedAudios
+        for audio in translatedAudios where !known.contains(audio.targetLanguage.lowercased()) {
+            withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = audio.targetLanguage }
+            onSelectAudioLanguage?(audio.targetLanguage)
+            HapticFeedback.success()
+        }
+    }
+
+    // MARK: - Local fallback (no ConversationViewModel available)
+
+    private func translateToLocal(_ targetLang: String, from sourceLang: String) async {
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        translatingLanguages.insert(targetLang)
+        localTranslatingLanguages.insert(targetLang)
         translationError = nil
-        defer { translatingLanguages.remove(targetLang) }
+        defer { localTranslatingLanguages.remove(targetLang) }
 
         do {
             let response = try await TranslationService.shared.translate(
@@ -346,10 +390,6 @@ struct MessageLanguageDetailView: View {
                 confidenceScore: nil
             )
             onSelectTranslation?(mt)
-            // No socket call: passing `messageId` routes /translate-blocking
-            // into the Case 1 "retranslation" branch, which persists AND
-            // broadcasts via `message:translation`. A second socket request
-            // would double-persist.
             HapticFeedback.success()
         } catch {
             translationError = String(
@@ -360,11 +400,10 @@ struct MessageLanguageDetailView: View {
         }
     }
 
-    private func translateAudioTo(_ targetLang: String) async {
-        guard let attachmentId = transcription?.attachmentId else { return }
-        translatingAudioLanguages.insert(targetLang)
+    private func translateAudioToLocal(_ targetLang: String, attachmentId: String) async {
+        localTranslatingAudioLanguages.insert(targetLang)
         translationError = nil
-        defer { translatingAudioLanguages.remove(targetLang) }
+        defer { localTranslatingAudioLanguages.remove(targetLang) }
         do {
             let response = try await AttachmentService.shared.translate(
                 attachmentId: attachmentId,
@@ -460,7 +499,20 @@ struct MessageLanguageDetailView: View {
         }
     }
 
-    private static func languageName(for code: String) -> String {
-        supportedLanguages.first { $0.code == code }?.name ?? code.uppercased()
+    static func languageName(for code: String) -> String {
+        LanguageDisplay.from(code: code)?.name ?? code.uppercased()
+    }
+
+    /// Résout l'attachment audio/vidéo à traduire pour une demande on-demand :
+    /// préfère l'attachmentId déjà connu via une transcription cachée (source
+    /// fiable, évite une recherche), sinon détecte un attachment timebased
+    /// directement sur le message (fonctionne même si `transcription` n'a
+    /// jamais été hydratée localement).
+    static func resolveAudioAttachmentId(
+        cachedTranscriptionAttachmentId: String?,
+        attachments: [MeeshyMessageAttachment]
+    ) -> String? {
+        cachedTranscriptionAttachmentId
+            ?? attachments.first { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack }?.id
     }
 }

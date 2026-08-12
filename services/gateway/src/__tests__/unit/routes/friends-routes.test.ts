@@ -155,6 +155,8 @@ function makeNotifService() {
     createFriendRequestNotification: jest.fn().mockResolvedValue(undefined),
     createFriendAcceptedNotification: jest.fn().mockResolvedValue(undefined),
     createSystemNotification: jest.fn().mockResolvedValue(undefined),
+    markFriendRequestNotificationsAsRead: jest.fn().mockResolvedValue(0),
+    retractFriendRequestNotifications: jest.fn().mockResolvedValue(0),
     emitFriendRequestCancelled: jest.fn(),
     emitFriendRequestNew: jest.fn(),
     emitFriendRequestAccepted: jest.fn(),
@@ -638,6 +640,63 @@ describe('DELETE /friend-requests/:id', () => {
     expect(res.statusCode).toBe(200);
     await appNoNotif.close();
   });
+
+  // La ligne `FriendRequest` part inconditionnellement — sa notification
+  // « X vous a envoyé une demande d'amitié » n'a donc plus rien où mener, quel
+  // que soit celui des deux qui a appelé. Elle appartient TOUJOURS au receveur :
+  // c'est lui, et lui seul, que `createFriendRequestNotification` a notifié.
+  it('retracts the receiver notification when the sender cancels', async () => {
+    const notifService = makeNotifService();
+    const appAsSender = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: USER_ID, // DB_FRIEND_REQUEST.senderId
+    });
+    const res = await appAsSender.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.retractFriendRequestNotifications).toHaveBeenCalledWith(RECEIVER_ID, FR_ID);
+    await appAsSender.close();
+  });
+
+  it('retracts its own notification when the receiver removes the request', async () => {
+    const notifService = makeNotifService();
+    const appAsReceiver = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: RECEIVER_ID, // DB_FRIEND_REQUEST.receiverId
+    });
+    const res = await appAsReceiver.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.retractFriendRequestNotifications).toHaveBeenCalledWith(RECEIVER_ID, FR_ID);
+    await appAsReceiver.close();
+  });
+
+  it('a failing retractFriendRequestNotifications does not fail the route', async () => {
+    const notifService = makeNotifService();
+    notifService.retractFriendRequestNotifications.mockRejectedValueOnce(new Error('notification db crash'));
+    const appErr = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await appErr.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    // Le signal temps réel à l'autre partie ne doit pas être emporté par
+    // l'échec du retrait : les deux gestes sont indépendants.
+    expect(notifService.emitFriendRequestCancelled).toHaveBeenCalled();
+    await appErr.close();
+  });
 });
 
 // ─── POST — notification service and ZodError paths ──────────────────────────
@@ -927,12 +986,12 @@ describe('PATCH /friend-requests/:id — social events', () => {
 });
 
 describe('PATCH /friend-requests/:id — notification error and onDuplicate', () => {
-  it('notification findMany error is swallowed (does not fail route)', async () => {
+  it('a failing markFriendRequestNotificationsAsRead does not fail the route', async () => {
+    const notifService = makeNotifService();
+    notifService.markFriendRequestNotificationsAsRead.mockRejectedValueOnce(new Error('notification db crash'));
     const app = await buildApp({
-      prismaOpts: {
-        friendRequestFindFirst: DB_FRIEND_REQUEST,
-        notificationFindMany: new Error('notification db crash'),
-      },
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService,
     });
     const res = await app.inject({
       method: 'PATCH',
@@ -944,15 +1003,11 @@ describe('PATCH /friend-requests/:id — notification error and onDuplicate', ()
     await app.close();
   });
 
-  it('marks only matching notifications as read and skips non-matching ones', async () => {
-    const matchingNotif = { ...DB_NOTIFICATION, id: 'match-notif', context: { friendRequestId: FR_ID } };
-    const otherNotif = { ...DB_NOTIFICATION, id: 'other-notif', context: { friendRequestId: 'other-id' } };
+  it('delegates friend-request notification marking to the shared service (SSOT, multi-device counts)', async () => {
+    const notifService = makeNotifService();
     const app = await buildApp({
-      prismaOpts: {
-        friendRequestFindFirst: DB_FRIEND_REQUEST,
-        notificationFindMany: [matchingNotif, otherNotif],
-        conversationFindFirst: null,
-      },
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService,
     });
     await app.inject({
       method: 'PATCH',
@@ -960,11 +1015,22 @@ describe('PATCH /friend-requests/:id — notification error and onDuplicate', ()
       headers: { ...AUTH, 'content-type': 'application/json' },
       body: JSON.stringify({ status: 'accepted' }),
     });
-    const prisma = (app as unknown as { prisma: ReturnType<typeof makePrisma> }).prisma;
-    expect(prisma.notification.update).toHaveBeenCalledTimes(1);
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'match-notif' } })
-    );
+    expect(notifService.markFriendRequestNotificationsAsRead).toHaveBeenCalledWith(USER_ID, FR_ID);
+    await app.close();
+  });
+
+  it('does not mark friend-request notifications when notificationService is absent', async () => {
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService: null,
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 

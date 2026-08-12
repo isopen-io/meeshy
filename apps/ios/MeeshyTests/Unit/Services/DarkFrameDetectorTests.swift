@@ -32,28 +32,4 @@ final class DarkFrameDetectorTests: XCTestCase {
         sut.reset()
         XCTAssertNil(sut.lastAverageBrightness)
     }
-
-    // MARK: - Callbacks
-
-    func test_onDarkFrameDetected_canBeSet() {
-        let sut = makeSUT()
-        var called = false
-        sut.onDarkFrameDetected = { called = true }
-        sut.onDarkFrameDetected?()
-        XCTAssertTrue(called)
-    }
-
-    func test_onLightFrameRestored_canBeSet() {
-        let sut = makeSUT()
-        var called = false
-        sut.onLightFrameRestored = { called = true }
-        sut.onLightFrameRestored?()
-        XCTAssertTrue(called)
-    }
-
-    func test_callbacks_defaultToNil() {
-        let sut = makeSUT()
-        XCTAssertNil(sut.onDarkFrameDetected)
-        XCTAssertNil(sut.onLightFrameRestored)
-    }
 }

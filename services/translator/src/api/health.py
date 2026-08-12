@@ -5,6 +5,8 @@ Routes complètes de monitoring et health checks avec statut DB, ZMQ et ML
 
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, Optional
+
+from src.utils.build_info import resolve_build_info
 import time
 import logging
 import asyncio
@@ -218,7 +220,12 @@ async def comprehensive_health_check() -> Dict[str, Any]:
         return {
             "status": overall_status,
             "service": "meeshy-translator",
-            "version": "1.0.0", 
+            "version": "1.0.0",
+            # Identifie le code réellement en cours d'exécution. Sans lui,
+            # savoir si un correctif est en production imposait un
+            # `docker inspect` sur l'hôte, ou une corrélation entre l'uptime du
+            # container et l'horodatage des tags `sha-<short>` du registre.
+            "build": resolve_build_info(),
             "timestamp": time.time(),
             "uptime_seconds": uptime_seconds,
             "models_loading": models_loading,  # Indicateur de chargement en cours

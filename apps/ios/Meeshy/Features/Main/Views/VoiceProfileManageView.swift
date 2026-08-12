@@ -40,7 +40,7 @@ struct VoiceProfileManageView: View {
                 Task { await viewModel.deleteProfile() }
             }
         } message: {
-            Text(String(localized: "voice.profile.deleteAlert.message", defaultValue: "Cette action est irreversible. Toutes vos donnees vocales seront supprimees conformement au RGPD.", bundle: .main))
+            Text(String(localized: "voice.profile.deleteAlert.message", defaultValue: "Cette action est irréversible. Toutes vos données vocales seront supprimées conformément au RGPD.", bundle: .main))
         }
         .sheet(isPresented: $showAddSamples) {
             addSamplesSheet
@@ -62,10 +62,13 @@ struct VoiceProfileManageView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
+                // Chrome de fermeture : glyphe dans une affordance de tap d'en-tête —
+                // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté (146i).
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -87,51 +90,14 @@ struct VoiceProfileManageView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Text(String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main))
-                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-
-            Text(String(localized: "voice.profile.empty.description", defaultValue: "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main))
-                .font(MeeshyFont.relative(15))
-                .multilineTextAlignment(.center)
-                .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, 32)
-
-            Button {
-                HapticFeedback.medium()
-                showWizard = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(MeeshyFont.relative(16))
-                    Text(String(localized: "voice.profile.create", defaultValue: "Creer un profil vocal", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(hex: accentColor))
-                )
-            }
-            .padding(.horizontal, 20)
-
-            Spacer()
-        }
+        EmptyStateView(
+            icon: "person.wave.2.fill",
+            title: String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main),
+            subtitle: String(localized: "voice.profile.empty.description", defaultValue: "Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main),
+            actionLabel: String(localized: "voice.profile.create", defaultValue: "Créer un profil vocal", bundle: .main),
+            accentColor: accentColor,
+            onAction: { showWizard = true }
+        )
     }
 
     // MARK: - Profile Content
@@ -170,9 +136,13 @@ struct VoiceProfileManageView: View {
 
     private func statusCard(_ profile: VoiceProfile) -> some View {
         HStack(spacing: 12) {
+            // Glyphe de statut décoratif : le libellé texte adjacent porte le sens →
+            // masqué à VoiceOver (évite l'annonce du nom brut du symbole), scale sous
+            // Dynamic Type pour rester harmonisé avec le libellé (146i).
             Image(systemName: statusIcon(for: profile.status))
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(statusColor(for: profile.status))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(statusLabel(for: profile.status))
@@ -191,7 +161,7 @@ struct VoiceProfileManageView: View {
                     Text("\(Int(quality * 100))%")
                         .font(MeeshyFont.relative(18, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: accentColor))
-                    Text(String(localized: "voice.profile.quality", defaultValue: "Qualite", bundle: .main))
+                    Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -203,17 +173,18 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Info Card
 
     private func infoCard(_ profile: VoiceProfile) -> some View {
         VStack(spacing: 10) {
-            infoRow(label: String(localized: "voice.profile.samples", defaultValue: "Echantillons", bundle: .main), value: "\(profile.sampleCount)")
-            infoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Duree totale", bundle: .main), value: String(localized: "voice.profile.totalDuration.value", defaultValue: "\(profile.totalDurationSeconds) secondes", bundle: .main))
-            infoRow(label: String(localized: "voice.profile.createdAt", defaultValue: "Cree le", bundle: .main), value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
+            infoRow(label: String(localized: "voice.profile.samples", defaultValue: "Échantillons", bundle: .main), value: "\(profile.sampleCount)")
+            infoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Durée totale", bundle: .main), value: String(localized: "voice.profile.totalDuration.value", defaultValue: "\(profile.totalDurationSeconds) secondes", bundle: .main))
+            infoRow(label: String(localized: "voice.profile.createdAt", defaultValue: "Créé le", bundle: .main), value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
             if let lastUsed = profile.lastUsedAt {
-                infoRow(label: String(localized: "voice.profile.lastUsed", defaultValue: "Derniere utilisation", bundle: .main), value: lastUsed.formatted(date: .abbreviated, time: .shortened))
+                infoRow(label: String(localized: "voice.profile.lastUsed", defaultValue: "Dernière utilisation", bundle: .main), value: lastUsed.formatted(date: .abbreviated, time: .shortened))
             }
         }
         .padding(16)
@@ -275,7 +246,7 @@ struct VoiceProfileManageView: View {
                 Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text(String(localized: "voice.makePublic.description", defaultValue: "Un echantillon de votre voix sera visible sur votre profil public", bundle: .main))
+                Text(String(localized: "voice.makePublic.description", defaultValue: "Un échantillon de votre voix sera visible sur votre profil public", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
             }
@@ -300,38 +271,35 @@ struct VoiceProfileManageView: View {
 
     // MARK: - Samples
 
+    // Le gateway ne modélise pas de collection d'échantillons éditables (profil
+    // vocal unique) : la liste par-item et son bouton de suppression ont été
+    // retirés (UI morte — getSamples() renvoyait toujours []). Le nombre réel
+    // d'échantillons est affiché par infoCard (profile.sampleCount) ; l'ajout
+    // d'échantillons de calibration reste fonctionnel via « Ajouter ».
     private var samplesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Echantillons vocaux", bundle: .main))
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Spacer()
-                Button {
-                    HapticFeedback.light()
-                    showAddSamples = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                        Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: accentColor))
-                }
+                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(theme.textSecondary)
             }
-
-            if viewModel.samples.isEmpty {
-                Text(String(localized: "voice.profile.noSamples", defaultValue: "Aucun echantillon disponible", bundle: .main))
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(theme.textMuted)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            } else {
-                ForEach(viewModel.samples) { sample in
-                    sampleRow(sample)
+            Spacer()
+            Button {
+                HapticFeedback.light()
+                showAddSamples = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                    Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
+                .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
         }
         .padding(16)
         .background(
@@ -339,44 +307,7 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
-    }
-
-    private func sampleRow(_ sample: VoiceSample) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(Color(hex: accentColor))
-
-            Text("\(sample.durationSeconds)s")
-                .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
-
-            Text(sample.status)
-                .font(MeeshyFont.relative(11, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(theme.textMuted.opacity(0.15)))
-
-            Spacer()
-
-            Text(sample.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(theme.textMuted)
-
-            Button {
-                HapticFeedback.light()
-                Task { await viewModel.deleteSample(id: sample.id) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(MeeshyColors.error.opacity(0.7))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(String(localized: "voice.profile.deleteSample", defaultValue: "Supprimer l'échantillon", bundle: .main))
-        }
-        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Actions
@@ -406,16 +337,11 @@ struct VoiceProfileManageView: View {
     // MARK: - Add Samples Sheet
 
     private var addSamplesSheet: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 VStack(spacing: 16) {
-                    Text(String(localized: "voice.profile.addSamples", defaultValue: "Ajouter des echantillons", bundle: .main))
-                        .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                        .padding(.top, 16)
-
                     VoiceRecordingView(
                         accentColor: accentColor,
                         minimumSamples: 1,
@@ -430,6 +356,14 @@ struct VoiceProfileManageView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            // The navigation bar is already on screen for the Close button, but its
+            // title slot sat empty while a hand-rolled Text played the title inside
+            // the content. Handing the title to the bar restores the header trait
+            // VoiceOver expects, keeps it legible at every Dynamic Type size (the
+            // bar truncates, the body Text pushed the recorder down instead), and
+            // matches every other sheet in the app.
+            .navigationTitle(String(localized: "voice.profile.addSamples", defaultValue: "Ajouter des échantillons", bundle: .main))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showAddSamples = false }
@@ -465,18 +399,18 @@ struct VoiceProfileManageView: View {
         case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
         case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
         case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
-        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Echec", bundle: .main)
-        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expire", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Échec", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expiré", bundle: .main)
         }
     }
 
     private func statusDescription(for status: VoiceProfileStatus) -> String {
         switch status {
         case .pending: return String(localized: "voice.profile.status.pending.description", defaultValue: "Votre profil est en file d'attente", bundle: .main)
-        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos echantillons vocaux", bundle: .main)
-        case .ready: return String(localized: "voice.profile.status.ready.description", defaultValue: "Votre profil vocal est pret a l'emploi", bundle: .main)
-        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a echoue, veuillez reessayer", bundle: .main)
-        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux echantillons", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos échantillons vocaux", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.description", defaultValue: "Votre profil vocal est prêt à l'emploi", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)
         }
     }
 }

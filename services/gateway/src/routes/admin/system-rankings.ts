@@ -106,7 +106,7 @@ function dateWhere(startDate: Date | null, field = 'createdAt') {
   return startDate ? { [field]: { gte: startDate } } : {};
 }
 
-// Message.senderId, Reaction.participantId, Mention.mentionedParticipantId and
+// Message.senderId, Reaction.participantId and
 // CallParticipant.participantId all reference Participant.id, and a user holds one
 // Participant per conversation. Counts keyed by those columns must be folded back
 // to the owning userId — summing a user's per-conversation counts — before ranking.
@@ -230,19 +230,22 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       return buildUserRankings(sorted, userMap);
     }
 
+    // Seul compteur de cette famille qui n'a PAS à être replié : `Mention` est
+    // keyé sur `User`, pas sur `Participant` (comme `CommentMention` et
+    // `PostMention`). Le repli coûtait une requête par classement pour ne jamais
+    // rien résoudre.
     case 'mentions_received': {
       const topMentioned = await fastify.prisma.mention.groupBy({
-        by: ['mentionedParticipantId'],
+        by: ['mentionedUserId'],
         where: dateWhere(startDate, 'mentionedAt'),
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const participantCounts = new Map<string, number>();
+      const userCounts = new Map<string, number>();
       for (const m of topMentioned) {
-        if (m.mentionedParticipantId) participantCounts.set(m.mentionedParticipantId, (participantCounts.get(m.mentionedParticipantId) || 0) + m._count.id);
+        if (m.mentionedUserId) userCounts.set(m.mentionedUserId, (userCounts.get(m.mentionedUserId) || 0) + m._count.id);
       }
-      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
       return buildUserRankings(sorted, userMap);

@@ -471,6 +471,58 @@ final class StoryComposerViewModelTests: XCTestCase {
         XCTAssertNil(vm.closingEffect)
     }
 
+    // MARK: - registerLoadedImage (bug 2026-07-20 : canvas noir après ajout média)
+
+    func test_registerLoadedImage_storesBitmapAndBumpsVersion() {
+        // Le `StoryComposerCanvasView` ne reconstruit son `ComposerImageCacheReader`
+        // (et ne re-stampe donc le bitmap frais sur le canvas) QUE lorsque
+        // `loadedImagesVersion` change. Muter `loadedImages` sans ce bump laisse le
+        // reader périmé → le média fraîchement ajouté reste invisible (canvas noir,
+        // bug user 2026-07-20). `registerLoadedImage` doit faire les DEUX atomiquement.
+        let vm = makeSubject()
+        let before = vm.loadedImagesVersion
+
+        vm.registerLoadedImage(makeRedSquareImage(), for: "media-1")
+
+        XCTAssertNotNil(vm.loadedImages["media-1"])
+        XCTAssertNotEqual(vm.loadedImagesVersion, before,
+            "Ajouter un bitmap DOIT bumper loadedImagesVersion — sinon le canvas reader reste périmé et le média fraîchement ajouté reste noir.")
+    }
+
+    func test_registerLoadedImage_nil_evictsAndBumps() {
+        let vm = makeSubject()
+        vm.registerLoadedImage(makeRedSquareImage(), for: "m")
+        let mid = vm.loadedImagesVersion
+
+        vm.registerLoadedImage(nil, for: "m")
+
+        XCTAssertNil(vm.loadedImages["m"], "Passer nil doit retirer le bitmap.")
+        XCTAssertNotEqual(vm.loadedImagesVersion, mid,
+            "Retirer un bitmap DOIT aussi bumper la version pour que le canvas cesse d'afficher l'ancien.")
+    }
+
+    func test_addMediaObject_withExplicitId_usesThatId() {
+        // Le composer passe l'`objectId` qui a servi à nommer le fichier temp
+        // `{objectId}.jpg` comme id du media object, pour que `obj.id` ==
+        // nom-de-fichier == `composerKey` du `StoryBackgroundLayer`. Sans cet
+        // alignement, le bitmap du fond (stocké sous obj.id dans loadedImages)
+        // n'était jamais trouvé par la clé dérivée du fichier → fond .clear →
+        // canvas noir (bug user 2026-07-20).
+        let vm = makeSubject()
+
+        let obj = vm.addMediaObject(kind: .image, id: "fixed-media-id")
+
+        XCTAssertEqual(obj?.id, "fixed-media-id",
+            "addMediaObject(id:) doit adopter l'id fourni pour aligner fichier / loadedImages / composerKey.")
+    }
+
+    func test_addMediaObject_withoutExplicitId_stillGeneratesOne() {
+        let vm = makeSubject()
+        let obj = vm.addMediaObject(kind: .image)
+        XCTAssertNotNil(obj?.id)
+        XCTAssertFalse(obj?.id.isEmpty ?? true)
+    }
+
     // MARK: - Helpers
 
     private func makeRedSquareImage() -> UIImage {

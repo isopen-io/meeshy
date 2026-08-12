@@ -12,11 +12,11 @@ export const AudioPreferenceSchema = z.object({
   autoTranscribeIncoming: z.boolean().default(false),
 
   // Traduction audio
-  audioTranslationEnabled: z.boolean().default(false),
+  audioTranslationEnabled: z.boolean().default(true),
   translatedAudioFormat: z.enum(['mp3', 'wav', 'ogg']).default('mp3'),
 
   // Text-to-Speech
-  ttsEnabled: z.boolean().default(false),
+  ttsEnabled: z.boolean().default(true),
   ttsVoice: z.string().optional(),
   ttsSpeed: z.number().min(0.5).max(2.0).default(1.0),
   ttsPitch: z.number().min(0.5).max(2.0).default(1.0),
@@ -37,9 +37,9 @@ export const AUDIO_PREFERENCE_DEFAULTS: AudioPreference = {
   transcriptionEnabled: true,
   transcriptionSource: 'auto',
   autoTranscribeIncoming: false,
-  audioTranslationEnabled: false,
+  audioTranslationEnabled: true,
   translatedAudioFormat: 'mp3',
-  ttsEnabled: false,
+  ttsEnabled: true,
   ttsSpeed: 1.0,
   ttsPitch: 1.0,
   audioQuality: 'high',

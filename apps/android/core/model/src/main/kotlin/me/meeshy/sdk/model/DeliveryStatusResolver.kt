@@ -32,12 +32,38 @@ object DeliveryStatusResolver {
      *   comparison so a live all-or-nothing update never transiently regresses to
      *   a single check while the sibling counters are still propagating.
      */
+    /**
+     * @param showReadReceipts reciprocity — port of the iOS `degradeRead` rule.
+     *   A viewer who has disabled their own read receipts does not see anyone
+     *   else's: a resolved [DeliveryTier.Read] degrades to [DeliveryTier.Delivered].
+     *   The default `true` is deliberate — only the DISPLAY site threads the
+     *   viewer's preference; persistence paths never pass it, so what is stored
+     *   is never degraded. Delivered / Sent are unaffected either way.
+     */
     fun resolve(
         deliveredCount: Int,
         readCount: Int,
         recipientCount: Int,
         deliveredToAllAt: String? = null,
         readByAllAt: String? = null,
+        showReadReceipts: Boolean = true,
+    ): DeliveryTier {
+        val tier = resolveTier(
+            deliveredCount = deliveredCount,
+            readCount = readCount,
+            recipientCount = recipientCount,
+            deliveredToAllAt = deliveredToAllAt,
+            readByAllAt = readByAllAt,
+        )
+        return if (!showReadReceipts && tier == DeliveryTier.Read) DeliveryTier.Delivered else tier
+    }
+
+    private fun resolveTier(
+        deliveredCount: Int,
+        readCount: Int,
+        recipientCount: Int,
+        deliveredToAllAt: String?,
+        readByAllAt: String?,
     ): DeliveryTier {
         if (recipientCount > 1) {
             // Group: the indicator must represent EVERY recipient. Trust the

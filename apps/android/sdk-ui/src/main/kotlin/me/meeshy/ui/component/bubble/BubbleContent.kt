@@ -7,6 +7,9 @@ import me.meeshy.sdk.model.MessageEffects
 @Immutable
 sealed class DeliveryStatus {
     @Immutable data object Pending : DeliveryStatus()
+
+    /** Pending, but parked in the offline outbox — shows a queue hourglass, not a clock. */
+    @Immutable data object QueuedOffline : DeliveryStatus()
     @Immutable data object Sent : DeliveryStatus()
     @Immutable data object Delivered : DeliveryStatus()
     @Immutable data object Read : DeliveryStatus()
