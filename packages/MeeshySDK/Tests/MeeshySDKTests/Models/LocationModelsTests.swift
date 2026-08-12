@@ -46,58 +46,56 @@ final class LocationModelsTests: XCTestCase {
         XCTAssertEqual(cl.longitude, 2.3522)
     }
 
-    // MARK: - LocationSharePayload
+    // MARK: - SharedPlace
 
-    func testLocationSharePayloadEncoding() throws {
-        let payload = LocationSharePayload(
-            conversationId: "conv1",
-            latitude: 48.8566,
-            longitude: 2.3522,
-            altitude: 35.0,
-            accuracy: 10.0,
-            placeName: "Eiffel Tower",
-            address: "Paris, France"
-        )
-
-        let data = try JSONEncoder().encode(payload)
-        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(dict["conversationId"] as? String, "conv1")
-        XCTAssertEqual(dict["latitude"] as? Double, 48.8566)
-        XCTAssertEqual(dict["longitude"] as? Double, 2.3522)
-        XCTAssertEqual(dict["placeName"] as? String, "Eiffel Tower")
-        XCTAssertEqual(dict["address"] as? String, "Paris, France")
+    func test_sharedPlace_roundTripsThroughJSON() throws {
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522,
+                                name: "Tour Eiffel", address: "Champ de Mars, Paris",
+                                category: "landmark")
+        let data = try JSONEncoder().encode(place)
+        let decoded = try JSONDecoder().decode(SharedPlace.self, from: data)
+        XCTAssertEqual(decoded, place)
     }
 
-    // MARK: - LocationSharedEvent
+    func test_sharedPlace_decodesWithCoordinatesOnly() throws {
+        let json = Data(#"{"latitude":48.8566,"longitude":2.3522}"#.utf8)
+        let decoded = try JSONDecoder().decode(SharedPlace.self, from: json)
+        XCTAssertEqual(decoded.latitude, 48.8566, accuracy: 0.00001)
+        XCTAssertNil(decoded.name, "Un point pose a la main n'a pas de nom : les trois champs texte sont optionnels.")
+    }
 
-    func testLocationSharedEventDecoding() throws {
-        let json = """
-        {
-            "messageId": "msg1",
-            "conversationId": "conv1",
-            "userId": "user1",
-            "latitude": 48.8566,
-            "longitude": 2.3522,
-            "altitude": 35.0,
-            "accuracy": 10.0,
-            "placeName": "Tour Eiffel",
-            "address": "Paris"
-        }
-        """.data(using: .utf8)!
+    // MARK: - APIMessage.location (lieu partage hisse par le gateway)
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let event = try decoder.decode(LocationSharedEvent.self, from: json)
+    /// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`).
+    /// Un `JSONDecoder` local en `.iso8601` refuse les fractions de seconde que
+    /// le gateway émet (`…T10:00:00.000Z`) : le test échouait alors sur sa propre
+    /// fixture, pas sur le code produit.
+    func test_apiMessage_decodesTopLevelLocation() throws {
+        let json = Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
+         "createdAt":"2026-07-29T10:00:00.000Z",
+         "location":{"latitude":48.8566,"longitude":2.3522,"name":"Tour Eiffel"}}
+        """.utf8)
+        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        XCTAssertEqual(message.location?.name, "Tour Eiffel")
+    }
 
-        XCTAssertEqual(event.messageId, "msg1")
-        XCTAssertEqual(event.conversationId, "conv1")
-        XCTAssertEqual(event.userId, "user1")
-        XCTAssertEqual(event.latitude, 48.8566)
-        XCTAssertEqual(event.longitude, 2.3522)
-        XCTAssertEqual(event.altitude, 35.0)
-        XCTAssertEqual(event.placeName, "Tour Eiffel")
-        XCTAssertNil(event.timestamp)
+    func test_apiMessage_withoutLocationDecodesToNil() throws {
+        let json = Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
+         "createdAt":"2026-07-29T10:00:00.000Z"}
+        """.utf8)
+        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        XCTAssertNil(message.location)
+    }
+
+    /// Verrou du décodeur de production : une régression vers `.iso8601` nu
+    /// ferait re-échouer TOUT payload REST daté par le gateway.
+    func test_apiPayloadDecoder_acceptsFractionalSecondsFromTheGateway() throws {
+        let json = Data(#"{"createdAt":"2026-07-29T10:00:00.000Z"}"#.utf8)
+        struct Probe: Decodable { let createdAt: Date }
+        let probe = try APIClient.makeAPIPayloadDecoder().decode(Probe.self, from: json)
+        XCTAssertEqual(probe.createdAt.timeIntervalSince1970, 1785319200, accuracy: 1)
     }
 
     // MARK: - LiveLocationDuration
@@ -176,5 +174,47 @@ final class LocationModelsTests: XCTestCase {
         )
 
         XCTAssertEqual(location.id, "user3")
+    }
+
+    // MARK: - ClientInfoProvider.enrichWithLocation (garde de source)
+
+    /// Avant correctif, `enrichWithLocation` instanciait un `CLLocationManager()`
+    /// JETABLE à CHAQUE appel — c'est-à-dire à CHAQUE requête API construisant
+    /// ses en-têtes. Le garde `status == .authorizedWhenInUse` sortait toujours
+    /// avant l'octroi de l'autorisation (le chemin dormait) ; dès l'octroi, ce
+    /// code s'exécute pour la première fois ET sur toutes les requêtes API en
+    /// vol simultanément — c'est le seul chemin réveillé globalement par
+    /// l'octroi, hors du picker lui-même, donc le suspect n°1 du crash « juste
+    /// après avoir accordé la permission ».
+    ///
+    /// Deux défauts corrigés ici : (1) un manager instancié par requête plutôt
+    /// qu'une instance durable rattachée à une runloop — CoreLocation n'aime
+    /// pas les managers éphémères créés/détruits en rafale ; (2) l'absence de
+    /// cache négatif — un échec de géocodage relançait le cycle CoreLocation +
+    /// réseau complet à la requête suivante, donc potentiellement des dizaines
+    /// de fois par seconde sur un flux de requêtes API.
+    func testClientInfoProviderReusesASingleLocationManagerWithNegativeCache() throws {
+        // Depuis ce fichier de test : Models -> MeeshySDKTests -> Tests -> MeeshySDK -> packages
+        // Donc 4 `deletingLastPathComponent()` (en comptant celle qui retire le
+        // nom de fichier) pour atteindre `packages/MeeshySDK`, pas 5.
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Models/ -> retire le fichier
+            .deletingLastPathComponent()  // MeeshySDKTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // packages/MeeshySDK
+        let sourceURL = packageRoot
+            .appendingPathComponent("Sources/MeeshySDK/Networking/ClientInfoProvider.swift")
+        let src = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        guard let bodyStart = src.range(of: "func enrichWithLocation") else {
+            XCTFail("enrichWithLocation introuvable dans ClientInfoProvider.swift")
+            return
+        }
+        let body = src[bodyStart.upperBound...]
+
+        XCTAssertFalse(body.contains("CLLocationManager()"),
+                       "Un manager par requête API : CoreLocation attend une instance durable, pas une instance jetable créée à chaque appel.")
+        XCTAssertTrue(src.contains("geoCacheExpiry = Date().addingTimeInterval("),
+                      "Un échec (pas de localisation disponible) doit poser un TTL négatif, sinon le cycle CoreLocation + réseau repart à chaque requête API.")
     }
 }

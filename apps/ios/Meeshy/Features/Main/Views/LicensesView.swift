@@ -39,7 +39,7 @@ struct LicensesView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -71,7 +71,7 @@ struct LicensesView: View {
             VStack(spacing: 12) {
                 sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open Source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
-                Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliotheques open source suivantes.", bundle: .main))
+                Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,7 +133,7 @@ struct LicensesView: View {
             )
         }
         .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
-        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le depot dans Safari", bundle: .main))
+        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le dépôt dans Safari", bundle: .main))
         }
     }
 

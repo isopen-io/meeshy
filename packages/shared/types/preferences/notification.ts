@@ -15,6 +15,10 @@ export const NotificationPreferenceSchema = z.object({
   // Types de notifications
   newMessageEnabled: z.boolean().default(true),
   missedCallEnabled: z.boolean().default(true),
+  // Appels entrants (VoIP/CallKit + pushes de gestion call_*) — catégorie
+  // produit distincte : `pushEnabled:false` ne coupe JAMAIS les appels
+  // (parité FaceTime/WhatsApp/Signal). Seul ce toggle les gouverne.
+  callsEnabled: z.boolean().default(true),
   voicemailEnabled: z.boolean().default(true),
   systemEnabled: z.boolean().default(true),
   conversationEnabled: z.boolean().default(true),
@@ -33,6 +37,7 @@ export const NotificationPreferenceSchema = z.object({
   storyReactionEnabled: z.boolean().default(true),
   commentReplyEnabled: z.boolean().default(true),
   commentLikeEnabled: z.boolean().default(true),
+  friendContentEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -41,6 +46,10 @@ export const NotificationPreferenceSchema = z.object({
   dndDays: z
     .array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']))
     .default([]),
+  // GW7 — minutes à AJOUTER à l'UTC pour obtenir l'heure locale de
+  // l'utilisateur (Tokyo = 540, New York été = -240). 0 = fenêtre évaluée en
+  // UTC (comportement historique des documents existants).
+  dndUtcOffsetMinutes: z.number().int().min(-720).max(840).default(0),
 
   // Prévisualisation
   showPreview: z.boolean().default(true),
@@ -60,6 +69,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   vibrationEnabled: true,
   newMessageEnabled: true,
   missedCallEnabled: true,
+  callsEnabled: true,
   voicemailEnabled: true,
   systemEnabled: true,
   conversationEnabled: true,
@@ -76,10 +86,12 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   storyReactionEnabled: true,
   commentReplyEnabled: true,
   commentLikeEnabled: true,
+  friendContentEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',
   dndDays: [],
+  dndUtcOffsetMinutes: 0,
   showPreview: true,
   showSenderName: true,
   groupNotifications: true,

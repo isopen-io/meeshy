@@ -29,6 +29,9 @@ import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useNotificationActions } from '@/stores/notification-store';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
+import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import { useVirtualKeyboard } from '@/hooks/use-virtual-keyboard';
 import { conversationsService } from '@/services/conversations.service';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -96,6 +99,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Notification system
   const { setActiveConversationId } = useNotificationActions();
+  const queryClient = useQueryClient();
   useNotificationsManagerRQ(); // Initialise Socket.IO pour les notifications en temps réel
 
   // Instance ID pour debugging
@@ -331,12 +335,23 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [clearMessageTranslatingState]
   );
 
+  // `useConversationTyping` a besoin des émetteurs `startTyping`/`stopTyping`
+  // que produit `useSocketIOMessaging`, lequel a besoin du récepteur
+  // `onUserTyping` : les deux hooks se précèdent mutuellement. Le ref casse ce
+  // cycle sans dupliquer de règle — le callback remis au socket est STABLE
+  // (aucune dépendance, donc plus de ré-abonnement à chaque changement de
+  // conversation) et se contente de relayer vers `handleUserTyping`, seul
+  // dépositaire des gardes (« pas mon propre écho », « pas une autre
+  // conversation ») et de l'état `typingUsers` que rend l'en-tête.
+  const handleUserTypingRef = useRef<
+    ((userId: string, username: string, isTyping: boolean, conversationId: string) => void) | null
+  >(null);
+
   const onUserTyping = useCallback(
-    (userId: string, _username: string, _isTyping: boolean, typingConversationId: string) => {
-      if (!user || userId === user.id) return;
-      if (typingConversationId !== selectedConversation?.id) return;
+    (userId: string, username: string, isTyping: boolean, typingConversationId: string) => {
+      handleUserTypingRef.current?.(userId, username, isTyping, typingConversationId);
     },
-    [user, selectedConversation?.id]
+    []
   );
 
   // Socket.IO messaging — cache mutations handled by useSocketCacheSync, only UI callbacks here
@@ -350,25 +365,47 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     });
 
   // Typing indicators
-  const { typingUsers, isTyping, handleTypingStop, handleTextInput: handleTypingTextInput } =
-    useConversationTyping({
-      conversationId: selectedConversation?.id || null,
-      currentUserId: user?.id || null,
-      participants,
-      startTyping,
-      stopTyping,
-    });
+  const {
+    typingUsers,
+    isTyping,
+    handleUserTyping,
+    handleTypingStop,
+    handleTextInput: handleTypingTextInput,
+  } = useConversationTyping({
+    conversationId: selectedConversation?.id || null,
+    currentUserId: user?.id || null,
+    participants,
+    startTyping,
+    stopTyping,
+  });
+
+  // Branche le récepteur déclaré plus haut. Un effet, pas une écriture en
+  // rendu : les événements typing arrivent du socket, jamais pendant un rendu.
+  useEffect(() => {
+    handleUserTypingRef.current = handleUserTyping;
+  }, [handleUserTyping]);
 
   // Sync volatile state ref after all hooks (#18)
   volatileStateRef.current = { newMessage, attachmentIds, attachmentMimeTypes, selectedLanguage, isTyping };
 
   // ========== EFFECTS ==========
 
-  // Informer le store de notifications
+  // Informer le store de notifications + consommer l'ouverture :
+  // - reset OPTIMISTE du badge de la conversation (le serveur confirmera via
+  //   `conversation:unread-updated` après le mark-as-read de useSeenMessages) ;
+  // - marquage des notifications de la conversation (cloche) — patch cache
+  //   immédiat + route de portée coalescée, miroir du `onConversationOpened` iOS.
   useEffect(() => {
     setActiveConversationId(effectiveSelectedId || null);
+    if (effectiveSelectedId) {
+      setConversationUnreadInCache(queryClient, effectiveSelectedId, 0);
+      markScopeNotificationsRead(queryClient, {
+        kind: 'conversation',
+        conversationId: effectiveSelectedId,
+      });
+    }
     return () => setActiveConversationId(null);
-  }, [effectiveSelectedId, setActiveConversationId]);
+  }, [effectiveSelectedId, setActiveConversationId, queryClient]);
 
   // Sync URL → local
   useEffect(() => {
@@ -462,64 +499,14 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     instanceId,
   ]);
 
-  // Marquer comme lu à l'ouverture d'une conversation
-  const hasMarkedAsReadOnOpenRef = useRef<string | null>(null);
-  useEffect(() => {
-    const conversationId = selectedConversation?.id;
-    if (!conversationId) return;
+  // Ouvrir une conversation ne la marque PLUS lue en entier : elle en marquait
+  // 200 quand 10 tenaient à l'écran. C'est `useSeenMessages` (ConversationView)
+  // qui rapporte les messages réellement affichés, et le serveur qui décide du
+  // compteur — d'où la disparition de la remise à zéro optimiste.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
 
-    hasMarkedAsReadOnOpenRef.current = conversationId;
-    conversationsService.markAsRead(conversationId)
-      .then(() => {
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-          )
-        );
-      })
-      .catch(() => {});
-  }, [selectedConversation?.id, setConversations]);
-
-  // Marquer comme lu quand scroll vers le bas
-  useEffect(() => {
-    const container = messagesScrollRef.current;
-    const conversationId = selectedConversation?.id;
-    if (!container || !conversationId) return;
-
-    let markAsReadTimeout: NodeJS.Timeout | null = null;
-    let hasMarkedAsRead = false;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-      if (distanceFromBottom < 100 && !hasMarkedAsRead) {
-        if (markAsReadTimeout) clearTimeout(markAsReadTimeout);
-
-        markAsReadTimeout = setTimeout(() => {
-          hasMarkedAsRead = true;
-          conversationsService
-            .markAsRead(conversationId)
-            .then(() => {
-              setConversations(prev =>
-                prev.map(conv =>
-                  conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-                )
-              );
-            })
-            .catch(console.error);
-        }, 500);
-      }
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    handleScroll();
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (markAsReadTimeout) clearTimeout(markAsReadTimeout);
-    };
-  }, [selectedConversation?.id, setConversations]);
+  // Le défilement près du bas ne marque plus rien non plus : il ne dit pas ce
+  // qui a été vu, seulement où se trouve la barre. L'observer s'en charge.
 
   // Reconnexion automatique
   useEffect(() => {
@@ -666,18 +653,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         markMessageFailed(optimistic._tempId);
       }
 
-      // Mark as read after send
-      if (conversationId) {
-        conversationsService.markAsRead(conversationId)
-          .then(() => {
-            setConversations(prev =>
-              prev.map(conv =>
-                conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-              )
-            );
-          })
-          .catch(console.error);
-      }
+      // Envoyer un message ne marque plus la conversation lue : les bulles
+      // affichées à ce moment le seront par l'observer, les autres non.
     } catch (error) {
       console.error('[ConversationLayout] Send error:', error);
       markMessageFailed(optimistic._tempId);

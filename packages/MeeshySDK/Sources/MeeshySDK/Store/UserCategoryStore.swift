@@ -143,6 +143,13 @@ public actor UserCategoryStore {
         publish()
     }
 
+    /// stores-10 — purge au logout (résidu cross-compte : la RAM du compte A
+    /// restait visible sous B, y compris via le snapshot widget).
+    public func reset() {
+        categoriesById.removeAll()
+        publish()
+    }
+
     // MARK: - CRUD
 
     @discardableResult
@@ -179,10 +186,18 @@ public actor UserCategoryStore {
     }
 
     public func delete(_ id: String) async throws {
-        guard categoriesById[id] != nil else { throw UserCategoryStoreError.unknownCategory(id) }
-        try await service.deleteCategory(id: id)
+        // stores-10 — optimiste : retrait local immédiat, rollback sur échec
+        // serveur (patron reorder).
+        guard let removed = categoriesById[id] else { throw UserCategoryStoreError.unknownCategory(id) }
         categoriesById.removeValue(forKey: id)
         publish()
+        do {
+            try await service.deleteCategory(id: id)
+        } catch {
+            categoriesById[id] = removed
+            publish()
+            throw error
+        }
     }
 
     /// Optimistic batch reorder. Applies the new ordering locally first
@@ -239,13 +254,32 @@ public actor UserCategoryStore {
         icon: String?,
         isExpanded: Bool?
     ) async throws -> ConversationCategory {
-        guard categoriesById[id] != nil else { throw UserCategoryStoreError.unknownCategory(id) }
-        let updated = try await service.updateCategory(
-            id: id, name: name, color: color, icon: icon, isExpanded: isExpanded
+        // stores-10 — optimiste : patch local immédiat (rename/setColor/
+        // setIcon/setExpanded partagent ce helper), le serveur écrase à la
+        // réponse, rollback complet sur échec (patron reorder).
+        guard let current = categoriesById[id] else { throw UserCategoryStoreError.unknownCategory(id) }
+        let snapshot = categoriesById
+        categoriesById[id] = ConversationCategory(
+            id: current.id,
+            name: name ?? current.name,
+            color: color ?? current.color,
+            icon: icon ?? current.icon,
+            order: current.order,
+            isExpanded: isExpanded ?? current.isExpanded
         )
-        categoriesById[id] = updated
         publish()
-        return updated
+        do {
+            let updated = try await service.updateCategory(
+                id: id, name: name, color: color, icon: icon, isExpanded: isExpanded
+            )
+            categoriesById[id] = updated
+            publish()
+            return updated
+        } catch {
+            categoriesById = snapshot
+            publish()
+            throw error
+        }
     }
 
     private func sortedSnapshot() -> [ConversationCategory] {

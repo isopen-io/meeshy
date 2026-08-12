@@ -31,6 +31,7 @@ const MESSAGE_ID = '507f1f77bcf86cd799439013';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439011';
 const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439099';
 const USER_ID = 'user-extra-1';
+const ANONYMOUS_PARTICIPANT_ID = '507f1f77bcf86cd799439088';
 
 // ---------------------------------------------------------------------------
 // Module-level mocks (must be declared before imports, hoisted by Jest)
@@ -177,14 +178,15 @@ describe('GET /messages/:messageId/read-status', () => {
     jest.clearAllMocks();
     clearStaticCache();
 
-    // Happy-path defaults
+    // Happy-path defaults. L'appartenance n'est plus filtrée EN RELATION sur le
+    // message (`conversation.participants`) mais résolue par
+    // `resolveCallerParticipant` — une seule règle d'identité pour les cinq
+    // gardes de ce fichier, et la seule qui connaisse les participants sans compte.
     mockPrisma.message.findUnique.mockResolvedValue({
       id: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      conversation: {
-        participants: [{ userId: USER_ID }]
-      }
+      conversationId: CONVERSATION_ID
     });
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
     mockGetMessageReadStatus.mockResolvedValue({
       messageId: MESSAGE_ID,
       readCount: 1,
@@ -218,13 +220,7 @@ describe('GET /messages/:messageId/read-status', () => {
   });
 
   it('returns 403 when user is not a participant of the conversation', async () => {
-    mockPrisma.message.findUnique.mockResolvedValue({
-      id: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      conversation: {
-        participants: [] // empty — user not in conversation
-      }
-    });
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
 
     const response = await app.inject({
       method: 'GET',
@@ -485,10 +481,11 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     expect(response.statusCode).toBe(200);
     expect(response.json().success).toBe(true);
 
-    // CONVERSATION_UNREAD_UPDATED must fire for badge reset
+    // CONVERSATION_UNREAD_UPDATED must fire for badge reset, carrying the real
+    // post-mark remaining unread (sourced from getUnreadCount), not a hardcoded 0.
     expect(emitMock).toHaveBeenCalledWith(
       'conversation:unread-updated',
-      { conversationId: CONVERSATION_ID, unreadCount: 0 }
+      { conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) }
     );
     // read-status:updated (peer disclosure) must NOT fire
     expect(emitMock).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
@@ -717,7 +714,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       deliveredCount: 1,
       readCount: 0
     });
-    mockPrisma.participant.findMany.mockResolvedValue([{ userId: USER_ID }]);
+    mockPrisma.participant.findMany.mockResolvedValue([{ id: PARTICIPANT_ID, userId: USER_ID }]);
   });
 
   it('returns 200 "Aucune action requise" when caller is the message sender (self-delivery no-op)', async () => {
@@ -832,5 +829,26 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     expect(response.json().data).toMatchObject({ message: 'Message marqué comme livré' });
     expect(emitMock).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
     expect(mockMarkMessagesAsReceived).toHaveBeenCalledTimes(1);
+  });
+
+  // This fan-out used to skip every participant with no `User` row, so an
+  // anonymous participant — the population a share-link conversation is made of
+  // — received no peer receipt at all. It is now addressed by the id its
+  // personal room is named after, the one `AuthHandler` joins it to.
+  it('reaches a participant with no account by its participant id', async () => {
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: ANONYMOUS_PARTICIPANT_ID, userId: null }
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: url(),
+      headers: { authorization: AUTH_HEADER }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ioChain.to).toHaveBeenCalledWith(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+    expect(emitMock).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
   });
 });

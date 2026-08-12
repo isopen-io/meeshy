@@ -28,6 +28,7 @@ enum DeepLinkDestination {
     case userLinks
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    case hashtag(tag: String)
     case external(URL)
 }
 
@@ -163,6 +164,9 @@ enum DeepLinkParser {
         case "u", "users":
             // meeshy://u/{username} (or meeshy://users/{username}).
             if components.count >= 2 { return .userProfile(username: components[1]) }
+        case "hashtag":
+            // meeshy://hashtag/{tag}.
+            if components.count >= 2, !components[1].isEmpty { return .hashtag(tag: components[1]) }
         case "join":
             // meeshy://join/{linkId} — conversation invitation share link.
             if components.count >= 2 { return .joinLink(identifier: components[1]) }
@@ -242,6 +246,10 @@ enum DeepLinkParser {
             if userSegments.contains(head) {
                 return .userProfile(username: components[1])
             }
+            // Hashtag results — `hashtag/{tag}`.
+            if head == "hashtag", !components[1].isEmpty {
+                return .hashtag(tag: components[1])
+            }
             // Story — `story`, `stories`, `s`.
             if storySegments.contains(head) {
                 return .storyDetail(postId: components[1])
@@ -300,6 +308,7 @@ enum DeepLink: Equatable {
     case userProfile(username: String)
     case ownProfile
     case userLinks
+    case hashtag(tag: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -409,6 +418,11 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .userLinks
             return true
 
+        case "hashtag":
+            guard let tag = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .hashtag(tag: tag)
+            return true
+
         case "feeds":
             // `/feeds/post/{postId}` — Universal Link surface for the public
             // share URL minted by the gateway (`FRONTEND_URL/feeds/post/<id>`).
@@ -510,7 +524,13 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .magicLink(token: token)
             return true
 
-        case "conversation":
+        case "c", "conversation":
+            // meeshy://c/{id} — short alias mirroring the Universal Link
+            // `/c/<id>` shape (and `DeepLinkParser.parseCustomScheme`'s own
+            // `case "c", "conversation":`) so a pasted/handwritten short
+            // scheme URL doesn't silently no-op. Previously only
+            // `"conversation"` was handled here, dropping `meeshy://c/<id>`
+            // even though the parser already resolved it to `.conversation`.
             guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
             return true

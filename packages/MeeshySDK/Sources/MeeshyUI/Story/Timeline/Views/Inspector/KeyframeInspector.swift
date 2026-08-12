@@ -37,6 +37,9 @@ public struct KeyframeInspector: View {
     /// At launch only `.linear` is exposed in the picker. Advanced easings stay
     /// gated behind `isAdvancedEnabled` so the data model already supports them
     /// when product unlocks the surface.
+    /// Pas des steppers d'instant — aligné sur `ClipInspector.timeStep`.
+    public static let timeStep: Float = 0.1
+
     public static let exposedEasingsAtLaunch: [Easing] = [.linear]
 
     public static func exposedEasings(advanced: Bool) -> [Easing] {
@@ -49,6 +52,9 @@ public struct KeyframeInspector: View {
     public let onScaleChanged: (CGFloat) -> Void
     public let onOpacityChanged: (CGFloat) -> Void
     public let onEasingChanged: (Easing) -> Void
+    /// Décalage temporel du keyframe, en secondes (delta, pas valeur absolue).
+    /// Même convention que les steppers de `ClipInspector`.
+    public let onTimeAdjusted: (Float) -> Void
     public let onDelete: () -> Void
     /// Ferme l'inspecteur (désélection) — même affordance que ClipInspector /
     /// TransitionInspector.
@@ -66,6 +72,7 @@ public struct KeyframeInspector: View {
                 onScaleChanged: @escaping (CGFloat) -> Void,
                 onOpacityChanged: @escaping (CGFloat) -> Void,
                 onEasingChanged: @escaping (Easing) -> Void,
+                onTimeAdjusted: @escaping (Float) -> Void = { _ in },
                 onDelete: @escaping () -> Void,
                 onClose: @escaping () -> Void = {}) {
         self.keyframe = keyframe
@@ -74,6 +81,7 @@ public struct KeyframeInspector: View {
         self.onScaleChanged = onScaleChanged
         self.onOpacityChanged = onOpacityChanged
         self.onEasingChanged = onEasingChanged
+        self.onTimeAdjusted = onTimeAdjusted
         self.onDelete = onDelete
         self.onClose = onClose
         _posX = State(initialValue: keyframe.x)
@@ -90,6 +98,7 @@ public struct KeyframeInspector: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            timeStepper
             positionSliders
             scaleSlider
             opacitySlider
@@ -126,6 +135,41 @@ public struct KeyframeInspector: View {
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.inspector.close", bundle: .module))
         }
+    }
+
+    /// Réglage de l'INSTANT du keyframe. Sans lui, un keyframe mal placé ne
+    /// pouvait que se supprimer et se reposer : position, échelle, opacité et
+    /// easing étaient éditables, le temps ne l'était pas.
+    /// Même pas et même présentation que les steppers de `ClipInspector` —
+    /// une seule grammaire de réglage fin dans toute la timeline.
+    private var timeStepper: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(localized: "story.timeline.keyframe.time",
+                        defaultValue: "Instant", bundle: .module).uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
+                Text(String(format: "%.2fs", keyframe.absoluteTime))
+                    .font(.system(.callout, design: .monospaced))
+                    .monospacedDigit()
+                timeStepButton(systemName: "plus.circle.fill") { onTimeAdjusted(Self.timeStep) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "story.timeline.keyframe.time",
+                                   defaultValue: "Instant", bundle: .module))
+        .accessibilityValue(String(format: "%.2fs", keyframe.absoluteTime))
+    }
+
+    private func timeStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3)
+                .foregroundStyle(MeeshyColors.indigo400)
+                .contentShape(Rectangle().inset(by: -8))
+        }
+        .buttonStyle(.plain)
     }
 
     private var positionSliders: some View {
@@ -191,7 +235,7 @@ public struct KeyframeInspector: View {
                 Text(kind.displayName).tag(kind)
             }
         } label: {
-            Text("Easing")
+            Text(String(localized: "story.timeline.inspector.easing.title", defaultValue: "Interpolation", bundle: .module))
         }
         .pickerStyle(.segmented)
         .disabled(exposed.count == 1)

@@ -104,4 +104,53 @@ class ConversationAccentTest {
 
         assertThat(conv.displayTitle()).isEqualTo("Sany")
     }
+
+    @Test
+    fun `otherParticipantUserId resolves the other participant's id in a direct conversation`() {
+        val direct = ApiConversation(
+            id = "c10",
+            type = "direct",
+            participants = listOf(
+                ApiParticipant(id = "p1", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p2", userId = "other", displayName = "Andre Tabeth"),
+            ),
+        )
+
+        assertThat(direct.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `otherParticipantUserId is null for a group conversation`() {
+        val group = ApiConversation(
+            id = "c11",
+            type = "group",
+            participants = listOf(
+                ApiParticipant(id = "p1", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p2", userId = "other", displayName = "Andre Tabeth"),
+            ),
+        )
+
+        assertThat(group.otherParticipantUserId(currentUserId = "me")).isNull()
+    }
+
+    @Test
+    fun `otherParticipantUserId is null for a direct conversation with no other participant`() {
+        val direct = ApiConversation(id = "c12", type = "direct")
+
+        assertThat(direct.otherParticipantUserId(currentUserId = "me")).isNull()
+    }
+
+    @Test
+    fun `otherParticipantUserId ignores a participant with no userId`() {
+        val direct = ApiConversation(
+            id = "c13",
+            type = "direct",
+            participants = listOf(
+                ApiParticipant(id = "p1", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p2", userId = null, displayName = "Ghost"),
+            ),
+        )
+
+        assertThat(direct.otherParticipantUserId(currentUserId = "me")).isNull()
+    }
 }

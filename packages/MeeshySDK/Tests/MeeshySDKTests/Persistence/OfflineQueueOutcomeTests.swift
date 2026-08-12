@@ -235,16 +235,18 @@ final class OfflineQueueOutcomeTests: XCTestCase {
     /// inbound message must NOT accumulate one outbox row per fire. The
     /// generic `enqueue<P>` collapses earlier `.pending` rows for the same
     /// `(kind: .markAsRead, conversationId: anchor)` before inserting the
-    /// newer payload — only the latest upToMessageId is kept (subsumes all
-    /// previous reads by monotonic property).
+    /// newer payload — la row survivante porte le cmid du dernier lot, les
+    /// identifiants lus des rows périmées y étant fusionnés.
     func test_enqueueMarkAsRead_coalescesPendingForSameConversation() async throws {
         let conv = "conv-coalesce-\(UUID().uuidString)"
 
+        var newestCmid = ""
         for i in 0..<5 {
+            newestCmid = ClientMutationId.generate()
             let payload = MarkAsReadPayload(
-                clientMutationId: ClientMutationId.generate(),
+                clientMutationId: newestCmid,
                 conversationId: conv,
-                upToMessageId: "msg-\(i)"
+                messageIds: ["msg-\(i)"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payload, conversationId: conv)
         }
@@ -257,9 +259,12 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         }
         XCTAssertEqual(rows.count, 1, "5 markAsRead enqueues for the same conversation must coalesce into 1 row")
 
-        // The surviving row must carry the LATEST payload (upToMessageId = msg-4)
+        // The surviving row must carry the LATEST payload, with every earlier
+        // batch's read receipts merged into it.
         let decoded = try JSONDecoder().decode(MarkAsReadPayload.self, from: rows[0].payload)
-        XCTAssertEqual(decoded.upToMessageId, "msg-4", "Surviving row must carry the latest upToMessageId")
+        XCTAssertEqual(decoded.clientMutationId, newestCmid, "Surviving row must carry the latest payload")
+        XCTAssertEqual(decoded.messageIds, ["msg-0", "msg-1", "msg-2", "msg-3", "msg-4"],
+                       "Coalescing must not drop the read receipts of superseded rows")
     }
 
     /// Coalescing is scoped per conversation — enqueuing markAsRead for two
@@ -274,7 +279,7 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             let payloadA = MarkAsReadPayload(
                 clientMutationId: ClientMutationId.generate(),
                 conversationId: convA,
-                upToMessageId: "msg-A"
+                messageIds: ["msg-A"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payloadA, conversationId: convA)
         }
@@ -282,7 +287,7 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             let payloadB = MarkAsReadPayload(
                 clientMutationId: ClientMutationId.generate(),
                 conversationId: convB,
-                upToMessageId: "msg-B"
+                messageIds: ["msg-B"]
             )
             _ = try await queue.enqueue(.markAsRead, payload: payloadB, conversationId: convB)
         }

@@ -41,6 +41,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 ### Regles critiques du Prisme
 1. **Si aucune traduction ne matche la langue preferee, afficher le contenu original (retourner `nil`).** Ne JAMAIS tomber sur `translations.first` comme fallback — l'absence de traduction vers la langue preferee signifie que le contenu est deja dans cette langue.
 2. **La locale appareil entre en 4e priorité (Prisme étendu 2026-05-26)** — après `systemLanguage`, `regionalLanguage`, `customDestinationLanguage`. Elle ne les supplante jamais. iOS l'injecte via header `X-Device-Locale` ; gateway la persiste opportunément dans `User.deviceLocale`.
+3. **La langue d'origine concourt à son RANG dans le prisme, jamais comme court-circuit (2026-08-10).** Un résolveur parcourt les langues du lecteur DANS L'ORDRE ; la première servie gagne — par une traduction, ou parce que le message est déjà écrit dedans. Ne JAMAIS écrire « si la langue d'origine appartient au prisme ⇒ afficher l'original » : cette formulation rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un rang inférieur, ce que produit mécaniquement la locale appareil (règle 2). Prisme `['fr','en']`, message anglais, traduction française disponible ⇒ **« Bonjour »**, jamais « Hello ». Sources de vérité jumelles : `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`) et `MeeshyConversation.resolvedLastMessagePreview` (`packages/MeeshySDK/.../CoreModels.swift`) — toute évolution touche les deux.
 
 ## Architecture
 
@@ -371,8 +372,8 @@ accent = hueShift(primary, −30°)
 - Semantic colors (error, success) remain static via `MeeshyColors`
 
 ### User Presence (source de vérité + palette)
-États dérivés de `isOnline` (backend, autoritatif — actif < 1 min) + `lastActiveAt` (décroissance 60s/5min/30min) :
-`online`/`recent` → **vert** `#34D399` (pulse sur online) · `away` → **orange** `#FBBF24` · `offline` (>30min) → **aucun point** · aucune donnée → aucun point.
+États dérivés de `isOnline` (backend, autoritatif — garde anti-stale jusqu'à 5 min) + `lastActiveAt` (décroissance 60s/3min/5min) — règle produit 1/3/5 (2026-07-20) :
+`online` (isOnline OU actif ≤ 60s) → **vert** `#34D399` (pulse) · `away` (≤ 3min) → **orange** `#FBBF24` · `idle` (≤ 5min) → **gris AFFICHÉ** `#9CA3AF` · `offline` (> 5min OU aucune donnée) → **aucun point**.
 - **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_DOT_CLASS.offline`, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
 - Source de vérité TS : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`) ; miroirs : iOS `UserPresence.state(now:)` (PresenceModels.swift), Android `Presence.kt` — toute évolution touche les 3 sites
 - Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)

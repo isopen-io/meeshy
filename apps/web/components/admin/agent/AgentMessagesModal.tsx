@@ -12,6 +12,7 @@ import { agentAdminService, type AgentMessageEntry } from '@/services/agent-admi
 import { UserDisplay } from './UserDisplay';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { useI18n } from '@/hooks/useI18n';
+import { formatPhrasedTimeAgo } from '@/utils/relative-time-format';
 
 type AgentMessagesModalProps = {
   conversationId: string;
@@ -28,13 +29,7 @@ function formatDateTime(dateStr: string, locale: string): string {
 }
 
 function formatTimeAgo(dateStr: string, t: (key: string) => string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t('agent.overview.timeAgo.justNow');
-  if (mins < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(mins));
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
-  return t('agent.overview.timeAgo.days').replace('{{count}}', String(Math.floor(hours / 24)));
+  return formatPhrasedTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'agent.overview.timeAgo');
 }
 
 export default memo(function AgentMessagesModal({

@@ -54,7 +54,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
             laneHeight: 44,
             frames: frames ?? [solidThumb(.systemBlue), solidThumb(.systemTeal),
                                solidThumb(.systemIndigo), solidThumb(.systemPurple)],
-            onTap: {}, onDoubleTap: {}, onLongPress: {},
+            onTap: {}, onDoubleTap: {},
             onTrimStartDelta: { _ in }, onTrimEndDelta: { _ in }, onMoveDelta: { _ in }
         )
         .frame(width: 390, height: 60, alignment: .leading)

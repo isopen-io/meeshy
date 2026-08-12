@@ -72,12 +72,26 @@ class FakeRTCPeerConnection {
   constructor(config: unknown) { this.config = config; }
 }
 
-const makeTrack = (kind: 'audio' | 'video') => ({
-  kind,
-  enabled: true,
-  contentHint: '',
-  stop: jest.fn(),
-});
+let trackIdCounter = 0;
+
+const makeTrack = (kind: 'audio' | 'video'): {
+  kind: 'audio' | 'video';
+  id: string;
+  enabled: boolean;
+  contentHint: string;
+  stop: jest.Mock;
+  clone: jest.Mock;
+} => {
+  const track = {
+    kind,
+    id: `track-${++trackIdCounter}`,
+    enabled: true,
+    contentHint: '',
+    stop: jest.fn(),
+    clone: jest.fn((): ReturnType<typeof makeTrack> => makeTrack(kind)),
+  };
+  return track;
+};
 
 const makeStream = (opts: { audio?: boolean; video?: boolean }) => {
   const tracks: ReturnType<typeof makeTrack>[] = [];
@@ -110,7 +124,8 @@ const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
 describe('WebRTCService — transceiver pre-allocation', () => {
   it('reserves a recvonly video m-line for an audio-only call', () => {
     const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    const stream = makeStream({ audio: true });
+    service.addLocalMedia(stream, { sendVideo: false });
 
     // Audio is attached as a sendrecv transceiver carrying the live track.
     const audioCall = pc.addTransceiver.mock.calls.find(
@@ -118,7 +133,12 @@ describe('WebRTCService — transceiver pre-allocation', () => {
     );
     expect(audioCall?.[1]).toEqual(expect.objectContaining({ direction: 'sendrecv' }));
     // Video m-line is reserved recvonly (no camera) so it can be upgraded later.
-    expect(pc.addTransceiver).toHaveBeenCalledWith('video', { direction: 'recvonly' });
+    // It must ALSO be pre-associated with the call's MediaStream (same `streams`
+    // as the audio transceiver): a sender's stream association is fixed at
+    // addTransceiver() time, not by a later replaceTrack() — see the
+    // "mid-call A/V switch" test below for why an unassociated sender means
+    // the remote peer's ontrack event never carries streams[0].
+    expect(pc.addTransceiver).toHaveBeenCalledWith('video', { direction: 'recvonly', streams: [stream] });
   });
 
   it('sends video immediately when the call starts as video', () => {
@@ -130,6 +150,85 @@ describe('WebRTCService — transceiver pre-allocation', () => {
       (c) => typeof c[0] !== 'string' && (c[0] as { kind: string }).kind === 'video'
     );
     expect(videoCall?.[1]).toEqual(expect.objectContaining({ direction: 'sendrecv' }));
+  });
+});
+
+// ===========================================================================
+// addLocalMedia — outgoing video track ownership (Vague 96)
+//
+// addLocalMedia() runs once per NEW peer connection, including a late joiner
+// added to an ALREADY video-active group call — at which point
+// `stream.getVideoTracks()[0]` is another already-connected peer's live
+// sender.track (enableVideo()/switchCamera() in use-webrtc-p2p.ts hand that
+// literal object to whichever peer is first in their snapshot). Attaching it
+// here directly used to alias two independent RTCRtpSenders to one
+// MediaStreamTrack: an unrelated switchVideoSendTrack()/disableVideoSend() on
+// THAT other peer reads its own sender.track as ground truth and stops it
+// unconditionally, silently freezing this peer's outbound video too — and
+// this peer's own track, never recorded as `exclusiveVideoTrack`, was never
+// released by a scoped close() either, leaking it if this peer alone left a
+// still-ongoing group call.
+// ===========================================================================
+
+describe('addLocalMedia — outgoing video track ownership (Vague 96)', () => {
+  it("clones the stream's video track instead of attaching it directly", () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    const sourceTrack = stream.getVideoTracks()[0] as unknown as ReturnType<typeof makeTrack>;
+
+    service.addLocalMedia(stream, { sendVideo: true });
+
+    const videoCall = pc.addTransceiver.mock.calls.find(
+      (c) => typeof c[0] !== 'string' && (c[0] as { kind: string }).kind === 'video'
+    );
+    const attachedTrack = videoCall?.[0] as ReturnType<typeof makeTrack>;
+
+    expect(sourceTrack.clone).toHaveBeenCalledTimes(1);
+    expect(attachedTrack).not.toBe(sourceTrack);
+    expect(attachedTrack).toBe(sourceTrack.clone.mock.results[0]!.value);
+    expect(stream.addTrack).toHaveBeenCalledWith(attachedTrack);
+  });
+
+  it("close({ stopLocalTracks: false }) releases this instance's own clone, never the shared source track", () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    const sourceTrack = stream.getVideoTracks()[0] as unknown as ReturnType<typeof makeTrack>;
+    service.addLocalMedia(stream, { sendVideo: true });
+
+    const videoCall = pc.addTransceiver.mock.calls.find(
+      (c) => typeof c[0] !== 'string' && (c[0] as { kind: string }).kind === 'video'
+    );
+    const ownClone = videoCall?.[0] as ReturnType<typeof makeTrack>;
+
+    service.close({ stopLocalTracks: false });
+
+    expect(ownClone.stop).toHaveBeenCalled();
+    expect(stream.removeTrack).toHaveBeenCalledWith(ownClone);
+    expect(sourceTrack.stop).not.toHaveBeenCalled();
+  });
+
+  it("gives two peer connections attached to the same stream independent track objects — one leaving never stops the other's video", () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true, video: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: true });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: true });
+
+    const findVideoTrack = (pc: FakeRTCPeerConnection) =>
+      pc.addTransceiver.mock.calls.find(
+        (c) => typeof c[0] !== 'string' && (c[0] as { kind: string }).kind === 'video'
+      )?.[0] as ReturnType<typeof makeTrack>;
+
+    const trackA = findVideoTrack(pcA);
+    const trackB = findVideoTrack(pcB);
+    expect(trackA).not.toBe(trackB);
+
+    // A leaves the group call (scoped close) — B's outbound video must survive.
+    serviceA.close({ stopLocalTracks: false });
+    expect(trackA.stop).toHaveBeenCalled();
+    expect(trackB.stop).not.toHaveBeenCalled();
   });
 });
 
@@ -200,6 +299,33 @@ describe('WebRTCService — mid-call A/V switch', () => {
     expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(camTrack);
     expect(videoTx.direction).toBe('sendrecv');
     expect(onLocalDescription).toHaveBeenCalledWith(expect.objectContaining({ type: 'offer' }));
+  });
+
+  it('groups the upgraded video track under the call stream so the remote ontrack event carries streams[0]', async () => {
+    // A sender's MSID/stream association is fixed at addTransceiver() time —
+    // replaceTrack() never changes it (WebRTC 1.0 spec). If the reserved
+    // recvonly video transceiver was created without `streams`, the track
+    // attached later by enableVideoSend() renegotiates with no stream
+    // grouping: the remote RTCPeerConnection's ontrack event fires with an
+    // empty `event.streams`, and use-webrtc-p2p.ts's `onTrack` handler
+    // (gated on `event.streams[0]`) silently drops the upgrade — the peer's
+    // camera never renders. This test locks the association to the exact
+    // stream instance passed to addLocalMedia.
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true });
+    service.addLocalMedia(stream, { sendVideo: false });
+
+    const videoCall = pc.addTransceiver.mock.calls.find(
+      (c) => c[0] === 'video'
+    );
+    expect(videoCall?.[1]).toEqual(expect.objectContaining({ streams: [stream] }));
+
+    const camTrack = makeTrack('video');
+    await service.enableVideoSend(camTrack as unknown as MediaStreamTrack);
+
+    // enableVideoSend() must not re-create the transceiver (that would
+    // reorder m-lines) — the pre-associated one is reused as-is.
+    expect(pc.addTransceiver.mock.calls.filter((c) => c[0] === 'video' || (c[0] as { kind?: string })?.kind === 'video')).toHaveLength(1);
   });
 
   it('downgrades video→audio: replaceTrack(null) + direction recvonly', async () => {

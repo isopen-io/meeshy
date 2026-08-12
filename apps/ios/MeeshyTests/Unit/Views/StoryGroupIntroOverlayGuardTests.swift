@@ -2,10 +2,12 @@ import XCTest
 @testable import Meeshy
 
 /// Source-analysis guards pour l'unification de la carte de transition
-/// inter-groupes (directive user 2026-07-14) : une SEULE vue d'identité
-/// (`StoryGroupIntroOverlay`, durée fixe 2,6 s), `NeighborGroupCubeFace`
-/// n'affiche plus jamais d'identité pendant le drag (sinon deux cartes
-/// quasi-identiques s'enchaînaient). `goBackToPreviousGroupFromIntro()`
+/// inter-groupes : un SEUL rendu d'identité, `StoryAuthorIdentityCard`, partagé
+/// par l'interstitiel (`StoryGroupIntroOverlay`, durée nominale fixe 2,2 s) et par la
+/// face entrante du cube (`NeighborGroupCubeFace`, qui révèle l'interlude AU
+/// DOIGT depuis le 2026-07-25 — cf. le commentaire détaillé du test
+/// correspondant pour le renversement de la règle du 2026-07-14).
+/// `goBackToPreviousGroupFromIntro()`
 /// (tap gauche sur l'intro) et `StoryGroupIntroOverlay`/`NeighborGroupCubeFace`
 /// sont couplés à `@State` SwiftUI ou n'ont pas de dépendances injectables —
 /// non instanciables proprement en test (même limite documentée dans
@@ -42,30 +44,79 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
         return String(source[declRange.upperBound..<closeRange.lowerBound])
     }
 
-    // MARK: - Durée fixe 2,6 s
+    // MARK: - Durée fixe 2,2 s
 
-    func test_groupIntroDuration_is2Point6Seconds() throws {
+    /// Resserré de 2,6 à 2,2 s le 2026-07-26 (directive user). La garde porte
+    /// sur la constante NOMINALE uniquement : le voile met un peu plus longtemps
+    /// à disparaître pour de vrai (ses courbes de sortie sont préservées par
+    /// choix utilisateur, cf. la doc de `groupIntroDuration`), et aucun test ne
+    /// doit prétendre le contraire.
+    func test_groupIntroDuration_is2Point2Seconds() throws {
         let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
         XCTAssertTrue(
-            viewerSource.contains("static let groupIntroDuration: TimeInterval = 2.6"),
-            "groupIntroDuration doit être fixé à 2,6 s (directive user 2026-07-14)."
+            viewerSource.contains("static let groupIntroDuration: TimeInterval = 2.2"),
+            "groupIntroDuration doit être fixé à 2,2 s (directive user 2026-07-26)."
         )
     }
 
-    // MARK: - Une seule vue d'identité : NeighborGroupCubeFace n'affiche plus l'avatar/nom
+    // MARK: - Un seul RENDU d'identité : les deux surfaces passent par StoryAuthorIdentityCard
 
-    func test_neighborGroupCubeFace_containsNoIdentityBlock() throws {
+    /// RENVERSEMENT du 2026-07-25 (règle 4 de la navigation gestuelle : « le
+    /// swipe doit afficher l'interlude du groupe suivant en mode cube, l'effet
+    /// suit le geste »).
+    ///
+    /// De 2026-07-14 à 2026-07-25, ce test interdisait toute identité dans
+    /// `NeighborGroupCubeFace` (`MeeshyAvatar` / `group.username` bannis) :
+    /// à l'époque la face du cube et `StoryGroupIntroOverlay` avaient DEUX
+    /// rendus distincts, et l'utilisateur voyait deux cartes quasi-identiques
+    /// s'enchaîner. La face du cube révèle désormais l'interlude au doigt, donc
+    /// l'interdiction est levée — mais la garantie « pas de double affichage »
+    /// doit tenir autrement.
+    ///
+    /// Nouvelle invariante verrouillée ici : les DEUX surfaces délèguent leur
+    /// identité à `StoryAuthorIdentityCard`. Un seul rendu, donc aucune
+    /// divergence possible entre ce que le doigt révèle et ce que
+    /// l'interstitiel prolonge — et aucune des deux ne peut ré-inliner son
+    /// propre avatar/nom sans casser ce test.
+    func test_bothIntroSurfaces_delegateIdentityToSharedCard() throws {
         let canvasSource = try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
-        let block = try body(of: "struct NeighborGroupCubeFace: View {", in: canvasSource, closing: "\n}")
-        XCTAssertFalse(
-            block.contains("MeeshyAvatar"),
-            "NeighborGroupCubeFace ne doit plus afficher d'avatar — StoryGroupIntroOverlay " +
-            "est désormais la SEULE carte d'identité de la transition inter-groupes."
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+
+        let cubeFace = try body(of: "struct NeighborGroupCubeFace: View {", in: canvasSource, closing: "\n}")
+        let overlay = try body(
+            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )
-        XCTAssertFalse(
-            block.contains("group.username"),
-            "NeighborGroupCubeFace ne doit plus afficher de nom — idem."
+
+        XCTAssertTrue(
+            cubeFace.contains("StoryAuthorIdentityCard("),
+            "NeighborGroupCubeFace doit rendre l'identité via StoryAuthorIdentityCard " +
+            "(interlude révélé au doigt, directive user 2026-07-25)."
         )
+        XCTAssertTrue(
+            overlay.contains("StoryAuthorIdentityCard("),
+            "StoryGroupIntroOverlay doit rendre l'identité via StoryAuthorIdentityCard " +
+            "— pas de rendu dupliqué qui divergerait de la face du cube."
+        )
+        for (name, block) in [("NeighborGroupCubeFace", cubeFace), ("StoryGroupIntroOverlay", overlay)] {
+            XCTAssertFalse(
+                block.contains("MeeshyAvatar("),
+                "\(name) ne doit PAS ré-inliner d'avatar : StoryAuthorIdentityCard est le " +
+                "SEUL rendu d'identité de la transition inter-groupes."
+            )
+        }
+    }
+
+    /// La montée de l'identité SUIT le geste : la face du cube dérive son
+    /// opacité de l'avancement du drag, elle ne l'allume pas d'un coup.
+    func test_neighborGroupCubeFace_identityOpacityFollowsGesture() throws {
+        XCTAssertEqual(NeighborGroupCubeFace.identityOpacity(forProgress: 0), 0, accuracy: 0.001,
+                       "Au repos, aucune identité — un micro-drag ne doit pas flasher un visage.")
+        XCTAssertEqual(NeighborGroupCubeFace.identityOpacity(forProgress: 1), 1, accuracy: 0.001,
+                       "À l'arête (90°), l'identité est pleine — l'interstitiel la prolonge sans saut.")
+        let quarter = NeighborGroupCubeFace.identityOpacity(forProgress: 0.25)
+        let half = NeighborGroupCubeFace.identityOpacity(forProgress: 0.4)
+        XCTAssertGreaterThan(quarter, 0, "L'identité doit être partiellement révélée en cours de geste.")
+        XCTAssertGreaterThan(half, quarter, "L'opacité doit croître avec l'avancement du doigt.")
     }
 
     // MARK: - Tap gauche sur l'intro = retour au groupe précédent (pas la story précédente)
@@ -104,5 +155,78 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
                       "Le double-tap (n'importe où → premier slide) doit être câblé.")
         XCTAssertTrue(block.contains("exclusively(before:"),
                       "Le double-tap doit être prioritaire sur le tap simple (sinon il ne fire jamais).")
+    }
+
+    /// Depuis le 2026-07-26, le drag du lecteur (`unifiedDragGesture`) est monté
+    /// en `.simultaneousGesture` sur un ANCÊTRE de cet overlay : les swipes
+    /// restent donc actifs PENDANT l'interlude. Or un `SpatialTapGesture` se
+    /// valide au relâchement quel que soit le déplacement parcouru — sans garde,
+    /// un swipe de changement de groupe tirerait AUSSI le tap et l'utilisateur
+    /// sauterait l'interlude en même temps qu'il change d'auteur.
+    ///
+    /// La garde est ancrée sur le COMPORTEMENT, pas sur le nom du drapeau ni sur
+    /// la forme du `guard` : chaque branche de tap doit sortir tôt (`else
+    /// { return }`) AVANT d'appeler quoi que ce soit, et l'overlay doit mesurer
+    /// le déplacement lui-même (`SpatialTapGesture.Value` n'expose que
+    /// `location`, jamais la distance parcourue — il faut un mouchard
+    /// `DragGesture`).
+    func test_storyGroupIntroOverlay_tapsAreGatedOnFingerMovement() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let overlay = try body(
+            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+        )
+
+        XCTAssertTrue(
+            overlay.contains("DragGesture(minimumDistance: 0"),
+            "L'overlay doit mesurer lui-même le déplacement du doigt : un SpatialTapGesture " +
+            "ne connaît que sa position, jamais la distance parcourue."
+        )
+
+        guard let tapChain = overlay.range(of: "SpatialTapGesture(count: 2)") else {
+            return XCTFail("chaîne de taps de l'interlude introuvable")
+        }
+        let handlers = overlay[tapChain.lowerBound...]
+            .components(separatedBy: ".onEnded {")
+            .dropFirst()
+        XCTAssertEqual(handlers.count, 2, "L'interlude doit avoir exactement deux branches de tap (double, simple).")
+
+        for handler in handlers {
+            // Première action déclenchée par la branche, quelle qu'elle soit.
+            let firstAction = [handler.range(of: "onSkip()"), handler.range(of: "onBack()")]
+                .compactMap { $0?.lowerBound }
+                .min()
+            guard let firstAction else {
+                return XCTFail("une branche de tap n'appelle aucune action")
+            }
+            XCTAssertTrue(
+                String(handler[..<firstAction]).contains("else { return }"),
+                "Chaque branche de tap doit rendre au drag parent un toucher QUI A BOUGÉ, " +
+                "avant d'agir — sinon un swipe change de groupe ET saute l'interlude."
+            )
+        }
+    }
+
+    // MARK: - Badge de présence : règle 1/3/5, offline = AUCUN badge
+
+    // Le badge vit désormais dans `StoryAuthorIdentityCard` (extraction du
+    // 2026-07-25) — assertion inchangée, seul le fichier cible suit le rendu.
+    func test_presenceBadge_rendersNothingWhenOffline() throws {
+        let cardSource = try source("Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift")
+        let block = try body(of: "private var presenceBadge: some View {", in: cardSource)
+        XCTAssertTrue(
+            block.contains("state.showsIndicator"),
+            "Le badge de présence de l'intro doit gater sur showsIndicator : " +
+            "au-delà de 5 min (offline), AUCUN badge — jamais de dot gris « Hors ligne »."
+        )
+    }
+
+    func test_accessibilitySummary_omitsPresenceWhenOffline() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let block = try body(of: "private var accessibilitySummary: String {", in: viewerSource)
+        XCTAssertTrue(
+            block.contains("showsIndicator"),
+            "VoiceOver doit suivre la même règle que le badge visuel : présence " +
+            "annoncée seulement quand un indicateur est affiché (online/away/idle)."
+        )
     }
 }

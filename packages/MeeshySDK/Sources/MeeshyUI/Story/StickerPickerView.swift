@@ -95,7 +95,7 @@ public struct StickerPickerView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)  // cf. note des onglets (emoji invisibles sinon)
-                    .accessibilityLabel("Sticker \(emoji)")
+                    .accessibilityLabel(String(localized: "story.sticker.a11y", defaultValue: "Autocollant \(emoji)", bundle: .module))
                 }
             }
             .padding(.horizontal, 12)

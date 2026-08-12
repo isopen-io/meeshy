@@ -52,7 +52,7 @@ public struct MeeshyVideoPlayer: View {
         public nonisolated static let loop        = ControlSet(rawValue: 1 << 13)
 
         public nonisolated static let none: ControlSet              = []
-        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .speed]
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .pip, .airplay, .speed]
         public nonisolated static let fullscreenDefault: ControlSet = [
             .playPause, .scrubber, .duration, .save, .share, .close,
             .speed, .author, .mute, .airplay, .pip, .loop

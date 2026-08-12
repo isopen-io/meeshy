@@ -27,7 +27,12 @@ final class AudioWaveformTests: XCTestCase {
 
         XCTAssertEqual(buckets.count, 10)
         XCTAssertLessThan(buckets[1], 0.05, "Première moitié = silence → bucket ~0")
-        XCTAssertGreaterThan(buckets[8], 0.9, "Seconde moitié forte, normalisée sur le pic → ~1")
+        // Attente mise à jour avec le passage à l'amplitude ABSOLUE : la sortie
+        // n'est plus divisée par le pic, donc un signal constant à 0,9 donne un
+        // RMS de 0,9 — et non ~1 comme le faisait la normalisation. C'est le
+        // but : deux pistes de niveaux différents doivent se distinguer.
+        XCTAssertEqual(buckets[8], 0.9, accuracy: 0.02,
+                       "Seconde moitié forte → RMS absolu ≈ l'amplitude du signal")
     }
 
     func test_normalize_silence_staysZero_noNoiseAmplification() {

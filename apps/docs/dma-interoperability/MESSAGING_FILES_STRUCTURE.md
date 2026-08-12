@@ -210,7 +210,6 @@ HOOKS LAYER (State management)
 │   ├── use-message-view-state.tsx    ⭐⭐ État de message
 │   ├── use-conversation-messages.ts  ⭐⭐ Messages conversation
 │   ├── use-conversations-pagination.ts
-│   ├── use-anonymous-messages.ts
 │   └── use-websocket.ts
 
 COMPONENTS LAYER (UI)

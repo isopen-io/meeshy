@@ -1,17 +1,24 @@
 import Foundation
 import AVFoundation
 import Combine
+import os
 
 @MainActor
 public class AudioPlayerManager: ObservableObject {
     @Published public var isPlaying = false
     @Published public var progress: Double = 0 // 0-1
     @Published public var duration: TimeInterval = 0
+    /// Last playback failure, surfaced so a caller can show an error state
+    /// instead of a tap that silently does nothing. `nil` = no error;
+    /// cleared on the next successful `playData`.
+    @Published public var lastError: String?
 
     /// Called before playback starts — hook this to PlaybackCoordinator in the app layer.
     public var onWillPlay: (() -> Void)?
     /// Called when stop() is invoked — hook this to allow external stop coordination.
     public var onDidStop: (() -> Void)?
+
+    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
 
     private var localPlayer: AVAudioPlayer? {
         didSet { cleanupHandle.localPlayer = localPlayer }
@@ -107,9 +114,11 @@ public class AudioPlayerManager: ObservableObject {
             duration = localPlayer?.duration ?? 0
             localPlayer?.play()
             isPlaying = true
+            lastError = nil
             startLocalProgressTimer()
         } catch {
-            // Silent failure
+            Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
+            lastError = error.localizedDescription
         }
     }
 
@@ -166,7 +175,15 @@ public class AudioPlayerManager: ObservableObject {
 
         // Cache audio data in background for next time
         loadTask = Task {
-            _ = try? await CacheCoordinator.shared.audio.data(for: cacheKey)
+            do {
+                _ = try await CacheCoordinator.shared.audio.data(for: cacheKey)
+            } catch is CancellationError {
+                // Piste changée avant la fin du préchargement — nominal.
+            } catch {
+                // Pur préchargement : la lecture en cours n'est pas affectée,
+                // seule la prochaine ouverture repartira du réseau.
+                Logger.cache.error("Audio cache warm-up failed, next playback will re-download: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -182,7 +199,10 @@ public class AudioPlayerManager: ObservableObject {
         do {
             let data = try Data(contentsOf: url)
             playData(data)
-        } catch {}
+        } catch {
+            Self.log.error("playLocalFile echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            lastError = error.localizedDescription
+        }
     }
 
     // MARK: - Controls

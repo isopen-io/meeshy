@@ -68,12 +68,15 @@ extension StoryCanvasUIView {
     }
 
     /// Vrai si la slide porte au moins un élément foreground manipulable
-    /// (média non-bg, texte ou sticker).
+    /// (média non-bg, texte, sticker ou pastille de lieu). Sans la pastille,
+    /// une slide qui n'en porte QU'une restait en `.canvas` : tous les gestes
+    /// étaient absorbés et le badge figé là où il avait été posé.
     static func hasForegroundContent(_ effects: StoryEffects) -> Bool {
         let medias = effects.mediaObjects ?? []
         return medias.contains(where: { $0.isBackground != true })
             || !effects.textObjects.isEmpty
             || !(effects.stickerObjects ?? []).isEmpty
+            || !effects.locationObjects.isEmpty
     }
 
     /// Vrai si la slide porte un média d'arrière-plan manipulable.
@@ -142,6 +145,9 @@ extension StoryCanvasUIView {
         if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             return (s.x, s.y)
         }
+        if let l = slide.locationObjects.first(where: { $0.id == id }) {
+            return (l.x, l.y)
+        }
         return nil
     }
 
@@ -149,6 +155,7 @@ extension StoryCanvasUIView {
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.scale }
         if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.scale }
         if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.scale }
+        if let l = slide.locationObjects.first(where: { $0.id == id }) { return l.scale }
         return nil
     }
 
@@ -156,34 +163,39 @@ extension StoryCanvasUIView {
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.rotation }
         if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.rotation }
         if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.rotation }
+        if let l = slide.locationObjects.first(where: { $0.id == id }) { return l.rotation }
         return nil
     }
 
     func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
         mutateItem(slideId: slideId,
-                   text:    { $0.x = x; $0.y = y },
-                   media:   { $0.x = x; $0.y = y },
-                   sticker: { $0.x = x; $0.y = y })
+                   text:     { $0.x = x; $0.y = y },
+                   media:    { $0.x = x; $0.y = y },
+                   sticker:  { $0.x = x; $0.y = y },
+                   location: { $0.x = x; $0.y = y })
     }
 
     func updateScale(slideId: String, scale: Double) -> StorySlide {
         mutateItem(slideId: slideId,
-                   text:    { $0.scale = scale },
-                   media:   { $0.scale = scale },
-                   sticker: { $0.scale = scale })
+                   text:     { $0.scale = scale },
+                   media:    { $0.scale = scale },
+                   sticker:  { $0.scale = scale },
+                   location: { $0.scale = scale })
     }
 
     func updateRotation(slideId: String, rotation: Double) -> StorySlide {
         mutateItem(slideId: slideId,
-                   text:    { $0.rotation = rotation },
-                   media:   { $0.rotation = rotation },
-                   sticker: { $0.rotation = rotation })
+                   text:     { $0.rotation = rotation },
+                   media:    { $0.rotation = rotation },
+                   sticker:  { $0.rotation = rotation },
+                   location: { $0.rotation = rotation })
     }
 
     func mutateItem(slideId: String,
-                            text:    (inout StoryTextObject)  -> Void,
-                            media:   (inout StoryMediaObject) -> Void,
-                            sticker: (inout StorySticker)     -> Void) -> StorySlide {
+                            text:     (inout StoryTextObject)     -> Void,
+                            media:    (inout StoryMediaObject)    -> Void,
+                            sticker:  (inout StorySticker)        -> Void,
+                            location: (inout StoryLocationObject) -> Void) -> StorySlide {
         var newSlide = slide
         for i in newSlide.effects.textObjects.indices where newSlide.effects.textObjects[i].id == slideId {
             text(&newSlide.effects.textObjects[i])
@@ -203,6 +215,12 @@ extension StoryCanvasUIView {
                 return newSlide
             }
         }
+        for i in newSlide.locationObjects.indices where newSlide.locationObjects[i].id == slideId {
+            var badges = newSlide.locationObjects
+            location(&badges[i])
+            newSlide.locationObjects = badges
+            return newSlide
+        }
         return newSlide
     }
 
@@ -215,6 +233,7 @@ extension StoryCanvasUIView {
         newSlide.effects.textObjects.removeAll { $0.id == id }
         newSlide.effects.mediaObjects?.removeAll { $0.id == id }
         newSlide.effects.stickerObjects?.removeAll { $0.id == id }
+        newSlide.locationObjects.removeAll { $0.id == id }
         slide = newSlide
         onItemModified?(slide)
     }
@@ -254,14 +273,26 @@ extension StoryCanvasUIView {
             onItemModified?(slide)
             return
         }
+        if let original = newSlide.locationObjects.first(where: { $0.id == id }) {
+            var copy = original
+            copy.id = UUID().uuidString
+            copy.x = clamp(copy.x + 0.05)
+            copy.y = clamp(copy.y + 0.05)
+            copy.zIndex = nextTopZ()
+            newSlide.locationObjects.append(copy)
+            slide = newSlide
+            onItemModified?(slide)
+            return
+        }
     }
 
     func sendToBack(id: String) {
         let newZ = nextBottomZ()
         slide = mutateItem(slideId: id,
-                           text:    { $0.zIndex = newZ },
-                           media:   { $0.zIndex = newZ },
-                           sticker: { $0.zIndex = newZ })
+                           text:     { $0.zIndex = newZ },
+                           media:    { $0.zIndex = newZ },
+                           sticker:  { $0.zIndex = newZ },
+                           location: { $0.zIndex = newZ })
         onItemModified?(slide)
     }
 
@@ -270,7 +301,8 @@ extension StoryCanvasUIView {
         elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
         elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
         elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
-        
+        elements += slide.locationObjects.map { ($0.id, $0.zIndex) }
+
         elements.sort { $0.1 < $1.1 }
         
         guard let index = elements.firstIndex(where: { $0.0 == id }), index < elements.count - 1 else { return }
@@ -287,8 +319,8 @@ extension StoryCanvasUIView {
 
         let nextId = elements[index + 1].0
 
-        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ })
-        slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ }, sticker: { $0.zIndex = newNextZ })
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ }, sticker: { $0.zIndex = newNextZ }, location: { $0.zIndex = newNextZ })
         onItemModified?(slide)
     }
 
@@ -297,7 +329,8 @@ extension StoryCanvasUIView {
         elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
         elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
         elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
-        
+        elements += slide.locationObjects.map { ($0.id, $0.zIndex) }
+
         elements.sort { $0.1 < $1.1 }
         
         guard let index = elements.firstIndex(where: { $0.0 == id }), index > 0 else { return }
@@ -313,22 +346,23 @@ extension StoryCanvasUIView {
         
         let prevId = elements[index - 1].0
         
-        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ })
-        slide = mutateItem(slideId: prevId, text: { $0.zIndex = newPrevZ }, media: { $0.zIndex = newPrevZ }, sticker: { $0.zIndex = newPrevZ })
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: prevId, text: { $0.zIndex = newPrevZ }, media: { $0.zIndex = newPrevZ }, sticker: { $0.zIndex = newPrevZ }, location: { $0.zIndex = newPrevZ })
         onItemModified?(slide)
     }
 
     func nextTopZ() -> Int {
-        let allZ = slide.effects.textObjects.map(\.zIndex)
-            + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
-            + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
-        return (allZ.max() ?? 0) + 1
+        (allItemZIndexes().max() ?? 0) + 1
     }
 
     func nextBottomZ() -> Int {
-        let allZ = slide.effects.textObjects.map(\.zIndex)
+        (allItemZIndexes().min() ?? 0) - 1
+    }
+
+    private func allItemZIndexes() -> [Int] {
+        slide.effects.textObjects.map(\.zIndex)
             + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
             + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
-        return (allZ.min() ?? 0) - 1
+            + slide.locationObjects.map(\.zIndex)
     }
 }

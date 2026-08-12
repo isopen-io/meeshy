@@ -34,6 +34,9 @@ public struct ConnectionActionView: View {
 
     private let friendService: FriendServiceProviding
     private let resolver: UserRelationshipResolver
+    /// Routes `sendRequest()` through the durable outbox instead of a
+    /// direct REST call — see that method for the rationale.
+    private let offlineQueue: OfflineQueueing
 
     public init(
         userId: String,
@@ -41,6 +44,7 @@ public struct ConnectionActionView: View {
         accentColor: Color = MeeshyColors.indigo500,
         friendService: FriendServiceProviding = FriendService.shared,
         resolver: UserRelationshipResolver = .shared,
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
         onError: ((String) -> Void)? = nil,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -49,6 +53,7 @@ public struct ConnectionActionView: View {
         self.accentColor = accentColor
         self.friendService = friendService
         self.resolver = resolver
+        self.offlineQueue = offlineQueue
         self.onError = onError
         self.onSuccess = onSuccess
     }
@@ -182,19 +187,55 @@ public struct ConnectionActionView: View {
 
     // MARK: - Actions (optimistic + rollback)
 
+    /// Routed through the `.sendFriendRequest` outbox — the dispatcher side
+    /// (`OutboxDispatcher.dispatchSendFriendRequest`) was already wired, but
+    /// no call site enqueued it: this used a direct `FriendService` REST
+    /// call, so an offline tap failed with no durability and no optimistic
+    /// state change accompanying the (premature) success haptic. The cache
+    /// now flips to `.pendingSent` synchronously, THEN the haptic fires,
+    /// THEN the durable enqueue — capture → apply local → send → rollback
+    /// on failure, matching `RequestsViewModel.accept`/`.reject`.
+    ///
+    /// `requestId` for the optimistic entry is the `clientMutationId` (the
+    /// real gateway id isn't known until the outbox flushes) — cancelling a
+    /// request still queued offline (not yet flushed) is a known narrow gap,
+    /// unchanged from before this fix.
     private func sendRequest() async {
         guard !isBusy else { return }
         isBusy = true
         defer { isBusy = false }
+        let cmid = ClientMutationId.generate()
+        friendshipCache.didSendRequest(to: userId, requestId: cmid)
         HapticFeedback.success()
+        observeSendRequestOutcome(cmid: cmid)
+        let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            let request = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
-            friendshipCache.didSendRequest(to: userId, requestId: request.id)
+            try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
             await friendshipCache.invalidatePersistedFriendCaches()
             onSuccess?(String(localized: "connection.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module))
         } catch {
+            friendshipCache.didCancelRequest(to: userId)
             HapticFeedback.error()
             onError?(String(localized: "connection.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module))
+        }
+    }
+
+    /// Mirrors `RequestsViewModel.observeOutcome`: rolls back the optimistic
+    /// `.pendingSent` entry if the OutboxFlusher exhausts its retry budget.
+    private func observeSendRequestOutcome(cmid: String) {
+        let offlineQueue = self.offlineQueue
+        let friendshipCache = self.friendshipCache
+        let userId = self.userId
+        let onError = self.onError
+        Task { @MainActor in
+            let stream = await offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    friendshipCache.didCancelRequest(to: userId)
+                    onError?(String(localized: "connection.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module))
+                    HapticFeedback.error()
+                }
+            }
         }
     }
 

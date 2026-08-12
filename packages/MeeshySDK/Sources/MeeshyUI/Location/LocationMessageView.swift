@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import MeeshySDK
+import UIKit
 
 public struct LocationMessageView: View {
     let latitude: Double
@@ -9,27 +10,44 @@ public struct LocationMessageView: View {
     let address: String?
     let accentColor: String
     let onTapFullscreen: (() -> Void)?
+    let thumbnailProvider: any LocationMapThumbnailProviding
+
+    private static let thumbnailSize = CGSize(width: 260, height: 150)
 
     public init(latitude: Double, longitude: Double, placeName: String? = nil,
                 address: String? = nil, accentColor: String = MeeshyColors.brandPrimaryHex,
-                onTapFullscreen: (() -> Void)? = nil) {
+                onTapFullscreen: (() -> Void)? = nil,
+                thumbnailProvider: any LocationMapThumbnailProviding = LocationMapThumbnailProvider()) {
         self.latitude = latitude; self.longitude = longitude
         self.placeName = placeName; self.address = address
         self.accentColor = accentColor; self.onTapFullscreen = onTapFullscreen
+        self.thumbnailProvider = thumbnailProvider
+    }
+
+    /// Rendu unique d'un lieu (Task 14, 2026-07-29) : message, post et
+    /// commentaire partagent désormais tous `SharedPlace` comme véhicule, donc
+    /// tous convergent vers cet initialiseur plutôt que de reconstruire leur
+    /// propre notion de « position ». L'initialiseur historique par
+    /// coordonnées brutes reste ci-dessus (public API du package) pour les
+    /// consommateurs qui n'ont qu'une paire lat/lon sans `SharedPlace`.
+    public init(place: SharedPlace,
+                accentColor: String = MeeshyColors.brandPrimaryHex,
+                onTapFullscreen: (() -> Void)? = nil,
+                thumbnailProvider: any LocationMapThumbnailProviding = LocationMapThumbnailProvider()) {
+        self.init(latitude: place.latitude, longitude: place.longitude,
+                  placeName: place.name, address: place.address,
+                  accentColor: accentColor, onTapFullscreen: onTapFullscreen,
+                  thumbnailProvider: thumbnailProvider)
     }
 
     private var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    private var region: MKCoordinateRegion {
-        MKCoordinateRegion(center: coordinate, latitudinalMeters: 500, longitudinalMeters: 500)
-    }
-
     public var body: some View {
         VStack(spacing: 0) {
             mapContent
-                .frame(height: 150)
+                .frame(height: Self.thumbnailSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .allowsHitTesting(false)
 
@@ -37,7 +55,7 @@ public struct LocationMessageView: View {
                 locationInfoBar
             }
         }
-        .frame(width: 260)
+        .frame(width: Self.thumbnailSize.width)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(.systemBackground).opacity(0.95))
@@ -47,17 +65,13 @@ public struct LocationMessageView: View {
         .onTapGesture {
             onTapFullscreen?()
         }
-        .accessibilityLabel("Location: \(placeName ?? "Shared location")")
-        .accessibilityHint("Tap to open full map")
+        .accessibilityLabel(String(localized: "location.a11y.label", defaultValue: "Position : \(placeName ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))", bundle: .module))
+        .accessibilityHint(String(localized: "location.a11y.hint", defaultValue: "Touchez pour ouvrir la carte en plein écran", bundle: .module))
     }
 
-    @ViewBuilder
     private var mapContent: some View {
-        if #available(iOS 17.0, *) {
-            LocationMapView17(coordinate: coordinate, region: region, accentColor: accentColor)
-        } else {
-            LocationMapView16(coordinate: coordinate, region: region, accentColor: accentColor)
-        }
+        LocationMapThumbnailView(coordinate: coordinate, accentColor: accentColor,
+                                 size: Self.thumbnailSize, provider: thumbnailProvider)
     }
 
     private var locationInfoBar: some View {
@@ -92,44 +106,48 @@ public struct LocationMessageView: View {
     }
 }
 
-// MARK: - iOS 17+ Map
+// MARK: - Static Map Thumbnail
 
-@available(iOS 17.0, *)
-private struct LocationMapView17: View {
+/// Vignette carte STATIQUE : placeholder déterministe (dégradé discret +
+/// épingle) immédiatement, puis l'image `MKMapSnapshotter` du provider quand
+/// elle arrive. Aucune `Map`/`MKMapView` vivante ici — la vignette est
+/// non-interactive (`allowsHitTesting(false)`) et l'interaction vit dans
+/// `LocationFullscreenView` ; une carte vivante rendait les snapshots tests
+/// non déterministes (capture sync vs tuiles Metal async).
+private struct LocationMapThumbnailView: View {
     let coordinate: CLLocationCoordinate2D
-    let region: MKCoordinateRegion
     let accentColor: String
+    let size: CGSize
+    let provider: any LocationMapThumbnailProviding
 
-    @State private var mapPosition: MapCameraPosition
-
-    init(coordinate: CLLocationCoordinate2D, region: MKCoordinateRegion, accentColor: String) {
-        self.coordinate = coordinate
-        self.region = region
-        self.accentColor = accentColor
-        _mapPosition = State(initialValue: .region(region))
-    }
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var thumbnail: UIImage?
 
     var body: some View {
-        Map(position: $mapPosition, interactionModes: []) {
-            Annotation("", coordinate: coordinate) {
-                LocationPinView(accentColor: accentColor, size: .small)
+        ZStack {
+            if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder
             }
+            LocationPinView(accentColor: accentColor, size: .small)
+        }
+        .task(id: colorScheme) {
+            thumbnail = await provider.thumbnail(coordinate: coordinate, size: size,
+                                                 isDark: colorScheme == .dark)
         }
     }
-}
 
-// MARK: - iOS 16 Fallback Map
-
-private struct LocationMapView16: View {
-    let coordinate: CLLocationCoordinate2D
-    let region: MKCoordinateRegion
-    let accentColor: String
-
-    var body: some View {
-        Map(coordinateRegion: .constant(region), interactionModes: [], annotationItems: [LocationAnnotationItem(coordinate: coordinate)]) { item in
-            MapAnnotation(coordinate: item.coordinate) {
-                LocationPinView(accentColor: accentColor, size: .small)
-            }
+    private var placeholder: some View {
+        ZStack {
+            Color(.secondarySystemBackground)
+            LinearGradient(
+                colors: [Color(hex: accentColor).opacity(0.18),
+                         Color(hex: accentColor).opacity(0.05)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
         }
     }
 }
@@ -194,6 +212,6 @@ struct LocationPinView: View {
 // MARK: - Annotation Item for iOS 16
 
 struct LocationAnnotationItem: Identifiable {
-    let id = UUID()
     let coordinate: CLLocationCoordinate2D
+    var id: String { "\(coordinate.latitude),\(coordinate.longitude)" }
 }
