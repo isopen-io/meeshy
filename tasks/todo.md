@@ -109,18 +109,51 @@ registre. Elle est marquée LIVRÉ, avec la mention du défaut voisin qu'elle ne
   `meta.deletedStoryIdsTruncated` de la route fait tomber ses **2 témoins**. Reverts confirmés par
   grep après coup.
 - `tsc --noEmit` gateway : 0 erreur (après `packages/shared && bun run build`).
-- Suite gateway complète : voir §Reste ouvert pour le verdict de la passe `test:coverage`.
+- Suite gateway **complète** (`bun run test:coverage`, parité CI) : **653/653 suites, 16 462/16 462
+  tests**, exit 0. (Le pourcentage global de couverture n'a pas été relevé — la commande était
+  filtrée par `| tail -35`, qui a coupé la ligne `All files`. Aucun témoin retiré, donc la
+  couverture ne peut que monter sur les fichiers touchés ; le chiffre n'est pas rapporté plutôt que
+  deviné.)
+- **CI de la PR #2867 : tous les checks verts** — `Quality (bun)`, `Build (bun)`, `Security`,
+  `Test gateway`, `Test shared`, `Test web`, `Test agent`, `Test Python (translator)`, `Prisma`,
+  `Audio Pipeline`, `TTS/STT`, `Voice API`, `Summary`, et **`sdk-tests`** (qui compile
+  `packages/MeeshySDK` et valide donc le décodage du nouveau champ). `Trivy` neutre,
+  `Voice E2E Benchmark` sauté — comme sur les PR précédentes.
 - iOS : 9 témoins ajoutés à `StoryViewModelTests` (drain de pages, chaînage des curseurs, plafond
   de pages, `hasMore` sans curseur, union des tombstones inter-pages, escalade sur troncature,
-  non-escalade sur fenêtre complète, rétro-compat `meta` absent). **Aucune toolchain Swift dans ce
-  conteneur** — la validation passe par `sdk-tests.yml` (déclenché par le diff
-  `packages/MeeshySDK/**`) et par `ios-tests.yml`, qui ne tourne PAS automatiquement sur une PR et
-  doit être lancé à la main sur la branche.
+  non-escalade sur fenêtre complète, rétro-compat `meta` absent). **Ces 9 témoins n'ont été
+  exécutés par personne** — voir §Reste ouvert, c'est la limite la plus importante de ce cycle.
 - Aucun fichier Swift NEUF : les témoins vivent dans des suites déjà enregistrées au pbxproj —
   donc pas d'orphelin possible (leçon 120).
 
 ## Reste ouvert après ce cycle
 
+- **⚠️ LE LOT `apps/ios` A ÉTÉ MERGÉ SANS AVOIR ÉTÉ COMPILÉ NULLE PART.** À dire franchement,
+  parce que c'est un écart au gate documenté d'`apps/ios/CLAUDE.md` (« `./apps/ios/meeshy.sh test`
+  MUST pass before any commit ») et que les cycles suivants doivent le savoir. Trois faits qui se
+  cumulent, aucun contournable depuis la routine :
+  1. **pas de toolchain Swift dans le conteneur** (`swift`/`xcodebuild` absents — vérifié, pas
+     supposé) ;
+  2. **`ios-tests.yml` ne tourne pas sur une PR** : son trigger est `push` sur `dev` +
+     `workflow_dispatch` ;
+  3. **le dispatch manuel est REFUSÉ à l'intégration** (`403 Resource not accessible by
+     integration`) — donc la porte de sortie que le workflow prévoit exprès pour ce cas est fermée
+     à cette routine.
+  `sdk-tests` couvre `packages/MeeshySDK` (donc `APIResponseMeta`), mais **rien** ne compile
+  `apps/ios/**`. Différence matérielle avec le cycle 79, qui touchait le SDK et était donc bien
+  gaté : **ne pas se référer à ce précédent pour conclure « la routine sait gater l'iOS ».**
+  Mitigation appliquée à défaut : revue statique ciblée (équilibrage des accolades comparé à HEAD
+  pour écarter les artefacts du parseur maison, aplatissement du chaînage d'optionnels
+  `pagination?.hasMore`, inférence générique de `JSONStub.decode` sous `return` implicite,
+  interpolation `os.Logger` avec `privacy:`, continuations `\` et indentation des littéraux
+  multi-lignes, isolation des types imbriqués dans une classe `@MainActor`), et **aucun fichier
+  Swift neuf** donc aucun risque d'orphelin pbxproj. Points de rupture les plus probables s'il y a
+  une erreur : la compilation du drain (`DrainedStoryPages`, `for _ in 0..<Self.maxTrayPagesPerPass`)
+  et la file `listResults` du mock.
+  **Action pour le prochain cycle : commencer par vérifier l'état de « iOS Tests » sur `dev`/`main`
+  et corriger sans délai ce qui viendrait de ce lot.** Et si la routine doit continuer à toucher
+  `apps/ios`, la vraie correction est structurelle : obtenir le droit `actions: write` pour
+  l'intégration, ou ajouter un trigger `pull_request` restreint aux chemins `apps/ios/**`.
 - **Le tray WEB reste coupé à 50**, et deux services se disputent la route. Voir la tête du
   cycle 81 ci-dessus.
 - **`maxTrayPagesPerPass = 6` est une borne tenue à la main**, comme `trayPageLimit = 50` face au
