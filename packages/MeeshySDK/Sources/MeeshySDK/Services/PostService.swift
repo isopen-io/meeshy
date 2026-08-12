@@ -312,7 +312,9 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             let force: Bool?
         }
         let body = TranslateCommentRequest(targetLanguage: targetLanguage, force: force ? true : nil)
-        let _: APIResponse<[String: AnyCodable]> = try await api.post(
+        // SimpleAPIResponse : le payload (`{ requested, targetLanguage }`) ne
+        // nous sert pas — le résultat utile arrive par le socket.
+        let _: SimpleAPIResponse = try await api.post(
             endpoint: "/posts/\(postId)/comments/\(commentId)/translate", body: body
         )
     }
