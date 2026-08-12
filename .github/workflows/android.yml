@@ -82,29 +82,49 @@ jobs:
       # Derived from app/build.gradle.kts rather than hardcoded: a compileSdk
       # bump must not require editing this workflow in lockstep and silently
       # break the gate when it drifts.
-      - name: Install compileSdk platform
+      # Best effort ONLY — never fails the job. AGP resolves and downloads the
+      # platform it actually wants (licences are accepted by setup-android
+      # above), and it is the authority on which package a given compileSdk
+      # maps to. This step exists to pre-warm the common case and to print what
+      # is published, so a resolution failure in Gradle below can be read
+      # against the real catalogue instead of guessed at.
+      #
+      # Why it cannot just install "platforms;android-$major": since the minor
+      # SDK releases (36.1, 37.0, 37.1 …) an API level is no longer guaranteed
+      # to be published under a bare `android-N` name. Run #1 of this workflow
+      # failed on exactly that — "Failed to find package 'platforms;android-37'"
+      # — while android-37.0 and android-37.1 both exist.
+      - name: Provision compileSdk platform (best effort)
+        continue-on-error: true
         run: |
           compile_sdk="$(grep -oE 'compileSdk[[:space:]]*=[[:space:]]*[0-9]+' app/build.gradle.kts | grep -oE '[0-9]+' | head -1)"
           if [ -z "$compile_sdk" ]; then
-            echo "::error::could not read compileSdk from apps/android/app/build.gradle.kts"
-            exit 1
+            echo "::warning::could not read compileSdk from app/build.gradle.kts; leaving provisioning to AGP"
+            exit 0
           fi
           echo "compileSdk = $compile_sdk"
-          # A platform that is still in preview is absent from the default
-          # (stable) channel, so a plain --install reports "Failed to find
-          # package" for an API level that does exist. Retry on the canary
-          # channel before concluding anything.
+
           if sdkmanager --install "platforms;android-${compile_sdk}"; then
+            echo "installed platforms;android-${compile_sdk}"
             exit 0
           fi
-          echo "::warning::platforms;android-${compile_sdk} not on the stable channel; retrying on canary"
-          if sdkmanager --channel=3 --install "platforms;android-${compile_sdk}"; then
-            exit 0
+
+          # Highest published minor for that major, excluding previews
+          # (-beta/-rc) and extension SDKs, across the preview channels too.
+          candidate="$(sdkmanager --channel=3 --list 2>/dev/null \
+            | grep -oE "platforms;android-${compile_sdk}\.[0-9]+" \
+            | sort -uV | tail -1)"
+
+          if [ -n "$candidate" ]; then
+            echo "::notice::no bare platforms;android-${compile_sdk}; installing ${candidate}"
+            sdkmanager --channel=3 --install "$candidate" || true
+          else
+            echo "::warning::no platform published for API ${compile_sdk}; AGP will have to resolve it"
           fi
-          echo "::error::no SDK platform published for compileSdk=${compile_sdk} on either channel"
-          echo "Platforms actually available:"
-          sdkmanager --list 2>/dev/null | grep -E '^\s+platforms;android-' | sort -u
-          exit 1
+
+          echo "Platforms published for API ${compile_sdk}:"
+          sdkmanager --channel=3 --list 2>/dev/null \
+            | grep -oE "platforms;android-${compile_sdk}[^ |]*" | sort -u
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
