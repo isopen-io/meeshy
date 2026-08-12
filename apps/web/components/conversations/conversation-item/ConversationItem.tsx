@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, memo } from 'react';
+import { useCallback, memo, useMemo } from 'react';
 import { Pin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -20,9 +20,11 @@ import {
   getConversationAvatarUrl,
   getConversationIcon,
   getConversationNameOnly,
-  getConversationCreatedDate
+  getConversationCreatedDate,
+  getMessageSenderName
 } from './conversation-utils';
 import { formatLastMessage } from './message-formatting';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -63,6 +65,20 @@ export const ConversationItem = memo(function ConversationItem({
   const localIsMuted = storePrefs?.isMuted ?? isMuted;
   const localIsArchived = storePrefs?.isArchived ?? isArchived;
   const localReaction = storePrefs?.reaction ?? reaction;
+
+  // Prisme Linguistique de la ligne de liste (cycle 61). `getUserLanguagePreferences`
+  // est le seul point d'entrée autorisé côté web — il délègue à
+  // `resolveUserLanguagesOrdered` (@meeshy/shared) ET injecte la `deviceLocale`
+  // en 4e priorité, ce qu'un appel direct au shared perdrait (cf. apps/web/CLAUDE.md).
+  const preferredLanguages = useMemo(
+    () => getUserLanguagePreferences(currentUser),
+    [
+      currentUser.systemLanguage,
+      currentUser.regionalLanguage,
+      currentUser.customDestinationLanguage,
+      currentUser.deviceLocale
+    ]
+  );
 
   // Actions du menu - utilisent le store pour la réactivité
   const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
@@ -188,23 +204,13 @@ export const ConversationItem = memo(function ConversationItem({
   }, [t]);
 
   const getSenderName = useCallback((message: unknown) => {
-    const sender = message?.sender;
-    const isAnonymous = false;
-
+    const sender = (message as { sender?: unknown } | null | undefined)?.sender;
     if (!sender) return null;
 
-    let senderName = sender.displayName ||
-                     sender.username ||
-                     (sender.firstName || sender.lastName
-                       ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim()
-                       : null);
-
-    if (!senderName) {
-      senderName = isAnonymous ? tCommon('anonymous') : tCommon('user');
-    }
-
-    return isAnonymous ? `${senderName} (anonyme)` : senderName;
-  }, []);
+    // Nom canonique via le SSOT (displayName > firstName+lastName > username) ;
+    // fallback i18n uniquement si l'expéditeur existe mais n'a aucun nom.
+    return getMessageSenderName(message) ?? tCommon('user');
+  }, [tCommon]);
 
   return (
     <div
@@ -300,7 +306,11 @@ export const ConversationItem = memo(function ConversationItem({
             {getSenderName(conversation.lastMessage) && (
               <span className="font-medium">{getSenderName(conversation.lastMessage)}: </span>
             )}
-            {formatLastMessage(conversation.lastMessage)}
+            {formatLastMessage(conversation.lastMessage, {
+              translations: conversation.lastMessageTranslations,
+              originalLanguage: conversation.lastMessageOriginalLanguage,
+              preferredLanguages
+            })}
           </p>
         )}
       </div>

@@ -10,6 +10,9 @@ final class FeedPersistenceActorTests: XCTestCase {
     override func setUp() async throws {
         dbQueue = try DatabaseQueue()
         try FeedDatabaseMigrations.runAll(on: dbQueue)
+        // grdb-03 — la garde anti-clobber lit la table outbox, qui vit dans
+        // le migrator messages (deux DatabaseMigrator distincts, même queue).
+        try MessageDatabaseMigrations.runAll(on: dbQueue)
         actor = FeedPersistenceActor(dbWriter: dbQueue)
     }
 
@@ -34,6 +37,21 @@ final class FeedPersistenceActorTests: XCTestCase {
         let fetched = try actor.posts(limit: 10)
         XCTAssertEqual(fetched[0].likeCount, 5)
         XCTAssertTrue(fetched[0].isLikedByMe)
+    }
+
+    /// stores-03 — le like d'un TIERS met à jour le compteur absolu sans
+    /// jamais toucher isLikedByMe, qui n'a de sens que pour l'utilisateur
+    /// courant.
+    func test_updateLikeCountOnly_updatesCountButLeavesIsLikedByMeUntouched() async throws {
+        var seeded = PostRecordFactory.make(id: "post_like_only")
+        seeded.isLikedByMe = true
+        try await actor.insertPost(seeded)
+
+        try await actor.updateLikeCountOnly(postId: "post_like_only", count: 9)
+
+        let fetched = try actor.posts(limit: 10)
+        XCTAssertEqual(fetched[0].likeCount, 9)
+        XCTAssertTrue(fetched[0].isLikedByMe, "updateLikeCountOnly ne doit jamais toucher isLikedByMe")
     }
 
     func test_updatePostReactionSummary_setsAndMergesEmojiCounts() async throws {
@@ -188,4 +206,59 @@ final class FeedPersistenceActorTests: XCTestCase {
         XCTAssertEqual(page2.count, 10)
         XCTAssertTrue(page2[0].createdAt < page1.last!.createdAt)
     }
+
+    // MARK: - grdb-03 — garde anti-clobber outbox sur insertPosts
+
+    private func seedPendingLike(postId: String) async throws {
+        let payload = try JSONEncoder().encode(
+            ToggleLikePostPayload(clientMutationId: "cmid_like_\(postId)", postId: postId, liked: true)
+        )
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .toggleLikePost,
+                conversationId: "feed",
+                messageLocalId: "post_like_\(postId)",
+                clientMessageId: "cmid_like_\(postId)",
+                payload: payload,
+                status: .pending
+            ).insert(db)
+        }
+    }
+
+    func test_insertPosts_pendingToggleLikeInOutbox_preservesIsLikedByMeAndCounts() async throws {
+        var optimistic = PostRecordFactory.make(id: "post_x", content: "hello")
+        optimistic.isLikedByMe = true
+        optimistic.likeCount = 5
+        try await actor.insertPost(optimistic)
+        try await seedPendingLike(postId: "post_x")
+
+        var staleServer = PostRecordFactory.make(id: "post_x", content: "hello (server)")
+        staleServer.isLikedByMe = false
+        staleServer.likeCount = 4
+        try await actor.insertPosts([staleServer])
+
+        let fetched = try actor.posts(limit: 10).first
+        XCTAssertEqual(fetched?.isLikedByMe, true,
+                       "un refresh REST périmé ne doit pas dé-remplir le cœur pendant que le like attend en outbox")
+        XCTAssertEqual(fetched?.likeCount, 5)
+        XCTAssertEqual(fetched?.content, "hello (server)",
+                       "les champs NON protégés prennent bien la valeur serveur")
+    }
+
+    func test_insertPosts_noPendingMutation_takesServerValues() async throws {
+        var optimistic = PostRecordFactory.make(id: "post_y", content: "hello")
+        optimistic.isLikedByMe = true
+        optimistic.likeCount = 5
+        try await actor.insertPost(optimistic)
+
+        var server = PostRecordFactory.make(id: "post_y", content: "hello")
+        server.isLikedByMe = false
+        server.likeCount = 4
+        try await actor.insertPosts([server])
+
+        let fetched = try actor.posts(limit: 10).first
+        XCTAssertEqual(fetched?.isLikedByMe, false, "sans mutation pending, le serveur fait foi")
+        XCTAssertEqual(fetched?.likeCount, 4)
+    }
+
 }

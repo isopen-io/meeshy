@@ -9,7 +9,7 @@
  * @module components/conversations/ConversationView
  */
 
-import React, { memo, forwardRef, useMemo, useState } from 'react';
+import React, { memo, forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationMessages } from './ConversationMessages';
@@ -19,6 +19,9 @@ import { FailedMessageBanner } from '@/components/messages/failed-message-banner
 import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useSeenMessages } from '@/hooks/use-seen-messages';
+import { resolveConsumedLanguage } from '@/utils/consumed-language';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -195,6 +198,53 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       isSearchOpen,
       onSearchClose,
     } = props;
+
+    // Prisme linguistique : quelle version le lecteur a-t-il sous les yeux pour
+    // chaque bulle. Lu à travers un ref pour que l'identité de la fonction reste
+    // STABLE — `useSeenMessages` la garde en dépendance, et une fonction recréée
+    // à chaque arrivée de message reconstruirait les observers en boucle.
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
+
+    // Liste ordonnée des langues préférées via le SSOT du Prisme Linguistique :
+    // `getUserLanguagePreferences` injecte la `deviceLocale` en 4e priorité et
+    // normalise chaque code (`pt-BR` → `pt`), exactement comme le chemin qui
+    // résout le TEXTE affiché (`resolveUserPreferredLanguage`). Reconstruire la
+    // liste à la main ici la faisait diverger : sans deviceLocale, un lecteur
+    // dont c'est le seul signal de langue voyait le serveur enregistrer la
+    // langue ORIGINALE — une langue jamais affichée.
+    const preferredLanguages = useMemo(
+      () => getUserLanguagePreferences(currentUser),
+      [
+        currentUser.systemLanguage,
+        currentUser.regionalLanguage,
+        currentUser.customDestinationLanguage,
+        (currentUser as { deviceLocale?: string | null }).deviceLocale,
+      ]
+    );
+    const preferredLanguagesRef = useRef(preferredLanguages);
+    preferredLanguagesRef.current = preferredLanguages;
+
+    const resolveLanguage = useCallback((messageId: string): string | null => {
+      const message = messagesRef.current.find(m => m.id === messageId);
+      if (!message) return null;
+      return resolveConsumedLanguage({
+        originalLanguage: message.originalLanguage,
+        availableTranslations: (message.translations ?? []).map(t => t.targetLanguage),
+        preferredLanguages: preferredLanguagesRef.current,
+      });
+    }, []);
+
+    // Suivi de lecture exact — rapporte au serveur les messages RÉELLEMENT
+    // affichés. Branché ICI et non dans ConversationLayout : le div scrollable
+    // est monté par ce composant, c'est donc le seul endroit où le ref est
+    // déjà peuplé au premier effet.
+    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+    useSeenMessages({
+      containerRef: scrollContainerRef,
+      conversationId: conversation?.id ?? null,
+      resolveLanguage,
+    });
 
     // Search panel state (controlled locally when parent doesn't supply it)
     const [localSearchOpen, setLocalSearchOpen] = useState(false);

@@ -158,6 +158,14 @@ struct BubbleContent: Equatable {
     let translation: Translation?
     let reply: Reply?
     let attachments: Attachments
+    /// Lieu partagé porté par `message.location` (hissé côté serveur depuis
+    /// `locationJson`). C'est la SEULE voie que le serveur produit encore :
+    /// `MessageAttachment` n'a aucun champ géographique en Prisma, donc une
+    /// pièce jointe `.location` ne peut venir que d'anciennes lignes du cache
+    /// local. Le builder garantit l'exclusivité : quand `location != nil`, les
+    /// pièces jointes `.location` sont exclues de `attachments` pour qu'un
+    /// message portant les deux ne rende le lieu qu'UNE fois.
+    let location: SharedPlace?
     let ephemeral: Ephemeral?
     let isBlurred: Bool                    // gates le composant de blur reveal
     let isViewOnce: Bool
@@ -184,6 +192,11 @@ struct BubbleContent: Equatable {
     var hasTextOrNonMediaContent: Bool {
         let hasText = !(text?.raw.isEmpty ?? true)
         let hasNonMedia: Bool = {
+            // Un lieu porté par `message.location` compte comme contenu
+            // non-média : exactement la sémantique qu'avait une pièce jointe
+            // `.location` (les anciennes lignes du cache local), pour qu'un
+            // message « lieu seul » atteigne bien la bulle texte qui l'héberge.
+            if location != nil { return true }
             switch attachments {
             case .nonMedia: return true
             case .mixed(_, _, let nm): return !nm.isEmpty
@@ -233,6 +246,7 @@ struct BubbleContent: Equatable {
             && lhs.translation == rhs.translation
             && lhs.reply == rhs.reply
             && lhs.attachments == rhs.attachments
+            && lhs.location == rhs.location
             && lhs.ephemeral == rhs.ephemeral
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce

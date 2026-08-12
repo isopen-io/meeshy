@@ -24,8 +24,10 @@ final class OrientationManager: ObservableObject {
     func lockPortrait() {
         orientationLock = .portrait
         if #available(iOS 16.0, *) {
-            guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first else { return }
+            // La scène ACTIVE, pas `connectedScenes.first` : sur un `Set` non
+            // ordonné, `.first` pouvait faire pivoter une fenêtre d'arrière-plan
+            // pendant que celle du lecteur restait dans son orientation.
+            guard let windowScene = DeviceLayout.activeWindowScene else { return }
             windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
         }
     }

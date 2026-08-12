@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 private struct TestItem: CacheIdentifiable, Codable, Equatable {
@@ -199,6 +200,106 @@ final class CacheFirstLoaderTests: XCTestCase {
         }
     }
 
+    // MARK: - cache-04 — la branche .expired peint la donnée disque avant le fetch
+
+    private func makeGRDBStore(
+        encrypted: Bool = false,
+        encryption: (any DatabaseEncryptionProviding)? = nil
+    ) throws -> GRDBCacheStore<String, TestItem> {
+        let dbQueue = try DatabaseQueue(configuration: Configuration())
+        try AppDatabase.runMigrations(on: dbQueue)
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+        if let encryption {
+            return GRDBCacheStore(policy: policy, db: dbQueue, encrypted: encrypted, encryption: encryption)
+        }
+        return GRDBCacheStore(policy: policy, db: dbQueue, encrypted: encrypted)
+    }
+
+    func test_load_expiredWithDiskPayloadAndFetchFailure_paintsRecoveredItemsAndSetsOffline() async throws {
+        let store = try makeGRDBStore()
+        let seeded = [TestItem(id: "1", name: "persisté")]
+        try await store.save(seeded, for: "k")
+        await store.debugRewindFetchTimestamp(by: .hours(1) + 10, for: "k")
+        let monitor = StubNetworkMonitor(isOnline: false)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+
+        var capturedStates: [LoadState] = []
+        var capturedItems: [[TestItem]] = []
+        _ = await loader.load(
+            fetch: { throw MeeshyError.network(.noConnection) },
+            setLoadState: { capturedStates.append($0) },
+            apply: { capturedItems.append($0) }
+        )
+
+        XCTAssertEqual(capturedItems.first, seeded,
+                       "offline après TTL : la dernière donnée connue doit être PEINTE, pas un écran vide")
+        XCTAssertEqual(capturedStates.first, .cachedStale,
+                       "la donnée disque est servie en .cachedStale, pas .loading")
+        XCTAssertEqual(capturedStates.last, .offline)
+    }
+
+    func test_load_expiredWithDiskPayloadAndFetchSuccess_appliesFreshAndSetsLoaded() async throws {
+        let store = try makeGRDBStore()
+        try await store.save([TestItem(id: "1", name: "vieux")], for: "k")
+        await store.debugRewindFetchTimestamp(by: .hours(1) + 10, for: "k")
+        let monitor = StubNetworkMonitor(isOnline: true)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+        let fresh = [TestItem(id: "2", name: "frais")]
+
+        var capturedStates: [LoadState] = []
+        var capturedItems: [[TestItem]] = []
+        _ = await loader.load(
+            fetch: { fresh },
+            setLoadState: { capturedStates.append($0) },
+            apply: { capturedItems.append($0) }
+        )
+
+        XCTAssertEqual(capturedItems.last, fresh)
+        XCTAssertEqual(capturedStates.last, .loaded)
+        XCTAssertFalse(capturedStates.contains(.loading),
+                       "avec une donnée disque, jamais de .loading — doctrine : skeleton seulement sur cache vide")
+        let reloaded = await store.load(for: "k")
+        guard case .fresh(let items, _) = reloaded else {
+            return XCTFail("le fetch réussi doit être persisté en .fresh, got \(reloaded)")
+        }
+        XCTAssertEqual(items, fresh)
+    }
+
+    func test_load_fetchSucceedsButSaveThrows_keepsLoadedStateAndAppliedItems() async throws {
+        let store = try makeGRDBStore(encrypted: true, encryption: AlwaysFailingEncryption())
+        let monitor = StubNetworkMonitor(isOnline: true)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+        let fresh = [TestItem(id: "2", name: "frais")]
+
+        var capturedStates: [LoadState] = []
+        var capturedItems: [[TestItem]] = []
+        _ = await loader.load(
+            fetch: { fresh },
+            setLoadState: { capturedStates.append($0) },
+            apply: { capturedItems.append($0) }
+        )
+
+        XCTAssertEqual(capturedItems.last, fresh)
+        XCTAssertEqual(capturedStates.last, .loaded,
+                       "un échec de PERSISTANCE ne doit pas régresser un état déjà peint vers .error")
+    }
+
+    func test_load_expiredWithEmptyDisk_setsLoadingThenErrorOffline() async {
+        let store = MockStore(loadResult: .expired)
+        let monitor = StubNetworkMonitor(isOnline: false)
+        let loader = CacheFirstLoader(store: store, key: "k", networkMonitor: monitor)
+
+        var capturedStates: [LoadState] = []
+        _ = await loader.load(
+            fetch: { throw MeeshyError.network(.noConnection) },
+            setLoadState: { capturedStates.append($0) },
+            apply: { _ in }
+        )
+
+        XCTAssertEqual(capturedStates.first, .loading, "disque vide : le skeleton reste légitime")
+        XCTAssertEqual(capturedStates.last, .offline)
+    }
+
     // MARK: - Cancellation
 
     func test_load_cachedStale_revalidationTaskCanBeCancelled() async {
@@ -227,4 +328,10 @@ final class CacheFirstLoaderTests: XCTestCase {
         let saveCount = await store.saveCallCount
         XCTAssertEqual(saveCount, 0)
     }
+}
+
+
+private final class AlwaysFailingEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
+    func encrypt(_ plaintext: Data) -> Data? { nil }
+    func decrypt(_ ciphertext: Data) -> Data? { ciphertext }
 }

@@ -16,7 +16,6 @@ import {
   useEncryptionPreferences,
   type EncryptionPreference,
 } from '@/stores';
-import { useAuthStore } from '@/stores/auth-store';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { TwoFactorSettings } from './TwoFactorSettings';
 
@@ -24,24 +23,24 @@ export function EncryptionSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
 
-  // Get current user for Signal keys info
-  const user = useAuthStore(state => state.user);
-
   // Use centralized store
   const {
     preferences: encryptionData,
+    keyStatus,
     update: updateEncryption,
     updateLocalSettings,
     sync: _syncEncryption,
+    syncKeys: syncEncryptionKeys,
   } = useEncryptionPreferences();
 
   const isLoading = useUserPreferencesStore(state => state.isLoading);
   const isInitialized = useUserPreferencesStore(state => state.isInitialized);
 
-  // Extract Signal keys info from user
-  const hasSignalKeys = !!(user?.signalRegistrationId);
-  const signalRegistrationId = user?.signalRegistrationId || null;
-  const lastKeyRotation = user?.lastKeyRotation || null;
+  // L'état des clés vient du serveur, jamais de l'objet user : `userSchema` ne
+  // déclare aucun champ signal, donc `GET /auth/me` ne peut pas les porter.
+  // Source unique : `GET /me/preferences/encryption`, adossé à la ligne
+  // `SignalPreKeyBundle` que le client téléverse à chaque authentification.
+  const { hasSignalKeys, signalRegistrationId, lastKeyRotation } = keyStatus;
 
   const [saving, setSaving] = useState(false);
   const [generatingKeys, setGeneratingKeys] = useState(false);
@@ -49,6 +48,13 @@ export function EncryptionSettings() {
     encryptionData.encryptionPreference
   );
   const [hasChanges, setHasChanges] = useState(false);
+
+  // L'état des clés n'est pas persisté par le serveur dans la session : il faut
+  // le demander. Sans ça, un utilisateur qui a téléversé son bundle depuis iOS
+  // verrait « clés non générées » jusqu'à la prochaine synchro globale.
+  useEffect(() => {
+    void syncEncryptionKeys();
+  }, [syncEncryptionKeys]);
 
   // Sync selected preference with store when data changes
   useEffect(() => {
@@ -108,13 +114,7 @@ export function EncryptionSettings() {
       const response = await apiService.post('/signal/keys', {});
 
       if (response.success) {
-        // Refresh user data to get updated Signal keys
-        const userResponse = await apiService.get('/auth/me');
-
-        if (userResponse.success && (userResponse.data as unknown)?.data?.user) {
-          useAuthStore.getState().setUser((userResponse.data as unknown).data.user);
-        }
-
+        await syncEncryptionKeys();
         toast.success(t('encryption.status.keysGenerated'));
       }
     } catch (error) {

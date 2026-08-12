@@ -335,6 +335,25 @@ export interface Conversation {
   readonly messageCount?: number;
   readonly unreadCount?: number;
 
+  /**
+   * Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
+   * déjà restreint par le gateway aux langues du LECTEUR et tronqué au plafond
+   * d'aperçu (`GET /conversations`, cf. `buildLastMessagePreviewTranslations`).
+   *
+   * `undefined` est un état normal (aucune traduction utile, ou message déjà
+   * dans une langue du lecteur) : la ligne affiche alors `lastMessage.content`,
+   * ce qui EST la règle #3 du Prisme. Résolution : `resolveLastMessagePreview`
+   * dans `utils/conversation-helpers` — jumeau de
+   * `MeeshyConversation.resolvedLastMessagePreview` côté iOS.
+   */
+  readonly lastMessageTranslations?: Readonly<Record<string, string>>;
+  /**
+   * Langue d'origine du dernier message — donc celle de `lastMessage.content`.
+   * Sans elle, le résolveur ne peut pas distinguer « aucune traduction vers ma
+   * langue » de « le message EST déjà dans ma langue ».
+   */
+  readonly lastMessageOriginalLanguage?: string;
+
   // ===== E2EE / ENCRYPTION =====
   readonly encryptionMode?: EncryptionMode;
   readonly encryptionProtocol?: string;

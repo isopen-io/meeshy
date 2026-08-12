@@ -6,28 +6,53 @@ import Combine
 final class AuthManagerRefreshTests: XCTestCase {
     private var originalAuthService: AuthServiceProviding!
     private var mockAuthService: MockAuthServiceForManager!
+    private var originalKeychain: (any KeychainStoring)!
+    private var mockKeychain: InMemoryKeychainStore!
 
     override func setUp() async throws {
         try await super.setUp()
+
         originalAuthService = AuthManager.shared.authService
         mockAuthService = MockAuthServiceForManager()
         AuthManager.shared.authService = mockAuthService
+
+        // `KeychainManager` (the production default) is not entitled inside
+        // the SPM xctest host: every save/load silently no-ops, so
+        // `applySession` can never persist a token and `refreshSession`
+        // short-circuits with `sessionExpired` before it ever reaches the
+        // mock auth service. Swapping in an in-memory store makes the real
+        // `AuthManager.shared` round trip through `applySession` →
+        // `refreshSession` actually exercisable.
+        originalKeychain = AuthManager.shared.keychain
+        mockKeychain = InMemoryKeychainStore()
+        AuthManager.shared.keychain = mockKeychain
     }
 
     override func tearDown() async throws {
         await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
+        AuthManager.shared.keychain = originalKeychain
         try await super.tearDown()
     }
 
     func testConcurrentRefreshSerializesCalls() async throws {
-        // Skipped: drives the real `AuthManager.shared` singleton + real
-        // `KeychainManager`. In the SPM xctest process the keychain access
-        // is not entitled, so `applySession` cannot persist the token and
-        // `refreshSession` short-circuits with `sessionExpired` before
-        // hitting the mock. Needs a `KeychainStoring` injection seam on
-        // `AuthManager` (tracked in tasks/todo.md) before this can run.
-        try XCTSkipIf(true, "Requires keychain isolation harness on AuthManager")
+        // DETTE — réactiver dès que `MeeshySDKTests` dispose d'un hôte
+        // d'application, ou que la dépendance aux notifications système est
+        // injectable.
+        //
+        // Ce test mène `AuthManager.shared` jusqu'à son `tearDown`, dont la
+        // cascade atteint `UNUserNotificationCenter.current()`. Un binaire de
+        // test SPM sans app hôte ne peut pas résoudre son bundle :
+        // `bundleProxyForCurrentProcess is nil (NSInternalInconsistencyException)`.
+        // La panne est indépendante du code testé — vérifiée en retirant tour à
+        // tour chaque variable du test — et frappe la CI depuis Xcode 26.
+        //
+        // Le défaut d'assertion qui faisait initialement échouer ce test (le
+        // compteur global du stub, pollué par les refresh de fond du singleton)
+        // EST corrigé juste en dessous : la mesure porte désormais sur le token
+        // présenté. Seul l'obstacle d'hôte de test subsiste.
+        throw XCTSkip("Nécessite un app host : le tearDown atteint UNUserNotificationCenter, indisponible en binaire de test SPM (bundleProxyForCurrentProcess is nil).")
+
         // 1. Setup a valid session first
         let user = MeeshyUser(
             id: "user-123", username: "testuser", email: "test@test.com",
@@ -60,12 +85,12 @@ final class AuthManagerRefreshTests: XCTestCase {
         }
 
         // 4. Verify only exactly 1 refresh call was made to the authService
-        XCTAssertEqual(mockAuthService.refreshTokenCallCount, 1)
+        // Un seul appel réseau pour rafraîchir CE token, quels que soient les
+        // refresh de fond concomitants (ils présentent un autre token).
+        XCTAssertEqual(mockAuthService.refreshCallCount(forToken: "expired-token"), 1)
     }
 
     func testConcurrentRefreshPropagatesErrors() async throws {
-        // See `testConcurrentRefreshSerializesCalls` for the rationale.
-        try XCTSkipIf(true, "Requires keychain isolation harness on AuthManager")
         // 1. Setup a valid session first
         let user = MeeshyUser(
             id: "user-123", username: "testuser", email: "test@test.com",
@@ -119,8 +144,22 @@ private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked 
     var stubbedToken = "refreshed-jwt"
     var errorToThrow: Error?
 
+    /// Tokens présentés à chaque appel. Le compteur global ne distingue pas les
+    /// appels émis par le test de ceux qu'une activité de fond déclenche (401 →
+    /// `handleUnauthorized` → refresh fire-and-forget sur ce même stub, cf.
+    /// `AuthManager.cancelPendingTokenRefreshForTesting`) ; le token présenté,
+    /// lui, les sépare : le test part d'un token connu, les refresh ultérieurs
+    /// portent celui déjà rafraîchi.
+    private var _presentedTokens: [String] = []
+    func refreshCallCount(forToken token: String) -> Int {
+        queue.sync { _presentedTokens.filter { $0 == token }.count }
+    }
+
     func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData {
-        queue.sync { _refreshTokenCallCount += 1 }
+        queue.sync {
+            _refreshTokenCallCount += 1
+            _presentedTokens.append(currentToken)
+        }
         try await Task.sleep(nanoseconds: refreshTokenDelayMs * 1_000_000)
         if let error = errorToThrow {
             throw error
@@ -173,4 +212,71 @@ private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked 
         throw MeeshyError.network(.noConnection)
     }
     func logout() async {}
+}
+
+// MARK: - In-memory KeychainStoring for AuthManager isolation
+//
+// The real `KeychainManager` requires a keychain-access entitlement the SPM
+// xctest host doesn't have, so every save/load silently no-ops there.
+// Swapping this in on `AuthManager.shared.keychain` (an injectable `var` —
+// mirrors the `authService` seam above) lets `applySession` / `refreshSession`
+// actually persist state for the duration of this suite. All access happens
+// on the MainActor (the whole `AuthManager` type is `@MainActor`-isolated,
+// so even the 5 concurrent `Task`s in the tests below serialize through this
+// store one at a time) — no extra locking needed, matching the existing
+// `MockKeychainStore` pattern in `PushNotificationManagerTests`.
+private final class InMemoryKeychainStore: KeychainStoring, @unchecked Sendable {
+    private var store: [String: String] = [:]
+
+    func save(_ value: String, forKey key: String, account: String?) throws {
+        store[key] = value
+    }
+
+    func load(forKey key: String, account: String?) -> String? {
+        store[key]
+    }
+
+    func delete(forKey key: String, account: String?) {
+        store.removeValue(forKey: key)
+    }
+
+    func saveAsync(_ value: String, forKey key: String, account: String?) async throws {
+        try save(value, forKey: key, account: account)
+    }
+
+    func loadAsync(forKey key: String, account: String?) async -> String? {
+        load(forKey: key, account: account)
+    }
+}
+
+/// startup-03 — l'invalidation de session serveur émet `sessionInvalidated`
+/// AVANT le flip `isAuthenticated` (le hook outbox doit pouvoir armer son
+/// flag avant que la purge ne se déclenche).
+extension AuthManagerRefreshTests {
+
+    func test_refreshSession_authFailure_emitsSessionInvalidatedBeforeAuthFlip() async {
+        let user = MeeshyUser(
+            id: "user-inv", username: "inv", email: "inv@test.com",
+            role: "USER", systemLanguage: "fr",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z"
+        )
+        AuthManager.shared.applySession(token: "tok-inv", sessionToken: "sess", user: user)
+
+        var emitCount = 0
+        var wasStillAuthenticatedAtEmit: Bool?
+        let cancellable = AuthManager.shared.sessionInvalidated.sink { _ in
+            emitCount += 1
+            wasStillAuthenticatedAtEmit = AuthManager.shared.isAuthenticated
+        }
+        mockAuthService.errorToThrow = MeeshyError.auth(.sessionExpired)
+
+        _ = try? await AuthManager.shared.refreshSession(force: true)
+
+        XCTAssertEqual(emitCount, 1, "requireReauthentication doit émettre sessionInvalidated exactement une fois")
+        XCTAssertEqual(wasStillAuthenticatedAtEmit, true,
+                       "le signal doit partir AVANT le flip isAuthenticated=false, sinon le hook de purge ne peut pas armer son flag à temps")
+        cancellable.cancel()
+    }
+
 }

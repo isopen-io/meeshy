@@ -1187,4 +1187,73 @@ class MessageRepositoryTest {
 
         assertThat(cachedMessage("m1").attachments.single().translations).isNull()
     }
+
+    @Test
+    fun `recentMessages returns the cached tail in chronological order`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        apiMessage("m1", createdAt = T1),
+                        apiMessage("m2", createdAt = T2),
+                        apiMessage("m3", createdAt = T3),
+                        apiMessage("m4", createdAt = T4),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        val recent = repo.recentMessages("c1", limit = 3)
+
+        assertThat(recent.map { it.message.id }).containsExactly("m2", "m3", "m4").inOrder()
+    }
+
+    @Test
+    fun `recentMessages never calls the network`() = runTest {
+        val api = FakeMessageApi(
+            ApiResponse(success = true, data = listOf(apiMessage("m1", createdAt = T1))),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+        api.listCalls = 0
+
+        repo.recentMessages("c1", limit = 5)
+
+        assertThat(api.listCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `recentMessages on a cold conversation is empty`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "down")))
+
+        assertThat(repo.recentMessages("ghost", limit = 5)).isEmpty()
+    }
+
+    @Test
+    fun `recentMessages reports each row's local send state`() = runTest {
+        val clock = MutableClock(now = 1_000L)
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1", createdAt = java.time.Instant.ofEpochMilli(1_000L).toString())),
+                ),
+            ),
+            clock = clock,
+        )
+        repo.refresh("c1")
+        clock.now = 2_000L
+        repo.sendOptimistic(
+            conversationId = "c1",
+            content = "hi",
+            originalLanguage = "fr",
+            sender = sender,
+        )
+
+        val recent = repo.recentMessages("c1", limit = 5)
+
+        assertThat(recent.map { it.sendState }).containsExactly(LocalSendState.SYNCED, LocalSendState.SENDING)
+    }
 }

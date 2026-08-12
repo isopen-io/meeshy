@@ -1,5 +1,9 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { ConversationMessageStatsService } from '../../../services/ConversationMessageStatsService';
+import {
+  ConversationMessageStatsService,
+  resolveAttachmentType,
+  statsAuthorKey,
+} from '../../../services/ConversationMessageStatsService';
 
 // Reset the singleton between tests to ensure isolation.
 // The private static field must be cleared because there is no other way to
@@ -711,15 +715,26 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.participantStats[USER_B]).toBeUndefined();
     });
 
-    it('calls recompute when stats row does not exist', async () => {
+    it('ne recalcule RIEN quand la ligne de compteurs n\'existe pas', async () => {
+      // Position d'`onMessageDeleted`, et l'édition a encore moins de raisons
+      // de s'en écarter : elle ne crée aucun message, donc l'absence de ligne
+      // ne rend rien périmé — `getStats` la bâtira, exacte, à la première
+      // lecture.
+      //
+      // Ce test remplace son inverse, qui exigeait le `recompute()`. La règle a
+      // changé parce que son exposition a changé : les QUATRE transports
+      // d'édition attendent cet appel AVANT d'acquitter le client, et
+      // `recompute()` balaie tous les messages vivants de la conversation.
+      // L'accusé de réception d'une édition ne doit pas passer derrière un scan
+      // complet. Le comptage à l'envoi garde le sien : il est fire-and-forget,
+      // hors du chemin de l'ACK.
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
-      prisma.message.findMany.mockResolvedValue([]);
-      prisma.conversationMessageStats.upsert.mockResolvedValue(makeExistingStats({ totalMessages: 0 }));
 
       await service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'old', 'new');
 
-      expect(prisma.message.findMany).toHaveBeenCalled();
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+      expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
       expect(prisma.conversationMessageStats.update).not.toHaveBeenCalled();
     });
 
@@ -1043,5 +1058,82 @@ describe('resolveAttachmentType — via recompute attachment classification', ()
     const counts = await typeFrom('application/pdf');
     expect(counts.fileCount).toBe(1);
     expect(counts.imageCount + counts.audioCount + counts.videoCount).toBe(0);
+  });
+});
+
+/**
+ * `resolveAttachmentType` et `statsAuthorKey` sont exportés depuis que les deux
+ * unités partagées d'effets (post-commit et retrait) les appliquent : la table
+ * MIME → compteur et la clé de crédit vivaient recopiées inline dans le handler
+ * socket et dans la route de suppression, c'est-à-dire à côté de `recompute()`,
+ * qui est pourtant l'autorité — celle qui reconstruit la ligne depuis les
+ * messages et qui contredirait n'importe quelle copie divergente.
+ */
+describe('resolveAttachmentType', () => {
+  it('classe les MIME comme le fait recompute()', () => {
+    expect(resolveAttachmentType('image/heic')).toBe('image');
+    expect(resolveAttachmentType('audio/mp4')).toBe('audio');
+    expect(resolveAttachmentType('video/quicktime')).toBe('video');
+    expect(resolveAttachmentType('application/pdf')).toBe('file');
+  });
+
+  it('classe un MIME absent en `file` plutôt que de jeter', () => {
+    // Les appelants rendent `att.mimeType ?? ''` : une colonne nulle en base ne
+    // doit pas faire échouer le comptage de tout le message.
+    expect(resolveAttachmentType('')).toBe('file');
+    expect(resolveAttachmentType(null as unknown as string)).toBe('file');
+  });
+});
+
+describe('statsAuthorKey', () => {
+  it('crédite l\'utilisateur enregistré', () => {
+    expect(statsAuthorKey(USER_B, USER_A)).toBe(USER_A);
+  });
+
+  it('retombe sur le Participant pour un anonyme', () => {
+    expect(statsAuthorKey(USER_B, null)).toBe(USER_B);
+    expect(statsAuthorKey(USER_B, undefined)).toBe(USER_B);
+    expect(statsAuthorKey(USER_B, '')).toBe(USER_B);
+  });
+});
+
+/**
+ * Le balayage des messages vides est le seul écrivain de `deletedAt` qui
+ * retire en LOT : il ne tient de ses messages que leur id et leur conversation,
+ * jamais l'auteur ni le contenu qu'un décrément demande. Le recalcul est donc
+ * le seul geste possible — et la garde d'existence est ce qui l'empêche de
+ * FABRIQUER des lignes de compteurs pour des conversations dont personne n'a
+ * jamais demandé les statistiques (`recompute()` fait un `upsert`).
+ */
+describe('recomputeIfTracked', () => {
+  let service: ConversationMessageStatsService;
+
+  beforeEach(() => {
+    resetSingleton();
+    service = ConversationMessageStatsService.getInstance();
+  });
+
+  it('ne touche à rien quand la conversation n\'a pas de compteurs', async () => {
+    const prisma = makePrisma();
+    prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
+
+    await service.recomputeIfTracked(prisma as any, CONV_ID);
+
+    expect(prisma.message.findMany).not.toHaveBeenCalled();
+    expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
+  });
+
+  it('recalcule depuis les messages vivants quand les compteurs existent', async () => {
+    const prisma = makePrisma();
+    prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.conversationMessageStats.upsert.mockResolvedValue(makeExistingStats({ totalMessages: 0 }));
+
+    await service.recomputeIfTracked(prisma as any, CONV_ID);
+
+    expect(prisma.message.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { conversationId: CONV_ID, deletedAt: null } })
+    );
+    expect(prisma.conversationMessageStats.upsert).toHaveBeenCalled();
   });
 });

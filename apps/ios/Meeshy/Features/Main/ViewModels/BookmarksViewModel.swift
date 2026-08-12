@@ -35,7 +35,9 @@ class BookmarksViewModel: ObservableObject {
                 return
             case .stale(let data, _):
                 posts = data
-                Task { [weak self] in await self?.fetchBookmarksFromNetwork() }
+                // vm-bookmarks-pagination-01 — router par loadMore : un seul
+                // point de vérité pour le guard concurrentiel isLoading.
+                Task { [weak self] in await self?.loadMore() }
                 return
             case .expired, .empty:
                 break
@@ -82,6 +84,16 @@ class BookmarksViewModel: ObservableObject {
             posts = snapshot
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.removeError", defaultValue: "Error removing bookmark", bundle: .main))
         }
+    }
+
+    /// vm-bookmarks-pagination-01 — page suivante RÉSEAU, jamais le cache :
+    /// le sentinel rappelait loadBookmarks() qui re-servait le .fresh et
+    /// bloquait la pagination pour toute la session.
+    func loadMore() async {
+        guard hasMore, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        await fetchBookmarksFromNetwork()
     }
 
     func refresh() async {

@@ -88,7 +88,12 @@ struct BubbleFooter: View, Equatable {
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Text(sender.name)
+                        // Nom borné à 16 caractères (directive user 2026-07-30) :
+                        // au-delà, le pseudo mangeait la rangée et repoussait
+                        // l'heure + l'accusé de lecture contre le bord. Le
+                        // `lineLimit(1)` reste comme filet pour les très grandes
+                        // tailles Dynamic Type, mais la borne est posée ici.
+                        Text(DisplayName.truncated(sender.name))
                             .font(.footnote.weight(.semibold))
                             .lineLimit(1)
                         roleBadge(sender.role)

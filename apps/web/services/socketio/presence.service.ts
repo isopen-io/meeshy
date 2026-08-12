@@ -58,6 +58,7 @@ export class PresenceService {
   private userUpdatedListeners: Set<UserUpdatedListener> = new Set();
   private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
   private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
+  private conversationParticipantJoinedListeners: Set<(data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void> = new Set();
   private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
   private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
   private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
@@ -168,6 +169,10 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_UPDATED as any, (data: any) => {
       this.conversationUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED as any, (data: any) => {
+      this.conversationParticipantJoinedListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT as any, (data: any) => {
@@ -316,6 +321,11 @@ export class PresenceService {
     return () => this.conversationUpdatedListeners.delete(listener);
   }
 
+  onConversationParticipantJoined(listener: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void): UnsubscribeFn {
+    this.conversationParticipantJoinedListeners.add(listener);
+    return () => this.conversationParticipantJoinedListeners.delete(listener);
+  }
+
   onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
     this.conversationParticipantLeftListeners.add(listener);
     return () => this.conversationParticipantLeftListeners.delete(listener);
@@ -364,6 +374,7 @@ export class PresenceService {
     this.userUpdatedListeners.clear();
     this.conversationDeletedListeners.clear();
     this.conversationUpdatedListeners.clear();
+    this.conversationParticipantJoinedListeners.clear();
     this.conversationParticipantLeftListeners.clear();
     this.conversationParticipantBannedListeners.clear();
     this.conversationParticipantUnbannedListeners.clear();

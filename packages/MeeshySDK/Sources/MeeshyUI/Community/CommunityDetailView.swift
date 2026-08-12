@@ -12,6 +12,9 @@ public struct CommunityDetailView: View {
     public var onOpenMembers: ((String) -> Void)? = nil
     public var onInvite: ((String) -> Void)? = nil
     public var onDismiss: (() -> Void)? = nil
+    /// Création d'un post de communauté, fournie par l'hôte. `nil` ⇒ l'état vide
+    /// du feed n'affiche AUCUN bouton (plutôt qu'un bouton inerte).
+    public var onCreatePost: (() -> Void)? = nil
 
     @State private var showLeaveConfirm = false
     @State private var showAddChannel = false
@@ -26,13 +29,15 @@ public struct CommunityDetailView: View {
                 onOpenSettings: ((MeeshyCommunity) -> Void)? = nil,
                 onOpenMembers: ((String) -> Void)? = nil,
                 onInvite: ((String) -> Void)? = nil,
-                onDismiss: (() -> Void)? = nil) {
+                onDismiss: (() -> Void)? = nil,
+                onCreatePost: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
         self.onInvite = onInvite
         self.onDismiss = onDismiss
+        self.onCreatePost = onCreatePost
     }
 
     public var body: some View {
@@ -151,7 +156,7 @@ public struct CommunityDetailView: View {
                     dismiss()
                 }
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
@@ -373,7 +378,7 @@ public struct CommunityDetailView: View {
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
-                    actionButton(icon: "arrow.right.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
+                    actionButton(icon: "arrow.forward.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
                         Task { await viewModel.joinCommunity() }
                     }
                 }
@@ -451,14 +456,19 @@ public struct CommunityDetailView: View {
     private var postsSection: some View {
         // Placeholder for Community Posts / Stories
         VStack(spacing: 8) {
+            // Le libellé + l'action ne sont posés QUE si l'hôte sait créer un
+            // post de communauté. `EmptyStateView` masque son bouton quand
+            // `onAction` est nil : l'état vide reste informatif au lieu
+            // d'exposer un « Créer un post » dont l'action était un `// To do`
+            // vide — un bouton qui ne menait nulle part.
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
                 title: String(localized: "community.detail.posts.empty.title", defaultValue: "No Posts Yet", bundle: .module),
                 subtitle: String(localized: "community.detail.posts.empty.subtitle", defaultValue: "Community feed will appear here", bundle: .module),
-                actionLabel: String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
-                onAction: { 
-                    // To do: Show post creator
-                }
+                actionLabel: onCreatePost == nil
+                    ? nil
+                    : String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
+                onAction: onCreatePost
             )
             .frame(height: 200)
         }
@@ -725,7 +735,7 @@ struct AddChannelSheet: View {
                 ProgressView()
                     .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
-                Image(systemName: "arrow.right.circle.fill")
+                Image(systemName: "arrow.forward.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(Color(hex: "F59E0B"))
             } else {

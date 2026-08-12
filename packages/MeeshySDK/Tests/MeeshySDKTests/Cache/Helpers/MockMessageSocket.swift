@@ -24,15 +24,17 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
+    let participantJoined = PassthroughSubject<ParticipantJoinedEvent, Never>()
     let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
+    let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
     let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
-    let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -89,7 +91,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitTypingStart(conversationId: String) {}
     func emitTypingStop(conversationId: String) {}
     func requestTranslation(messageId: String, targetLanguage: String) {}
-    func emitLocationShare(payload: LocationSharePayload) {}
     func emitLiveLocationStart(payload: LiveLocationStartPayload) {}
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {}
     func emitLiveLocationStop(conversationId: String) {}
@@ -113,5 +114,5 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? { nil }
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck? { nil }
 }

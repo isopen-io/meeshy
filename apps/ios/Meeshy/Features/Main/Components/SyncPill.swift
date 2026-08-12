@@ -79,8 +79,19 @@ struct SyncPill: View {
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
+    // The status dot pulses with `.repeatForever` in the app's persistent
+    // chrome — motion the user cannot dismiss. Reduce Motion must reach it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dotPhase: Int = 0
-    private let dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
+    // on every reconstruction of this View value (every unrelated re-render
+    // of the parent ConnectionBanner), handing `.onReceive` a brand-new,
+    // not-yet-ticked Timer.publish().autoconnect() each time. If those
+    // reconstructions happen faster than the 0.5s interval, the publisher
+    // never survives long enough to fire and the dot pulse/ellipsis freeze.
+    // `@State`'s initial-value expression runs once per view identity, so the
+    // same connected publisher instance is preserved across re-renders.
+    @State private var dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     init(
         entries: [SyncPillEntry],
@@ -102,7 +113,10 @@ struct SyncPill: View {
 
     /// Pulsing alpha on the leading status dot. Matches the legacy chrome
     /// (0.5 s tick, 50 % duty cycle).
-    private var pulseOpacity: Double { dotPhase % 2 == 0 ? 1.0 : 0.4 }
+    /// Full strength when motion is reduced: the pulse's low phase (0.4) would
+    /// freeze the dot into something that reads as inactive, and the dot is the
+    /// only thing carrying "syncing" at a glance.
+    private var pulseOpacity: Double { reduceMotion ? 1.0 : (dotPhase % 2 == 0 ? 1.0 : 0.4) }
 
     private var animatedDots: String {
         String(repeating: ".", count: (dotPhase % 3) + 1)
@@ -175,12 +189,12 @@ struct SyncPill: View {
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundStyle(dotForeground)
                 .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
         } else {
             dotShape
                 .frame(width: 6, height: 6)
                 .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
         }
     }
 

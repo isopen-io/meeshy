@@ -20,6 +20,30 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var repostOfId: String?
     @Published var originalRepostOfId: String?
 
+    // MARK: - Edit mode (directive 2026-07-29 — édition d'une story publiée)
+
+    /// Non-nil quand le composer ÉDITE une story publiée (`init(editing:)`).
+    /// L'app le lit au publish pour router vers `PUT /posts/:id` (update +
+    /// reset d'engagement serveur) au lieu de `createStory`. Le mode édition
+    /// désactive aussi le système de brouillons (restore/save) et le
+    /// multi-slide — une story publiée = UN slide.
+    public internal(set) var editingPostId: String?
+    /// Ids des `PostMedia` attachés à la story au moment de l'hydratation —
+    /// sert à diff-er `removeMediaIds` au publish (médias plus référencés).
+    public internal(set) var editingOriginalMediaIds: [String] = []
+    /// Id du média de FOND original (celui de `story.media` qui n'est
+    /// référencé par aucun objet des effects) — conservé tel quel si le fond
+    /// n'a pas changé, retiré + ré-uploadé sinon.
+    public internal(set) var editingOriginalBackgroundMediaId: String?
+    /// Instance UIImage posée par le préchargement d'hydratation comme fond
+    /// de slide. Comparaison d'IDENTITÉ (`===`) au publish : la même instance
+    /// = fond inchangé (ne pas ré-uploader), une autre = l'utilisateur a
+    /// remplacé le fond.
+    public internal(set) var editingHydratedBackgroundImage: UIImage?
+    /// Visibilité initiale de la story éditée (seed de l'état du composer).
+    public internal(set) var editingInitialVisibility: String?
+    public internal(set) var editingInitialVisibilityUserIds: [String] = []
+
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
     // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
@@ -368,6 +392,54 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     var memoryObserver: Any?
 
     // MARK: - Repost Initializer (Patch B.6)
+
+    // MARK: - Identité de brouillon
+
+    /// Brouillon sous lequel cette session du composer s'autosauvegarde.
+    ///
+    /// Le store était mono-brouillon : commencer une deuxième story écrasait
+    /// silencieusement la première. Chaque session porte désormais son id —
+    /// neuf pour une ardoise vierge, celui du brouillon repris sinon
+    /// (spec 2026-08-01).
+    public private(set) var draftId: String = UUID().uuidString
+
+    /// Vrai quand la session a été rattachée à un brouillon CHOISI par
+    /// l'utilisateur (`adoptDraft(id:)`, tap dans « Mes stories »). Le composer
+    /// restaure alors ce brouillon dès l'ouverture SANS re-proposer le bandeau
+    /// de reprise — l'utilisateur vient de trancher — et « Recommencer » s'en
+    /// détache (`detachFromAdoptedDraft`) au lieu de le détruire.
+    public private(set) var isAdoptedDraftSession = false
+
+    /// Rattache la session à un brouillon existant. Appelé AVANT toute
+    /// restauration : l'autosave qui suit doit écrire sous le bon id.
+    public func adoptDraft(id: String) {
+        draftId = id
+        isAdoptedDraftSession = true
+    }
+
+    /// « Recommencer » sur une session adoptée : la session repart sous un id
+    /// NEUF et rend le brouillon choisi, qui reste intact en magasin. Le
+    /// supprimer ici détruirait précisément ce que l'utilisateur venait de
+    /// désigner comme « à reprendre ».
+    public func detachFromAdoptedDraft() {
+        draftId = UUID().uuidString
+        isAdoptedDraftSession = false
+    }
+
+    /// Absorbe les médias d'un brouillon restauré en UNE passe et bump
+    /// `loadedImagesVersion` quand des bitmaps sont arrivés : le canvas ne
+    /// reconstruit son `ComposerImageCacheReader` que sur ce cookie — merger
+    /// `loadedImages` sans lui laissait les images du brouillon repris
+    /// invisibles (même invariant que `registerLoadedImage`).
+    func mergeRestoredMedia(images: [String: UIImage],
+                            videoURLs: [String: URL],
+                            audioURLs: [String: URL]) {
+        loadedImages.merge(images) { _, new in new }
+        loadedVideoURLs.merge(videoURLs) { _, new in new }
+        loadedAudioURLs.merge(audioURLs) { _, new in new }
+        guard !images.isEmpty else { return }
+        loadedImagesVersion &+= 1
+    }
 
     /// Default initializer (kept explicit so the convenience init below has a designated
     /// init to delegate to). All stored properties default-initialise, so the body is empty.

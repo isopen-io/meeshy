@@ -65,13 +65,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // Local-only: which output the user wants remote audio on. Never synced to
+  // peers (unlike controls.audioEnabled/videoEnabled) — it drives `muted` on
+  // every <video> element playing a remote stream, nothing else.
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
 
   // Local self-view dragging + ticking call duration (extracted hooks).
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
     initial: { x: 20, y: 20 },
   });
+  // Vague 110 (2026-08-12): anchor on `answeredAt`, never `startedAt`.
+  // `startedAt` is stamped at ring-start (use-video-call.ts, CallManager's
+  // acceptOrJoinCall) — for the CALLER specifically, that's the instant the
+  // callee's device starts ringing, not when they pick up. Feeding it
+  // straight into the ticking clock baked the entire ring delay into every
+  // subsequent second of "call duration" shown on screen. `answeredAt` is
+  // unset until the call is actually answered (CallManager's
+  // handleParticipantJoined / acceptOrJoinCall), so the clock correctly
+  // reads 0:00 while ringing and only starts ticking once picked up.
   const { seconds: callDuration, label: callDurationLabel } = useCallDuration(
-    currentCall?.startedAt
+    currentCall?.answeredAt
   );
 
   // New state for fullscreen mode and disconnected participants
@@ -85,7 +98,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier, removeParticipant } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -132,7 +145,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
   // reliability dashboard blind to web calls.
-  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
+  useCallAnalyticsReporter({ callId, connectionState, isReconnecting, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -147,6 +160,49 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   }, [callId]);
 
+  // Re-entrancy guard for every video on/off path — the manual button
+  // (handleToggleVideo below) AND the adaptive-degradation controller's own
+  // suspend()/resume() (right below) both end up calling
+  // enableVideo()/disableVideo() (use-webrtc-p2p.ts) on the same
+  // WebRTCService instances. Vague 76 guarded the manual double-click but
+  // left this cross-path race open ("reste ouvert": no MUTUAL synchronization
+  // between a manual toggle and an automatic suspend/resume) — either
+  // ordering acquires two independent camera tracks via getUserMedia, exactly
+  // like the double-click bug: the LOSING track is never referenced by
+  // anything that could stop it, an orphaned camera capture surviving
+  // silently for the rest of the call.
+  const videoToggleInFlightRef = useRef(false);
+
+  // Vague 92: same class of race, one hop over. `handleSwitchCamera` (below)
+  // mutates the SAME localStream video track and the SAME peer-connection
+  // senders as this guard's operations, via its own, entirely disconnected
+  // `cameraSwitchInFlightRef` — Vague 82 unified manual-toggle-vs-auto-
+  // suspend/resume but left camera-switch-vs-either unguarded. A camera flip
+  // racing a manual toggle or an auto suspend/resume (e.g. the link degrades
+  // mid-flip) lets one path replaceTrack/stop a track the other is still
+  // mid-acquisition on, orphaning a camera capture or reviving video the
+  // user/controller just turned off. `runGuardedVideoToggle` and
+  // `handleSwitchCamera` now check EACH OTHER's ref in addition to their own.
+  const cameraSwitchInFlightRef = useRef(false);
+
+  // Wraps a video on/off operation with the guard above; rejects instead of
+  // running when another video toggle (manual or automatic) — or a camera
+  // switch — is already in flight. The adaptive-degradation controller's
+  // existing suspend()/resume() `.catch()` handlers already revert its state
+  // machine on rejection, so a rejected guard collision degrades correctly —
+  // the automatic decision simply retries on the next quality sample.
+  const runGuardedVideoToggle = useCallback(async (op: () => Promise<void>): Promise<void> => {
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) {
+      throw new Error('VIDEO_TOGGLE_IN_PROGRESS');
+    }
+    videoToggleInFlightRef.current = true;
+    try {
+      await op();
+    } finally {
+      videoToggleInFlightRef.current = false;
+    }
+  }, []);
+
   // Adaptive compression + graceful-degradation control loop. Feeds observed
   // connection quality into a hysteresis state machine that (1) sheds the
   // encoder down the bitrate ladder under congestion, (2) DROPS outbound video
@@ -156,17 +212,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // is authoritative — the controller never re-enables video the user turned off.
   const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
     applyTier: (tier) => { applyQualityTier(tier).catch(() => { /* best effort */ }); },
-    suspend: async () => {
+    suspend: () => runGuardedVideoToggle(async () => {
       await disableVideo();
       emitVideoToggle(false);
       toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
-    },
-    resume: async () => {
+    }),
+    resume: () => runGuardedVideoToggle(async () => {
       await enableVideo();
       emitVideoToggle(true);
       toast.success(t('calls.toasts.videoResumed'));
-    },
-  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
+    }),
+  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
 
   const { videoSuspended } = useAdaptiveDegradation({
     qualityStats,
@@ -253,71 +309,62 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     return unsubscribe;
   }, [peerConnectionsCount]);
 
-  // Apply audio effects to outgoing stream
-  // Replace audio tracks in all peer connections when processed audio stream changes or new connections are added
+  // Route outgoing audio through the processed (effects) track while any
+  // effect is enabled, and through the raw microphone track otherwise.
+  // Deliberately a single effect with NO cleanup: an effect's cleanup runs
+  // with the closure captured at the render that scheduled it — i.e. always
+  // the PREVIOUS value of `audioEffectsActive`, never the one that triggered
+  // the re-run. A prior version branched on `!audioEffectsActive` inside the
+  // cleanup to decide whether to restore the raw track, which read that
+  // stale value: turning effects OFF left the processed track on the wire
+  // (restore silently skipped), and turning them ON briefly restored the raw
+  // track before the processed one landed (audible blip). Picking the
+  // target track directly in the effect body — which always sees the
+  // CURRENT render's values — sidesteps the whole class of bug, and also
+  // means a new participant (peerConnectionsCount change) is naturally
+  // wired to whatever's currently playing rather than always the processed
+  // stream regardless of `audioEffectsActive`.
   useEffect(() => {
-    if (!processedAudioStream || !localStream) return;
+    if (!localStream) return;
 
     const peerConnections = useCallStore.getState().peerConnections;
     if (peerConnections.size === 0) {
-      logger.debug('[VideoCallInterface]', 'No peer connections yet, audio effects will be applied when connections are created');
+      logger.debug('[VideoCallInterface]', 'No peer connections yet, audio routing will be applied when connections are created');
       return;
     }
 
-    // Get the processed audio track
-    const processedAudioTracks = processedAudioStream.getAudioTracks();
-    if (processedAudioTracks.length === 0) {
-      logger.warn('[VideoCallInterface]', 'No audio tracks in processed stream');
+    const targetStream = audioEffectsActive ? processedAudioStream : localStream;
+    const targetTracks = targetStream?.getAudioTracks() ?? [];
+    if (targetTracks.length === 0) {
+      logger.warn('[VideoCallInterface]', 'No audio tracks available to route', { audioEffectsActive });
       return;
     }
 
-    const newAudioTrack = processedAudioTracks[0];
-    logger.info('[VideoCallInterface]', 'Replacing audio tracks in peer connections with processed audio', {
+    const targetTrack = targetTracks[0];
+    logger.info('[VideoCallInterface]', 'Routing outgoing audio track', {
       audioEffectsActive,
-      trackId: newAudioTrack.id,
+      trackId: targetTrack.id,
       peerConnectionsCount
     });
 
-    // Replace audio track in all peer connections
     peerConnections.forEach((peerConnection, participantId) => {
       const senders = peerConnection.getSenders();
       const audioSender = senders.find(sender => sender.track?.kind === 'audio');
 
-      if (audioSender) {
-        audioSender.replaceTrack(newAudioTrack)
-          .then(() => {
-            logger.debug('[VideoCallInterface]', 'Audio track replaced successfully', { participantId });
-          })
-          .catch((error) => {
-            logger.error('[VideoCallInterface]', 'Failed to replace audio track', { participantId, error });
-          });
-      } else {
+      if (!audioSender) {
         logger.warn('[VideoCallInterface]', 'No audio sender found for participant', { participantId });
+        return;
       }
+      if (audioSender.track?.id === targetTrack.id) return;
+
+      audioSender.replaceTrack(targetTrack)
+        .then(() => {
+          logger.debug('[VideoCallInterface]', 'Audio track replaced successfully', { participantId });
+        })
+        .catch((error) => {
+          logger.error('[VideoCallInterface]', 'Failed to replace audio track', { participantId, error });
+        });
     });
-
-    // Cleanup: when effect is disabled or component unmounts, restore original audio
-    return () => {
-      if (!audioEffectsActive && localStream) {
-        const originalAudioTracks = localStream.getAudioTracks();
-        if (originalAudioTracks.length > 0) {
-          const originalAudioTrack = originalAudioTracks[0];
-          logger.info('[VideoCallInterface]', 'Restoring original audio track');
-
-          peerConnections.forEach((peerConnection, participantId) => {
-            const senders = peerConnection.getSenders();
-            const audioSender = senders.find(sender => sender.track?.kind === 'audio');
-
-            if (audioSender) {
-              audioSender.replaceTrack(originalAudioTrack)
-                .catch((error) => {
-                  logger.error('[VideoCallInterface]', 'Failed to restore original audio track', { participantId, error });
-                });
-            }
-          });
-        }
-      }
-    };
   }, [processedAudioStream, localStream, audioEffectsActive, peerConnectionsCount]);
 
   // Cleanup on unmount and page unload
@@ -348,6 +395,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     };
   }, []);
 
+  // Toggles whether remote audio is audible. Purely local playback state —
+  // never emitted to the socket (unlike audio/video), since it has no
+  // meaning for the other participants.
+  const handleToggleSpeaker = () => {
+    setSpeakerEnabled((prev) => !prev);
+  };
+
   // Handle media toggles
   const handleToggleAudio = () => {
     const newEnabled = !controls.audioEnabled;
@@ -360,30 +414,38 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   };
 
   const handleToggleVideo = async () => {
-    const newEnabled = !controls.videoEnabled;
+    if (videoToggleInFlightRef.current || cameraSwitchInFlightRef.current) return;
+    videoToggleInFlightRef.current = true;
     try {
-      // Real audio↔video switch: acquire/release the camera and renegotiate
-      // (FaceTime-style asymmetric) instead of merely toggling track.enabled.
-      if (newEnabled) {
-        await enableVideo();
-      } else {
-        await disableVideo();
+      const newEnabled = !controls.videoEnabled;
+      try {
+        // Real audio↔video switch: acquire/release the camera and renegotiate
+        // (FaceTime-style asymmetric) instead of merely toggling track.enabled.
+        if (newEnabled) {
+          await enableVideo();
+        } else {
+          await disableVideo();
+        }
+      } catch (error) {
+        logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
+        toast.error(t('calls.toasts.videoSwitchFailed'));
+        return;
       }
-    } catch (error) {
-      logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
-      toast.error(t('calls.toasts.videoSwitchFailed'));
-      return;
-    }
 
-    setControls({ videoEnabled: newEnabled });
+      setControls({ videoEnabled: newEnabled });
 
-    const socket = meeshySocketIOService.getSocket();
-    if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+      const socket = meeshySocketIOService.getSocket();
+      if (socket) {
+        (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+      }
+    } finally {
+      videoToggleInFlightRef.current = false;
     }
   };
 
   const handleSwitchCamera = async () => {
+    if (cameraSwitchInFlightRef.current || videoToggleInFlightRef.current) return;
+    cameraSwitchInFlightRef.current = true;
     try {
       if (!localStream) return;
 
@@ -394,31 +456,19 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacingMode },
-        audio: false,
-      });
-
-      const newVideoTrack = newStream.getVideoTracks()[0];
-
-      // MDN warns the outgoing track must not be stopped until replaceTrack()
-      // resolves on every sender — the peer connection may still be reading
-      // from it. Await all replacements first; a rejection propagates to the
-      // catch block below and the old track is left untouched.
-      const replacements = Array.from(useCallStore.getState().peerConnections.values())
-        .map(pc => pc.getSenders().find(s => s.track?.kind === 'video'))
-        .filter((sender): sender is RTCRtpSender => Boolean(sender))
-        .map(sender => sender.replaceTrack(newVideoTrack));
-      await Promise.all(replacements);
-
-      videoTrack.stop();
-      localStream.removeTrack(videoTrack);
-      localStream.addTrack(newVideoTrack);
+      // Track acquisition + per-peer replaceTrack/stop sequencing lives in
+      // switchCamera() (use-webrtc-p2p.ts), which mirrors enableVideo()'s
+      // "one real track + N clones" ownership model — giving the first peer
+      // the literal camera track and every other peer a `.clone()` — so a
+      // group call's per-peer WebRTCService bookkeeping stays accurate.
+      await switchCamera(newFacingMode);
 
       toast.success(t('calls.toasts.cameraSwitched'));
     } catch (error) {
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
       toast.error(t('calls.toasts.cameraSwitchFailed'));
+    } finally {
+      cameraSwitchInFlightRef.current = false;
     }
   };
 
@@ -662,7 +712,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
             <VideoStream
               key={displayParticipant[0]}
               stream={displayParticipant[1]}
-              muted={false}
+              muted={!speakerEnabled}
               isLocal={false}
               className="w-full h-full object-cover"
               participantName={
@@ -722,6 +772,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isAudioEnabled={participant?.isAudioEnabled ?? true}
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
+              muted={!speakerEnabled}
               initialPosition={{ x: 20 + index * 160, y: 20 }}
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
@@ -748,9 +799,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <CallControls
         audioEnabled={controls.audioEnabled}
         videoEnabled={controls.videoEnabled}
+        speakerEnabled={speakerEnabled}
         videoSuspended={videoSuspended}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
+        onToggleSpeaker={handleToggleSpeaker}
         onSwitchCamera={handleSwitchCamera}
         onToggleAudioEffects={() => setShowAudioEffects(!showAudioEffects)}
         onToggleStats={() => setShowStats(!showStats)}

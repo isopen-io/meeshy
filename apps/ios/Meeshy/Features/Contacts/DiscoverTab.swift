@@ -159,7 +159,7 @@ struct DiscoverTab: View {
             )
         }
         .disabled(viewModel.isImportingContacts)
-        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont deja sur Meeshy", bundle: .main))
+        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont déjà sur Meeshy", bundle: .main))
     }
 
     // MARK: - Contact Matches Section
@@ -407,7 +407,7 @@ struct SMSComposerView: UIViewControllerRepresentable {
     @MainActor
     class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
         nonisolated func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 controller.dismiss(animated: true)
             }
         }

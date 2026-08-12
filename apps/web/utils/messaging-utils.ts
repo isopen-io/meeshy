@@ -30,14 +30,16 @@ export function validateMessageContent(
   content: string, 
   maxLength: number = MAX_MESSAGE_LENGTH
 ): { isValid: boolean; error?: string } {
-  if (!content.trim()) {
+  const trimmed = content.trim();
+
+  if (!trimmed) {
     return { isValid: false, error: 'Le message ne peut pas être vide' };
   }
-  
-  if (content.length > maxLength) {
+
+  if (trimmed.length > maxLength) {
     return { isValid: false, error: `Le message ne peut pas dépasser ${maxLength} caractères` };
   }
-  
+
   return { isValid: true };
 }
 

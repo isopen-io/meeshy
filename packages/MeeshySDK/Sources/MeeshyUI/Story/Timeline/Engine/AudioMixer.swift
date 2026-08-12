@@ -60,7 +60,7 @@ public final class AudioMixer: AudioMixerProviding {
         teardown()
         var attached = 0
         for audio in audios {
-            volumes[audio.id] = max(0, min(1, audio.volume))
+            volumes[audio.id] = max(0, min(StoryVolume.maxGain, audio.volume))
             startTimes[audio.id] = audio.startTime ?? 0
             guard attached < maxActiveNodes else {
                 logger.info("AudioMixer cap reached at \(self.maxActiveNodes), skipping audio \(audio.id)")
@@ -219,7 +219,7 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     public func setVolume(_ volume: Float, for audioId: String) {
-        let clamped = max(0, min(1, volume))
+        let clamped = max(0, min(StoryVolume.maxGain, volume))
         volumes[audioId] = clamped
         nodes[audioId]?.volume = isMuted ? 0 : clamped
     }
