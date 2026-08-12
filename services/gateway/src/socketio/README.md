@@ -472,6 +472,39 @@ reservi n'est pas « en retard », il est faux definitivement.
 
 ---
 
+## La pastille de non-lus — l'envoi n'est pas le seul instant qui la bouge
+
+`conversation:unread-updated` est le SEUL signal qui deplace une pastille en vif.
+Le compte lui-meme est derive des curseurs de lecture, donc toujours juste au
+prochain refetch complet — mais la liste de conversations du web tourne en
+`staleTime: Infinity` : sans poussee, la pastille garde sa valeur precedente
+INDEFINIMENT. Elle ne vieillit pas, elle ment.
+
+Un seul emetteur, `emitUnreadCountsToRecipients` (`emitUnreadCountsToRecipients.ts`),
+partage par tous les appelants. L'exclusion porte sur l'AUTEUR du message, jamais
+sur l'acteur : c'est la seule identite dont le compteur ne peut pas bouger (ses
+propres messages ne comptent jamais dans ses non-lus).
+
+| Instant | Appelant | Ce qui bouge |
+|---|---|---|
+| envoi WS | `MessageHandler._updateUnreadCounts` | +1 chez les destinataires |
+| envoi REST/ZMQ | `MeeshySocketIOManager` | idem |
+| envoi par lien de partage | `broadcastLinkMessage` | idem (seul transport d'un anonyme) |
+| **suppression** | `MessageHandler.handleMessageDelete` | **−1 : le message compte un message qui n'existe plus** |
+
+La ligne de suppression a longtemps manque : les quatre premiers appelants sont
+tous des chemins d'ENVOI. Le lecteur voyait le message disparaitre pendant que sa
+pastille continuait de le compter. Le decompte etait pourtant deja juste —
+`getUnreadCountsForParticipants` filtre `deletedAt: null` — il ne manquait que de
+le redemander.
+
+**Regle** : tout chemin qui rend un message INVISIBLE a un destinataire (soft
+delete, rappel, expiration, moderation) doit repousser la pastille, exactement
+comme il repousse `emitConversationPreviewUpdate`. Les trois transports REST de
+suppression ne le font pas encore.
+
+---
+
 ## `message:attachment-updated` — l'enrichissement asynchrone doit TROIS audiences
 
 Whisper finit de transcrire une note vocale une a deux secondes apres l'envoi ;

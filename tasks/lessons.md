@@ -5258,3 +5258,109 @@ CI complète.
    praticable est procédurale et doit vivre dans la tête de cycle, pas dans une leçon qu'on relit
    après coup : *avant d'écrire l'item N, `git fetch origin main && git log --oneline -15 origin/main`
    et chercher le mot-clé de l'item.* Une seconde de commande contre trois heures de travail.
+
+---
+
+## Leçon 138 — un garde d'ordonnancement doit être clé sur l'UNITÉ qu'il protège, pas sur son conteneur (2026-08-12, routine messaging, cycle 89)
+
+`_isStaleTranslationResult` protégeait une vraie course (deux éditions rapprochées, réponses ZMQ
+dans le désordre) avec un garde clé sur le MESSAGE. Mais l'unité que le pipeline traite, écrit et
+rend, c'est le couple **(message, langue)** : une requête porte N langues, le translator les rend
+une par une, `Message.translations` les range une par une, et une retraduction peut n'en viser
+qu'une seule.
+
+1. **Un garde trop large ne « protège trop » pas — il détruit.** Périmer par message faisait tomber
+   des résultats parfaitement valides pour des langues qu'aucune tâche récente n'avait redemandées.
+   Et un résultat jeté ici est perdu pour toujours : rien ne retente une traduction absente.
+2. **Le test qui le prouve doit faire vivre DEUX tâches**, une par langue, avec des `taskId`
+   distincts. Un test à une seule tâche valide indifféremment le garde large et le garde étroit —
+   c'est la leçon 128 (« un double qui n'évalue pas le `where` valide les deux versions du code »)
+   appliquée à un garde plutôt qu'à une requête.
+3. **La même erreur de granularité se répétait un étage plus bas**, dans `ZmqTranslationClient` :
+   `removePendingRequest` soldait la REQUÊTE au premier résultat, alors que ce qui se solde est une
+   LANGUE. Même conteneur, même unité, même défaut — trouver l'un doit faire chercher l'autre.
+4. **Écrire la clé composite, jamais la déduire.** Les deux côtés (enregistrement, lecture)
+   normalisent par le SSOT `normalizeLanguageCode` : le demandeur dit `'pt-BR'`, le translator rend
+   `'pt'`. Une clé composite dont les deux moitiés ne sont pas produites par la même fonction est un
+   garde qui ne se déclenche jamais — ou toujours.
+
+---
+
+## Leçon 139 — un code défensif qui « nettoie avant » est presque toujours une redondance devenue destructive (2026-08-12, routine messaging, cycle 89)
+
+La retraduction supprimait `Message.translations[langue]` et **persistait** cette suppression avant
+d'envoyer la requête ZMQ, sans rollback. Le commentaire disait « cela permet de remplacer les
+traductions existantes par les nouvelles » — une justification qui était fausse au moment où elle a
+été écrite : `_saveTranslationToDatabase` remplace la clé quoi qu'il s'y trouve.
+
+1. **Vérifier l'écrivain AVAL avant de croire le nettoyeur AMONT.** La question à poser n'est pas
+   « pourquoi supprime-t-on ? » mais « que se passerait-il si on ne supprimait pas ? ». Ici : rien,
+   sauf sur le chemin d'échec, où la suppression est la seule chose qui reste.
+2. **Un nettoyage préalable sans rollback est un pari sur le succès du réseau.** Le mode de panne
+   n'est pas « l'utilisateur voit brièvement l'ancienne traduction » (bénin) mais « la traduction
+   correcte n'existe plus nulle part » (définitif). Entre les deux, le choix ne se discute pas.
+3. **La redondance était déjà documentée à côté** : quatre transports d'édition écrivent
+   `translations: null` dans l'écriture du CONTENU, et un test du cycle 35 verrouille précisément ce
+   choix (« ne réécrit pas la ligne une seconde fois pour invalider ce que la première a déjà
+   vidé »). Le bloc supprimé était la seconde écriture que ce test interdisait — un étage plus bas,
+   hors de sa portée.
+4. **Un correctif qui RETIRE du code doit se prouver par un test d'ABSENCE d'écriture**
+   (`expect(prisma.message.update).not.toHaveBeenCalled()`), pas seulement par la survie de la
+   donnée : sinon un futur « nettoyage » revient sans que rien ne le dise.
+
+---
+
+## Leçon 140 — deux exclusions voisines dans le même handler peuvent devoir porter sur des identités OPPOSÉES (2026-08-12, routine messaging, cycle 89)
+
+Dans `handleMessageDelete`, deux fan-outs se suivent à dix lignes d'intervalle et excluent chacun
+quelqu'un. La file hors ligne exclut **l'ACTEUR** (un modérateur supprime, l'auteur doit l'apprendre
+— corrigé à un cycle précédent, avec un commentaire de quinze lignes). Le recalcul du badge de
+non-lus exclut **l'AUTEUR** (ses propres messages n'ont jamais compté dans ses non-lus ; le
+modérateur, lui, est un destinataire à rafraîchir).
+
+1. **Copier l'exclusion du voisin est le réflexe à combattre.** Les deux lignes se ressemblent, le
+   commentaire d'à côté est long et convaincant, et il dit l'inverse de ce qu'il faut faire ici.
+   L'exclusion se dérive de la question « de qui l'état ne peut PAS changer ? », jamais de « qui le
+   code voisin exclut-il ? ».
+2. **Réutiliser l'unité partagée ne dispense pas de rejouer son contrat.** `emitUnreadCountsToRecipients`
+   nomme son paramètre `senderId` parce que ses trois appelants d'origine sont des chemins d'ENVOI.
+   Sur un chemin de SUPPRESSION, le même paramètre reste juste — mais parce que l'auteur est le bon
+   exclu, pas parce que le nom du paramètre le suggère.
+3. **Un paramètre trop large invite au cast, et le cast masque le contrat.** `_updateUnreadCounts`
+   exigeait un `Message` complet pour n'en lire que `senderId` ; le chemin de suppression, qui ne
+   dispose que d'un `select` étroit, ne pouvait l'appeler qu'en mentant (`as Message`). Réduire le
+   paramètre à ce que l'unité lit vraiment a supprimé le cast — et rendu l'exclusion visible sur la
+   ligne d'appel.
+
+---
+
+## Leçon 141 — un test rouge sur du code que personne n'a touché ne prouve pas un défaut, il prouve un DÉSACCORD (2026-08-12, routine messaging, cycle 89)
+
+`main` était rouge : 8 suites gateway, 35 tests, depuis un lot d'intégration de 48 fichiers de test.
+Le job `Test gateway` échouait sur `main` ET sur toute PR — donc plus rien ne pouvait être mergé,
+par personne. Aucun des 35 échecs n'était un défaut de production.
+
+1. **Mesurer le DELTA avant de diagnostiquer quoi que ce soit.** Le premier réflexe utile n'est pas
+   de lire le test rouge, c'est de le rejouer sur `main` en checkout détaché avec le MÊME
+   `node_modules`. Liste identique, comptes identiques ⇒ la branche est hors de cause, et la
+   question change complètement de nature. Cinq minutes qui évitent de chercher un défaut chez soi.
+2. **Trancher en lisant ce que la production justifie d'elle-même.** Six des huit suites portaient,
+   en face, un commentaire de production expliquant pourquoi la forme attendue par le test était
+   exactement celle qu'un correctif avait retirée : `deletedAt: null` qui n'apparie rien sur Mongo,
+   `currentUses + 1` qui est une course, `userId` nu qui n'est pas un credential, « pas de requête
+   DB » qui était le trou de sécurité. Le test décrivait le BUG. Un dépôt qui documente ses
+   correctifs à l'endroit du correctif rend cet arbitrage mécanique — c'est le retour sur
+   investissement des commentaires-qui-expliquent-pourquoi.
+3. **Un double de test incomplet produit un échec qui ACCUSE la production.** Trois des huit
+   suites échouaient uniquement parce qu'il manquait une méthode au double (`updateMany`,
+   `connect`, `findFirst`) : la méthode réelle levait, le `catch` avalait, et le test rendait
+   « `internal_error` » ou « 0 appel ». Le symptôme désigne la production ; la cause est dans le
+   mock. Signature à reconnaître : *tous* les cas d'une méthode rendent la même erreur générique.
+4. **Ne jamais écrire de production pour satisfaire un test imaginé.** `sendNotificationToUser`
+   n'existait nulle part, dans aucune version, et rien ne l'appelait. Lui donner une implémentation
+   aurait produit du code mort — sous garantie de test, donc protégé de toute suppression future.
+   Le test part.
+5. **Réparer la CI d'autrui n'est pas une digression quand elle bloque la sienne.** La règle « ne
+   pas élargir le périmètre » cède devant un fait simple : tant que `main` est rouge, aucun travail
+   ne peut être livré. Le repérer tôt (au premier échec de CI) coûte une passe ; le repérer tard
+   coûte le cycle.

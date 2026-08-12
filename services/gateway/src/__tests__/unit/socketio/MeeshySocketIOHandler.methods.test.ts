@@ -1,7 +1,7 @@
 /**
  * Unit tests for MeeshySocketIOHandler — methods other than broadcastMessage.
- * Covers: getManager, sendNotificationToUser (sent/not-connected/error),
- * getConnectedUsers (no manager, with manager, error).
+ * Covers: getManager, broadcastMessage, getConnectedUsers (no manager, with
+ * manager, error).
  *
  * @jest-environment node
  */
@@ -53,30 +53,13 @@ describe('getManager', () => {
   });
 });
 
-// ─── sendNotificationToUser ───────────────────────────────────────────────────
-
-describe('sendNotificationToUser', () => {
-  it('does nothing when the manager is not initialized', async () => {
-    const handler = makeHandlerNoManager();
-    await expect(handler.sendNotificationToUser('u-1', { type: 'test' })).resolves.toBeUndefined();
-  });
-
-  it('calls manager.sendToUser with the correct event and payload', async () => {
-    const { handler, manager } = makeHandler();
-    await handler.sendNotificationToUser('u-42', { type: 'message' });
-    expect(manager.sendToUser).toHaveBeenCalledWith('u-42', expect.any(String), { type: 'message' });
-  });
-
-  it('does not throw when the user is not connected (sendToUser returns false)', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockReturnValue(false) });
-    await expect(handler.sendNotificationToUser('u-offline', {})).resolves.toBeUndefined();
-  });
-
-  it('catches and swallows errors thrown by the manager', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockImplementation(() => { throw new Error('crash'); }) });
-    await expect(handler.sendNotificationToUser('u-1', {})).resolves.toBeUndefined();
-  });
-});
+// `sendNotificationToUser` n'a jamais existé sur `MeeshySocketIOHandler` — ni
+// dans l'histoire du fichier, ni ailleurs dans le service, et aucun appelant ne
+// la nomme. Le bloc qui la décrivait a été retiré plutôt qu'accompagné d'une
+// production écrite pour lui : ajouter une méthode que rien n'appelle pour
+// satisfaire un test imaginé, c'est écrire du code mort sous garantie. Les
+// notifications passent par `NotificationService` et, pour le transport,
+// `MeeshySocketIOManager.sendToUser`.
 
 // ─── getConnectedUsers ────────────────────────────────────────────────────────
 

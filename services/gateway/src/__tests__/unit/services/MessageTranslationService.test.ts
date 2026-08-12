@@ -1918,7 +1918,20 @@ describe('MessageTranslationService - Translation Deduplication', () => {
   });
 });
 
-describe('MessageTranslationService - Retranslation with Old Translation Cleanup', () => {
+/**
+ * Ce bloc verrouillait l'inverse : « should delete old translations before
+ * retranslation », c'est-à-dire la description de l'implémentation d'alors, pas
+ * une exigence produit.
+ *
+ * Cette suppression pré-envoi était persistée SANS rollback : translator muet,
+ * retries épuisés ou circuit ouvert, la traduction correcte disparaissait
+ * définitivement. Et elle ne protégeait de rien — l'invalidation qui compte
+ * (ne jamais publier la traduction du texte d'AVANT) vit dans l'écriture du
+ * CONTENU, sur les quatre transports d'édition, et son propre test la verrouille
+ * (`message-edit-stale-translation.test.ts`). Le remplacement, lui, est
+ * inconditionnel dans `_saveTranslationToDatabase`.
+ */
+describe('MessageTranslationService - la retraduction ne détruit pas ce qu\'elle remplace', () => {
   let translationService: MessageTranslationService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;
 
@@ -1932,7 +1945,7 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
     mockZmqClient.sendTranslationRequest.mockResolvedValue('retrans-task');
   });
 
-  it('should delete old translations before retranslation', async () => {
+  it('laisse la traduction existante en base tant que le remplacement n\'est pas revenu', async () => {
     const messageData: MessageData = {
       id: 'existing-retrans-msg',
       conversationId: 'conv-retrans',
@@ -1962,11 +1975,42 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
     // Wait for async processing
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Should have called message.update to remove old translations from JSON
-    expect(mockPrisma.message.update).toHaveBeenCalledWith({
-      where: { id: 'existing-retrans-msg' },
-      data: { translations: {} }
+    // Aucune écriture de `Message.translations` sur le chemin de dispatch : la
+    // traduction française d'avant reste servie jusqu'à ce que la nouvelle
+    // arrive, et survit si elle n'arrive jamais.
+    expect(mockPrisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('demande bien la retraduction de la langue visée', async () => {
+    const messageData: MessageData = {
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en',
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en'
     });
+    mockPrisma.message.findUnique.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      translations: { fr: { text: 'Old translation', translationModel: 'basic' } }
+    });
+    mockPrisma.participant.findMany.mockResolvedValue([]);
+
+    await translationService.handleNewMessage(messageData);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'existing-retrans-msg',
+        targetLanguages: ['fr']
+      })
+    );
   });
 });
 
