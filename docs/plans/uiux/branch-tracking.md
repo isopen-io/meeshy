@@ -86,6 +86,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Base de départ 210i+ : `main` HEAD** (resync ; supprimer la branche mergée). **Piste 210i+** (surfaces fraîches, 1/itération, vérifier collision essaim) : autres `ProgressView` + `Text` de chargement non groupés (grep `ProgressView()` suivi d'un `Text` de chargement sans `accessibilityElement`) ; `StoryExpiredContent` empty-state (prudence : 15 mentions, déjà largement travaillé).
 
 | 209i | claude/laughing-thompson-chy3fk (iOS VoiceOver `StoryNotificationLoadingView` : `ProgressView` indéterminé + `Text("Loading…")` non groupés = 2 nœuds VoiceOver disjoints → `.accessibilityElement(children: .ignore)` + `.accessibilityLabel(loadingMessage)` sur le `VStack` = 1 élément « Loading… » ; message hissé en `private var loadingMessage` (DRY Text+label) ; clé `loading.message` existante réutilisée ; 1 fichier, 0 clé/0 visuel/0 logique/0 SDK/0 test ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR AUTORITAIRE iOS (mis à jour 144i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **144i (branche `claude/laughing-thompson-ich12b`, base `main` HEAD `efedb69e4`)** :
+>   VoiceOver-**structure** de `AddParticipantSheet` (feuille « Ajouter un membre »). **Pool Dynamic Type
+>   TARI** : tous les `.font(.system(size:))` restants du tree `apps/ios/Meeshy` sont des glyphes
+>   chrome/décoratifs gelés + annotés (doctrine 82i/84i/86i/87i) — **aucun site texte à migrer**. On passe
+>   « state-of-the-art ». **2 gaps corrigés** : (1) `userRow` lisait le nom **2×** — `MeeshyAvatar` porte
+>   son `.accessibilityLabel(name)` (`MeeshyAvatar.swift:378/381`) redondant avec le bloc nom/@pseudo déjà
+>   `.combine` → `.accessibilityHidden(true)` sur l'avatar (présentationnel, sans mood tap/menu → 0 action
+>   perdue ; doctrine 143i). (2) Squelette de chargement (3 `searchSkeletonRow` shimmer) →
+>   `.accessibilityElement(children: .ignore)` + `.accessibilityLabel("Recherche en cours")` : une annonce
+>   au lieu de 3 arrêts VoiceOver vides. **1 clé i18n inline** `participants.add.searching` (defaultValue
+>   only, cohérent avec les `participants.add.*` non catalogués → 0 édition `.xcstrings`). 1 fichier, 0
+>   logique, 0 test neuf (`searchResults` est `@State private` → non peuplable en test ; smoke `_ = body`
+>   ne couvrirait que l'état vide). Modifiers additifs → rendu voyant strictement identique. Gate = CI
+>   `ios-tests`. PR à venir.
+> - **⚠️ `AddParticipantSheet` VoiceOver-structure SOLDÉ** : ne plus reprendre (avatar `userRow` masqué,
+>   squelette regroupé).
+> - **Base de départ 145i : `main` HEAD**. Pool `.system(size:)` tari → continuer le pass VoiceOver
+>   state-of-the-art : propager le fix « avatar présentationnel → `.accessibilityHidden(true)` » aux autres
+>   user-rows qui double-lisent le nom quand l'avatar est **non interactif** (ex. `MemberManagementSection.
+>   memberRow`) ; garder l'avatar exposé quand il est interactif (`ForwardPickerSheet` mood tap). Reste
+>   `StoryViewerView+Content` parké (⚠️ i18n + `@State private` cross-file). Éviter les fichiers des PRs iOS
+>   ouvertes.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 216i, 2026-07-26)** — piste iOS (suffixe `i`).
 > - **215i MERGÉE** (PR #2322, squash **`fefe559`** dans `main`). CI **16/16 verte** (`ios-tests` 28 min — la fourchette normale du dépôt est 22–35 min, ne pas conclure au blocage avant 35 min), `mergeable_state: clean`, 0 review bloquante. ⚠️ **La suppression de branche distante échoue via le proxy git** (`git push --delete` → « Everything up-to-date » + disconnect, 4 tentatives avec backoff) : sans effet pratique puisque la branche assignée est **recyclée** (reset sur `main`), donc pas d'accumulation de branches obsolètes — ne pas s'acharner dessus.
 > - **216i (terminée, branche `claude/quirky-curie-vjj2u6`, base `main` HEAD `fefe559`)** : **adoption de `ShareLink` natif** sur les 2 derniers sites de partage à URL **synchrone** — `AffiliateView` (lien de parrainage) et `ShareLinkDetailView` (lien de jointure). Suite directe de 215i, **critère de choix de l'outil désormais explicite** : `ShareLink` exige son item à la construction de la vue ⇒ réservé aux URL **synchrones** ; les liens forgés par appel gateway (**asynchrones**, cas 215i) exigent `.sheet(item:)` + `ShareSheet`. Deux défauts soldés : (A) **scène non déterministe** (défaut B de 215i) — ces 2 sites ancraient pourtant **correctement** le popover iPad, mais résolvaient leur présentateur via `connectedScenes.first` (`Set` **non ordonné** ⇒ scène d'arrière-plan possible en multitâche iPad) : bien ancrer un popover ne sauve rien si la fenêtre est la mauvaise ; (B) **contrôle mort** — sur URL invalide le `guard … else { return }` laissait un bouton **visible, activé et annoncé par VoiceOver** qui ne faisait rien ⇒ désormais affordance **estompée 0.4 + `accessibilityHidden`** (patron `CommunityLinkDetailView`). Dé-duplication : le corps de `actionButton(_:icon:color:action:)` extrait dans **`actionButtonLabel(_:icon:color:)`** (miroir du couple `communityActionButton`/`communityActionButtonLabel`) pour que le `ShareLink` et ses 3 voisins partagent le style ; `presentSheet(_:)` **supprimé** (seul appelant). `ShareLink` porte **`.isButton` nativement** → pas de `.accessibilityAddTraits` (contrairement aux voisins restés `Button`). **2 fichiers prod : +80 / −54 lignes** · **0 clé i18n neuve** (`affiliate.action.share`, `common.share` réutilisées) · 0 couleur / 0 layout. Test neuf `NativeShareLinkAdoptionTests` (5 tests / 13 assertions) : **RED 13/13 contre `main` `fefe559`**, GREEN 13/13. Gate = CI `iOS Tests`.
