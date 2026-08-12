@@ -81,8 +81,12 @@ struct BookmarksView: View {
                             },
                             onReport: { postId in
                                 Task {
-                                    try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                    FeedbackToastManager.shared.showSuccess(String(localized: "bookmarks.report.success", defaultValue: "Signalement envoyé", bundle: .main))
+                                    do {
+                                        try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+                                        FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+                                    } catch {
+                                        FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+                                    }
                                 }
                             },
                             authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),

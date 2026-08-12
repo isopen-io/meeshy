@@ -74,11 +74,7 @@ struct ContactsListTab: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.friends.isEmpty {
-            VStack {
-                Spacer()
-                ProgressView().tint(MeeshyColors.indigo500)
-                Spacer()
-            }
+            ContactsSkeletonList()
         } else if viewModel.filteredFriends.isEmpty {
             emptyState
         } else {
@@ -101,6 +97,7 @@ struct ContactsListTab: View {
                 .padding(.top, 4)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+            .refreshable { await viewModel.loadFriends() }
         }
     }
 

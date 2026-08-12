@@ -28,6 +28,11 @@ struct DiscoverTab: View {
             .padding(.bottom, 20)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+        .refreshable { await viewModel.loadSuggestions() }
+        .task {
+            guard viewModel.searchQuery.isEmpty, viewModel.searchResults.isEmpty else { return }
+            await viewModel.loadSuggestions()
+        }
     }
 
     // MARK: - Invite Section
