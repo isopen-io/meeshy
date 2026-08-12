@@ -66,6 +66,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   typographie délibérée, hors scope) ; `AudioFullscreenView`, `FeedCommentsSheet` (non audités,
 >   vérifier collision essaim via `list_pull_requests`).
 > - **Base de départ 186i : `main` HEAD** (resync ; supprimer la branche mergée).
+> - **208i (terminée, branche `claude/laughing-thompson-c3ngz4`, base `main` HEAD `22465a5` Merge PR #2214)** :
+>   Consolidation design-system de **`PrivacyPolicyView`** (visionneuse légale). Le twin quasi-identique
+>   `TermsOfServiceView` avait migré son `accentColor` vers le token de marque `MeeshyColors.brandPrimaryHex`
+>   en **194i**, qui a **explicitement nommé** `PrivacyPolicyView` comme le sibling restant utilisant encore
+>   le **littéral magique** `"6366F1"`. Fix (idiome 180i/186i/194i) : `private let accentColor = "6366F1"`
+>   → `MeeshyColors.brandPrimaryHex` (byte-identique `"6366F1"` = indigo500, `MeeshyUI` déjà importé).
+>   **0 visuel / 0 logique / 0 i18n / 0 test neuf**. 1 fichier. Les 2 écrans légaux partagent désormais la
+>   même déclaration `accentColor`. Aucune PR iOS ne touche `PrivacyPolicyView` (dernier commit = base `64f943d`).
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** le token accent de `PrivacyPolicyView` (soldé 208i). Sibling legacy restant de
+>   la chaîne 180i : `AboutView` (`accentColor = "45B7D1"` cyan) — itération dédiée future.
+> - **Base de départ 209i : `main` HEAD** (après merge, supprimer la branche).
 >
 > **POINTEUR iOS AUTORITAIRE (mis à jour 216i, 2026-07-26)** — piste iOS (suffixe `i`).
 > - **215i MERGÉE** (PR #2322, squash **`fefe559`** dans `main`). CI **16/16 verte** (`ios-tests` 28 min — la fourchette normale du dépôt est 22–35 min, ne pas conclure au blocage avant 35 min), `mergeable_state: clean`, 0 review bloquante. ⚠️ **La suppression de branche distante échoue via le proxy git** (`git push --delete` → « Everything up-to-date » + disconnect, 4 tentatives avec backoff) : sans effet pratique puisque la branche assignée est **recyclée** (reset sur `main`), donc pas d'accumulation de branches obsolètes — ne pas s'acharner dessus.
