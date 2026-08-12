@@ -100,13 +100,30 @@ public actor TusUploadCheckpointStore {
         }
     }
 
+    /// media-08 — purge de logout : tous les checkpoints, sans filtre d'âge
+    /// (miroir de `purgeStale` sans cutoff).
+    public func purgeAll() async {
+        do {
+            try await pool.write { db in
+                try db.execute(sql: "DELETE FROM tus_upload_checkpoint")
+            }
+        } catch {
+            logger.error("purgeAll failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     // MARK: - Test surface
 
     /// Returns the entire table (for tests / debug). Unbounded — do not
     /// call from production paths.
     public func allCheckpoints() async -> [TusUploadCheckpoint] {
-        (try? await pool.read { db in
-            try TusUploadCheckpoint.fetchAll(db)
-        }) ?? []
+        do {
+            return try await pool.read { db in
+                try TusUploadCheckpoint.fetchAll(db)
+            }
+        } catch {
+            logger.error("Checkpoint table read failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
 }

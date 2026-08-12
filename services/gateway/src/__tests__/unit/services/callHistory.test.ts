@@ -29,13 +29,19 @@ const baseRow = (over: Partial<CallHistoryRow> = {}): CallHistoryRow => ({
 describe('callHistory pure helpers', () => {
   describe('deriveCallDirection', () => {
     it('outgoing when I initiated', () => {
-      expect(deriveCallDirection('me', 'me', null)).toBe('outgoing');
+      expect(deriveCallDirection('me', 'me', null, false)).toBe('outgoing');
     });
-    it('incoming when other initiated and it was answered', () => {
-      expect(deriveCallDirection('other', 'me', new Date())).toBe('incoming');
+    it('incoming when other initiated, it was answered, and I personally joined', () => {
+      expect(deriveCallDirection('other', 'me', new Date(), true)).toBe('incoming');
     });
     it('missed when other initiated and never answered', () => {
-      expect(deriveCallDirection('other', 'me', null)).toBe('missed');
+      expect(deriveCallDirection('other', 'me', null, true)).toBe('missed');
+    });
+    it('missed — never "incoming" — when answered by someone else but I never personally joined', () => {
+      // Group conversation, P2P call capped at 2 active participants: a 3rd
+      // member whose auto-early-join lost the cap race has no CallParticipant
+      // row of their own, even though the call WAS answered by the other two.
+      expect(deriveCallDirection('other', 'me', new Date(), false)).toBe('missed');
     });
   });
 
@@ -93,7 +99,7 @@ describe('callHistory pure helpers', () => {
         phoneNumber: '+33123456789',
         isOnline: true,
       };
-      const item = buildCallHistoryItem(baseRow(), 'me', peer);
+      const item = buildCallHistoryItem(baseRow(), 'me', peer, false);
       expect(item).toMatchObject({
         callId: 'call1',
         conversationId: 'conv1',
@@ -120,7 +126,8 @@ describe('callHistory pure helpers', () => {
           status: 'missed',
         }),
         'me',
-        null
+        null,
+        true
       );
       expect(item.direction).toBe('missed');
       expect(item.answeredAt).toBeNull();
@@ -130,7 +137,7 @@ describe('callHistory pure helpers', () => {
     });
 
     it('outputs endReason: null when the row has no endReason', () => {
-      const item = buildCallHistoryItem(baseRow({ endReason: null }), 'me', null);
+      const item = buildCallHistoryItem(baseRow({ endReason: null }), 'me', null, true);
       expect(item.endReason).toBeNull();
     });
 
@@ -141,12 +148,26 @@ describe('callHistory pure helpers', () => {
           conversation: { type: 'group', title: 'Squad', avatar: 'a.png' },
         }),
         'me',
-        null
+        null,
+        true
       );
       expect(item.isVideo).toBe(false);
       expect(item.conversationType).toBe('group');
       expect(item.conversationTitle).toBe('Squad');
       expect(item.conversationAvatar).toBe('a.png');
+    });
+
+    it('marks a group-call bystander (answered by others, never personally joined) as missed, not incoming', () => {
+      const item = buildCallHistoryItem(
+        baseRow({
+          initiatorId: 'other',
+          conversation: { type: 'group', title: 'Squad', avatar: null },
+        }),
+        'me',
+        null,
+        false
+      );
+      expect(item.direction).toBe('missed');
     });
   });
 });

@@ -4,10 +4,15 @@
  * Audit 2026-07-02: both handlers were missing a rate limit (unlike every
  * sibling call:* handler), and `call:analytics` had NO authorization check at
  * all — any authenticated user could submit lifecycle telemetry against an
- * arbitrary callId. `resolveActiveCallParticipantId` can't be used here
- * (analytics fires after the client has already left the call, so `leftAt`
- * is already set) — it's scoped to conversation membership instead via
- * `resolveParticipantIdFromCall`.
+ * arbitrary callId. It was first scoped to conversation membership via
+ * `resolveParticipantIdFromCall`, but that still let ANY member of the
+ * conversation submit fabricated telemetry for a call they never joined,
+ * since it never checks CallParticipant rows. Re-audited 2026-07-29:
+ * `resolveEverCallParticipantId` now requires the caller to actually have a
+ * CallParticipant row for THIS call, regardless of `leftAt` —
+ * `resolveActiveCallParticipantId` can't be used here since analytics fires
+ * after the client has already left the call (its `leftAt: null` check would
+ * reject the legitimate sender).
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
@@ -137,7 +142,7 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       const prisma = makePrisma();
       const { socket, io, handlers } = makeSocket();
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallServiceWithParticipant('participant-1'));
       handler.setupCallEvents(socket as any, io as any, () => USER_ID);
 
       await handlers[CALL_EVENTS.ANALYTICS](ANALYTICS_PAYLOAD);
@@ -160,7 +165,7 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       const prisma = makePrisma();
       const { socket, io, handlers } = makeSocket();
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallServiceWithParticipant('participant-1'));
       handler.setupCallEvents(socket as any, io as any, () => USER_ID);
 
       await handlers[CALL_EVENTS.ANALYTICS](ANALYTICS_PAYLOAD);
@@ -168,16 +173,66 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       expect(mockLoggerInfo).not.toHaveBeenCalled();
     });
 
-    it('is dropped when the caller is not a member of the call conversation', async () => {
-      const prisma = makePrisma({ hasParticipant: false });
+    it('is dropped when the caller was never a participant of this call', async () => {
+      const prisma = makePrisma();
       const { socket, io, handlers } = makeSocket();
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallServiceWithParticipant(null));
       handler.setupCallEvents(socket as any, io as any, () => USER_ID);
 
       await handlers[CALL_EVENTS.ANALYTICS](ANALYTICS_PAYLOAD);
 
       expect(mockLoggerInfo).not.toHaveBeenCalled();
+    });
+
+    // Regression test — the gap this audit closed. `resolveParticipantIdFromCall`
+    // (removed from this path) only checked conversation membership, so ANY
+    // member of the conversation could submit fabricated telemetry for a call
+    // they never joined. `prisma` here reports the caller as a conversation
+    // member (the old check would have let them through); the callService
+    // reports them as never having a CallParticipant row for THIS call, which
+    // must still be rejected.
+    it('is dropped when the caller is a conversation member but never joined this specific call', async () => {
+      const prisma = makePrisma({ hasParticipant: true });
+      const { socket, io, handlers } = makeSocket();
+      const strangerCallService = {
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { participantId: 'participant-other', participant: { userId: 'someone-else' }, leftAt: null },
+          ],
+        }),
+      } as any;
+
+      const handler = new CallEventsHandler(prisma, strangerCallService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.ANALYTICS](ANALYTICS_PAYLOAD);
+
+      expect(mockLoggerInfo).not.toHaveBeenCalled();
+    });
+
+    // The legitimate case call:analytics exists for — the sender has already
+    // hung up (`leftAt` set) by the time telemetry arrives. Must still pass.
+    it('still succeeds when the caller has already left this call', async () => {
+      const prisma = makePrisma();
+      const { socket, io, handlers } = makeSocket();
+      const departedCallService = {
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { participantId: 'participant-1', participant: { userId: USER_ID }, leftAt: new Date() },
+          ],
+        }),
+      } as any;
+
+      const handler = new CallEventsHandler(prisma, departedCallService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.ANALYTICS](ANALYTICS_PAYLOAD);
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        '📞 Socket: call:analytics received',
+        expect.objectContaining({ callId: VALID_CALL_ID, userId: USER_ID })
+      );
     });
   });
 

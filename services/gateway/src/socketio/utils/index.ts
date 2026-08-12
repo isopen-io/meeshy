@@ -22,3 +22,10 @@ export {
   resolveParticipantFromMessage,
   type ParticipantResolution
 } from './participant-resolver';
+
+export {
+  buildMessageAckData,
+  stripClientMessageId,
+  type MessageAckSource,
+  type MessageAckData
+} from './message-ack-shaping';

@@ -148,7 +148,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
-      if (body.regionalLanguage !== undefined) updateData.regionalLanguage = body.regionalLanguage;
+      if (body.regionalLanguage !== undefined) {
+        // Chaîne vide = effacement de la langue secondaire → null (le Prisme la
+        // traite comme absente). Mirror de customDestinationLanguage.
+        updateData.regionalLanguage = body.regionalLanguage === '' ? null : body.regionalLanguage;
+      }
       if (body.customDestinationLanguage !== undefined) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
@@ -229,11 +233,26 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
       // Only public-facing fields matter to other users' cached profile view.
-      const publicChanges: { displayName?: string; firstName?: string; lastName?: string } = {};
-      if (body.firstName !== undefined) publicChanges.firstName = updatedUser.firstName;
-      if (body.lastName !== undefined) publicChanges.lastName = updatedUser.lastName;
-      if (body.displayName !== undefined) publicChanges.displayName = updatedUser.displayName;
-      if (Object.keys(publicChanges).length > 0) {
+      //
+      // Les quatre composants du nom voyagent en GROUPE, pas en delta. Le nom
+      // rendu par un client est `displayName > « Prénom Nom » > username` : un
+      // delta partiel (« firstName vaut désormais Bob ») est IRRECOMPOSABLE chez
+      // le destinataire, qui ne stocke que le nom déjà composé — il lui manque
+      // toujours les autres composants. Envoyer les quatre ensemble laisse chaque
+      // client appliquer SON résolveur (`getUserDisplayName` web,
+      // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
+      // copie côté serveur.
+      const nameChanged =
+        body.firstName !== undefined ||
+        body.lastName !== undefined ||
+        body.displayName !== undefined;
+      if (nameChanged) {
+        const publicChanges = {
+          displayName: updatedUser.displayName,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          username: updatedUser.username,
+        };
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
           .catch((err: unknown) => fastify.log.error({ err }, '[PROFILE_UPDATE] emitUserUpdated failed'));
 
@@ -736,13 +755,28 @@ export async function updateUsername(fastify: FastifyInstance) {
         },
         select: {
           id: true,
-          username: true
+          username: true,
+          // Les trois autres composants du nom : `username` n'est le nom RENDU
+          // que si `displayName` et « Prénom Nom » sont vides, et le
+          // destinataire ne peut pas le savoir sans eux. Même règle de groupe
+          // que le chemin `PATCH /users/me`.
+          displayName: true,
+          firstName: true,
+          lastName: true
         }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
-      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { username: updatedUser.username } })
+      fastify.notificationService?.emitUserUpdated({
+        userId: userId!,
+        changes: {
+          username: updatedUser.username,
+          displayName: updatedUser.displayName,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+        },
+      })
         .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
 
       // `username` fait partie de l'identité de frappe mise en cache par

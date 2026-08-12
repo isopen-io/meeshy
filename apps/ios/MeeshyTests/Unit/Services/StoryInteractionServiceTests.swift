@@ -52,12 +52,12 @@ final class StoryInteractionServiceTests: XCTestCase {
 
     // MARK: - postComment
 
-    func test_postComment_minimalArgs_hitsEndpoint() async {
+    func test_postComment_minimalArgs_hitsEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/comments"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.postComment(
+        try await sut.postComment(
             storyId: Self.storyId,
             content: "great story",
             originalLanguage: "fr"
@@ -67,12 +67,12 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_postComment_replyWithEffectFlags_hitsEndpoint() async {
+    func test_postComment_replyWithEffectFlags_hitsEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/comments"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.postComment(
+        try await sut.postComment(
             storyId: Self.storyId,
             content: "👏",
             originalLanguage: "fr",
@@ -84,39 +84,55 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_postComment_apiFailure_doesNotThrow() async {
+    /// `postComment` MUST throw (not swallow) so the caller — `sendComment`
+    /// in `StoryViewerView+Content.swift` — can roll back the optimistic
+    /// `temp_` comment/reply it already inserted instead of leaving a
+    /// phantom row that silently never reached the server.
+    func test_postComment_apiFailure_throwsAndLogs() async {
         let (sut, api) = makeSUT()
         api.errorToThrow = NSError(domain: "TestNetwork", code: 401)
 
-        await sut.postComment(
-            storyId: Self.storyId,
-            content: "swallowed",
-            originalLanguage: "fr"
-        )
-
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.postComment(
+                storyId: Self.storyId,
+                content: "not swallowed anymore",
+                originalLanguage: "fr"
+            )
+            XCTFail("Expected postComment to rethrow")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
     }
 
     // MARK: - react
 
-    func test_react_hitsCorrectEndpoint() async {
+    func test_react_hitsCorrectEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/like"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
+        try await sut.react(storyId: Self.storyId, emoji: "🔥")
 
         XCTAssertEqual(api.postCount, 1)
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_react_apiFailure_doesNotThrow() async {
+    /// `react` MUST throw (not swallow) so the caller — `sendReaction` in
+    /// `StoryViewerView+Content.swift` — can roll back its optimistic emoji
+    /// append / counter bump. The 409 `REACTION_LIMIT_REACHED` conflict is
+    /// the concrete reproducible case (see `StoryReactionRollbackTests`),
+    /// but ANY failure must propagate: the service still logs via
+    /// `os.Logger` before rethrowing, it just no longer eats the error.
+    func test_react_apiFailure_throwsAndLogs() async {
         let (sut, api) = makeSUT()
-        api.errorToThrow = NSError(domain: "TestNetwork", code: 429)
+        api.errorToThrow = MeeshyError.server(statusCode: 409, message: "REACTION_LIMIT_REACHED")
 
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
-
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.react(storyId: Self.storyId, emoji: "🔥")
+            XCTFail("Expected react to rethrow the 409 conflict")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
     }
 
     // MARK: - Failure-then-success: proves the catch handler is recoverable.
@@ -131,11 +147,15 @@ final class StoryInteractionServiceTests: XCTestCase {
         api.stub(endpoint, result: makeEmptyResponse())
 
         api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.react(storyId: Self.storyId, emoji: "🔥")
+            XCTFail("Expected first call to throw")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
 
         api.errorToThrow = nil
-        await sut.react(storyId: Self.storyId, emoji: "❤️")
+        try? await sut.react(storyId: Self.storyId, emoji: "❤️")
         XCTAssertEqual(api.postCount, 2)
     }
 

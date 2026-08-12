@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- Feed post composer: "add my location" attachment (device fix, no map/geocoding yet). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Android 15+ : détection « l'écran de l'app est enregistré » pendant un
          appel → alerte privacy du pair (call:screen-capture-detected). Permission
          normale (aucun prompt), inerte sous l'API 35. -->
@@ -25,6 +28,8 @@
     <application
         android:name=".MeeshyApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Meeshy">
@@ -35,17 +40,30 @@
             android:label="@string/app_name"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Meeshy">
+            android:theme="@style/Theme.Meeshy.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link: meeshy://conversations/{id} -->
-            <intent-filter android:autoVerify="true">
+            <!-- Deep link: meeshy://conversations/{id} — autoVerify retire : un
+                 scheme custom ne peut pas etre verifie (source de l'erreur lint
+                 AppLinkUrlError), la verification appartient au filtre https. -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" />
+            </intent-filter>
+            <!-- App Link : le lien du mail magic link (https://meeshy.me/auth/magic-link?token=)
+                 ouvre l'app directement. La verification s'appuie sur
+                 apps/web/public/.well-known/assetlinks.json, qui doit contenir le
+                 SHA-256 de la cle de signature RELEASE. Procedure (obtenir + poser
+                 l'empreinte, verifier) : apps/android/docs/magic-link-app-links.md -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/auth/magic-link" />
             </intent-filter>
             <!-- Deep link: meeshy://chat/{conversationId} -->
             <intent-filter>
@@ -76,6 +94,68 @@
         <receiver
             android:name=".push.DeclineCallReceiver"
             android:exported="false" />
+
+        <!-- Home-screen widget: unread-count scaffold (feature-parity.md
+             "Home-screen widgets" — first sub-slice). Parity target: iOS
+             MeeshyWidgets.UnreadCountWidget. -->
+        <receiver
+            android:name=".widget.UnreadCountWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_unread_count_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/unread_count_widget_info" />
+        </receiver>
+
+        <!-- Home-screen widget: recent conversations (feature-parity.md
+             "Home-screen widgets" — second sub-slice, after unread-count).
+             Parity target: iOS MeeshyWidgets.RecentConversationsWidget. -->
+        <receiver
+            android:name=".widget.RecentConversationsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_recent_conversations_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_conversations_widget_info" />
+        </receiver>
+
+        <!-- Home-screen widget: favorite contacts (feature-parity.md
+             "Home-screen widgets" — third sub-slice, after unread-count and
+             recent-conversations). Parity target: iOS
+             MeeshyWidgets.FavoriteContactsWidget. -->
+        <receiver
+            android:name=".widget.FavoriteContactsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_favorite_contacts_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/favorite_contacts_widget_info" />
+        </receiver>
+
+        <!-- Home-screen widget: quick reply (feature-parity.md "Home-screen
+             widgets" — fourth sub-slice, after unread-count, recent-conversations
+             and favorite-contacts). Parity target: iOS
+             MeeshyWidgets.QuickReplyWidget. -->
+        <receiver
+            android:name=".widget.QuickReplyWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quick_reply_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_reply_widget_info" />
+        </receiver>
 
         <!-- WorkManager initialization -->
         <provider

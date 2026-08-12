@@ -36,11 +36,30 @@ import { registerRevokeAllSessionsRoute } from '../../../../routes/auth/revoke-a
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function buildApp(): Promise<FastifyInstance> {
+async function buildApp(socketIOHandler?: unknown): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  if (socketIOHandler) (app as any).socketIOHandler = socketIOHandler;
   registerRevokeAllSessionsRoute({ fastify: app } as any);
   await app.ready();
   return app;
+}
+
+/**
+ * A Socket.IO stand-in exposing only what the route reaches through:
+ * `socketIOHandler.getManager().getIO().in(room).fetchSockets()`.
+ */
+function makeSocketIOHandler(sockets: Array<{ emit: any; disconnect: any }>) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return { fetchSockets: async () => sockets };
+    },
+  };
+  return {
+    rooms,
+    handler: { getManager: () => ({ getIO: () => io }) },
+  };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -88,6 +107,61 @@ describe('GET /auth/revoke-all-sessions — success', () => {
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('sessions disconnected');
     expect(mockInvalidateAllSessions).toHaveBeenCalledWith('usr-123', undefined, 'email_revoke_all');
+    await app.close();
+  });
+});
+
+describe('GET /auth/revoke-all-sessions — live sockets', () => {
+  it('closes every live socket of the user, not only their database rows', async () => {
+    mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
+    mockInvalidateAllSessions.mockResolvedValue(2);
+    const emitted: Array<{ event: string; payload: any }> = [];
+    const closed: boolean[] = [];
+    const socket = {
+      emit: (event: string, payload: unknown) => emitted.push({ event, payload }),
+      disconnect: (close?: boolean) => closed.push(close === true),
+    };
+    const { rooms, handler } = makeSocketIOHandler([socket, { ...socket }]);
+
+    const app = await buildApp(handler);
+    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+
+    expect(res.statusCode).toBe(200);
+    expect(rooms).toEqual(['user:usr-123']);
+    expect(closed).toEqual([true, true]);
+    expect(emitted.map((e) => e.event)).toEqual(['auth:session-revoked', 'auth:session-revoked']);
+    expect(emitted[0].payload.reason).toBe('logout_all_devices');
+    await app.close();
+  });
+
+  it('still confirms the revocation when no Socket.IO server is wired', async () => {
+    mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
+    mockInvalidateAllSessions.mockResolvedValue(1);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('sessions disconnected');
+    await app.close();
+  });
+
+  it('still confirms the revocation when the socket fanout fails', async () => {
+    mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
+    mockInvalidateAllSessions.mockResolvedValue(1);
+    const handler = {
+      getManager: () => ({
+        getIO: () => ({
+          in: () => ({
+            fetchSockets: async () => {
+              throw new Error('adapter unavailable');
+            },
+          }),
+        }),
+      }),
+    };
+    const app = await buildApp(handler);
+    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('sessions disconnected');
     await app.close();
   });
 });

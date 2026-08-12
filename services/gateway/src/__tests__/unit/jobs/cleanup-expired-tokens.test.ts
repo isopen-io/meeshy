@@ -10,6 +10,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { CleanupExpiredTokens } from '../../../jobs/cleanup-expired-tokens';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 type DeleteManyResult = { count: number };
 type CountResult = number;
@@ -137,6 +138,29 @@ describe('CleanupExpiredTokens', () => {
       expect(prisma.spies.deleteMany).toHaveBeenCalledTimes(1);
       // getStats calls count 5 times (total, active, expired, used, revoked)
       expect(prisma.spies.count).toHaveBeenCalled();
+    });
+
+    /**
+     * `activeTokens` comptait toujours 0 : sa clause exigeait `usedAt: null` sur
+     * une colonne que `create` ne renseigne pas, donc ABSENTE du document de tout
+     * jeton encore vierge. Jugé ici sur des documents, pas sur la forme du
+     * `where` — un compteur faux ne se distingue d'un compteur juste que là.
+     */
+    it('compte comme actif un jeton vierge, dont la colonne usedAt est ABSENTE', async () => {
+      const prisma = makePrisma({ deleteMany: () => Promise.resolve({ count: 5 }) });
+      const job = new CleanupExpiredTokens(prisma as any);
+
+      await job.runNow();
+
+      // getStats : [total (sans where), active, expired, used, revoked]
+      const activeWhere = (prisma.spies.count.mock.calls as any[])[1][0].where;
+      const later = new Date(Date.now() + 10 * 60 * 1000);
+
+      expect(matchesMongoWhere({ expiresAt: later, isRevoked: false }, activeWhere)).toBe(true);
+      expect(matchesMongoWhere({ expiresAt: later, isRevoked: false, usedAt: null }, activeWhere)).toBe(true);
+      expect(matchesMongoWhere({ expiresAt: later, isRevoked: false, usedAt: new Date() }, activeWhere)).toBe(false);
+      expect(matchesMongoWhere({ expiresAt: later, isRevoked: true }, activeWhere)).toBe(false);
+      expect(matchesMongoWhere({ expiresAt: new Date(Date.now() - 1000), isRevoked: false }, activeWhere)).toBe(false);
     });
 
     it('does not call getStats when no tokens were deleted', async () => {

@@ -18,6 +18,9 @@ public struct TransportBar: View {
     /// nil = masqués — le Pro garde sa toolbar et passe nil ici.
     public let canUndo: Bool?
     public let canRedo: Bool?
+    /// Chip d'aimantation (fusion Simple+Pro : le snap vit dans le transport).
+    /// nil = masqué — les surfaces sans moteur de snap ne l'affichent pas.
+    public let isSnapEnabled: Bool?
     public let onPlayToggle: () -> Void
     public let onMuteToggle: () -> Void
     public let onZoomIn: () -> Void
@@ -25,25 +28,36 @@ public struct TransportBar: View {
     public let onZoomReset: () -> Void
     public let onUndo: () -> Void
     public let onRedo: () -> Void
+    public let onSnapToggle: () -> Void
+    /// Enregistrement de la story (export MP4 watermarké + effets/transitions →
+    /// Fichiers/Photothèque). Rendu juste après le bouton lecture (user
+    /// 2026-07-20). `nil` = surfaces sans export (le bouton n'apparaît pas).
+    public let onSave: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
                 showsTimeReadout: Bool = true,
                 canUndo: Bool? = nil, canRedo: Bool? = nil,
+                isSnapEnabled: Bool? = nil,
                 onPlayToggle: @escaping () -> Void,
                 onMuteToggle: @escaping () -> Void,
                 onZoomIn: @escaping () -> Void,
                 onZoomOut: @escaping () -> Void,
                 onZoomReset: @escaping () -> Void,
                 onUndo: @escaping () -> Void = {},
-                onRedo: @escaping () -> Void = {}) {
+                onRedo: @escaping () -> Void = {},
+                onSnapToggle: @escaping () -> Void = {},
+                onSave: (() -> Void)? = nil) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.showsTimeReadout = showsTimeReadout
         self.canUndo = canUndo; self.canRedo = canRedo
+        self.isSnapEnabled = isSnapEnabled
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
         self.onUndo = onUndo; self.onRedo = onRedo
+        self.onSnapToggle = onSnapToggle
+        self.onSave = onSave
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -73,26 +87,47 @@ public struct TransportBar: View {
         "\(Int(scale * 100))%"
     }
 
-    public static func modeSwitchLabel(currentMode: TimelineMode) -> String {
-        switch currentMode {
-        case .quick: return "PRO ↗"
-        case .pro:   return "QUICK ↗"
-        }
+    /// Clés a11y du chip snap — même contrat que l'ancienne TimelineToolbar
+    /// pour que VoiceOver annonce l'état, pas juste le libellé.
+    public static func snapAccessibilityKey(isOn: Bool) -> String {
+        isOn ? "story.timeline.a11y.snap.on" : "story.timeline.a11y.snap.off"
     }
 
     public var body: some View {
-        // Mode switching is handled by the dedicated TimelineModeSwitcher
-        // shown above the sheet — keeping it out of the transport row frees
-        // horizontal space and avoids duplicate affordances.
-        HStack(spacing: 10) {
+        // Vue unifiée (Simple/Pro fusionnés) : la rangée porte désormais 7
+        // grappes (lecture, temps, undo/redo, snap, zoom×3, son) — sa largeur
+        // intrinsèque (~470 pt avec le readout, ~390 pt sans) dépasse la
+        // portrait des iPhone étroits (16 non-Pro 393 pt, SE 375 pt), ce qui
+        // rognait la lecture à gauche et le son à droite (rangée centrée qui
+        // déborde symétriquement). `ViewThatFits` choisit le PREMIER candidat
+        // qui TIENT dans la largeur proposée, du plus riche au plus compact :
+        //  1. lecteur de temps + libellé zoom `100%` (iPad / large / paysage) ;
+        //  2. temps retiré (~115 pt, déjà jugé redondant avec la règle + le
+        //     playhead, cf. `showsTimeReadout`), libellé zoom conservé (16 Pro) ;
+        //  3-4. libellé zoom `100%` retiré aussi (le zoom reste réglable via
+        //     − / + et le pincement) + espacement resserré, pour que les 6
+        //     boutons fonctionnels tiennent jusqu'au SE (375 pt). Aucun bouton
+        //     fonctionnel (lecture, undo/redo, snap, zoom ±, son) n'est jamais
+        //     retiré — seuls les DEUX libellés informatifs (temps, zoom%) le sont.
+        //
+        // La lecture est ÉPINGLÉE à gauche, hors du `ViewThatFits` : le cluster
+        // droit est mesuré SANS `Spacer` glouton (un Spacer ferait croire à
+        // `ViewThatFits` que chaque candidat remplit toute la largeur, sabotant
+        // la sélection). Le cluster gagne son alignement droit via
+        // `.frame(maxWidth: .infinity, alignment: .trailing)`, pas via un Spacer.
+        HStack(spacing: 0) {
             playButton
-            if showsTimeReadout {
-                timeReadout
+            if let onSave {
+                saveButton(onSave)
+                    .padding(.leading, 10)
             }
-            Spacer(minLength: 4)
-            undoRedoCluster
-            zoomCluster
-            muteButton
+            ViewThatFits(in: .horizontal) {
+                trailingCluster(showTime: showsTimeReadout, showZoomLabel: true, spacing: 10)
+                trailingCluster(showTime: false, showZoomLabel: true, spacing: 10)
+                trailingCluster(showTime: false, showZoomLabel: false, spacing: 8)
+                trailingCluster(showTime: false, showZoomLabel: false, spacing: 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -103,6 +138,22 @@ public struct TransportBar: View {
         .keyboardShortcut(" ", modifiers: [])
         // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
         .background(keyboardShortcutOverlay)
+    }
+
+    /// Grappes de droite (temps? + undo/redo + snap + zoom + son), SANS Spacer
+    /// ni bouton lecture, pour que `ViewThatFits` en mesure la vraie largeur
+    /// intrinsèque. Paramétrée par la présence des libellés informatifs (temps,
+    /// zoom%) et l'espacement, du plus riche au plus compact.
+    private func trailingCluster(showTime: Bool, showZoomLabel: Bool, spacing: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            if showTime {
+                timeReadout
+            }
+            undoRedoCluster
+            snapChip
+            zoomCluster(showLabel: showZoomLabel)
+            muteButton
+        }
     }
 
     /// iOS 26+: the parent band (`ComposerBottomBand`) is now real Liquid
@@ -164,6 +215,23 @@ public struct TransportBar: View {
             bundle: .module))
     }
 
+    /// Bouton « Enregistrer » — juste après la lecture. Déclenche l'export MP4
+    /// watermarké (effets + transitions) puis la sauvegarde Fichiers/Photothèque
+    /// (cf. `TimelineExportFlow`). Icône descendante (save) plutôt que partage.
+    private func saveButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "square.and.arrow.down")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle().inset(by: -6))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(MeeshyColors.indigo600)
+        .accessibilityLabel(String(localized: "story.timeline.export.button",
+                                   defaultValue: "Enregistrer la story en vidéo",
+                                   bundle: .module))
+    }
+
     private var timeReadout: some View {
         let nowCompact = Self.formatTimeCompact(seconds: currentTime)
         let totalCompact = Self.formatTimeCompact(seconds: duration)
@@ -218,7 +286,43 @@ public struct TransportBar: View {
         }
     }
 
-    private var zoomCluster: some View {
+    /// Pill d'aimantation — reprend le langage visuel exact du snap toggle de
+    /// l'ancienne TimelineToolbar (point vert quand actif) pour que la fusion
+    /// Simple+Pro ne change pas la sémantique visuelle apprise.
+    @ViewBuilder
+    private var snapChip: some View {
+        if let isSnapEnabled {
+            Button(action: onSnapToggle) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isSnapEnabled ? MeeshyColors.success : Color.secondary.opacity(0.4))
+                        .frame(width: 8, height: 8)
+                    Text(String(localized: "story.timeline.toolbar.snap", bundle: .module))
+                        .font(.caption2.weight(.semibold))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(isSnapEnabled
+                                   ? MeeshyColors.indigo500.opacity(0.15)
+                                   : Color.gray.opacity(0.1))
+                )
+                .contentShape(Rectangle().inset(by: -6))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(isSnapEnabled ? MeeshyColors.indigo700 : Color.secondary)
+            .accessibilityLabel(isSnapEnabled
+                ? String(localized: "story.timeline.a11y.snap.on", bundle: .module)
+                : String(localized: "story.timeline.a11y.snap.off", bundle: .module))
+        }
+    }
+
+    /// - Parameter showLabel: sur les iPhone les plus étroits (tier compact de
+    ///   `ViewThatFits`) le libellé `100%` — informatif + raccourci reset — se
+    ///   retire pour que les 6 grappes fonctionnelles tiennent sans rogner ;
+    ///   le zoom reste réglable via − / + et le pincement. Toujours affiché
+    ///   dès qu'il y a la place (16 Pro, iPad, paysage).
+    private func zoomCluster(showLabel: Bool) -> some View {
         HStack(spacing: 6) {
             Button(action: onZoomOut) {
                 Image(systemName: "minus.magnifyingglass")
@@ -228,14 +332,16 @@ public struct TransportBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.transport.zoomOut", bundle: .module))
 
-            Button(action: onZoomReset) {
-                Text(Self.zoomLabel(scale: zoomScale))
-                    .font(.caption2.weight(.semibold))
-                    .frame(minWidth: 36, minHeight: 30)
-                    .contentShape(Rectangle().inset(by: -7))
+            if showLabel {
+                Button(action: onZoomReset) {
+                    Text(Self.zoomLabel(scale: zoomScale))
+                        .font(.caption2.weight(.semibold))
+                        .frame(minWidth: 36, minHeight: 30)
+                        .contentShape(Rectangle().inset(by: -7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.transport.zoomReset", bundle: .module))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "story.timeline.transport.zoomReset", bundle: .module))
 
             Button(action: onZoomIn) {
                 Image(systemName: "plus.magnifyingglass")

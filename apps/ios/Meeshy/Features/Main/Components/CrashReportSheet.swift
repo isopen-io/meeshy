@@ -11,29 +11,24 @@ struct CrashReportSheet: View {
             List {
                 ForEach(reports) { report in
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                kindBadge(report.kind)
-                                Spacer()
-                                Text(report.timestamp, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                        DisclosureGroup(isExpanded: expansionBinding(for: report.id)) {
+                            Text(report.details)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    kindBadge(report.kind)
+                                    Spacer()
+                                    Text(report.timestamp, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
 
-                            Text(report.summary)
-                                .font(.subheadline.weight(.medium))
-
-                            if expandedId == report.id {
-                                Text(report.details)
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                expandedId = expandedId == report.id ? nil : report.id
+                                Text(report.summary)
+                                    .font(.subheadline.weight(.medium))
                             }
                         }
                     }
@@ -50,9 +45,21 @@ struct CrashReportSheet: View {
                     ShareLink(item: formatAllReports()) {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel(String(localized: "crash.reports.share", defaultValue: "Partager les rapports", bundle: .main))
                 }
             }
         }
+    }
+
+    private func expansionBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expandedId == id },
+            set: { isExpanded in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    expandedId = isExpanded ? id : nil
+                }
+            }
+        )
     }
 
     @ViewBuilder

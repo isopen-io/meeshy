@@ -36,6 +36,12 @@ interface UseAttachmentUploadOptions {
   t?: (key: string, options?: any) => string;
   /** Taille des batches pour upload multiple */
   batchSize?: number;
+  /**
+   * Callback appelé quand un upload échoue en cours de traitement (réseau,
+   * timeout...). Additif — le toast interne existant reste émis pour les
+   * appelants qui ne consomment pas cette API.
+   */
+  onUploadError?: (message: string) => void;
 }
 
 interface UseAttachmentUploadReturn {
@@ -59,6 +65,8 @@ interface UseAttachmentUploadReturn {
   showAttachmentLimitModal: boolean;
   /** Nombre de fichiers tentés */
   attemptedCount: number;
+  /** Dernier message d'erreur d'upload (mid-upload), `null` si aucun/résolu */
+  uploadError: string | null;
   /** Ajouter des fichiers */
   handleFilesSelected: (files: File[], metadata?: any[]) => Promise<void>;
   /** Supprimer un fichier */
@@ -84,12 +92,123 @@ interface UseAttachmentUploadReturn {
 
 // Constantes
 const MAX_ATTACHMENTS_DEFAULT = 50;
+const MEDIA_DURATION_EXTRACTION_TIMEOUT_MS = 4000;
+
+type AttachmentSelectionMetadata = Record<string, unknown> & { duration?: number };
+type AttachmentSelectionMetadataList = Array<AttachmentSelectionMetadata | undefined>;
+
+function isDurationEligibleFile(file: File): boolean {
+  return file.type.startsWith('video/') || file.type.startsWith('audio/');
+}
+
+/**
+ * Extrait la durée (en millisecondes, contrat gateway — voir
+ * packages/shared/types/attachment.ts:197) d'un fichier vidéo/audio via un
+ * élément média caché monté sur une object URL et l'évènement
+ * `loadedmetadata`. Timeout court : ne bloque JAMAIS l'upload — résout
+ * `undefined` sur erreur/timeout plutôt que de rejeter.
+ */
+function extractMediaDurationMs(file: File): Promise<number | undefined> {
+  if (!isDurationEligibleFile(file) || typeof document === 'undefined') {
+    return Promise.resolve(undefined);
+  }
+
+  return new Promise((resolve) => {
+    const tagName = file.type.startsWith('video/') ? 'video' : 'audio';
+    const element = document.createElement(tagName) as HTMLMediaElement;
+    const objectUrl = URL.createObjectURL(file);
+    let settled = false;
+
+    const finish = (durationMs: number | undefined) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      element.removeEventListener('loadedmetadata', onLoadedMetadata);
+      element.removeEventListener('error', onError);
+      URL.revokeObjectURL(objectUrl);
+      resolve(durationMs);
+    };
+
+    const onLoadedMetadata = () => {
+      const seconds = element.duration;
+      finish(Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : undefined);
+    };
+
+    const onError = () => finish(undefined);
+
+    const timeoutId = setTimeout(() => finish(undefined), MEDIA_DURATION_EXTRACTION_TIMEOUT_MS);
+
+    element.addEventListener('loadedmetadata', onLoadedMetadata);
+    element.addEventListener('error', onError);
+    element.preload = 'metadata';
+    element.src = objectUrl;
+  });
+}
+
+/**
+ * Construit le tableau de métadonnées par fichier envoyé à l'upload, en
+ * fusionnant la durée extraite côté client (vidéo/audio) avec les
+ * métadonnées éventuellement fournies par l'appelant (ex: audioEffectsTimeline
+ * du recorder audio). Ne fabrique jamais de tableau si ni l'appelant ni
+ * l'extraction n'ont produit la moindre donnée — préserve `undefined` pour un
+ * comportement identique à avant sur les sélections sans média temporel.
+ */
+async function buildUploadMetadata(
+  files: File[],
+  provided?: AttachmentSelectionMetadataList,
+): Promise<AttachmentSelectionMetadataList | undefined> {
+  const durations = await Promise.all(files.map(extractMediaDurationMs));
+  const hasExtractedDuration = durations.some((duration) => duration !== undefined);
+
+  if (!hasExtractedDuration) {
+    return provided;
+  }
+
+  return files.map((_file, index) => {
+    const entry = provided?.[index];
+    const duration = durations[index];
+    if (duration === undefined) {
+      return entry;
+    }
+    return { ...entry, duration: entry?.duration ?? duration };
+  });
+}
 
 /**
  * Génère une signature unique pour un fichier
  */
 function getFileSignature(file: File): string {
   return `${file.name}_${file.size}_${file.lastModified}`;
+}
+
+/**
+ * Réconcilie les fichiers envoyés avec les attachments effectivement échoués
+ * par la réponse serveur. Nécessaire car `UploadProcessor.uploadMultiple`
+ * avale les échecs par fichier et renvoie un tableau `attachments` plus court
+ * (voire vide) sous `success: true` — la route `/attachments/upload` répond
+ * toujours `sendSuccess`, donc `response.success` seul ne détecte rien.
+ *
+ * Apparie chaque fichier envoyé au premier attachment retourné dont
+ * `originalName` correspond (par ordre, une seule consommation par match) ;
+ * tout fichier n'ayant trouvé aucune correspondance est considéré échoué et
+ * retourné pour rollback. Corrélation par nom uniquement (le serveur ne
+ * renvoie aucun index d'origine) — fiable dans le cas courant (noms
+ * uniques dans une même sélection) ; en cas d'homonymes, l'appariement par
+ * ordre reste déterministe et conservateur (jamais un match fantaisiste).
+ */
+function reconcileUploadFailures(
+  files: readonly File[],
+  succeededAttachments: readonly UploadedAttachmentResponse[],
+): File[] {
+  const remainingNames = succeededAttachments.map((attachment) => attachment.originalName);
+  return files.filter((file) => {
+    const matchIndex = remainingNames.indexOf(file.name);
+    if (matchIndex === -1) {
+      return true;
+    }
+    remainingNames.splice(matchIndex, 1);
+    return false;
+  });
 }
 
 /**
@@ -115,6 +234,7 @@ export function useAttachmentUpload({
   onAttachmentsChange,
   t = (key: string) => key,
   batchSize = 10,
+  onUploadError,
 }: UseAttachmentUploadOptions = {}): UseAttachmentUploadReturn {
   // États
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -131,6 +251,7 @@ export function useAttachmentUpload({
     totalBatches: 0,
   });
   const [showAttachmentLimitModal, setShowAttachmentLimitModal] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [attemptedCount, setAttemptedCount] = useState(0);
 
   // Refs
@@ -166,7 +287,7 @@ export function useAttachmentUpload({
   }, [attachmentIdsString, onAttachmentsChange]);
 
   // Upload en batches
-  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: any) => {
+  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: AttachmentSelectionMetadataList) => {
     const totalFiles = files.length;
     const totalBatches = Math.ceil(totalFiles / batchSize);
 
@@ -184,6 +305,7 @@ export function useAttachmentUpload({
       const start = i * batchSize;
       const end = Math.min(start + batchSize, totalFiles);
       const batch = files.slice(start, end);
+      const batchMetadata = additionalMetadata?.slice(start, end);
 
       setBatchProgress(prev => ({
         ...prev,
@@ -194,18 +316,37 @@ export function useAttachmentUpload({
         const response = await AttachmentService.uploadFiles(
           batch,
           token,
-          additionalMetadata,
+          batchMetadata,
           (percentage, loaded, total) => {
             setUploadProgress(prev => ({ ...prev, [i]: percentage }));
           }
         );
 
         const attachments = response.attachments || (response as any).data?.attachments;
-        if (response.success && attachments) {
-          allUploadedAttachments.push(...attachments);
+        const succeededAttachments = response.success && attachments ? attachments : [];
+        if (succeededAttachments.length > 0) {
+          allUploadedAttachments.push(...succeededAttachments);
+        }
+
+        // La route répond toujours success:true (sendSuccess) même quand
+        // UploadProcessor.uploadMultiple a avalé des échecs par fichier et
+        // renvoyé un tableau plus court — response.success seul ne le
+        // détecte pas. Réconcilier par nom pour purger précisément les
+        // fichiers de CE lot qui n'ont pas d'attachment correspondant.
+        const failedFiles = reconcileUploadFailures(batch, succeededAttachments);
+        if (failedFiles.length > 0) {
+          console.warn(`⚠️ Batch ${i + 1}: ${failedFiles.length}/${batch.length} fichier(s) non uploadé(s) (réponse serveur incomplète)`, response);
+          const message = `${failedFiles.length} fichier(s) sur ${batch.length} n'ont pas pu être uploadé(s).`;
+          setUploadError(message);
+          onUploadError?.(message);
+          setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
         }
       } catch (error) {
         console.error(`❌ Batch ${i + 1} upload error:`, error);
+        const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+        setUploadError(message);
+        onUploadError?.(message);
+        setSelectedFiles(prev => prev.filter((f) => !batch.includes(f)));
       }
 
       uploadedCount += batch.length;
@@ -227,11 +368,13 @@ export function useAttachmentUpload({
       currentBatch: 0,
       totalBatches: 0,
     });
-  }, [batchSize, token]);
+  }, [batchSize, token, onUploadError]);
 
   // Ajouter des fichiers
   const handleFilesSelected = useCallback(async (files: File[], additionalMetadata?: any) => {
     if (files.length === 0) return;
+
+    setUploadError(null);
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
     console.log(`📎 Traitement de ${files.length} fichier(s) (${(totalSize / (1024 * 1024)).toFixed(1)}MB)`);
@@ -276,8 +419,12 @@ export function useAttachmentUpload({
       uniqueFiles.splice(0, uniqueFiles.length, ...nonEmptyFiles);
     }
 
-    // Vérifier la limite
-    const currentTotalAttachments = selectedFiles.length + uploadedAttachments.length;
+    // Vérifier la limite — `selectedFiles` est la SEULE source de vérité :
+    // il contient déjà tout fichier en attente OU uploadé avec succès
+    // (jamais purgé au succès, purgé sur échec — cf. rollback plus bas),
+    // donc l'additionner à `uploadedAttachments.length` double le compte en
+    // régime établi (N + N au lieu de N).
+    const currentTotalAttachments = selectedFiles.length;
     const newTotalAttachments = currentTotalAttachments + uniqueFiles.length;
 
     if (newTotalAttachments > maxAttachments) {
@@ -333,14 +480,21 @@ export function useAttachmentUpload({
     setIsUploading(true);
 
     try {
+      // Durée média (vidéo/audio) extraite côté client, fusionnée aux
+      // métadonnées éventuellement fournies par l'appelant, avant l'upload —
+      // débloque le toggle Réel et la duration des stories (Task 7, point 1).
+      // Faite APRÈS setIsUploading(true) (et non avant) pour que l'état
+      // "upload en cours" reste synchrone à l'appel, avant tout `await`.
+      const metadataForUpload = await buildUploadMetadata(uniqueFiles, additionalMetadata);
+
       if (uniqueFiles.length > batchSize) {
         console.log(`📦 Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
-        await uploadFilesInBatches(uniqueFiles, additionalMetadata);
+        await uploadFilesInBatches(uniqueFiles, metadataForUpload);
       } else {
         const response = await AttachmentService.uploadFiles(
           uniqueFiles,
           token,
-          additionalMetadata,
+          metadataForUpload,
           (percentage, loaded, total) => {
             setUploadProgress(prev => ({ ...prev, 0: percentage }));
             if (percentage % 25 === 0) {
@@ -354,24 +508,48 @@ export function useAttachmentUpload({
 
         // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
         const attachments = response.attachments || (response as any).data?.attachments;
-        if (response.success && attachments) {
-          console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
-          setUploadedAttachments(prev => [...prev, ...attachments]);
-        } else {
-          console.warn('⚠️ Upload sans succès:', response);
+        const succeededAttachments = response.success && attachments ? attachments : [];
+        if (succeededAttachments.length > 0) {
+          console.log(`✅ Upload réussi: ${succeededAttachments.length} fichier(s)`);
+          setUploadedAttachments(prev => [...prev, ...succeededAttachments]);
+        }
+
+        // La route /attachments/upload répond toujours success:true (sendSuccess),
+        // même quand UploadProcessor.uploadMultiple a avalé des échecs par
+        // fichier côté serveur et renvoyé moins d'attachments que de fichiers
+        // envoyés (voire aucun) — `response.success` seul ne détecte donc pas
+        // cette perte silencieuse. Réconcilier par nom pour purger précisément
+        // les fichiers sans attachment correspondant (Task 7 review, Important #2).
+        const failedFiles = reconcileUploadFailures(uniqueFiles, succeededAttachments);
+        if (failedFiles.length > 0) {
+          console.warn('⚠️ Upload partiellement ou totalement échoué côté serveur:', response);
+          const message = uniqueFiles.length === 1
+            ? 'Upload failed. Please try again.'
+            : `${failedFiles.length} fichier(s) sur ${uniqueFiles.length} n'ont pas pu être uploadé(s).`;
+          toast.error(message);
+          setUploadError(message);
+          onUploadError?.(message);
+          setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
         }
       }
     } catch (error) {
       console.error('❌ Upload error:', error);
+      const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
       if (error instanceof Error) {
         toast.error(`Upload failed: ${error.message}`);
       } else {
         toast.error('Upload failed. Please try again.');
       }
+      setUploadError(message);
+      onUploadError?.(message);
+      // Symétrie avec handleCreateTextAttachment: purger les fichiers de CETTE
+      // sélection de selectedFiles pour que le compteur (source de vérité
+      // unique — voir plus haut) ne dérive pas après un échec réseau.
+      setSelectedFiles(prev => prev.filter((f) => !uniqueFiles.includes(f)));
     } finally {
       setIsUploading(false);
     }
-  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches]);
+  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches, onUploadError]);
 
   // Créer un attachment texte
   const handleCreateTextAttachment = useCallback(async (text: string) => {
@@ -419,6 +597,7 @@ export function useAttachmentUpload({
     setSelectedFiles([]);
     setUploadedAttachments([]);
     setUploadProgress({});
+    setUploadError(null);
   }, []);
 
   // Handlers drag & drop
@@ -489,6 +668,7 @@ export function useAttachmentUpload({
     batchProgress,
     showAttachmentLimitModal,
     attemptedCount,
+    uploadError,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,

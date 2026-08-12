@@ -3,6 +3,7 @@ import Combine
 import PhotosUI
 import MeeshySDK
 import MeeshyUI
+import os
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
@@ -494,7 +495,23 @@ struct ProfileView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(statsAccessibilityLabel)
+            .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
         }
+    }
+
+    // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans
+    // regroupement, la rangée était lue comme des fragments épars (valeurs et labels
+    // entremêlés) et rien n'indiquait que le tap ouvre l'écran de stats détaillées.
+    // Le label associe chaque valeur à son intitulé (mêmes clés que les cartes visibles),
+    // précédé du titre de section « Statistiques » — 0 clé i18n neuve pour le label.
+    private var statsAccessibilityLabel: String {
+        let title = String(localized: "profile.section.stats", bundle: .main)
+        let messages = "\(stats?.totalMessages ?? 0) \(String(localized: "profile.stats.messages", bundle: .main))"
+        let conversations = "\(stats?.totalConversations ?? 0) \(String(localized: "profile.stats.conversations", bundle: .main))"
+        let friends = "\(stats?.friendRequestsReceived ?? 0) \(String(localized: "profile.stats.friends", bundle: .main))"
+        return "\(title): \(messages), \(conversations), \(friends)"
     }
 
     // MARK: - Friend Requests Section
@@ -524,7 +541,7 @@ struct ProfileView: View {
                             .background(Circle().fill(MeeshyColors.indigo500))
                     }
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -627,7 +644,7 @@ struct ProfileView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(title): \(value)"))
+        .accessibilityLabel(Text(verbatim: "\(title): \(value.wrappedValue)"))
     }
 
     private func profileInfoRow(icon: String, title: String, value: String) -> some View {
@@ -695,7 +712,7 @@ struct ProfileView: View {
                 }
 
                 if isEditing {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -764,6 +781,27 @@ struct ProfileView: View {
 
     // MARK: - Actions
 
+    /// Distinguishes "field untouched" (`nil` — omit from the request/optimistic
+    /// merge so the prior value survives) from "field intentionally cleared"
+    /// (empty string — sent verbatim instead of being collapsed to `nil` and
+    /// silently dropped). Comparing against the pre-edit snapshot instead of
+    /// `current.isEmpty` is what lets an already-empty field stay omitted (no
+    /// spurious clear-of-nothing) while a genuine clear survives the round-trip.
+    ///
+    /// Only valid for fields the gateway's `updateUserProfileSchema` actually
+    /// accepts an empty string for: `bio` (plain `z.string().max(500)`, no
+    /// minimum), `customDestinationLanguage` (explicit `z.literal('')` union
+    /// member) and `regionalLanguage` (now a `z.union([z.literal(''),
+    /// supportedLanguageCode])` — the gateway maps `''` to `null` and the
+    /// Prisme treats a cleared secondary language as absent).
+    ///
+    /// `static` + non-`private` (rather than an instance method) so it can be
+    /// exercised directly from `MeeshyTests` via `@testable import Meeshy`
+    /// without instantiating the SwiftUI view.
+    static func changedOrNil(_ current: String, original: String?) -> String? {
+        current == (original ?? "") ? nil : current
+    }
+
     private func saveProfile() {
         guard let original = authManager.currentUser else { return }
 
@@ -775,10 +813,10 @@ struct ProfileView: View {
             firstName: firstName.isEmpty ? nil : firstName,
             lastName: lastName.isEmpty ? nil : lastName,
             displayName: displayName.isEmpty ? nil : displayName,
-            bio: bio.isEmpty ? nil : bio,
+            bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-            customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
+            regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
+            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
         authManager.currentUser = optimistic
         isEditing = false
@@ -788,19 +826,22 @@ struct ProfileView: View {
             firstName: firstName.isEmpty ? nil : firstName,
             lastName: lastName.isEmpty ? nil : lastName,
             displayName: displayName.isEmpty ? nil : displayName,
-            bio: bio.isEmpty ? nil : bio,
+            bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-            customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
+            regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
+            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
 
         // Offline path — persist the request to SettingsActionQueue so it
         // replays automatically once connectivity returns. The optimistic
         // UI is already in place; the user gets a confirmation toast.
         if NetworkMonitor.shared.isOffline {
-            if let payload = try? JSONEncoder().encode(request) {
+            do {
+                let payload = try JSONEncoder().encode(request)
+                // The gateway route is `PATCH /users/me` (services/gateway/src/routes/users/profile.ts) —
+                // `/users/me/profile` does not exist and 404s forever on replay.
                 let action = SettingsAction(
-                    endpoint: "/users/me/profile",
+                    endpoint: "/users/me",
                     httpMethod: "PATCH",
                     payload: payload
                 )
@@ -809,6 +850,16 @@ struct ProfileView: View {
                     localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
 
                 ))
+            } catch {
+                // Encoding failure means nothing was queued — the optimistic
+                // apply above must not be left standing as a silent lie.
+                Logger.settings.error("Offline profile save failed to encode payload: \(error.localizedDescription, privacy: .public)")
+                authManager.currentUser = original
+                isEditing = true
+                HapticFeedback.error()
+                withAnimation {
+                    errorMessage = String(localized: "profile.save.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)
+                }
             }
             return
         }

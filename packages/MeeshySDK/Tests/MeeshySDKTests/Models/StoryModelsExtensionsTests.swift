@@ -1337,4 +1337,36 @@ final class StoryModelsExtensionsTests: XCTestCase {
                 "Command \(any.typeTag) is not apply-revert idempotent")
         }
     }
+
+    // MARK: - Clip name (persisted optional field)
+
+    func test_storyMediaObject_name_roundtrips() throws {
+        var m = StoryMediaObject(aspectRatio: 1.0)
+        m.name = "Intro"
+        let data = try JSONEncoder().encode(m)
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Intro")
+    }
+
+    func test_storyMediaObject_legacyWithoutName_decodesToNil() throws {
+        let json = #"{"id":"m1","postMediaId":"p","mediaType":"image","aspectRatio":1.0}"#
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.name)
+    }
+
+    func test_storyAudioPlayerObject_name_roundtrips() throws {
+        var a = StoryAudioPlayerObject()
+        a.name = "Musique"
+        let data = try JSONEncoder().encode(a)
+        let decoded = try JSONDecoder().decode(StoryAudioPlayerObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Musique")
+    }
+
+    func test_storyTextObject_name_roundtrips() throws {
+        var t = StoryTextObject(text: "Hello")
+        t.name = "Titre"
+        let data = try JSONEncoder().encode(t)
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Titre")
+    }
 }

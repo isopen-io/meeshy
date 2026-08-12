@@ -15,6 +15,7 @@ import { conversationsService } from '@/services';
 import { Conversation } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { formatShortDate } from '@/utils/date-format';
 
 interface ConversationDropdownProps {
   userId: string;
@@ -23,9 +24,10 @@ interface ConversationDropdownProps {
   variant?: 'default' | 'outline';
 }
 
-function formatShortDate(
+function formatRelativeContactTime(
   date: Date,
-  t: (key: string, params?: Record<string, unknown>) => string
+  t: (key: string, params?: Record<string, unknown>) => string,
+  locale: string
 ): string {
   const bucket = classifyRelativeTime(date.getTime(), Date.now(), { beyondDays: 7 });
   switch (bucket.unit) {
@@ -38,7 +40,7 @@ function formatShortDate(
     case 'days':
       return t('status.daysAgo', { count: bucket.value });
     default:
-      return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+      return formatShortDate(date, locale);
   }
 }
 
@@ -57,7 +59,7 @@ export function ConversationDropdown({
   variant = 'default'
 }: ConversationDropdownProps) {
   const router = useRouter();
-  const { t } = useI18n('contacts');
+  const { t, locale } = useI18n('contacts');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -209,7 +211,7 @@ export function ConversationDropdown({
                     <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-gray-400">
                       <Clock className="h-3 w-3 flex-shrink-0" />
                       <span className="flex-shrink-0">
-                        {formatShortDate(new Date(conv.createdAt), t)}
+                        {formatRelativeContactTime(new Date(conv.createdAt), t, locale)}
                       </span>
                     </div>
                     {conv.lastMessage && (
@@ -219,7 +221,7 @@ export function ConversationDropdown({
                     )}
                     {conv.lastActivityAt && (
                       <p className="text-xs text-muted-foreground dark:text-gray-500 mt-1">
-                        {t('conversations.lastActivity', { date: formatShortDate(new Date(conv.lastActivityAt), t) })}
+                        {t('conversations.lastActivity', { date: formatRelativeContactTime(new Date(conv.lastActivityAt), t, locale) })}
                       </p>
                     )}
                   </div>

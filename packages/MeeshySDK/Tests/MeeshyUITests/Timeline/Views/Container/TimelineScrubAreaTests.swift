@@ -27,10 +27,10 @@ final class TimelineScrubAreaTests: XCTestCase {
 
     func test_pinchZoom_scalesFromGestureAnchor_andClampsToRange() {
         XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 1.0, magnification: 2.0), 2.0)
-        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 2.0, magnification: 4.0), 4.0,
-                       "Clamp haut à ×4 — même borne que les boutons du transport")
-        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 1.0, magnification: 0.1), 0.25,
-                       "Clamp bas à ×0.25")
+        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 4.0, magnification: 4.0), 8.0,
+                       "Clamp haut à ×8 (800 %) — même borne que les boutons du transport (user 2026-07-20)")
+        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 1.0, magnification: 0.01), 0.05,
+                       "Clamp bas à ×0.05 (5 %)")
     }
 
     func test_playheadLeadingInset_isLabelColumnPlusContentPadding() {

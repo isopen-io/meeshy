@@ -93,7 +93,11 @@ describe('useImpressionTracking', () => {
     expect(mockRecord).toHaveBeenCalledWith(['p1', 'p2'], 'feed');
   });
 
-  it('never records the same post twice in a session', () => {
+  // Une impression par APPARITION : un post scrollé hors écran puis ramené
+  // recompte. L'ancien comportement (une seule impression par post et par
+  // montage, via `unobserve` + un Set de déjà-vus) plafonnait `impressionCount`
+  // bien en dessous de la portée réelle.
+  it('counts a new impression each time the element re-enters the viewport', () => {
     const { result } = renderHook(() => useImpressionTracking({ source: 'feed', flushDelayMs: 1000 }));
     const el = makeEl();
 
@@ -101,14 +105,40 @@ describe('useImpressionTracking', () => {
     const io = ioInstances[0];
     act(() => io.enter(el));
     act(() => { jest.advanceTimersByTime(1000); });
-    expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(mockRecord).toHaveBeenNthCalledWith(1, ['p1'], 'feed');
 
-    // Re-observe the same id with a fresh element → ignored (already recorded).
+    // L'élément reste observé : c'est ce qui permet la seconde apparition.
+    expect(io.observed.has(el)).toBe(true);
+
+    act(() => io.enter(el));
+    act(() => { jest.advanceTimersByTime(1000); });
+    expect(mockRecord).toHaveBeenNthCalledWith(2, ['p1'], 'feed');
+  });
+
+  // Les répétitions dans une MÊME fenêtre de debounce doivent survivre au lot :
+  // les coalescer en un seul id sous-compterait la portée.
+  it('keeps repeated occurrences inside a single batch', () => {
+    const { result } = renderHook(() => useImpressionTracking({ source: 'feed', flushDelayMs: 1000 }));
+    const el = makeEl();
+
+    act(() => result.current.observe(el, 'p1'));
+    const io = ioInstances[0];
+    act(() => { io.enter(el); io.enter(el); io.enter(el); });
+    act(() => { jest.advanceTimersByTime(1000); });
+
+    expect(mockRecord).toHaveBeenCalledWith(['p1', 'p1', 'p1'], 'feed');
+  });
+
+  it('observes a given post id through a single element at a time', () => {
+    const { result } = renderHook(() => useImpressionTracking({ source: 'feed', flushDelayMs: 1000 }));
+    const el = makeEl();
+
+    act(() => result.current.observe(el, 'p1'));
+    const io = ioInstances[0];
     const el2 = makeEl();
     act(() => result.current.observe(el2, 'p1'));
+
     expect(io.observed.has(el2)).toBe(false);
-    act(() => { jest.advanceTimersByTime(1000); });
-    expect(mockRecord).toHaveBeenCalledTimes(1);
   });
 
   it('record() enqueues a single visible post (reels) and batches it', () => {

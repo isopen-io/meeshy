@@ -28,7 +28,7 @@
     "online": "Online",
     "offline": "Offline",
     "away": "Away",
-    "recent": "Recently active",
+    "idle": "Inactive",
     "pending": "Pending",
     "rejected": "Rejected",
     "neverSeen": "Never seen",

@@ -29,7 +29,7 @@ final class ThermalStateMonitor {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            Task { @MainActor in self?.thermalStateChanged() }
+            Task { @MainActor [weak self] in self?.thermalStateChanged() }
         }
     }
 

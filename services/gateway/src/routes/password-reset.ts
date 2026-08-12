@@ -22,6 +22,7 @@ import {
   createPhoneResetResendRateLimiter
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
+import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -301,6 +302,17 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       if (result.success) {
+        // The reset transaction invalidated every session of this user. A
+        // socket authenticates once at connect and is never re-checked, so
+        // without this the device that prompted the reset kept receiving every
+        // message in real time. `userId` stays server-side — the body below
+        // carries `message` alone.
+        await disconnectRevokedSessions({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId: result.userId ?? '',
+          reason: 'password_changed',
+          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+        });
         return sendSuccess(reply, { message: result.message });
       } else {
         return sendBadRequest(reply, result.error);

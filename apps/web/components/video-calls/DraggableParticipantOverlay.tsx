@@ -20,6 +20,8 @@ interface DraggableParticipantOverlayProps {
   isAudioEnabled?: boolean;
   isVideoEnabled?: boolean;
   isDisconnected?: boolean;
+  /** Speaker off → this tile's remote audio is muted too, same as the fullscreen tile. */
+  muted?: boolean;
   initialPosition?: { x: number; y: number };
   onDoubleClick?: () => void;
   onRemove?: () => void;
@@ -32,6 +34,7 @@ export function DraggableParticipantOverlay({
   isAudioEnabled = true,
   isVideoEnabled = true,
   isDisconnected = false,
+  muted = false,
   initialPosition = { x: 20, y: 20 },
   onDoubleClick,
   onRemove,
@@ -117,7 +120,7 @@ export function DraggableParticipantOverlay({
     >
       <VideoStream
         stream={stream}
-        muted={false}
+        muted={muted}
         isLocal={false}
         className="w-full h-full object-cover"
         participantName={participantName}

@@ -4,7 +4,7 @@ import MeeshySDK
 /// Jonction temporelle entre deux clips média consécutifs — le point
 /// d'ancrage des `TransitionBadge` (transition existante) et des affordances
 /// de création (`TransitionCreationBadge`). Résolution PURE, partagée par
-/// Quick et Pro, testable sans SwiftUI.
+/// la timeline, testable sans SwiftUI.
 public nonisolated struct TransitionJunction: Equatable, Identifiable, Sendable {
     public let fromClipId: String
     public let toClipId: String
@@ -58,7 +58,7 @@ public enum TransitionJunctionResolver {
     }
 
     /// Jonctions dont le clip AMONT vit sur la lane donnée — c'est la lane
-    /// qui héberge le badge (compact Quick : tous les clips d'un type sur une
+    /// qui héberge le badge (état compact : tous les clips d'un type sur une
     /// lane ; Pro/déployé : une lane par clip).
     public nonisolated static func junctions(
         for laneClipIds: [String],

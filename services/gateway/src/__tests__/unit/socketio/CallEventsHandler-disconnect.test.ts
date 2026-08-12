@@ -701,6 +701,44 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    // -----------------------------------------------------------------------
+    // Regression: this happy path (leaveCall succeeds) previously let
+    // CallService default the end reason to `completed` — indistinguishable
+    // from an explicit call:leave/call:end hangup. But this whole handler
+    // only runs from a disconnect-grace expiry (an involuntary socket drop
+    // that never reconnected): its own error-fallback branch a few lines
+    // below (`forceEndOrphanedCallSession`) already stamps `connectionLost`
+    // for the exact same scenario when leaveCall THROWS. The happy path must
+    // agree, both for internal consistency and because the web retry-on-
+    // failure feature (`isRetryableCallFailure`) only offers "Réessayer" for
+    // `failed`/`connectionLost` — the genuine-disconnect scenario this path
+    // exists for was silently excluded from ever triggering it.
+    // -----------------------------------------------------------------------
+    it('passes endReasonHint: connectionLost to leaveCall (disconnect-grace expiry is never a deliberate hangup)', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ended',
+        duration: 42,
+        endReason: 'connectionLost',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(mockLeaveCallDc).toHaveBeenCalledWith(
+        expect.objectContaining({ endReasonHint: CallEndReason.connectionLost })
+      );
+    });
+
     it('posts the call-summary message when leaveCall itself ends the call', async () => {
       const leftSession = {
         id: CALL_ID,

@@ -2,6 +2,7 @@
  * Utilitaires pour construire les URLs d'attachements
  * Transforme les chemins relatifs en URLs complètes selon l'environnement
  */
+import { getBackendUrl } from '@/lib/config';
 
 /**
  * Construit l'URL complète d'un attachement à partir d'un chemin relatif ou absolu
@@ -28,11 +29,12 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
     return null;
   }
 
-  // Récupérer l'URL du backend depuis les variables d'environnement
-  const backendUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    'http://localhost:3000'; // Fallback
+  // Origine API dérivée au runtime (SSOT : `getBackendUrl()` dans `lib/config.ts`).
+  // Ne JAMAIS lire `process.env.NEXT_PUBLIC_*` directement ici : en prod, la valeur
+  // n'est fiable qu'après le remplacement `__RUNTIME_*__` par docker-entrypoint.sh ;
+  // `getBackendUrl()` retombe sur `window.location` (gate.{hostname}) sinon, au lieu
+  // d'un `localhost:3000` qui casserait les médias sur meeshy.me en cas de config absente.
+  const backendUrl = getBackendUrl();
 
   // Si c'est déjà une URL complète (http:// ou https://)
   if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {

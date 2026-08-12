@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared scrub surface for the Quick & Pro timelines: ONE horizontal
+/// Scrub surface of the story timeline: ONE horizontal
 /// scroller hosting the ruler and the track lanes so ticks, clips and the
 /// playhead all share the same time→x mapping and scroll together, with the
 /// draggable `PlayheadView` overlaid across the full lane height.
@@ -15,7 +15,15 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Width of the `TrackBarView` sticky label column. The ruler and the
     /// playhead are both offset by this amount so x=0 of the time axis lands
     /// exactly on the lane origin.
-    public nonisolated static var laneLabelWidth: CGFloat { 72 }
+    /// Offset ruler/playhead = largeur de la colonne d'étiquette collante.
+    /// DOIT égaler `TrackBarView.labelColumnWidth` sinon les ticks du ruler se
+    /// désalignent des pistes (bug introduit 2026-07-18 : colonne passée à 32
+    /// pendant que cet offset restait à 72, ~40pt de décalage). Remises en
+    /// lockstep à 52 (colonne deux-lignes icône+durée / type).
+    // 84 pt : « 12,0 s » + type lisibles en entier — à 52 la durée tronquait
+    // en « 12,… » (capture user 2026-07-20). Lockstep avec
+    // `TrackBarView.labelColumnWidth` (test dédié).
+    public nonisolated static var laneLabelWidth: CGFloat { 84 }
     public nonisolated static var horizontalPadding: CGFloat { 12 }
     /// Leading inset applied to the playhead overlay — the time axis origin
     /// in scroll-content coordinates.
@@ -41,9 +49,6 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Pinch-to-zoom : reçoit le zoomScale cible (clampé [0.25, 4]). nil =
     /// pas de pinch (les boutons +/− du transport restent la seule entrée).
     public let onZoomScaleChanged: ((CGFloat) -> Void)?
-    /// Pin direct de la durée de slide — monte la `DurationHandle` (losange
-    /// indigo) en fin de ruler. nil = pas de poignée.
-    public let onSlideDurationChanged: ((Float) -> Void)?
     /// Temps aimanté du drag de clip en cours (non-nil UNIQUEMENT quand
     /// l'aimant a accroché) — affiche le guide vertical magenta.
     public let snapGuideTime: Float?
@@ -61,6 +66,15 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// lecture par geste, jamais re-lue mid-geste : anti boule-de-neige).
     @State private var magnifyAnchor: CGFloat?
 
+    /// Décalage horizontal courant, alimenté par les deux lecteurs (préférence
+    /// sous iOS 18, `onScrollGeometryChange` au-delà).
+    @State private var scrollX: CGFloat = 0
+    /// Largeur visible — le dénominateur de tout le contrôleur.
+    @State private var viewportWidth: CGFloat = 0
+    /// Décalage demandé par la poignée. Déplace l'ancre mobile, sur laquelle on
+    /// recale ensuite le scroll.
+    @State private var requestedScrollX: CGFloat = 0
+
     /// `tracks` receives the resolved lane width so every `TrackBarView` row
     /// spans exactly the same horizontal extent as the ruler above it.
     public init(
@@ -72,7 +86,6 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         rulerHeight: CGFloat = 22,
         isPlaying: Bool = false,
         onZoomScaleChanged: ((CGFloat) -> Void)? = nil,
-        onSlideDurationChanged: ((Float) -> Void)? = nil,
         snapGuideTime: Float? = nil,
         onScrub: @escaping (Float) -> Void,
         onScrubBegan: @escaping () -> Void = {},
@@ -87,7 +100,6 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.rulerHeight = rulerHeight
         self.isPlaying = isPlaying
         self.onZoomScaleChanged = onZoomScaleChanged
-        self.onSlideDurationChanged = onSlideDurationChanged
         self.snapGuideTime = snapGuideTime
         self.onScrub = onScrub
         self.onScrubBegan = onScrubBegan
@@ -95,8 +107,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.tracks = tracks
     }
 
-    /// Bornes de zoom partagées avec les boutons du transport.
-    public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.25...4.0 }
+    /// Bornes de zoom partagées avec les boutons du transport — élargies à
+    /// 5 % – 800 % (retour user 2026-07-20) : 5 % embrasse une timeline de
+    /// plusieurs minutes d'un coup d'œil, 800 % permet le calage fin < 0,1 s.
+    public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.05...8.0 }
 
     /// Zoom cible d'un pinch : ancre capturée au début du geste × facteur de
     /// magnification, clampé aux bornes. Pure — testable sans geste SwiftUI.
@@ -105,38 +119,113 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     }
 
     private nonisolated static var playheadAnchorId: String { "timeline-playhead-anchor" }
+    /// Ancre MOBILE de la poignée : on la déplace au décalage visé, puis on la
+    /// ramène au bord gauche. Une seule ancre suffit là où une grille de
+    /// repères fixes n'aurait donné qu'un défilement par crans.
+    private nonisolated static var scrollTargetAnchorId: String { "timeline-scroll-target" }
+    private nonisolated static var scrollSpaceName: String { "timeline-scroll-space" }
+
+    /// Largeur totale du contenu défilant : la piste, plus la colonne
+    /// d'étiquettes et les marges qui la précèdent.
+    private func contentWidth(laneWidth: CGFloat) -> CGFloat {
+        laneWidth + Self.laneLabelWidth + Self.horizontalPadding * 2
+    }
 
     public var body: some View {
         let laneWidth = Self.laneWidth(totalDuration: totalDuration,
                                        geometry: geometry,
                                        minLaneWidth: minLaneWidth)
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    RulerView(
-                        totalDuration: totalDuration,
-                        geometry: geometry,
+        let content = contentWidth(laneWidth: laneWidth)
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        RulerView(
+                            totalDuration: totalDuration,
+                            geometry: geometry,
+                            isDark: isDark,
+                            height: rulerHeight,
+                            onTapTime: onScrub,
+                            onScrubBegan: onScrubBegan,
+                            onScrubEnded: onScrubEnded
+                        )
+                        .equatable()
+                        .frame(width: laneWidth, alignment: .leading)
+                        .padding(.leading, Self.laneLabelWidth)
+                        tracks(laneWidth)
+                    }
+                    .padding(.horizontal, Self.horizontalPadding)
+                    .overlay(alignment: .topLeading) { snapGuideOverlay }
+                    .overlay(alignment: .topLeading) { playheadOverlay }
+                    .background(alignment: .topLeading) { playheadAnchor }
+                    .background(alignment: .topLeading) { scrollTargetAnchor }
+                    .background(alignment: .topLeading) { offsetReader }
+                }
+                .coordinateSpace(name: Self.scrollSpaceName)
+                .background(alignment: .topLeading) { viewportReader }
+                .onPreferenceChange(HorizontalScrollOffsetKey.self) { scrollX = $0 }
+                .trackScrollContentOffsetX { scrollX = $0 }
+                .onPreferenceChange(TimelineViewportWidthKey.self) { viewportWidth = $0 }
+                .adaptiveOnChange(of: currentTime) { _, time in
+                    followPlayheadIfPlaying(time: time, proxy: proxy)
+                }
+                // L'ancre doit avoir REJOINT sa nouvelle place avant qu'on
+                // recale le scroll dessus : d'où le recalage sur le changement
+                // d'état, et non dans le geste lui-même.
+                .adaptiveOnChange(of: requestedScrollX) { _, _ in
+                    proxy.scrollTo(Self.scrollTargetAnchorId, anchor: .leading)
+                }
+                .simultaneousGesture(pinchZoomGesture)
+            }
+            if TimelineScrollMetrics.isNeeded(contentWidth: content,
+                                              viewportWidth: viewportWidth) {
+                // Dernière PISTE de la pile, et non une barre flottante : la
+                // colonne d'étiquettes lui est réservée à gauche comme aux
+                // autres pistes, si bien que la course du curseur se superpose
+                // exactement à la zone des clips au-dessus. Un curseur au tiers
+                // de sa piste désigne alors le tiers de la timeline, sans que
+                // l'œil ait à corriger le décalage des étiquettes.
+                //
+                // HORS du ScrollView à dessein : embarquée dedans, elle
+                // défilerait avec le contenu qu'elle sert à piloter.
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: Self.laneLabelWidth)
+                    TimelineScrollBar(
+                        scrollX: scrollX,
+                        contentWidth: content,
+                        viewportWidth: viewportWidth,
                         isDark: isDark,
-                        height: rulerHeight,
-                        onTapTime: onScrub,
-                        onScrubBegan: onScrubBegan,
-                        onScrubEnded: onScrubEnded
+                        onScrollTo: { requestedScrollX = $0 }
                     )
-                    .equatable()
-                    .frame(width: laneWidth, alignment: .leading)
-                    .padding(.leading, Self.laneLabelWidth)
-                    tracks(laneWidth)
                 }
                 .padding(.horizontal, Self.horizontalPadding)
-                .overlay(alignment: .topLeading) { snapGuideOverlay }
-                .overlay(alignment: .topLeading) { playheadOverlay }
-                .overlay(alignment: .topLeading) { durationHandleOverlay }
-                .background(alignment: .topLeading) { playheadAnchor }
             }
-            .adaptiveOnChange(of: currentTime) { _, time in
-                followPlayheadIfPlaying(time: time, proxy: proxy)
-            }
-            .simultaneousGesture(pinchZoomGesture)
+        }
+    }
+
+    /// Ancre mobile pilotée par la poignée.
+    private var scrollTargetAnchor: some View {
+        TimelineScrollAnchor(x: requestedScrollX, anchorId: Self.scrollTargetAnchorId)
+    }
+
+    /// Lecteur de décalage pour iOS 16–17 — au-delà, c'est
+    /// `trackScrollContentOffsetX` qui prend le relais.
+    private var offsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: HorizontalScrollOffsetKey.self,
+                value: -proxy.frame(in: .named(Self.scrollSpaceName)).minX
+            )
+        }
+        .frame(width: 0, height: 0)
+    }
+
+    /// Largeur visible. Une TAILLE, pas un décalage : la lecture par préférence
+    /// reste fiable sur toutes les versions d'iOS.
+    private var viewportReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(key: TimelineViewportWidthKey.self,
+                                   value: proxy.size.width)
         }
     }
 
@@ -156,10 +245,8 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Ancre invisible qui suit le playhead dans l'espace du contenu —
     /// cible du `scrollTo` de l'auto-follow.
     private var playheadAnchor: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .offset(x: Self.playheadLeadingInset + geometry.x(for: currentTime))
-            .id(Self.playheadAnchorId)
+        TimelineScrollAnchor(x: Self.playheadLeadingInset + geometry.x(for: currentTime),
+                             anchorId: Self.playheadAnchorId)
     }
 
     /// Suit le playhead PENDANT LA LECTURE uniquement (un scrub = le doigt de
@@ -174,22 +261,6 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         guard abs(time - lastFollowedTime) > 0.5 else { return }
         lastFollowedTime = time
         proxy.scrollTo(Self.playheadAnchorId, anchor: UnitPoint(x: 0.35, y: 0))
-    }
-
-    /// Losange indigo en fin de ruler — étire ou rogne la durée de la slide
-    /// au doigt (le pin devient `effects.timelineDuration` au commit).
-    @ViewBuilder
-    private var durationHandleOverlay: some View {
-        if let onSlideDurationChanged {
-            DurationHandle(
-                duration: totalDuration,
-                geometry: geometry,
-                laneHeight: rulerHeight,
-                isDark: isDark,
-                onChange: onSlideDurationChanged
-            )
-            .offset(x: Self.playheadLeadingInset)
-        }
     }
 
     /// Guide vertical magenta au temps aimanté du drag en cours.
