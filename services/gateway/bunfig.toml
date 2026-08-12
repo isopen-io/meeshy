@@ -1,0 +1,11 @@
+[test]
+# Chargé avant tout fichier de test. Neutralise le binding natif `zeromq`,
+# dont le chargement fait paniquer Bun (`uv_async_init`) et tuait la suite
+# complète au 20e fichier sur 571. Voir l'en-tête du fichier pour le détail.
+preload = ["./src/__tests__/bun-preload.ts"]
+
+# Un test qui n'aboutit jamais bloque la suite ENTIÈRE : sans borne, le
+# lanceur attend indéfiniment et les 500+ fichiers suivants ne tournent
+# jamais. Une borne généreuse laisse passer les tests lents légitimes tout
+# en transformant un test qui pend en un échec nommé, donc réparable.
+timeout = 15000

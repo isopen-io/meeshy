@@ -1,106 +1,130 @@
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  ROOMS: {
-    user: (id: string) => `user:${id}`,
-  },
-}));
+/**
+ * Unit tests for socket-broadcast utilities.
+ * Covers: resolveSocketIO (no handler, getManager path, direct io path,
+ * getManager returns undefined io), broadcastToUser (no io → false,
+ * emit success → true, emit throws → false + warn).
+ *
+ * @jest-environment node
+ */
 
+import { describe, it, expect, jest } from '@jest/globals';
 import { resolveSocketIO, broadcastToUser } from '../../../utils/socket-broadcast';
 
-function makeEmitSpy() {
-  const emit = jest.fn();
-  const to = jest.fn(() => ({ emit }));
-  return { to, emit };
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeEmit() {
+  return { emit: jest.fn<any>() };
 }
 
-function makeFastify(shape: 'none' | 'manager' | 'handler-io' | 'no-io' = 'none') {
-  const log = { warn: jest.fn() };
-
-  if (shape === 'none') {
-    return { log } as any;
-  }
-
-  const { to, emit } = makeEmitSpy();
-  const io = { to };
-
-  if (shape === 'manager') {
-    return {
-      log,
-      socketIOHandler: {
-        getManager: () => ({ io }),
-      },
-    } as any;
-  }
-
-  if (shape === 'handler-io') {
-    return {
-      log,
-      socketIOHandler: { io },
-    } as any;
-  }
-
-  if (shape === 'no-io') {
-    return {
-      log,
-      socketIOHandler: {},
-    } as any;
-  }
+function makeIo(room: string) {
+  const target = makeEmit();
+  return {
+    to: jest.fn<any>().mockReturnValue(target),
+    _target: target,
+  };
 }
+
+function makeFastify(socketIOHandler?: unknown) {
+  return {
+    socketIOHandler,
+    log: {
+      warn: jest.fn<any>(),
+    },
+  } as unknown as any;
+}
+
+// ─── resolveSocketIO ──────────────────────────────────────────────────────────
 
 describe('resolveSocketIO', () => {
-  it('returns null when socketIOHandler is absent', () => {
-    const fastify = makeFastify('none');
+  it('returns null when fastify has no socketIOHandler', () => {
+    const fastify = makeFastify(undefined);
     expect(resolveSocketIO(fastify)).toBeNull();
   });
 
-  it('resolves io from handler.getManager().io', () => {
-    const fastify = makeFastify('manager');
-    const io = resolveSocketIO(fastify);
-    expect(io).not.toBeNull();
+  it('returns io via getManager().io path', () => {
+    const io = makeIo('room');
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({ io }),
+    };
+    const fastify = makeFastify(handler);
+
+    expect(resolveSocketIO(fastify)).toBe(io);
   });
 
-  it('resolves io from handler.io when getManager is absent', () => {
-    const fastify = makeFastify('handler-io');
-    const io = resolveSocketIO(fastify);
-    expect(io).not.toBeNull();
+  it('falls back to handler.io when getManager is absent', () => {
+    const io = makeIo('room');
+    const handler = { io };
+    const fastify = makeFastify(handler);
+
+    expect(resolveSocketIO(fastify)).toBe(io);
   });
 
-  it('returns null when handler has no io and no getManager', () => {
-    const fastify = makeFastify('no-io');
+  it('falls back to handler.io when getManager returns no io', () => {
+    const io = makeIo('room');
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({ io: undefined }),
+      io,
+    };
+    const fastify = makeFastify(handler);
+
+    expect(resolveSocketIO(fastify)).toBe(io);
+  });
+
+  it('returns null when handler has neither getManager nor io', () => {
+    const fastify = makeFastify({});
     expect(resolveSocketIO(fastify)).toBeNull();
   });
 });
 
+// ─── broadcastToUser ─────────────────────────────────────────────────────────
+
 describe('broadcastToUser', () => {
-  it('returns false and logs warn when Socket.IO layer is unavailable', () => {
-    const fastify = makeFastify('none');
-    const result = broadcastToUser(fastify, 'u1', 'test:event', { data: 1 });
+  it('returns false and warns when Socket.IO layer is unavailable', () => {
+    const fastify = makeFastify(undefined);
+
+    const result = broadcastToUser(fastify, 'user-1', 'test:event', { foo: 'bar' });
+
     expect(result).toBe(false);
     expect(fastify.log.warn).toHaveBeenCalled();
   });
 
-  it('emits to the user room and returns true on success', () => {
-    const fastify = makeFastify('manager');
-    const result = broadcastToUser(fastify, 'user-abc', 'my:event', { key: 'val' });
+  it('returns true and emits when IO is available', () => {
+    const target = { emit: jest.fn<any>() };
+    const io = { to: jest.fn<any>().mockReturnValue(target) };
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({ io }),
+    };
+    const fastify = makeFastify(handler);
+
+    const result = broadcastToUser(fastify, 'user-42', 'message:new', { id: 'msg-1' });
+
     expect(result).toBe(true);
-    const io = fastify.socketIOHandler.getManager().io;
-    expect(io.to).toHaveBeenCalledWith('user:user-abc');
-    expect(io.to('user:user-abc').emit).toHaveBeenCalledWith('my:event', { key: 'val' });
+    expect(io.to).toHaveBeenCalledWith(expect.stringContaining('user-42'));
+    expect(target.emit).toHaveBeenCalledWith('message:new', { id: 'msg-1' });
   });
 
-  it('returns false and logs warn when emit throws', () => {
-    const log = { warn: jest.fn() };
-    const fastify = {
-      log,
-      socketIOHandler: {
-        io: {
-          to: () => {
-            throw new Error('emit exploded');
-          },
-        },
-      },
-    } as any;
-    const result = broadcastToUser(fastify, 'u1', 'evt', {});
+  it('returns false and warns when emit throws', () => {
+    const target = {
+      emit: jest.fn<any>().mockImplementation(() => { throw new Error('socket disconnected'); }),
+    };
+    const io = { to: jest.fn<any>().mockReturnValue(target) };
+    const handler = { getManager: jest.fn<any>().mockReturnValue({ io }) };
+    const fastify = makeFastify(handler);
+
+    const result = broadcastToUser(fastify, 'user-5', 'presence:update', {});
+
     expect(result).toBe(false);
-    expect(log.warn).toHaveBeenCalled();
+    expect(fastify.log.warn).toHaveBeenCalled();
+  });
+
+  it('passes the exact payload to emit', () => {
+    const target = { emit: jest.fn<any>() };
+    const io = { to: jest.fn<any>().mockReturnValue(target) };
+    const fastify = makeFastify({ io });
+    const payload = { data: [1, 2, 3], extra: true };
+
+    broadcastToUser(fastify, 'user-99', 'notification:push', payload);
+
+    expect(target.emit).toHaveBeenCalledWith('notification:push', payload);
   });
 });

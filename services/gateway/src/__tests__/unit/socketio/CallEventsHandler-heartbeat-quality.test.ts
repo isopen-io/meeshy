@@ -58,6 +58,7 @@ jest.mock('../../../utils/logger', () => ({
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
+import { logger } from '../../../utils/logger';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
@@ -298,6 +299,52 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
       });
 
       expect(callService.persistCallStats).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression: a `getCallSession` failure (DB timeout, connection drop, bug)
+  // is otherwise indistinguishable from "not a participant" — both
+  // resolveActiveCallParticipantId and resolveEverCallParticipantId used to
+  // swallow it via a bare `catch { return null }`, silently dropping the
+  // caller's heartbeat/quality-report/toggle with zero trace in production.
+  describe('resolveActiveCallParticipantId — getCallSession failure is logged, not silently swallowed', () => {
+    it('logs a warning and drops the heartbeat when getCallSession throws', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      callService.getCallSession.mockRejectedValueOnce(new Error('Mongo connection lost'));
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.HEARTBEAT]({ callId: VALID_CALL_ID });
+
+      expect(callService.recordHeartbeat).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized',
+        expect.objectContaining({ userId: USER_ID, callId: VALID_CALL_ID, error: 'Mongo connection lost' })
+      );
+    });
+
+    it('logs a warning and drops the quality-report when getCallSession throws', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      callService.getCallSession.mockRejectedValueOnce(new Error('Mongo connection lost'));
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT]({
+        callId: VALID_CALL_ID,
+        stats: { bytesSent: 100, bytesReceived: 200, level: 'good', rtt: 50, packetLoss: 0 },
+      });
+
+      expect(callService.persistCallStats).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized',
+        expect.objectContaining({ userId: USER_ID, callId: VALID_CALL_ID, error: 'Mongo connection lost' })
+      );
     });
   });
 

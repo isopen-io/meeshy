@@ -54,12 +54,6 @@ public struct MeeshyAudioEditorView: View {
     /// (header, transport, dock) passerait sous la Dynamic Island / home
     /// indicator. La fenêtre expose toujours les insets physiques réels. Même
     /// pattern que `MeeshyVideoEditorView` / `MeeshyImageEditorView`.
-    private var deviceSafeAreaInsets: UIEdgeInsets {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
-    }
-
     // MARK: - Body
 
     public var body: some View {
@@ -132,27 +126,40 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Content
 
     private var content: some View {
-        VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+        // Aucun padding de safe area ici : seul le FOND porte
+        // `.ignoresSafeArea()`, donc SwiftUI a déjà inséré ce contenu. Le
+        // relire depuis la fenêtre clé et le repadder le comptait DEUX fois —
+        // près de cent points de hauteur fantôme sur un iPhone à Dynamic
+        // Island, sur une vue qui ne défilait pas.
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
 
-            Spacer(minLength: 6)
+                    Spacer(minLength: 6)
 
-            waveformSection
-                .padding(.horizontal, 18)
+                    waveformSection
+                        .padding(.horizontal, 18)
 
-            transportControls
-                .padding(.top, 18)
+                    transportControls
+                        .padding(.top, 18)
 
-            Spacer(minLength: 6)
+                    Spacer(minLength: 6)
 
-            bottomDock
-                .padding(.horizontal, 16)
-                .padding(.bottom, 28)
+                    bottomDock
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 28)
+                }
+                // Plancher égal au conteneur : tant que le contenu tient, les
+                // `Spacer` se répartissent comme avant et le dock reste ancré
+                // en bas. Au-delà — panneau d'outil ouvert par-dessus la bande
+                // d'historique et la bande d'outils — la vue défile au lieu de
+                // pousser les chips hors du cadre.
+                .frame(minHeight: geo.size.height)
+            }
         }
-        .padding(.top, deviceSafeAreaInsets.top)
-        .padding(.bottom, deviceSafeAreaInsets.bottom)
     }
 
     private var bottomDock: some View {

@@ -18,15 +18,12 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   NotificationPreferencesDTO,
   UpdateNotificationPreferencesDTO,
-  EncryptionPreferencesDTO,
-  UpdateEncryptionPreferenceDTO,
   ThemePreferencesDTO,
   UpdateThemePreferencesDTO,
   LanguagePreferencesDTO,
   UpdateLanguagePreferencesDTO,
   PrivacyPreferencesDTO,
-  UpdatePrivacyPreferencesDTO,
-  EncryptionPreference
+  UpdatePrivacyPreferencesDTO
 } from '../../routes/me/preferences/types';
 import {
   NOTIFICATION_PREFERENCES_DEFAULTS,
@@ -42,6 +39,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'PreferencesService' });
@@ -176,79 +174,6 @@ export class PreferencesService {
   }
 
   // ============================================================================
-  // ENCRYPTION PREFERENCES
-  // ============================================================================
-
-  /**
-   * Get encryption preferences for a user
-   */
-  async getEncryptionPreferences(userId: string): Promise<EncryptionPreferencesDTO> {
-    const [user, userPrefs] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          signalIdentityKeyPublic: true,
-          signalRegistrationId: true,
-          signalPreKeyBundleVersion: true,
-          lastKeyRotation: true
-        }
-      }),
-      this.prisma.userPreferences.findUnique({
-        where: { userId },
-        select: { application: true }
-      })
-    ]);
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    const application = (userPrefs?.application ?? {}) as Record<string, unknown>;
-    const storedPref = application.encryptionPreference as EncryptionPreference | undefined;
-    const validPreferences: EncryptionPreference[] = ['disabled', 'optional', 'always'];
-    const encryptionPreference: EncryptionPreference =
-      storedPref && validPreferences.includes(storedPref) ? storedPref : 'optional';
-
-    return {
-      encryptionPreference,
-      hasSignalKeys: !!user.signalIdentityKeyPublic,
-      signalRegistrationId: user.signalRegistrationId,
-      signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
-      lastKeyRotation: user.lastKeyRotation
-    };
-  }
-
-  /**
-   * Update encryption preference
-   */
-  async updateEncryptionPreference(
-    userId: string,
-    data: UpdateEncryptionPreferenceDTO
-  ): Promise<{ encryptionPreference: EncryptionPreference }> {
-    const validPreferences: EncryptionPreference[] = ['disabled', 'optional', 'always'];
-    if (!validPreferences.includes(data.encryptionPreference)) {
-      throw new Error('Invalid encryption preference. Must be "disabled", "optional", or "always"');
-    }
-
-    const existing = await this.prisma.userPreferences.findUnique({
-      where: { userId },
-      select: { application: true }
-    });
-
-    const currentApplication = (existing?.application ?? {}) as Record<string, unknown>;
-    const updatedApplication = { ...currentApplication, encryptionPreference: data.encryptionPreference };
-
-    await this.prisma.userPreferences.upsert({
-      where: { userId },
-      create: { userId, application: updatedApplication as any },
-      update: { application: updatedApplication as any },
-      select: { id: true }
-    });
-
-    return { encryptionPreference: data.encryptionPreference };
-  }
-
-  // ============================================================================
   // THEME PREFERENCES
   // ============================================================================
 
@@ -364,15 +289,23 @@ export class PreferencesService {
     userId: string,
     data: UpdateLanguagePreferencesDTO
   ): Promise<LanguagePreferencesDTO> {
-    // Update user language fields. Lowercase at the write boundary so the DB only
-    // ever holds minuscule codes — the invariant the read-side resolvers
-    // (resolveUserLanguage) rely on. A code stored as 'EN' would never match the
-    // lowercase-keyed MessageTranslation store (Prisme rule #1 miss).
+    // Canonicalize language codes at the write boundary so the DB only ever holds
+    // canonical, lowercase codes — the invariant the read-side resolvers
+    // (resolveUserLanguage) rely on. Platform locales arrive region/script-tagged
+    // (iOS `Locale.current.identifier` = 'fr_FR', web `navigator.language` =
+    // 'fr-FR'); a raw `.toLowerCase()` would persist 'fr-fr', which matches
+    // neither the lowercase-keyed MessageTranslation store nor the NLLB source
+    // mapping (Prisme rule #1 miss + fragmented per-language stats). The SSOT
+    // normalizeLanguageCode reduces 'fr-FR'/'fr_FR' → 'fr' and preserves
+    // supported ISO 639-3 codes ('bas') verbatim; it returns undefined only for
+    // codes it cannot reduce, where we fall back to `.toLowerCase()` — identical
+    // to prior behavior, so unknown codes are never lost.
+    const canonicalize = (code: string): string => normalizeLanguageCode(code) ?? code.toLowerCase();
     const updateData: any = {};
-    if (data.systemLanguage !== undefined) updateData.systemLanguage = data.systemLanguage.toLowerCase();
-    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = data.regionalLanguage.toLowerCase();
+    if (data.systemLanguage !== undefined) updateData.systemLanguage = canonicalize(data.systemLanguage);
+    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = canonicalize(data.regionalLanguage);
     if (data.customDestinationLanguage !== undefined) {
-      updateData.customDestinationLanguage = data.customDestinationLanguage.toLowerCase();
+      updateData.customDestinationLanguage = canonicalize(data.customDestinationLanguage);
     }
 
     if (Object.keys(updateData).length > 0) {

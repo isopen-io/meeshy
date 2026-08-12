@@ -56,9 +56,15 @@ import me.meeshy.ui.theme.MeeshyPalette
 @Composable
 fun ContactsScreen(
     onBack: () -> Unit,
+    initialTab: ContactsTab? = null,
     viewModel: ContactsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Ouverture ciblee (Reglages -> Utilisateurs bloques) : selectionner l'onglet
+    // demande UNE fois a l'entree, sans voler la main a la navigation interne.
+    androidx.compose.runtime.LaunchedEffect(initialTab) {
+        initialTab?.let(viewModel::selectTab)
+    }
     val tabs = ContactsTab.entries
     val selectedIndex = tabs.indexOf(state.selectedTab)
 

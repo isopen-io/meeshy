@@ -5,6 +5,9 @@ jest.mock('@meeshy/shared/utils/languages', () => ({
     { code: 'es', name: 'Spanish', flag: 'ES' },
     { code: 'de', name: 'German', flag: 'DE' },
   ],
+  // normalizeLanguageCode (via language-normalize) reads the supported-code set
+  // from this module — keep it in sync with the mock catalog above.
+  getSupportedLanguageCodes: () => ['fr', 'en', 'es', 'de'],
 }));
 
 const mockGetDeviceLocale = jest.fn();
@@ -180,6 +183,48 @@ describe('getUserLanguageChoices', () => {
     it('collapses a regional entry that differs from system only by case', () => {
       const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'EN' });
       expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+  });
+
+  describe('normalized emitted code (BCP-47 subtags stripped — SSOT with translation targets)', () => {
+    it('emits the canonical code for a region-subtagged systemLanguage', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'en-US' }));
+
+      // 'en-US' must surface as 'en' (translation target), not 'en-us', and still
+      // resolve its catalog name/flag via the normalized code.
+      expect(choices[0].code).toBe('en');
+      expect(choices[0].description).toBe('English');
+    });
+
+    it('normalizes an underscore-separated systemLanguage', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'fr_FR' }));
+      expect(choices[0].code).toBe('fr');
+      expect(choices[0].description).toBe('French');
+    });
+
+    it('normalizes regional and custom codes', () => {
+      const choices = getUserLanguageChoices(makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en-GB',
+        customDestinationLanguage: 'es_419',
+      }));
+
+      expect(choices[1].code).toBe('en');
+      expect(choices[2].code).toBe('es');
+    });
+
+    it('collapses a regional entry that differs from system only by region subtag', () => {
+      const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'en-US' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+
+    it('collapses a custom entry that normalizes to the same code as system', () => {
+      const user = makeUser({
+        systemLanguage: 'de',
+        regionalLanguage: 'en',
+        customDestinationLanguage: 'de-AT',
+      });
+      expect(getUserLanguageChoices(user)).toHaveLength(2);
     });
   });
 });

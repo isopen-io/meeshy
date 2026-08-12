@@ -75,27 +75,52 @@ final class PushNotificationManagerTests: XCTestCase {
     @MainActor
     func test_noteMessageActivity_messageType_emitsConversationId() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "message", "conversationId": "conv-1"])
         c.cancel()
-        XCTAssertEqual(received, ["conv-1"])
+        XCTAssertEqual(received.map(\.conversationId), ["conv-1"])
     }
 
     @MainActor
     func test_noteMessageActivity_messageIdPresent_emitsConversationId() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["messageId": "msg-9", "conversationId": "conv-2"])
         c.cancel()
-        XCTAssertEqual(received, ["conv-2"])
+        XCTAssertEqual(received.map(\.conversationId), ["conv-2"])
+    }
+
+    /// Le signal DOIT transporter l'identifiant du message : sans lui, la liste
+    /// de conversations ne peut pas distinguer « un message que j'affiche déjà »
+    /// (chemin socket arrivé une seconde plus tôt) d'un message inconnu — et
+    /// écrase l'aperçu du premier avec une facette neutre.
+    @MainActor
+    func test_noteMessageActivity_carriesMessageId() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["messageId": "msg-9", "conversationId": "conv-2"])
+        c.cancel()
+        XCTAssertEqual(received.first?.messageId, "msg-9")
+    }
+
+    @MainActor
+    func test_noteMessageActivity_emptyMessageId_carriesNilMessageId() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message", "conversationId": "conv-3", "messageId": ""])
+        c.cancel()
+        XCTAssertEqual(received.count, 1)
+        XCTAssertNil(received.first?.messageId)
     }
 
     @MainActor
     func test_noteMessageActivity_friendRequest_emitsNothing() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "friend_request", "conversationId": "conv-1"])
         c.cancel()
@@ -105,7 +130,7 @@ final class PushNotificationManagerTests: XCTestCase {
     @MainActor
     func test_noteMessageActivity_missingConversationId_emitsNothing() {
         let sut = PushNotificationManager.shared
-        var received: [String] = []
+        var received: [MessageActivitySignal] = []
         let c = sut.messageNotificationReceived.sink { received.append($0) }
         sut.noteMessageActivity(userInfo: ["type": "message"])
         c.cancel()
@@ -268,7 +293,7 @@ final class PushNotificationManagerTests: XCTestCase {
     // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
 
     @MainActor
-    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #file, line: UInt = #line)
+    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #filePath, line: UInt = #line)
     -> (sut: PushNotificationManager, defaults: UserDefaults, keychain: MockKeychainStore, suiteName: String)
     {
         let suiteName = "test.push.\(UUID().uuidString)"

@@ -224,6 +224,31 @@ describe('ZmqMessageHandler', () => {
       expect(handler.getStats().translationCompleted).toBe(0);
     });
 
+    it('does NOT poison the dedup slot when a malformed result precedes a valid retry', async () => {
+      const received: unknown[] = [];
+      handler.on('translationCompleted', (p) => received.push(p));
+
+      // 1) A malformed frame (missing result) arrives first for task-retry/fr.
+      const malformed = makeEvent({ taskId: 'task-retry' });
+      delete (malformed as any).result;
+      await handler.handleMessage(makeBuffer(malformed));
+      expect(received).toHaveLength(0);
+
+      // 2) The translator re-delivers (ZMQ SUB is at-least-once, retries reuse the
+      //    taskId) the VALID result for the SAME taskId+targetLanguage.
+      const valid = makeEvent({
+        taskId: 'task-retry',
+        result: makeTranslationResult({ messageId: 'msg-retry' }),
+      });
+      await handler.handleMessage(makeBuffer(valid));
+
+      // The valid retry MUST still emit — the earlier malformed frame must not
+      // have consumed the (taskId, targetLanguage) dedup slot (Prisme: dropping
+      // it leaves the recipient stranded on the untranslated original).
+      expect(received).toHaveLength(1);
+      expect((received[0] as any).result.messageId).toBe('msg-retry');
+    });
+
     it('deduplicates by taskId+targetLanguage: same key fires only once', async () => {
       const received: unknown[] = [];
       handler.on('translationCompleted', (p) => received.push(p));

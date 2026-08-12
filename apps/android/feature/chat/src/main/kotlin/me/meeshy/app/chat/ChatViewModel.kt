@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.net.URLDecoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -28,15 +31,23 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
+import me.meeshy.sdk.composer.ComposerAffordances
+import me.meeshy.sdk.composer.ComposerAttachmentPolicy
+import me.meeshy.sdk.composer.ComposerSendGate
+import me.meeshy.sdk.composer.ComposerSendKind
+import me.meeshy.sdk.composer.SlowModePolicy
+import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
@@ -47,6 +58,7 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.applyRemote
 import me.meeshy.sdk.mention.onTextChange
 import me.meeshy.sdk.mention.reset
@@ -62,14 +74,17 @@ import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -81,6 +96,9 @@ import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
 
 data class ChatUiState(
+    /** This conversation's id — lets header actions (e.g. the admin settings sheet)
+     * bind a sibling ViewModel without re-reading the nav argument. */
+    val conversationId: String = "",
     val messages: List<BubbleContent> = emptyList(),
     /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
      * active-call) — alimente la pill « Rejoindre » du header (parité iOS
@@ -106,6 +124,17 @@ data class ChatUiState(
     val hasMoreOlder: Boolean = true,
     val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
+    /** The first unread message's id — the "new messages" boundary, latched once
+     * from the initial unread count captured before the conversation is marked
+     * read (null = nothing unread on open). */
+    val firstUnreadMessageId: String? = null,
+    /** Flips true the moment the unread-boundary latch settles — whether it found
+     * a boundary or not. The one-shot open scroll waits for this so it never fires
+     * against an unresolved (possibly empty) window. */
+    val unreadBoundaryResolved: Boolean = false,
+    /** The conversation's encryption posture (e.g. `"e2ee"`), or `null` when the
+     * conversation is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -130,9 +159,53 @@ data class ChatUiState(
      * `location:live-*` socket events (see [LiveLocationEventFold]). Drives the badges
      * surfaced above the message list. */
     val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
+    /** The viewer's hardened send permissions for THIS conversation, or `null` for a
+     * registered member (the full posture). Populated from the anonymous guest
+     * session's [ParticipantPermissions] when the viewer joined via a share link;
+     * a normal member never carries a stored anonymous session, so it stays null. */
+    val composerPermissions: ParticipantPermissions? = null,
+    /** The conversation's slow-mode interval in seconds, or `null`/`0` when off.
+     * Carried from the loaded conversation; feeds [slowModeState]. */
+    val slowModeSeconds: Int? = null,
+    /** Whether the viewer's conversation role (moderator+) bypasses slow mode.
+     * Computed once per conversation load via [SlowModePolicy.isExemptRole]. */
+    val slowModeExempt: Boolean = false,
+    /** When the viewer last sent a message in this conversation (epoch millis),
+     * or `null` if not this session. Advances the slow-mode cooldown. */
+    val lastSelfSentAtMillis: Long? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
+
+    /** The composer's live slow-mode posture at [nowMillis] — whether the send
+     * action is allowed and, if not, how many seconds remain. Pure derivation over
+     * [SlowModePolicy]; the Compose screen ticks [nowMillis] to animate the
+     * countdown, the ViewModel reads it to gate [ChatViewModel.send]. */
+    fun slowModeState(nowMillis: Long): SlowModeState =
+        SlowModePolicy.evaluate(
+            slowModeSeconds = slowModeSeconds,
+            lastSelfSentAtMillis = lastSelfSentAtMillis,
+            nowMillis = nowMillis,
+            isExempt = slowModeExempt,
+        )
+
+    /** The concrete affordances the composer may offer, derived from
+     * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
+     * member (null permissions) gets every affordance; a share-link guest is gated
+     * to the capabilities the join hardened. */
+    val composerAffordances: ComposerAffordances
+        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** Whether the end-to-end-encryption notice sits at the top of the list — the
+     * conversation is encrypted, the reader has reached the start of history
+     * ([hasMoreOlder] false), and the cold-start skeleton ([showSkeleton]) is down.
+     * Pure derivation over [EncryptionDisclaimer]. */
+    val showEncryptionDisclaimer: Boolean
+        get() = EncryptionDisclaimer.shouldShow(
+            encryptionMode = encryptionMode,
+            hasOlderMessages = hasMoreOlder,
+            isLoadingInitial = showSkeleton,
+        )
 
     /** The live-location sessions to render as badges, in registry order. The badge
      * self-terminates on expiry, so the raw session list is safe to surface directly. */
@@ -211,6 +284,9 @@ class ChatViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
     private val mediaUploadQueue: MediaUploadQueue,
     private val mentionSearch: MentionSearch,
+    private val anonymousSessionStore: AnonymousSessionStore,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val networkConditionMonitor: NetworkConditionMonitor,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -218,7 +294,20 @@ class ChatViewModel @Inject constructor(
         "ChatViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
     }
 
-    private val _state = MutableStateFlow(ChatUiState())
+    /**
+     * An incoming quick-reply/deep-link draft (`meeshy://conversation/{id}?draft=...`),
+     * e.g. from a future Quick Reply widget. Seeded into [_state] below so it wins over
+     * whatever [DraftAutosave.restore] would otherwise restore from [draftStore] — that
+     * function's own idle guard (`currentDraft.isNotBlank() -> null`) already refuses to
+     * clobber a non-empty composer, so no separate precedence rule is needed here; a
+     * blank/absent arg leaves the composer empty exactly as before, letting the stored
+     * draft restore normally.
+     */
+    private val initialDraft: String? = savedStateHandle.get<String>(DRAFT_ARG)
+        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+        ?.takeIf { it.isNotBlank() }
+
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -258,8 +347,36 @@ class ChatViewModel @Inject constructor(
      */
     private val sendingForwards = mutableMapOf<String, String>()
 
+    /**
+     * The conversation's unread count captured from the cache **before** the open
+     * marks it read — the input to the [UnreadMarker] boundary. Null until the
+     * first conversation emission has been read.
+     */
+    private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
     init {
-        viewModelScope.launch { markConversationRead() }
+        // Capture the unread count from the cached conversation BEFORE marking it
+        // read (which zeroes it), then mark read. The first Room emission carries
+        // the current cached value, so this never blocks beyond it.
+        viewModelScope.launch {
+            initialUnreadCount.value =
+                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            markConversationRead()
+        }
+
+        // Latch the "new messages" boundary once, when both the initial unread
+        // count and a non-empty message window are known. A later message arrival
+        // never re-derives it (the boundary is stable for the session).
+        viewModelScope.launch {
+            val count = initialUnreadCount.filterNotNull().first()
+            val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            _state.update {
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+            }
+        }
+
+        viewModelScope.launch { loadComposerPermissions() }
 
         refreshActiveCall()
 
@@ -303,6 +420,9 @@ class ChatViewModel @Inject constructor(
                     .filterNot { it == currentUserId }
                     .distinct()
                     .size
+                val viewerRole = conversation.participants
+                    .firstOrNull { it.userId == currentUserId }
+                    ?.role
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -310,6 +430,9 @@ class ChatViewModel @Inject constructor(
                         isGroup = conversation.type.lowercase() != "direct",
                         accentColorHex = conversation.accentHex(),
                         mentionDisplayNames = MentionRoster.displayNames(roster),
+                        slowModeSeconds = conversation.slowModeSeconds,
+                        slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
+                        encryptionMode = conversation.encryptionMode,
                     )
                 }
             }
@@ -344,14 +467,27 @@ class ChatViewModel @Inject constructor(
                     Triple(inputs, hidden, starred.ids)
                 }
                 .combine(activeLanguageOverride) { triple, overrides -> triple to overrides }
-                .collect { (triple, overrides) ->
+                .combine(
+                    privacyPreferencesStore.preferences
+                        .map { it.showReadReceipts }
+                        .distinctUntilChanged(),
+                ) { pair, showReadReceipts -> pair to showReadReceipts }
+                .combine(
+                    networkConditionMonitor.condition
+                        .map { it == NetworkCondition.OFFLINE }
+                        .distinctUntilChanged(),
+                ) { data, isOffline -> data to isOffline }
+                .collect { (data, isOffline) ->
+                    val (pair, showReadReceipts) = data
+                    val (triple, overrides) = pair
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
                     latestMessagesFlow.value = latestMessages
                     _state.update { current ->
                         val next = current.applyResult(
-                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds, overrides,
+                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
+                            overrides, showReadReceipts, isOffline,
                         )
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
@@ -565,6 +701,24 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Fold the viewer's hardened send permissions into the composer state. A
+     * share-link guest carries a persisted [AnonymousSessionStore] context whose
+     * capabilities gate the composer; a registered member has no stored anonymous
+     * session, so the permissions stay `null` and the composer keeps the full
+     * posture. A store failure degrades to the full posture (never a crash).
+     */
+    private suspend fun loadComposerPermissions() {
+        val permissions = try {
+            anonymousSessionStore.load()?.permissions
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return
+        _state.update { it.copy(composerPermissions = permissions) }
+    }
+
+    /**
      * Re-probe the server for a still-active call in this conversation. Called
      * on init and by the screen when it resumes (returning from the call, an
      * app relaunch) so the « Rejoindre » pill reflects the server truth: it
@@ -752,6 +906,17 @@ class ChatViewModel @Inject constructor(
             applyEdit(editingId, text)
             return
         }
+        // Unified send gate: refuse a new send while a slow-mode cooldown is running
+        // or the viewer is read-only (edits above are exempt — they are not new
+        // messages). The draft is kept so the countdown's tick simply re-enables the
+        // send button.
+        val sentAtMillis = clock.nowMillis()
+        val gate = ComposerSendGate.evaluate(
+            ComposerSendKind.TEXT,
+            _state.value.composerAffordances,
+            _state.value.slowModeState(sentAtMillis),
+        )
+        if (!gate.allowed) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
@@ -763,6 +928,7 @@ class ChatViewModel @Inject constructor(
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
+                lastSelfSentAtMillis = sentAtMillis,
             )
         }
         persistDraft("", replyToId = null)
@@ -857,6 +1023,20 @@ class ChatViewModel @Inject constructor(
     fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
         if (bytes.isEmpty()) return
         val user = sessionRepository.currentUser.value ?: return
+        val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
+        val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
+        val messageType = AttachmentMessageType.forMime(mime)
+        // Same unified gate the text path uses: a denied attachment capability or a
+        // running slow-mode cooldown refuses the pick before it leaves the composer.
+        // The "+" ladder stays visible during a cooldown, so this is where the block
+        // is really enforced — and a delivered attachment starts the cooldown too.
+        val sentAtMillis = clock.nowMillis()
+        val gate = ComposerSendGate.evaluate(
+            ComposerSendKind.fromMessageType(messageType),
+            _state.value.composerAffordances,
+            _state.value.slowModeState(sentAtMillis),
+        )
+        if (!gate.allowed) return
         val text = _state.value.draft.trim()
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
@@ -868,13 +1048,12 @@ class ChatViewModel @Inject constructor(
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
+                lastSelfSentAtMillis = sentAtMillis,
             )
         }
         persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
-                val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-                val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
                 val uploadCmid = mediaUploadQueue.enqueue(
                     MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
                 )
@@ -888,7 +1067,7 @@ class ChatViewModel @Inject constructor(
                     sender = user,
                     replyToId = replyToId,
                     effects = effects,
-                    messageType = AttachmentMessageType.forMime(mime),
+                    messageType = messageType,
                     attachmentUploadCmids = listOf(uploadCmid),
                     attachments = listOf(
                         ApiMessageAttachment(
@@ -1626,6 +1805,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
+
+        /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
+        const val DRAFT_ARG: String = "draft"
         private const val QUICK_REACTION_COUNT = 8
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
@@ -1665,23 +1847,25 @@ private fun ChatUiState.applyResult(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
+    showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -1725,6 +1909,8 @@ private fun List<LocalMessage>.toBubbles(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
+    showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): List<BubbleContent> {
     val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
         MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
@@ -1753,6 +1939,8 @@ private fun List<LocalMessage>.toBubbles(
             showOriginal = local.message.id in showingOriginal,
             activeLanguageCode = activeLanguageOverride[local.message.id],
             mediaBaseUrl = mediaBaseUrl,
+            showReadReceipts = showReadReceipts,
+            isOffline = isOffline,
         ).copy(
             isStarred = local.message.id in starredIds,
             isFirstInGroup = position.isFirstInGroup,

@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { resolveUserLanguage, resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { getDeviceLocale } from '@/lib/device-locale';
 
 /**
@@ -26,9 +27,10 @@ function resolveDeviceLocale(user: User): string | undefined {
  */
 /**
  * Recherche l'entrée du catalogue de langues de manière insensible à la casse.
- * Les codes du catalogue sont lowercase ; une préférence stockée `'EN'` (casse
- * mixte issue d'un ancien client) doit tout de même résoudre son nom/drapeau —
- * sinon `getUserLanguageChoices` retombait silencieusement sur 🇫🇷 « Français ».
+ * Les codes du catalogue sont lowercase ; les appelants passent désormais un code
+ * déjà normalisé par {@link normalizeLanguageCode} (`'pt-BR'` → `'pt'`), donc une
+ * variante régionale résout bien son nom/drapeau au lieu de retomber sur
+ * 🇫🇷 « Français ».
  */
 function findLanguageMeta(code: string | null | undefined) {
   if (!code) return undefined;
@@ -37,19 +39,26 @@ function findLanguageMeta(code: string | null | undefined) {
 }
 
 export function getUserLanguageChoices(user: User): LanguageChoice[] {
-  // Lookup by the raw (lowercased) preference so an absent systemLanguage keeps
-  // the historical 🇫🇷 « Français » fallback; the emitted code still defaults to 'fr'.
-  const systemRaw = user.systemLanguage?.toLowerCase();
-  const systemCode = systemRaw || 'fr';
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
+  // Normalize each preference to its canonical Meeshy code (BCP-47 region/script
+  // subtags stripped, case-folded) BEFORE emitting `code`: this value is consumed
+  // as a translation target and as `selectedInputLanguage`, so it MUST match the
+  // codes produced by resolveUserPreferredLanguage / getUserLanguagePreferences /
+  // MessageTranslation.targetLanguage. A raw 'pt-BR' emitted as 'pt-br' would
+  // diverge from the 'pt' used everywhere else and silently miss translations.
+  // Meta (name/flag) is looked up from the *normalized* preference, but the
+  // 🇫🇷 « Français » fallback stays tied to an absent/unknown systemLanguage —
+  // never to the 'fr' emission fallback — so an absent language still reads « Français ».
+  const systemNormalized = normalizeLanguageCode(user.systemLanguage);
+  const systemCode = systemNormalized || 'fr';
+  const regionalCode = normalizeLanguageCode(user.regionalLanguage);
+  const customCode = normalizeLanguageCode(user.customDestinationLanguage);
 
   const choices: LanguageChoice[] = [
     {
       code: systemCode,
       name: 'Langue système',
-      description: findLanguageMeta(systemRaw)?.name || 'Français',
-      flag: findLanguageMeta(systemRaw)?.flag || '🇫🇷',
+      description: findLanguageMeta(systemNormalized)?.name || 'Français',
+      flag: findLanguageMeta(systemNormalized)?.flag || '🇫🇷',
       isDefault: true
     }
   ];

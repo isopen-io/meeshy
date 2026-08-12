@@ -76,7 +76,154 @@ final class AppInitWireupTests: XCTestCase {
         MeeshyMetricsSubscriber.shared.register()
     }
 
+    // MARK: - Gate iOS : `meeshy.sh test` doit exécuter les tests du SDK
+
+    /// `./apps/ios/meeshy.sh test` est LE gate exigé avant tout commit iOS
+    /// (CLAUDE.md racine). Il ne lançait que le bundle de l'app
+    /// (`-only-testing:MeeshyTests`) : n'importe quel test rouge sous
+    /// `packages/MeeshySDK/Tests/**` restait invisible en local et n'apparaissait
+    /// qu'au push, dans `sdk-tests.yml`. Deux tests de `LocationModelsTests` ont
+    /// ainsi survécu à trois commits.
+    func test_meeshyShTestGate_runsTheMeeshySDKPackageSuite() throws {
+        let body = try scriptBody(of: "do_test() {", upTo: "# ─── Setup")
+
+        XCTAssertTrue(
+            body.contains("-scheme MeeshySDK-Package"),
+            "meeshy.sh test doit lancer la suite du package MeeshySDK (scheme MeeshySDK-Package) : "
+                + "sinon les tests de packages/MeeshySDK/Tests ne sont exercés que par sdk-tests.yml, au push."
+        )
+        XCTAssertTrue(
+            body.contains("p0 != 0"),
+            "L'exit code de la suite SDK doit entrer dans le verdict du gate — une phase dont "
+                + "l'échec ne fait pas rougir le script ne prouve rien (cf. le `|| true` des UI tests)."
+        )
+    }
+
+    // MARK: - Composer de story : le sélecteur de lieu vient de l'app
+
+    /// Le composer de story vit au SDK ; le sélecteur de lieu, non (MapKit,
+    /// CoreLocation, `MediaPermissionCoordinator`, catalogue `.main`). Le SDK
+    /// expose donc `\.storyLocationPicker` et l'app l'alimente. Un site de
+    /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
+    /// pastille redevient inatteignable, sans le moindre signal.
+    func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
+        for path in Self.storyComposerPresentationSites {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                injections, presentations,
+                "\(path) : chaque présentation du composer doit injecter le picker de lieu "
+                    + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
+            )
+        }
+    }
+
+    /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
+    /// permissions) et la pellicule (PhotoKit) restent app-side, le composer
+    /// SDK expose deux points d'injection. Un site de présentation qui les
+    /// oublie fait disparaître les amorces de la page blanche SANS le moindre
+    /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
+    /// interdit.
+    func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
+        for path in Self.storyComposerPresentationSites {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                occurrences(of: ".storyCameraCaptureProvided()", in: src), presentations,
+                "\(path) : sans injection caméra, l'amorce « Caméra » n'est pas rendue."
+            )
+            XCTAssertEqual(
+                occurrences(of: ".storyRecentCameraRollProvided()", in: src), presentations,
+                "\(path) : sans injection pellicule, la vignette « dernière photo » n'est pas rendue."
+            )
+        }
+    }
+
+    /// Tous les fichiers qui MONTENT un composer de story. `StoryTrayActions`
+    /// s'y est ajouté quand le cover de création est remonté au niveau racine :
+    /// un site oublié par ce garde-fou est un site où les amorces de page
+    /// blanche disparaissent sans le moindre signal.
+    private static let storyComposerPresentationSites = [
+        "Meeshy/Features/Main/Views/StoryTrayView.swift",
+        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
+        "Meeshy/Features/Main/Views/StoryViewerView.swift"
+    ]
+
+    /// R4 — le cover du composer de création n'est monté qu'UNE fois par racine.
+    ///
+    /// `StoryTrayView` le montait, et elle est instanciée par
+    /// `ConversationListView`, `FeedView` et `RootViewComponents` ; sur iPhone la
+    /// feuille de feed recouvre la liste sans la démonter, donc deux trays
+    /// vivantes présentaient le même cover sur le même `@Published`
+    /// (« Attempt to present … which is already presenting »). C'est la course
+    /// que les `Task.sleep(350 ms)` masquaient.
+    func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
+        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
+                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        for path in mounts {
+            XCTAssertEqual(
+                occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,
+                "\(path) : une racine, un montage."
+            )
+        }
+        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+                     "Meeshy/Features/Main/Views/RootViewComponents.swift",
+                     "Meeshy/Features/Main/Views/FeedView.swift",
+                     "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            XCTAssertEqual(
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                0,
+                "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
+            )
+        }
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    /// Source d'un fichier de l'app, commentaires `//` retirés — un `.contains`
+    /// qui matche un commentaire ne prouve rien (et les doc-comments de ces deux
+    /// vues NOMMENT les composers qu'on compte ici).
+    private func appSource(_ relativePath: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let raw = try String(contentsOfFile: "\(projectRoot)/\(relativePath)", encoding: .utf8)
+        return raw
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "//") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
+
     // MARK: - Helpers
+
+    /// Extrait une portion de `apps/ios/meeshy.sh`, commentaires `#` retirés :
+    /// une assertion qui matche un commentaire ne prouve rien.
+    private func scriptBody(of startMarker: String, upTo endMarker: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let source = try String(contentsOfFile: "\(projectRoot)/meeshy.sh", encoding: .utf8)
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("meeshy.sh ne contient plus « \(startMarker) »")
+            return ""
+        }
+        let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "#") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
 
     /// Returns the body of `application(_:didFinishLaunchingWithOptions:)`
     /// from `AppDelegate.swift`. Mirrors the file-path resolution used by

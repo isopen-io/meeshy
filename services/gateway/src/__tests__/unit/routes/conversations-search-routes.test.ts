@@ -22,7 +22,11 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
+// `resolveUserLanguagesOrdered` garde son implémentation RÉELLE : la route
+// l'utilise pour le Prisme de l'aperçu, et c'est la seule autorité du dépôt sur
+// l'ordre des langues du lecteur.
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as Record<string, unknown>),
   generateDefaultConversationTitle: jest.fn<any>().mockReturnValue('Default Title'),
 }));
 

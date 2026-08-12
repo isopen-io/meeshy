@@ -28,6 +28,7 @@ struct BubbleExpandableText: View, Equatable {
     let mentionDisplayNames: [String: String]
     let highlightTerm: String?
     let mentionTint: Color
+    let hashtagTint: Color
     let linkTint: Color
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
@@ -36,6 +37,7 @@ struct BubbleExpandableText: View, Equatable {
     var onLongPress: (() -> Void)? = nil
 
     @SwiftUI.State private var isExpanded: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -43,6 +45,7 @@ struct BubbleExpandableText: View, Equatable {
         lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
         lhs.highlightTerm == rhs.highlightTerm &&
         lhs.mentionTint == rhs.mentionTint &&
+        lhs.hashtagTint == rhs.hashtagTint &&
         lhs.linkTint == rhs.linkTint &&
         lhs.trackedLinks == rhs.trackedLinks
     }
@@ -54,7 +57,7 @@ struct BubbleExpandableText: View, Equatable {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
                     // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
@@ -91,29 +94,42 @@ struct BubbleExpandableText: View, Equatable {
                     .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                     .textSelection(.disabled)
                     .highPriorityGesture(
-                        TapGesture()
-                            .onEnded {
-                                HapticFeedback.light()
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    isExpanded = true
-                                }
-                            }
+                        TapGesture().onEnded { expand() }
                     )
                     .accessibilityIdentifier("bubble.expand.more")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                    .accessibilityHint(Text(String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)))
+                    // Le libellé n'est pas un vrai `Button` (il porte un
+                    // `.highPriorityGesture` custom pour battre le long-press du
+                    // parent) : la double-tape VoiceOver n'atteint pas ce geste.
+                    // On câble donc l'action d'activation par défaut explicitement.
+                    .accessibilityAction { expand() }
             }
         } else {
             // Déplié (ou court) : on affiche le message COMPLET sans aucun
             // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
             // son rôle et disparaît (spec : « déplier uniquement et disparaître,
             // pas de repli »). `isExpanded` reste local à la sous-vue.
-            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
                 // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le
                 // long-press passe par le menu contextuel custom Meeshy, pas par
                 // le menu d'édition natif iOS.
+        }
+    }
+
+    /// Dépliage à sens unique, partagé par le tap et l'action VoiceOver.
+    /// Respecte Reduce Motion : pas d'animation quand l'utilisateur l'a désactivée.
+    private func expand() {
+        HapticFeedback.light()
+        if reduceMotion {
+            isExpanded = true
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isExpanded = true
+            }
         }
     }
 

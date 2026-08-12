@@ -6,9 +6,17 @@ import os
 final class NSEPendingMessageConsumer {
     static let shared = NSEPendingMessageConsumer()
 
-    private static let appGroupId = "group.me.meeshy.apps"
-    private static let pendingDirName = "nse_pending_messages"
+    private nonisolated static let appGroupId = "group.me.meeshy.apps"
+    private nonisolated static let pendingDirName = "nse_pending_messages"
     private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-consumer")
+
+    /// Dossier de staging App Group — exposé pour le wipe de logout
+    /// (appgroup-01), miroir de `SharePendingSendConsumer.directoryURL()`.
+    nonisolated static func directoryURL() -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+            .appendingPathComponent(pendingDirName, isDirectory: true)
+    }
 
     private init() {}
 
@@ -79,7 +87,9 @@ final class NSEPendingMessageConsumer {
             // Only drop the prefetch files once the messages are committed to GRDB,
             // so a persist failure leaves them on disk to retry next launch instead
             // of silently dropping the push-prefetched message.
-            for url in consumedFiles { try? fm.removeItem(at: url) }
+            for url in consumedFiles {
+                fm.removeItemLogging(at: url, context: "merged NSE prefetch file", logger: logger)
+            }
             logger.info("Merged \(decodedAPIMessages.count) NSE messages into cache")
         } catch {
             logger.error("NSE message persist failed, keeping \(consumedFiles.count) file(s) for retry: \(error.localizedDescription)")

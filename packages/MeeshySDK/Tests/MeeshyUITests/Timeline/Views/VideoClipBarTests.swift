@@ -26,7 +26,6 @@ final class VideoClipBarTests: XCTestCase {
             frames: [],
             onTap: {},
             onDoubleTap: {},
-            onLongPress: {},
             onTrimStartDelta: { _ in },
             onTrimEndDelta: { _ in },
             onMoveDelta: { _ in }

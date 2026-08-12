@@ -68,16 +68,28 @@ export const clampNonNegativeInt = (value?: number | null): number | null =>
 /**
  * From the current user's vantage point:
  * - they started it → outgoing
- * - someone else started it and it was answered → incoming
+ * - someone else started it, THEY personally joined it, and it was answered
+ *   → incoming
  * - someone else started it and it was never answered → missed
+ * - someone else started it, was answered by someone else, but THEY never
+ *   personally joined it → missed, never "incoming"
+ *
+ * The last case matters for group conversations: a P2P call is capped at 2
+ * active participants, so a 3rd conversation member whose auto-early-join
+ * lost the race (`MAX_PARTICIPANTS_REACHED`) has no `CallParticipant` row for
+ * this call at all — the call never actually reached their device. Without
+ * `userParticipated`, `answeredAt` alone (set once, call-wide, by whichever
+ * of the two real participants answered) wrongly labelled that bystander's
+ * history entry "incoming", claiming they received a call they never did.
  */
 export function deriveCallDirection(
   initiatorId: string,
   userId: string,
-  answeredAt: Date | null
+  answeredAt: Date | null,
+  userParticipated: boolean
 ): CallDirection {
   if (initiatorId === userId) return 'outgoing';
-  return answeredAt ? 'incoming' : 'missed';
+  return answeredAt && userParticipated ? 'incoming' : 'missed';
 }
 
 /** A call was a video call when its initiation metadata recorded `type: 'video'`. */
@@ -105,7 +117,9 @@ export function deriveDurationSec(row: Pick<CallHistoryRow, 'duration' | 'answer
 export function buildCallHistoryItem(
   row: CallHistoryRow,
   userId: string,
-  peer: CallHistoryPeer | null
+  peer: CallHistoryPeer | null,
+  /** Does `userId` have their own `CallParticipant` row for this call? Irrelevant (and safe to pass `false`) when `userId` is the initiator. */
+  userParticipated: boolean
 ): CallHistoryItem {
   return {
     callId: row.id,
@@ -116,7 +130,7 @@ export function buildCallHistoryItem(
     mode: row.mode,
     status: row.status,
     endReason: row.endReason ?? null,
-    direction: deriveCallDirection(row.initiatorId, userId, row.answeredAt),
+    direction: deriveCallDirection(row.initiatorId, userId, row.answeredAt, userParticipated),
     isVideo: callIsVideo(row.metadata),
     startedAt: row.startedAt.toISOString(),
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,

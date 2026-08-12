@@ -44,9 +44,13 @@ function buildRequiredAuth(authenticated = true) {
 
 function buildMockPrisma() {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn(),
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+      // `GET /static/:filename` consulte `mutedAt` avant de servir le fichier :
+      // `null` = aucun son coupé, la route sert normalement. Le cas coupé est
+      // couvert par `staticMuted.test.ts`.
+      findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
       update: jest.fn(),
     },
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
@@ -75,6 +79,10 @@ async function buildApp(opts: { authenticated?: boolean; uploadDir: string } = {
 // Tests
 // ---------------------------------------------------------------------------
 
+// Sauvegardée AVANT toute écriture : `process.env` est partagé entre fichiers
+// d'un même worker Jest. La supprimer effaçait une valeur qu'on n'avait pas posée.
+const ORIGINAL_UPLOAD_DIR = process.env['UPLOAD_DIR'];
+
 describe('GET /static/:filename — story audio static route', () => {
   let uploadDir: string;
   let app: FastifyInstance;
@@ -86,7 +94,8 @@ describe('GET /static/:filename — story audio static route', () => {
   afterEach(async () => {
     await app?.close();
     await fs.rm(uploadDir, { recursive: true, force: true });
-    delete process.env['UPLOAD_DIR'];
+    if (ORIGINAL_UPLOAD_DIR === undefined) delete process.env['UPLOAD_DIR'];
+    else process.env['UPLOAD_DIR'] = ORIGINAL_UPLOAD_DIR;
   });
 
   it('should_serve_audio_files_from_static_route', async () => {
