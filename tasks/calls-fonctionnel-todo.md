@@ -7520,3 +7520,106 @@ string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android
 sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111) ; guard
 `!isAnonymous` sur le poll `active-call` du bandeau (Vague 112) ; `CallInfoOverlay`'s
 `participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).
+
+## Vague 115 — le bandeau « appel en cours, rejoindre » rejoignait TOUJOURS en audio-only, quelle que soit la vraie nature de l'appel (web+gateway) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche locale déjà
+alignée sur `origin/main` (`c1d57dbd`, contient la Vague 114 — PR #2898 mergée), 0 commit
+d'avance/retard. `list_pull_requests` n'a remonté qu'une seule PR ouverte (#2899, cycle 92 messaging,
+messages autodestructibles — sans rapport, aucune collision). Audit dédié (agent Explore, lecture
+seule, périmètre web+gateway, mandaté avec le backlog condensé des Vagues 63-114 pour éviter toute
+redite) a remonté 5 candidats ; le premier (confiance la plus haute, root cause directement dans la
+lignée de la Vague 112) retenu après relecture ligne à ligne directe de tous les fichiers cités.
+
+- **Root cause confirmée par lecture directe** (`packages/shared/types/api-schemas.ts` +
+  `apps/web/components/conversations/header/use-call-banner.ts`) : le contrat REST
+  `GET /conversations/:id/active-call` sérialise via `callSessionSchema`/`callParticipantSchema` —
+  une WHITELIST `fast-json-stringify` qui strippe silencieusement tout champ non déclaré (fix privacy
+  2026-05-12, documenté dans `call-session-schema-serialization.test.ts`, qui raconte déjà un premier
+  incident de la même classe : iOS lisait `mode=="video"` au lieu de `metadata.type`). Deux champs que
+  le hook de la Vague 112 lit directement n'étaient PAS dans cette whitelist :
+  - `answeredAt` était absent de `callSessionSchema` (seuls `startedAt`/`endedAt`/`duration` y
+    figuraient). `activeCall.answeredAt` était donc TOUJOURS `undefined` sur le fil — le fallback
+    `?? startedAt` de la Vague 112 (qui prétendait ancrer le chrono du bandeau sur le décroché réel,
+    même correctif que la Vague 110) était inerte : le chrono affiché a toujours compté le temps de
+    sonnerie comme temps de conversation, pour CE bandeau spécifiquement.
+  - `isVideoEnabled`/`isAudioEnabled` sont absents de `callParticipantSchema` (seuls les champs
+    INVERSÉS `isMuted`/`isVideoOff` y figurent, posés par `toCallParticipantResponse`,
+    `call-session-response.ts:67-94`). `handleJoinCall` dérivait pourtant `callType` de
+    `activeCall.participants.some(p => p.isVideoEnabled)` — toujours `false` sur le fil, donc
+    `callType` toujours `'audio'`, quelle que soit la vraie nature de l'appel.
+  Scénario concret atteignable via le chemin même que la Vague 112 vient d'ouvrir (le SEUL chemin de
+  jonction pour un appel de groupe, `CallSystemMessage`/`call-live` étant restreint aux conversations
+  `direct`) : un membre qui rate le ring initial (hors-ligne, autre onglet) voit le bandeau sur un
+  appel VIDÉO en cours, tape « Rejoindre » → `requestJoin({callType:'audio'})` →
+  `acceptOrJoinCall({isVideo:false})` → `getCallMediaConstraints('audio')` n'acquiert JAMAIS de flux
+  vidéo (pas de prompt caméra) → le gate privacy du gateway (`CallService.joinCallAttempt`,
+  `:1348-1354`) persiste `isVideoEnabled: false` pour ce joiner. Résultat : rejoint un appel vidéo sans
+  jamais pouvoir émettre de vidéo, sans aucune explication visible — pas un cas limite, le seul chemin
+  prévu pour ce scénario précis.
+- **Fix** : (a) `answeredAt` ajouté à `callSessionSchema` (`packages/shared/types/api-schemas.ts`),
+  miroir exact de `startedAt`/`endedAt` déjà présents — additif, aucune régression privacy (le champ
+  n'a jamais fait partie du contenu sensible strippé par le fix 2026-05-12). (b) `handleJoinCall`
+  dérive désormais `callType` de `activeCall.metadata?.type === 'video'` — `metadata.type` EST déjà
+  whitelisté et documenté en commentaire comme « la SEULE source REST fiable du type d'appel »
+  (`api-schemas.ts`, `mode` transportant l'architecture WebRTC p2p/sfu, jamais le type). Le champ
+  `type?: 'audio' | 'video'` — posé côté serveur depuis toujours (`CallService.initiateCall`, lu à de
+  nombreux sites gateway existants), simplement jamais typé côté client — est ajouté à l'interface
+  partagée `CallMetadata` (`packages/shared/types/video-call.ts`) avec un commentaire explicite
+  proscrivant toute dérivation future depuis `participants[].isVideoEnabled` (état média mutable,
+  sans rapport avec la nature de l'appel). Deux fichiers de production modifiés côté contrat
+  (`api-schemas.ts`, `video-call.ts`) + un côté consommateur (`use-call-banner.ts`).
+- **Tests** (TDD, RED confirmé aux DEUX niveaux avant fix, via `git stash` du seul diff source puis
+  ré-exécution réelle des nouveaux cas) :
+  - `call-session-schema-serialization.test.ts` (gateway, 2 nouveaux cas) : `answeredAt` traverse la
+    sérialisation `fast-json-stringify` intact ; un appel jamais décroché sérialise `answeredAt` à
+    `null` (pas de `undefined` muet). RED confirmé : `expect(out.answeredAt).toBe(...)` échouait avec
+    `Received: undefined` avant l'ajout au schema.
+  - `use-call-banner.test.tsx` (web, 4 cas réécrits/ajoutés dans le describe `handleJoinCall`) :
+    `callType` suit `metadata.type` (`'video'`/`'audio'`/absent → `'audio'` pour les sessions
+    legacy) ; cas de RÉGRESSION dédié — un appel `metadata.type:'video'` avec tous les participants
+    `isVideoEnabled:false` (l'état réel sur le fil AVANT ce fix) doit quand même rejoindre en vidéo.
+    RED confirmé : 2/4 cas échouaient avec `Received: "audio"` contre l'ancien code (les deux autres,
+    déjà couverts par construction du fallback, passaient par coïncidence). Les 2 tests existants
+    fondés sur `participants[].isVideoEnabled` ont été réécrits pour piloter par `metadata.type` —
+    l'ancien contrat qu'ils épinglaient était le bug lui-même, pas un comportement à préserver.
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **web : 50 suites / 426 tests verts** (+4 net) ;
+    **gateway : 48 suites / 1125 tests verts** (+2 net) — 0 régression des deux côtés.
+  - `npx tsc --noEmit` : **apps/web 1757 erreurs** (baseline documentée identique, zéro sur les 3
+    fichiers touchés) ; **services/gateway 0 erreur** (inchangé). Prérequis CLAUDE.md rejoués (sandbox
+    sans `node_modules` au démarrage) : `bun install --ignore-scripts` (racine + gateway), puis
+    `packages/shared && npx prisma generate --generator client && bun run build` sans erreur.
+    `eslint`/`next lint` : indisponible dans ce sandbox (même erreur de config circulaire
+    pré-existante que les vagues précédentes, plugin `react`).
+- **Portée volontairement non étendue** : aucun autre site ne dérive `callType`/le type d'appel depuis
+  `participants[].isVideoEnabled` côté REST (`rg isVideoEnabled apps/web` : les 13 autres sites sont
+  soit socket-fed (état média réel, en direct), soit ce même hook déjà corrigé) — pas de miroir
+  nécessaire ailleurs. iOS n'a reçu aucune modification (hors d'atteinte de ce sandbox) : le contrat
+  REST whitelisté est commun aux deux plateformes, mais `ActiveCallSession` (iOS) lit déjà
+  `metadata.type` depuis l'incident P1-C documenté en tête du fichier de test gateway — seul ce hook
+  web, ajouté par la Vague 112, avait la mauvaise lecture.
+- **Backlog réévalué ce cycle** (audit dédié, cf. mandat ci-dessus) :
+  - Item « `call:force-leave`/`call:check-active` en string literals hors du type-map partagé » —
+    **CONFIRMÉ CORRIGÉ**, retiré du backlog. Lecture directe (`CallEventsHandler.ts:2698,1828`) : les
+    deux handlers utilisent déjà `CLIENT_EVENTS.CALL_FORCE_LEAVE`/`CLIENT_EVENTS.CALL_CHECK_ACTIVE`
+    (`socketio-events.ts:168,472,474`), plus de raw strings.
+  - Item « `removeParticipant()` ne nettoie pas `connectedPeersRef`/`stalledPeersRef` » — **rétrogradé,
+    probablement mort sous les contraintes actuelles**. Tracé jusqu'au seul call site
+    (`VideoCallInterface.tsx`, handler `CALL_PARTICIPANT_LEFT` à délai 2s) contre `CallService.leaveCall`
+    et le plafond P2P dur (`joinCallAttempt`, max 2 participants actifs) : sous le backend actuel, TOUT
+    départ de participant termine l'appel entier pour l'autre côté, démonte `VideoCallInterface` et
+    déclenche le `cleanup()` complet du hook (qui vide déjà toutes les refs) AVANT que
+    `removeParticipant()` seul puisse jamais laisser une entrée périmée pour une connexion encore
+    vivante. Candidat à retirer du backlog actif tant que le vrai multi-party (SFU) n'atterrit pas.
+
+### Reste ouvert
+
+Reconduit (moins les deux items réévalués ci-dessus) : dead code / god-object `CallManager.swift`
+(~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall`
+UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+`supportsHolding = false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111, nécessite un vrai
+sélecteur multi-périphériques, pas un quick fix) ; guard `!isAnonymous` sur le poll `active-call` du
+bandeau (Vague 112, faible sévérité — 401 gaspillés, aucun impact fonctionnel) ; `CallInfoOverlay`'s
+`participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).

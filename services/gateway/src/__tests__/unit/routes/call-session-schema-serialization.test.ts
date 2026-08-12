@@ -31,6 +31,7 @@ const SAMPLE_SESSION = {
     turnSecretHint: 'never-leak-me',
   },
   startedAt: '2026-07-12T03:00:00.000Z',
+  answeredAt: '2026-07-12T03:00:08.000Z',
   participants: [],
   participantCount: 2,
 };
@@ -58,6 +59,22 @@ describe('callSessionSchema — sérialisation REST', () => {
     const out = serialize(SAMPLE_SESSION);
 
     expect(out.mode).toBe('p2p');
+  });
+
+  it('laisse passer answeredAt — Vague 115 : le bandeau "appel en cours" (web) ancrait son ' +
+    'chrono dessus mais le champ était absent du whitelist, retombant toujours sur startedAt ' +
+    '(temps de sonnerie compté comme temps de conversation)', () => {
+    const out = serialize(SAMPLE_SESSION);
+
+    expect(out.answeredAt).toBe('2026-07-12T03:00:08.000Z');
+  });
+
+  it('un appel jamais décroché sérialise answeredAt à null (pas de crash, pas de undefined muet)', () => {
+    const { answeredAt: _answeredAt, ...withoutAnsweredAt } = SAMPLE_SESSION;
+
+    const out = serialize(withoutAnsweredAt);
+
+    expect(out.answeredAt ?? null).toBeNull();
   });
 
   it('un appel sans metadata sérialise sans crasher (sessions legacy)', () => {
