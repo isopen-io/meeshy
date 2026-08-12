@@ -133,10 +133,45 @@ jobs:
       # a failure below is a behavioural regression, and the routine's run log
       # needs to tell them apart without reading the raw log.
       - name: Assemble debug (./apps/android/meeshy.sh build)
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Unit tests (./apps/android/meeshy.sh test)
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      # Gradle only says "There were failing tests. See the report at ..." and
+      # points at an HTML file. The agents this gate exists for cannot download
+      # the artifact, so the failures have to be IN the log or they may as well
+      # not exist. --stacktrace is deliberately absent above for the same
+      # reason: it buries this signal under 100+ lines of Gradle internals.
+      - name: Summarise failing tests
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+
+          total = 0
+          for path in sorted(glob.glob('**/build/test-results/**/*.xml', recursive=True)):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for case in root.iter('testcase'):
+                  bad = [c for c in case if c.tag in ('failure', 'error')]
+                  if not bad:
+                      continue
+                  total += 1
+                  print(f"\n=== {case.get('classname')}.{case.get('name')}")
+                  for c in bad:
+                      msg = (c.get('message') or '').strip()
+                      if msg:
+                          print(f"  {msg[:2000]}")
+                      body = (c.text or '').strip()
+                      if body:
+                          print('  ' + '\n  '.join(body.splitlines()[:20]))
+
+          print(f"\n{total} failing test case(s)." if total
+                else "\nNo failing test cases found — the failure was not a test assertion.")
+          PY
 
       - name: Upload test reports
         if: always()
