@@ -325,7 +325,7 @@ struct SecurityView: View {
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
             }
             .padding(.horizontal, 14)
