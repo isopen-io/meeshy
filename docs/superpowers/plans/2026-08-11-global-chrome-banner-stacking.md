@@ -864,6 +864,8 @@ Expected: PASS — `CallViewObservedObjectInjectionTests` grep le littéral `"Fl
 
 Lancer l'app sur simulateur (`./apps/ios/meeshy.sh run`), démarrer un appel de test, vérifier visuellement que le contenu de l'écran descend bien sous la nouvelle bannière plein-largeur (pas de chevauchement). **La transition PiP réelle (émergence/retour) ne peut PAS être vérifiée en simulateur** (`AVPictureInPictureController.isPictureInPictureSupported()` y est faux) — noter explicitement dans le message de commit que cette vérification reste à faire sur device physique avant mise en production, conformément à la spec §B2/§Tests.
 
+> Note (2026-08-12) : Steps 2-4 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; build, tests et vérification manuelle reportés en CI macOS et sur device (cf. commit e6db8743).
+
 - [x] **Step 5: Commit**
 
 ```bash
