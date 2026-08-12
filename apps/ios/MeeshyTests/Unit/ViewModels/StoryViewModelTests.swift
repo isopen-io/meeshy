@@ -2326,6 +2326,32 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s-live"])
     }
 
+    /// Local-first : un drain ABOUTI verrouille les suivants (chaque
+    /// apparition de MyStoriesView relançait jusqu'à 10 pages de refetch d'une
+    /// archive immuable) ; un drain raté reste RETENTABLE.
+    func test_loadMyStoriesArchive_successfulDrainRunsOnce_failedDrainRetries() async {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [makeStoryItem(id: "s-live")])]
+
+        // Échec réseau : le garde ne se verrouille pas, le retry re-frappe.
+        mockStoryService.listMineResult = .failure(NSError(domain: "test", code: -1009))
+        await sut.loadMyStoriesArchive()
+        XCTAssertEqual(mockStoryService.listMineCallCount, 1)
+
+        // Drain abouti…
+        let archived = Self.makeStoryAPIPost(id: "s-archived", authorId: "me-id", authorUsername: "me")
+        mockStoryService.listMineResult = .success(Self.makeStoriesResponse(posts: [archived]))
+        await sut.loadMyStoriesArchive()
+        XCTAssertEqual(mockStoryService.listMineCallCount, 2)
+
+        // …puis plus AUCUN refetch aux apparitions suivantes.
+        await sut.loadMyStoriesArchive()
+        XCTAssertEqual(mockStoryService.listMineCallCount, 2,
+                       "l'archive déjà drainée se ressert du local sans réseau")
+    }
+
     func test_applyRepublishedStory_replacesItemInPlace_sameId() {
         let previous = AuthManager.shared.currentUser
         defer { AuthManager.shared.currentUser = previous }

@@ -146,6 +146,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
     @Published private(set) var receiverCoverRenderTick = 0
     private var uploadTask: Task<Void, Never>?
+    /// Garde local-first du drain d'archive « Mes stories » : un seul drain
+    /// réseau ABOUTI par session (cf. `loadMyStoriesArchive`).
+    private var myStoriesArchiveDrained = false
 
     private let storyService: StoryServiceProviding
     private let postService: PostServiceProviding
@@ -1248,6 +1251,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// drain borné à 10 pages de 50.
     func loadMyStoriesArchive() async {
         guard let user = AuthManager.shared.currentUser else { return }
+        // Local-first : un seul drain par session — l'archive est immuable côté
+        // serveur (les nouvelles stories arrivent par le flux temps réel /
+        // publication locale, la republication par `applyRepublishedStory`).
+        // Sans ce garde, chaque apparition de MyStoriesView relançait jusqu'à
+        // 10 pages de refetch d'un contenu déjà présent.
+        guard !myStoriesArchiveDrained else { return }
+        myStoriesArchiveDrained = true
         var cursor: String? = nil
         var fetched: [APIPost] = []
         for _ in 0..<10 {
@@ -1259,7 +1269,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
         guard !fetched.isEmpty,
               let archiveGroup = fetched.toStoryGroups(currentUserId: user.id).first(where: { $0.id == user.id })
-        else { return }
+        else {
+            // Rien reçu (offline, erreur, archive vide) : rendre le drain
+            // retentable — le garde ne doit verrouiller qu'un drain ABOUTI.
+            myStoriesArchiveDrained = false
+            return
+        }
 
         if let idx = groupIndex(forUserId: user.id) {
             let existing = storyGroups[idx].stories

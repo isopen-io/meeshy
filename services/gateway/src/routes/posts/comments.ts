@@ -425,8 +425,10 @@ export function registerCommentRoutes(
           if (!c) throw new Error('COMMENT_NOT_FOUND');
           return c as UpdateResult & { id: string };
         },
+        // Rejeu idempotent : relire au MÊME format que updateComment (author +
+        // media + postId) — la ligne Prisma brute cassait le décodage client.
         onDuplicate: async (resultId) => {
-          const existing = await prisma.postComment.findUnique({ where: { id: resultId } });
+          const existing = await commentService.getCommentAsUpdateResult(resultId);
           return existing ? (existing as unknown as UpdateResult & { id: string }) : null;
         },
       }).catch((err) => {
@@ -472,6 +474,9 @@ export function registerCommentRoutes(
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this comment', { code: 'FORBIDDEN' });
+      }
+      if (error instanceof Error && error.message === 'EMPTY_CONTENT') {
+        return sendBadRequest(reply, 'A text comment cannot be edited to blank', { code: 'EMPTY_CONTENT' });
       }
       fastify.log.error(`[PATCH /posts/:postId/comments/:commentId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

@@ -386,9 +386,10 @@ struct ProfileUserPostsList: View {
     }
 
     /// Tap sur la tuile « Stories » : sur SON PROPRE profil, ouvre la page des
-    /// stories en cours et passées (`MyStoriesView`, hébergée par le tray qui
-    /// possède le StoryViewModel et le coordinator du viewer). La feuille de
-    /// profil est fermée d'abord — le même motif différé que
+    /// stories en cours et passées (`MyStoriesView`, hébergée par la RACINE —
+    /// RootView / iPadRootView écoutent `openMyStories`, donc la tuile marche
+    /// quel que soit l'écran qui a présenté la feuille de profil). La feuille
+    /// de profil est fermée d'abord — le même motif différé que
     /// `ProfilePostsOpener` (une sheet présentée par-dessus une sheet en cours
     /// de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la tuile
     /// reste informative (ses stories passées ne nous sont pas accessibles).

@@ -366,7 +366,7 @@ public struct FeedComment: Identifiable, Sendable {
     public var displayContent: String { translatedContent ?? content }
 
     public var effects: MessageEffects {
-        MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(effectFlags)))
+        MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(clamping: effectFlags)))
     }
 
     /// Copie éditée (édition par l'auteur) : nouveau contenu + effets, tout le

@@ -927,10 +927,38 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.repliesMap = ["c1": [FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", likes: 0, parentId: "c1")]]
         sut.commentLikeDelta["r1"] = 1
 
-        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"])
+        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"], actorUserId: "u9")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.first?.likes, 5)
         XCTAssertNil(sut.commentLikeDelta["r1"])
+    }
+
+    /// L'agrégat d'un TIERS ne connaît pas un like local encore en vol : il ne
+    /// doit ni éteindre le cœur ni faire régresser le compte affiché. Seul un
+    /// événement dont JE suis l'acteur fait autorité pour retirer mon cœur.
+    func test_commentReactionAggregate_thirdPartyEvent_preservesInFlightOwnHeart() async throws {
+        // Le résolveur lit AuthManager.shared (non injectable ici) : sans
+        // session, la branche « mon cœur » est inerte — rien à vérifier.
+        guard let myId = AuthManager.shared.currentUser?.id, myId != "u9" else {
+            throw XCTSkip("nécessite une session utilisateur courante")
+        }
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 1)]
+        sut.commentLikedIds.insert("c1")
+
+        // Tiers "u9" like pendant que MON like n'est pas encore persisté
+        // (absent de userIds) : cœur préservé, mon like compté par-dessus.
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: "u9")
+        XCTAssertTrue(sut.commentLikedIds.contains("c1"), "le cœur en vol n'est pas éteint par l'agrégat d'un tiers")
+        XCTAssertEqual(sut.comments.first?.likes, 2, "le like en vol est compté par-dessus l'agrégat du tiers")
+
+        // Événement dont JE suis l'acteur (unlike depuis un autre appareil) :
+        // l'agrégat fait autorité et retire le cœur.
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: myId)
+        XCTAssertFalse(sut.commentLikedIds.contains("c1"), "mon propre événement fait autorité pour mon cœur")
+        XCTAssertEqual(sut.comments.first?.likes, 1)
     }
 
     // MARK: - topLevelComments

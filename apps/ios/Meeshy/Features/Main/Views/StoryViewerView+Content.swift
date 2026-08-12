@@ -2356,11 +2356,18 @@ extension StoryViewerView {
         // `hasCurrentUser` : ce flag est calculé côté gateway relativement à
         // l'ACTEUR de l'événement, donc il vaut true pour le like d'un TIERS et
         // allumait le cœur de tous les destinataires du broadcast.
+        var resolvedCount = serverCount
         if let myId = AuthManager.shared.currentUser?.id {
             if event.aggregation.userIds.contains(myId) {
                 storyCommentLikedIds.insert(commentId)
-            } else {
+            } else if event.userId == myId {
+                // L'événement décrit MA propre action : agrégat autoritatif.
                 storyCommentLikedIds.remove(commentId)
+            } else if storyCommentLikedIds.contains(commentId) {
+                // Agrégat d'un TIERS pendant que MON like est encore en vol :
+                // il ne me connaît pas — préserver le cœur, compter le mien
+                // par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = serverCount + 1
             }
         }
 
@@ -2368,11 +2375,11 @@ extension StoryViewerView {
         // que la prochaine reaction parte d'une baseline propre.
         storyCommentLikeDelta[commentId] = 0
         if let idx = storyComments.firstIndex(where: { $0.id == commentId }) {
-            storyComments[idx].likes = serverCount
+            storyComments[idx].likes = resolvedCount
         } else if let parentId = storyComments.first(where: { storyCommentRepliesMap[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
                   var replies = storyCommentRepliesMap[parentId],
                   let replyIdx = replies.firstIndex(where: { $0.id == commentId }) {
-            replies[replyIdx].likes = serverCount
+            replies[replyIdx].likes = resolvedCount
             storyCommentRepliesMap[parentId] = replies
         }
     }

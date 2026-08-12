@@ -445,22 +445,29 @@ class PostDetailViewModel: ObservableObject {
     /// relativement à l'ACTEUR de l'événement, donc faux pour les destinataires
     /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
     /// serveur sans jamais compter double.
-    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String]) {
+    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
+        var resolvedCount = count
         if let myId = AuthManager.shared.currentUser?.id {
             if reactorUserIds.contains(myId) {
                 commentLikedIds.insert(commentId)
-            } else {
+            } else if actorUserId == myId {
+                // L'événement décrit MA propre action : agrégat autoritatif.
                 commentLikedIds.remove(commentId)
+            } else if commentLikedIds.contains(commentId) {
+                // Agrégat d'un TIERS pendant que MON like est encore en vol :
+                // il ne me connaît pas — préserver le cœur, compter le mien
+                // par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = count + 1
             }
         }
         commentLikeDelta[commentId] = nil
         if let idx = comments.firstIndex(where: { $0.id == commentId }) {
-            comments[idx].likes = count
+            comments[idx].likes = resolvedCount
             return
         }
         for (key, var replies) in repliesMap {
             if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx].likes = count
+                replies[idx].likes = resolvedCount
                 repliesMap[key] = replies
                 return
             }
@@ -1259,7 +1266,8 @@ class PostDetailViewModel: ObservableObject {
                 self.applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds
+                    reactorUserIds: event.aggregation.userIds,
+                    actorUserId: event.userId
                 )
             }
             .store(in: &socketCancellables)
@@ -1272,7 +1280,8 @@ class PostDetailViewModel: ObservableObject {
                 self.applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds
+                    reactorUserIds: event.aggregation.userIds,
+                    actorUserId: event.userId
                 )
             }
             .store(in: &socketCancellables)

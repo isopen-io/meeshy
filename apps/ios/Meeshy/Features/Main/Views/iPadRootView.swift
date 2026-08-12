@@ -41,6 +41,11 @@ struct iPadRootView: View {
     /// (iPhone) coordinator wiring; the cover is wired in
     /// `iPadRootView+Sheets.swift`.
     @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
+    /// Page « Mes stories » ouverte depuis la tuile Stories du profil —
+    /// même hôte racine unique que RootView (cf. commentaire là-bas).
+    @State private var showMyStoriesFromProfile = false
+    @State private var myStoriesProfileFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
+    @State private var editingStorySessionFromProfile: StoryEditSession?
     // CallManager n'est PLUS observé ici : la présentation d'appel passe par
     // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
     // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
@@ -131,6 +136,37 @@ struct iPadRootView: View {
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
             // 2026-05-27).
             .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+            // Tuile « Stories » du profil → page « Mes stories » (hôte racine
+            // unique du listener — même câblage que RootView).
+            .myStoriesSheet(
+                isPresented: $showMyStoriesFromProfile,
+                followUp: $myStoriesProfileFollowUp,
+                viewModel: storyViewModel,
+                userId: AuthManager.shared.currentUser?.id ?? "",
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                perform: { action in
+                    switch action {
+                    case .openViewer(let postId):
+                        storyViewerCoordinator.present(StoryViewerRequest(
+                            id: AuthManager.shared.currentUser?.id ?? "",
+                            singleGroup: true, postId: postId))
+                    case .createStory:
+                        storyViewModel.showStoryComposer = true
+                    case .editStory(let story):
+                        editingStorySessionFromProfile = StoryEditSession(
+                            story: story,
+                            composer: StoryComposerViewModel(editing: story))
+                    case .resumeDraft(let draftId):
+                        storyViewModel.openComposer(resumingDraftId: draftId)
+                    }
+                }
+            )
+            .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+                showMyStoriesFromProfile = true
+            }
             .onAppear {
                 router.onRouteRequested = { route in
                     if case .conversation(let conv) = route {

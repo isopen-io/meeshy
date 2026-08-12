@@ -355,10 +355,14 @@ export const CreateCommentSchema = z.object({
 
 export const UpdateCommentSchema = z.object({
   /// Nouveau contenu — mêmes bornes que la création. `undefined` = inchangé.
+  /// Un contenu blanc n'est accepté QUE pour un commentaire à média (retrait
+  /// de légende) — garde métier dans `PostCommentService.updateComment`.
   content: z.string().max(2000).optional(),
   /// Effets visuels (bitmask partagé avec les messages — GLOW/PULSE/…).
-  /// `0` retire tous les effets ; `undefined` = inchangé.
-  effectFlags: z.number().int().min(0).optional(),
+  /// `0` retire tous les effets ; `undefined` = inchangé. Borné à Int32 max :
+  /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
+  /// cette valeur — un flag hors borne casserait les deux côtés.
+  effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
 }).refine(
   (data) => data.content !== undefined || data.effectFlags !== undefined,
   { message: 'Nothing to update' },

@@ -145,13 +145,10 @@ struct StoryTrayView: View {
             }
         )
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
-        // Tuile « Stories » du bandeau de stats du profil : la feuille de
-        // profil se ferme puis poste cette notification — le tray (qui possède
-        // le StoryViewModel et le coordinator du viewer) présente la page des
-        // stories en cours et passées.
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
-            showMyStories = true
-        }
+        // NOTE : la tuile « Stories » du profil est désormais servie par le
+        // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
+        // un listener ici ne couvrait que les écrans où un tray est monté et
+        // aurait présenté en double depuis chaque instance.
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,

@@ -510,7 +510,7 @@ struct PostDetailView: View {
                     viewModel.clearReply()
                     viewModel.editingComment = target
                     composerText = target.content
-                    let flags = MessageEffectFlags(rawValue: UInt32(target.effectFlags))
+                    let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
                     commentBlurEnabled = flags.contains(.blurred)
                     commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
                     HapticFeedback.light()

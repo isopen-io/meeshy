@@ -371,28 +371,44 @@ struct CommentsSheetView: View {
         return localOnly + fetched
     }
 
+    /// Ne JAMAIS persister une ligne optimiste non confirmée (id `cmid_`/`tmp_`) :
+    /// une fois la ligne réconciliée en mémoire par l'écho socket, le fantôme
+    /// resterait en cache pour toujours — `mergeFetchedComments` le garde en
+    /// tête à chaque relecture puisque le serveur ne le renverra jamais.
+    static func persistableComments(_ comments: [FeedComment]) -> [FeedComment] {
+        comments.filter { !$0.id.hasPrefix("cmid_") && !$0.id.hasPrefix("tmp_") }
+    }
+
     /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
     /// pose `likes = count` (top-level ou réponse), purge le delta optimiste et
     /// dérive « mon cœur » de la liste des réacteurs. Miroir de
     /// `PostDetailViewModel.applyCommentReactionAggregate`.
-    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String]) {
+    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
+        var resolvedCount = count
         if let myId = AuthManager.shared.currentUser?.id {
             if reactorUserIds.contains(myId) {
                 likedIds.insert(commentId)
-            } else {
+            } else if actorUserId == myId {
+                // L'événement décrit MA propre action (cet appareil ou un
+                // autre) : l'agrégat est autoritatif pour mon cœur.
                 likedIds.remove(commentId)
+            } else if likedIds.contains(commentId) {
+                // Événement d'un TIERS pendant que MON like est encore en vol :
+                // son agrégat ne me connaît pas — préserver le cœur et compter
+                // le mien par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = count + 1
             }
         }
         likeDelta[commentId] = nil
         var current = liveComments ?? post.comments
         if let idx = current.firstIndex(where: { $0.id == commentId }) {
-            current[idx].likes = count
+            current[idx].likes = resolvedCount
             liveComments = current
             return
         }
         for (key, var replies) in repliesMap {
             if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx].likes = count
+                replies[idx].likes = resolvedCount
                 repliesMap[key] = replies
                 return
             }
@@ -434,7 +450,7 @@ struct CommentsSheetView: View {
         replyingTo = nil
         editingComment = target
         composerText = target.content
-        let flags = MessageEffectFlags(rawValue: UInt32(target.effectFlags))
+        let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
         commentBlurEnabled = flags.contains(.blurred)
         commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
         HapticFeedback.light()
@@ -477,10 +493,10 @@ struct CommentsSheetView: View {
                 // overlay story) la resservent depuis le cache sans refetch.
                 if let parentId = edited.parentId {
                     if let replies = repliesMap[parentId] {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
                     }
                 } else if let current = liveComments {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(current, for: "post-\(post.id)")
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
                 }
             } catch {
                 liveComments = snapshotComments
@@ -766,6 +782,13 @@ struct CommentsSheetView: View {
                         liveComments = current
                     }
                 }
+                // Réécriture du cache réponses avec la ligne RÉCONCILIÉE : sans
+                // elle, un cache persisté pendant que la ligne optimiste (cmid)
+                // était encore là garderait le fantôme pour toujours.
+                let replies = existing
+                Task {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
+                }
             } else {
                 var current = liveComments ?? post.comments
                 if let idx = current.firstIndex(where: isTwin) {
@@ -774,6 +797,12 @@ struct CommentsSheetView: View {
                     current.insert(feedComment, at: 0)
                 }
                 liveComments = current
+                // Même réécriture pour le fil top-level (clé partagée avec le
+                // détail de post et l'overlay story — local-first inter-vues).
+                let snapshot = current
+                Task {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(snapshot), for: "post-\(post.id)")
+                }
             }
             liveCommentCount = data.commentCount
         }
@@ -848,7 +877,8 @@ struct CommentsSheetView: View {
             applyCommentReactionAggregate(
                 commentId: event.commentId,
                 count: event.aggregation.count,
-                reactorUserIds: event.aggregation.userIds
+                reactorUserIds: event.aggregation.userIds,
+                actorUserId: event.userId
             )
         }
         .onReceive(
@@ -860,7 +890,8 @@ struct CommentsSheetView: View {
             applyCommentReactionAggregate(
                 commentId: event.commentId,
                 count: event.aggregation.count,
-                reactorUserIds: event.aggregation.userIds
+                reactorUserIds: event.aggregation.userIds,
+                actorUserId: event.userId
             )
         }
         // Pipeline audio d'un média de commentaire terminé (transcription / variantes
@@ -946,7 +977,12 @@ struct CommentsSheetView: View {
             seedLikedIds(from: full)
             // La pagination reste possible : cursor nil = page 1 de recovery
             // quand l'utilisateur atteint le bas (même contrat que le profil).
-            commentsHasMore = post.commentCount > (liveComments?.count ?? 0)
+            // `post.commentCount` compte TOUTES les lignes (réponses incluses)
+            // alors que `liveComments` n'a que le top-level : le total local
+            // comparable = top-level chargés + réponses qu'ils annoncent.
+            let loaded = liveComments ?? []
+            let knownTotal = loaded.count + loaded.reduce(0) { $0 + $1.replies }
+            commentsHasMore = post.commentCount > knownTotal
             return
         case .stale(let full, _):
             // Merge (not overwrite): the `await` above may have given an
@@ -2004,7 +2040,7 @@ struct CommentsSheetView: View {
             // ressuscitait le commentaire supprimé à la prochaine ouverture
             // (sheet, détail, overlay story lisent la même clé).
             if comment.parentId == nil, let current = liveComments {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(current, for: "post-\(post.id)")
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
             }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
         } catch {

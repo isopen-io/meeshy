@@ -479,6 +479,27 @@ describe('PATCH /posts/:postId/comments/:commentId — edit own comment', () => 
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 EMPTY_CONTENT when a text comment is edited to blank', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('EMPTY_CONTENT'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('EMPTY_CONTENT');
+  });
+
+  it('real UpdateCommentSchema borne effectFlags à Int32 (Prisma Int + iOS UInt32)', () => {
+    // Le schéma est mocké pour les tests de route — la borne se vérifie sur le vrai.
+    const { UpdateCommentSchema } = jest.requireActual('../../../routes/posts/types') as
+      typeof import('../../../routes/posts/types');
+    expect(UpdateCommentSchema.safeParse({ effectFlags: 0x80000000 }).success).toBe(false);
+    expect(UpdateCommentSchema.safeParse({ effectFlags: -1 }).success).toBe(false);
+    expect(UpdateCommentSchema.safeParse({ effectFlags: 0x7FFFFFFF }).success).toBe(true);
+    expect(UpdateCommentSchema.safeParse({}).success).toBe(false);
+  });
+
   it('returns 403 when the caller is not the author', async () => {
     mockUpdateComment.mockRejectedValueOnce(new Error('FORBIDDEN'));
     const res = await app.inject({
