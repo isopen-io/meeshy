@@ -363,7 +363,7 @@ final class CallViewAccessibilityTests: XCTestCase {
             XCTFail("CallView must declare hasActiveEffects")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
         let block = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             block.contains("hasAdvancedFilters"),

@@ -276,6 +276,54 @@ describe('PostFeedService.getFeed', () => {
     expect(p4.currentUserReactions).toEqual(['👍']);
     expect(p5.currentUserReactions).toEqual(['🔥', '❤️']);
   });
+
+  // Repost simple → racine (chantier reposts cohérents & watermark, tâche 9) :
+  // isLikedByMe/currentUserReactions d'un repost isQuote:false reflètent
+  // l'état du viewer sur l'ORIGINAL — deuxième chemin d'enrichissement
+  // (le premier est PostService.getPostById), même règle exacte.
+
+  it('redirects currentUserReactions to the ROOT for a simple repost', async () => {
+    const repost = makePost('repost-1', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(mockPostReactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', postId: { in: ['root-1'] } } })
+    );
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+
+  it('a QUOTE keeps its own currentUserReactions — no redirect', async () => {
+    const quote = makePost('quote-1', { isQuote: true, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([quote]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getFeed('user-1');
+
+    expect(mockPostReactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', postId: { in: ['quote-1'] } } })
+    );
+  });
+
+  it('two distinct reposts of the SAME original both surface the ONE reaction posed on the root (idempotence)', async () => {
+    const repostA = makePost('repost-a', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    const repostB = makePost('repost-b', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repostA, repostB]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    const a = result.items.find((i: any) => i.id === 'repost-a') as any;
+    const b = result.items.find((i: any) => i.id === 'repost-b') as any;
+    expect(a.currentUserReactions).toEqual(['❤️']);
+    expect(b.currentUserReactions).toEqual(['❤️']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -710,6 +758,17 @@ describe('PostFeedService.getUserPosts', () => {
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
   });
+
+  it('redirects currentUserReactions to the ROOT for a simple repost shown on a profile', async () => {
+    const repost = makePost('up-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -755,6 +814,17 @@ describe('PostFeedService.getCommunityFeed', () => {
     expect(cp3.currentUserReactions).toEqual(['❤️']);
     expect(cp4.currentUserReactions).toEqual([]);
   });
+
+  it('redirects currentUserReactions to the ROOT for a simple repost shown in a community', async () => {
+    const repost = makePost('cp-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '🔥')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -792,6 +862,17 @@ describe('PostFeedService.getBookmarks', () => {
     await service.getBookmarks('user-1');
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
+  });
+
+  it('redirects currentUserReactions to the ROOT for a bookmarked simple repost', async () => {
+    const repost = makePost('bp-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostBookmarkFindMany.mockResolvedValue([{ post: repost, createdAt: new Date(), id: 'bk-3' }]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 });
 
@@ -1007,6 +1088,17 @@ describe('PostFeedService.getReels', () => {
     const byId = Object.fromEntries(result.items.map((p: any) => [p.id, p.isBookmarkedByMe]));
     expect(byId['r-bm']).toBe(true);
     expect(byId['r-plain']).toBe(false);
+  });
+
+  it('redirects currentUserReactions to the ROOT for a simple repost in the reel viewer', async () => {
+    const repost = makePost('reel-repost', { type: 'REEL', isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {

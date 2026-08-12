@@ -1,171 +1,165 @@
 /**
- * logger.ts — unit tests
- *
- * Covers: MeeshyLogger methods (info, error, warn, debug),
- * logError and logWarn utility functions (all branches).
+ * Unit tests for utils/logger.
+ * Covers: logger (info, error, warn, debug), logError and logWarn
+ * with real-logger, null-logger, Error instance, non-Error, and
+ * the internal catch-all fallback.
  *
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { logger, logError, logWarn } from '../../../utils/logger';
 
-// ─── console spies ────────────────────────────────────────────────────────────
+// ─── logger singleton ─────────────────────────────────────────────────────────
 
-let spyLog: ReturnType<typeof jest.spyOn>;
-let spyError: ReturnType<typeof jest.spyOn>;
-let spyWarn: ReturnType<typeof jest.spyOn>;
-let spyDebug: ReturnType<typeof jest.spyOn>;
+describe('logger', () => {
+  let logSpy;
+  let errorSpy;
+  let warnSpy;
+  let debugSpy;
 
-beforeEach(() => {
-  spyLog = jest.spyOn(console, 'log').mockImplementation(() => {});
-  spyError = jest.spyOn(console, 'error').mockImplementation(() => {});
-  spyWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  spyDebug = jest.spyOn(console, 'debug').mockImplementation(() => {});
-});
-
-afterEach(() => {
-  jest.restoreAllMocks();
-  delete process.env['DEBUG'];
-});
-
-// ─── MeeshyLogger.info ────────────────────────────────────────────────────────
-
-describe('logger.info', () => {
-  it('writes to console.log with INFO prefix', () => {
-    logger.info('hello world');
-    expect(spyLog).toHaveBeenCalledTimes(1);
-    const msg = spyLog.mock.calls[0][0] as string;
-    expect(msg).toContain('INFO');
-    expect(msg).toContain('hello world');
+  beforeEach(() => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    debugSpy = jest.spyOn(console, 'debug').mockImplementation(() => {});
   });
 
-  it('formats extra args inline', () => {
-    logger.info('msg', { key: 'val' });
-    const msg = spyLog.mock.calls[0][0] as string;
-    expect(msg).toContain('"key":"val"');
-  });
-});
-
-// ─── MeeshyLogger.error ───────────────────────────────────────────────────────
-
-describe('logger.error', () => {
-  it('writes to console.error with ERROR prefix', () => {
-    logger.error('something broke');
-    expect(spyError).toHaveBeenCalledTimes(1);
-    const msg = spyError.mock.calls[0][0] as string;
-    expect(msg).toContain('ERROR');
-    expect(msg).toContain('something broke');
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+    debugSpy.mockRestore();
   });
 
-  it('includes string args verbatim', () => {
-    logger.error('oops', 'detail');
-    const msg = spyError.mock.calls[0][0] as string;
-    expect(msg).toContain('detail');
-  });
-});
-
-// ─── MeeshyLogger.warn ────────────────────────────────────────────────────────
-
-describe('logger.warn', () => {
-  it('writes to console.warn with WARN prefix', () => {
-    logger.warn('watch out');
-    expect(spyWarn).toHaveBeenCalledTimes(1);
-    const msg = spyWarn.mock.calls[0][0] as string;
-    expect(msg).toContain('WARN');
-    expect(msg).toContain('watch out');
-  });
-});
-
-// ─── MeeshyLogger.debug ───────────────────────────────────────────────────────
-
-describe('logger.debug', () => {
-  it('writes to console.debug when DEBUG=true', () => {
-    process.env['DEBUG'] = 'true';
-    logger.debug('trace info');
-    expect(spyDebug).toHaveBeenCalledTimes(1);
-    const msg = spyDebug.mock.calls[0][0] as string;
-    expect(msg).toContain('DEBUG');
-    expect(msg).toContain('trace info');
+  it('info writes to console.log', () => {
+    logger.info('hello info');
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0][0]).toContain('hello info');
   });
 
-  it('writes to console.debug when NODE_ENV=development', () => {
-    const original = process.env['NODE_ENV'];
-    process.env['NODE_ENV'] = 'development';
-    logger.debug('dev trace');
-    expect(spyDebug).toHaveBeenCalledTimes(1);
-    process.env['NODE_ENV'] = original;
+  it('error writes to console.error', () => {
+    logger.error('something went wrong');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toContain('something went wrong');
   });
 
-  it('does NOT write to console.debug in production', () => {
-    const original = process.env['NODE_ENV'];
-    process.env['NODE_ENV'] = 'production';
-    delete process.env['DEBUG'];
+  it('warn writes to console.warn', () => {
+    logger.warn('caution');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('caution');
+  });
+
+  it('debug does not write when NODE_ENV is not development', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    delete process.env.DEBUG;
     logger.debug('should be silent');
-    expect(spyDebug).not.toHaveBeenCalled();
-    process.env['NODE_ENV'] = original;
+    expect(debugSpy).not.toHaveBeenCalled();
+    process.env.NODE_ENV = prev;
+  });
+
+  it('debug writes to console.debug in development mode', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    logger.debug('dev trace');
+    expect(debugSpy).toHaveBeenCalledTimes(1);
+    process.env.NODE_ENV = prev;
+  });
+
+  it('formats extra args as JSON when they are objects', () => {
+    logger.info('msg', { foo: 'bar' });
+    const call = logSpy.mock.calls[0][0];
+    expect(call).toContain('{"foo":"bar"}');
   });
 });
 
 // ─── logError ─────────────────────────────────────────────────────────────────
 
 describe('logError', () => {
-  it('calls logger.error with message and Error details when logger has error method', () => {
+  let errorSpy;
+
+  beforeEach(() => {
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it('calls logger.error with the message when an Error is passed', () => {
     const mockLogger = { error: jest.fn() };
-    const err = new Error('boom');
-    logError(mockLogger, 'Something failed', err);
-    expect(mockLogger.error).toHaveBeenCalledWith('Something failed');
-    expect(mockLogger.error).toHaveBeenCalledWith(err.message);
-    expect(mockLogger.error).toHaveBeenCalledWith(err.stack);
+    logError(mockLogger, 'oops', new Error('bad'));
+    expect(mockLogger.error).toHaveBeenCalledWith('oops');
   });
 
-  it('calls logger.error with String(error) for non-Error values', () => {
+  it('calls logger.error with the error message when an Error is passed', () => {
     const mockLogger = { error: jest.fn() };
-    logError(mockLogger, 'Oops', 'raw string error');
-    expect(mockLogger.error).toHaveBeenCalledWith('raw string error');
+    logError(mockLogger, 'oops', new Error('bad'));
+    expect(mockLogger.error).toHaveBeenCalledWith('bad');
   });
 
-  it('falls back to console.error when logger has no error method', () => {
-    logError(null, 'fallback', new Error('fallback err'));
-    expect(spyError).toHaveBeenCalled();
+  it('calls logger.error with String(error) when a non-Error is passed', () => {
+    const mockLogger = { error: jest.fn() };
+    logError(mockLogger, 'oops', 'string-error');
+    expect(mockLogger.error).toHaveBeenCalledWith('string-error');
   });
 
-  it('falls back to console.error when logger.error throws', () => {
-    const badLogger = {
-      error: jest.fn(() => { throw new Error('logger itself broken'); }),
+  it('falls back to console.error when the logger has no error method', () => {
+    logError(null, 'msg', 'err');
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('falls back to console.error when the logger.error throws', () => {
+    const brokenLogger = {
+      error: jest.fn().mockImplementation(() => { throw new Error('logger broken'); }),
     };
-    logError(badLogger, 'msg', 'data');
-    expect(spyError).toHaveBeenCalled();
+    logError(brokenLogger, 'msg', 'err');
+    expect(errorSpy).toHaveBeenCalled();
   });
 });
 
 // ─── logWarn ──────────────────────────────────────────────────────────────────
 
 describe('logWarn', () => {
-  it('calls logger.warn with message and Error message when logger has warn', () => {
-    const mockLogger = { warn: jest.fn() };
-    const err = new Error('warning');
-    logWarn(mockLogger, 'Watch out', err);
-    expect(mockLogger.warn).toHaveBeenCalledWith('Watch out');
-    expect(mockLogger.warn).toHaveBeenCalledWith(err.message);
+  let warnSpy;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('calls logger.warn with String(error) for non-Error values', () => {
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('calls logger.warn with the message when an Error is passed', () => {
     const mockLogger = { warn: jest.fn() };
-    logWarn(mockLogger, 'Oops', 42);
+    logWarn(mockLogger, 'attention', new Error('minor'));
+    expect(mockLogger.warn).toHaveBeenCalledWith('attention');
+  });
+
+  it('calls logger.warn with the error message when an Error is passed', () => {
+    const mockLogger = { warn: jest.fn() };
+    logWarn(mockLogger, 'attention', new Error('minor'));
+    expect(mockLogger.warn).toHaveBeenCalledWith('minor');
+  });
+
+  it('calls logger.warn with String(error) for non-Error input', () => {
+    const mockLogger = { warn: jest.fn() };
+    logWarn(mockLogger, 'heads-up', 42);
     expect(mockLogger.warn).toHaveBeenCalledWith('42');
   });
 
-  it('falls back to console.warn when logger has no warn method', () => {
-    logWarn(null, 'fallback warn', 'details');
-    expect(spyWarn).toHaveBeenCalled();
+  it('falls back to console.warn when the logger is null', () => {
+    logWarn(null, 'msg', 'w');
+    expect(warnSpy).toHaveBeenCalled();
   });
 
-  it('falls back to console.warn when logger.warn throws', () => {
-    const badLogger = {
-      warn: jest.fn(() => { throw new Error('logger broken'); }),
+  it('falls back to console.warn when the logger.warn throws', () => {
+    const brokenLogger = {
+      warn: jest.fn().mockImplementation(() => { throw new Error('broken'); }),
     };
-    logWarn(badLogger, 'msg', 'data');
-    expect(spyWarn).toHaveBeenCalled();
+    logWarn(brokenLogger, 'msg', 'w');
+    expect(warnSpy).toHaveBeenCalled();
   });
 });

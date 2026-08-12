@@ -133,6 +133,16 @@ Translation cache MUST be a bounded LRU (max 500 entries), not an unbounded Map.
 Each feature MUST have its own ErrorBoundary.
 A crash in message list MUST NOT crash the conversation list.
 
+### Accusés de lecture — monotones par construction
+`readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
+et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST
+(`use-conversation-messages-rq.ts` → `getReadStatuses`), ce dernier étant un instantané appliqué au
+retour de requête. Toute écriture passe donc par `isStaleReceipt()` : un résumé dont `readCount` ou
+`deliveredCount` recule à `totalMembers` INCHANGÉ est rejeté **entier** (jamais un max par champ —
+`readCount >= totalMembers` pilote la branche « lu par tous » de `DeliveryIndicator`). Un
+`totalMembers` qui change signifie un effectif différent : l'instantané gagne. Ne jamais écrire dans
+ces deux maps sans passer par les actions du store.
+
 ### Dead Code
 `conversation-store.ts` has been removed. Use React Query hooks (`useConversationsPaginationRQ` pour la liste, `useConversationMessagesRQ` pour un fil) for all conversation data.
 

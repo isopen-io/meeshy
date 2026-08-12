@@ -124,6 +124,12 @@ export const queryKeys = {
     stories: () => [...queryKeys.posts.lists(), 'stories'] as const,
     statuses: () => [...queryKeys.posts.lists(), 'statuses'] as const,
   },
+
+  calls: {
+    all: ['calls'] as const,
+    active: (conversationId: string) =>
+      [...queryKeys.calls.all, 'active', conversationId] as const,
+  },
 } as const;
 
 export type QueryKeys = typeof queryKeys;

@@ -49,6 +49,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  // `resolveCallerParticipant` reste REEL : c'est sa regle de precedence
+  // (`participantId` avant `userId`) que les tests d'invite anonyme verifient.
+  // La stubber rendrait ces tests tautologiques.
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as object),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
@@ -1305,6 +1309,44 @@ describe('registerCoreRoutes', () => {
       const sent = mockSendSuccess.mock.calls[0][1];
       expect(sent.participants[0].isOnline).toBe(false);
       expect(sent.participants[0].lastActiveAt).toBeNull();
+    });
+
+    it('counts unread for a shared-link guest, whose userId carries a Participant id', async () => {
+      // La branche anonyme d'`UnifiedAuthService` pose `userId: participant.id`.
+      // Le `where: { conversationId, userId, isActive: true }` ecrit a la main
+      // comparait donc un id de participant a la colonne `userId` : aucun match,
+      // `unreadCount` retombait a 0, et ce 0 ecrasait le badge que le socket
+      // venait de pousser juste. `resolveCallerParticipant` resout par
+      // `participantId` d'abord — c'est exactement le site pour lequel il existe.
+      const readStatusService = {
+        getUnreadCount: jest.fn<any>().mockResolvedValue(4),
+        getUnreadCountsForUser: jest.fn<any>().mockResolvedValue(new Map()),
+      };
+      const { MessageReadStatusService } = jest.requireMock('../../../services/MessageReadStatusService') as any;
+      MessageReadStatusService.mockImplementationOnce(() => readStatusService);
+      prisma.conversation.findFirst.mockResolvedValue(makeFullConversation());
+      // Le double de base de donnees ne repond QUE sur la colonne interrogee :
+      // une clause `{ userId: <participant id> }` ne matche rien, comme en base.
+      prisma.participant.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.id === PARTICIPANT_ID ? { id: PARTICIPANT_ID } : null)
+      );
+
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        authContext: {
+          isAuthenticated: true,
+          type: 'anonymous',
+          isAnonymous: true,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
+        },
+      });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(PARTICIPANT_ID, CONV_ID);
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ unreadCount: 4 }));
     });
 
     it('unreadCount silently fails when participant not found', async () => {
