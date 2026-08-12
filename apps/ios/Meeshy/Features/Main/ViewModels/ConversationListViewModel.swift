@@ -234,7 +234,7 @@ class ConversationListViewModel: ObservableObject {
         let cursor = nextCursor
         let more = hasMore
         persistTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(debounce))
             guard !Task.isCancelled else { return }
             // Cache .save() est devenu throwing (Wave 1 Local-First) :
             // utilise try? pour preserver le comportement historique
