@@ -49,6 +49,27 @@ La règle est écrite dans `src/socketio/README.md` § « La pastille de non-lus
 existe et est partagée : `emitUnreadCountsToRecipients`, en excluant l'AUTEUR (`message.senderId`),
 jamais l'acteur.
 
+## Dette d'intégration relevée au cycle 89 — huit suites gateway sont rouges SUR `main`
+
+Mesuré au cycle 89, `origin/main` à `f96478ff` : **8 suites, 35 tests en échec**, identiques à
+l'octet près sur `main` et sur la branche du cycle (vérifié en checkout détaché, même
+`node_modules`). Elles proviennent du lot `b7fc5dcf` (« integrate 48 net-new unit test files onto
+updated main ») : des tests qui appellent des méthodes que la production ne porte pas — p. ex.
+`handler.sendNotificationToUser is not a function`.
+
+```
+unit/socketio/MeeshySocketIOHandler.methods    unit/services/PostService
+unit/services/PhonePasswordResetService        unit/handlers/AuthHandler
+unit/services/AffiliateTrackingService         unit/socketio/participant-resolver
+unit/services/ExpiredStoriesCleanupService     unit/socketio/AgentAdminRelay
+```
+
+**Conséquence pour la routine** : « suite gateway verte » n'est plus un critère utilisable tel quel.
+Tant que cette dette vit, la seule mesure honnête est le DELTA branche↔`main` sur la même liste de
+suites. Le passage qui la solde doit trancher, test par test, entre « le test décrit une méthode
+qui aurait dû exister » (écrire la production) et « le test décrit une API qui n'a jamais existé »
+(supprimer le test) — c'est exactement l'arbitrage de la leçon 139 appliqué à 35 cas.
+
 ## Ce qui reste ouvert des cycles précédents
 
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
