@@ -63,6 +63,14 @@ COPY packages/shared/ ./packages/shared/
 # === SETUP WORKSPACE CONFIG ===
 # For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
 # For pnpm: create pnpm-workspace.yaml
+# Le binaire bun vient de GitHub Releases : son téléchargement meurt par
+# intermittence en transport — « curl: (56) Connection died, tried 5 times »
+# sur l'étage arm64, qui a fait échouer les images de la release v1.25.9 le
+# 2026-08-12 alors que le tag et les versions étaient déjà publiés.
+# L'installateur a déjà épuisé ses propres essais curl quand il rend la main,
+# d'où une boucle par-dessus. Sous-shell : `exit` n'en sort que la boucle, la
+# chaîne `&&` du RUN reste intacte, et l'échec des trois tentatives fait bien
+# tomber le build au lieu de le laisser continuer sans bun.
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Configuring bun workspace ===" && \
       node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
@@ -75,7 +83,11 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
 # === INSTALL DEPENDENCIES ===
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing with bun ===" && \
-      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
+      ( for i in 1 2 3; do \
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && exit 0; \
+          echo "bun: tentative $i échouée, nouvelle tentative dans 5 s..."; \
+          sleep 5; \
+        done; exit 1 ) && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
       bun install --no-save; \
     else \
@@ -112,7 +124,11 @@ COPY --from=deps /app/packages ./packages
 
 # Install package manager binary if using bun
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
+      ( for i in 1 2 3; do \
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && exit 0; \
+          echo "bun: tentative $i échouée, nouvelle tentative dans 5 s..."; \
+          sleep 5; \
+        done; exit 1 ) && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun; \
     fi
 
