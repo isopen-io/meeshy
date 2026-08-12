@@ -1,52 +1,87 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useCallStore } from '@/stores/call-store';
+import { callsService } from '@/services/calls.service';
+import { queryKeys } from '@/lib/react-query/query-keys';
+import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 
-export function useCallBanner(conversationId: string, onStartCall?: (type?: 'audio' | 'video') => void) {
-  const { currentCall, isInCall } = useCallStore();
+/**
+ * `currentCall`/`isInCall` (`useCallStore`) only ever describe a call THIS
+ * client is already part of — every write site (`CallManager.handleIncomingCall`,
+ * `acceptOrJoinCall`, `use-video-call.ts`'s `startCall`) sets both together, so
+ * `currentCall && !isInCall` is unreachable by construction. A conversation
+ * member who is not yet in the call — the only person this banner exists to
+ * help — never gets a `currentCall` at all (they never received, or already
+ * dismissed, the `call:initiated` ring). The one data source that actually
+ * answers "is a call live in this conversation" independently of whether the
+ * viewer joined it is the same REST endpoint the live-bubble join path
+ * (`CallSystemMessage` → `requestJoin`) already revalidates against.
+ */
+const ACTIVE_CALL_POLL_MS = 15_000;
+
+export function useCallBanner(conversationId: string) {
+  const isInCall = useCallStore((s) => s.isInCall);
+  const requestJoin = useCallStore((s) => s.requestJoin);
   const [callDuration, setCallDuration] = useState(0);
-  const [showCallBanner, setShowCallBanner] = useState(false);
+  const [dismissedCallId, setDismissedCallId] = useState<string | null>(null);
+
+  const { data: activeCall } = useQuery({
+    queryKey: queryKeys.calls.active(conversationId),
+    queryFn: async () => {
+      const response = await callsService.getActiveCall(conversationId);
+      return response.success ? (response.data ?? null) : null;
+    },
+    enabled: !!conversationId,
+    refetchInterval: ACTIVE_CALL_POLL_MS,
+  });
+
+  // Only ever true for a call the viewer has NOT joined — once they join,
+  // `isInCall` flips and the full-screen VideoCallInterface takes over; the
+  // banner has nothing left to offer and must not compete with it.
+  const hasActiveCall =
+    !!activeCall &&
+    activeCall.conversationId === conversationId &&
+    !CALL_TERMINAL_STATUSES.includes(activeCall.status) &&
+    !isInCall;
+  const showCallBanner = hasActiveCall && activeCall.id !== dismissedCallId;
 
   useEffect(() => {
-    const hasActiveCall =
-      currentCall &&
-      isInCall &&
-      currentCall.conversationId === conversationId &&
-      currentCall.status !== 'ended';
-
-    if (hasActiveCall) {
-      setShowCallBanner(true);
-
-      const updateDuration = () => {
-        if (currentCall.startedAt) {
-          const now = new Date();
-          const start = new Date(currentCall.startedAt);
-          const durationInSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
-          setCallDuration(durationInSeconds);
-        }
-      };
-
-      updateDuration();
-      const interval = setInterval(updateDuration, 1000);
-
-      return () => clearInterval(interval);
-    } else {
-      setShowCallBanner(false);
+    if (!showCallBanner) {
       setCallDuration(0);
+      return;
     }
-  }, [currentCall, isInCall, conversationId]);
+
+    // Vague 110 anchored the visible call clock on `answeredAt` (falls back
+    // to `startedAt` pre-answer) — same reasoning applies here: a call still
+    // ringing hasn't been "in progress" for the time since it was dialed.
+    const anchor = activeCall.answeredAt ?? activeCall.startedAt;
+    if (!anchor) {
+      setCallDuration(0);
+      return;
+    }
+
+    const updateDuration = () => {
+      const start = new Date(anchor);
+      setCallDuration(Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000)));
+    };
+
+    updateDuration();
+    const interval = setInterval(updateDuration, 1000);
+    return () => clearInterval(interval);
+  }, [showCallBanner, activeCall?.answeredAt, activeCall?.startedAt]);
 
   const handleJoinCall = useCallback(() => {
-    if (currentCall && onStartCall) {
-      onStartCall();
-    }
-  }, [currentCall, onStartCall]);
+    if (!activeCall) return;
+    const callType = activeCall.participants.some((p) => p.isVideoEnabled) ? 'video' : 'audio';
+    requestJoin({ callId: activeCall.id, conversationId, callType });
+  }, [activeCall, conversationId, requestJoin]);
 
   const handleDismissCallBanner = useCallback(() => {
-    setShowCallBanner(false);
-  }, []);
+    if (activeCall) setDismissedCallId(activeCall.id);
+  }, [activeCall]);
 
   return {
-    currentCall,
+    currentCall: activeCall ?? null,
     callDuration,
     showCallBanner,
     handleJoinCall,
