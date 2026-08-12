@@ -149,7 +149,7 @@ struct LoginView: View {
                 }
 
                 // Signature de marque partagée avec le splash (BrandSignature) :
-                // version + « Fait avec ❤️ par Services CEO » + logo.
+                // « Meeshy <version> · <build> » + « Par Services CEO » + logo.
                 BrandSignature()
                     .padding(.top, MeeshySpacing.md)
                     .opacity(showFields ? 1 : 0)
@@ -267,7 +267,7 @@ struct LoginView: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
@@ -299,7 +299,7 @@ struct LoginView: View {
                 } label: {
                     // Chrome de retour : glyphe centré dans un cadre de tap fixe 36×36
                     // (doctrine 82i) — gardé figé pour ne pas déborder le cercle.
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize - 1, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .meeshyTapTarget() // HIG minimum 44pt
@@ -376,7 +376,7 @@ struct LoginView: View {
                         }
                     } label: {
                         HStack(spacing: MeeshySpacing.sm - 2) {
-                            Image(systemName: "chevron.left")
+                            Image(systemName: "chevron.backward")
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             Text(String(localized: "auth.login.saved_accounts", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))

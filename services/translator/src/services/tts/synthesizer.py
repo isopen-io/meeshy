@@ -356,6 +356,12 @@ class Synthesizer:
         output_filename = f"{file_id}_{target_language}.{output_format}"
         output_path = str(self.output_dir / "translated" / output_filename)
 
+        # Les backends écrivent via `torchaudio.save()`, qui ne sait pas encoder
+        # tous les conteneurs de livraison (opus en particulier, cf. D1). La
+        # synthèse se fait donc toujours en WAV ; `_convert_format()` produit
+        # ensuite le format demandé via ffmpeg/libopus.
+        synth_path = output_path if output_format == "wav" else output_path.rsplit(".", 1)[0] + ".wav"
+
         # Convertir text en string si nécessaire
         text_str = str(text) if not isinstance(text, str) else text
         text_str = text_str.strip()
@@ -450,9 +456,8 @@ class Synthesizer:
                     temp_concat_path = str(self.output_dir / "segments" / f"{file_id}_{target_language}_full.wav")
                     await self._concatenate_audios(segment_paths, temp_concat_path)
                     # Déplacer vers la destination finale
-                    output_path_wav = output_path.rsplit(".", 1)[0] + ".wav"
-                    shutil.move(temp_concat_path, output_path_wav)
-                    output_path = output_path_wav
+                    shutil.move(temp_concat_path, synth_path)
+                    output_path = synth_path
                 else:
                     raise RuntimeError("Aucun segment audio généré")
             else:
@@ -461,10 +466,11 @@ class Synthesizer:
                     text=text,
                     language=target_language,
                     speaker_audio_path=speaker_audio_path,
-                    output_path=output_path,
+                    output_path=synth_path,
                     conditionals=conditionals,
                     **kwargs
                 )
+                output_path = synth_path
 
             # Ajuster la vitesse de l'audio (ralentir de 10% par défaut)
             if AUDIO_SPEED_FACTOR != 1.0:

@@ -106,6 +106,7 @@ struct LinksHubView: View {
                         .stroke(theme.border(tint: MeeshyColors.communityAccentHex), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Category Cards
@@ -179,6 +180,7 @@ struct LinksHubView: View {
                     Image(systemName: icon)
                         .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
+                        .accessibilityHidden(true)
                 }
                 .accessibilityHidden(true)
 
@@ -207,10 +209,13 @@ struct LinksHubView: View {
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(createLabel ?? title)
+                        // Re-exposé via l'action rotor « Créer… » de la carte (idiome 183i) :
+                        // ce Button secondaire imbriqué dans le Button de navigation est
+                        // masqué à VoiceOver pour éviter un élément interactif ambigu.
+                        .accessibilityHidden(true)
                     }
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
@@ -227,5 +232,25 @@ struct LinksHubView: View {
             )
         }
         .buttonStyle(.plain)
+        .modifier(LinkCardCreateAction(label: createLabel, onCreate: onCreate))
+    }
+}
+
+// MARK: - Accessibility helpers
+
+/// Ré-expose l'action « Créer… » d'une carte de liens comme action VoiceOver
+/// nommée (rotor Actions), le `Button` secondaire visible étant masqué à
+/// VoiceOver pour éviter un élément interactif imbriqué ambigu (idiome 183i).
+/// Aucune action ajoutée pour les cartes sans création (ex. communauté).
+private struct LinkCardCreateAction: ViewModifier {
+    let label: String?
+    let onCreate: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let label, let onCreate {
+            content.accessibilityAction(named: Text(verbatim: label)) { onCreate() }
+        } else {
+            content
+        }
     }
 }

@@ -30,10 +30,13 @@ export interface ImpressionTracker {
 
 /**
  * Batches post impressions and reports them to the gateway, mirroring the iOS
- * clients (`ReelsViewModel` / `ProfileUserPostsList`): each post is recorded at
- * most once per session, and visible ids are coalesced into a single
- * `/posts/impressions/batch` call after a short debounce (plus an immediate
- * flush on unmount or when the tab is hidden, so nothing is lost on navigation).
+ * clients (`ReelsViewModel` / `ProfileUserPostsList`): one impression per
+ * APPEARANCE on screen — a card scrolled away and back counts again — coalesced
+ * into a single `/posts/impressions/batch` call after a short debounce (plus an
+ * immediate flush on unmount or when the tab is hidden, so nothing is lost on
+ * navigation). Elements stay observed after their first intersection, so the
+ * observer re-fires on every re-entry; the gateway groups repeated ids and
+ * increments `impressionCount` by the number of occurrences.
  *
  * Reporting is fire-and-forget — a failed impression must never surface to the
  * user or block rendering.
@@ -41,8 +44,7 @@ export interface ImpressionTracker {
 export function useImpressionTracking(options: UseImpressionTrackingOptions): ImpressionTracker {
   const { source, enabled = true, threshold = 0.5, flushDelayMs = 1500 } = options;
 
-  const recordedRef = useRef<Set<string>>(new Set());
-  const pendingRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const idByElement = useRef<WeakMap<Element, string>>(new WeakMap());
@@ -53,10 +55,9 @@ export function useImpressionTracking(options: UseImpressionTrackingOptions): Im
       clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
-    if (pendingRef.current.size === 0) return;
-    const ids = Array.from(pendingRef.current);
-    pendingRef.current.clear();
-    ids.forEach((id) => recordedRef.current.add(id));
+    if (pendingRef.current.length === 0) return;
+    const ids = pendingRef.current;
+    pendingRef.current = [];
     void postsService.recordImpressions(ids, source).catch(() => {});
   }, [source]);
 
@@ -68,8 +69,7 @@ export function useImpressionTracking(options: UseImpressionTrackingOptions): Im
   const enqueue = useCallback(
     (postId: string) => {
       if (!enabled || !postId) return;
-      if (recordedRef.current.has(postId) || pendingRef.current.has(postId)) return;
-      pendingRef.current.add(postId);
+      pendingRef.current.push(postId);
       scheduleFlush();
     },
     [enabled, scheduleFlush],
@@ -84,9 +84,9 @@ export function useImpressionTracking(options: UseImpressionTrackingOptions): Im
           if (!entry.isIntersecting) continue;
           const id = idByElement.current.get(entry.target);
           if (!id) continue;
-          observerRef.current?.unobserve(entry.target);
-          idByElement.current.delete(entry.target);
-          elementById.current.delete(id);
+          // L'élément reste observé : une sortie puis un retour à l'écran est
+          // une NOUVELLE impression. `unobserve` ici plafonnait le compteur à
+          // une impression par carte et par montage de la liste.
           enqueue(id);
         }
       },
@@ -107,7 +107,7 @@ export function useImpressionTracking(options: UseImpressionTrackingOptions): Im
         }
         return;
       }
-      if (recordedRef.current.has(postId) || elementById.current.has(postId)) return;
+      if (elementById.current.has(postId)) return;
       const observer = ensureObserver();
       if (!observer) return;
       idByElement.current.set(element, postId);

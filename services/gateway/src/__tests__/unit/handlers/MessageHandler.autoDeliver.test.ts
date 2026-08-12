@@ -50,18 +50,24 @@ const offlineUserId = 'u_offline';
 const conversationId = 'c_test';
 const messageId = 'm_test';
 
-function makeHandler(overrides: { onlineUsers: string[]; showReadReceipts?: boolean }) {
+function makeHandler(overrides: {
+  onlineUsers: string[];
+  showReadReceipts?: boolean;
+  participants?: Array<{ id: string; userId: string | null }>;
+}) {
   const emit = jest.fn();
   const to = jest.fn(() => ({ to, emit }));
   const io: any = { to };
 
   const prisma: any = {
     participant: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: senderParticipantId, userId: senderUserId },
-        { id: onlineParticipantId, userId: onlineUserId },
-        { id: offlineParticipantId, userId: offlineUserId }
-      ])
+      findMany: jest.fn().mockResolvedValue(
+        overrides.participants ?? [
+          { id: senderParticipantId, userId: senderUserId },
+          { id: onlineParticipantId, userId: onlineUserId },
+          { id: offlineParticipantId, userId: offlineUserId }
+        ]
+      )
     }
   };
 
@@ -312,5 +318,138 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
 
     expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Anonymous recipients.
+ *
+ * An anonymous participant has NO `User` row: `Participant.userId` is null and
+ * `AuthHandler._registerUser` keys them in `connectedUsers` by their
+ * `Participant.id` (registered users are keyed by `User.id`). A liveness test
+ * written as `!!p.userId && connectedUsers.has(p.userId)` therefore cannot ever
+ * be true for them — they are excluded by CONSTRUCTION, not by circumstance.
+ *
+ * That exclusion is not cosmetic: `getLatestMessageSummary` counts every active
+ * participant by `Participant.id` in `totalMembers`, anonymous included. An
+ * anonymous participant that can never enter `deliveredCount` while sitting in
+ * the denominator makes "delivered by all" unreachable for the whole
+ * conversation — which is precisely the shape of every share-link conversation.
+ */
+const anonParticipantId = 'p_anon';
+
+describe('MessageHandler — auto-deliver reaches anonymous recipients', () => {
+  const participantsWithAnon = [
+    { id: senderParticipantId, userId: senderUserId },
+    { id: anonParticipantId, userId: null },
+    { id: offlineParticipantId, userId: offlineUserId }
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('marks a connected anonymous participant as received', async () => {
+    const { handler, readStatusService } = makeHandler({
+      onlineUsers: [anonParticipantId],
+      participants: participantsWithAnon
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      anonParticipantId,
+      conversationId,
+      messageId
+    );
+  });
+
+  it('resolves the anonymous recipient privacy preferences as anonymous', async () => {
+    // Anonymous ids are Participant ids: a lookup declaring `isAnonymous: false`
+    // sends them to `fetchManyFromDatabase` as if they were `User` ids, which
+    // both costs a query and caches a default under an id that is not a user.
+    const { handler, privacyPreferencesService } = makeHandler({
+      onlineUsers: [anonParticipantId],
+      participants: participantsWithAnon
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(privacyPreferencesService.getPreferencesForUsers).toHaveBeenCalledWith([
+      { id: anonParticipantId, isAnonymous: true }
+    ]);
+  });
+
+  it('broadcasts the receipt with a null userId for an anonymous acker', async () => {
+    const { handler, emit, to } = makeHandler({
+      onlineUsers: [anonParticipantId],
+      participants: participantsWithAnon
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit.mock.calls[0][1]).toMatchObject({
+      conversationId,
+      type: 'received',
+      participantId: anonParticipantId,
+      userId: null
+    });
+
+    // The anonymous acker DOES have a personal room: `AuthHandler` joins
+    // `ROOMS.user(participant.id)` for an anonymous socket, and says in the
+    // comment that put it there that this is the only room personal-event
+    // emitters address. The conversation room is not a substitute — a client
+    // sitting on the conversation list has left `conversation:<id>` and is
+    // reachable through its personal room alone.
+    const roomTargets = to.mock.calls.map((c) => c[0]);
+    expect(roomTargets).toContain(`conversation:${conversationId}`);
+    expect(roomTargets).toContain(`user:${anonParticipantId}`);
+  });
+
+  it('leaves a disconnected anonymous participant out', async () => {
+    const { handler, readStatusService, emit } = makeHandler({
+      onlineUsers: [],
+      participants: participantsWithAnon
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('excludes an anonymous SENDER from their own delivery receipt', async () => {
+    // The share-link routes pass the anonymous author's `Participant.id` as
+    // senderId, and that author is online by definition — they just sent.
+    const { handler, readStatusService } = makeHandler({
+      onlineUsers: [anonParticipantId, offlineUserId],
+      participants: participantsWithAnon
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: anonParticipantId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      offlineParticipantId,
+      conversationId,
+      messageId
+    );
   });
 });

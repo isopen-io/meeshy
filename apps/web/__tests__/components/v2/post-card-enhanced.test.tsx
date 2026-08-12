@@ -21,9 +21,10 @@ const COMPONENTS_EN: Record<string, string> = {
 
 jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, string>) => {
+    t: (key: string, paramsOrFallback?: Record<string, string> | string) => {
+      if (typeof paramsOrFallback === 'string') return COMPONENTS_EN[key] ?? paramsOrFallback;
       const val = COMPONENTS_EN[key] ?? key;
-      if (params) return val.replace(/\{(\w+)\}/g, (_: string, k: string) => params[k] ?? `{${k}}`);
+      if (paramsOrFallback) return val.replace(/\{(\w+)\}/g, (_: string, k: string) => paramsOrFallback[k] ?? `{${k}}`);
       return val;
     },
     tArray: () => [],
@@ -116,6 +117,43 @@ describe('PostCard enhanced features', () => {
     expect(screen.getByAltText('A photo')).toBeInTheDocument();
   });
 
+  describe('media download (Task 4, point 3)', () => {
+    it('triggers a download and calls onDownloadMedia with the media id', () => {
+      const media = [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://example.com/img.jpg', alt: 'A photo' }];
+      const onDownloadMedia = jest.fn();
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      render(<PostCard {...baseProps} media={media} onDownloadMedia={onDownloadMedia} />);
+
+      fireEvent.click(screen.getByLabelText('Download'));
+
+      expect(clickSpy).toHaveBeenCalled();
+      expect(onDownloadMedia).toHaveBeenCalledWith('m-1');
+      clickSpy.mockRestore();
+    });
+
+    it('does not render a download button without onDownloadMedia', () => {
+      const media = [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://example.com/img.jpg', alt: 'A photo' }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.queryByLabelText('Download')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('audio media tile (Task 4, point 0bis)', () => {
+    it('renders an identifiable audio tile with duration instead of an empty grey square', () => {
+      const media = [{ id: 'm-1', mimeType: 'audio/webm', fileUrl: 'https://example.com/clip.webm', duration: 75000 }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.getByTestId('post-card-audio-tile')).toBeInTheDocument();
+      expect(screen.getByText('1:15')).toBeInTheDocument();
+    });
+
+    it('renders the audio tile without a duration label when duration is unavailable', () => {
+      const media = [{ id: 'm-1', mimeType: 'audio/mpeg', fileUrl: 'https://example.com/clip.mp3' }];
+      render(<PostCard {...baseProps} media={media} />);
+      expect(screen.getByTestId('post-card-audio-tile')).toBeInTheDocument();
+      expect(screen.queryByText(/^\d+:\d{2}$/)).not.toBeInTheDocument();
+    });
+  });
+
   it('renders pinned badge', () => {
     render(<PostCard {...baseProps} isPinned />);
     expect(screen.getByText('Pinned')).toBeInTheDocument();
@@ -139,5 +177,32 @@ describe('PostCard enhanced features', () => {
     render(<PostCard {...baseProps} onClick={onClick} />);
     fireEvent.click(screen.getByText('Hello world'));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  describe('report menu item (non-author)', () => {
+    it('shows a menu with a Report entry for a non-author post', () => {
+      render(<PostCard {...baseProps} isAuthor={false} onReport={jest.fn()} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      expect(screen.getByText('Report')).toBeInTheDocument();
+    });
+
+    it('calls onReport from the menu', () => {
+      const onReport = jest.fn();
+      render(<PostCard {...baseProps} isAuthor={false} onReport={onReport} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      fireEvent.click(screen.getByText('Report'));
+      expect(onReport).toHaveBeenCalled();
+    });
+
+    it('does not offer Report on the author own post', () => {
+      render(<PostCard {...baseProps} isAuthor onEdit={jest.fn()} onReport={jest.fn()} />);
+      fireEvent.click(screen.getByLabelText('Post menu'));
+      expect(screen.queryByText('Report')).not.toBeInTheDocument();
+    });
+
+    it('still hides the menu entirely for a non-author without onReport', () => {
+      render(<PostCard {...baseProps} isAuthor={false} />);
+      expect(screen.queryByLabelText('Post menu')).not.toBeInTheDocument();
+    });
   });
 });

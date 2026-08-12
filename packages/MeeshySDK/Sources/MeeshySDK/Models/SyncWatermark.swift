@@ -28,6 +28,14 @@ public enum SyncWatermark {
     }
 
     // MARK: - Conversation-list delta watermark (`updatedSince`)
+    //
+    // JUMEAU WEB — `conversationDeltaWatermark`
+    // (`apps/web/lib/conversations/delta-merge.ts`). Même règle « le curseur
+    // vit en temps SERVEUR », exprimée sur la source que chaque plateforme
+    // détient : iOS fait avancer une valeur persistée, le web recalcule le plus
+    // récent `updatedAt` de son cache et le borne par `now`. Les deux
+    // garantissent la même chose — la fenêtre ne saute jamais une mise à jour
+    // réelle, au pire elle en relit.
 
     /// Next INCREMENTAL delta watermark. The `/conversations?updatedSince=`
     /// query is compared SERVER-side against server `updatedAt`, so the cursor
@@ -38,6 +46,28 @@ public enum SyncWatermark {
     /// row can't pull the cursor back); an empty delta keeps `previous`.
     static func advanced(previous: Date, receivedUpdatedAt: [Date]) -> Date {
         Swift.max(previous, receivedUpdatedAt.max() ?? previous)
+    }
+
+    /// Curseur à persister après UNE page delta, `pageMayHaveMore` disant si la
+    /// fenêtre `updatedSince` contenait plus de lignes que la page n'en a rendues.
+    ///
+    /// Une page qui laisse du reste n'a pas rendu toute la fenêtre. Avancer le
+    /// curseur au max des `updatedAt` REÇUS reviendrait à affirmer une couverture
+    /// qu'elle ne démontre pas — et comme la borne serveur est STRICTE (`gt`),
+    /// les lignes partageant la milliseconde de coupure ne reviendraient plus
+    /// jamais.
+    ///
+    /// Le curseur reste donc où il est, et l'appelant escalade vers la vérité
+    /// serveur complète. L'ORDRE compte : c'est parce que le curseur n'a pas
+    /// bougé qu'une escalade ÉCHOUÉE (offline, panne) laisse la fenêtre entière
+    /// rejouable au prochain delta au lieu d'un trou définitif.
+    static func advancedAfterDeltaPage(
+        previous: Date,
+        receivedUpdatedAt: [Date],
+        pageMayHaveMore: Bool
+    ) -> Date {
+        guard !pageMayHaveMore else { return previous }
+        return advanced(previous: previous, receivedUpdatedAt: receivedUpdatedAt)
     }
 
     /// AUTHORITATIVE watermark after a full sync. A full fetch is the ground

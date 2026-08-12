@@ -15,7 +15,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
-  'friend.story', 'friend.post', 'friend.mood', 'friend.subtitleNew',
+  'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
   'repost',
@@ -23,6 +23,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'group.added', 'group.newContact',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'login.newDevice.title',
+  'push.private',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -65,6 +66,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'vous a mentionné',
     'friend.story': 'a publié une nouvelle story',
     'friend.post': 'a publié un nouveau post',
+    'friend.reel': 'a publié un nouveau réel',
     'friend.mood': 'a publié une nouvelle humeur',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Appel {callLabel} manqué',
@@ -83,6 +85,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Document',
     'attachment.files': '📎 {count} fichiers',
     'login.newDevice.title': 'Nouvelle connexion détectée',
+    'push.private': 'Nouvelle notification',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -102,6 +105,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'mentioned you',
     'friend.story': 'shared a new story',
     'friend.post': 'shared a new post',
+    'friend.reel': 'shared a new reel',
     'friend.mood': 'shared a new mood',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Missed {callLabel} call',
@@ -120,6 +124,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Document',
     'attachment.files': '📎 {count} files',
     'login.newDevice.title': 'New login detected',
+    'push.private': 'New notification',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -139,6 +144,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'te mencionó',
     'friend.story': 'publicó una nueva historia',
     'friend.post': 'publicó una nueva publicación',
+    'friend.reel': 'publicó un nuevo reel',
     'friend.mood': 'publicó un nuevo estado de ánimo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Llamada {callLabel} perdida',
@@ -157,6 +163,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} archivos',
     'login.newDevice.title': 'Nuevo inicio de sesión detectado',
+    'push.private': 'Nueva notificación',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -176,6 +183,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'mencionou você',
     'friend.story': 'publicou uma nova story',
     'friend.post': 'publicou uma nova publicação',
+    'friend.reel': 'publicou um novo reel',
     'friend.mood': 'publicou um novo humor',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chamada {callLabel} perdida',
@@ -194,6 +202,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} arquivos',
     'login.newDevice.title': 'Novo login detectado',
+    'push.private': 'Nova notificação',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -213,6 +222,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'hat dich erwähnt',
     'friend.story': 'hat eine neue Story geteilt',
     'friend.post': 'hat einen neuen Beitrag geteilt',
+    'friend.reel': 'hat einen neuen Reel geteilt',
     'friend.mood': 'hat eine neue Stimmung geteilt',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Verpasster {callLabel}',
@@ -231,6 +241,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Dokument',
     'attachment.files': '📎 {count} Dateien',
     'login.newDevice.title': 'Neue Anmeldung erkannt',
+    'push.private': 'Neue Benachrichtigung',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -250,6 +261,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'ti ha menzionato',
     'friend.story': 'ha pubblicato una nuova storia',
     'friend.post': 'ha pubblicato un nuovo post',
+    'friend.reel': 'ha pubblicato un nuovo reel',
     'friend.mood': 'ha pubblicato un nuovo stato d’animo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chiamata {callLabel} persa',
@@ -268,6 +280,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} file',
     'login.newDevice.title': 'Nuovo accesso rilevato',
+    'push.private': 'Nuova notifica',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -287,6 +300,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'أشار إليك',
     'friend.story': 'نشر قصة جديدة',
     'friend.post': 'نشر منشورًا جديدًا',
+    'friend.reel': 'نشر ريلًا جديدًا',
     'friend.mood': 'شارك مزاجًا جديدًا',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
@@ -305,6 +319,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 مستند',
     'attachment.files': '📎 {count} ملفات',
     'login.newDevice.title': 'تم رصد تسجيل دخول جديد',
+    'push.private': 'إشعار جديد',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -324,6 +339,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': '提到了你',
     'friend.story': '发布了新快拍',
     'friend.post': '发布了新帖子',
+    'friend.reel': '发布了新短视频',
     'friend.mood': '分享了新心情',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} 未接{callLabel}',
@@ -342,6 +358,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 文档',
     'attachment.files': '📎 {count} 个文件',
     'login.newDevice.title': '检测到新登录',
+    'push.private': '新通知',
   },
 };
 
@@ -476,6 +493,37 @@ export function normalizeNotificationLanguage(code?: string | null): Notificatio
   if (lc.startsWith('zh')) return 'zh-Hans';
   const base = lc.split(/[-_]/)[0] ?? '';
   return SUPPORTED.has(base) ? (base as NotificationLanguage) : 'fr';
+}
+
+type ByteUnits = { readonly b: string; readonly kb: string; readonly mb: string };
+
+/**
+ * Unités d’octets par langue. Le français emploie la notation « octet »
+ * (o / Ko / Mo) ; toutes les autres langues du catalogue utilisent la notation
+ * B / KB / MB, universellement lisible dans un contexte technique. Sans cette
+ * localisation, une notification anglaise/allemande affichait « 15.0 Mo » —
+ * mot localisé (Video / Foto…) mais unité de taille restée française.
+ */
+const FRENCH_BYTE_UNITS: ByteUnits = { b: 'o', kb: 'Ko', mb: 'Mo' };
+const DEFAULT_BYTE_UNITS: ByteUnits = { b: 'B', kb: 'KB', mb: 'MB' };
+
+/**
+ * Formate une taille de fichier en octets vers un libellé court localisé.
+ *
+ * La langue est normalisée via {@link normalizeNotificationLanguage} (parité
+ * stricte avec {@link notificationString}), donc `'fr-FR'` → `'fr'`, `'en-US'`
+ * → `'en'`, une langue hors catalogue → `'fr'`.
+ *
+ * Le palier bascule sur la valeur ARRONDIE (comme `formatCallDataSize`) : sinon
+ * 1 048 500 o (< 1 Mio, mais /1024 = 1023,93) afficherait « 1024 Ko » au lieu de
+ * « 1.0 Mo ».
+ */
+export function formatFileSizeI18n(lang: string | null | undefined, bytes: number): string {
+  const units = normalizeNotificationLanguage(lang) === 'fr' ? FRENCH_BYTE_UNITS : DEFAULT_BYTE_UNITS;
+  if (bytes < 1024) return `${bytes} ${units.b}`;
+  const kb = Math.round(bytes / 1024);
+  if (kb < 1024) return `${kb} ${units.kb}`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} ${units.mb}`;
 }
 
 function interpolate(template: string, tokens: Record<string, string>): string {
@@ -651,7 +699,13 @@ export function buildNotificationDisplay(
     case 'friend_new_story':
       return { title: compose(notificationString(L, 'friend.story')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'STORY' }) };
     case 'friend_new_post':
-      return { title: compose(notificationString(L, 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
+      // Un réel reste le type de notification `friend_new_post` (variante de post),
+      // mais son titre ET son sous-titre restent conscients de l'entité — le
+      // discriminant `postType: REEL` est justement « conservé pour l'affichage
+      // client ». Sans titre réel-conscient, un nouveau réel s'annonçait « a
+      // publié un nouveau post » alors que le sous-titre disait déjà « Nouveau
+      // réel » : titre et sous-titre se contredisaient sur la même entrée.
+      return { title: compose(notificationString(L, kind === 'REEL' ? 'friend.reel' : 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
     case 'friend_new_mood':
       return { title: compose(notificationString(L, 'friend.mood')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }) };
 

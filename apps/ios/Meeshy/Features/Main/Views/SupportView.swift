@@ -1,10 +1,16 @@
 import SwiftUI
 import Combine
+import StoreKit
 import MeeshySDK
 import MeeshyUI
 
 struct SupportView: View {
     @Environment(\.dismiss) private var dismiss
+    // Demande d'avis native (StoreKit). ID-free : pas d'App Store ID requis.
+    // Quand l'app aura un ID App Store numérique, préférer un Link direct
+    // `itms-apps://…?action=write-review` (Apple recommande le deep-link pour
+    // un bouton explicite, requestReview restant soumis à ses heuristiques).
+    @Environment(\.requestReview) private var requestReview
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -39,7 +45,7 @@ struct SupportView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -89,6 +95,9 @@ struct SupportView: View {
             VStack(spacing: 0) {
                 supportLink(icon: "book.fill", title: String(localized: "support.help.center", defaultValue: "Centre d'aide", bundle: .main), url: "https://meeshy.me/help", color: accentColor)
                 supportLink(icon: "questionmark.circle.fill", title: String(localized: "support.help.faq", defaultValue: "FAQ", bundle: .main), url: "https://meeshy.me/faq", color: accentColor)
+                supportButton(icon: "star.fill", title: String(localized: "support.help.rate", defaultValue: "Noter l'app", bundle: .main), color: accentColor) {
+                    requestReview()
+                }
             }
             .background(sectionBackground(tint: accentColor))
         }
@@ -116,7 +125,7 @@ struct SupportView: View {
 
             VStack(spacing: 0) {
                 supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
-                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggerer une fonctionnalite", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
+                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggérer une fonctionnalité", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
             }
             .background(sectionBackground(tint: MeeshyColors.warningHex))
         }
@@ -202,6 +211,31 @@ struct SupportView: View {
         .accessibilityLabel(title)
         .accessibilityHint(String(localized: "support.a11y.opens", defaultValue: "Ouvre \(title)", bundle: .main))
         }
+    }
+
+    private func supportButton(icon: String, title: String, color: String, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            HStack(spacing: 12) {
+                fieldIcon(icon, color: color)
+
+                Text(title)
+                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.forward")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .foregroundColor(Color(hex: color))
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+        .accessibilityLabel(title)
     }
 
     private func infoRow(icon: String, title: String, value: String, color: String) -> some View {

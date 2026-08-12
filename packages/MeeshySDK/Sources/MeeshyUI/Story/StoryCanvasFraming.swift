@@ -69,8 +69,14 @@ public nonisolated enum StoryCanvasFraming {
     /// panel est présenté sans passer par le state machine) — `timelineActive`
     /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
     /// Default `false` keeps pre-existing call sites source-compatible.
+    /// L'édition texte court-circuite tout : le canvas reste plein écran, les
+    /// contrôles flottent par-dessus. Ce n'est pas un terme de la disjonction
+    /// mais une sortie anticipée — quand l'éditeur s'ouvre depuis la tuile
+    /// Texte, la band n'est pas `.hidden` (elle est seulement masquée et
+    /// non-interactive), et `bandPresent` seul relancerait le carding.
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
-        bandPresent || textActive || timelineActive
+        guard !textActive else { return false }
+        return bandPresent || timelineActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.

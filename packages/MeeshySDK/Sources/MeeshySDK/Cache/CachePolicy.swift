@@ -60,7 +60,14 @@ extension CachePolicy {
     /// suffisaient à déclencher l'éviction LRU des reels/vidéos de conversation
     /// non épinglés, donc leur re-téléchargement (violation local-first).
     public static let mediaVideo = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Video", maxBytes: 1_000_000_000))
-    public static let thumbnails = CachePolicy(ttl: .days(7), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 50_000_000))
+    /// Aligné sur les autres médias : à 7 jours, la vignette d'une photo ou
+    /// d'une vidéo revue au bout de huit jours était RE-TÉLÉCHARGÉE alors que le
+    /// média lui-même était encore en cache — le contrat « un même média ne se
+    /// retélécharge pas pendant six mois » tombait sur son seul aperçu. Une
+    /// vignette est immuable à URL stable : rien ne justifiait un TTL court.
+    /// Budget 150 Mo (au lieu de 50) parce qu'à ce rythme c'est l'éviction LRU,
+    /// et non le TTL, qui redevenait le facteur limitant.
+    public static let thumbnails = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 150_000_000))
     /// Fil d'actualité. TTL 7 jours : une fois un post chargé, il reste servable
     /// (et disponible hors-ligne) pendant 7 jours sans nouveau téléchargement du
     /// payload liste — les médias (images 1 an / vidéo-audio 6 mois) ne sont jamais
@@ -71,7 +78,15 @@ extension CachePolicy {
     /// plusieurs fois par jour, contraire à « ne pas re-télécharger sur 7 jours ».
     public static let feedPosts = CachePolicy(ttl: .days(7), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let comments = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 500, storageLocation: .grdb)
-    public static let stories = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+    /// Le tray des stories transporte, pour chaque story, la traduction de son
+    /// contenu ET celle de chaque texte du canvas — la charge la plus coûteuse à
+    /// reconstituer : un aller ZMQ et une passe modèle par overlay et par
+    /// langue. Un TTL de 24 h la jetait au premier cold start du lendemain,
+    /// spinner compris, alors que `purgeStoryTray` retire déjà les stories
+    /// sorties de leur propre fenêtre de visibilité. La validité d'une story et
+    /// la durée de vie du conteneur sont deux choses distinctes : on garde le
+    /// cache 72 h (directive user 2026-07-27), la purge se charge du reste.
+    public static let stories = CachePolicy(ttl: .hours(72), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let notifications = CachePolicy(ttl: .hours(24), staleTTL: .minutes(2), maxItemCount: 200, storageLocation: .grdb)
     /// Call journal. Calls are immutable once terminal, so a long TTL is safe;
     /// the 5-min fresh window keeps the Calls tab instant on cold start / quick

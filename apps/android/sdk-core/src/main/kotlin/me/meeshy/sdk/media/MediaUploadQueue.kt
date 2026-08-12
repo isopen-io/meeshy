@@ -1,5 +1,9 @@
 package me.meeshy.sdk.media
 
+import kotlinx.serialization.encodeToString
+import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.MediaUploadPayload
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -31,10 +35,21 @@ class MediaUploadQueue @Inject constructor(
     private val outboxRepository: OutboxRepository,
 ) {
     /**
-     * Durably queues [item] for upload. Returns the `cmid` shared by the stored
-     * blob and the outbox row — the dependency key a dependent publish references.
+     * Durably queues [item] for upload, tagged with [context]. Returns the `cmid`
+     * shared by the stored blob and the outbox row — the dependency key a dependent
+     * publish references.
+     *
+     * [context] threads through to the drain sender ([MediaUploadPayload], read by
+     * `OutboxFlushWorker`'s `UPLOAD_MEDIA` sender) so a retried upload uses the
+     * *same* upload path the eager attempt would have: a `null` context (the
+     * default — every pre-existing caller, e.g. chat attachments) uploads via
+     * `MediaRepository`/`POST /attachments/upload` unchanged; a caller that durably
+     * queues **post/story/status/comment** media (e.g. `StoryMediaUploader`'s own
+     * offline fallback) must pass its [TusUploadContext] so the retry produces a
+     * `PostMedia` row too — the same wire-format correctness [TusUploadRepository]
+     * gives the eager path, extended to the durable one.
      */
-    suspend fun enqueue(item: MediaUploadItem): String {
+    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null): String {
         val cmid = OutboxIds.cmid()
         blobStore.put(cmid, item)
         outboxRepository.enqueue(
@@ -42,7 +57,7 @@ class MediaUploadQueue @Inject constructor(
                 kind = OutboxKind.UPLOAD_MEDIA,
                 lane = OutboxLanes.MEDIA,
                 targetId = cmid,
-                payload = "",
+                payload = if (context == null) "" else MeeshyApi.json.encodeToString(MediaUploadPayload(context.wire)),
                 cmid = cmid,
             ),
         )

@@ -41,6 +41,7 @@ import {
   MagicLinkValidation
 } from '../../../services/MagicLinkService';
 import { RequestContext } from '../../../services/GeoIPService';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -330,20 +331,28 @@ describe('MagicLinkService', () => {
         mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       });
 
-      it('should revoke existing tokens before creating new one', async () => {
+      /**
+       * Jumelle de la clause de `PasswordResetService.revokeExistingTokens` —
+       * même piège, même jugement : `magicLinkToken.create` ne renseigne pas
+       * `usedAt`, donc la colonne est ABSENTE de tout lien encore cliquable.
+       */
+      it('révoque le lien en attente, dont la colonne usedAt est ABSENTE', async () => {
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
-          where: {
-            userId: mockUser.id,
-            usedAt: null,
-            isRevoked: false
-          },
-          data: {
-            isRevoked: true,
-            revokedReason: 'NEW_REQUEST'
-          }
-        });
+        const { where, data } = (mockPrisma.magicLinkToken.updateMany as jest.Mock<any>).mock.calls[0][0];
+
+        expect(matchesMongoWhere({ userId: mockUser.id, isRevoked: false }, where)).toBe(true);
+        expect(data).toEqual({ isRevoked: true, revokedReason: 'NEW_REQUEST' });
+      });
+
+      it('épargne un lien déjà consommé, déjà révoqué, ou d\'un autre compte', async () => {
+        await service.requestMagicLink(validMagicLinkRequest);
+
+        const { where } = (mockPrisma.magicLinkToken.updateMany as jest.Mock<any>).mock.calls[0][0];
+
+        expect(matchesMongoWhere({ userId: mockUser.id, isRevoked: false, usedAt: new Date() }, where)).toBe(false);
+        expect(matchesMongoWhere({ userId: mockUser.id, isRevoked: true }, where)).toBe(false);
+        expect(matchesMongoWhere({ userId: 'someone-else', isRevoked: false }, where)).toBe(false);
       });
 
       it('should create a new magic link token with correct data', async () => {
@@ -1047,16 +1056,12 @@ describe('MagicLinkService - Security Tests', () => {
 
     await service.requestMagicLink(validMagicLinkRequest);
 
-    expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
-      where: {
-        userId: mockUser.id,
-        usedAt: null,
-        isRevoked: false
-      },
-      data: {
-        isRevoked: true,
-        revokedReason: 'NEW_REQUEST'
-      }
-    });
+    const { where, data } = (mockPrisma.magicLinkToken.updateMany as jest.Mock<any>).mock.calls[0][0];
+
+    // Un lien encore cliquable n'a PAS de colonne `usedAt` — c'est ce document,
+    // et pas la forme de la clause, qui dit si la révocation atteint sa cible.
+    expect(matchesMongoWhere({ userId: mockUser.id, isRevoked: false }, where)).toBe(true);
+    expect(matchesMongoWhere({ userId: mockUser.id, isRevoked: false, usedAt: new Date() }, where)).toBe(false);
+    expect(data).toEqual({ isRevoked: true, revokedReason: 'NEW_REQUEST' });
   });
 });

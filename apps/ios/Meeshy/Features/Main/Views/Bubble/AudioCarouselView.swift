@@ -57,6 +57,10 @@ struct AudioCarouselView: View {
     let onShowTranslationDetail: ((String) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onPlayAudio: ((String) -> Void)?
+    /// Cold-open (F1) : forwardés à chaque page (`AudioMediaView`) — voir
+    /// `BubbleStandardLayout.conversationName` / `.audioQueueTailProvider`.
+    var conversationName: String? = nil
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var parentIsMe: Bool = false
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
@@ -229,7 +233,9 @@ struct AudioCarouselView: View {
             activeAudioLanguageOverride: activeAudioLanguage,
             footerModel: nil,
             footerActions: .none,
-            onPlayAudio: onPlayAudio
+            onPlayAudio: onPlayAudio,
+            conversationName: conversationName,
+            audioQueueTailProvider: audioQueueTailProvider
         )
         .equatable()
         .padding(.trailing, 4)

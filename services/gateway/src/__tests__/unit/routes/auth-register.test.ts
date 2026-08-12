@@ -480,29 +480,16 @@ describe('GET /check-availability — DB error', () => {
 
 // ─── POST /force-init ─────────────────────────────────────────────────────────
 
-describe('POST /force-init — success', () => {
+describe('POST /force-init — retirée', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 with success message', async () => {
+  // Publique, elle déclenchait la création d'un compte BIGBOSS dont le mot de
+  // passe retombe sur une valeur écrite dans le code source. L'initialisation
+  // reste assurée au démarrage du serveur ; ce test empêche son retour.
+  it('n\'existe plus', async () => {
     const res = await app.inject({ method: 'POST', url: '/force-init' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.message).toContain('initialized');
-  });
-});
-
-describe('POST /force-init — error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on initialization error', async () => {
-    const { InitService } = jest.requireMock('../../../services/InitService') as any;
-    (InitService as jest.Mock).mockImplementationOnce(() => ({
-      initializeDatabase: jest.fn<any>().mockRejectedValue(new Error('init failed')),
-    }));
-    const res = await app.inject({ method: 'POST', url: '/force-init' });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(404);
   });
 });

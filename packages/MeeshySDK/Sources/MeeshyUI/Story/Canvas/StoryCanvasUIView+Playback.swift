@@ -103,6 +103,13 @@ extension StoryCanvasUIView {
             pushSlidePlayheadToLayers()
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
+            forEachMediaLayer { $0.startAlignedIfActive() }
+            // Le « GO » de fin de chargement a pu tomber PENDANT la pause : il
+            // reste alors armé plutôt que consommé sous le gel (cf.
+            // `fireContentReadyIfNeeded`). Les lignes ci-dessus VIENNENT de le
+            // rejouer — on le solde donc ici, AVANT `startAudioPlayback` qui le
+            // ré-arme légitimement si le contenu n'est toujours pas prêt.
+            pendingBackgroundActivation = false
             if window != nil, !completionFired {
                 startAudioPlayback()
             }
@@ -192,7 +199,13 @@ extension StoryCanvasUIView {
         // ne sont pas prêts (cf. `contentReadyFired`), la vidéo bg attend —
         // le user-spec exige que ni vidéo ni audio bg ne joue tant que la
         // slide n'est pas visuellement complète.
-        if contentReadyFired {
+        // Gate de pause : `startPlayback()` est ré-entré à l'attachement window
+        // et aux transitions de mode, qui peuvent survenir ALORS QUE l'hôte a
+        // gelé la lecture (interstitiel d'identité, overlay commentaires,
+        // appel). Sans ce test, la vidéo de fond et les foreground repartaient
+        // sous le gel — la story s'entendait pendant l'interlude. L'intention
+        // est armée à la place, et soldée par `setStoryPlaybackPaused(false)`.
+        if contentReadyFired, !isPlaybackPaused {
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
         } else {
@@ -222,6 +235,9 @@ extension StoryCanvasUIView {
         // sondage détecte aussi la reprise alors que le playhead est gelé.
         refreshPlaybackHealth(now: link.timestamp)
         advancePlayheadIfActive(by: link.targetTimestamp - link.timestamp)
+        // Le volume suit le playhead : posé APRÈS l'avancée, sinon l'automation
+        // retarderait d'une image sur l'image affichée.
+        applyVolumeAutomation(at: Float(currentTime.seconds))
     }
 
     /// Avance le playhead canvas (`currentTime`) si la lecture est active.

@@ -17,9 +17,27 @@ struct StatusBubbleOverlay: View {
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
 
-    private var screenHeight: CGFloat { UIScreen.main.bounds.height }
-    private var screenWidth: CGFloat { UIScreen.main.bounds.width }
-    private var showAbove: Bool { anchorPoint.y > screenHeight * 0.45 }
+    /// Décisions de layout pures — extraites pour être directement testables
+    /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
+    /// Idiome : `StoryViewerView+Content.reactionRollbackTarget`.
+    ///
+    /// Les deux mesurent le **conteneur** dans lequel la bulle est posée, jamais
+    /// `UIScreen.main.bounds`. `.withStatusBubble()` est appliqué sur ~15 surfaces
+    /// dont plusieurs feuilles (`FeedCommentsSheet`, `ConversationInfoSheet`,
+    /// `ForwardPickerSheet`, `SharePickerView`…) : leurs bornes sont bien plus
+    /// petites que l'écran physique — davantage encore dans une form sheet iPad,
+    /// une colonne de split view, un Slide Over ou une fenêtre Stage Manager.
+    /// La bulle est clippée par ce conteneur, donc c'est lui qui décide.
+    nonisolated static func bubbleWidth(containerWidth: CGFloat) -> CGFloat {
+        min(250, max(0, containerWidth - 48))
+    }
+
+    /// La bulle bascule au-dessus de son ancre dès que celle-ci occupe la moitié
+    /// basse du conteneur : c'est de ce côté-là qu'il reste de la place. Le seuil
+    /// se mesure sur le conteneur — `anchorY` y est déjà exprimé, l'écran non.
+    nonisolated static func flipsAbove(anchorY: CGFloat, containerHeight: CGFloat) -> Bool {
+        anchorY > containerHeight * 0.45
+    }
 
     var body: some View {
         GeometryReader { parentGeo in
@@ -29,7 +47,8 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 48, 250)
+            let bubbleW = Self.bubbleWidth(containerWidth: bounds.width)
+            let showAbove = Self.flipsAbove(anchorY: anchor.y, containerHeight: bounds.height)
             // Décalé à droite de l'avatar : bord gauche de la bulle à anchor.x + 12
             let bubbleX = min(anchor.x + 12 + bubbleW / 2, bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
@@ -67,14 +86,29 @@ struct StatusBubbleOverlay: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
                     .onTapGesture { replyTapped() }
+                    // Un seul élément VoiceOver pour la bulle : le tap-pour-répondre est un
+                    // `.onTapGesture` (invisible à VoiceOver) et le contenu imbrique des boutons
+                    // (lecture audio, republier) qui seraient soit avalés par un `.combine`, soit
+                    // inatteignables. `children: .ignore` + action par défaut = répondre, actions
+                    // nommées (rotor) = lire l'audio / republier. Idiome 183i (CommunityLinksView).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(bubbleAccessibilityLabel)
+                    .accessibilityValue(bubbleAccessibilityValue)
                     .accessibilityHint(onReplyTapped != nil
                         ? String(localized: "status.bubble.reply_hint", defaultValue: "Toucher pour répondre à cette humeur", bundle: .main)
                         : "")
+                    .accessibilityAddTraits(onReplyTapped != nil ? .isButton : [])
+                    .accessibilityAction { replyTapped() }
+                    .accessibilityActions { bubbleAccessibilityActions }
                     .position(x: bubbleX, y: anchor.y + dir * 52)
                     .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottomLeading : .topLeading)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.28, dampingFraction: 0.72).delay(0.05), value: appearAnimation)
             }
+            // Geste d'échappement VoiceOver (scrub à deux doigts) : la bulle est un overlay ZStack,
+            // pas une sheet système — sans ceci, un utilisateur VoiceOver n'a aucun moyen standard
+            // de la fermer (le tap-to-dismiss extérieur est un `Color.clear` non focalisable).
+            .accessibilityAction(.escape) { dismiss() }
         }
         .onAppear {
             appearAnimation = true
@@ -104,26 +138,13 @@ struct StatusBubbleOverlay: View {
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    audioPlayerRow(urlString: audioUrl)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let content = status.content, !content.isEmpty {
-                        Text(content)
-                            .font(MeeshyFont.relative(13))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
+                audioPlayerRow(urlString: audioUrl)
+            } else if let content = status.content, !content.isEmpty {
+                Text(content)
+                    .font(MeeshyFont.relative(13))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // "via @username" for republished statuses
@@ -133,20 +154,35 @@ struct StatusBubbleOverlay: View {
                     .foregroundColor(theme.textMuted)
             }
 
-            // Republish button (only for other users' statuses)
             if onRepublish != nil {
                 Divider().opacity(0.3)
-                Button {
-                    dismiss()
-                    onRepublish?(status)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(11))
-                        Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .medium))
+            }
+
+            // Ancienneté + « Republier » (autres statuts uniquement) sur une seule ligne
+            // basse séparée par un point médian — libère toute la largeur de la bulle
+            // pour le texte de l'humeur au lieu de le partager avec le timestamp.
+            HStack(spacing: 4) {
+                Text(status.timeAgo)
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                if onRepublish != nil {
+                    Text("·")
+                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+
+                    Button {
+                        dismiss()
+                        onRepublish?(status)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(MeeshyFont.relative(11))
+                            Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.indigo400)
                     }
-                    .foregroundColor(MeeshyColors.indigo400)
                 }
             }
         }
@@ -186,11 +222,9 @@ struct StatusBubbleOverlay: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
-            .accessibilityLabel(
-                audioPlayer.isPlaying
-                    ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
-                    : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
-            )
+            // VoiceOver : cette rangée est agrégée par le conteneur `bubbleContent`
+            // (`children: .ignore`) ; l'étiquette lecture/arrêt vit dans l'action nommée
+            // du conteneur (`bubbleAccessibilityActions`). Pas de label ici (inerte).
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
@@ -200,6 +234,54 @@ struct StatusBubbleOverlay: View {
         }
         .onAppear {
             audioPlayer.play(urlString: urlString)
+        }
+    }
+
+    // MARK: - Accessibility
+
+    private var hasAudio: Bool {
+        guard let audioUrl = status.audioUrl else { return false }
+        return !audioUrl.isEmpty
+    }
+
+    /// Libellé combiné de la bulle : contenu (texte ou « Humeur audio ») + ancienneté
+    /// + « via @… » éventuel. Un seul élément VoiceOver (`children: .ignore`).
+    private var bubbleAccessibilityLabel: String {
+        var parts: [String] = []
+        if hasAudio {
+            parts.append(String(localized: "status.bubble.audio.a11yLabel", defaultValue: "Humeur audio", bundle: .main))
+        } else if let content = status.content, !content.isEmpty {
+            parts.append(content)
+        }
+        parts.append(status.timeAgo)
+        if let via = status.viaUsername {
+            parts.append(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Progression de lecture audio, formatée en pourcentage locale-aware (0 clé i18n).
+    /// Vide pour une humeur texte (pas de valeur d'état à annoncer).
+    private var bubbleAccessibilityValue: String {
+        guard hasAudio else { return "" }
+        return audioPlayer.progress.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    /// Actions secondaires exposées via le rotor VoiceOver (l'action par défaut = répondre).
+    @ViewBuilder private var bubbleAccessibilityActions: some View {
+        if hasAudio {
+            Button(audioPlayer.isPlaying
+                ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+                : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+            ) {
+                audioPlayer.togglePlayPause()
+            }
+        }
+        if onRepublish != nil {
+            Button(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main)) {
+                dismiss()
+                onRepublish?(status)
+            }
         }
     }
 

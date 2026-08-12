@@ -12,6 +12,11 @@ import XCTest
 /// These tests pin the contract: audio clip URLs land in `audioURLPaths`,
 /// video / image clip URLs land in `mediaURLPaths`, and the two maps stay
 /// disjoint regardless of project composition.
+///
+/// S6 — exercises `buildOfflineQueueItem` directly rather than through
+/// `handlePublishTap` (removed as dead orchestration code, zero production
+/// call sites): `pendingMediaURLs` is populated synchronously by `bootstrap`,
+/// so no network/queue mock is needed to observe the split.
 @MainActor
 final class AudioURLPathsTests: XCTestCase {
 
@@ -60,21 +65,13 @@ final class AudioURLPathsTests: XCTestCase {
         let audioId = "audio-1"
         let audioURL = URL(fileURLWithPath: "/tmp/voice-note.m4a")
         let project = projectWithAudioClip(audioId: audioId)
-        let network = MockNetworkMonitor()
-        network.isOnline = false
-        let queue = MockOfflineQueue()
 
         let vm = makeViewModel()
         vm.bootstrap(project: project, mediaURLs: [audioId: audioURL], images: [:])
         await vm.awaitConfigured()
 
-        await vm.handlePublishTap(visibility: .public,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
+        let item = vm.buildOfflineQueueItem(visibility: .public, originalLanguage: "fr")
 
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(items.count, 1, "Offline publish must enqueue exactly one item")
-        guard let item = items.first else { return }
         XCTAssertEqual(item.audioURLPaths[audioId], audioURL.path,
                        "Audio clip URL must be persisted in audioURLPaths (data-loss regression)")
         XCTAssertTrue(item.mediaURLPaths.isEmpty,
@@ -95,21 +92,13 @@ final class AudioURLPathsTests: XCTestCase {
             textObjects: [],
             clipTransitions: []
         )
-        let network = MockNetworkMonitor()
-        network.isOnline = false
-        let queue = MockOfflineQueue()
 
         let vm = makeViewModel()
         vm.bootstrap(project: project, mediaURLs: [videoId: videoURL], images: [:])
         await vm.awaitConfigured()
 
-        await vm.handlePublishTap(visibility: .public,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
+        let item = vm.buildOfflineQueueItem(visibility: .public, originalLanguage: "fr")
 
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(items.count, 1)
-        guard let item = items.first else { return }
         XCTAssertEqual(item.mediaURLPaths[videoId], videoURL.path,
                        "Video clip URL must be in mediaURLPaths")
         XCTAssertNil(item.audioURLPaths[videoId],
@@ -124,9 +113,6 @@ final class AudioURLPathsTests: XCTestCase {
         let videoURL = URL(fileURLWithPath: "/tmp/clip.mp4")
         let audioURL = URL(fileURLWithPath: "/tmp/voice-note.m4a")
         let project = projectWithVideoAndAudio(videoId: videoId, audioId: audioId)
-        let network = MockNetworkMonitor()
-        network.isOnline = false
-        let queue = MockOfflineQueue()
 
         let vm = makeViewModel()
         vm.bootstrap(project: project,
@@ -134,13 +120,7 @@ final class AudioURLPathsTests: XCTestCase {
                      images: [:])
         await vm.awaitConfigured()
 
-        await vm.handlePublishTap(visibility: .friends,
-                                  networkMonitor: network,
-                                  offlineQueue: queue)
-
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(items.count, 1)
-        guard let item = items.first else { return }
+        let item = vm.buildOfflineQueueItem(visibility: .friends, originalLanguage: "fr")
 
         XCTAssertEqual(item.mediaURLPaths, [videoId: videoURL.path],
                        "Mixed project: mediaURLPaths must contain ONLY the video clip")

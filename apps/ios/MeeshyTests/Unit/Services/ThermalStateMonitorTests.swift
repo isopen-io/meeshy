@@ -82,6 +82,37 @@ final class ThermalStateMonitorTests: XCTestCase {
         delegate = nil
         XCTAssertNil(sut.delegate)
     }
+
+    // MARK: - Concurrency (source guard)
+
+    /// Vague 100 — `startMonitoring`'s `NotificationCenter` observer closure
+    /// already captures `[weak self]`, but the nested
+    /// `Task { @MainActor in ... }` it hops through to reach the MainActor-
+    /// isolated `thermalStateChanged()` did NOT repeat the weak capture: an
+    /// unstructured `Task` closure captures whatever it references
+    /// independently of its enclosing closure's capture list, so omitting
+    /// `[weak self]` there re-strongly-captures `self` for the task's
+    /// lifetime — this is a long-lived, repeatedly-firing observer (removed
+    /// only in `stopMonitoring`), so every thermal-state notification pins a
+    /// strong reference for the hop. Not behaviorally exercisable (would
+    /// require driving a real `thermalStateDidChangeNotification` on a
+    /// background queue), so guarded at the source level — same idiom as
+    /// `P2PWebRTCClientConcurrencySourceTests`.
+    func test_startMonitoring_notificationTask_capturesSelfWeakly() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Services/ThermalStateMonitor.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("Task { @MainActor [weak self] in self?.thermalStateChanged() }"),
+            "startMonitoring's thermal-notification Task must capture [weak self], not just the outer " +
+            "NotificationCenter observer closure — an unstructured Task does not inherit its enclosing " +
+            "closure's capture list."
+        )
+    }
 }
 
 // MARK: - Mock Delegate

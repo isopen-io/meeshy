@@ -73,14 +73,20 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     userPreferences: {
       findUnique: jest.fn(),
     },
+    userConversationPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -227,21 +233,10 @@ describe('NotificationService — Uncovered Paths', () => {
   // createTranslationReadyNotification
   // ==============================================
 
-  describe('createTranslationReadyNotification', () => {
-    it('should create notification', async () => {
-      prisma.conversation.findUnique.mockResolvedValue({ title: 'Conv', type: 'direct' });
-      prisma.userPreferences.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotif('translation_ready'));
-
-      const result = await service.createTranslationReadyNotification({
-        recipientUserId: 'user-1',
-        messageId: 'msg-1',
-        conversationId: 'conv-1',
-      });
-
-      expect(result).toBeDefined();
-    });
-  });
+  // `createTranslationReadyNotification` a été retiré : aucun appelant de
+  // production ne l'atteignait, et ce test était son unique invocation dans
+  // tout le dépôt. Un test qui est le seul appelant de son sujet ne mesure pas
+  // du code vivant — il en entretient l'apparence.
 
   // ==============================================
   // createReplyNotification

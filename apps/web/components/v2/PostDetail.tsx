@@ -3,11 +3,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
-import { Repeat2 } from 'lucide-react';
+import { formatDuration } from '@/utils/audio-formatters';
+import { Download, Repeat2 } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
+import { PostContentText } from './PostContentText';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import { getLanguageName } from './flags';
@@ -37,6 +40,95 @@ function postTranslationsToItems(translations: unknown): TranslationItem[] {
 
 const formatCount = formatCompactNumber;
 
+/**
+ * Same `<a download>` DOM pattern as the chat lightboxes
+ * (ImageLightbox/VideoLightbox `handleDownload`) — a browser-native save,
+ * no service call.
+ */
+function triggerMediaDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadFileName(media: { id: string; mimeType: string; alt?: string | null }): string {
+  const ext = media.mimeType.split('/')[1]?.split(';')[0];
+  return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
+}
+
+type RepostMediaItem = {
+  id: string;
+  mimeType: string;
+  fileUrl: string;
+  thumbnailUrl?: string | null;
+  alt?: string | null;
+  duration?: number | null;
+};
+
+/**
+ * Nested-card media tile for a repost's original media — image / video /
+ * audio, mirroring PostCard's `PostMediaTile` (PostDetail's own top-level
+ * media grid predates audio support, so the nested grid needs its own
+ * complete tile rather than reusing that incomplete one).
+ */
+function RepostMediaTile({
+  media,
+  onDownload,
+  downloadLabel,
+}: {
+  media: RepostMediaItem;
+  onDownload?: (media: RepostMediaItem) => void;
+  downloadLabel: string;
+}) {
+  return (
+    <div className="group relative rounded-lg overflow-hidden bg-[var(--gp-parchment)] aspect-square">
+      {onDownload && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload(media);
+          }}
+          className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          aria-label={downloadLabel}
+        >
+          <Download className="w-4 h-4" />
+        </button>
+      )}
+      {media.mimeType.startsWith('image/') && (
+        <img
+          src={buildAttachmentUrl(media.thumbnailUrl ?? media.fileUrl) ?? undefined}
+          alt={media.alt ?? ''}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      )}
+      {media.mimeType.startsWith('video/') && (
+        <video src={buildAttachmentUrl(media.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
+      )}
+      {media.mimeType.startsWith('audio/') && (
+        <div
+          data-testid="post-detail-repost-audio-tile"
+          className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[var(--gp-terracotta)]"
+        >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          {typeof media.duration === 'number' && (
+            <span className="text-xs font-medium text-[var(--gp-text-secondary)]">
+              {formatDuration(media.duration)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -63,6 +155,12 @@ export interface PostDetailProps {
   onRepost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onReport?: () => void;
+  onDownloadMedia?: (mediaId: string) => void;
+  /** Media download inside the nested `repostOf` card — targets the ORIGINAL's media. */
+  onDownloadRepostMedia?: (mediaId: string) => void;
+  /** Tap on the repost banner or nested card — navigates to the ORIGINAL post. */
+  onTapRepost?: (repostId: string) => void;
   onTranslate?: () => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onLoadMoreComments?: () => void;
@@ -72,6 +170,8 @@ export interface PostDetailProps {
   onShowReplies?: (commentId: string) => void;
   /** Commentaire ciblé par une navigation depuis une notification. */
   targetCommentId?: string | null;
+  /** Parent top-level quand `targetCommentId` est une réponse (`?parent=`). */
+  targetParentCommentId?: string | null;
   className?: string;
 }
 
@@ -101,6 +201,10 @@ function PostDetail({
   onRepost,
   onDelete,
   onEdit,
+  onReport,
+  onDownloadMedia,
+  onDownloadRepostMedia,
+  onTapRepost,
   onTranslate,
   onSubmitComment,
   onLoadMoreComments,
@@ -109,12 +213,28 @@ function PostDetail({
   onDeleteComment,
   onShowReplies,
   targetCommentId,
+  targetParentCommentId,
   className,
 }: PostDetailProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const { t } = useI18n('components');
   const translationItems = useMemo(() => postTranslationsToItems(post.translations), [post.translations]);
   const isAuthor = currentUserId === post.authorId;
   const hasReactions = post.reactionSummary && Object.keys(post.reactionSummary).length > 0;
+
+  const repostOf = post.repostOf;
+  const repostTranslationItems = useMemo(() => postTranslationsToItems(repostOf?.translations), [repostOf?.translations]);
+  const repostMedia = repostOf?.media;
+  const hasRepostMedia = repostMedia && repostMedia.length > 0;
+  /**
+   * A SIMPLE repost has no engagement of its own worth surfacing — the outer
+   * stats bar shows the ORIGINAL's counts instead (product rule 2026-08-11).
+   * A QUOTE keeps its own outer counts; the nested row then carries the
+   * original's, so the same numbers never render twice on one card.
+   */
+  const displayLikeCount = repostOf && !post.isQuote ? repostOf.likeCount ?? post.likeCount : post.likeCount;
+  const displayCommentCount = repostOf && !post.isQuote ? repostOf.commentCount ?? post.commentCount : post.commentCount;
+  const displayViewCount = repostOf && !post.isQuote ? repostOf.viewCount ?? post.viewCount : post.viewCount;
 
   const handleLikeToggle = useCallback(() => {
     onLike?.();
@@ -123,6 +243,28 @@ function PostDetail({
   const handleBookmarkToggle = useCallback(() => {
     onBookmark?.();
   }, [onBookmark]);
+
+  const handleTapRepost = useCallback(() => {
+    if (repostOf?.id) onTapRepost?.(repostOf.id);
+  }, [repostOf?.id, onTapRepost]);
+
+  const repostClickableProps = onTapRepost && repostOf?.id
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: (e: React.MouseEvent) => { e.stopPropagation(); handleTapRepost(); },
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTapRepost(); }
+        },
+      }
+    : {};
+
+  const handleDownloadRepostMedia = onDownloadRepostMedia
+    ? (m: RepostMediaItem) => {
+        triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
+        onDownloadRepostMedia(m.id);
+      }
+    : undefined;
 
   return (
     <div className={cn('max-w-2xl mx-auto', className)} data-testid="post-detail">
@@ -171,23 +313,37 @@ function PostDetail({
                 )}
               </div>
             )}
+
+            {!isAuthor && onReport && (
+              <div className="flex gap-1">
+                <button onClick={onReport} className="p-2 text-[var(--gp-text-muted)] hover:text-red-500" aria-label="Report post">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18M3 4h13l-2 4 2 4H3" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Content */}
           {post.content && (
             <div className="mb-4">
               {translationItems.length > 0 ? (
-                <TranslationToggle
-                  originalContent={post.content}
-                  originalLanguage={post.originalLanguage ?? 'unknown'}
-                  originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
-                  translations={translationItems}
-                  userLanguage={userLanguage}
-                  variant="block"
-                />
+                <>
+                  <TranslationToggle
+                    originalContent={post.content}
+                    originalLanguage={post.originalLanguage ?? 'unknown'}
+                    originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
+                    translations={translationItems}
+                    userLanguage={userLanguage}
+                    variant="block"
+                    showContent={false}
+                  />
+                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
+                </>
               ) : (
                 <>
-                  <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
                   {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
                     <button
                       onClick={onTranslate}
@@ -205,7 +361,21 @@ function PostDetail({
           {post.media && post.media.length > 0 && (
             <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: post.media.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}>
               {post.media.map((m) => (
-                <div key={m.id} className="rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
+                <div key={m.id} className="group relative rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
+                  {onDownloadMedia && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerMediaDownload(buildAttachmentUrl(m.fileUrl) ?? m.fileUrl, downloadFileName(m));
+                        onDownloadMedia(m.id);
+                      }}
+                      className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                      aria-label="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
                   {m.mimeType.startsWith('image/') && (
                     <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
                   )}
@@ -214,6 +384,96 @@ function PostDetail({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Repost — banner + nested original card */}
+          {repostOf && (
+            <div
+              data-testid="post-detail-repost-block"
+              className={cn(
+                'mb-4 rounded-xl border border-[var(--gp-border)] p-4',
+                onTapRepost && repostOf.id && 'cursor-pointer',
+              )}
+              {...repostClickableProps}
+            >
+              <div className="flex items-center gap-1.5 mb-3 text-xs text-[var(--gp-text-muted)]">
+                <Repeat2 className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
+              </div>
+
+              <div className="flex items-center gap-2 mb-2">
+                <Avatar name={repostOf.author?.username ?? '?'} src={repostOf.author?.avatar ?? undefined} size="sm" />
+                <span className="text-sm font-medium text-[var(--gp-text-primary)]">
+                  {repostOf.author?.displayName ?? repostOf.author?.username ?? '?'}
+                </span>
+              </div>
+
+              {repostOf.content && (
+                repostTranslationItems.length > 0 ? (
+                  // `inline` (not `block`) — the `block` variant renders its
+                  // own resolved-content paragraph unconditionally regardless
+                  // of `showContent`, which would double the text alongside
+                  // PostContentText. `inline` is the same combination
+                  // CommentItem/StatusBar/StoryViewer already use.
+                  // The shield div stops the toggle's own clicks/keydowns
+                  // (chip, dropdown rows) from bubbling into the enclosing
+                  // repost block's navigation handler — same shape as the
+                  // media download button's own stopPropagation.
+                  <div
+                    className="mb-3"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <TranslationToggle
+                      originalContent={repostOf.content}
+                      originalLanguage={repostOf.originalLanguage ?? 'unknown'}
+                      originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
+                      translations={repostTranslationItems}
+                      userLanguage={userLanguage}
+                      variant="inline"
+                    />
+                  </div>
+                ) : (
+                  <div className="mb-3">
+                    <PostContentText content={repostOf.content} className="text-sm text-[var(--gp-text-secondary)]" />
+                  </div>
+                )
+              )}
+
+              {hasRepostMedia && repostMedia && (
+                <div
+                  className="mb-3 grid gap-1.5 rounded-lg overflow-hidden"
+                  style={{ gridTemplateColumns: repostMedia.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}
+                >
+                  {repostMedia.slice(0, 4).map((m) => (
+                    <RepostMediaTile
+                      key={m.id}
+                      media={m}
+                      downloadLabel={t('post.repostDownload', 'Download original media')}
+                      onDownload={handleDownloadRepostMedia}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/*
+                A SIMPLE repost's counters now live in the outer stats bar
+                (displayLikeCount/displayCommentCount/displayViewCount
+                above) — repeating them here would render the same 42/7
+                twice on one card. A QUOTE's outer bar shows the quote's OWN
+                counts, so the nested row is the only place the original's
+                counters surface.
+              */}
+              {post.isQuote && (
+                <div className="flex items-center gap-4 text-xs text-[var(--gp-text-muted)]">
+                  <span data-testid="repost-like-count">{formatCount(repostOf.likeCount ?? 0)} likes</span>
+                  <span data-testid="repost-comment-count">{formatCount(repostOf.commentCount ?? 0)} comments</span>
+                  {typeof repostOf.viewCount === 'number' && (
+                    <span data-testid="repost-view-count">{formatCount(repostOf.viewCount)} views</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -240,10 +500,10 @@ function PostDetail({
 
           {/* Stats bar */}
           <div className="flex items-center gap-4 py-2 border-t border-b border-[var(--gp-border)] text-xs text-[var(--gp-text-muted)] mb-3">
-            {post.likeCount > 0 && <span>{formatCount(post.likeCount)} likes</span>}
-            {post.commentCount > 0 && <span>{formatCount(post.commentCount)} comments</span>}
+            {displayLikeCount > 0 && <span>{formatCount(displayLikeCount)} likes</span>}
+            {displayCommentCount > 0 && <span>{formatCount(displayCommentCount)} comments</span>}
             {post.repostCount > 0 && <span>{formatCount(post.repostCount)} reposts</span>}
-            {post.viewCount > 0 && <span>{formatCount(post.viewCount)} views</span>}
+            {displayViewCount > 0 && <span>{formatCount(displayViewCount)} views</span>}
           </div>
 
           {/* Action buttons */}
@@ -348,6 +608,7 @@ function PostDetail({
           onSubmitComment={onSubmitComment}
           onShowReplies={onShowReplies}
           targetCommentId={targetCommentId}
+          targetParentCommentId={targetParentCommentId}
         />
       </div>
     </div>

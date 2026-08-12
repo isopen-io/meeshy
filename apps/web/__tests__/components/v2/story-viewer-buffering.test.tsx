@@ -47,6 +47,10 @@ jest.mock('@/stores/auth-store', () => ({
     selector({ user: { id: 'user-1', username: 'alice', avatar: null } }),
 }));
 
+jest.mock('@/hooks/social/use-stories', () => ({
+  useReactToStoryMutation: () => ({ mutate: jest.fn() }),
+}));
+
 import { StoryViewer } from '@/components/v2/StoryViewer';
 import type { StoryData } from '@/components/v2/StoryViewer';
 

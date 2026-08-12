@@ -7,13 +7,14 @@ import { useToast } from '@/components/v2';
 import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { CommentList } from '@/components/v2/CommentList';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
   useUnlikePostMutation,
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
-  useSharePostMutation,
+  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -29,8 +30,10 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
-import { copyToClipboard } from '@/lib/clipboard';
 import { isHeartLikedByMe } from '@/lib/reactions';
+import { shareLink } from '@/lib/share-utils';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 
 function isReelLiked(post: Post): boolean {
   return isHeartLikedByMe(post);
@@ -63,7 +66,7 @@ export function ReelsFeedScreen() {
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
-  const shareMutation = useSharePostMutation();
+  const repostMutation = useRepostMutation();
   const createCommentMutation = useCreateCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
@@ -71,6 +74,7 @@ export function ReelsFeedScreen() {
 
   const [index, setIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
 
   // Clamp the cursor if the thread shrinks (cache eviction / refetch).
   useEffect(() => {
@@ -139,18 +143,74 @@ export function ReelsFeedScreen() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
-    if (success) {
-      shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } else {
-      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
+    const localUrl = `${window.location.origin}/reel/${current.id}`;
+    const title = current.author?.displayName ?? current.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+    try {
+      const { shortUrl } = await postsService.sharePost(current.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, current.content ?? '');
+      if (shared) {
+        toastCtx.addToast(t('shared', 'Shared!'), 'success');
+      } else if (!hasNativeShare) {
+        toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
+    } catch {
+      toastCtx.addToast(t('linkCopyError', "Couldn't share the reel"), 'error');
     }
-  }, [current, shareMutation, toastCtx, t]);
+  }, [current, toastCtx, t]);
 
   const onComment = useCallback(() => {
     if (current) setShowComments(true);
   }, [current]);
+
+  const onReport = useCallback(() => {
+    if (!current) return;
+    if (!window.confirm(t('report.confirm', 'Report this reel?'))) return;
+    reportService
+      .reportPost(current.id, 'inappropriate', '')
+      .then(() => toastCtx.addToast(t('report.success', 'Reel reported'), 'success'))
+      .catch(() => toastCtx.addToast(t('report.error', "Couldn't report the reel"), 'error'));
+  }, [current, toastCtx, t]);
+
+  const onRepost = useCallback(() => {
+    if (current) setRepostModalOpen(true);
+  }, [current]);
+
+  const handleRepost = useCallback(() => {
+    if (!current) return;
+    repostMutation.mutate(
+      { postId: current.id, data: { isQuote: false } },
+      {
+        onSuccess: () => {
+          setRepostModalOpen(false);
+          toastCtx.addToast(t('repost.success', 'Reposted!'), 'success');
+        },
+        onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+      },
+    );
+  }, [current, repostMutation, toastCtx, t]);
+
+  const handleQuote = useCallback(
+    (quoteContent: string) => {
+      if (!current) return;
+      repostMutation.mutate(
+        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostModalOpen(false);
+            toastCtx.addToast(t('repost.quoted', 'Quoted!'), 'success');
+          },
+          onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [current, repostMutation, toastCtx, t],
+  );
+
+  const onDownload = useCallback((mediaId: string, owningPostId: string) => {
+    postsService.recordMediaDownloads(owningPostId, [mediaId], 'reel');
+  }, []);
 
   const content = useMemo(() => {
     if (current) {
@@ -173,6 +233,9 @@ export function ReelsFeedScreen() {
           onComment={onComment}
           onShare={onShare}
           onBookmark={onBookmark}
+          onReport={authUser?.id !== current.authorId ? onReport : undefined}
+          onRepost={onRepost}
+          onDownload={onDownload}
         />
       );
     }
@@ -210,7 +273,7 @@ export function ReelsFeedScreen() {
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery, t]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, onReport, onRepost, onDownload, reelsQuery, t, authUser]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">
@@ -267,6 +330,19 @@ export function ReelsFeedScreen() {
           </div>
         )}
       </div>
+
+      {/* Repost Modal */}
+      {repostModalOpen && current && (
+        <RepostModal
+          open
+          originalAuthor={current.author?.displayName ?? current.author?.username}
+          originalContent={current.content ?? undefined}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostModalOpen(false)}
+          saving={repostMutation.isPending}
+        />
+      )}
     </DashboardLayout>
   );
 }

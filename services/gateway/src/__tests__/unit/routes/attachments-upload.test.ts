@@ -118,7 +118,11 @@ async function buildApp({
       };
     } else if (isAnonymous) {
       (req as any).authContext = {
-        isAuthenticated: false,
+        // Un participant anonyme MUNI d'un jeton de session valide porte
+        // `isAuthenticated: true` (cf. `createAnonymousUserContext`). Seul le
+        // visiteur nu a `isAuthenticated: false` — et c'est lui que cette
+        // fixture décrivait, ce qui masquait la garde cassée des routes.
+        isAuthenticated: true,
         isAnonymous: true,
         userId: 'anon-session',
         participantId,
