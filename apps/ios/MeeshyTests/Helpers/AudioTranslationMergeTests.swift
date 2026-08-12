@@ -12,7 +12,7 @@ final class AudioTranslationMergeTests: XCTestCase {
                 translatedText: "hello", audioUrl: "https://x/en.mp3",
                 durationMs: 1800, voiceCloned: false)
         ]
-        let merged = MessageDetailSheet.mergeAudioTranslations(
+        let merged = MessageLanguageDetailView.mergeAudioTranslations(
             existing: existing, incoming: incoming, attachmentId: "att_1"
         )
         XCTAssertEqual(merged.count, 1)
@@ -31,7 +31,7 @@ final class AudioTranslationMergeTests: XCTestCase {
                 translatedText: "hello", audioUrl: "https://x/new.mp3",
                 durationMs: 1800, voiceCloned: false)
         ]
-        let merged = MessageDetailSheet.mergeAudioTranslations(
+        let merged = MessageLanguageDetailView.mergeAudioTranslations(
             existing: existing, incoming: incoming, attachmentId: "att_1"
         )
         XCTAssertEqual(merged.count, 1)

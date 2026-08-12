@@ -127,6 +127,19 @@ class ConversationDraftStoreTest {
         assertThat(all.getValue("c1")).isEqualTo(draft("c1", "seeded"))
     }
 
+    @Test
+    fun inMemory_clearAll_removesEveryDraft() = runBlocking {
+        val store = InMemoryConversationDraftStore()
+        store.save(draft("c1", "one"))
+        store.save(draft("c2", "two"))
+
+        store.clearAll()
+
+        assertThat(store.observeAll().first()).isEmpty()
+        assertThat(store.load("c1")).isNull()
+        assertThat(store.load("c2")).isNull()
+    }
+
     // ---- DataStoreConversationDraftStore (durable) ----
 
     @Test
@@ -195,6 +208,22 @@ class ConversationDraftStoreTest {
 
         assertThat(store.load("c1")).isNull()
         assertThat(store.load("c2")?.text).isEqualTo("two")
+
+        scope.cancel()
+    }
+
+    @Test
+    fun dataStore_clearAll_removesEveryDraft() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d9.preferences_pb")), json)
+        store.save(draft("c1", "one"))
+        store.save(draft("c2", "two"))
+
+        store.clearAll()
+
+        assertThat(store.observeAll().first()).isEmpty()
+        assertThat(store.load("c1")).isNull()
+        assertThat(store.load("c2")).isNull()
 
         scope.cancel()
     }

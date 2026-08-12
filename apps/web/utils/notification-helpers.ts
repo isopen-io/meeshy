@@ -192,8 +192,13 @@ export function getNotificationLink(notification: Notification): string | null {
   const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
   if (postId) {
     const commentId = context?.commentId ?? metadata?.commentId;
+    // Quand la cible est une RÉPONSE, le parent top-level voyage en query
+    // (`?parent=<id>`) : la page de destination chasse le parent dans les
+    // pages top-level, déplie son thread puis cible la réponse via l'ancre.
+    const parentCommentId = context?.parentCommentId ?? metadata?.parentCommentId;
+    const parentQuery = commentId && parentCommentId ? `?parent=${parentCommentId}` : '';
     const anchor = commentId ? `#comment-${commentId}` : '';
-    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+    return `${resolveContentRoute(notification)}/${postId}${parentQuery}${anchor}`;
   }
 
   // 3. Amis / contacts

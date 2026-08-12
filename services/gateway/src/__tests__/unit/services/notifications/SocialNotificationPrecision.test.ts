@@ -48,6 +48,11 @@ const makePrismaMock = () => ({
   conversation: {
     findUnique: jest.fn(),
   },
+  // Audience du post declaree PUBLIC : les notifications a destinataire unique du
+  // fil (reponse, like, reaction sur commentaire) verifient desormais que le
+  // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
+  // la langue et le payload push — pas sur le droit de voir.
+  post: { findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
   userPreferences: {
     findUnique: jest.fn().mockResolvedValue(null),
   },
@@ -392,12 +397,15 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createStoryCommentNotificationsBatch — subtitles + postType', () => {
+    // `visibility` est REQUIS depuis le cycle 31 — ces cas portent sur le
+    // wording, pas sur l'audience, et déclarent donc le post public.
     const baseParams = {
       postId: POST_ID,
       commentId: COMMENT_ID,
       storyAuthorId: RECIPIENT_ID,
       commenterId: ACTOR_ID,
       commentExcerpt: 'Super moment !',
+      visibility: 'PUBLIC',
     };
 
     beforeEach(() => {

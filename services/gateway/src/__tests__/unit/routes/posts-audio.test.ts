@@ -1,7 +1,6 @@
 /**
  * Unit tests for posts/audio.ts
- * Tests POST /stories/audio, GET /stories/audio,
- *       POST /stories/audio/:audioId/use, GET /static/:filename
+ * Tests POST /stories/audio, GET /stories/audio, GET /static/:filename
  *
  * @jest-environment node
  */
@@ -46,13 +45,21 @@ const DEFAULT_MOCK_FILE = {
 
 function makePrisma(overrides: any = {}) {
   return {
-    storyBackgroundAudio: {
+    // `...overrides` EN PREMIER : placé en dernier, il réécrasait tout l'objet
+    // `sound` fusionné juste au-dessus dès qu'un test passait `{ sound: {...} }`,
+    // ne laissant que la clé surchargée. Les mocks de base disparaissaient en
+    // silence, et la route tombait en 500 sur la première méthode manquante.
+    ...overrides,
+    sound: {
       create: jest.fn<any>().mockResolvedValue({ id: 'audio-1', title: 'Test Audio', fileUrl: '/api/v1/static/story_audio_test.mp3', uploader: { username: 'alice' } }),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // Deux usages : `GET /static/:filename` consulte `mutedAt` avant de
+      // servir, et `POST /stories/audio` cherche un envoi identique (`null` =
+      // aucun, donc création). Le cas coupé vit dans staticMuted.test.ts.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),
-      ...overrides.storyBackgroundAudio,
+      ...overrides.sound,
     },
-    ...overrides,
   };
 }
 
@@ -136,7 +143,7 @@ describe('POST /stories/audio — success', () => {
     uploader: { username: 'alice' },
   });
   beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { create: mockCreate } } });
+    app = await buildApp({ prismaOverrides: { sound: { create: mockCreate } } });
   });
   afterAll(async () => { await app.close(); });
 
@@ -161,7 +168,7 @@ describe('POST /stories/audio — isPublic false', () => {
   beforeAll(async () => {
     app = await buildApp({
       mockFile: { ...DEFAULT_MOCK_FILE, fields: { ...DEFAULT_MOCK_FILE.fields, isPublic: { value: 'false' } } },
-      prismaOverrides: { storyBackgroundAudio: { create: mockCreate } },
+      prismaOverrides: { sound: { create: mockCreate } },
     });
   });
   afterAll(async () => { await app.close(); });
@@ -174,7 +181,12 @@ describe('POST /stories/audio — isPublic false', () => {
   });
 });
 
-describe('POST /stories/audio — missing extension defaults to .m4a', () => {
+/**
+ * Le repli n'est plus un `.m4a` aveugle : quand le nom de fichier n'a pas
+ * d'extension servable, elle est dérivée du MIME. Un payload `audio/mpeg`
+ * nommé `.m4a` aurait été servi avec le mauvais `Content-Type`.
+ */
+describe('POST /stories/audio — extension dérivée du MIME quand le nom n’en a pas', () => {
   let app: FastifyInstance;
   const mockCreate = jest.fn<any>().mockResolvedValue({
     id: 'audio-3', title: 'No Ext', fileUrl: '/api/v1/static/story_audio_noext.m4a',
@@ -183,16 +195,17 @@ describe('POST /stories/audio — missing extension defaults to .m4a', () => {
   beforeAll(async () => {
     app = await buildApp({
       mockFile: { ...DEFAULT_MOCK_FILE, filename: '' },
-      prismaOverrides: { storyBackgroundAudio: { create: mockCreate } },
+      prismaOverrides: { sound: { create: mockCreate } },
     });
   });
   afterAll(async () => { await app.close(); });
 
-  it('uses .m4a extension when filename has no extension', async () => {
+  it('derives the extension from the MIME type when the filename has none', async () => {
     const res = await app.inject({ method: 'POST', url: '/stories/audio' });
     expect(res.statusCode).toBe(201);
     const call = mockCreate.mock.calls[0][0] as any;
-    expect(call.data.fileUrl).toContain('.m4a');
+    // `DEFAULT_MOCK_FILE` déclare `audio/mpeg` → `.mp3`, pas `.m4a`.
+    expect(call.data.fileUrl).toContain('.mp3');
   });
 });
 
@@ -218,7 +231,7 @@ describe('GET /stories/audio — with results and search', () => {
   ];
   const mockFindMany = jest.fn<any>().mockResolvedValue(audioList);
   beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { findMany: mockFindMany } } });
+    app = await buildApp({ prismaOverrides: { sound: { findMany: mockFindMany } } });
   });
   afterAll(async () => { await app.close(); });
 
@@ -231,36 +244,15 @@ describe('GET /stories/audio — with results and search', () => {
   it('passes search query to prisma', async () => {
     const res = await app.inject({ method: 'GET', url: '/stories/audio?q=happy&limit=5' });
     expect(res.statusCode).toBe(200);
+    // La clause est passée d'un `title` nu à un `OR` titre/pseudo : un son
+    // capturé naît sans titre, le chercher par titre seul le rendait invisible.
+    // L'OR de recherche vit dans le AND, à côté du prédicat NOT_MUTED_WHERE —
+    // deux OR au même niveau, le second écraserait le premier.
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ title: expect.any(Object) }),
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([expect.objectContaining({ OR: expect.any(Array) })]),
+      }),
     }));
-  });
-});
-
-// ─── POST /stories/audio/:audioId/use ────────────────────────────────────────
-
-describe('POST /stories/audio/:audioId/use — increment counter', () => {
-  let app: FastifyInstance;
-  const mockUpdate = jest.fn<any>().mockResolvedValue({});
-  beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { update: mockUpdate } } });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 and calls prisma update', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio/audio-1/use' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'audio-1' },
-      data: { usageCount: { increment: 1 } },
-    }));
-  });
-
-  it('returns 200 even when audio does not exist (silent fail)', async () => {
-    mockUpdate.mockRejectedValueOnce(new Error('Record not found'));
-    const res = await app.inject({ method: 'POST', url: '/stories/audio/nonexistent/use' });
-    expect(res.statusCode).toBe(200);
   });
 });
 
@@ -317,5 +309,128 @@ describe('GET /static/:filename — success', () => {
     const res = await app.inject({ method: 'GET', url: '/static/..%2F..%2Fetc%2Fpasswd.mp3' });
     // Path traversal should be mitigated by path.basename()
     expect(res.statusCode).toBe(200);
+  });
+});
+
+// ─── POST /stories/audio — gardes ajoutées après la revue sécurité ───────────
+
+describe('POST /stories/audio — conteneur non servable', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>().mockResolvedValue({ id: 'x' });
+  beforeAll(async () => {
+    app = await buildApp({
+      // MIME accepté par la liste d'upload, mais `.mpga` n'est pas servable :
+      // avant, la ligne était créée et son `fileUrl` renvoyait 400 À VIE.
+      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'song.mpga', mimetype: 'audio/mpeg' },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('accepts it under the MIME extension rather than creating a dead row', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(201);
+    // `.mpga` est remplacé par `.mp3`, l'extension canonique du MIME déclaré.
+    expect((mockCreate.mock.calls[0][0] as any).data.fileUrl).toContain('.mp3');
+  });
+});
+
+describe('POST /stories/audio — conteneur inconnu du MIME et du nom', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  beforeAll(async () => {
+    app = await buildApp({
+      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'voice.webm', mimetype: 'audio/webm' },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('is rejected before anything is written', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /stories/audio — ré-envoi du même fichier', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  const existing = { id: 'deja-la', title: 'Test Audio', fileUrl: '/api/v1/static/x.mp3' };
+  beforeAll(async () => {
+    app = await buildApp({
+      prismaOverrides: {
+        sound: {
+          create: mockCreate,
+          findFirst: jest.fn<any>().mockResolvedValue(existing),
+        },
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('is idempotent instead of violating the unique index with a 500', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.id).toBe('deja-la');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /stories/audio — fichier trop gros', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  beforeAll(async () => {
+    app = await buildApp({
+      // `@fastify/multipart` lève quand le plafond est franchi en cours de flux.
+      mockFile: {
+        ...DEFAULT_MOCK_FILE,
+        toBuffer: jest.fn<any>().mockRejectedValue(new Error('request file too large')),
+      },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 413 rather than an anonymous 500', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().code).toBe('FILE_TOO_LARGE');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /stories/audio — recherche', () => {
+  let app: FastifyInstance;
+  const findMany = jest.fn<any>().mockResolvedValue([]);
+  beforeAll(async () => {
+    app = await buildApp({ prismaOverrides: { sound: { findMany } } });
+  });
+  afterAll(async () => { await app.close(); });
+
+  /**
+   * Un son CAPTURÉ naît sans titre — le libellé « Son original » est composé
+   * par le client dans sa langue. Chercher le titre seul rendrait donc
+   * introuvable tout ce que la bibliothèque produit d'elle-même.
+   */
+  it('matches the uploader username as well as the title', async () => {
+    await app.inject({ method: 'GET', url: '/stories/audio?q=alice' });
+    const where = (findMany.mock.calls[0][0] as any).where;
+    expect(where.AND[1].OR).toEqual([
+      { title: { contains: 'alice', mode: 'insensitive' } },
+      { uploader: { username: { contains: 'alice', mode: 'insensitive' } } },
+    ]);
+    // La découverte reste bornée aux sons publics et non coupés — forme
+    // isSet-safe : `mutedAt: null` seul ne matche pas un champ ABSENT en
+    // Prisma-Mongo, or aucun chemin de création ne pose `mutedAt` (prod
+    // 2026-08-02 : bibliothèque entière invisible).
+    expect(where.isPublic).toBe(true);
+    expect(where.AND[0]).toEqual({ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] });
+  });
+
+  it('includes the uploader so the list can credit an author', async () => {
+    await app.inject({ method: 'GET', url: '/stories/audio' });
+    const args = findMany.mock.calls[findMany.mock.calls.length - 1][0] as any;
+    expect(args.include?.uploader).toBeDefined();
   });
 });

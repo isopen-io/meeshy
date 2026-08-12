@@ -99,6 +99,17 @@ public final class PlaybackCoordinator {
         return false
     }
 
+    /// `true` when any registered AUDIO engine is playing — the shared VIDEO
+    /// manager is deliberately excluded. This is the background-transition
+    /// discriminant: audio playback survives backgrounding under the `audio`
+    /// UIBackgroundMode, while video NEVER does (it either hands off to PiP or
+    /// pauses). `isAnyPlaying` above stays the global predicate (video included)
+    /// for the post-call resume gate in `ConversationAudioCoordinator`.
+    public var isAnyAudioPlaying: Bool {
+        for (_, weak) in audioPlayers where weak.player?.isPlaying == true { return true }
+        return false
+    }
+
     // MARK: - Stop All Playback
 
     public func stopAll() {

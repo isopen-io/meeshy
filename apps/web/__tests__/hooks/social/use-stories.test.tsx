@@ -47,10 +47,14 @@ const mockCurrentUser = {
 
 let mockAuthToken: string | null = 'tok-1';
 
-jest.mock('@/stores/auth-store', () => ({
-  useAuthStore: (sel: (s: unknown) => unknown) =>
-    sel({ user: mockCurrentUser, authToken: mockAuthToken }),
-}));
+jest.mock('@/stores/auth-store', () => {
+  const useAuthStore = (sel: (s: unknown) => unknown) =>
+    sel({ user: mockCurrentUser, authToken: mockAuthToken });
+  // notification-read-sync (appelé par recordView) lit le token hors React
+  // via getState().
+  useAuthStore.getState = () => ({ user: mockCurrentUser, authToken: mockAuthToken });
+  return { useAuthStore };
+});
 
 // ---------------------------------------------------------------------------
 // Query keys mock
@@ -62,6 +66,20 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       all: ['stories'],
       feed: () => ['stories', 'feed'],
     },
+    // Consommées par notification-read-sync (recordView marque les
+    // notifications du slide affiché).
+    notifications: {
+      all: ['notifications'],
+      lists: () => ['notifications', 'list'],
+      unreadCount: () => ['notifications', 'unreadCount'],
+    },
+  },
+}));
+
+jest.mock('@/services/notification.service', () => ({
+  NotificationService: {
+    markPostRead: jest.fn().mockResolvedValue(undefined),
+    markConversationRead: jest.fn().mockResolvedValue(undefined),
   },
 }));
 

@@ -66,7 +66,7 @@ struct GlobalSearchView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
@@ -170,11 +170,11 @@ struct GlobalSearchView: View {
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .overlay(alignment: .topTrailing) {
                             if count > 0 {
-                                Text(count > 99 ? "99+" : "\(count)")
+                                Text(NotificationBadge.displayed(count))
                                     // Fixed: micro count-badge positioned via absolute
                                     // .offset/.fixedSize — must not scale with Dynamic Type
                                     // or it clips out of its overlay anchor.
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
@@ -305,6 +305,7 @@ struct GlobalSearchView: View {
                         Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
                             .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
                         Spacer()
 
@@ -355,16 +356,17 @@ struct GlobalSearchView: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.removeRecentSearch(query)
-                }
-                HapticFeedback.light()
+                removeRecentSearch(query)
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes") + ": \(query)")
+            // La rangée est un élément VoiceOver combiné (bouton « relancer la
+            // recherche ») : le bouton de suppression imbriqué serait absorbé et
+            // son action deviendrait injoignable. Masqué ici, ré-exposé via
+            // `.accessibilityAction(named:)` sur la rangée (doctrine 183i).
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -382,6 +384,16 @@ struct GlobalSearchView: View {
         .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche recente") + ": \(query)")
         .accessibilityHint(String(localized: "accessibility.recent_search_hint", defaultValue: "Relance la recherche"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes"))) {
+            removeRecentSearch(query)
+        }
+    }
+
+    private func removeRecentSearch(_ query: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.removeRecentSearch(query)
+        }
+        HapticFeedback.light()
     }
 
     // MARK: - Messages Results
@@ -414,7 +426,7 @@ struct GlobalSearchView: View {
 
                     Spacer()
 
-                    Text(formatTimeAgo(result.createdAt))
+                    Text(Self.formatTimeAgo(result.createdAt))
                         .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
@@ -641,7 +653,7 @@ struct GlobalSearchView: View {
     private func messageResultAccessibilityLabel(_ result: GlobalSearchMessageResult) -> String {
         let messageFrom = String(localized: "accessibility.message_from", defaultValue: "Message de")
         let inConversation = String(localized: "accessibility.in_conversation", defaultValue: "dans")
-        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(formatTimeAgo(result.createdAt))"
+        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(Self.formatTimeAgo(result.createdAt))"
     }
 
     private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
@@ -713,12 +725,13 @@ struct GlobalSearchView: View {
 
     // MARK: - Helpers
 
-    private func formatTimeAgo(_ date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "now" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)d"
+    /// Delegates to the SSOT `RelativeTimeFormatter` (dense-list `.short` style)
+    /// instead of re-forging the ladder locally — that hand-rolled version was
+    /// hardcoded in English ("now" / "5m" / "2h" / "3d"), showing English
+    /// timestamps to non-English users regardless of their configured language.
+    /// `static` + injectable `now` so it's unit-testable without a live view.
+    static func formatTimeAgo(_ date: Date, now: Date = Date()) -> String {
+        RelativeTimeFormatter.shortString(for: date, now: now)
     }
 
     private func highlightedText(_ text: String, query: String) -> AttributedString {

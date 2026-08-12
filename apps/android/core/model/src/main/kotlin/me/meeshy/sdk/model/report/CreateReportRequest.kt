@@ -55,6 +55,20 @@ public object ReportRequestBuilder {
     public fun forMessage(messageId: String, reason: ReportReason, details: String?): CreateReportRequest? =
         build("message", messageId, reason, details)
 
+    /**
+     * Builds a post-report body — le schema gateway (`admin/reports.ts`) accepte
+     * `'post'` au meme titre que `'user'`/`'message'`. Memes gardes que [forUser].
+     */
+    public fun forPost(postId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("post", postId, reason, details)
+
+    /**
+     * Builds a story-report body (`'story'` cote gateway). Une story EST un post en
+     * base, mais le type wire distinct garde le triage moderation lisible.
+     */
+    public fun forStory(storyId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("story", storyId, reason, details)
+
     private fun build(
         reportedType: String,
         entityId: String,

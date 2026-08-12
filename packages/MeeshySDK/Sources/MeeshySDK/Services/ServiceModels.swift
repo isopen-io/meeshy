@@ -82,14 +82,19 @@ public struct CreatePostRequest: Encodable {
     public let mobileTranscription: MobileTranscriptionPayload?
     public let viaUsername: String?
     public let repostOfId: String?
+    /// Lieu partagé (picker → `SharedPlace`) — même clé `location` top-level que
+    /// pour un message ou un commentaire, hissée par le gateway depuis
+    /// `metadata.location` (Task 9).
+    public let location: SharedPlace?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
         self.originalLanguage = originalLanguage
         self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
         self.repostOfId = repostOfId
+        self.location = location
     }
 }
 
@@ -106,17 +111,22 @@ public struct CreateCommentRequest: Encodable {
     /// re-transcription serveur). Même structure que pour les posts.
     public let mobileTranscription: MobileTranscriptionPayload?
     public let originalLanguage: String?
+    /// Lieu partagé (picker → `SharedPlace`) — même clé `location` que pour un
+    /// message ou un post, hissée par le gateway depuis `metadata.location`.
+    public let location: SharedPlace?
 
     public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
                 attachmentIds: [String]? = nil,
                 mobileTranscription: MobileTranscriptionPayload? = nil,
-                originalLanguage: String? = nil) {
+                originalLanguage: String? = nil,
+                location: SharedPlace? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
         self.attachmentIds = (attachmentIds?.isEmpty == false) ? attachmentIds : nil
         self.mobileTranscription = mobileTranscription
         self.originalLanguage = originalLanguage
+        self.location = location
     }
 }
 
@@ -127,9 +137,26 @@ public struct LikeRequest: Encodable {
     }
 }
 
+/// Modification de la position d'un post à l'ÉDITION — tri-état sur le fil :
+/// requête sans la clé `location` = inchangé, `location: null` = retrait
+/// (le gateway efface `metadata.location`), objet = remplacement. Le
+/// `Encodable` synthétisé ne sachant pas émettre un `null` EXPLICITE,
+/// `UpdatePostRequest` encode ce cas à la main (`encodeNil`).
+public enum PostLocationUpdate: Sendable, Equatable {
+    case set(SharedPlace)
+    case remove
+}
+
 public struct UpdatePostRequest: Encodable, Sendable {
     public let content: String?
     public let visibility: String?
+    /// `nil` = « ne touche pas au champ », PAS « vide-le ». L'`Encodable`
+    /// synthétisé omet les optionnels `nil` du JSON, et le gateway ne réécrit
+    /// le champ que s'il est présent (`PostService.updatePost` :
+    /// `if (data.visibilityUserIds !== undefined)`). Pour NETTOYER une liste
+    /// d'audience devenue orpheline, envoyer `[]` — accepté par
+    /// `UpdatePostSchema` sauf pour `EXCEPT`/`ONLY`, que son `refine` exige
+    /// non vides.
     public let visibilityUserIds: [String]?
     public let moodEmoji: String?
     /// Source language. Changing it re-runs the Prisme translation pipeline.
@@ -138,16 +165,53 @@ public struct UpdatePostRequest: Encodable, Sendable {
     public let type: String?
     /// Ids of attached media (PostMedia) to detach during the edit.
     public let removeMediaIds: [String]?
+    /// Full replacement composition blob for a STORY edit. On a STORY, its
+    /// presence counts as a CONTENT edit — the gateway resets views/reactions
+    /// (`engagementReset`) while keeping the publication date.
+    public let storyEffects: StoryEffects?
+    /// Ids of freshly uploaded media (TUS, postId=null) to attach during the
+    /// edit — same contract as `CreateStoryRequest.mediaIds`.
+    public let mediaIds: [String]?
+    /// Tri-état (cf. doc de `PostLocationUpdate`) : `nil` = clé absente du
+    /// JSON (inchangé), `.remove` = `location: null`, `.set` = objet.
+    public let location: PostLocationUpdate?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
-                removeMediaIds: [String]? = nil) {
+                removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
+                mediaIds: [String]? = nil, location: PostLocationUpdate? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
         self.originalLanguage = originalLanguage
         self.type = type
         self.removeMediaIds = removeMediaIds
+        self.storyEffects = storyEffects
+        self.mediaIds = mediaIds
+        self.location = location
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
+        case type, removeMediaIds, storyEffects, mediaIds, location
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(content, forKey: .content)
+        try c.encodeIfPresent(visibility, forKey: .visibility)
+        try c.encodeIfPresent(visibilityUserIds, forKey: .visibilityUserIds)
+        try c.encodeIfPresent(moodEmoji, forKey: .moodEmoji)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(type, forKey: .type)
+        try c.encodeIfPresent(removeMediaIds, forKey: .removeMediaIds)
+        try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
+        try c.encodeIfPresent(mediaIds, forKey: .mediaIds)
+        switch location {
+        case .set(let place): try c.encode(place, forKey: .location)
+        case .remove: try c.encodeNil(forKey: .location)
+        case nil: break
+        }
     }
 }
 
@@ -229,7 +293,7 @@ public struct TranslateRequest: Encodable {
     }
 }
 
-public struct TranslateResponse: Decodable {
+public struct TranslateResponse: Decodable, Sendable {
     public let translatedText: String
     public let detectedLanguage: String?
 
@@ -381,6 +445,12 @@ public struct AttachmentConsentError: Error, Sendable {
     public let code: String
     public let message: String
     public let requiredConsents: [String]
+
+    public init(code: String, message: String, requiredConsents: [String]) {
+        self.code = code
+        self.message = message
+        self.requiredConsents = requiredConsents
+    }
 }
 
 /// Decodable shape of the HTTP 403 body for consent-required 403 responses.

@@ -1,5 +1,6 @@
 import {
   authorSelect,
+  storyAuthorSelect,
   mediaSelect,
   mediaInclude,
   commentMediaInclude,
@@ -20,6 +21,23 @@ describe('posts/postIncludes — canonical shared selects', () => {
         displayName: true,
         avatar: true,
       });
+    });
+  });
+
+  describe('storyAuthorSelect', () => {
+    it("inclut banner pour que l'interstitiel d'identité soit complet sans résolution paresseuse", () => {
+      expect(storyAuthorSelect).toHaveProperty('banner', true);
+    });
+
+    it('reste un sur-ensemble de authorSelect', () => {
+      for (const key of Object.keys(authorSelect)) {
+        expect(storyAuthorSelect).toHaveProperty(key);
+      }
+    });
+
+    it('conserve la présence déjà embarquée', () => {
+      expect(storyAuthorSelect).toHaveProperty('isOnline', true);
+      expect(storyAuthorSelect).toHaveProperty('lastActiveAt', true);
     });
   });
 
@@ -125,6 +143,14 @@ describe('posts/postIncludes — canonical shared selects', () => {
       );
     });
 
+    it('selects metadata so a geotagged comment keeps its location in the embedded preview', () => {
+      // Sans `metadata` ici, un commentaire portant `metadata.location` montre sa
+      // position dans la liste complète (GET .../comments) mais PAS dans l'aperçu
+      // des 3 commentaires embarqué sur le post lui-même — la position "disparaît"
+      // selon la surface consultée.
+      expect(commentsPreviewInclude.select.metadata).toBe(true);
+    });
+
     it('embeds the comment media preview so a comment attachment survives reload', () => {
       // The comments-with-media bug: a comment attachment (image/video/audio,
       // incl. its transcription + per-language TTS variants) showed live (via
@@ -155,6 +181,13 @@ describe('posts/postIncludes — canonical shared selects', () => {
       expect(repostOfInclude.select.media).toBe(mediaInclude);
     });
 
+    it('selects metadata so a geotagged original keeps its location on the repost', () => {
+      // Sans `metadata` ici, `hoistLocationDeep` n'a rien à hisser sur
+      // `repostOf` : le repost perd la position de l'original (lot 2,
+      // clos 2026-07-30). Même porte que `commentsPreviewInclude.metadata`.
+      expect(repostOfInclude.select.metadata).toBe(true);
+    });
+
     it('exposes the full set of repost preview fields', () => {
       expect(Object.keys(repostOfInclude.select).sort()).toEqual(
         [
@@ -172,7 +205,25 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'createdAt',
           'likeCount',
           'commentCount',
+          'metadata',
+          'viewCount',
+          'repostCount',
+          'shareCount',
+          'bookmarkCount',
+          'impressionCount',
         ].sort(),
+      );
+    });
+
+    it("selects the original's reach counters — sans eux, aucune UI ne peut afficher les vues/reposts/partages/favoris de l'original (chantier reposts cohérents, tâche 1)", () => {
+      expect(repostOfInclude.select).toEqual(
+        expect.objectContaining({
+          viewCount: true,
+          repostCount: true,
+          shareCount: true,
+          bookmarkCount: true,
+          impressionCount: true,
+        }),
       );
     });
   });

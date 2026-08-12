@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.PostViewersResponse
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -27,6 +28,13 @@ data class CreatePostRequest(
     val originalLanguage: String? = null,
     val mobileTranscription: MobileTranscriptionPayload? = null,
     val repostOfId: String? = null,
+    val viaUsername: String? = null,
+    /**
+     * Optional attached location — the exact `{latitude, longitude, name, address,
+     * category}` shape the gateway's `parseSharedPlace` validates
+     * (`services/gateway/src/services/location/sharedPlace.ts`).
+     */
+    val location: SharedPlace? = null,
 )
 
 /** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */
@@ -96,6 +104,17 @@ data class PostViewRequest(
     val duration: Int? = null,
 )
 
+/**
+ * Like/react to a post with a chosen [emoji] — port of the iOS `StatusService.react`
+ * body (`{ emoji }` to `POST /posts/:id/like`). The gateway defaults to `❤️` when the
+ * body is absent, so the plain [PostApi.like] stays valid; this variant carries the
+ * emoji a mood-status reaction picks.
+ */
+@Serializable
+data class PostLikeRequest(
+    val emoji: String,
+)
+
 /** Batch impression-tracking body for a feed slice. */
 @Serializable
 data class PostImpressionsRequest(
@@ -112,6 +131,20 @@ interface PostApi {
 
     @GET("posts/feed/stories")
     suspend fun getStories(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /** Friends' mood statuses (`GET /posts/feed/statuses`) — StatusService.Mode.friends. */
+    @GET("posts/feed/statuses")
+    suspend fun getStatuses(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /** Discover mood statuses (`GET /posts/feed/statuses/discover`) — StatusService.Mode.discover. */
+    @GET("posts/feed/statuses/discover")
+    suspend fun getStatusesDiscover(
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
@@ -145,6 +178,13 @@ interface PostApi {
 
     @POST("posts/{id}/like")
     suspend fun like(@Path("id") postId: String): ApiResponse<Unit>
+
+    /** Like/react to a post carrying a chosen emoji (mood-status reaction). */
+    @POST("posts/{id}/like")
+    suspend fun likeWithEmoji(
+        @Path("id") postId: String,
+        @Body body: PostLikeRequest,
+    ): ApiResponse<Unit>
 
     @DELETE("posts/{id}/like")
     suspend fun unlike(@Path("id") postId: String): ApiResponse<Unit>

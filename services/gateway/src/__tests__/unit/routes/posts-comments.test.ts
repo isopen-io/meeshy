@@ -122,16 +122,24 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
   } as any);
 
   // prisma decorated on app (used for broadcast lookups in POST/DELETE handlers)
-  app.decorate('prisma', {
+  // et, depuis la garde d'audience du fil, par les routes elles-mêmes : le
+  // MÊME double doit donc être passé à `registerCommentRoutes`. Audience
+  // déclarée PUBLIC — ce harnais porte sur les codes de retour, pas sur le
+  // droit de voir (cf. `posts/comments-audience.test.ts`).
+  const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
+  const prisma = {
     post: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue(publicAcl),
     },
     postComment: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: publicAcl }),
     },
-  });
+  };
+  app.decorate('prisma', prisma);
 
-  registerCommentRoutes(app, {} as any, requiredAuth);
+  registerCommentRoutes(app, prisma as any, requiredAuth);
   await app.ready();
   return app;
 }

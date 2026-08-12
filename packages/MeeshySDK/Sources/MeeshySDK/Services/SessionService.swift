@@ -9,6 +9,20 @@ public struct UserSession: Codable, Sendable, Identifiable {
     public let lastActive: Date?
     public let createdAt: Date
     public let isCurrent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case deviceName
+        case ipAddress
+        case lastActive = "lastActivityAt"
+        case createdAt
+        case isCurrent = "isCurrentSession"
+    }
+}
+
+struct SessionsListData: Decodable {
+    let sessions: [UserSession]
+    let totalCount: Int
 }
 
 // MARK: - Protocol
@@ -30,8 +44,8 @@ public final class SessionService: SessionServiceProviding, @unchecked Sendable 
     }
 
     public func listSessions() async throws -> [UserSession] {
-        let response: APIResponse<[UserSession]> = try await api.request(endpoint: "/auth/sessions")
-        return response.data
+        let response: APIResponse<SessionsListData> = try await api.request(endpoint: "/auth/sessions")
+        return response.data.sessions
     }
 
     public func revokeSession(sessionId: String) async throws {

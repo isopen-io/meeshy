@@ -340,7 +340,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         avatar: String? = nil,
         avatarThumbHash: String? = nil,
         banner: String? = nil,
-        bannerThumbHash: String? = nil
+        bannerThumbHash: String? = nil,
+        voicePublic: Bool? = nil
     ) -> MeeshyUser {
         MeeshyUser(
             id: id, username: username, email: email,
@@ -367,7 +368,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
+            voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality
@@ -413,9 +414,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// des langues sans équivalent 639-1 (`"bas"`, `"dua"`, `"ewo"`), qui NE
     /// doivent jamais être tronqués à 2 lettres (`"bas"` → `"ba"` = Bachkir,
     /// langue sans rapport, casserait la résolution du Prisme Linguistique).
-    /// Un ISO 639-3 sans entrée Meeshy est réduit à son préfixe 2-lettres
-    /// uniquement si ce préfixe est lui-même supporté (`"eng"` → `"en"`) ;
-    /// sinon il est rejeté (`nil`) plutôt que corrompu (`"spa"` → `"sp"` ≠ `"es"`).
+    /// Un ISO 639-2/639-3 sans entrée Meeshy est réduit à son ISO 639-1 via la
+    /// table EXPLICITE `iso639ReductionMap` (`"eng"` → `"en"`, `"spa"` → `"es"`,
+    /// `"swe"` → `"sv"`), JAMAIS par troncature aveugle : `"swe"` (Suédois) ne
+    /// devient pas `"sw"` (Swahili) et `"fil"` (Filipino, sans équivalent 639-1)
+    /// n'est PAS mappé sur `"fi"` (Finnois) mais rejeté (`nil`).
     ///
     /// Miroir Swift de `normalizeLanguageCode` :
     /// - `packages/shared/utils/language-normalize.ts` (source de vérité TS)
@@ -440,15 +443,59 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             return primary
         }
 
-        // ISO 639-3 sans entrée Meeshy : réduction 2-lettres si supportée.
+        // ISO 639-2/639-3 sans entrée Meeshy directe : réduction via table
+        // EXPLICITE (jamais par troncature — `"fil"` → `"fi"`, `"swe"` → `"sw"`
+        // étaient des collisions silencieuses). Cible re-validée contre les codes
+        // supportés. Miroir de `ISO_639_3_TO_1` (language-normalize.ts, TS SSOT).
         if primary.count > 2 {
-            let twoLetter = String(primary.prefix(2))
-            return LanguageData.supportedCodeSet.contains(twoLetter) ? twoLetter : nil
+            guard let reduced = Self.iso639ReductionMap[primary],
+                  LanguageData.supportedCodeSet.contains(reduced) else { return nil }
+            return reduced
+        }
+
+        // Alias ISO 639-1 DÉPRÉCIÉ (`iw`/`in`/`ji`) : réduit vers le code canonique
+        // courant, re-validé contre les codes supportés (comme le chemin 3-lettres).
+        // La JVM normalise `he→iw`, `id→in`, `yi→ji` ; un client Android émet donc
+        // `iw` sur une locale hébraïque, qui verbatim ne matcherait aucune trad `he`.
+        // Miroir de `LEGACY_ISO_639_1` (language-normalize.ts, TS SSOT).
+        if let legacy = Self.legacyISO6391Map[primary] {
+            return LanguageData.supportedCodeSet.contains(legacy) ? legacy : nil
         }
 
         // Code 2-lettres inconnu : conservé (comportement historique).
         return primary
     }
+
+    /// Table de réduction des codes ISO 639-1 DÉPRÉCIÉS vers leur code canonique
+    /// courant (miroir de `LEGACY_ISO_639_1` dans
+    /// `packages/shared/utils/language-normalize.ts`). `iw`/`in`/`ji` sont les
+    /// anciens codes de l'hébreu/indonésien/yiddish, encore émis par la JVM
+    /// (`java.util.Locale.getLanguage()` : `he→iw`, `id→in`, `yi→ji`). Chaque cible
+    /// est re-validée contre les codes supportés. Toute évolution DOIT toucher les
+    /// deux sites (TS + Swift).
+    private static let legacyISO6391Map: [String: String] = [
+        "iw": "he", "in": "id", "ji": "yi"
+    ]
+
+    /// Table de réduction ISO 639-2/639-3 → ISO 639-1 (miroir de `ISO_639_3_TO_1`
+    /// dans `packages/shared/utils/language-normalize.ts`). Couvre les variantes
+    /// 639-2/T ET 639-2/B qui diffèrent (`deu`/`ger`, `fra`/`fre`, `zho`/`chi`…).
+    /// Tout code 3-lettres absent (dont `"fil"`, `"tgl"`) est rejeté — jamais
+    /// tronqué. Toute évolution DOIT toucher les deux sites (TS + Swift).
+    private static let iso639ReductionMap: [String: String] = [
+        "afr": "af", "amh": "am", "ara": "ar", "ben": "bn", "bul": "bg",
+        "ces": "cs", "cze": "cs", "dan": "da", "deu": "de", "ger": "de",
+        "ell": "el", "gre": "el", "eng": "en", "ewe": "ee", "fas": "fa", "per": "fa",
+        "fin": "fi", "fra": "fr", "fre": "fr", "hau": "ha", "heb": "he", "hin": "hi",
+        "hrv": "hr", "hun": "hu", "hye": "hy", "arm": "hy", "ibo": "ig", "ind": "id",
+        "ita": "it", "jpn": "ja", "kin": "rw", "kor": "ko", "lin": "ln", "lit": "lt",
+        "lug": "lg", "mlg": "mg", "msa": "ms", "may": "ms", "nld": "nl", "dut": "nl",
+        "nor": "no", "nya": "ny", "orm": "om", "pol": "pl", "por": "pt", "ron": "ro",
+        "rum": "ro", "run": "rn", "rus": "ru", "sna": "sn", "som": "so", "spa": "es",
+        "swa": "sw", "swe": "sv", "tha": "th", "tir": "ti", "tur": "tr", "ukr": "uk",
+        "urd": "ur", "vie": "vi", "wol": "wo", "xho": "xh", "yor": "yo", "zho": "zh",
+        "chi": "zh", "zul": "zu"
+    ]
 }
 
 // MARK: - /auth/me Response

@@ -32,16 +32,18 @@ public enum class StoryRingState { None, Unread, Read }
 /**
  * CENTRAL presence-dot colour mapping for [presence], or `null` when no dot
  * should render. Pure so it stays unit-testable off Compose. Mirrors iOS
- * (MeeshyAvatar renders green online/recent, orange away, and NOTHING for
+ * (MeeshyAvatar renders green online, orange away, grey idle, and NOTHING for
  * offline) and the web `PRESENCE_DOT_CLASS` consumers (which skip offline
- * dots): green = online/recent, orange = away, offline/no-data = no dot.
+ * dots) — règle 1/3/5 : green = online, orange = away (1-3min), grey =
+ * idle (3-5min, AFFICHÉ), offline/no-data = no dot.
  * Every surface (contacts, profile, new-conversation) MUST consume this —
  * never redeclare the palette locally.
  */
 public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (presence) {
-    PresenceState.ONLINE, PresenceState.RECENT -> MeeshyPalette.Success // vert : connecté / actif <= 5min
-    PresenceState.AWAY -> MeeshyPalette.Warning                          // orange : absent 5-30min
-    PresenceState.OFFLINE, null -> null                                 // hors ligne / aucune donnée : aucun dot
+    PresenceState.ONLINE -> MeeshyPalette.Success // vert : connecté (<= 5min) / actif <= 60s
+    PresenceState.AWAY -> MeeshyPalette.Warning   // orange : absent 1-3min
+    PresenceState.IDLE -> MeeshyPalette.Neutral400 // gris AFFICHÉ : inactif 3-5min
+    PresenceState.OFFLINE, null -> null           // hors ligne (> 5min) / aucune donnée : aucun dot
 }
 
 /**

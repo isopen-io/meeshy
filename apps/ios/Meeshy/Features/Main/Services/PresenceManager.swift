@@ -1,6 +1,30 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
+
+// MARK: - Presence Refresh Signal
+
+/// Debounced, coarse-grained re-render signal for observers that need to
+/// react to presence changes WITHOUT subscribing to `PresenceManager`
+/// itself. Every `@Published` property on ONE `ObservableObject` shares the
+/// SAME `objectWillChange` publisher, so observing `PresenceManager`
+/// directly would re-fire on every single `presenceMap` mutation (one per
+/// `user:status` socket event) — exactly the "re-render the whole list on
+/// every presence event" cost `ConversationListView` already deliberately
+/// avoids by reading `presenceManager` as a plain (unobserved) computed
+/// property. `presenceVersion`'s VALUE is irrelevant — only the CHANGE is
+/// the signal; consumers observe THIS object (`@ObservedObject`) instead of
+/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact (audit
+/// 2026-07-20, "pastilles de présence jamais rafraîchies sur user:status").
+@MainActor
+final class PresenceRefreshSignal: ObservableObject {
+    @Published private(set) var presenceVersion: Int = 0
+
+    fileprivate func bump() {
+        presenceVersion &+= 1
+    }
+}
 
 // MARK: - Presence Manager
 
@@ -9,8 +33,19 @@ final class PresenceManager: ObservableObject {
     static let shared = PresenceManager()
 
     @Published var presenceMap: [String: UserPresence] = [:] {
-        didSet { schedulePersist() }
+        didSet {
+            schedulePersist()
+            scheduleVersionBump()
+        }
     }
+
+    /// Debounced companion signal — see `PresenceRefreshSignal`. Bumped
+    /// `Self.versionBumpDebounce` seconds after the LAST `presenceMap`
+    /// mutation settles, coalescing a burst of `user:status` events (e.g.
+    /// right after reconnect) into a single downstream re-render.
+    let refreshSignal = PresenceRefreshSignal()
+    nonisolated(unsafe) private var versionBumpTask: Task<Void, Never>?
+    nonisolated static let versionBumpDebounce: TimeInterval = 0.4
 
     private var cancellables = Set<AnyCancellable>()
     nonisolated(unsafe) private var recalcTimer: Timer?
@@ -63,9 +98,9 @@ final class PresenceManager: ObservableObject {
         // (e.g. iOS background → foreground transition). Wiping the map the
         // moment `isConnected` flips to false caused all avatars to lose
         // their online dots during every resume, which felt like the app
-        // "forgot" who was online. The `.away` computed state still kicks in
-        // after 5 min of inactivity, so stale data decays gracefully.
-        // Presence will be refreshed when `user:status` events resume.
+        // "forgot" who was online. The computed decay (away at 1 min, idle at
+        // 3 min, offline at 5 min) still applies, so stale data degrades
+        // gracefully. Presence will be refreshed when `user:status` events resume.
 
         // Hydrate from disk off-main: fills entries not yet populated by a
         // real-time socket event (live updates take precedence via merging).
@@ -77,15 +112,21 @@ final class PresenceManager: ObservableObject {
             self.presenceMap = loaded.merging(self.presenceMap) { _, liveEntry in liveEntry }
         }
 
-        // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
-        // traverse une frontière d'état dans cette fenêtre : online → away à 300s
-        // d'inactivité, ou away → offline à 1800s après déconnexion
-        recalcTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // Recalcule toutes les 30s — déclenche un re-render seulement si un
+        // utilisateur traverse une frontière d'état 1/3/5 dans cette fenêtre :
+        // online → away à 60s, away → idle à 180s, idle → offline à 300s.
+        recalcTimer = Timer.scheduledTimer(withTimeInterval: Self.recalcInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
                 let hasTransition = self.presenceMap.values.contains { Self.isNearStateFlip($0) }
                 if hasTransition {
                     self.objectWillChange.send()
+                    // Reaches actual observers (`refreshSignal`) — previously
+                    // this recalc fired into the void: nothing subscribed to
+                    // `PresenceManager` directly, so a 1/3/5 boundary crossing
+                    // (e.g. online → away at 60s, no new `user:status` event)
+                    // never repainted a single avatar dot.
+                    self.refreshSignal.bump()
                 }
             }
         }
@@ -136,13 +177,18 @@ final class PresenceManager: ObservableObject {
         return UserPresence(isOnline: isOnline ?? false, lastActiveAt: lastActiveAt).state
     }
 
+    /// Cadence du timer de recalcul. Egale a la largeur des fenetres de
+    /// `isNearStateFlip` : chaque transition 1/3/5 est captee par le tick
+    /// qui suit la frontiere (retard maximal d'un tick).
+    nonisolated static let recalcInterval: TimeInterval = 30
+
     nonisolated static func isNearStateFlip(_ presence: UserPresence, now: Date = Date()) -> Bool {
         guard let last = presence.lastActiveAt else { return false }
         let elapsed = now.timeIntervalSince(last)
-        // Fenetres de bascule (60s online→recent, 300s recent→away, 1800s away→offline).
-        return (elapsed > 60 && elapsed <= 120)
-            || (elapsed > 300 && elapsed <= 360)
-            || (elapsed > 1800 && elapsed <= 1860)
+        // Fenetres de bascule 1/3/5 (60s online→away, 180s away→idle, 300s idle→offline).
+        return (elapsed > 60 && elapsed <= 90)
+            || (elapsed > 180 && elapsed <= 210)
+            || (elapsed > 300 && elapsed <= 330)
     }
 
     /// Apply a bulk presence snapshot received via the `presence:snapshot` socket
@@ -166,6 +212,7 @@ final class PresenceManager: ObservableObject {
         recalcTimer?.invalidate()
         recalcTimer = nil
         persistTask?.cancel()
+        versionBumpTask?.cancel()
     }
 
     // MARK: - Disk Persistence
@@ -190,11 +237,27 @@ final class PresenceManager: ObservableObject {
         }
     }
 
+    // MARK: - Debounced Refresh Signal
+
+    /// Schedules a `refreshSignal.bump()` `Self.versionBumpDebounce` seconds
+    /// out, cancelling any still-pending bump — a burst of `presenceMap`
+    /// mutations (several `user:status` events arriving close together)
+    /// coalesces into exactly ONE bump instead of one per event. See
+    /// `PresenceRefreshSignal`.
+    private nonisolated func scheduleVersionBump() {
+        versionBumpTask?.cancel()
+        versionBumpTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.versionBumpDebounce * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.refreshSignal.bump()
+        }
+    }
+
     private nonisolated static var persistURL: URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            FileManager.default.createDirectoryLogging(at: cacheDir, context: "presence cache dir", logger: Logger.presence)
         }
         return cacheDir.appendingPathComponent(persistFileName)
     }
@@ -202,17 +265,27 @@ final class PresenceManager: ObservableObject {
     private nonisolated static func writeToDisk(_ map: [String: UserPresence]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(map) else { return }
-        try? data.write(to: persistURL, options: .atomic)
+        guard let data = encoder.encodeOrLog(map, field: "presence map", logger: Logger.presence) else { return }
+        do {
+            try data.write(to: persistURL, options: .atomic)
+        } catch {
+            Logger.presence.error("Presence snapshot not persisted, dots restart empty next launch: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private nonisolated static func loadFromDisk() -> [String: UserPresence] {
         let url = persistURL
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url) else { return [:] }
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            Logger.presence.error("Presence snapshot present but unreadable: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let map = try? decoder.decode([String: UserPresence].self, from: data) else { return [:] }
+        guard let map = decoder.decodeOrLog([String: UserPresence].self, from: data, field: "presence map", logger: Logger.presence) else { return [:] }
         // Drop entries older than 24h — claiming someone is online based on
         // day-old data would be actively wrong, but a 15-min gap is fine and
         // still avoids the "all offline on cold start" flash.
@@ -221,4 +294,10 @@ final class PresenceManager: ObservableObject {
             (presence.lastActiveAt ?? .distantPast) >= cutoff
         }
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let presence = Logger(subsystem: "me.meeshy.app", category: "presence")
 }

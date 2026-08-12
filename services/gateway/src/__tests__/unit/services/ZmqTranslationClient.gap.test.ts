@@ -152,7 +152,11 @@ describe('ZmqTranslationClient — gap-fill', () => {
       ).rejects.toThrow('Either audioPath or audioData');
     });
 
-    it('should register retry timeout (resend fires after 30s)', async () => {
+    // Ce test gardait l'ancien renvoi à 30 s. Il est devenu la garde inverse :
+    // en prod (2026-08-04) ce renvoi dupliquait le job Whisper, la seconde
+    // passe mourait sur le fichier temporaire nettoyé par la première et son
+    // erreur effaçait une transcription déjà livrée au client.
+    it('should arm a deadman instead of resending after 30s', async () => {
       await client.sendTranscriptionOnlyRequest({
         messageId: 'msg-tc-retry',
         audioPath: '/tmp/audio.wav'
@@ -163,7 +167,7 @@ describe('ZmqTranslationClient — gap-fill', () => {
 
       await jest.advanceTimersByTimeAsync(30_001);
 
-      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(callsBefore);
     });
   });
 
@@ -462,7 +466,12 @@ describe('ZmqTranslationClient — gap-fill', () => {
       expect(err.taskId).toBe('gap-uuid-0001');
     });
 
-    it('sendAudioProcessRequest: retry fires on 30s timeout', async () => {
+    // Prod incident 2026-08-06: le pipeline audio complet (Whisper + NLLB +
+    // Chatterbox, plusieurs minutes) dépassait systématiquement les 30 s. Le
+    // gateway re-poussait le MÊME taskId en boucle, dupliquant le job dans le
+    // worker pool ML — même classe de bug que sendTranscriptionOnlyRequest :
+    // un seul tir, deadman long, pas de retry.
+    it('sendAudioProcessRequest: arms a deadman instead of resending after 30s', async () => {
       await client.sendAudioProcessRequest({
         messageId: 'msg-audio-retry',
         attachmentId: 'att-2',
@@ -480,7 +489,7 @@ describe('ZmqTranslationClient — gap-fill', () => {
 
       await jest.advanceTimersByTimeAsync(30_001);
 
-      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBeGreaterThan(callsBefore);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(callsBefore);
     });
 
     it('sendVoiceProfileRequest: retry fires on 30s timeout', async () => {
