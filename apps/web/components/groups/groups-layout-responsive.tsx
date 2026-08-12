@@ -32,6 +32,7 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { generateCommunityIdentifier, sanitizeCommunityIdentifier } from '@/utils/community-identifier';
 import { authManager } from '@/services/auth-manager.service';
+import { formatShortDate } from '@/utils/date-format';
 
 interface GroupsLayoutResponsiveProps {
   selectedGroupIdentifier?: string;
@@ -42,7 +43,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
   const router = useRouter();
   const _searchParams = useSearchParams();
   const user = useUser(); const isAuthChecking = useIsAuthChecking();
-  const { t: tGroups } = useI18n('groups');
+  const { t: tGroups, locale } = useI18n('groups');
 
   // Si on est en train de vérifier l'authentification, afficher un loader
   if (isAuthChecking) {
@@ -466,7 +467,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                             </div>
                             {group.createdAt && (
                               <div className="flex items-center gap-1">
-                                <span>{new Date(group.createdAt).toLocaleDateString()}</span>
+                                <span>{formatShortDate(group.createdAt, locale)}</span>
                               </div>
                             )}
                           </div>
@@ -573,7 +574,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                       {selectedGroup._count?.members || 0} {tGroups('members')}
                     </div>
                     <div>
-                      {tGroups('details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}
+                      {tGroups('details.createdOn') + ' '}{formatShortDate(selectedGroup.createdAt, locale)}
                     </div>
                   </div>
                 </CardContent>

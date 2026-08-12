@@ -71,4 +71,47 @@ final class GRDBCacheStoreEvictionFlushTests: XCTestCase {
         let dirty = await store.dirtyKeyCount()
         XCTAssertEqual(dirty, 0, "evictL1 must not leave evicted keys in the dirty set")
     }
+
+    // MARK: - cache-05 — la branche .expired de load() flushe la victime dirty
+
+    func test_load_expiredEntryWithPendingDirtyMutation_flushesMutationToL2BeforeDropping() async throws {
+        let db = try makeDB()
+        let store = makeStore(maxL1Keys: 20, db: db)
+
+        try await store.save([EvictTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: .hours(1) + 1, for: "k")
+        await store.update(for: "k") { items in
+            items.map { item in EvictTestItem(id: item.id, name: "B") }
+        }
+
+        let result = await store.load(for: "k")
+        guard case .expired = result else {
+            return XCTFail("Expected .expired once the rewound entry crosses the TTL, got \(result)")
+        }
+
+        let recovered = await store.loadIgnoringExpiry(for: "k")
+        XCTAssertEqual(recovered?.items, [EvictTestItem(id: "1", name: "B")],
+                       "la mutation dirty en attente doit être flushée en L2 AVANT que la branche .expired ne jette L1")
+
+        let dirty2 = await store.dirtyKeyCount()
+        XCTAssertEqual(dirty2, 0, "la clé ne doit pas rester dirty après l'éviction-flush de load()")
+    }
+
+    func test_load_expiredEntry_stillReturnsExpiredAfterFlush() async throws {
+        let db = try makeDB()
+        let store = makeStore(maxL1Keys: 20, db: db)
+
+        try await store.save([EvictTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: .hours(1) + 1, for: "k")
+        await store.update(for: "k") { items in
+            items.map { item in EvictTestItem(id: item.id, name: "B") }
+        }
+
+        _ = await store.load(for: "k")
+
+        let second = await store.load(for: "k")
+        guard case .expired = second else {
+            return XCTFail("lastFetchedAt doit survivre au flush d'éviction, got \(second)")
+        }
+    }
 }

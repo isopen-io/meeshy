@@ -83,6 +83,18 @@ const mockUpdateEncryption = jest.fn();
 const mockUpdateLocalSettings = jest.fn();
 const mockSyncEncryption = jest.fn();
 
+// Key status is server state, not a preference: it is the existence of a
+// `SignalPreKeyBundle` row, served by `GET /me/preferences/encryption`. It does
+// NOT ride on the user object — `userSchema` strips every signal field out of
+// `GET /auth/me` before the body is serialized.
+let mockKeyStatus: {
+  hasSignalKeys: boolean;
+  signalRegistrationId: number | null;
+  lastKeyRotation: string | null;
+} = { hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null };
+
+const mockSyncEncryptionKeys = jest.fn();
+
 jest.mock('@/stores', () => ({
   useUserPreferencesStore: jest.fn((selector) => {
     const state = {
@@ -93,9 +105,11 @@ jest.mock('@/stores', () => ({
   }),
   useEncryptionPreferences: () => ({
     preferences: mockEncryptionData,
+    keyStatus: mockKeyStatus,
     update: mockUpdateEncryption,
     updateLocalSettings: mockUpdateLocalSettings,
     sync: mockSyncEncryption,
+    syncKeys: mockSyncEncryptionKeys,
   }),
 }));
 
@@ -156,6 +170,7 @@ describe('EncryptionSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUser = { id: 'user-1', username: 'testuser' };
+    mockKeyStatus = { hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null };
     mockEncryptionData.encryptionPreference = 'optional';
     mockEncryptionData.autoEncryptNewConversations = true;
     mockEncryptionData.showEncryptionStatus = true;
@@ -200,8 +215,8 @@ describe('EncryptionSettings', () => {
       expect(screen.getByText('Generer les cles')).toBeInTheDocument();
     });
 
-    it('affiche "Cles actives" quand user a signalRegistrationId', () => {
-      mockUser = { id: 'user-1', username: 'testuser', signalRegistrationId: 12345 };
+    it('affiche "Cles actives" quand le serveur rapporte un bundle', () => {
+      mockKeyStatus = { hasSignalKeys: true, signalRegistrationId: 12345, lastKeyRotation: null };
 
       render(<EncryptionSettings />);
 
@@ -210,8 +225,23 @@ describe('EncryptionSettings', () => {
       expect(screen.getByText(/12345/)).toBeInTheDocument();
     });
 
-    it('n\'affiche pas le bouton de generation quand les cles existent', () => {
+    it('ignore un signalRegistrationId porte par l\'objet user', () => {
+      // Un utilisateur iOS a bien un bundle en base, mais `GET /auth/me` ne peut
+      // pas le dire : `userSchema` ne declare aucun champ signal, donc le
+      // serialiseur les retire. Un composant qui lit la pour son statut affiche
+      // « pas de cles » a un utilisateur qui en a — et l'inverse ici : un champ
+      // qui ne peut pas arriver ne doit pas non plus faire passer le statut a vert.
       mockUser = { id: 'user-1', username: 'testuser', signalRegistrationId: 12345 };
+      mockKeyStatus = { hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null };
+
+      render(<EncryptionSettings />);
+
+      expect(screen.getByText('Cles non generees')).toBeInTheDocument();
+      expect(screen.queryByText(/12345/)).not.toBeInTheDocument();
+    });
+
+    it('n\'affiche pas le bouton de generation quand les cles existent', () => {
+      mockKeyStatus = { hasSignalKeys: true, signalRegistrationId: 12345, lastKeyRotation: null };
 
       render(<EncryptionSettings />);
 
@@ -219,9 +249,8 @@ describe('EncryptionSettings', () => {
     });
 
     it('affiche la date de derniere rotation si disponible', () => {
-      mockUser = {
-        id: 'user-1',
-        username: 'testuser',
+      mockKeyStatus = {
+        hasSignalKeys: true,
         signalRegistrationId: 12345,
         lastKeyRotation: '2024-01-15T10:30:00Z',
       };
@@ -230,15 +259,17 @@ describe('EncryptionSettings', () => {
 
       expect(screen.getByText(/Derniere rotation/)).toBeInTheDocument();
     });
+
+    it('demande le statut des cles au serveur au montage', () => {
+      render(<EncryptionSettings />);
+
+      expect(mockSyncEncryptionKeys).toHaveBeenCalled();
+    });
   });
 
   describe('Generation des cles', () => {
     it('genere les cles quand on clique sur le bouton', async () => {
       mockApiPost.mockResolvedValueOnce({ success: true });
-      mockApiGet.mockResolvedValueOnce({
-        success: true,
-        data: { data: { user: { id: 'user-1', signalRegistrationId: 12345 } } },
-      });
 
       render(<EncryptionSettings />);
 
@@ -247,6 +278,23 @@ describe('EncryptionSettings', () => {
       await waitFor(() => {
         expect(mockApiPost).toHaveBeenCalledWith('/signal/keys', {});
       });
+    });
+
+    it('rafraichit le statut des cles depuis le serveur apres un succes', async () => {
+      // Pas via `GET /auth/me` : ce que ce refresh cherchait — les champs signal —
+      // ne traverse pas `userSchema`. La seule source qui les porte est
+      // `GET /me/preferences/encryption`.
+      mockApiPost.mockResolvedValueOnce({ success: true });
+
+      render(<EncryptionSettings />);
+      mockSyncEncryptionKeys.mockClear();
+
+      fireEvent.click(screen.getByText('Generer les cles'));
+
+      await waitFor(() => {
+        expect(mockSyncEncryptionKeys).toHaveBeenCalled();
+      });
+      expect(mockApiGet).not.toHaveBeenCalledWith('/auth/me');
     });
 
     it('affiche le loading pendant la generation', async () => {

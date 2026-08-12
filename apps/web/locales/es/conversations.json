@@ -711,7 +711,8 @@
       "writeMessage": "Escribe tu mensaje…",
       "file": "Archivo",
       "document": "Documento"
-    }
+    },
+    "newMessagesWhileAway": "mensajes nuevos"
   },
   "bubbleStream": {
     "messageSentSuccessfully": "Mensaje enviado correctamente",

@@ -14,6 +14,9 @@ import { useAudioTranslation } from '@/hooks/use-audio-translation';
 import { useAudioEffectsAnalysis } from '@/hooks/use-audio-effects-analysis';
 import { useAuth } from '@/hooks/use-auth';
 
+// Utilitaires
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
+
 // Composants UI
 import { AudioProgressBar } from './AudioProgressBar';
 import { AudioControls } from './AudioControls';
@@ -63,15 +66,12 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
 
-  // Langues préférées de l'utilisateur pour auto-sélection audio
+  // Langues préférées de l'utilisateur pour auto-sélection audio — délègue à
+  // la résolution Prisme partagée (systemLanguage > regional > custom >
+  // deviceLocale), au lieu de réimplémenter l'ordre de priorité localement.
   const userLanguages = useMemo(() => {
     if (!user) return undefined;
-    const langs: string[] = [];
-    if (user.systemLanguage) langs.push(user.systemLanguage);
-    if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage)
-      langs.push(user.regionalLanguage);
-    if (user.customDestinationLanguage && !langs.includes(user.customDestinationLanguage))
-      langs.push(user.customDestinationLanguage);
+    const langs = getUserLanguagePreferences(user);
     return langs.length > 0 ? langs : undefined;
   }, [user]);
 

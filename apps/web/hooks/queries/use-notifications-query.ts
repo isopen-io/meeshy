@@ -17,10 +17,13 @@ export function useNotificationsQuery(options: NotificationsFiltersAndPagination
   });
 }
 
-export function useInfiniteNotificationsQuery(options: NotificationsFiltersAndPagination = {}) {
-  const { limit = 50, ...filters } = options;
+export function useInfiniteNotificationsQuery(
+  options: NotificationsFiltersAndPagination & { enabled?: boolean } = {}
+) {
+  const { limit = 50, enabled = true, ...filters } = options;
 
   return useInfiniteQuery({
+    enabled,
     queryKey: [...queryKeys.notifications.lists(), 'infinite', filters],
     queryFn: async ({ pageParam = 0 }) => {
       const response = await NotificationService.fetchNotifications({
@@ -35,6 +38,13 @@ export function useInfiniteNotificationsQuery(options: NotificationsFiltersAndPa
       if (!lastPage?.pagination?.hasMore) return undefined;
       return lastPage.pagination.offset + lastPage.pagination.limit;
     },
+    // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
+    // (Socket.IO est la source temps réel). Mais le socket ne pousse RIEN quand
+    // l'app est fermée : une liste restaurée du cache restait alors affichée
+    // telle quelle, sans jamais montrer les notifications reçues entre-temps —
+    // ni dans la cloche, ni sur /notifications, quel que soit le nombre de
+    // rechargements. Monter la cloche ou la page relit donc toujours le serveur.
+    refetchOnMount: 'always',
   });
 }
 
@@ -46,7 +56,10 @@ export function useUnreadNotificationCountQuery() {
       return response.data?.count ?? 0;
     },
     // No refetchInterval — the notification socket manager updates this count
-    // directly via setQueryData on every notification:new event.
+    // directly via setQueryData on every notification:new event. It still has to
+    // re-read on mount: the socket pushes nothing while the app is closed, so a
+    // restored count would otherwise stay frozen at its last-seen value.
+    refetchOnMount: 'always',
   });
 }
 
@@ -73,11 +86,22 @@ export function useMarkNotificationAsReadMutation() {
       const previousLists = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists() });
       const previousUnread = queryClient.getQueryData(queryKeys.notifications.unreadCount());
 
+      // Ne décrémenter que si la notification était réellement NON LUE : un
+      // second clic (ou un clic sur une ligne déjà lue) faisait dériver le
+      // compteur vers le bas jusqu'au prochain refetch.
+      let wasUnread = false;
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.notifications.lists(), exact: false },
         (old: unknown) => {
           if (!old || typeof old !== 'object' || !('pages' in old)) return old;
           const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+
+          const foundUnread = data.pages.some((page) =>
+            page.notifications?.some((n: Notification) => n.id === notificationId && !n.state.isRead)
+          );
+          if (foundUnread) wasUnread = true;
+
           return {
             ...data,
             pages: data.pages.map((page) => ({
@@ -87,16 +111,20 @@ export function useMarkNotificationAsReadMutation() {
                   ? { ...n, state: { ...n.state, isRead: true, readAt: new Date() } }
                   : n
               ),
-              unreadCount: Math.max(0, (page.unreadCount ?? 0) - 1),
+              unreadCount: foundUnread
+                ? Math.max(0, (page.unreadCount ?? 0) - 1)
+                : page.unreadCount,
             })),
           };
         }
       );
 
-      queryClient.setQueryData(
-        queryKeys.notifications.unreadCount(),
-        (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
-      );
+      if (wasUnread) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(),
+          (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
+        );
+      }
 
       return { previousLists, previousUnread };
     },

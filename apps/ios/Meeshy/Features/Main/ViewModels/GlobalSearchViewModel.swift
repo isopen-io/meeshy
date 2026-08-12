@@ -286,6 +286,14 @@ final class GlobalSearchViewModel: ObservableObject {
         return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
     }
 
+    /// Prisme Linguistique du lecteur, dans l'ordre — systemLanguage,
+    /// regionalLanguage, customDestinationLanguage, puis la locale appareil en
+    /// 4e rang. `MeeshyUser.preferredContentLanguages` est la seule autorité
+    /// iOS sur cet ordre : ne jamais le réimplémenter ici.
+    private var preferredContentLanguages: [String] {
+        authManager.currentUser?.preferredContentLanguages ?? []
+    }
+
     private func searchLocalConversations(query: String) async -> [GlobalSearchConversationResult] {
         let ids = (try? await SearchIndex.shared.searchConversations(query: query, limit: 50)) ?? []
         guard !ids.isEmpty else { return [] }
@@ -304,6 +312,7 @@ final class GlobalSearchViewModel: ObservableObject {
             cached = []
         }
         let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        let preferred = preferredContentLanguages
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
             guard let conv = byId[id] else { return nil }
@@ -313,7 +322,11 @@ final class GlobalSearchViewModel: ObservableObject {
                 avatar: conv.avatar ?? conv.participantAvatarURL,
                 type: conv.type,
                 memberCount: conv.memberCount,
-                lastMessagePreview: conv.lastMessagePreview,
+                // Même résolution que `ThemedConversationRow` — la ligne de
+                // résultat de recherche est une ligne de conversation, elle doit
+                // rendre le MÊME texte que la liste. Rend l'aperçu original
+                // quand aucune langue du prisme n'est servie (règle #1).
+                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
                 lastMessageAt: conv.lastMessageAt,
                 unreadCount: conv.userState.unreadCount,
                 conversation: conv
@@ -328,6 +341,7 @@ final class GlobalSearchViewModel: ObservableObject {
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
+            let preferred = preferredContentLanguages
             return response.data.map { apiConv in
                 let conv = apiConv.toConversation(currentUserId: userId)
                 return GlobalSearchConversationResult(
@@ -336,7 +350,12 @@ final class GlobalSearchViewModel: ObservableObject {
                     avatar: conv.avatar ?? conv.participantAvatarURL,
                     type: conv.type,
                     memberCount: conv.memberCount,
-                    lastMessagePreview: conv.lastMessagePreview,
+                    // `GET /conversations/search` sert désormais
+                    // `lastMessageTranslations`/`lastMessageOriginalLanguage`
+                    // (jumeau de `GET /conversations`) : les rendre bruts ici
+                    // laisserait la recherche dans la langue de l'expéditeur
+                    // alors que la liste, elle, traduit.
+                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
                     lastMessageAt: conv.lastMessageAt,
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv
@@ -488,14 +507,25 @@ final class GlobalSearchViewModel: ObservableObject {
             limit: 50,
             conversationId: nil
         )) ?? []
+        // vm-search-localname-01 — résoudre le nom/avatar LOCALEMENT depuis le
+        // cache conversations (même motif que searchLocalConversations) : le
+        // placeholder ObjectId n'était remplacé par le merge réseau que si le
+        // réseau répondait — précisément jamais offline.
+        let cachedConvs = await CacheCoordinator.shared.conversations.load(for: "list")
+        let conversationsById: [String: MeeshyConversation]
+        switch cachedConvs {
+        case .fresh(let v, _), .stale(let v, _):
+            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
+        case .expired, .empty:
+            conversationsById = [:]
+        }
         return records.map { record in
-            GlobalSearchMessageResult(
+            let conv = conversationsById[record.conversationId]
+            return GlobalSearchMessageResult(
                 id: record.localId,
                 conversationId: record.conversationId,
-                // conversationName is not stored in MessageRecord; use conversationId as
-                // placeholder — network results will supply the proper name via merge.
-                conversationName: record.conversationId,
-                conversationAvatar: nil,
+                conversationName: conv?.displayName ?? record.conversationId,
+                conversationAvatar: conv?.avatar ?? conv?.participantAvatarURL,
                 content: record.content ?? "",
                 senderName: record.senderName ?? record.senderUsername ?? "?",
                 senderAvatar: record.senderAvatarURL,

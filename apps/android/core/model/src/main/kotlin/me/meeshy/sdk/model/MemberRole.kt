@@ -20,6 +20,14 @@ enum class MemberRole(val level: Int) {
 
     fun hasMinimumRole(required: MemberRole): Boolean = level >= required.level
 
+    /**
+     * The lowercase wire value the gateway expects (matches each entry's
+     * [SerialName]). SSOT for encoding a role back onto an API request body — e.g.
+     * the conversation-settings `defaultWriteRole` patch — so no call site
+     * hand-writes the string.
+     */
+    val wireValue: String get() = name.lowercase()
+
     companion object {
         fun from(raw: String?): MemberRole =
             entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: MEMBER

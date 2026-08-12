@@ -310,7 +310,7 @@ struct ConversationContextMenuView: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 if showsChevron {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .opacity(0.4)
                 }
@@ -330,7 +330,7 @@ struct ConversationContextMenuView: View {
             navigate(to: .root)
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)

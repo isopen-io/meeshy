@@ -40,6 +40,8 @@ export class InitService {
     } else {
     }
 
+    await this.ensurePostGeoIndex();
+
     try {
       // 1. Créer la conversation globale "meeshy"
       await this.createGlobalConversation();
@@ -261,6 +263,36 @@ export class InitService {
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la configuration de l'utilisateur Admin "${username}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Garantit l'existence d'un index MongoDB `2dsphere` sur `Post.geoPoint`
+   * (recherche de posts/reels/stories/status par proximité géographique).
+   * Prisma ne sait pas déclarer ce type d'index sur MongoDB — `$runCommandRaw`
+   * est le seul chemin, au même titre que les autres commandes brutes de ce
+   * service (`resetDatabase`) et de `PostTranslationService`/`NotificationService`.
+   * `createIndexes` est nativement idempotent côté MongoDB : rejouer la même
+   * spec sur un index déjà existant réussit sans erreur (pas de code à
+   * ignorer ici) — toute erreur qui remonte est donc réelle et doit stopper
+   * le démarrage, jamais avalée en silence.
+   * Inconditionnel : appelé à chaque boot, que `FORCE_DB_RESET` soit actif ou
+   * non — pas dans `resetDatabase()`, qui ne s'exécute que sur reset explicite.
+   */
+  private async ensurePostGeoIndex(): Promise<void> {
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'Post',
+        indexes: [
+          {
+            key: { geoPoint: '2dsphere' },
+            name: 'Post_geoPoint_2dsphere',
+          },
+        ],
+      });
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la création de l\'index géospatial Post.geoPoint', error);
       throw error;
     }
   }

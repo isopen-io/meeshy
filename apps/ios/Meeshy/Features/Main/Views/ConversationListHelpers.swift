@@ -79,7 +79,7 @@ struct SectionHeaderView: View {
                 }
 
                 // Expand/collapse chevron with rotation animation
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
@@ -319,8 +319,8 @@ struct ConversationPreviewView: View {
     private var headerActions: some View {
         HStack(spacing: 8) {
             if conversation.userState.unreadCount > 0 {
-                Text("\(min(conversation.userState.unreadCount, 99))")
-                    .font(.caption2.weight(.bold))
+                Text(NotificationBadge.displayed(conversation.userState.unreadCount))
+                    .font(.caption2.weight(NotificationBadge.fontWeight))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .frame(minWidth: 20, minHeight: 20)

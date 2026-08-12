@@ -17,6 +17,10 @@ data class RegisterRequest(
     val lastName: String? = null,
     val systemLanguage: String? = null,
     val regionalLanguage: String? = null,
+    /** E.164 (dial code + national digits, e.g. `"+33612345678"`), or `null` when skipped/empty. */
+    val phoneNumber: String? = null,
+    /** The selected dial-code country's ISO 3166-1 alpha-2, or `null` alongside [phoneNumber]. */
+    val phoneCountryCode: String? = null,
 )
 
 /** Payload of `POST /auth/login` and `POST /auth/register` responses. */
@@ -37,4 +41,21 @@ data class MeEnvelope(
 @Serializable
 data class RefreshTokenRequest(
     val sessionToken: String,
+)
+
+/**
+ * Payload of `GET /auth/check-availability?username=&email=&phoneNumber=`.
+ *
+ * Every field is nullable because the gateway only echoes back the checks it was
+ * actually asked to run (a probe for a single field returns only that field's
+ * verdict). `suggestions` carries free alternate handles when a username is taken.
+ * Parity with the gateway response in `services/gateway/src/routes/auth/register.ts`.
+ */
+@Serializable
+data class AvailabilityResult(
+    val usernameAvailable: Boolean? = null,
+    val suggestions: List<String>? = null,
+    val emailAvailable: Boolean? = null,
+    val phoneNumberAvailable: Boolean? = null,
+    val phoneNumberValid: Boolean? = null,
 )

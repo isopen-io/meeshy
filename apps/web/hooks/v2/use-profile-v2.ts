@@ -18,6 +18,7 @@ import {
 } from '@/hooks/queries/use-users-query';
 import { usersService, type UpdateUserDto, type UserStats } from '@/services/users.service';
 import { useI18n } from '@/hooks/useI18n';
+import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { User } from '@meeshy/shared/types';
 
@@ -84,26 +85,16 @@ export interface UpdateProfileData {
 }
 
 /**
- * Map language code to display name
+ * Map language code to display name.
+ *
+ * Delegates to the shared language SSOT (`packages/shared/utils/languages.ts`)
+ * so the profile renders each language in its native script with correct
+ * diacritics ("Français", "Español", "Português") and covers the full 60+
+ * language catalogue instead of a divergent 13-entry romanized list.
  */
-const LANGUAGE_NAMES: Record<string, string> = {
-  fr: 'Francais',
-  en: 'English',
-  es: 'Espanol',
-  de: 'Deutsch',
-  it: 'Italiano',
-  pt: 'Portugues',
-  zh: '中文',
-  ja: '日本語',
-  ko: '한국어',
-  ar: 'العربية',
-  ru: 'Русский',
-  hi: 'हिन्दी',
-  multi: 'Multilingue',
-};
-
 function getLanguageName(code: string): string {
-  return LANGUAGE_NAMES[code] || code.toUpperCase();
+  const info = getLanguageInfo(code);
+  return info.nativeName ?? info.name;
 }
 
 type LastSeenI18n = { t: (key: string, params?: Record<string, unknown>) => string; locale?: string };
@@ -152,7 +143,7 @@ function transformToProfile(user: User, i18n: LastSeenI18n): ProfileV2 {
   if (languages.length === 0) {
     languages.push({
       code: 'fr',
-      name: 'Francais',
+      name: getLanguageName('fr'),
       level: 'native',
     });
   }

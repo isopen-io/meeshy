@@ -29,6 +29,10 @@ class EncryptedTokenStore(context: Context) : TokenStore {
         get() = prefs.getString(KEY_SESSION, null)
         set(value) = prefs.edit().putOrRemove(KEY_SESSION, value).apply()
 
+    override var userId: String?
+        get() = prefs.getString(KEY_USER_ID, null)
+        set(value) = prefs.edit().putOrRemove(KEY_USER_ID, value).apply()
+
     override val isAuthenticated: Boolean get() = jwt != null || sessionToken != null
 
     override fun clear() {
@@ -42,5 +46,6 @@ class EncryptedTokenStore(context: Context) : TokenStore {
         private const val FILE_NAME = "meeshy_secure_tokens"
         private const val KEY_JWT = "jwt"
         private const val KEY_SESSION = "session_token"
+        private const val KEY_USER_ID = "user_id"
     }
 }

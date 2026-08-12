@@ -257,6 +257,81 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].translatedContent, "Hello")
     }
 
+    /// grdb-06 — deux schémas d'id de traduction coexistent (fallback socket
+    /// horodaté vs id serveur stable) : la même (message, langue) peut arriver
+    /// sous deux PK différentes. Le save par PK violait l'index UNIQUE
+    /// idx_trans_msg_lang au lieu de remplacer la row existante.
+    func test_saveTranslation_sameMessageAndLanguageDifferentIds_replacesWithoutThrow() async throws {
+        let fallback = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(fallback)
+
+        let canonical = TranslationRecord(
+            id: "m1-en", messageLocalId: "m1", messageServerId: "m1",
+            targetLanguage: "en", translatedContent: "Hello v2",
+            translationModel: "nllb-200", confidenceScore: 0.95,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(canonical)
+
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1, "une seule row par (message, langue)")
+        XCTAssertEqual(fetched[0].translatedContent, "Hello v2")
+        XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
+    }
+
+    /// La collision ne doit plus faire lever le db.write entier : avant le fix,
+    /// le throw sur la ligne translations faisait rollback TOUT le batch — un
+    /// message sans rapport avec la collision était droppé collatéralement.
+    func test_upsertFromAPIMessages_translationIdCollision_persistsWholeBatch() async throws {
+        let seeded = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(seeded)
+
+        let msgA = makeAPIMessage(
+            id: "m1", conversationId: "conv_tr",
+            translations: [[
+                "id": "m1-en", "messageId": "m1", "targetLanguage": "en",
+                "translatedContent": "Hello EN", "translationModel": "nllb-200"
+            ]]
+        )
+        let msgB = makeAPIMessage(id: "m2", conversationId: "conv_tr", content: "Second")
+        try await actor.upsertFromAPIMessages([msgA, msgB])
+
+        let rows = try actor.messages(for: "conv_tr", limit: 10)
+        XCTAssertNotNil(rows.first { $0.localId == "m2" },
+                        "un message sans rapport avec la collision ne doit pas être droppé")
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Hello EN")
+    }
+
+    /// Verrou de non-régression : des ids stables re-livrés restent idempotents
+    /// après le passage à l'upsert ON CONFLICT.
+    func test_upsertFromAPIMessages_stableTranslationIds_idempotent() async throws {
+        let msg = makeAPIMessage(
+            id: "m3", conversationId: "conv_tr2",
+            translations: [[
+                "id": "m3-en", "messageId": "m3", "targetLanguage": "en",
+                "translatedContent": "Stable", "translationModel": "nllb-200"
+            ]]
+        )
+        try await actor.upsertFromAPIMessages([msg])
+        try await actor.upsertFromAPIMessages([msg])
+
+        let fetched = try actor.translations(for: "m3")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Stable")
+    }
+
     // MARK: - Edit / Delete
 
     func test_markEdited_updatesContentAndFlag() async throws {
@@ -625,15 +700,19 @@ final class MessagePersistenceActorTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 1.0)
     }
 
-    func test_updateLayout_postsRefreshWithConversationId() async throws {
+    func test_updateLayout_doesNotPostRefresh() async throws {
+        // grdb-04 — le refresh d'updateLayout était un no-op prouvé
+        // (MessageRecord == ne compare que localId+changeVersion, non bumpé
+        // ici) qui coûtait fetch+compare à CHAQUE écriture de layout.
         let record = MessageRecordFactory.make(localId: "layout_notif", conversationId: "conv_layout")
         try await actor.insertOptimistic(record)
         await drainMainQueueNotifications()
 
         let (exp, observer) = observeRefresh(
             conversationId: "conv_layout",
-            description: "messageStoreShouldRefresh fires for updateLayout"
+            description: "messageStoreShouldRefresh must NOT fire for updateLayout"
         )
+        exp.isInverted = true
         defer { NotificationCenter.default.removeObserver(observer) }
 
         try await actor.updateLayout(
@@ -760,6 +839,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         clientMessageId: String? = nil,
         isEncrypted: Bool = false,
         attachments: [[String: Any]] = [],
+        translations: [[String: Any]] = [],
         reactionSummary: [String: Int]? = nil,
         currentUserReactions: [String]? = nil,
         metadata: [String: Any]? = nil,
@@ -776,6 +856,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let clientMessageId { json["clientMessageId"] = clientMessageId }
         if isEncrypted { json["isEncrypted"] = true }
         if !attachments.isEmpty { json["attachments"] = attachments }
+        if !translations.isEmpty { json["translations"] = translations }
         if let reactionSummary { json["reactionSummary"] = reactionSummary }
         if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
         if let metadata { json["metadata"] = metadata }
@@ -1704,6 +1785,32 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a 👍 cap of 1 must not suppress a distinct 🎉 reaction")
     }
 
+    // MARK: - Failed-from-outbox reconciliation (grdb-04 changeVersion bump)
+
+    func test_reconcileFailedFromOutbox_flipsState_bumpsChangeVersion() async throws {
+        let record = MessageRecordFactory.make(
+            localId: "stuck_bump_1", conversationId: "conv_stuck_bump", state: .sending, changeVersion: 3
+        )
+        try await actor.insertOptimistic(record)
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .sendMessage,
+                conversationId: "conv_stuck_bump",
+                messageLocalId: "stuck_bump_1",
+                clientMessageId: "stuck_bump_1",
+                payload: Data(),
+                status: .exhausted
+            ).insert(db)
+        }
+
+        await actor.reconcileFailedFromOutbox(conversationId: "conv_stuck_bump")
+
+        let fetched = try actor.messages(for: "conv_stuck_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 4,
+            "un flip d'état sans bump changeVersion est invisible au diff O(1) du MessageStore")
+    }
+
     // MARK: - Orphaned sending reconciliation
 
     /// An optimistic row stuck in `.sending` with no serverId, no live outbox
@@ -1760,6 +1867,22 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a live outbox record still owns the retry loop — don't fail its message")
     }
 
+    func test_reconcileOrphanedSendingRows_orphan_bumpsChangeVersion() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "orphan_bump_1", conversationId: "conv_orphan_bump", state: .sending,
+            createdAt: old, changeVersion: 5
+        )
+        try await actor.insertOptimistic(record)
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_orphan_bump", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_orphan_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 6,
+            "le flip orphelin doit être visible du diff O(1)")
+    }
+
     func test_reconcileOrphanedSendingRows_rowWithExhaustedOutbox_flipsToFailed() async throws {
         let old = Date().addingTimeInterval(-300)
         let record = MessageRecordFactory.make(
@@ -1782,5 +1905,25 @@ final class MessagePersistenceActorTests: XCTestCase {
         let fetched = try actor.messages(for: "conv_exhausted", limit: 10)
         XCTAssertEqual(fetched[0].state, .failed,
             "an exhausted outbox no longer retries — the row is orphaned")
+    }
+}
+
+/// startup-03 — compteur des lignes outbox éligibles à l'envoi.
+extension MessagePersistenceActorTests {
+
+    func test_pendingOutboxCount_countsPendingAndInflightOnly() async throws {
+        try await dbQueue.write { db in
+            let now = Date()
+            for (id, status) in [("o-p", "pending"), ("o-i", "inflight"), ("o-e", "exhausted"), ("o-f", "failed")] {
+                try db.execute(
+                    sql: "INSERT INTO outbox (id, kind, conversationId, payload, status, createdAt, updatedAt, nextAttemptAt) VALUES (?, 'sendMessage', 'c1', ?, ?, ?, ?, ?)",
+                    arguments: [id, Data(), status, now, now, now]
+                )
+            }
+        }
+
+        let count = try await actor.pendingOutboxCount()
+
+        XCTAssertEqual(count, 2, "seuls .pending et .inflight comptent comme travail encore éligible à l'envoi")
     }
 }

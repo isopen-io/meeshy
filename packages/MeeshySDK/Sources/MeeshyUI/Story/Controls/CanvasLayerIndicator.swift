@@ -58,7 +58,10 @@ struct CanvasLayerIndicator: View {
                 Capsule()
                     .stroke(isActive ? Color.clear : mutedText.opacity(0.4), lineWidth: 1)
             )
-            .contentShape(Capsule())
+            // Chip d'environ 19 pt de haut (paddings 4/4 sur une police 11), posé
+            // sur le flanc du canvas où le doigt arrive de biais. Le débord de
+            // contact le porte à 44 avant la rotation du rail.
+            .composerHitTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

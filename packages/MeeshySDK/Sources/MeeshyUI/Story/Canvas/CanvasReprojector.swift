@@ -55,6 +55,14 @@ public struct CanvasReprojector: Sendable {
         return ReprojectedItem(value: copy, warning: w)
     }
 
+    public func reproject(location: StoryLocationObject) -> ReprojectedItem<StoryLocationObject> {
+        let (nx, ny, w) = reprojectNormalized(x: location.x, y: location.y)
+        var copy = location
+        copy.x = nx
+        copy.y = ny
+        return ReprojectedItem(value: copy, warning: w)
+    }
+
     /// Audio has no spatial position — pass-through identity.
     public func reproject(audio: StoryAudioPlayerObject) -> ReprojectedItem<StoryAudioPlayerObject> {
         ReprojectedItem(value: audio, warning: nil)
