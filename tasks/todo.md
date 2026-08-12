@@ -1,86 +1,78 @@
-# Tête instruite pour le cycle 90 — le pipeline de traduction est soldé, la re-synchronisation ne l'est pas
+# Tête instruite pour le cycle 91 — les deux compteurs restants sont soldés, la file est vide
 
-*Le cycle 89 a livré les TROIS défauts restants du pipeline de traduction (ancienne priorité 2) plus
-une moitié de l'ancienne priorité 3. Ce qui reste est reproduit ci-dessous **tel que les cycles
-précédents l'ont établi** — site exact, scénario d'échec. **Ne pas re-auditer — vérifier puis
-corriger.***
+*Le cycle 90 a livré les DEUX derniers défauts que les cycles 86/87 avaient légués et que le cycle
+89 n'avait pas pris : la pastille de non-lus sur les transports REST de suppression, et le
+rattrapage des accusés après une coupure socket. **La file héritée est vide** — le cycle 91 doit
+donc AUDITER pour se donner du travail, ce qui n'était plus arrivé depuis le cycle 86.*
 
-> **Le `fetch` d'ouverture ne protège de rien** (leçon 137, reproduite deux fois). La règle
-> praticable, à appliquer littéralement :
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> Le cycle 90 a fait son `git fetch` d'ouverture, lu la tête, puis passé une heure à implémenter
+> les trois défauts du pipeline de traduction — pendant qu'une session parallèle livrait les
+> **mêmes trois**, mieux, et les mergeait (PR #2890). Une heure entièrement jetée : le salvage a
+> été **intégralement négatif** (les 10 tests écrits passaient contre `main`, mais les 7 de
+> l'autre session couvraient strictement plus).
+>
+> La consigne du cycle 89 disait déjà « fetch avant CHAQUE item ». Elle a échoué parce que
+> **« item » n'a pas de grain défini** : la tête présentait trois défauts comme UN bloc.
 >
 > ```bash
-> git fetch origin main && git log --oneline -15 origin/main   # AVANT d'écrire CHAQUE item
-> git fetch origin main                                        # ET juste avant d'ouvrir la PR
+> git fetch origin main && git log --oneline -5 origin/main
 > ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
 
-## Livré au cycle 89
+## Livré au cycle 90
 
-1. **Le garde « traduction périmée » est scopé À LA LANGUE** — `latestRetranslationTask` est clé par
-   `${messageId}::${langue canonique}`. Une retraduction ne périme plus que ce qu'elle redemande.
-2. **La retraduction ne détruit plus la traduction qu'elle prétend remplacer** — le bloc de
-   suppression pré-envoi (`_processRetranslationAsync`, ancien `:697-724`) est retiré. Il était
-   redondant (les QUATRE transports d'édition écrivent déjà `translations: null` dans l'écriture du
-   contenu) et létal sur une retraduction ciblée.
-3. **Une requête ZMQ multi-langues se solde langue par langue** — `settleTranslationLanguage()` ;
-   le deadman ne tombe qu'avec la dernière langue, et le retry ne redemande que ce qui manque.
-4. **La pastille de non-lus est repoussée après une suppression** (WS) — première moitié de
-   l'ancienne priorité 3, item 2.
-5. **Les 8 suites gateway qui tenaient `main` en rouge sont réparées** (35 tests) — voir la section
-   dédiée plus bas. Ce n'était pas au programme : c'était le prérequis pour que quoi que ce soit
-   puisse être mergé.
+1. **Les deux transports REST de suppression repoussent la pastille de non-lus.** La poussée vit
+   dans `broadcastMessageMutation`, l'unique broadcaster des cinq routes de mutation REST — écrite
+   UNE fois pour `DELETE /messages/:id` (Android) et `DELETE /conversations/:id/messages/:messageId`
+   (SDK iOS). `MessageMutationParams` est désormais une **union discriminée** : `authorId` requis
+   sur `'deleted'`, absent de `'edited'`. Un sixième transport de suppression ne compile pas sans
+   nommer l'auteur — les deux callsites ont été trouvés par `tsc`, pas par lecture.
+2. **Les accusés se rattrapent à la reconnexion socket** (web). Le front montant est compté une
+   seule fois (`reconnectEpoch`, en tête de `use-conversation-messages-rq.ts`) et sert les DEUX
+   dettes du même instant : les messages manqués (qui l'avaient déjà) et les accusés manqués (qui
+   ne l'avaient pas). La détection de front, dupliquée d'un côté et absente de l'autre, n'existe
+   plus qu'en un endroit.
 
-## Priorité 1 — les accusés ne sont jamais re-synchronisés après une coupure socket
+## Deux affirmations de la tête du cycle 90 qui étaient FAUSSES — vérifiées, corrigées
 
-Le lot REST (`use-conversation-messages-rq.ts:261-307`) n'est relancé que lorsqu'on ENVOIE un
-message, et `conversation:join` ne re-émet pas de `read-status:updated`. Le cycle 85 a rendu ces
-compteurs monotones : sans backfill, un événement manqué devient un **gel permanent**. C'est le
-dernier défaut légué par les cycles 86/87 encore entier.
+La tête annonçait « **trois** transports REST de suppression », et les disait dépourvus
+d'`emitConversationPreviewUpdate`. Les deux points sont faux :
 
-## Priorité 2 — la suppression : trois transports REST ne repoussent toujours rien
+| Ce que la tête disait | Ce que la vérification a établi |
+|---|---|
+| trois transports REST de suppression | **deux** — les trois autres appelants de `broadcastMessageMutation` sont des ÉDITIONS |
+| ils n'émettent pas l'aperçu de liste | ils l'émettent **depuis toujours**, via `broadcastMessageMutation` |
 
-Le cycle 89 a câblé le recalcul du badge sur le transport WS (`handleMessageDelete`), à côté de
-`emitConversationPreviewUpdate`. **Les trois transports REST de suppression ne le font pas** —
-et deux d'entre eux n'émettent même pas l'aperçu :
+`src/socketio/README.md` § « La pastille de non-lus » portait la même erreur et est corrigé.
+**Morale, à appliquer au cycle 91 :** « ne pas re-auditer — vérifier puis corriger » veut dire
+VÉRIFIER. Un site exact légué par un cycle précédent se relit avant qu'on écrive contre lui ;
+ici la vérification a économisé un correctif sur un transport qui n'existe pas et un autre sur
+un canal déjà branché.
 
-| Transport | `emitConversationPreviewUpdate` | `emitUnreadCountsToRecipients` |
-|---|---|---|
-| WS `message:delete` | oui | **oui (cycle 89)** |
-| `DELETE /messages/:id` | non | non |
-| `DELETE /conversations/:id/messages/:id` | non | non |
+## Ce que le cycle 91 doit faire : auditer, la file est vide
 
-La règle est écrite dans `src/socketio/README.md` § « La pastille de non-lus ». L'unité à appeler
-existe et est partagée : `emitUnreadCountsToRecipients`, en excluant l'AUTEUR (`message.senderId`),
-jamais l'acteur.
+Aucun défaut n'est légué avec site et scénario. Pistes non instruites, par ordre de valeur
+apparente — **à confirmer par lecture avant tout code** :
 
-## Dette d'intégration relevée ET SOLDÉE au cycle 89 — `main` était rouge
-
-`origin/main` à `f96478ff` rendait **8 suites gateway / 35 tests en échec** — le job `Test gateway`
-de la CI était rouge sur `main` depuis ~11:49, donc AUCUNE PR ne pouvait passer au vert. Vérifié en
-checkout détaché, même `node_modules` : liste et comptes identiques sur `main` et sur la branche.
-
-Origine : le lot `b7fc5dcf` (« integrate 48 net-new unit test files onto updated main »). **Aucun de
-ces 35 échecs n'était un défaut de production.** Toutes ces suites décrivent une version ANTÉRIEURE
-(ou imaginée) de l'API — et, dans les cas les plus parlants, décrivent exactement le DÉFAUT qu'un
-correctif ultérieur a fermé :
-
-| Suite | Ce que le test exigeait | Ce que la production fait, et pourquoi elle a raison |
-|---|---|---|
-| `AuthHandler` | authentifier par `userId` nu | exige un JWT — un identifiant revendiqué n'est pas un credential |
-| `participant-resolver` | « pas de requête DB » pour un anonyme | la requête EST le contrôle qui empêche de diffuser dans un salon étranger |
-| `ExpiredStoriesCleanupService` | `deletedAt: null`, `type: 'STORY'` | `NOT_DELETED` (`isSet`) + les deux types éphémères — le `null` n'appariait AUCUN post sur Mongo |
-| `AffiliateTrackingService` | `currentUses: 4` | `$inc` atomique — la version lue-puis-écrite est une course documentée |
-| `PhonePasswordResetService` | double sans `updateMany` | consommation ATOMIQUE du plafond de tentatives (anti-TOCTOU) |
-| `PostService` | `deletePost(id, actor)` | prend le rôle de l'acteur : un modérateur retire le post d'un autre |
-| `AgentAdminRelay` | double sans `connect()` | subscriber `lazyConnect` — sans `connect()`, la socket n'est pas écrivable |
-| `MeeshySocketIOHandler.methods` | `sendNotificationToUser` | **n'a jamais existé**, nulle part ; bloc retiré |
-
-**La règle d'arbitrage, à réutiliser telle quelle** : un test rouge sur du code que personne n'a
-touché ne prouve pas un défaut — il prouve un DÉSACCORD. Trancher en lisant ce que la production
-justifie d'elle-même : ici, six des huit portaient un commentaire expliquant pourquoi la forme
-attendue par le test était précisément celle qu'on avait corrigée. Et ne JAMAIS écrire de production
-pour satisfaire un test imaginé : `sendNotificationToUser` aurait été du code mort sous garantie.
+- **Les autres chemins qui rendent un message invisible** ne repoussent pas la pastille : la règle
+  du README dit « soft delete, rappel, expiration, modération ». Seules les suppressions (WS + les
+  deux REST) sont câblées. L'expiration éphémère (`ExpiredStoriesCleanupService` et son équivalent
+  messages) et la modération admin sont des candidats directs, avec le même one-liner.
+- **Le rattrapage à la reconnexion est maintenant un motif à trois usages** (messages, accusés) et
+  vaut d'être cherché ailleurs : réactions, épinglages, statuts de présence — tout état poussé par
+  socket et jamais re-demandé sur reconnexion souffre du même gel.
+- **`tsc --noEmit` sur `apps/web` rend 1 224 diagnostics**, tous dans `__tests__/**` et tous
+  pré-existants (compte identique mesuré sur l'arbre stashé au cycle 90). Ce n'est pas une
+  régression, mais c'est un signal éteint : plus personne ne peut lire ce compte pour y détecter
+  une vraie erreur. Assainir est un chantier en soi, pas un à-côté.
 
 ## Ce qui reste ouvert des cycles précédents
+
 
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
   depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de la
@@ -101,6 +93,80 @@ pour satisfaire un test imaginé : `sendNotificationToUser` aurait été du code
 
 `bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
 interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+---
+
+# Cycle 90 — Deux compteurs qui mentaient sans jamais se corriger
+
+*Branche `claude/keen-hamilton-acrbyg`. Deux correctifs, chacun RED-prouvé avant correction. Et une
+heure perdue en doublon, consignée en tête de fichier et en leçon 142.*
+
+## 0. Ce que ce cycle a d'abord écrit pour rien
+
+Le cycle a ouvert sur la tête du cycle 90, qui donnait les trois défauts restants du pipeline de
+traduction. Ils ont été implémentés et prouvés (10 tests, suite gateway verte) — puis le `fetch`
+d'avant-PR a rapporté `ee547fa8` : une session parallèle avait livré les **mêmes trois**, plus la
+moitié WS de la priorité 3, et était déjà sur `main`.
+
+Le salvage a été mené test par test et s'est révélé **intégralement négatif**. Les 10 tests écrits
+passaient tous contre l'implémentation de `main` — les deux sessions avaient donc la même lecture
+des défauts — mais les 7 tests d'en face couvraient strictement plus (forme canonique de la langue,
+retry ne redemandant que les langues manquantes, erreur nommant les langues jamais rendues, double
+livraison). **Rien n'a été conservé.** La branche a été remise à plat sur `origin/main`.
+
+Deux points où la version parallèle était objectivement meilleure, gardés comme motifs (leçon 142) :
+un **plafond FIFO doit être renégocié quand sa clé gagne une dimension** (5 000 → 20 000 : sinon
+l'éviction couvre N fois moins de MESSAGES, et une entrée évincée se lit « jamais périmé » — le
+garde se désarme tout seul sous charge) ; et un **retry après succès partiel ne doit redemander que
+ce qui manque**, sous peine de dupliquer le travail du worker pool ML.
+
+## 1. Les deux transports REST de suppression ne repoussaient pas la pastille de non-lus
+
+Le cycle 89 avait câblé le recalcul sur le transport WS. Les deux transports REST —
+`DELETE /messages/:id` (Android) et `DELETE /conversations/:id/messages/:messageId` (SDK iOS) —
+ne le faisaient pas : le lecteur voyait le message disparaître pendant que sa pastille continuait
+de le compter. La liste web tourne en `staleTime: Infinity` : la valeur ne vieillit pas, **elle
+ment**. Le décompte était déjà juste (`deletedAt: null` filtré) ; il ne manquait que de le
+redemander.
+
+La poussée vit dans `broadcastMessageMutation` — l'unique broadcaster des cinq routes de mutation
+REST — donc écrite **une seule fois** pour les deux suppressions. Les trois autres appelants sont
+des éditions : une édition ne change aucun compte, et l'y brancher aurait coûté deux requêtes par
+frappe validée pour zéro delta.
+
+L'exclusion porte sur l'**AUTEUR**, jamais sur l'acteur : un modérateur qui retire le message d'un
+autre est lui-même un destinataire à rafraîchir. C'est l'inverse de la file hors ligne, dix lignes
+plus bas, qui exclut bien l'acteur.
+
+**C'est le TYPE qui tient la règle** : `MessageMutationParams` est une union discriminée où
+`authorId` est requis sur `'deleted'` et absent de `'edited'`. Les deux callsites à corriger ont été
+trouvés par `tsc`, pas par lecture — et un sixième transport de suppression ne compilera pas sans
+nommer son auteur.
+
+## 2. Les accusés de lecture ne se rattrapaient jamais après une coupure socket
+
+Le lot REST `getReadStatuses` est gardé par `${conversationId}:${dernier message à soi}` : il ne se
+relance donc que lorsqu'on **ENVOIE**. Et `conversation:join` ne re-émet aucun `read-status:updated`.
+
+Depuis que le cycle 85 a rendu ces compteurs **monotones**, un événement manqué n'est plus une
+valeur en retard qu'un suivant corrigerait : c'est un **gel permanent**. L'expéditeur garde une
+coche « remis » sur un message que tout le monde a lu, jusqu'à ce qu'il en envoie un autre.
+
+Le hook rattrapait déjà les MESSAGES manqués sur le front montant de la reconnexion. Ce front est
+désormais compté **une seule fois** (`reconnectEpoch`) et sert les deux dettes du même instant. La
+détection de front, dupliquée pour les messages et absente pour les accusés, n'existe plus qu'en un
+endroit.
+
+## Vérification
+
+- Suite gateway complète : **680/680 suites, 16 847/16 847 tests**. `tsc --noEmit` : 0 diagnostic.
+- Suite web complète verte ; `tsc --noEmit` web : **1 224 diagnostics, tous dans `__tests__/**` et
+  strictement pré-existants** — compte identique mesuré sur l'arbre stashé, aucun sur un fichier
+  touché ici. Consigné plutôt qu'assaini (hors périmètre).
+- Le test de rattrapage a d'abord été **flaky sous la suite complète** (`waitFor`, délai par défaut
+  d'une seconde, 564 suites en parallèle). Il asserte désormais directement après `rerender` : le
+  front monté relance le lot de façon synchrone, il n'y avait rien à attendre. RED/GREEN re-prouvé
+  sous cette forme, en retirant `reconnectEpoch` de la clé.
 
 ---
 
