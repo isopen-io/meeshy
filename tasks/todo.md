@@ -70,7 +70,29 @@ PAS plutôt que de supposer le vide. Le bon filtre reste celui du cycle 93 : *un
 comportement d'un champ dont AUCUN code serveur ne lit la valeur pour agir* — pas « le champ
 ressemble à une promesse ».
 
-### 2. Les deux constats du cycle 93, toujours non instruits
+### 2. VÉRIFIÉ au cycle 94, non traité : le budget de vue unique se contourne par un simple GET
+
+**C'est la même forme de défaut, un cran plus bas, et il est confirmé dans le code.**
+`viewOnceCount` n'est incrémenté QUE par la route explicite
+`POST /conversations/:id/messages/:messageId/consume`. La route qui sert réellement les octets,
+`GET /attachments/:attachmentId` (`routes/attachments/download.ts`), ne gate que sur
+l'APPARTENANCE à la conversation : `callerMayReadAttachment` lit `messageId → conversationId` puis
+cherche un `Participant` actif, et ne regarde ni `isViewOnce`, ni `viewOnceCount`, ni `deletedAt`,
+ni `expiresAt`.
+
+Conséquence : un membre — ou un `curl` muni d'un jeton valide — télécharge le média à vue unique
+autant de fois qu'il veut sans jamais appeler `consume`. Le budget n'est donc jamais épuisé,
+`isFullyConsumed` reste faux, `scheduleViewOnceBurn` n'est jamais appelé, et **le message ne brûle
+jamais**. Le cycle 93 a câblé la destruction sur un compteur que seuls les clients bien élevés
+alimentent.
+
+Ce n'est PAS un petit correctif : décider ce qui compte comme « une vue » côté serveur touche le
+préchargement de vignettes (`/thumbnail`), les requêtes Range (lecture vidéo en plusieurs morceaux
+— chacune ne doit pas coûter une vue) et le rejeu réseau. **C'est le chantier le plus rentable
+ouvert à ce jour, et il passe avant la prospection Story/Post/Call de la section 1** : celle-ci
+cherche des promesses non tenues, celui-là en a une, déjà localisée et déjà prouvée.
+
+### 3. Les deux constats du cycle 93, toujours non instruits
 
 - **`maxViewOnceCount: null` veut dire « 1 » partout dans le code et « tous les membres » dans le
   commentaire du schéma** (la route fait `?? 1`). C'est le commentaire du schéma qui est faux, ou la
@@ -80,7 +102,7 @@ ressemble à une promesse ».
   jamais son échéance. Une passe de rattrapage unique (`viewOnceCount >= maxViewOnceCount ?? 1` ET
   `expiresAt` absent) fermerait le passif ; elle n'est toujours pas écrite.
 
-### 3. Les deux suivis que le cycle 94 ouvre
+### 4. Les deux suivis que le cycle 94 ouvre
 
 - **Aucun client ne masque `.forward` sur un message à vue unique.** L'action est offerte puis
   refusée par le serveur — correct pour la sécurité, médiocre pour l'UX. Côté iOS le correctif est
@@ -95,7 +117,7 @@ ressemble à une promesse ».
   déjà son fichier quand elle était permanente) et qui ne fuit rien — il dégrade. Le fermer
   demande de dupliquer l'octet ou de compter les références.
 
-### 4. La veine « événement socket manqué », toujours ouverte
+### 5. La veine « événement socket manqué », toujours ouverte
 
 - **La modération admin** reste le candidat restant parmi les chemins qui rendent un message
   invisible sans repousser la pastille de non-lus.
