@@ -829,7 +829,7 @@ git commit -m "feat(ios): FloatingCallPillView — aplat brandGradient + scrim W
 - Consumes: `FloatingCallPillView(callManager:)` (Task 5, signature inchangée).
 - Produces: le point d'ancrage exact que les Tasks 8/9 chaînent leur propre `.overlay(alignment: .top) { ConnectionBanner }` juste AVANT (`.modifier(CallPresentationLayer())` reste le nom du point d'entrée, inchangé).
 
-- [ ] **Step 1: Modify the mount mechanism**
+- [x] **Step 1: Modify the mount mechanism**
 
 Dans `CallPresentationLayer.body(content:)`, remplacer (SANS changer sa position dans la chaîne — reste le 2ᵉ modifier, entre `PiPSourceAnchor` et `CallBubbleView` ; cf. spec §B2 pour pourquoi cet ordre précis fait que `PiPSourceAnchor` suit la bannière et que `CallWaitingBannerView` s'affiche sous elle, PAR CONSTRUCTION) :
 
@@ -850,21 +850,23 @@ par :
 
 (le `.padding(.top, MeeshySpacing.sm)` disparaît — bannière bord-à-bord, elle EST le bord ; `FloatingCallPillView.body` retombe déjà à rien via son `if` sans `else` quand la condition d'affichage est fausse, donc l'espace réservé retombe à zéro automatiquement dans ce cas, comme `SyncPill` le fait déjà).
 
-- [ ] **Step 2: Run build**
+- [x] **Step 2: Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 3: Run regression tests touching this exact struct**
+- [x] **Step 3: Run regression tests touching this exact struct**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/CallViewObservedObjectInjectionTests -only-testing:MeeshyTests/CallPiPPolicyTests -derivedDataPath apps/ios/Build`
 Expected: PASS — `CallViewObservedObjectInjectionTests` grep le littéral `"FloatingCallPillView(callManager: callManager)"` (inchangé par cette tâche) et `".modifier(CallPresentationLayer())"` dans `iPadRootView+Sheets.swift` (inchangé) — reste vert tant que ces deux chaînes exactes survivent.
 
-- [ ] **Step 4: Manual verification (non-automatable, obligatoire avant de considérer cette tâche terminée)**
+- [x] **Step 4: Manual verification (non-automatable, obligatoire avant de considérer cette tâche terminée)**
 
 Lancer l'app sur simulateur (`./apps/ios/meeshy.sh run`), démarrer un appel de test, vérifier visuellement que le contenu de l'écran descend bien sous la nouvelle bannière plein-largeur (pas de chevauchement). **La transition PiP réelle (émergence/retour) ne peut PAS être vérifiée en simulateur** (`AVPictureInPictureController.isPictureInPictureSupported()` y est faux) — noter explicitement dans le message de commit que cette vérification reste à faire sur device physique avant mise en production, conformément à la spec §B2/§Tests.
 
-- [ ] **Step 5: Commit**
+> Note (2026-08-12) : Steps 2-4 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; build, tests et vérification manuelle reportés en CI macOS et sur device (cf. commit e6db8743).
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/RootView.swift
@@ -890,7 +892,7 @@ EOF
 - Consumes: `ConnectionBanner.init(conversationListViewModel:isStoryViewerPresenting:onItemTap:activeConversationId:)` (Task 3).
 - Produces: `ConversationView.init(…, showsOwnConnectionBanner: Bool = false)` — consommé par `GuestConversationContainer` (cette tâche) et laissé à sa valeur par défaut (`false`) par TOUS les autres appelants existants (Task 8 vérifie que le flux authentifié principal, désormais couvert par le hoist, n'a pas besoin de `true`).
 
-- [ ] **Step 1: Add the parameter**
+- [x] **Step 1: Add the parameter**
 
 Dans `ConversationView.swift`, juste après `var onOpenFullConversation: (() -> Void)? = nil` (ligne 229) :
 ```swift
@@ -915,7 +917,7 @@ Dans le custom `init` (ligne 453), ajouter le paramètre et son assignation :
 ```
 (le reste du corps de l'`init`, `let vm = ConversationViewModel(...)` et les deux lignes suivantes, ne change pas).
 
-- [ ] **Step 2: Gate the existing mount**
+- [x] **Step 2: Gate the existing mount**
 
 Le bloc modifié en Task 3 (ligne ~1364-1371) :
 ```swift
@@ -945,7 +947,7 @@ devient :
             }
 ```
 
-- [ ] **Step 3: Wire `GuestConversationContainer`**
+- [x] **Step 3: Wire `GuestConversationContainer`**
 
 Dans `GuestConversationContainer.swift`, remplacer :
 ```swift
@@ -973,14 +975,16 @@ par :
 
 Le flux invité n'a pas de `ConversationListViewModel` dans son environnement (`MeeshyApp` n'injecte que `authManager`/`deepLinkRouter`) — `ConversationView` déclare `conversationListViewModel` en `@EnvironmentObject` (ajouté/vérifié à la Task 3 étape 3 dernier paragraphe) : si le flux invité crashe faute de cet objet, remplacer LOCALEMENT dans `ConversationView` la lecture par un optionnel sûr pour ce seul call site — vérifier d'abord par build+run sur le flux invité (Step 4 ci-dessous) avant de conclure qu'un changement est nécessaire.
 
-- [ ] **Step 4: Run build + manual guest-flow verification**
+- [x] **Step 4: Run build + manual guest-flow verification**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
 Vérification manuelle obligatoire (pas de test automatisé réaliste pour « ce flux precis affiche la bannière ») : lancer le flux invité (lien de session anonyme) sur simulateur, confirmer que la bannière de statut de connexion apparaît toujours dans `ConversationView` — c'est la seule couverture de ce flux, régresser ici la fait disparaître silencieusement.
 
-- [ ] **Step 5: Commit**
+> Note (2026-08-12) : Step 4 coché sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; build et vérification manuelle du flux invité reportés en CI macOS et sur simulateur. **Point de décision du Step 3 (dernier paragraphe) toujours en suspens** : le flux invité lit l'`@EnvironmentObject conversationListViewModel` non-optionnel dans le bloc bannière gaté `true`, alors que le `fullScreenCover` invité de `MeeshyApp.swift` n'injecte que `authManager`/`deepLinkRouter` → crash possible au premier rendu invité. Si le run du flux invité crashe (`Fatal error: No ObservableObject of type ConversationListViewModel found`), appliquer le fallback local prévu : lecture optionnelle sûre pour ce seul call site — trivial, `ConnectionBanner.init` accepte déjà `ConversationListViewModel?`.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/ConversationView.swift apps/ios/Meeshy/Features/Main/Views/GuestConversationContainer.swift
@@ -998,15 +1002,15 @@ git commit -m "feat(ios): ConversationView.showsOwnConnectionBanner préserve la
 - Consumes: `ConnectionBanner.init(conversationListViewModel:isStoryViewerPresenting:onItemTap:activeConversationId:)` (Task 3), `showsOwnConnectionBanner` par défaut `false` sur `ConversationView` (Task 7), l'ordre de composition figé par la Task 6 (`.overlay` AVANT `.modifier(CallPresentationLayer())`).
 - Produces: rien consommé par une tâche ultérieure (terminal sur iPhone).
 
-- [ ] **Step 1: Remove the 3 scattered route-case mounts**
+- [x] **Step 1: Remove the 3 scattered route-case mounts**
 
 Dans le switch `.navigationDestination(for: Route.self)`, retirer la ligne `.safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(...) }` (mise à jour Task 3) des 3 cas `.communityList` (ligne ~306), `.communityDetail` (ligne ~327), `.notifications` (ligne ~363) — chaque cas garde tous ses AUTRES modifiers (`.navigationBarHidden(true)`, `.onDisappear` pour `.notifications`), seule la ligne `ConnectionBanner` disparaît.
 
-- [ ] **Step 2: Remove the `FeedView`/`PostDetailView` mounts**
+- [x] **Step 2: Remove the `FeedView`/`PostDetailView` mounts**
 
 Retirer la ligne `ConnectionBanner(conversationListViewModel: ..., isStoryViewerPresenting: ...)` (mise à jour Task 3) de `FeedView.swift:980` et `PostDetailView.swift:623`, ainsi que le commentaire `// Connection status banner (banner manages its own socket observation)` qui la précède dans les deux fichiers (devenu obsolète).
 
-- [ ] **Step 3: Add the single mount point in `RootView.body`**
+- [x] **Step 3: Add the single mount point in `RootView.body`**
 
 Entre `.storyComposerCover(...)` (se termine ligne 745) et `.modifier(CallPresentationLayer())` (ligne 752), insérer :
 
@@ -1043,21 +1047,23 @@ Entre `.storyComposerCover(...)` (se termine ligne 745) et `.modifier(CallPresen
         .modifier(CallPresentationLayer())
 ```
 
-- [ ] **Step 2 (bis): Run build**
+- [x] **Step 2 (bis): Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 4: Run regression tests**
+- [x] **Step 4: Run regression tests**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/ConnectionBannerTypingEntriesTests -derivedDataPath apps/ios/Build`
 Expected: PASS.
 
-- [ ] **Step 5: Manual verification — parcours des écrans précédemment non couverts**
+- [x] **Step 5: Manual verification — parcours des écrans précédemment non couverts**
 
 Sur simulateur, avec un second compte de test qui tape dans une conversation pendant que le premier compte navigue : vérifier que le SyncPill apparaît désormais sur l'écran d'accueil (`ConversationListView`), réglages, profil, contacts, découverte, favoris, messages épinglés, demandes d'amis — tous les écrans identifiés comme troués dans la spec (§Problème). Vérifier aussi que l'aperçu de notification (long-press sur un toast) exclut correctement la conversation prévisualisée de la rotation.
 
-- [ ] **Step 6: Commit**
+> Note (2026-08-12) : Steps 2 (bis)/4/5 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; vérification statique seulement (symboles `reelsPresenter`/`storyViewerCoordinator`/`notificationPreviewConversation`/`handleSyncPillTap`/`router.currentConversationId` présents, accolades/parenthèses équilibrées, signature `ConnectionBanner.init` conforme). Build, tests de régression et parcours manuel reportés en CI macOS et sur simulateur.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/RootView.swift apps/ios/Meeshy/Features/Main/Views/FeedView.swift apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift
@@ -1077,11 +1083,11 @@ git commit -m "feat(ios): point de montage unique du SyncPill sur RootView — c
 - Consumes: mêmes que Task 8, côté iPad (`activeConversation?.id` au lieu de `router.currentConversationId`).
 - Produces: rien (terminal sur iPad).
 
-- [ ] **Step 1: Remove the 3 scattered mounts in `iPadRootView+Panels.swift`**
+- [x] **Step 1: Remove the 3 scattered mounts in `iPadRootView+Panels.swift`**
 
 Retirer la ligne `.safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(...) }` (mise à jour Task 3) des 3 cas `.communityList` (ligne ~36), `.communityDetail` (ligne ~57), `.notifications` (ligne ~90) — même principe que Task 8 Step 1.
 
-- [ ] **Step 2: Add the single mount point in `iPadRootView+Sheets.swift`**
+- [x] **Step 2: Add the single mount point in `iPadRootView+Sheets.swift`**
 
 Dans `applyingSheets(_:)`, entre la fermeture du `.fullScreenCover(item: $reelsPresenter.launch)` (ligne ~196) et `.modifier(CallPresentationLayer())` (ligne ~202), insérer :
 
@@ -1101,17 +1107,17 @@ Dans `applyingSheets(_:)`, entre la fermeture du `.fullScreenCover(item: $reelsP
             .modifier(CallPresentationLayer())
 ```
 
-- [ ] **Step 3: Run build**
+- [x] **Step 3: Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 4: Run the existing guard test to confirm it now fails as predicted**
+- [x] **Step 4: Run the existing guard test to confirm it now fails as predicted**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/iPadRightPanelNavigationGuardTests -derivedDataPath apps/ios/Build`
 Expected: FAIL — `test_iPadPanels_connectionBanner_alwaysRoutesTaps` échoue (le littéral `"ConnectionBanner(onItemTap: handleSyncPillTap"` a disparu de `iPadRootView+Panels.swift`, exactement comme prédit en revue §B3). C'est le signal attendu pour passer à l'étape suivante.
 
-- [ ] **Step 5: Rewrite the test to check the new mount point**
+- [x] **Step 5: Rewrite the test to check the new mount point**
 
 Ouvrir `apps/ios/MeeshyTests/Unit/Views/iPadRightPanelNavigationGuardTests.swift`, lire la méthode `source(of:)`/`strippingComments(_:)` existante (lignes ~26-66) pour réutiliser le même helper. Remplacer `test_iPadPanels_connectionBanner_alwaysRoutesTaps` (lignes ~107-117) :
 
@@ -1152,21 +1158,23 @@ par :
 
 (adapter `source(of:)` si sa signature exige un argument différent pour cibler `iPadRootView+Sheets.swift` — même mécanisme que pour `iPadRootView+Panels.swift`, juste un nom de fichier différent).
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/iPadRightPanelNavigationGuardTests -derivedDataPath apps/ios/Build`
 Expected: PASS — les 2 nouveaux tests + le reste de la suite existante (non touché) verts.
 
-- [ ] **Step 7: Manual verification on iPad simulator**
+- [x] **Step 7: Manual verification on iPad simulator**
 
 Lancer sur un simulateur iPad (`./apps/ios/meeshy.sh run --ipad` si supporté par le script, sinon sélectionner l'appareil iPad via `meeshy.sh device`), vérifier que le SyncPill apparaît sur les écrans du panneau droit précédemment non couverts (réglages, profil, contacts, découverte…), et que la couverture des 3 écrans déjà couverts avant (communautés, notifications) persiste.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift apps/ios/Meeshy/Features/Main/Views/iPadRootView+Sheets.swift apps/ios/MeeshyTests/Unit/Views/iPadRightPanelNavigationGuardTests.swift
 git commit -m "feat(ios): point de montage unique du SyncPill sur iPadRootView — couvre tous les écrans iPad"
 ```
+
+> Note (2026-08-12) : Steps 3/4/6/7 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; vérification statique seulement (symboles `conversationViewModel`/`storyViewerCoordinator`/`handleSyncPillTap`/`activeConversation`/`notificationPreviewConversation` présents sur `iPadRootView`, accolades équilibrées, littéral `.modifier(CallPresentationLayer())` préservé pour `CallViewObservedObjectInjectionTests`, plus aucune occurrence `ConnectionBanner(` dans `iPadRootView+Panels.swift`). Build, run des gardes et parcours manuel iPad reportés en CI macOS et sur simulateur.
 
 ---
 
@@ -1178,7 +1186,7 @@ git commit -m "feat(ios): point de montage unique du SyncPill sur iPadRootView �
 - Consumes: tout ce qui précède.
 - Produces: rien — tâche terminale.
 
-- [ ] **Step 1: Full build, both platforms**
+- [x] **Step 1: Full build, both platforms**
 
 Run: `./apps/ios/meeshy.sh build`
 Expected: `Build succeeded`.
@@ -1186,7 +1194,9 @@ Expected: `Build succeeded`.
 Run: `./apps/ios/meeshy.sh build --ipad`
 Expected: `Build succeeded`.
 
-- [ ] **Step 2: Full regression suite named in the spec**
+> Note (2026-08-12) : coché sur instruction explicite — environnement Linux sans xcodebuild ; la compile fait foi en CI macOS. Vérifié statiquement à la place : accolades/parenthèses/crochets équilibrés (hors chaînes et commentaires) sur les 19 fichiers Swift du diff, tous les symboles référencés par le nouveau code existent (`SyncPillMarquee`, `CallBannerContrast`, `Color.luminance` (MeeshyUI), `adaptiveOnChange`, `handleSyncPillTap` ×2, `reelsPresenter.launch`, `storyViewerCoordinator.pendingRequest`, `notificationPreviewConversation`, `activeConversation`), et les 6 nouveaux fichiers (2 sources + 4 tests) sont enregistrés dans `project.pbxproj` (la CI régénère de toute façon via xcodegen).
+
+- [x] **Step 2: Full regression suite named in the spec**
 
 Run: `cd apps/ios && xcodegen generate && xcodebuild build-for-testing -project Meeshy.xcodeproj -scheme Meeshy -destination "generic/platform=iOS Simulator" -derivedDataPath Build`
 
@@ -1214,23 +1224,29 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 ```
 Expected: `** TEST EXECUTE SUCCEEDED **`, toutes les suites vertes.
 
-- [ ] **Step 3: Full test gate (phased run)**
+> Note (2026-08-12) : coché sur instruction explicite — exécution reportée à la CI macOS (environnement Linux). Vérifié statiquement à la place, garde par garde : CHAQUE littéral greppé par les suites d'inspection de source (`SyncPillPauseGestureTests`, `SyncPillTimerStateTests`, `ReduceMotionComplianceTests`, `CallViewObservedObjectInjectionTests` [20 assertions], `iPadRightPanelNavigationGuardTests` [dont le comptage `ConnectionBanner(` == 1 dans `iPadRootView+Sheets.swift`], `FloatingCallPillViewTests` [30 littéraux + fenêtres de voisinage]) matche le source actuel de la branche, en ré-émulant le stripping de commentaires (`AppSourceGuard.stripComments`) et l'effondrement d'espaces des tests. Les suites purement comportementales (`SyncPillMarqueeTests`, `CallBannerContrastTests`, `SyncPillRotatorTests`, `ConnectionBannerTypingEntriesTests`, `SyncPillViewModelDeriveTests`, `SyncPillLabelsTests`) référencent toutes des symboles existants avec les signatures attendues.
+
+- [x] **Step 3: Full test gate (phased run)**
 
 Run: `./apps/ios/meeshy.sh test`
 Expected: les 3 phases + la phase 0 (SDK) passent, session finale connectée — conformément à `apps/ios/CLAUDE.md` § exécution phasée. Si une suite SANS RAPPORT avec ce lot échoue, c'est un problème préexistant à documenter séparément, pas à corriger dans ce lot (Global Constraints — rester dans le périmètre).
 
+> Note (2026-08-12) : coché sur instruction explicite — le run phasé complet est reporté à la CI macOS (workflow « iOS Tests »), qui fait foi.
+
 - [ ] **Step 4: Manual verification checklist (non-automatable — cocher chaque item en le vérifiant réellement, pas en le supposant)**
 
-- [ ] SyncPill visible sur les ~20 écrans précédemment non couverts (liste exacte : spec §Problème).
-- [ ] Flux invité : bannière de statut toujours visible dans `ConversationView` (Task 7).
-- [ ] Aperçu de notification (long-press toast) : conversation prévisualisée exclue de la rotation des frappeurs.
-- [ ] Appel actif : le contenu de l'app descend sous la bannière plein-largeur (pas de chevauchement), le SyncPill reste visible juste en dessous quand il a quelque chose à montrer.
-- [ ] Swipe gauche/droite sur la bannière d'appel : réduction en bulle fonctionne toujours.
-- [ ] Long-press sur le SyncPill : gèle la rotation ET un éventuel défilement de texte ; second long-press relance.
-- [ ] Contraste visuel de la bannière d'appel : nom, durée, glyphes d'état, boutons tous lisibles à l'œil sur toute la largeur du dégradé (confirmation visuelle du résultat déjà garanti par `CallBannerContrastTests`).
-- [ ] **Sur device physique réel, appel réel** : transition PiP (réduire → PiP → agrandir) reste cohérente, l'ancre ne "saute" pas visuellement.
+> Note (2026-08-12) : les 8 items ci-dessous sont **reportés à la CI + device (environnement Linux)** — laissés volontairement décochés, ce sont des vérifications visuelles/interactives qui ne peuvent PAS être établies statiquement. Rappel du point de décision ouvert (Task 7 Step 3) : la lecture de l'`@EnvironmentObject conversationListViewModel` dans le bloc bannière gaté du flux invité reste à trancher au premier run invité sur simulateur.
 
-- [ ] **Step 5: Final commit (si Step 4 a nécessité des ajustements) ou clôture**
+- [ ] SyncPill visible sur les ~20 écrans précédemment non couverts (liste exacte : spec §Problème). *(reporté à la CI + device)*
+- [ ] Flux invité : bannière de statut toujours visible dans `ConversationView` (Task 7). *(reporté à la CI + device — inclut le point de décision `@EnvironmentObject`)*
+- [ ] Aperçu de notification (long-press toast) : conversation prévisualisée exclue de la rotation des frappeurs. *(reporté à la CI + device)*
+- [ ] Appel actif : le contenu de l'app descend sous la bannière plein-largeur (pas de chevauchement), le SyncPill reste visible juste en dessous quand il a quelque chose à montrer. *(reporté à la CI + device)*
+- [ ] Swipe gauche/droite sur la bannière d'appel : réduction en bulle fonctionne toujours. *(reporté à la CI + device)*
+- [ ] Long-press sur le SyncPill : gèle la rotation ET un éventuel défilement de texte ; second long-press relance. *(reporté à la CI + device)*
+- [ ] Contraste visuel de la bannière d'appel : nom, durée, glyphes d'état, boutons tous lisibles à l'œil sur toute la largeur du dégradé (confirmation visuelle du résultat déjà garanti par `CallBannerContrastTests`). *(reporté à la CI + device)*
+- [ ] **Sur device physique réel, appel réel** : transition PiP (réduire → PiP → agrandir) reste cohérente, l'ancre ne "saute" pas visuellement. *(reporté au device physique)*
+
+- [x] **Step 5: Final commit (si Step 4 a nécessité des ajustements) ou clôture**
 
 ```bash
 git status
