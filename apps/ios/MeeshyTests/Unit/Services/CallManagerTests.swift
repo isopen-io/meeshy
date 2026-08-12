@@ -704,6 +704,43 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Vague 100 — `startCall`'s `callController.request` completion already
+    /// captures `[weak self]` (the outer closure), but the nested
+    /// `Task { @MainActor in ... }` it spawns on CallKit failure did NOT repeat
+    /// the weak capture: an unstructured `Task` closure captures whatever it
+    /// references independently of its enclosing closure's capture list, so
+    /// omitting `[weak self]` there re-strongly-captures `self` for the task's
+    /// lifetime — the exact convention `apps/ios/CLAUDE.md`'s "Common Retain
+    /// Cycle Traps" section calls out for `DispatchQueue`/`Task` closures.
+    func test_startCall_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func startCall(conversationId: String", in: source) else {
+            XCTFail("startCall not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed(\"CallKit error\")) }"),
+            "startCall's CXStartCallAction failure Task must capture [weak self], not just the outer " +
+            "callController.request closure — an unstructured Task does not inherit its enclosing " +
+            "closure's capture list."
+        )
+    }
+
+    /// Mirrors `test_startCall_callKitFailureTask_capturesSelfWeakly` for the
+    /// incoming-call `reportNewIncomingCall` failure Task in
+    /// `handleIncomingCallNotification` — same bug, same fix.
+    func test_handleIncomingCallNotification_callKitFailureTask_capturesSelfWeakly() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("Task { @MainActor [weak self] in self?.failCall(\"CallKit error\") }"),
+            "handleIncomingCallNotification's reportNewIncomingCall failure Task must capture [weak self]."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {
@@ -4111,6 +4148,44 @@ final class RejectDeferredReconciliationTests: XCTestCase {
             body.contains("pendingEndReconciliationCallId = callId"),
             "the deferred reject must be remembered in pendingEndReconciliationCallId " +
             "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_emitCallReject_usesAtLeastOnceWithAck_notFireAndForget() throws {
+        // 2026-08-11: the socket-down guard above only protects the "socket is
+        // OBSERVABLY disconnected" case. A socket that LOOKS connected at the
+        // moment of decline can still drop the emit in flight — a blip that
+        // self-heals before connectionState ever publishes the disconnect. The
+        // decliner has already torn down locally (endCallInternal ran before
+        // this call), so a silently-dropped reject leaves the caller ringing
+        // until the gateway's own timeout, which resolves to `missed` — the
+        // exact mislabel the arc reject 2026-07-12 fix eliminated on every
+        // OTHER decline path. Mirrors emitCallEndReliably's ACK'd-with-fallback
+        // shape (§6.3 precedent: test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget).
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallRejectWithAck"),
+            "emitCallReject must await the ACK'd reject path — a plain fire-and-forget " +
+            "emit gives no signal that the gateway ever received it."
+        )
+        XCTAssertTrue(
+            body.contains("if !acked"),
+            "emitCallReject must branch on ACK failure, mirroring emitCallEndReliably."
+        )
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallReject(callId: callId)"),
+            "on ACK failure, emitCallReject must still emit the fire-and-forget fallback — " +
+            "the gateway's end handler is idempotent, a duplicate is a no-op."
+        )
+        let rejectedReasonCount = body.components(separatedBy: "pendingEndReconciliationReason = \"rejected\"").count - 1
+        XCTAssertEqual(
+            rejectedReasonCount, 2,
+            "emitCallReject must arm pendingEndReconciliationReason = \"rejected\" on BOTH the " +
+            "socket-down guard AND the ACK-failure fallback — an unacked-but-emitted reject needs " +
+            "replay too, or the caller keeps ringing until the gateway's own timeout mislabels it `missed`."
         )
     }
 

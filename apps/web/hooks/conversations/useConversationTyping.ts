@@ -98,6 +98,14 @@ export function useConversationTyping({
 
   // Refs pour éviter re-créations de callbacks
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Miroir SYNCHRONE de `isTyping`, écrit aux trois mêmes endroits que l'état.
+  // Le nettoyage ci-dessous est une fermeture créée au rendu où
+  // `conversationId` a changé pour la DERNIÈRE fois : il y capture un `isTyping`
+  // qui vaut toujours `false`, donc la retraction n'était jamais émise. Un ref
+  // synchronisé par `useEffect` ne suffirait pas non plus — React exécute TOUS
+  // les nettoyages avant TOUS les effets, l'ordre resterait à démontrer. Écrit
+  // à la main, il est juste par construction au moment où le nettoyage le lit.
+  const isTypingRef = useRef(false);
   const participantsRef = useRef(participants);
   const conversationIdRef = useRef(conversationId);
   // Un timeout de sécurité par utilisateur distant en train de taper
@@ -133,14 +141,23 @@ export function useConversationTyping({
         typingTimeoutRef.current = null;
       }
       clearAllRemoteTypingTimeouts();
-      // Stop typing if active
-      if (isTyping) {
+      // Retracte l'indicateur chez les pairs. Rien d'autre ne le fera :
+      // `conversation:leave` ne retracte pas côté gateway (seul `disconnecting`
+      // le fait, cf. `StatusHandler.handleSocketDisconnecting`), et le timer
+      // d'auto-stop local vient justement d'être annulé au-dessus. Le
+      // `stopTyping` capturé ici est celui du rendu où cette conversation a été
+      // sélectionnée : il vise donc bien la conversation qu'on QUITTE.
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
         stopTyping();
       }
     };
   }, [conversationId]); // Reset on conversation change
 
-  // Reset typing users when conversation changes
+  // Reset typing users when conversation changes.
+  // `isTypingRef` n'a pas besoin d'être remis à zéro ici : le nettoyage
+  // ci-dessus s'exécute AVANT cet effet et le remet lui-même à `false` dans la
+  // seule branche où il valait `true`.
   useEffect(() => {
     setTypingUsers([]);
     setIsTyping(false);
@@ -196,6 +213,7 @@ export function useConversationTyping({
 
   // Handle local typing start
   const handleTypingStart = useCallback(() => {
+    isTypingRef.current = true;
     if (!isTyping) {
       setIsTyping(true);
     }
@@ -216,6 +234,7 @@ export function useConversationTyping({
 
     // Auto-stop after delay
     typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
       setIsTyping(false);
       stopTyping();
     }, TYPING_STOP_DELAY);
@@ -224,6 +243,7 @@ export function useConversationTyping({
   // Handle local typing stop
   const handleTypingStop = useCallback(() => {
     if (isTyping) {
+      isTypingRef.current = false;
       setIsTyping(false);
       stopTyping();
     }

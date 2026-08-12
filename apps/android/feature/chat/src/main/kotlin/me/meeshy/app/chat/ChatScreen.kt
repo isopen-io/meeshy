@@ -166,6 +166,9 @@ import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
+import me.meeshy.sdk.model.waveform.VoiceRecordingFile
+import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
+import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import java.io.File
 import java.time.ZoneId
 import java.util.Locale
@@ -196,6 +199,7 @@ import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette

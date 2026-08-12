@@ -304,24 +304,48 @@ extension FeedPostCard {
     func audioMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
         return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            AudioPlayerView(
-                attachment: attachment,
-                context: .feedPost,
-                accentColor: media.thumbnailColor,
-                transcription: media.transcription,
-                translatedAudios: media.translatedAudios,
-                onFullscreen: {
-                    audioFullscreen = .fromFeed(
-                        media: media,
-                        author: ProfileSheetUser.from(feedPost: post),
-                        originalLanguage: post.originalLanguage,
-                        caption: post.content,
-                        createdAt: post.timestamp
+            CoordinatedAudioPlayer(
+                attachmentId: attachment.id,
+                nowPlayingName: post.author,
+                nowPlayingArtworkURL: post.authorAvatarURL,
+                makeQueuedAudio: {
+                    QueuedAudio(
+                        attachmentId: attachment.id,
+                        messageId: post.id,
+                        conversationId: post.id,
+                        fileUrl: attachment.fileUrl,
+                        durationMs: attachment.duration ?? 0,
+                        senderName: post.author,
+                        senderAvatarURL: post.authorAvatarURL,
+                        receivedAt: post.timestamp
                     )
-                },
-                availability: availability,
-                onDownload: onDownload
-            )
+                }
+            ) { external, onPlay in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .feedPost,
+                    accentColor: media.thumbnailColor,
+                    transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        audioFullscreen = .fromFeed(
+                            media: media,
+                            author: ProfileSheetUser.from(feedPost: post),
+                            originalLanguage: post.originalLanguage,
+                            caption: post.content,
+                            createdAt: post.timestamp,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE post doit être vu comme
+                            // la même session coordinator.
+                            conversationId: post.id
+                        )
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    externalPlayer: external,
+                    onPlayRequest: onPlay
+                )
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }

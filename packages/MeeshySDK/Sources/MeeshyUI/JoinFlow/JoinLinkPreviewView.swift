@@ -326,9 +326,7 @@ public struct JoinLinkPreviewView: View {
         if hours < 24 { return "dans \(hours)h" }
         let days = hours / 24
         if days < 7 { return "dans \(days)j" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return "le \(formatter.string(from: date))"
+        let formattedString = date.formatted(.dateTime.day(.twoDigits).month(.abbreviated).locale(Locale(identifier: "fr_FR")))
+        return "le \(formattedString)"
     }
 }

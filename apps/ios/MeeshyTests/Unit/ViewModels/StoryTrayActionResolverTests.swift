@@ -18,19 +18,30 @@ final class StoryTrayActionResolverTests: XCTestCase {
 
     func test_avatarTap_withActiveStory_opensTheManageSheet() {
         XCTAssertEqual(
-            StoryTrayActionResolver.avatarTap(hasMyStory: true), .manageStories,
+            StoryTrayActionResolver.avatarTap(hasMyStory: true, hasAnyStory: true), .manageStories,
             "Le tap ouvre la liste « Mes stories » (Publiées / Brouillons), pas la lecture directe."
         )
     }
 
-    func test_avatarTap_withoutStory_opensTheComposer() {
-        XCTAssertEqual(StoryTrayActionResolver.avatarTap(hasMyStory: false), .createStory)
+    func test_avatarTap_withoutAnyStory_opensTheComposer() {
+        XCTAssertEqual(
+            StoryTrayActionResolver.avatarTap(hasMyStory: false, hasAnyStory: false), .createStory)
+    }
+
+    /// Parité 2026-08-10 : aucune story ACTIVE, mais un historique entièrement
+    /// expiré — le tap doit rester sur la gestion, pas retomber sur la
+    /// création comme si rien n'avait jamais existé.
+    func test_avatarTap_withOnlyExpiredHistory_stillOpensTheManageSheet() {
+        XCTAssertEqual(
+            StoryTrayActionResolver.avatarTap(hasMyStory: false, hasAnyStory: true), .manageStories,
+            "Un historique entièrement expiré reste « une story » pour le routage du tap."
+        )
     }
 
     // MARK: - Libellé VoiceOver
 
-    func test_avatarAccessibilityLabel_withoutStory_announcesCreateStory() {
-        let label = StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false)
+    func test_avatarAccessibilityLabel_withoutAnyStory_announcesCreateStory() {
+        let label = StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false, hasAnyStory: false)
         XCTAssertEqual(
             label,
             StoryTrayCopy.createStory,
@@ -40,16 +51,24 @@ final class StoryTrayActionResolverTests: XCTestCase {
 
     func test_avatarAccessibilityLabel_withActiveStory_announcesManageStories() {
         XCTAssertEqual(
-            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: true),
+            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: true, hasAnyStory: true),
             StoryTrayCopy.manageStories,
             "Le libellé décrit la destination réelle : la liste de gestion."
         )
     }
 
+    func test_avatarAccessibilityLabel_withOnlyExpiredHistory_announcesManageStories() {
+        XCTAssertEqual(
+            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false, hasAnyStory: true),
+            StoryTrayCopy.manageStories,
+            "Même sans story active, un historique expiré route toujours vers la gestion."
+        )
+    }
+
     func test_avatarAccessibilityLabel_describesTwoDistinctDestinations() {
         XCTAssertNotEqual(
-            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: true),
-            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false),
+            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: true, hasAnyStory: true),
+            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false, hasAnyStory: false),
             "Deux destinations différentes ne peuvent pas partager une seule annonce."
         )
     }

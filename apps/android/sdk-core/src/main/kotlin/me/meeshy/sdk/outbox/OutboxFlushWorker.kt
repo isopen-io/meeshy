@@ -122,11 +122,10 @@ class OutboxFlushWorker @AssistedInject constructor(
 
         val reports = mutableListOf<DrainReport>()
 
-        // Drain per-conversation message lanes
-        val messageLanes = outboxRepository
-            .deliverable(OutboxLanes.forMessage(""))
-            .map { it.lane }
-            .distinct()
+        // Drain per-conversation message lanes. Lane ids are dynamic (only known at enqueue
+        // time), so they are discovered via activeMessageLanes() rather than enumerated like
+        // the fixed shared lanes below.
+        val messageLanes = outboxRepository.activeMessageLanes()
         for (lane in messageLanes) {
             val report = drainer.drainLane(lane)
             Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")

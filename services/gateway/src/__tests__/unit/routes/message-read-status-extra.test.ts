@@ -178,14 +178,15 @@ describe('GET /messages/:messageId/read-status', () => {
     jest.clearAllMocks();
     clearStaticCache();
 
-    // Happy-path defaults
+    // Happy-path defaults. L'appartenance n'est plus filtrée EN RELATION sur le
+    // message (`conversation.participants`) mais résolue par
+    // `resolveCallerParticipant` — une seule règle d'identité pour les cinq
+    // gardes de ce fichier, et la seule qui connaisse les participants sans compte.
     mockPrisma.message.findUnique.mockResolvedValue({
       id: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      conversation: {
-        participants: [{ userId: USER_ID }]
-      }
+      conversationId: CONVERSATION_ID
     });
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
     mockGetMessageReadStatus.mockResolvedValue({
       messageId: MESSAGE_ID,
       readCount: 1,
@@ -219,13 +220,7 @@ describe('GET /messages/:messageId/read-status', () => {
   });
 
   it('returns 403 when user is not a participant of the conversation', async () => {
-    mockPrisma.message.findUnique.mockResolvedValue({
-      id: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      conversation: {
-        participants: [] // empty — user not in conversation
-      }
-    });
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
 
     const response = await app.inject({
       method: 'GET',

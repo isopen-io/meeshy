@@ -1,5 +1,326 @@
 # @meeshy/gateway
 
+## 1.25.3
+
+### Patch Changes
+
+- 34383f0: Un `typing:stop` retracte ce que ce socket a réellement diffusé — et ne coûte plus rien quand il n'a rien à retracter
+
+  `handleTypingStop` reconstruisait depuis zéro tout ce que `handleTypingStart` avait déjà établi :
+  `resolveParticipant` (participation), `shouldShowTypingIndicator` (préférence), puis
+  `_resolveTypingIdentity` (identité), avant de consulter enfin l'état de suivi `activeTypers`. Or
+  `activeTypers` EST l'enregistrement exact de ce qui a été diffusé — `_trackTyping` ne s'exécute que
+  sur un start ayant franchi ces mêmes portes. Le commentaire du fichier énonçait déjà la règle (« A
+  stop must retract exactly what a prior start broadcast, so the handler proceeds on tracking state —
+  NOT the live preference ») ; il ne l'appliquait qu'à moitié. L'entrée de suivi est désormais à la
+  fois l'autorisation, l'audience et la charge utile de la retraction, et rien ne la surcharge.
+
+  Trois conséquences, chacune verrouillée par un test.
+
+  **Amplification.** `typing:start` est limité en débit (`SOCKET_RATE_LIMITS.TYPING_INDICATOR`),
+  `typing:stop` ne l'est pas. Un stop sans start correspondant dépensait pourtant `resolveParticipant`
+
+  - la lecture de préférence + la requête des viewers bloqués (`participant.findMany` puis la requête
+    de blocage), puis diffusait une retraction fantôme à **tous** les sockets de la conversation : un
+    paquet client non throttlé achetait trois allers-retours base + un fan-out N-way. Le socket qui n'a
+    rien diffusé n'a rien à reprendre : on sort avant toute I/O. La borne de débit manquante devient
+    sans objet plutôt que d'être ajoutée — un limiteur sur `typing:stop` aurait jeté de vraies
+    retractions, ce qui est précisément le défaut qu'on ne veut pas.
+
+  **Indicateur fantôme.** Re-vérifier la participation sur le chemin du stop ne pouvait que REFUSER de
+  reprendre ce que les pairs voyaient déjà. Un participant désactivé en cours de frappe (retrait par
+  un admin) voyait donc son stop rejeté, son entrée `activeTypers` fuir, et ses pairs garder « X est
+  en train d'écrire… » jusqu'à la déconnexion du socket. Même classe de défaut que celui déjà corrigé
+  pour la préférence qui bascule en cours de rafale — la même cause, l'autre porte.
+
+  **Identité de la retraction.** Le stop ré-interrogeait l'identité au lieu de reprendre celle sous
+  laquelle le start était parti. Le cache masquait le coût jusqu'à son invalidation (une édition de
+  profil) : après renommage en cours de rafale, le start partait sous « Alice S » et le stop sous
+  « Alice Renamed » — une retraction désignant quelqu'un que les pairs n'ont jamais vu. L'entrée de
+  suivi porte déjà `username`/`displayName` ; elle les rend, sans lookup.
+
+  Les tests qui appelaient `handleTypingStop` sans start préalable ont été corrigés plutôt que
+  contournés : un stop sans start n'est pas une scène de fond, c'est un cas distinct — désormais
+  couvert explicitement, dans les deux fichiers de suite.
+
+## 1.25.2
+
+### Patch Changes
+
+- 778e96c: Un invité de lien partagé peut enfin acquitter ses messages — son badge de non-lus ne pouvait jusqu'ici que monter
+
+  Le serveur soutenait déjà la MOITIÉ anonyme du suivi de lecture, et délibérément :
+  `MessageReadStatusService.getUnreadCount` résout aussi bien un `Participant.id` qu'un `User.id`,
+  `emitUnreadCountsToRecipients` adresse `ROOMS.user(userId ?? id)`, et `AuthHandler` fait rejoindre
+  cette room aux sockets anonymes précisément « because joining anything else had already left
+  anonymous participants without their unread badge ». Le compte était donc tenu, et poussé.
+
+  L'autre moitié — celle qui REMET LE COMPTEUR À ZÉRO — était fermée deux fois :
+
+  1. **La porte.** `message-read-status.ts` et les trois routes de lecture de `conversations/messages.ts`
+     (`mark-read`, `read`, `mark-unread`) portaient `allowAnonymous: false` : 403 avant même de
+     regarder la conversation. Elles acceptent désormais un appelant **authentifié sans compte** —
+     `requireAuth: true` reste, un appelant sans jeton n'entre toujours pas. C'est la règle que
+     `routes/reactions.ts` applique depuis toujours (« Les anonymes peuvent aussi réagir ») et que le
+     POST d'envoi de message applique aussi : l'invité écrivait et réagissait, il ne pouvait pas lire.
+
+  2. **La clé.** Les six gardes d'appartenance de ces routes filtraient `Participant.userId` avec
+     `authContext.userId`, qui **vaut un `Participant.id`** pour un anonyme (`middleware/auth.ts`,
+     branche anonyme : `userId: participant.id`). La comparaison n'appariait donc rien : la garde ne
+     sautait pas une ligne inexistante, elle rendait invisible une ligne qui existe. Les six passent
+     par un `resolveCallerParticipant` unique, dont la précédence (`participantId` d'abord, `userId`
+     ensuite) est celle de `canAccessConversation`, dans le même fichier — les deux réponses ne
+     peuvent plus diverger sur l'identité de l'appelant.
+
+  Effets de bord réparés au passage : les préférences de confidentialité d'un anonyme sont désormais
+  demandées EN TANT QU'anonyme (`shouldShowReadReceipts(userId, isAnonymous)` — trois sites codaient
+  `false` en dur sous le commentaire « les utilisateurs authentifiés ne sont pas anonymes ici », qui
+  n'était vrai que parce que la porte était fermée) ; `mark-unread` ne relit plus deux fois le même
+  participant ; et `GET /messages/:messageId/read-status` cesse de filtrer l'appartenance EN RELATION,
+  la cinquième copie de la règle.
+
+  Le client iOS envoie déjà `X-Session-Token` sur ses appels REST (`APIClient.swift`) et appelle
+  exactement `/conversations/:id/mark-read` et `/mark-unread` : le suivi de lecture des invités y
+  fonctionne dès ce correctif, sans une ligne de Swift. La webapp, elle, avait débranché son propre
+  suivi pour les sessions anonymes (`bubble-stream-page.tsx`, « la route mark-as-read est JWT-only ») ;
+  le rebrancher demande d'abord que `apiService` porte `X-Session-Token`, ce qu'il ne fait pas encore.
+
+## 1.25.1
+
+### Patch Changes
+
+- ac3c088: L'enrichissement d'une pièce jointe (transcription, audio traduit) atteint enfin les lecteurs qui ne sont pas dans le fil
+
+  `message:attachment-updated` — le delta émis quand Whisper finit de transcrire une note
+  vocale, puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — n'était diffusé
+  que dans la room `conversation:<id>`. Deux audiences le perdaient :
+
+  - **Le lecteur resté sur la liste de conversations.** iOS ne rejoint une room de
+    conversation qu'à l'OUVERTURE du fil : au lancement de l'app, un lecteur sur la liste
+    n'est dans aucune room de conversation. Son SDK applique pourtant ce delta sans regarder
+    quel fil est ouvert (`ConversationSyncEngine.handleAttachmentUpdated` patche le message
+    en cache de n'importe quelle conversation) — la room personnelle n'est donc pas une
+    audience plus large pour le principe, c'est l'endroit où l'écriture atterrit vraiment.
+  - **Le lecteur hors ligne.** Le `message:new` mis en file à l'ENVOI porte la pièce jointe
+    telle qu'elle était alors : sans transcription, sans audio traduit, les deux arrivant une
+    à deux secondes plus tard. Sans rejeu de l'enrichissement, la copie rejouée à la
+    reconnexion reste définitivement celle-là.
+
+  Même classe de défaut que l'aperçu de liste qui ne se retraduisait jamais : le Prisme
+  (« il s'applique à TOUT le contenu, transcriptions audio comprises ») dépendait de la
+  ROUTE du lecteur — avoir le fil ouvert au moment où Whisper a fini — et non de ses
+  préférences de langue.
+
+  L'émission chaîne désormais la room de conversation et les rooms personnelles de tous les
+  participants (une seule copie par socket, `emitToConversationParticipants`), et met
+  l'enrichissement en file pour les participants hors ligne sous le nouveau
+  `eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` à la
+  reconnexion. La clé de dédup est l'id de la PIÈCE JOINTE : l'identité par défaut
+  `(messageId, eventType)` ferait superséder l'enrichissement de la première pièce jointe
+  par celui de la seconde sur un message à deux audios. Le payload n'est pas filtré par
+  langue du destinataire — les clients REMPLACENT la carte de traductions de la pièce
+  jointe, donc un sous-ensemble par lecteur effacerait les langues déjà en cache.
+
+  Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+  d'avant), jamais vers le silence.
+
+- ac3c088: Une page delta de conversations tronquée se rattrape au lieu de sauter des lignes
+
+  `GET /conversations?updatedSince=` plafonne à 100 lignes et triait par `lastMessageAt`
+  décroissant — l'ordre de l'écran de liste, sans aucun rapport avec le filtre. Une fenêtre
+  de synchronisation ayant touché plus de 100 conversations rendait donc une page tronquée
+  dont les lignes coupées n'étaient pas « les moins récemment mises à jour ». Les deux
+  clients avancent pourtant leur watermark au max des `updatedAt` REÇUS : les lignes coupées
+  étaient enjambées définitivement, jusqu'à la réconciliation complète (1×/24 h sur iOS).
+  Entre-temps la liste affichait des compteurs de non-lus et des aperçus périmés sans qu'aucun
+  signal ne l'indique.
+
+  Une page delta est désormais triée par `updatedAt` croissant (`id` départage les égalités) :
+  les lignes coupées sont exactement celles d'`updatedAt` supérieur à la dernière ligne
+  rendue, donc le watermark qui les enjambait pointe dessus et l'appel suivant les rend. La
+  troncature devient une pagination naturelle, sans aucun changement client. Une page
+  ordinaire (sans `updatedSince`) garde l'ordre de récence.
+
+  Reste à la charge des clients, et le web le couvre déjà (`DELTA_PAGE_LIMIT` ⇒ relecture
+  complète) : plus de 100 conversations portant la MÊME milliseconde d'`updatedAt` débordent
+  d'une page que la borne stricte `gt` ne peut pas reprendre.
+
+- Updated dependencies [ac3c088]
+  - @meeshy/shared@1.10.2
+
+## 1.25.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - une notification manquée l'était pour la session entière — le web ignorait `_seq` (#2844)
+  - deuxieme widget ecran d'accueil — conversations recentes (#2841)
+  - CallNotification no longer orphans the ringtone on fast unmount (#2843)
+  - déclare `userUpdated` sur `MessageSocketProviding` — main était rouge
+
+## 1.24.1
+
+### Patch Changes
+
+- 70a0e04: user:updated — les composants du nom voyagent en groupe, et iOS applique enfin l'événement
+
+  La gateway diffusait `user:updated` à tous les contacts depuis des mois ; le web
+  l'appliquait, iOS n'avait aucun listener. Un interlocuteur qui changeait d'avatar
+  ou de nom restait figé sur la ligne de liste, l'en-tête et le sélecteur de
+  transfert jusqu'au prochain refetch complet.
+
+  Le payload envoie désormais les quatre composants du nom ensemble
+  (`displayName`, `firstName`, `lastName`, `username`) dès que l'un change : un
+  delta partiel est irrecomposable chez un client qui ne stocke que le nom déjà
+  composé. `null` y signifie EFFACÉ, seule façon de faire retomber le nom sur le
+  composant suivant.
+
+- Updated dependencies [70a0e04]
+  - @meeshy/shared@1.10.1
+
+## 1.24.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.10.0
+
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - après une édition, la ligne de liste affichait le texte d'avant (#2802)
+  - restore two-factor authentication (gateway route exists) (#2805)
+  - ravive la carte Now Playing après un vol de lecture transitoire + polis AirPlay
+  - traduit le bouton AirPlay du plein écran audio dans les 7 langues
+  - bouton AirPlay dans le plein écran audio
+  - per-post language override for the Feed post composer (#2804)
+  - useCallAnalyticsReporter's reconnection counter could never increment
+  - attach device location to a Feed post composer (#2801)
+  - migre 5 NavigationView vers NavigationStack (soft-dépréciée iOS 16+) (#2798)
+  - épingler un message traduit rendait la route d'épingles inexploitable
+  - enableVideo()/switchCamera() snapshot connected peers before getUserMedia, dropping late joiners
+  - addLocalMedia clones outgoing video track instead of sharing it across peers (#2790)
+  - TUS uploads resume from the last confirmed chunk on retry (feature-parity §Q) (#2795)
+  - OutboxFlushWorker never discovered per-conversation message lanes (#2794)
+  - l'aperçu de liste servi par socket pouvait afficher un cryptogramme (#2789)
+  - Feed post composer audio attachment (feature-parity §F) (#2791 follow-up) (#2792)
+  - real MediaRecorder capture for chat voice-recording pill (feature-parity §Q) (#2791)
+  - attribue l'audio d'un post cité au bon auteur sur la carte Now Playing
+  - feed, commentaires et posts audio passent par le coordinator Now Playing
+  - stabilise l'abonnement audio du bouton scroll-to-bottom
+  - le bouton scroll-to-audio démarre la file du coordinator
+  - playKeepingQueue préserve la file au swipe plein écran, playVariant survit à la reprise d'appel
+  - le plein écran audio fusionne dans le coordinator (carte + file + variantes)
+  - termine le background task d'avance de file bloquée par le garde CallKit
+  - fixture d'appel avec discriminant kind, mocks partagés du target, await GRDB async
+  - la greffe store se limite à userState+suppressions — un snapshot en retard réécrivait un rename frais
+  - l'avance de file audio est couverte par un background task
+  - résorbe les deux warnings d'intégration (await inutile, résultat de write ignoré)
+  - la file audio en pause garde sa carte Now Playing en background
+  - un instantane store VIDE est un teardown, pas N suppressions
+  - ne jamais confondre un avis d'appel avec une edition, armer aussi sur iPad
+  - patcher les traductions temps reel sous TOUTES les cles de cache
+  - persister les moods temps reel et abonner status:unreacted
+  - armer le pont de persistance app-wide et persister le media de commentaire
+  - route la tray vers la gestion pour les stories passées sans story active
+  - persister conversation:updated/deleted et les mutations de message hors conversation ouverte
+  - affiche la progression d'export en cours sur les cards « Mes stories »
+  - carte Now Playing avec date du vocal et position de file
+  - relance la lecture de la timeline après un export (fin/échec/annulation)
+  - allonge les interludes de lecture à 1,2 s et lie l'export à la SSOT
+  - corrige le flip vertical du fond dans StoryStaticSnapshot
+  - icone de telechargement media coherente avec la convention
+  - désarme la reprise d'interruption sur retrait AirPods et suspension d'appel
+  - seedMediaConsumption alimente les stores de reprise audio/video
+  - frappe hors conversation dans la pastille de synchronisation
+  - reprise de lecture video via VideoPlaybackPositionStore
+  - VideoPlaybackPositionStore, miroir strict d'AudioPlaybackPositionStore
+  - lecture instantanee a l ouverture, au bas atteint et au bouton
+  - pourcentage + barre de progression par participant dans mediaConsumptionCard
+  - promotion immediate de l accumulateur de lecture, retrait du code mort
+  - pause/reprise de l'audio de conversation sur interruption système
+  - decode position/pourcentage sur attachment-status:updated et alimente MediaConsumptionStore
+  - le moteur du coordinator audio devient Now Playing éligible (.content)
+  - profils de session audio avec pause/reprise et plomberie moteur
+  - l'écho REST de message:new ne portait pas le clientMessageId
+  - le chemin socket sérialisait les traductions dans une forme qu'iOS ne peut pas décoder (#2793)
+  - transporte position/durée/pourcentage sur attachment-status:updated
+
 ## 1.22.24
 
 ### Patch Changes

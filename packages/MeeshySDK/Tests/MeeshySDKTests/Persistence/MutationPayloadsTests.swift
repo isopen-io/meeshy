@@ -174,7 +174,7 @@ final class MutationPayloadsTests: XCTestCase {
         let original = MarkAsReadPayload(
             clientMutationId: ClientMutationId.generate(),
             conversationId: "conv-123",
-            upToMessageId: "msg-456"
+            messageIds: ["msg-456"]
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(MarkAsReadPayload.self, from: data)

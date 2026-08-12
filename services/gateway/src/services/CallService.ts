@@ -855,7 +855,18 @@ export class CallService {
     if (TERMINAL_STATUSES.includes(newStatus)) {
       const now = new Date();
       updateData.endedAt = now;
-      updateData.duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
+      // Audit Vague 105 — anchor duration on `answeredAt` (talk time), not
+      // `startedAt` (ring+talk time), mirroring the other 7 terminal writers
+      // in this file (endCall/leaveCall/forceEndOrphanedCallSession/the
+      // idempotent leaveCall branch/the phantom-cleanup and zombie sweeps in
+      // CallCleanupService/markCallAsMissed — Vague 25/27/30). This writer is
+      // currently unreachable with a terminal `newStatus` (grep confirms no
+      // caller passes one today), but the next caller/refactor that does
+      // would otherwise resurrect the "Manqué · N:NN" phantom duration bug
+      // those Vagues fixed everywhere else.
+      updateData.duration = call.answeredAt
+        ? Math.floor((now.getTime() - call.answeredAt.getTime()) / 1000)
+        : 0;
       if (endReason) {
         updateData.endReason = endReason;
       }
@@ -2059,11 +2070,29 @@ export class CallService {
       }
     }
 
+    // Resolve, for each call the current user did NOT initiate, whether they
+    // have their own `CallParticipant` row — i.e. they actually joined this
+    // specific call, as opposed to merely being a conversation member. A P2P
+    // call is capped at 2 active participants; a 3rd group member whose
+    // auto-early-join lost that race never gets a row, and must never be
+    // shown "incoming" just because the call's shared `answeredAt` was set by
+    // one of the two real participants. See `deriveCallDirection`.
+    const nonOutgoingCallIds = page.filter((r) => r.initiatorId !== userId).map((r) => r.id);
+    const participatedCallIds = new Set<string>();
+    if (nonOutgoingCallIds.length > 0) {
+      const myParticipations = await this.prisma.callParticipant.findMany({
+        where: { callSessionId: { in: nonOutgoingCallIds }, participant: { userId } },
+        select: { callSessionId: true }
+      });
+      for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
+    }
+
     const items = page.map((row) =>
       buildCallHistoryItem(
         row as CallHistoryRow,
         userId,
-        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null
+        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null,
+        participatedCallIds.has(row.id)
       )
     );
 

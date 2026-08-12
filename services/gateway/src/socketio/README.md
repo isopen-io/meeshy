@@ -265,16 +265,36 @@ NotificationService: notifier auteur message
 
 ### 4. Typing Indicator
 ```
-Client: typing:start
+Client: typing:start                      Client: typing:stop
+  ↓                                         ↓
+StatusHandler: handleTypingStart()        StatusHandler: handleTypingStop()
+  ↓                                         ↓
+Limite de débit (TYPING_INDICATOR)        activeTypers[socket.id] ?
+  ↓                                         ↓        ↓
+Vérification participation                 non      oui
+  ↓                                          ↓        ↓
+Vérification préférences confidentialité   RETOUR   Retrait du suivi + de la fenêtre de throttle
+  ↓                                        (0 I/O,   ↓
+Récupération nom d'affichage                0 emit)  Broadcast: typing:stop (identité du start)
   ↓
-StatusHandler: handleTypingStart()
-  ↓
-Vérification préférences confidentialité
-  ↓
-Récupération nom d'affichage
+Suivi dans activeTypers (AVANT le throttle d'émission)
   ↓
 Broadcast: typing:start (vers conversation room, sauf émetteur)
 ```
+
+**`activeTypers` est la seule autorité du chemin `typing:stop`.** Un stop retracte un start que CE
+socket a diffusé ; `_trackTyping` n'inscrit que les starts ayant franchi les portes participation et
+confidentialité, donc l'entrée de suivi vaut à la fois autorisation, audience et charge utile.
+
+- **Pas d'entrée ⇒ rien n'a jamais été montré, donc rien à reprendre.** Le retour est immédiat,
+  AVANT toute I/O : `typing:start` est limité en débit, `typing:stop` ne l'est pas, et re-vérifier
+  participation + préférence + viewers bloqués faisait payer 3 requêtes base et un fan-out N-way à
+  chaque paquet non apparié.
+- **Une entrée ⇒ ne jamais re-vérifier ces portes.** Le start est déjà parti ; les re-vérifier ne
+  peut que refuser de le reprendre — c'est ainsi qu'un participant retiré en cours de frappe laissait
+  un « X écrit… » fantôme jusqu'à sa déconnexion.
+- **L'identité diffusée est celle capturée au start** (`username`/`displayName` portés par l'entrée),
+  pour que la retraction désigne exactement qui les pairs ont vu, même après un renommage.
 
 ---
 
@@ -409,6 +429,120 @@ Exception unique et deliberee : `utils/callEndedFanout.ts` filtre bien les
 anonymes, parce que l'audience de terminaison d'un appel doit refleter son
 audience d'invitation et que `call:initiated` porte le meme filtre — un
 participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier.
+
+---
+
+## L'apercu de la ligne de liste — qui l'emet, et A QUEL INSTANT
+
+`conversation:updated` est le SEUL evenement qui rafraichit la ligne de la liste
+de conversations. Il porte un groupe indissociable — `lastMessagePreview`,
+`lastMessageTranslations`, `lastMessageOriginalLanguage` — resolu **par
+destinataire**, parce que la carte de traductions est filtree au prisme du
+lecteur (`resolveLastMessagePreviewPrism`).
+
+Quatre FAMILLES d'emetteurs, et leur difference n'est pas le transport mais
+l'INSTANT :
+
+| Famille | Declencheur | Portee |
+|---|---|---|
+| `MessageHandler` (WS `message:send`) | envoi | tous les participants |
+| `MeeshySocketIOManager._broadcastNewMessage` (REST/ZMQ) | envoi | tous les participants |
+| `emitConversationPreviewUpdate` — edition, suppression, epinglage, resume d'appel | mutation | tous les participants |
+| `MeeshySocketIOManager._handleTextTranslationReady` | **traduction NLLB qui atterrit** | `PreviewUpdateScope` |
+
+Le quatrieme existe parce que les trois premiers ne suffisent pas : l'apercu est
+servi **a l'envoi**, a un instant ou `Message.translations` vaut encore `null` —
+la traduction arrive une a deux secondes plus tard par ZMQ. Sans lui, la carte
+n'est jamais reservie et la ligne reste dans la langue de l'expediteur pour
+toujours. `message:translation`, lui, ne rafraichit rien : les clients le rangent
+dans leur cache MESSAGE, jamais dans la ligne de liste.
+
+Il est le seul a passer un `scope`, et les deux bornes sont obligatoires :
+
+- **`onlyIfLatestIs`** — un message plus recent est arrive pendant que la
+  traduction volait ? Reservir l'ancien ferait RECULER la ligne de liste.
+- **`onlyIfPreviewCarriesLanguage`** — un lecteur hors de cette langue recevrait
+  un payload identique a l'octet pres. Sans ce filtre, une conversation a N
+  langues paie N fan-outs complets par message.
+
+**Regle** : tout nouvel ecrivain de `Message.translations` ou de `Message.content`
+doit se demander si le message touche est le DERNIER de sa conversation — et si
+oui, appeler `emitConversationPreviewUpdate`. Un champ d'apercu qui n'est jamais
+reservi n'est pas « en retard », il est faux definitivement.
+
+---
+
+## `message:attachment-updated` — l'enrichissement asynchrone doit TROIS audiences
+
+Whisper finit de transcrire une note vocale une a deux secondes apres l'envoi ;
+NLLB+Chatterbox rendent l'audio traduit langue par langue, plus tard encore.
+Chaque etape ecrit la piece jointe en base et diffuse un delta
+`message:attachment-updated` (`emitAttachmentUpdated.ts`, appele par
+`MeeshySocketIOManager._broadcastAttachmentUpdated`).
+
+Ce delta doit **les memes trois audiences que toute mutation de conversation** :
+
+| Audience | Canal | Ce qu'elle perdait |
+|---|---|---|
+| lecteurs DANS le fil | room `conversation:<id>` | rien — c'etait la seule servie |
+| lecteurs sur la LISTE | rooms personnelles, chainees | iOS ne joint `conversation:<id>` qu'a l'**ouverture** du fil (`roomsToRejoinOnConnect`) : au lancement de l'app, un lecteur reste sur la liste n'est dans AUCUNE room de conversation |
+| lecteurs HORS LIGNE | file de remise, `eventType: 'attachment-updated'` | le `message:new` mis en file a l'ENVOI porte la piece jointe **sans** transcription ni audio traduit — sans rejeu, la copie rejouee reste celle-la |
+
+Le defaut etait de la meme classe que l'apercu de liste qui ne se retraduisait
+jamais : le Prisme (« il s'applique a TOUT le contenu, transcriptions audio
+comprises ») devenait fonction de la **route** du lecteur — avoir le fil ouvert
+au moment ou Whisper a fini — et non de ses preferences de langue.
+
+Deux points qui ne se devinent pas :
+
+1. **`dedupKey` = l'id de la PIECE JOINTE**, pas du message. L'identite par
+   defaut `(messageId, eventType)` ferait superseder l'enrichissement de la
+   premiere piece jointe par celui de la seconde sur un message a deux audios.
+   Par piece jointe, en revanche, la regle « le dernier payload gagne » est
+   exactement la bonne : le payload porte l'etat COMPLET de la piece jointe.
+2. **Le payload n'est PAS filtre par langue du destinataire**, contrairement a
+   `message:new` (`filterMessagePayloadForLanguages`). Les clients REMPLACENT la
+   carte de traductions de la piece jointe par celle que porte l'evenement (iOS
+   `handleAttachmentUpdated`, web `use-socket-cache-sync`) : un sous-ensemble par
+   lecteur EFFACERAIT les langues qu'un fetch REST anterieur avait mises en
+   cache.
+
+---
+
+## `message:new` — le split `clientMessageId` (Phase 4 §6.2)
+
+**Tout emetteur de `message:new` doit envoyer DEUX payloads**, jamais un seul :
+
+| Destinataire | Payload | Pourquoi |
+|---|---|---|
+| `ROOMS.user(sender.userId)` — tous les appareils de l'expediteur | **avec** `clientMessageId` | c'est la cle primaire de la ligne optimiste. Sans elle, seule la reponse du transport peut la promouvoir a `.sent`. |
+| `ROOMS.conversation(id)` `.except(ROOMS.user(sender.userId))` | **sans** (`stripClientMessageId`) | un pair n'a pas a apprendre l'espace d'ids optimistes de l'expediteur. |
+
+Le `.except(...)` n'est pas cosmetique : sans lui un appareil de l'expediteur
+present dans la room recoit **deux** `message:new`.
+
+L'expediteur sans compte (invite de lien) n'a aucune `ROOMS.user(User.id)` a
+adresser : une seule emission room-wide, cid-strippee. Meme regle pour le rejeu
+hors ligne (`deliveryQueue.enqueue`) et pour tout enqueue de mutation — le corps
+stocke est le corps DESTINATAIRE, identique a l'emission live.
+
+Ne pas reecrire le retrait a la main : `stripClientMessageId(payload)`
+(`socketio/utils/message-ack-shaping.ts`) est generique et **preservant**, donc
+il ne re-elargit pas le type du payload — un `Record<string, unknown>` casse
+l'emit type de `link:message:new`.
+
+**Le piege est de croire que le contrat ne concerne que le transport socket.**
+Il concerne les trois : `message:send` (`MessageHandler.broadcastNewMessage`),
+les deux routes de lien (`routes/links/messages.ts`) et le chemin REST/ZMQ
+(`MeeshySocketIOManager._broadcastNewMessage`). Ce dernier n'avait ni moitie du
+contrat jusqu'au cycle 68 : le cid n'etait pas dans le payload **du tout**.
+C'est pourtant le chemin de tout envoi non eligible au socket-first cote iOS —
+piece jointe, DM chiffre, vue-unique, ephemere, message a effets
+(`socketFirstEligible`, `ConversationViewModel.swift`). La garde que le client
+avait ecrite exactement pour cette course (`MessagePersistenceActor`, branche
+`0. clientMessageId` : « catches an echo that races ahead of
+`applyEvent(.serverAck)` ») etait donc inatteignable — l'echo REST ne portait
+jamais la cle sur laquelle elle indexe.
 
 ---
 

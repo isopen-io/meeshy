@@ -33,6 +33,16 @@ struct MyStoryCardModel: Equatable {
     /// Titre d'un brouillon, quand il en a un. Les stories publiées n'en
     /// affichent pas : leur vignette parle pour elles.
     let title: String?
+    /// Progression d'un export vers la photothèque en cours pour CETTE
+    /// story (`StoryPhotoSaveService.shared.progress(for:)`) — `nil` =
+    /// aucun job en vol, la carte n'affiche alors aucun anneau. Même
+    /// source de vérité que le rail du lecteur (`StoryViewerView+Sidebar`) :
+    /// un export lancé depuis l'une des deux surfaces progresse sur les deux.
+    let saveProgress: Double?
+    /// `false` dès que l'écriture photothèque a commencé — voir
+    /// `StoryPhotoSaveService.isCancellable(storyId:)`. Contrôle si
+    /// l'anneau répond encore au tap (annulation).
+    let saveIsCancellable: Bool
 }
 
 struct MyStoryCard: View {
@@ -98,6 +108,7 @@ struct MyStoryCard: View {
             .overlay(thumbnailLayers)
             .clipped()
             .overlay(alignment: .topTrailing) { selectionBadge }
+            .overlay { saveProgressOverlay }
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
@@ -129,6 +140,37 @@ struct MyStoryCard: View {
             .frame(width: 22, height: 22)
             .shadow(color: .black.opacity(0.35), radius: 2)
             .padding(6)
+        }
+    }
+
+    /// Anneau d'export en cours vers la photothèque — même job, même source
+    /// de vérité que le rail du lecteur (`StoryViewerView+Sidebar:511-540`) :
+    /// un export lancé depuis l'une des deux surfaces progresse sur les
+    /// deux. Centré sur la vignette, avec un fond translucide pour rester
+    /// lisible sur une couverture claire.
+    @ViewBuilder
+    private var saveProgressOverlay: some View {
+        if MyStoryCardPresentation.showsSaveProgressRing(saveProgress: model.saveProgress),
+           let progress = model.saveProgress {
+            Button {
+                HapticFeedback.light()
+                StoryPhotoSaveService.shared.cancel(storyId: model.id)
+            } label: {
+                StorySaveProgressRing(progress: progress, tint: accentColor, diameter: 32,
+                                      isCancellable: model.saveIsCancellable)
+                    .padding(8)
+                    .background(Circle().fill(Color.black.opacity(0.35)))
+            }
+            .buttonStyle(.plain)
+            // Le tap cesse d'être actif dès que l'écriture photothèque a
+            // commencé — même règle que le rail du lecteur, sinon les deux
+            // surfaces divergeraient sur le même job.
+            .disabled(!model.saveIsCancellable)
+            .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
+                                       defaultValue: "Annuler l'enregistrement", bundle: .main))
+            .accessibilityValue(Text(String(
+                localized: "story.mine.save.progress.a11y",
+                defaultValue: "Enregistrement \(StorySaveProgressRing.percent(progress)) %", bundle: .main)))
         }
     }
 

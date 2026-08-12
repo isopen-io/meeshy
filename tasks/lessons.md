@@ -1,5 +1,158 @@
 # Lessons
 
+## Leçon 122 — deux troncatures sur la MÊME réponse peuvent exiger des gestes opposés ; ce qui tranche, c'est l'existence d'un curseur de reprise (2026-08-11, routine messaging, cycle 80)
+
+`GET /posts/feed/stories?updatedSince=` tronque deux choses à la fois : sa page (plafond 50) et
+ses tombstones (plafond 500). La tentation — et ce que la tête du cycle proposait — est de leur
+appliquer le même remède, puisque c'est « la même famille de défaut ». C'est faux, et l'écart n'est
+pas de degré mais de nature :
+
+- **La page a un curseur de reprise, et il est exact.** Elle est filtrée par `updatedAt` mais
+  ordonnée par `(createdAt, id)` — le mésappariement de la leçon 121 — SAUF que son curseur porte
+  sur ce même couple. Le parcours est donc sans saut ni doublon : le geste est de **paginer**.
+- **Les tombstones n'ont AUCUN curseur.** Il n'existe pas de « page suivante » de disparitions à
+  demander. Le seul geste qui fasse sortir les fantômes est le **REMPLACEMENT** du tray par un
+  fetch complet : le geste est d'**escalader**.
+
+**Règle : avant de choisir entre paginer et escalader, chercher si le signal tronqué possède un
+curseur de reprise — et si ce curseur est cohérent avec l'ORDRE de la page.** Les trois questions
+sont distinctes et se posent dans cet ordre. Un curseur qui existe mais porte sur un autre champ
+que l'`orderBy` ne vaut rien (c'est le cas des conversations, cycle 79 — d'où l'escalade là-bas).
+
+Deux corollaires qui ont mordu ici :
+
+- **Vérifier que le recours est un vrai recours.** Escalader vers `fullSync` avait du sens pour les
+  conversations parce que cette route-là couvre tout. Ici le « fetch complet » emprunte la MÊME
+  route plafonnée à 50 : l'escalade seule n'aurait rien rattrapé. Pire, c'est le chemin qui
+  REMPLACE l'état affiché puis sauve le cache disque — la troncature y effaçait des stories au lieu
+  d'en omettre. **Le chemin de repli mérite le même audit que le chemin nominal**, surtout quand on
+  s'apprête à lui envoyer plus de trafic.
+- **L'ordre de livraison n'est pas indifférent.** L'escalade des tombstones ne devient correcte que
+  parce que le drain a été livré dans le même lot ; livrée seule, elle aurait pointé vers un fetch
+  lui-même tronqué. Quand deux correctifs se tiennent, dire lequel rend l'autre valable.
+
+Enfin, un réflexe à installer : **`docs/reviews/**` prescrivait déjà ce correctif** (fiche
+`gwcontract-11`), sonde `take: LIMIT+1` comprise, et nommait même le RED discriminant « exactement
+LIMIT ⇒ non tronqué ». Trouvée en cherchant où documenter, après avoir tout re-dérivé. Le backlog
+d'audit du dépôt est une **source de conception**, pas seulement un registre à cocher : le grepper
+sur le symptôme AVANT de concevoir.
+
+## Leçon 115 — Un plafond serveur silencieux transforme une pagination en perte de données, et le tri de la route décide s'il est récupérable (2026-08-11, routine messaging, cycle 76)
+
+Le catch-up delta demandait `limit=500` à `GET /conversations?updatedSince=`. La route
+répond `Math.min(limit, 100)` sans jamais le dire — ni champ « tronqué », ni erreur, ni
+`hasMore` fiable sur ce chemin. Écrit naïvement, le client fusionne les 100 lignes reçues,
+avance son watermark au max des `updatedAt` REÇUS, et enjambe définitivement le reste.
+
+Ce qui rend le défaut irrécupérable n'est pas la troncature, c'est **l'orthogonalité du
+tri et du filtre** : la route filtre sur `updatedAt` et trie sur `lastMessageAt`. Si elle
+triait sur son propre filtre, les lignes coupées seraient exactement « les plus
+anciennes » et le watermark suivant les rattraperait tout seul — la troncature ne coûterait
+qu'un tour de plus. Avec deux clés distinctes, les lignes coupées sont arbitraires, et
+n'importe quel watermark calculé sur ce qui a été reçu passe par-dessus.
+
+1. **Avant d'écrire un client de pagination delta, lire le `Math.min` de la route.** Le
+   `limit` qu'on demande n'est pas celui qu'on obtient, et rien dans la réponse ne le
+   signale. Ici, iOS demandait 500 depuis toujours ; personne ne l'avait rapproché du
+   plafond de 100 écrit trois fichiers plus loin.
+2. **La question qui tranche est : « le tri de la route est-il sa clé de filtre ? »**
+   Même clé ⇒ la troncature est un simple report, sûre par construction. Clés distinctes
+   ⇒ la troncature est une perte, et le client DOIT la détecter. C'est une propriété de
+   la ROUTE, pas du client — elle se vérifie dans le `orderBy`, pas dans le hook.
+3. **Une page pleine est la seule preuve d'incomplétude disponible**, et elle suffit :
+   `length >= limitDemandée` ⇒ ne pas faire confiance au delta, escalader vers la
+   relecture complète. Le coût de l'escalade est payé exactement quand elle est justifiée.
+4. **Le mensonge et le défaut sont deux choses distinctes.** Corriger `500 → 100` rend le
+   code honnête et ne répare rien ; c'est la détection qui répare. Réparer d'abord ce qui
+   perd des données, l'hygiène ensuite — sinon on livre un correctif qui se lit comme un
+   correctif et n'en est pas un.
+
+## Leçon 114 — Un watermark se DÉDUIT quand ses deux extrémités vivent dans le même objet (2026-08-11, routine messaging, cycle 76)
+
+iOS garde `lastSyncTimestamp` comme état persisté explicite, avec toute la machinerie qui
+va avec : ne jamais régresser, ne jamais partir de l'horloge locale (R15b), purger au
+changement d'identité. Porter le delta au web invitait à porter aussi le curseur. C'était
+une erreur de lecture : sur iOS, le cache disque et le curseur sont deux stockages
+distincts, donc le curseur DOIT être tenu. Sur le web, le cache React Query est le seul
+stockage — le plus récent `updatedAt` qu'il contient EST le watermark.
+
+La déduction n'est pas un raccourci, elle se démontre. Soit `T` le max des `updatedAt` en
+cache et `F` l'instant de la lecture serveur qui les a produits : `T <= F` par
+construction, et tout changement postérieur à cette lecture porte un `updatedAt > F >= T`.
+`updatedSince=T` ne peut donc rien rater ; au pire il re-livre `]T, F]`, que l'upsert rend
+idempotent. Et la propriété survit aux écritures socket, qui ne peuvent que faire avancer
+`T`.
+
+1. **Un état dérivable ne se stocke pas.** Toutes les propriétés qu'on aurait dû écrire,
+   tester et maintenir — monotonie, purge au logout, non-régression sur event réordonné —
+   sont vraies gratuitement quand la valeur est recalculée à l'appel depuis la seule
+   source qui compte.
+2. **Porter une règle cross-plateforme, c'est distinguer ce qui est du CONTRAT de ce qui
+   est de la PLATEFORME.** Contrat : l'endpoint, la sémantique d'upsert, le refus de
+   l'horloge locale, la détection de troncature. Plateforme : le curseur persisté, qui
+   n'existe que parce qu'iOS a deux stockages. Copier le second aurait produit du code
+   correct, testé, et inutile — la pire sorte de dette, celle qu'on n'ose plus retirer.
+3. **Le corollaire protège le suivant** : un throttle qui SAUTE une exécution est sans
+   conséquence ici, précisément parce que le watermark est dérivé — une exécution sautée
+   n'avance rien, et la suivante couvre exactement la même fenêtre. Avec un curseur
+   stocké, ce même throttle aurait demandé une preuve séparée.
+
+## Leçon 109 — Un même nom d'événement pour deux faits produit DEUX défauts opposés, et aucun ne se lit dans le code qui l'émet (2026-08-11, routine messaging, cycle 71)
+
+`conversation:joined` était émis à deux endroits avec **le même payload** : l'ack self-only d'un
+socket qui rejoint la room (à chaque ouverture de fil, aucune appartenance changée) et la diffusion
+d'une adhésion réelle. Aucun client ne pouvait les distinguer. Les deux s'en sont sortis
+différemment, et les deux se sont trompés :
+
+- **web** a compté l'ack comme une adhésion → l'effectif du groupe grossissait d'une unité à chaque
+  ouverture du fil, indéfiniment ;
+- **iOS** n'a rien compté du tout → l'effectif ne connaissait que des soustractions et dérivait vers
+  le bas, persistée dans le cache disque.
+
+Symptômes opposés, racine unique. Ce qu'il faut en retenir :
+
+1. **L'absence d'un handler est une donnée, pas un vide.** Le `+1` manquant côté iOS n'était pas un
+   oubli : c'était la seule réaction correcte face à un événement ambigu. Chercher pourquoi un
+   client N'ÉCOUTE PAS est aussi instruit que lire ce qu'il fait.
+2. **Le défaut ne se voit dans aucun des deux émetteurs.** Chacun, lu seul, est parfaitement correct.
+   Il n'apparaît qu'en cherchant TOUS les émetteurs d'un même `SERVER_EVENTS.X` — ce que fait
+   `grep SERVER_EVENTS.X` en une seconde, et qu'aucune lecture de route ne fera jamais.
+3. **Le critère mécanique se réutilise** : un événement émis à la fois par `socket.emit` (self-only)
+   et par `io.to(...).emit` (diffusion) porte deux faits. Le vérifier avant d'écrire un handler
+   qui compte quoi que ce soit.
+4. **Séparer plutôt que désambiguïser.** Ajouter un champ discriminant à `conversation:joined`
+   aurait cassé tous les clients déployés qui ne le lisent pas. Un événement neuf, laissant
+   l'ancien strictement intact, ne régresse personne — et un témoin fige l'ancien pour le prouver.
+
+## Leçon 108 — Un gate qu'on n'a pas le DROIT de déclencher n'est pas un gate : le vérifier fait partie de l'instruction (2026-08-11, routine messaging, cycle 70)
+
+Le cycle 69 a refusé d'écrire du Swift invérifiable et a laissé une tête instruite très précise, en
+nommant son gate : « `ios-tests.yml` ne se déclenche pas sur les PR — lancer le workflow à la main
+sur la branche (Actions → Run workflow) avant de merger, sinon la vérification n'existe pas ».
+Instruction juste, et impossible à exécuter : l'intégration GitHub de la routine n'a pas
+`actions: write`. `POST /actions/workflows/ios-tests.yml/dispatches` répond `403 Resource not
+accessible by integration`. Le cycle 70 ne l'a découvert **qu'après avoir écrit le correctif et les
+témoins**.
+
+Le coût n'est pas d'avoir perdu du travail — le correctif est bon et le prochain cycle le fera
+tourner. Le coût est que le cycle 69 a **cru** avoir sécurisé la suite en nommant un gate, et que
+le cycle 70 a **cru** hériter d'un plan exécutable. Deux cycles ont raisonné sur une vérification
+qui n'a jamais existé.
+
+**Règle** : instruire un gate, c'est aussi prouver qu'on peut le déclencher. Un cycle qui reporte
+du travail « avec son gate » doit avoir TENTÉ le déclenchement (ou l'avoir tenté à vide sur un
+commit sans effet) avant de l'écrire dans la tête instruite. Le résultat de cette tentative se note
+au même titre que le défaut : « gate vérifié, dispatch OK » ou « gate INACCESSIBLE, il faut
+`actions: write` ».
+
+Corollaire, qui est celui de la leçon 103 appliqué à l'outillage : quand le gate manque et que le
+correctif est déjà écrit, le choix n'est pas entre « livrer » et « jeter » mais entre « livrer en
+ÉCRIVANT que ce n'est pas gaté » et « livrer en le taisant ». Ce cycle a livré, a retiré du Swift
+toute inférence de type évitable, a relu chaque API dans son fichier source — et a écrit en tête du
+relevé que rien de tout cela ne remplace une compilation. C'est la forme honnête. Elle ne devient
+acceptable que parce que la dette est datée, nommée, et posée en PREMIER geste du cycle suivant.
+
+
 ## Leçon 107 — Une capacité client complète, testée et jamais alimentée est un défaut serveur, pas une feature en attente (2026-08-10, routine messaging, cycle 60)
 
 Le SDK iOS portait `resolvedLastMessagePreview` — la résolution du Prisme pour la ligne de liste —
@@ -4197,3 +4350,911 @@ décrivant la même faute (`metadata.location`, Lot 3 : « la donnée était pay
    et sans lui, le cycle aurait reproduit à l'identique, une route plus loin, le défaut que le cycle
    62 venait de corriger. **« Non gatable ici » décide de la façon de PROUVER un changement, jamais
    de la nécessité de le chercher.**
+
+## Leçon 95 — un schéma de réponse qui ment ne dégrade pas : il fait tomber la route entière (2026-08-11, routine messaging, cycle 67)
+
+Le cycle 66 laissait comme tête « le mensonge de type » : `Message.translations` est déclaré
+`readonly MessageTranslation[]` alors que Prisma en rend une carte Mongo. Chercher à démêler le
+type aurait été un chantier de contrat. Chercher **ce que le mensonge produit** a trouvé, en une
+heure, une route qui répond 500 en production.
+
+1. **Un mensonge de type se chasse par ses SITES, pas par sa définition.** La question utile n'est
+   pas « comment démêler les deux formes ? » mais « qui recopie le résultat Prisma tel quel dans
+   une réponse ? ». Elle est greppable (`translations: true` en `select`, puis remonter à ce que
+   la route renvoie), elle est finie — dix routes ici — et elle a séparé les huit qui appellent le
+   transformateur des deux qui ne l'appellent pas. Démêler le type reste à faire ; il n'aurait rien
+   trouvé de plus, et beaucoup plus tard.
+2. **`fast-json-stringify` JETTE, il ne coerce pas — donc un champ mal formé casse la RÉPONSE, pas
+   le champ.** C'est contre-intuitif : on s'attend à un `translations` vide ou tronqué, on obtient
+   un 500 sur l'endpoint entier. Ça change le diagnostic (« la liste d'épingles ne marche plus »
+   ne ressemble pas à un problème de traductions) et ça change la gravité. **Avant de conclure
+   qu'un champ mal typé « dégrade », faire tourner le vrai schéma de réponse sur la vraie valeur :
+   trois lignes de node, et la réponse n'est pas devinable.**
+3. **Un fixture de test qui n'existe pas en production est pire qu'une absence de test.** Les
+   quatre témoins de la route posaient `translations: null` — le seul cas qui ne casse pas ; le
+   fixture du fil posait `translations: []` — une forme que Prisma ne rend JAMAIS. Les deux suites
+   étaient vertes et décrivaient fidèlement un monde où le défaut n'existe pas. **Quand un champ
+   vient d'une colonne, le fixture doit porter la forme de la COLONNE, pas une forme plausible.**
+4. **Deux défauts sur la même surface se masquent l'un l'autre, et le second n'a aucune chance
+   d'être trouvé par l'utilisateur.** La bannière web lisait `data.messages[0]` sur une enveloppe
+   `{success, data:[…]}` : elle ne s'affichait jamais. Sans épingle traduite, la route répondait
+   200 et la bannière restait vide « parce qu'il n'y a rien à épingler » ; avec, la requête
+   échouait en 500 et la bannière restait vide pareillement. **Un symptôme d'absence — un écran qui
+   ne montre rien — n'a pas de signature : ne jamais s'arrêter au premier défaut qui l'explique.**
+5. **Un composant que toutes les suites remplacent par `() => null` n'est pas testé : il est
+   caché.** `PinnedMessageBanner` était `jest.mock`é dans les deux seules suites qui le montent.
+   Le mock est légitime — ces suites testent autre chose — mais l'absence de suite PROPRE au
+   composant l'était moins. **La forme est greppable : un composant `jest.mock`é partout et testé
+   nulle part est un candidat de défaut, pas une commodité de test.**
+6. **Poser une donnée sur un fil, c'est hériter de ses exclusions.** Corriger le Prisme de la
+   bannière mettait pour la première fois `translations[].isEncrypted` sous ses yeux ; sans
+   l'exclusion du chiffré, le correctif aurait affiché du base64 dans les conversations chiffrées —
+   le défaut exact que le cycle 65 venait de fermer côté iOS. Ce n'est pas un élargissement de
+   périmètre : c'est la conséquence directe du geste. **Après avoir branché un champ sur un rendu,
+   chercher qui d'autre rend ce champ et RECOPIER ses exclusions, pas ses valeurs.**
+7. **Quand le vrai défaut est un mensonge que le compilateur ne peut pas tenir, le témoin le plus
+   durable ne porte sur aucune route.** Le contrat `translations` ↔ `messageSchema`, vérifié en
+   compilant le vrai schéma, protège toute route future déclarant `messageSchema` — y compris
+   celles qui n'existent pas encore. Corriger deux routes ferme deux défauts ; épingler l'invariant
+   ferme la classe.
+
+## Leçon 110 — un champ dénormalisé que personne n'écrit ne « dérive » pas : il MENT dès la première lecture (2026-08-11, routine messaging, cycle 71b)
+
+Le cycle 70 laissait une question d'audience : *faut-il élargir la diffusion de trois événements
+de membres ?* La réponse honnête imposait de vérifier d'abord ce que la ligne de liste rend. Cette
+vérification a trouvé un défaut plus grave, ailleurs, et l'audience n'en était que la moitié.
+
+1. **Chercher ce qu'un écran REND avant de décider ce qu'on lui envoie.** La question « la ligne
+   de liste dépend-elle de ces faits ? » se répond en lisant la vue, pas en raisonnant sur les
+   noms d'événements. `ThemedConversationRow` rend `memberCount` de trois façons — un badge, une
+   intensité, et le **saturation boost de la couleur d'accent**. La troisième n'était devinable
+   par personne, et c'est celle qui produisait le symptôme le plus visible : **la couleur d'une
+   conversation changeait quand on l'ouvrait**, la liste calculant sur `0` et le fil sur le vrai
+   effectif. Un « bug de compteur » ne ressemble pas à un bug de couleur : sans lire la vue, on
+   ne relie jamais les deux.
+2. **Une colonne dénormalisée se qualifie par ses ÉCRITURES, pas par ses lectures.** `grep`
+   `memberCount` rendait quinze sites ; filtrer sur les écritures Prisma en rendait UN, une
+   migration héritée. Un champ que le code courant n'écrit jamais n'est pas « en retard » : il
+   vaut `@default(0)` pour tout ce qui a été créé depuis. **La question utile n'est pas « ce
+   compteur est-il à jour ? » mais « qui l'incrémente ? » — et quand la réponse est "personne",
+   le champ est mort, pas obsolète.**
+3. **Deux routes qui servent le même nom de champ depuis deux sources sont un défaut, même quand
+   les deux « marchent ».** Le détail servait `_count` filtré, la liste servait la colonne. Chaque
+   route, lue seule, était cohérente. C'est leur CONTRAT COMMUN qui mentait — et le client, lui,
+   ne sait pas de quelle route vient sa ligne. Le repli du transformer web
+   (`memberCount || _count || participants.length`) achevait de masquer : il rendait `5`, une
+   valeur plausible, parce que la liste n'envoie que 5 participants.
+4. **Le nom d'événement surchargé — voir la leçon 109, écrite le même jour par la session
+   parallèle, qui l'a instruit plus loin (le jumeau `conversation:left`).** *(Numérotée 110 et non
+   96 : ce fichier porte DEUX séries de numéros qui se recouvrent depuis longtemps — une vingtaine
+   de doublons entre ~54 et ~96. La série haute, seule à jour, va jusqu'à 109 ; s'y rattacher plutôt
+   qu'ajouter une collision de plus. Le tri du reste est un chantier à lui seul, pas un effet de
+   bord de cycle.)* Un point à ajouter
+   depuis ce côté-ci : entre « un champ qui discrimine » et « un nom distinct », **prendre le
+   nom**. Cette session proposait de séparer les deux sens par la PRÉSENCE de `memberCount` dans
+   le payload ; ça fonctionne, mais ça fait porter la sémantique à une option, et ça élargit
+   l'audience d'un événement que des clients déployés écoutent déjà. Un nom neuf ne demande rien
+   à personne et se fige par un témoin.
+5. **Le remède d'un delta n'est pas un meilleur delta : c'est un ÉTAT ABSOLU.** Élargir l'audience
+   réduit les événements manqués ; elle ne les supprime pas (hors ligne, trou de reconnexion). Un
+   `±1` ne se rattrape jamais, et les deux clients PERSISTENT la dérive (cache disque iOS,
+   `staleTime: Infinity` web). Porter le total dans le payload — compté sur la requête qui sert
+   déjà à nommer les rooms, donc gratuitement — rend l'effectif convergent, rend `membershipEnded`
+   / `membershipRestored` superflus pour qui le lit, ET sépare les deux sens de l'événement
+   surchargé : seul celui qui parle d'appartenance porte le compte. **Un champ bien choisi ferme
+   trois défauts que trois correctifs séparés auraient traités un par un.**
+6. **Un double de test qui ne supporte pas la forme de production décrit un autre programme.**
+   Six suites plantaient parce que leur `io.to()` rendait `{ emit }` sans `.to` — or la forme
+   livrée chaîne (`to(fil).to(perso).emit()`) pour ne délivrer qu'une copie par socket. Pire :
+   `expect(io.to).toHaveBeenCalledWith(room)` ne prouve PAS la livraison — il dit qu'une room a
+   été nommée quelque part, jamais qu'elle appartenait à la chaîne qui a émis cet événement-là.
+   **Quand un témoin porte sur « qui reçoit quoi », le double doit retenir la chaîne, pas compter
+   les appels.**
+7. **`{ ...défauts, ...o.champ }` suivi de `...o` annule le premier spread.** Trouvé en passant
+   dans une factory de test : le second spread réécrase l'objet entier, donc tout défaut non
+   redéclaré par le test disparaît — silencieusement, jusqu'au jour où le code lit un champ de
+   plus. La fusion par clé n'est vraie que si le spread large vient EN PREMIER.
+
+## Leçon 97 — « je ne peux pas compiler ici » n'est pas « ce n'est pas gatable » (2026-08-11, routine messaging, cycle 72)
+
+Le cycle 71 a diagnostiqué un `sdk-tests` rouge sur `main`, prouvé la cause par l'arithmétique,
+écrit le correctif en prose — et **ne l'a pas posé**, au motif que le conteneur n'a pas de chaîne
+Swift. Il notait pourtant, dans le même document, que « `sdk-tests.yml` tourne sur les PR ». Les
+deux phrases coexistaient sans se rencontrer : le gate était identifié comme bon pour vérifier du
+Swift déjà écrit, pas comme autorisation d'en écrire.
+
+1. **La question utile est « existe-t-il un gate qui compile ceci ? », jamais « puis-je le compiler
+   ici ? ».** Elles ont divergé pendant cinq cycles, et la seconde a coûté un `main` rouge laissé
+   en l'état une journée entière alors que le correctif tenait en deux fichiers. Avant de reporter
+   un travail pour cause d'environnement, **énumérer les workflows qui touchent le chemin
+   concerné** — `on: pull_request` suffit, l'absence de toolchain locale ne décide de rien.
+2. **La règle « ne pas poser sur `main` du code non gaté » (leçon 95) porte sur `main`, pas sur une
+   branche.** L'appliquer à une PR la transforme en interdiction de travailler. Une PR EST le
+   dispositif qui rend le code gatable ; s'en priver au nom de la prudence inverse la règle.
+3. **Un défaut de témoin se répare en le liant à sa source de vérité, pas en recalant son
+   littéral.** `slideTransitionDuration` a bougé deux fois, et deux fois laissé derrière elle des
+   témoins rouges décrivant un comportement inchangé. Recaler sur 1,2 aurait armé la troisième
+   occurrence. Le prix est assumé et doit être payé explicitement : lier à la SSOT rend certains
+   témoins **tautologiques**, et il faut alors leur rendre leur portée par d'autres assertions
+   (ici : la largeur reste celle de la fenêtre et non celle du slide, et elle respire avec le zoom).
+4. **Un correctif de témoin oblige à relire le code qu'il traverse — c'est là que le vrai défaut
+   se trouve.** Dériver les instants d'échantillonnage imposait de relire `applyOpening` à côté de
+   `applyClosing`, et l'asymétrie a sauté aux yeux : l'un pose des `CABasicAnimation`, l'autre écrit
+   des valeurs **modèle**. Un remplissage `fillMode = .forwards` + `isRemovedOnCompletion = false`
+   recouvre la valeur modèle indéfiniment. **Chercher ce motif partout où un instantané piloté par
+   le playhead cohabite avec une animation autonome sur la même propriété.**
+5. **Le conflit d'une animation se raisonne par keyPath, jamais par nom d'effet.** `.zoom` et
+   `.slide` sont deux effets distincts qui écrivent tous deux `sublayerTransform` : une entrée
+   `.zoom` masque une sortie `.slide` aussi sûrement que la sienne. Un retrait indexé sur l'effet
+   aurait laissé la moitié du défaut en place.
+6. **Établir la portée d'un défaut de rendu en balayant TOUS les chemins de rendu, avant de
+   conclure.** Ici trois : aperçu du composer (touché), lecteur (indemne — son canvas naît en
+   `.play`, `applyOpening` n'y passe jamais), export MP4 (indemne — il n'écrit que des valeurs
+   modèle). Sans ce balayage, le rapport aurait annoncé « les fermetures ne marchent pas », ce qui
+   est faux, au lieu de « **la surface où l'auteur vérifie ses transitions est la seule qui les
+   avale** » — l'aperçu mentait sur l'export, et c'est ce qui rend le défaut coûteux.
+7. **Quand le pixel n'est pas observable, assertionner la CAUSE.** `presentationLayer()` exige un
+   render server qu'aucun test unitaire n'a. Assertionner `animation(forKey:)` n'est pas un repli
+   sur l'implémentation : le remplissage attaché **est** le défaut, et sa présence est exactement
+   ce qui rend la valeur modèle invisible.
+8. **Un correctif partiel doit nommer ce qu'il laisse ouvert, avec l'arithmétique faite.** Retirer
+   l'entrée à `progress > 0` tronque une ouverture encore en vol sur un slide de 2 s (fenêtre 1,2 s,
+   seuil de chevauchement 2,4 s). Moins grave que le défaut remplacé, mais réel — et l'arbitrage
+   entre relever le plancher de durée, comprimer la fenêtre de sortie, ou l'assumer est **produit**,
+   pas technique. Le cycle le mesure, le documente en tête du suivant, et ne tranche pas.
+
+
+## Leçon 111 — un champ servi à un instant où sa valeur n'existe pas encore n'est pas « en retard » : il est FAUX pour toujours (2026-08-11, routine messaging, cycle 73)
+
+Le cycle 69 a branché le Prisme Linguistique sur la ligne de liste : `lastMessageTranslations` est
+posé par les trois chemins REST et par le temps réel, filtré au prisme de CHAQUE destinataire. Le
+câblage était juste. Ce qu'il n'a pas regardé, c'est **à quel INSTANT** la valeur est lue.
+
+1. **Un aperçu servi à l'ENVOI ne peut pas porter une traduction qui atterrit deux secondes plus
+   tard.** Le pipeline est asynchrone par construction (ZMQ → NLLB → persistance → diffusion), donc
+   `Message.translations` vaut `null` au moment exact où le fan-out d'aperçu le lit. Le champ n'est
+   pas « pas encore à jour » : rien ne repasse jamais, donc il est faux définitivement. **Après avoir
+   branché un champ sur un rendu, chercher QUAND il est écrit — pas seulement QUI l'écrit
+   (leçon 110, point 2, qui posait la moitié de la question).**
+2. **Un défaut conditionnel au parcours est plus coûteux qu'un défaut constant.** Ouvrir la
+   conversation traduisait la ligne, ne pas l'ouvrir la laissait dans la langue de l'expéditeur : le
+   même compte, sur le même appareil, voyait deux comportements selon ce qu'il avait fait avant.
+   C'est indébuggable côté support et invisible en test manuel — celui qui vérifie a forcément
+   ouvert la conversation.
+3. **« Le client reçoit l'événement » ne veut pas dire « le client s'en sert ».** Le lecteur sur
+   l'écran de liste recevait bien `message:translation` : `AuthHandler` fait rejoindre TOUTES les
+   rooms de conversation à l'authentification. Mais iOS le range dans le cache MESSAGE
+   (`cacheTranslation`) et web ne l'écoute que depuis la vue conversation. **Vérifier le CONSOMMATEUR,
+   pas l'abonnement** — la room prouve l'arrivée, jamais l'usage.
+4. **Un émetteur qui n'est pas une mutation humaine ne mérite pas la même audience.** Une édition
+   change la ligne pour tout le monde ; une traduction ne la change que pour les lecteurs de cette
+   langue-là, et seulement tant que le message traduit est encore le dernier. Réutiliser le fan-out
+   existant SANS ces deux bornes aurait payé N fan-outs complets par message sur le chemin le plus
+   chaud du service. **Le bon test d'audience n'est pas « qui est participant ? » mais « pour qui le
+   payload CHANGE-t-il ? »** — et ici la réponse se lit sur la carte SORTIE, pas sur les préférences
+   en entrée : un lecteur hors de la langue reçoit un objet identique à l'octet près.
+5. **Re-servir un état périmé est pire que ne rien servir.** Sans la garde `onlyIfLatestIs`, une
+   traduction arrivée après un message plus récent aurait fait RECULER la ligne de liste sur
+   l'avant-dernier message. Un correctif de convergence qui n'ordonne pas ses écritures fabrique une
+   régression que le défaut d'origine n'avait pas.
+6. **Prouver le ROUGE par mutation quand les témoins sont écrits après le correctif.** Trois témoins
+   de portée sur six et un témoin de câblage sur quatre sont tombés en neutralisant les gardes ; les
+   autres verrouillent ce qui ne doit PAS changer et sont non-discriminants seuls, ce qui est leur
+   fonction. **Le dire explicitement dans le rapport vaut mieux que laisser croire que dix témoins
+   ferment dix défauts.**
+7. **Un défaut trouvé dans la lane d'une AUTRE routine se documente, il ne se corrige pas.** Android
+   ne décode ni `lastMessageTranslations` ni `lastMessageOriginalLanguage` — même famille de défaut,
+   même surface, mais `apps/android/` appartient à la routine de parité. Le corriger ici aurait
+   produit un conflit de fichiers avec une session qui travaille sur les mêmes écrans. La tête
+   instruite coûte cinq minutes et vaut plus qu'une PR en conflit.
+
+## Cycle 74 — Un témoin d'égalité n'est pas du remplissage : c'est le seul qui voit les faux verts
+
+1. **Une valeur par défaut non déterministe dans un `init` rend TOUT `XCTAssertNotEqual` entre deux
+   instances vacuoirement vert.** `MeeshyConversation.init` défaute `lastMessageAt` à `Date()`, et
+   ce champ est replié dans `renderFingerprint` : deux instances construites séparément diffèrent
+   toujours. Trois témoins `_changes` sont donc partis verts en verrouillant zéro comportement — ils
+   auraient passé sur le code d'AVANT le correctif. **Avant d'écrire un témoin qui compare deux
+   instances, lire les DÉFAUTS de l'init** : toute horloge, tout `UUID()`, tout compteur y suffit à
+   fabriquer un faux vert.
+2. **Corollaire de construction : dériver les variantes d'UNE fabrique paramétrée, jamais construire
+   deux objets « pareils ».** « Pareils » est une intention ; « même fabrique, un seul paramètre qui
+   change » est une garantie, et elle survit à l'ajout d'un futur champ non déterministe.
+3. **Les témoins non-discriminants seuls sont ce qui attrape les faux verts des autres.** Ici, seuls
+   les deux témoins d'ÉGALITÉ (stabilité du hash, indépendance à l'ordre d'insertion) pouvaient voir
+   le problème — et ils l'ont vu, en CI, sur la première passe. Le cycle 73 notait déjà qu'ils
+   « verrouillent ce qui ne doit PAS changer » ; ce cycle montre qu'ils verrouillent aussi la
+   validité des témoins voisins.
+4. **Un portillon de mémoïsation est un contrat, et un champ affiché mais non replié est un rendu
+   MORT, pas une approximation.** `.equatable()` empêche SwiftUI d'appeler `body` : le champ oublié
+   n'est pas « rafraîchi en retard », il n'est jamais rafraîchi. Toute évolution qui rend un champ
+   VIVANT (le cycle 73 a rendu `lastMessageTranslations` re-émis en temps réel) doit rouvrir le hash
+   qui le mémoïse — la mémoïsation reste sinon calibrée sur l'hypothèse d'avant.
+5. **Hasher un dictionnaire : trier les clés, combiner chaque composant séparément.** `Dictionary`
+   n'a pas d'ordre d'itération stable (hash non déterministe ⇒ portillon qui s'ouvre au hasard,
+   c'est-à-dire un défaut MASQUÉ et non corrigé), et une concaténation `clé+valeur` confond
+   `["a":"bc"]` et `["ab":"c"]`.
+6. **Sans toolchain locale, le RED se prouve par inspection ET se dit comme tel.** Le raisonnement
+   sur `keys.sorted().joined(",")` était juste et le témoin headline est passé ; ce que l'inspection
+   ne pouvait PAS voir, c'est la validité du dispositif de test lui-même. **Une preuve par lecture
+   couvre le code sous test, jamais le harnais qui l'exerce** — d'où l'obligation d'attendre la CI
+   avant de conclure, et de ne jamais merger sur la seule foi de l'inspection.
+
+## Leçon 113 — vérifier le SITE d'appel ne vérifie pas le TYPE qu'il traverse (2026-08-11, routine messaging, cycle 74b)
+
+Le cycle a branché `messageSocket.userUpdated` dans `ConversationSyncEngine`, en copiant le
+voisin immédiat (`messageSocket.conversationUpdated`, dix lignes plus haut) qui compile. Ça a
+quand même cassé `main` :
+
+    error: value of type 'any MessageSocketProviding' has no member 'userUpdated'
+
+`messageSocket` n'est pas un `MessageSocketManager` mais un `MessageSocketProviding` — un
+PROTOCOLE, déclaré 735 lignes plus haut (`private let messageSocket: MessageSocketProviding`).
+Le publisher existait bien sur la classe concrète ; il n'existait pas sur le protocole que ce
+fichier-là traverse.
+
+1. **Le voisin qui compile prouve que SON symbole est dans le protocole, pas que le vôtre y
+   sera.** `conversationUpdated` compilait parce que quelqu'un l'avait ajouté au protocole en son
+   temps. Copier la forme d'un appel copie sa syntaxe, jamais ses prérequis de type.
+2. **Ajouter un membre à un protocole casse ses CONFORMANTS, pas seulement l'appelant.** Ici deux
+   `MockMessageSocket` (SDK et app). Le réflexe `rg "(class|struct).*: *NomDuProtocole"` fait
+   partie du correctif, pas d'une vérification optionnelle après coup.
+3. **Une relecture attentive n'est pas une relecture typée.** La même passe a bien attrapé deux
+   vrais défauts par lecture seule — un `try` à droite d'un ternaire (refusé par Swift) et une
+   mutation de dictionnaire pendant son itération. Elle a raté celui-ci parce qu'elle vérifiait
+   ce que le code FAIT sans vérifier ce que chaque symbole EST. **Sans toolchain, la question
+   « quel est le TYPE de ce receveur ? » se pose explicitement, une commande par receveur
+   nouvellement touché** — `rg "let messageSocket"` la répondait en une seconde.
+4. **Le coût est asymétrique et connu d'avance** : `sdk-tests` ne tourne qu'APRÈS le merge dans
+   cette routine (dispatch = 403), le job dure ~40 min, et une erreur de compilation tue le
+   build AVANT que la moindre cible de test compile — donc les 12 témoins Swift du cycle n'ont
+   rien prouvé du tout à la première passe. Un symbole nouveau traversant un protocole mérite sa
+   vérification explicite avant le merge, pas après.
+
+
+## Leçon 112 — un miroir cross-plateforme se prouve par mutation, et sa règle se nomme des DEUX côtés (2026-08-11, routine messaging, cycle 75)
+
+Le `_seq` du SyncEngine existait sur iOS et nulle part ailleurs. Le porter au web n'était pas
+« réécrire la même chose en TypeScript » : c'était décider ce qui, dans la règle, est du contrat et
+ce qui est de la plateforme.
+
+1. **Un défaut de rattrapage coûte ce que coûte la politique de fraîcheur de la plateforme.** Le même
+   event manqué se rattrape tout seul sur un client qui relit périodiquement, et ne se rattrape
+   JAMAIS sur un client en `staleTime: Infinity`. Avant de chiffrer l'impact d'un trou temps réel,
+   lire la politique de cache du consommateur — c'est elle qui transforme « en retard » en
+   « perdu pour la session ».
+2. **Une couverture qui ressemble à la bonne n'est pas la bonne : vérifier sur QUEL signal elle
+   écoute.** `refetchOnReconnect: 'always'` était déjà posé globalement et semblait fermer la
+   fenêtre de coupure. Il écoute le `onlineManager` — la transition réseau du NAVIGATEUR. Un
+   redémarrage gateway, un drop de load balancer, un échec d'upgrade de transport ne bougent pas
+   `navigator.onLine` : la socket tombe, le navigateur se croit en ligne, rien ne se déclenche.
+   **Deux mécanismes nommés « reconnect » peuvent observer deux mondes disjoints.**
+3. **La variante plausible-mais-fausse d'un correctif de synchro, c'est presque toujours de RÉINITIALISER
+   trop tôt.** Purger le curseur de séquence sur l'event `disconnect` de la socket paraît hygiénique
+   et détruit exactement la preuve que la reconnexion doit révéler : le premier `_seq` d'après la
+   coupure est ce qui MESURE le trou. Le curseur ne se purge que sur un changement d'IDENTITÉ
+   (token, logout) — le seul moment où sa valeur cesse d'avoir un sens. Écrire ce mutant en test
+   avant de coder : ici il n'a fait tomber qu'UN témoin, et sans ce témoin le correctif serait
+   passé vert en ne détectant plus rien après la première coupure.
+4. **Un compteur GLOBAL par utilisateur impose un lockstep émission/observation.** `_seq` n'est pas
+   par event : un client qui n'observe qu'un sous-ensemble des events estampillés voit un trou à
+   chaque event non observé. Porter l'observation d'UN seul event n'est correct que parce que
+   l'émetteur est unique — fait à vérifier, pas à supposer. La note qui protège la suite ne va pas
+   dans le client qu'on vient d'écrire : elle va chez l'ÉMETTEUR, seul endroit que touchera
+   forcément celui qui étendra la couverture.
+5. **Un jumeau qui ne se nomme que dans un sens n'est pas un jumeau.** Le fichier web pointait le
+   Swift ; le Swift ne pointait rien. Celui qui fait évoluer la règle ouvre le fichier de SA
+   plateforme — la référence doit exister aux deux extrémités, sinon elle ne sert que ceux qui
+   n'en ont pas besoin.
+6. **Établir la portée par balayage de TOUTES les surfaces voisines, avant de conclure.** Trois
+   surfaces web pouvaient porter le même défaut ; les messages avaient déjà leur rattrapage sur le
+   front `false → true` du socket, les notifications non (corrigé), la liste de conversations non
+   plus (documentée en tête du cycle suivant). Sans ce balayage, le rapport aurait annoncé « le web
+   n'a pas de rattrapage », ce qui est faux, au lieu de nommer la seule surface restante.
+
+## Leçon 116 — `args` passé à Workflow doit être vérifié en tête de script, jamais consommé les yeux fermés (2026-08-11, mini-chantier follow-ups audio immersif iOS)
+
+Un script `Workflow` lancé avec `args: {"worktree": "/chemin/reel"}` et lisant `const WORKTREE = args.worktree` a vu CHAQUE prompt dispatché aux 14 sous-agents contenir littéralement `cd undefined` — `args` ne s'est pas propagé malgré un appel conforme à la doc de l'outil.
+
+Conséquence observée : les agents ont dû deviner le bon worktree eux-mêmes (`git worktree list` + correspondance de nom/branche). Trois follow-ups sur quatre (implémentation ET revue) ont deviné juste grâce au nom de branche fraîchement créée — mais l'agent de gate final, sans commit ni branche à faire correspondre, a été induit en erreur par la mémoire du projet (qui mentionne un worktree du MÊME chantier parent, déjà mergé, sous un nom proche) et a fait tourner le gate complet sur l'ancien worktree : zéro signal utile après ~50 tool calls et 53s.
+
+Ce qu'il faut en retenir :
+1. **Après tout lancement de `Workflow` avec `args`, lire le `promptPreview` du tout premier agent du journal AVANT de faire confiance au reste du run** — un `cd undefined` ou toute valeur manifestement fausse dans le premier prompt dispatché signale qu'`args` ne s'est pas propagé ; mieux vaut le savoir après le premier agent qu'après les 14.
+2. **Un chemin absolu critique (worktree, fichier cible) gagne à être interpolé DANS le texte du script au moment de l'écrire, en plus (ou à la place) de son passage via `args`** — une constante littérale ne peut pas se perdre en transit.
+3. **Un agent à qui il manque un repère se rabat sur la mémoire projet, pas sur l'incertitude explicite** — et la mémoire peut nommer un chemin qui n'est plus le bon (chantier voisin, déjà clos). Un prompt qui dépend d'un chemin doit soit le vérifier lui-même en première étape (`test -d "$WORKTREE" || exit 1` avant tout `cd`), soit refuser de deviner.
+4. **Un sous-agent qui lance une commande longue en arrière-plan doit bloquer dessus jusqu'à un signal terminal réel, jamais retourner "j'attendrai la suite" comme conclusion.** Celui de ce run a fini par répondre "je vais attendre les notifications" comme texte FINAL après plusieurs tentatives de `sleep`/`Monitor` — un sous-agent n'est jamais réveillé plus tard dans le même appel `agent()` : soit il bloque en synchrone jusqu'à la fin réelle du process qu'il surveille, soit son tour se termine sans résultat exploitable et l'orchestrateur doit le traiter comme tel, pas comme un résultat définitif.
+
+
+## Leçon 117 — un mutant qui n'a pas été appliqué se lit EXACTEMENT comme un mutant survivant (2026-08-11, routine messaging, cycle 76)
+
+Le RED se prouvait par mutation : `sed` sur le fichier, relance des témoins, restauration.
+Trois mutants lancés, **deux annoncés survivants** — donc deux règles porteuses
+apparemment non couvertes. La conclusion naturelle était « mes témoins ne discriminent
+pas, il faut les renforcer ».
+
+C'était faux. Les deux `sed` avaient une indentation de motif erronée (8 espaces là où le
+code en a 4, les lignes vivant dans une closure). Ils n'ont RIEN remplacé. Les témoins
+tournaient contre le code d'origine et passaient.
+
+1. **« N passed » après une mutation n'est une information que si la mutation a eu lieu.**
+   `sed`/`perl -pi` échouent SILENCIEUSEMENT sur un motif non trouvé : code de sortie 0,
+   fichier inchangé. Un mutant se VÉRIFIE avant de se juger — `git diff --stat` sur le
+   fichier muté, et mutation par NUMÉRO DE LIGNE (`sed -i '148s|.*|...|'`) après
+   localisation au `grep -n`. Refait ainsi, tous les mutants sont tombés du premier coup.
+2. **Le faux négatif pousse à SUR-tester, pas à sous-tester** — c'est ce qui le rend
+   coûteux sans avoir l'air dangereux. On ajoute des témoins redondants pour une règle
+   déjà couverte et on ne découvre jamais que l'instrument de preuve était cassé. « Mon
+   témoin nommé pour CETTE règle ne tombe pas alors qu'il devrait » est un signal sur le
+   HARNAIS avant d'être un signal sur le témoin.
+
+## Leçon 118 — recharger un module pour remettre à zéro son état partagé recharge aussi son React
+
+Le cooldown du delta-sync vit au niveau module (plusieurs écrans montent la même liste).
+Pour isoler les témoins, premier réflexe : `jest.resetModules()` + `await import(...)`.
+
+Les témoins de fonction pure passaient ; les `renderHook` tombaient sur
+`TypeError: Cannot read properties of null (reading 'useContext')` — qui se lit comme un
+`QueryClientProvider` manquant, alors que le provider était là.
+
+`resetModules` vide le registre : le module fraîchement importé résout un `react` et un
+`@tanstack/react-query` **différents** de ceux que le fichier de test importe
+statiquement. Deux instances de React ⇒ dispatcher nul.
+
+**L'état partagé d'un module se remet à zéro par la porte que la PRODUCTION utilise, pas
+en détruisant le module.** Le garde lit `Date.now()` : un `jest.spyOn(Date, 'now')` qui
+avance de dix minutes entre les tests le rouvre exactement comme le temps réel — sans
+toucher au registre, sans export test-only dans le code de production. (La version
+retenue de ce cycle a réglé le même besoin autrement : garde porté par une `WeakMap`
+clé par `QueryClient`, donc naturellement isolé par client de test.)
+
+## Leçon 119 — la variante « plausible et plus complète » d'une garde se teste contre la FEATURE qu'elle pourrait éteindre
+
+Le cycle a proposé, par-dessus la version retenue, un cliquet sur le compteur de non-lus :
+« le delta peut toujours BAISSER le badge, il ne peut le MONTER que s'il apporte un
+`lastMessageAt` plus récent ». Le raisonnement tenait, le cas visé était réel (instantané
+serveur antérieur à un `mark-as-read` en vol), et la règle avait ses cinq témoins verts.
+
+Elle était fausse, et c'est un témoin PRÉEXISTANT de l'autre session — « the delta is
+server truth » — qui l'a fait tomber, pas une relecture.
+
+1. **Transposer une règle d'une plateforme à l'autre demande de transposer aussi son
+   INTERRUPTEUR.** iOS clampe sur `userState.lastReadAt` ; `markAsUnread` marche
+   précisément parce qu'il EFFACE cette frontière, ce qui désarme le clamp et rend la main
+   au serveur. Une transposition basée sur `unreadCount` + `lastMessageAt` reproduit la
+   condition mais PAS son moyen de désarmement — donc elle éteint silencieusement le
+   « marquer comme non lu » cross-device, une feature qu'aucun témoin du cycle ne
+   regardait. **Avant d'écrire une garde qui refuse une valeur serveur, chercher quelle
+   ACTION UTILISATEUR produit légitimement cette valeur.**
+2. **Comparer les coûts des deux erreurs, pas seulement leurs probabilités.** Un badge
+   rallumé une seconde et réparé par le `conversation:unread-updated` suivant est un faux
+   transitoire auto-réparant ; un mark-as-unread jamais affiché est un faux PERMANENT.
+   Une garde n'est justifiée que si le mal qu'elle empêche survit plus longtemps que celui
+   qu'elle cause.
+3. **Une garde se coupe à la portée qu'on peut PROUVER.** La moitié « conversation
+   ouverte » est démontrable sans frontière locale (l'écran la montre, le handler socket
+   la clampe déjà) et a été conservée. La moitié « conversation fermée » demande de faire
+   voyager la frontière de lecture jusqu'au modèle web : chantier de contrat, documenté et
+   laissé ouvert, pas approximé par un proxy.
+
+---
+
+## Leçon 120 — une room n'est pas une audience : chercher QUAND le client la rejoint (2026-08-11, routine messaging, cycle 77)
+
+`message:attachment-updated` diffusait dans `ROOMS.conversation(...)` depuis toujours, et
+ça se relit comme correct : l'événement concerne une pièce jointe D'UN message DE cette
+conversation, donc la room de la conversation. C'est un raisonnement sur le SUJET de
+l'événement, pas sur l'audience réelle de la room.
+
+Ce qui décide, c'est **le moment où le client rejoint cette room**. iOS n'émet
+`conversation:join` qu'à l'OUVERTURE du fil (`roomsToRejoinOnConnect` ne rejoue que les
+rooms déjà tenues) : au lancement de l'app, un lecteur resté sur la liste n'est dans AUCUNE
+room de conversation. Une diffusion « à la room » n'atteint donc pas « les participants »,
+elle atteint « ceux qui ont ouvert ce fil depuis le lancement ».
+
+Trois gestes, dans cet ordre :
+
+1. **Vérifier ce que le client FAIT du delta, pas seulement s'il l'écoute.** Ici le SDK
+   applique le patch sans regarder quel fil est ouvert (`ConversationSyncEngine`, cache
+   par conversation, no-op si le message est absent) alors que le ViewModel, lui, filtre
+   sur la conversation courante. Deux écouteurs, deux portées : élargir l'audience n'a de
+   valeur que parce que le PREMIER existe. Sans lui, on aurait payé de la bande passante
+   pour rien.
+2. **Un événement asynchrone doit se demander ce que portait la copie MISE EN FILE.** Le
+   `message:new` d'une note vocale part avant Whisper : il porte la pièce jointe sans
+   transcription. Rejouer ce `message:new` seul à la reconnexion, c'est garantir la
+   version non enrichie — l'enrichissement doit sa PROPRE entrée de file.
+3. **Élargir une audience oblige à re-poser la question du filtrage par destinataire.**
+   `message:new` trime ses traductions par langue du lecteur ; ce delta ne le peut pas,
+   parce que les clients REMPLACENT la carte de traductions au lieu de la fusionner — un
+   sous-ensemble effacerait les langues déjà en cache. La bonne réponse n'est pas toujours
+   « fais comme le voisin » : c'est « regarde la sémantique d'application côté client ».
+
+Corollaire pour le balayage : `grep "to(ROOMS.conversation("` ne rend pas une liste de
+fautes, il rend une liste de **questions**. Chaque site se juge sur trois audiences — dans
+le fil, sur la liste, hors ligne — et sur ce que le client fait de l'événement dans
+chacune.
+
+## Leçon 121 — l'ORDRE d'une page décide si sa troncature est une perte ou une pagination (2026-08-11, routine messaging, cycle 77)
+
+`GET /conversations?updatedSince=` plafonne à 100 lignes et triait par `lastMessageAt`
+décroissant. Le tri venait de l'écran de liste, où il est juste ; appliqué à une page
+FILTRÉE par `updatedAt`, il n'a aucun rapport avec le filtre.
+
+Conséquence : les lignes coupées ne sont pas « les moins récemment mises à jour », donc un
+client qui avance son watermark au max des `updatedAt` reçus les enjambe — définitivement,
+jusqu'à sa prochaine réconciliation complète (24 h). Le web avait traité le symptôme côté
+client (page pleine ⇒ relecture complète) ; la cause était un `orderBy` à quatre mots.
+
+**Règle : quand une page est filtrée par un curseur, elle doit être TRIÉE par ce même
+curseur, croissant.** Alors les lignes coupées sont exactement celles que le curseur
+suivant demandera, et la troncature devient une pagination naturelle — sans une ligne de
+code client. Un tri hérité d'un autre usage de la même route est le premier endroit où
+regarder quand un delta « perd » des lignes.
+
+Deux bornes à écrire noir sur blanc :
+
+- **Le résidu des ÉGALITÉS survit.** Avec une borne stricte (`gt`), plus de `limit` lignes
+  portant la même milliseconde débordent d'une page qu'on ne sait pas reprendre. Le dire
+  dans le code, et laisser au client la détection de la page pleine plutôt que la
+  supprimer en croyant le défaut clos.
+- **L'ordre est conditionnel au filtre.** Une page ordinaire garde la récence : la même
+  route sert deux besoins, et trier par `updatedAt` un écran de liste lui rendrait ses
+  conversations les plus vieilles en tête.
+
+## Leçon 122 — une page PLEINE n'est jamais une preuve de fin ; demander plus que le plafond détruit la preuve (2026-08-11, routine messaging, cycle 78)
+
+`deltaSyncCore` (iOS) demandait `limit=500` à une route plafonnée à 100. On lit ça comme de
+l'hygiène — « le serveur cappe, tant pis ». C'en est l'inverse : **la seule façon de savoir
+qu'une page a été coupée est de la comparer au plafond, et demander plus que le plafond rend
+cette comparaison impossible**. Une page à 100 devenait indistinguable d'une fenêtre épuisée.
+
+Trois règles à reprendre partout où un curseur pagine :
+
+1. **Demander EXACTEMENT le plafond serveur** — ou mieux, **lire ce que le serveur ANNONCE**.
+   La version retenue sur `main` (PR #2863) fait `pagination?.hasMore ?? (count >= limit)` : le
+   comptage n'est que le repli. Une preuve déclarée par la source bat une preuve déduite ; ne
+   déduire que lorsque la source se tait.
+2. **Sur une page qui laisse du reste, NE PAS AVANCER LE CURSEUR** — puis escalader. L'ordre est
+   le contenu du correctif : une escalade partant d'un curseur déjà trop haut hérite du trou
+   qu'elle existe pour fermer. Et c'est parce que le curseur n'a pas bougé qu'une escalade
+   ÉCHOUÉE (offline) laisse la fenêtre entière rejouable au lieu d'un trou définitif.
+3. **Si on choisit de paginer plutôt que d'escalader, reprendre au max de la page est FAUX.**
+   La coupure peut tomber au milieu d'un groupe partageant la même valeur de curseur ; une borne
+   stricte `gt` posée sur le max enjambe les survivantes du groupe. Le seul curseur sûr est la
+   plus haute valeur STRICTEMENT inférieure au max de la page. Et il reste un cas qu'aucun
+   curseur ne franchit — toute la page à une seule valeur — où l'escalade est la seule réponse.
+
+Distinction qui vaut au-delà de ce cas : **une borne de fréquence sur un entretien PÉRIODIQUE ne
+doit jamais throttler une RÉPARATION.** `fullReconcileInterval` (24 h) borne la purge des
+fantômes ; il n'a rien à dire à un `fullSync` que le delta vient de réclamer parce qu'il sait sa
+fenêtre incomplète.
+
+Côté test : une pagination ne se teste pas contre un mock qui rend la MÊME page à chaque appel —
+la boucle passe au vert quoi qu'elle fasse. Il faut une file de réponses.
+
+## Leçon 122b — arriver deuxième sur la même tête ne donne aucun droit de réécriture (2026-08-11, routine messaging, cycle 78)
+
+Ce cycle a écrit, testé et fait passer la CI sur une correction de la page delta tronquée.
+Pendant la CI, une session parallèle a mergé la PR #2863 : même défaut, correction plus simple et
+mieux instrumentée. Le merge a conflité sur les quatre fichiers.
+
+La tentation est de « fusionner intelligemment » — garder sa propre mécanique en résolution de
+conflit. C'est un piège à trois détentes :
+
+1. **Deux mécanismes pour une règle ne se superposent pas.** Leur contrat testé disait « le
+   curseur n'avance pas » ; le mien avançait pour paginer. Garder les deux, c'est faire échouer
+   leurs témoins — donc les retirer — donc écraser leur travail en prétendant l'intégrer.
+2. **Le code déjà mergé a une propriété que le mien n'a pas : il est sur `main`.** Il a été revu,
+   il a passé sa CI, d'autres branches partent déjà de lui. Le remplacer par une variante lors
+   d'une résolution de merge est une décision d'architecture prise dans le pire endroit possible.
+3. **Ce qu'on jette, on le documente.** Le récit, les deux bornes trouvées (reprise sous le
+   groupe du haut, résidu des égalités) et le coût mesuré de l'escalade systématique valent plus
+   que le code retiré : ils deviennent une tête instruite CONTRE le comportement en place.
+
+Règle : quand `main` a déjà fermé la tête qu'on instruit, on prend `main`, on retire sa propre
+plomberie devenue sans consommateur, et on convertit son travail en instruction. On ne se sert
+pas d'un conflit comme d'un droit de veto.
+
+Corollaire de cadence : **relire `main` avant d'OUVRIR une tête, pas seulement avant de merger.**
+Une tête écrite dans `todo.md` n'est pas une réservation ; trois routines lisent la même liste.
+
+
+## Leçon 123 — une invalidation qui ne matche aucun cache est une PANNE, et sa correction n'est pas de la rebrancher (2026-08-11, routine messaging, cycle 78)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` sur chaque réaction, commentaire
+explicite à l'appui (« réaction ajoutée = conversation modifiée »). La sidebar lit
+`conversations.infinite()` : préfixes disjoints, donc **l'intention déclarée n'a jamais été
+exécutée**. C'est pire que du code mort : le commentaire fait foi pour le prochain lecteur.
+
+Le réflexe est de rebrancher sur la bonne clé. Deux questions AVANT :
+
+1. **L'intention est-elle vraie ?** Ici non : une ligne de liste ne porte rien qui dérive des
+   réactions. Le piège était un homonyme — `ConversationList` rend bien un `reaction`, mais
+   c'est l'emoji de PRÉFÉRENCE de conversation, sans aucun rapport. Vérifier ce que la vue
+   AFFICHE, pas ce que le nom suggère.
+2. **Que coûterait la version qui marche ?** Sur un cache `infinite`, une invalidation relit
+   TOUTES les pages chargées. Rebrancher aurait réintroduit, sur chaque réaction, le refetch que
+   le cycle précédent venait de retirer du chemin de focus.
+
+Quand les deux réponses sont « non » et « cher », le correctif est la SUPPRESSION. Une
+invalidation morte qu'on répare sans rouvrir son intention devient une régression de perf
+présentée comme un correctif.
+
+Corollaire de test : une `invalidateQueries` ne refetch que les requêtes ACTIVES. Un témoin qui
+pose son cache à la main (`setQueryData`, `fetchQuery`) reste muet et passe au vert sans rien
+prouver. Il faut monter de VRAIS observateurs — et sur les DEUX formes de clé, pour que le
+témoin échoue aussi bien sur l'invalidation morte que sur sa « correction » coûteuse.
+
+## Leçon 124 — un fichier d'état PARTAGÉ entre routines ne s'écrit que par la routine qui le possède (2026-08-11, routine messaging, cycle 78)
+
+Ce cycle a écrit `tasks/lane-cursor.md` en finalisation, par mimétisme avec les cycles
+précédents. Ce fichier est l'état de la routine **Android** (`lane=…`, `android_streak=…`,
+sa source de vérité déclarée dans `tasks/android-parity-ios-debt-agent-prompt.md`). Pendant le
+même run, cette routine l'a avancé de `streak 2` à `streak 3` : le merge de `main` a conflité,
+et une résolution distraite (« garder HEAD ») aurait effacé le compteur d'une autre routine.
+
+Deux règles :
+
+1. **Avant d'écrire un fichier de tâches, chercher qui le DÉCLARE comme sa source de vérité.**
+   Un `rg` sur le nom du fichier dans `tasks/` répond en une commande. Écrire dedans « parce
+   que le cycle précédent l'a fait » n'est pas une raison — il faut vérifier que le cycle
+   précédent était la même routine.
+2. **Sur conflit dans un fichier qu'on ne possède pas : prendre `--theirs`, sans discussion**,
+   et retirer sa propre écriture plutôt que tenter une fusion des deux états. Un compteur de
+   streak n'a pas de fusion sensée.
+
+Corollaire, valable au-delà des fichiers d'état : quand plusieurs routines tournent en
+parallèle sur le même dépôt, `git merge origin/main` en fin de cycle n'est pas une formalité —
+c'est le moment où l'on découvre ce que les autres ont fait. Ce cycle y a découvert que la PR
+#2860 avait livré, en parallèle, la moitié du lot qu'il documentait comme « reste ouvert » :
+il a fallu corriger la note AVANT de merger, sinon `todo.md` sortait du cycle avec une
+affirmation fausse.
+## Leçon 120 — un fichier de test non enregistré au pbxproj ne s'exécute pas, et rien dans le gate ne le dit (2026-08-11, plan message-more-jumps-to-views, Task 3)
+
+Un plan a livré `MessageMoreJumpsToViewsGuardTests.swift` avec ses trois gardes, deux
+commits verts, un RED et un GREEN « observés ». Le fichier n'était dans aucune cible :
+`Meeshy.xcodeproj` énumère ses sources explicitement (aucun
+`PBXFileSystemSynchronizedRootGroup`) et `meeshy.sh` ne lance JAMAIS `xcodegen`. Preuve
+définitive dans le bundle produit pendant le run : `nm -a MeeshyTests.xctest/MeeshyTests`
+donnait **0** symbole pour la classe, contre 11 pour un témoin voisin.
+
+1. **`-only-testing:` sur une classe inexistante ne fait PAS échouer xcodebuild.** Le run
+   sort « vert », et le rouge attendu de la phase RED se confond avec une erreur de
+   sélection. Un rouge n'est valable que s'il imprime une ligne
+   `Test Case '-[MeeshyTests.<Classe> …]' failed` AVEC le message d'assertion attendu.
+2. **Le manifeste `-only-testing` n'est pas une preuve d'exécution.**
+   `discover_test_classes()` le construit en grepant les SOURCES : une classe orpheline y
+   figure toujours. Seuls font foi le symbole dans `MeeshyTests.xctest` ou une ligne
+   `Executed N tests` nommant la classe. Le gate le vérifie désormais lui-même
+   (`verify_test_classes_are_compiled`), et un orphelin le rend ROUGE.
+3. **« Ne jamais committer le churn pbxproj » ≠ « ne jamais committer le pbxproj ».**
+   Appliquée en bloc avant chaque `git add`, la règle jette l'ajout de référence d'un
+   fichier NEUF et fait naître mort tout test créé par un plan. Distinguer : churn
+   (réordonnancements, UUID régénérés, build number réécrit) → jeter ; 4 lignes nommant le
+   fichier neuf (`xcodegen generate` en produit exactement 4, 0 suppression) → committer.
+
+## Leçon 125 — une consigne héritée d'un cycle précédent ne dispense pas de lire l'en-tête du fichier qu'elle prescrit de changer (2026-08-12, routine messaging, cycle 81)
+
+Le cycle 80 léguait une action nommée et argumentée : « ajouter un trigger `pull_request` restreint
+aux chemins `apps/ios/**` » pour que la routine cesse de merger du Swift non compilé. L'appliquer
+aurait annulé une décision **délibérée, datée et mesurée** — l'en-tête d'`ios-tests.yml` documente
+son retrait au 2026-07-27 sur les runs #3728-#3741 : le trigger PR ajoutait 24-49 min de pure
+attente de runner et ralentissait la suite **pour `dev` et `main` aussi**.
+
+1. **Une prescription héritée est une hypothèse, pas un mandat.** Elle a été écrite par un cycle qui
+   n'avait pas le fichier sous les yeux. Le fichier, lui, porte souvent la contre-mesure.
+2. **Chercher la trace de décision AVANT de l'annuler**, et la chercher là où elle vit : l'en-tête du
+   workflow, pas seulement `decisions.md`. Ici le paragraphe s'appelait littéralement
+   « TRIGGER SCOPE (2026-07-27, measured on runs #3728-#3741) ».
+3. **Le bon livrable, quand la prescription tombe, est la tête du cycle suivant** — les deux portes
+   restantes (`macos-15-xlarge`, nommé « the RIGHT fix » par le fichier lui-même ; ou `actions: write`),
+   avec la question qui les relie peut-être en une seule. Pas un revert silencieux, pas un abandon.
+4. Corollaire du cycle 80 (fiche gwcontract-11) sous un autre angle : **le dépôt est une source, pas
+   seulement un registre.** Au 80 il contenait déjà le correctif à écrire ; au 81 il contenait déjà la
+   raison de ne pas écrire celui qu'on prescrivait.
+
+## Leçon 126 — un test intermittent sur du code qui n'a pas bougé nomme une course, et la course est en général dans la production (2026-08-12, routine messaging, cycle 81)
+
+`StoryUploadQueueTests.test_uploadSucceeds_dequeuesItsWriteAheadIntent` était rouge sur `dev` avec
+deux runs verts antérieurs sur le MÊME code (fichier inchangé depuis `0737b063`). Le réflexe
+« stabiliser le test » (attendre la queue plutôt que l'UI) aurait éteint le signal et laissé le
+défaut.
+
+1. **Intermittent + source figée ⇒ ordonnancement, pas régression.** Le seul travail utile est de
+   trouver les deux choses que rien n'ordonne. Ici : le retrait de l'intent write-ahead
+   (`Task.detached`) et la déclaration de succès à l'UI (`activeUploads`, toast, slot), sur le
+   chemin de succès de `StoryViewModel.launchUploadTask`.
+2. **Un `Task.detached` qui retire un garde de durabilité APRÈS que l'action gardée a réussi est un
+   défaut de correction, pas une optimisation.** Le commentaire du site disait déjà ce que l'intent
+   protège (« sinon le boot suivant re-publierait ») : le détacher ouvre une fenêtre où l'app meurt
+   avec l'intent en base et la story déjà en ligne — le drain de boot la republie.
+3. **Chercher le chemin jumeau avant de conclure au choix délibéré.** Le drain hors-ligne
+   (`executeQueuedPublish`) awaitait ce même retrait depuis toujours : l'incohérence interne au
+   fichier prouve la dette. Deux gestes opposés sur la même invariante, c'est l'un des deux qui a
+   tort.
+4. **Détacher ce qui doit l'être, awaiter ce qui doit l'être — dans le même correctif.** L'acteur
+   (retrait de l'intent) s'awaite : c'est un saut d'acteur, et il ORDONNE. L'IO synchrone
+   `nonisolated` (suppression du dossier médias) reste détachée : aucun boot n'en dépend une fois
+   l'intent parti. Tout awaiter aurait mis du `FileManager` sur le MainActor ; tout détacher était le
+   défaut d'origine.
+
+## Leçon 127 — un contournement client bien commenté est le procès-verbal d'un défaut serveur (2026-08-12, routine messaging, cycle 82)
+
+`bubble-stream-page.tsx` portait la phrase exacte : « Sessions ANONYMES exclues : la route
+mark-as-read est JWT-only (allowAnonymous: false) — chaque flush partirait en 401 », trois lignes
+après avoir expliqué qu'un écran privé de ce hook voit « son compteur croître indéfiniment ». Tout
+était écrit : la cause, l'effet, et jusqu'au nom de l'option fautive. Personne n'avait suivi la
+flèche jusqu'au serveur.
+
+1. **Un commentaire qui EXPLIQUE pourquoi le client renonce à un appel nomme une cause serveur.**
+   Le grep qui trouve `allowAnonymous`, `JWT-only`, `401`, `403` dans les commentaires du CLIENT est
+   un détecteur de défauts backend, et il est bon marché.
+2. **Deux moitiés d'une même capacité peuvent vivre dans deux fichiers et ne jamais se rencontrer.**
+   Ici le serveur COMPTAIT les non-lus d'un anonyme et les lui POUSSAIT (trois sites délibérés,
+   commentés, testés) mais aucune route ne lui permettait de les ACQUITTER. Chaque moitié était
+   défendable seule ; c'est leur asymétrie qui était le défaut. Chercher la moitié manquante :
+   « qui écrit ce que ce chemin lit ? », « qui remet à zéro ce que ce chemin incrémente ? ».
+3. **Deux verrous en série s'auditent séparément.** La porte (`allowAnonymous: false`) répondait 403
+   AVANT la clé (la garde `where: { userId }`). Corriger la clé seule n'aurait rien changé et le
+   test serait resté rouge sans qu'on sache pourquoi ; corriger la porte seule aurait ouvert sur un
+   403 plus tardif. Prouver CHAQUE verrou par sa propre mutation.
+4. **`authContext.userId` ne contient pas toujours un `User.id`.** La branche anonyme d'auth y écrit
+   `participant.id`. Tout `where: { userId: authContext.userId }` sur `Participant` est donc suspect
+   par construction — il compare un id de participant à une colonne d'utilisateur. Le résolveur
+   partagé (`resolveCallerParticipant`) existe désormais ; la dette restante est nommée dans
+   `tasks/todo.md`.
+
+## Leçon 128 — un double de test qui n'ÉVALUE pas le `where` valide les deux versions du code (2026-08-12, routine messaging, cycle 82)
+
+Le défaut du cycle 82 a traversé des suites vertes pendant des mois parce que chaque test doublait
+`participant.findFirst` par un `mockResolvedValue({ id })` constant : la garde juste et la garde
+fausse rendaient le même participant. Le dépôt possédait DÉJÀ le remède —
+`src/__tests__/helpers/mongo-where.ts` (`findFirstIn`), écrit pour le piège absent-vs-null — et son
+en-tête dit la règle mieux que moi : « Un test qui compare la clause reçue à celle qu'il attend
+passe aussi bien avec une clause juste qu'avec une clause fausse ».
+
+1. **Chercher le helper AVANT d'écrire le double.** J'ai commencé par une fonction `clauseMatches`
+   maison, avec un `if (key === 'bannedAt') return true` — une triche qui aurait masqué exactement la
+   garde de bannissement que j'ajoutais. Le helper du dépôt, lui, distingue `null` d'absent et
+   n'aurait rien laissé passer.
+2. **Le corollaire côté fichiers de test EXISTANTS** : quatre doublaient le module `access-control`
+   en ENTIER, donc rendaient `undefined` toute fonction nouvellement exportée. Le réflexe « ajouter
+   la fonction au mock » aurait recréé le problème une couche plus loin ; `jest.requireActual` +
+   override de la seule fonction voulue garde la règle réelle sous le test.
+3. **Un test qui pinne une requête SUPPRIMÉE doit être réécrit, pas rafistolé.** `mark-unread`
+   relisait deux fois le même participant ; un test verrouillait le second `null`. La bonne
+   réécriture ne remplace pas l'assertion par une équivalente : elle affirme la nouvelle vérité —
+   une seule résolution, et le refus tombe PLUS TÔT (`participant.findFirst` appelé une fois,
+   `message.findFirst` jamais).
+
+
+## Leçon 129 — un callback dont le corps n'est que des gardes est un défaut, pas un no-op délibéré (2026-08-12, routine messaging, cycle 86)
+
+`ConversationLayout.onUserTyping` filtrait l'écho de soi, filtrait les autres conversations… puis se
+terminait. Rien n'écrivait. La forme est traître parce qu'elle a l'air FINIE : deux `return` gardés,
+des paramètres préfixés `_` qui signalent « volontairement inutilisés », des deps cohérentes. Le
+hook d'à côté exposait pourtant `handleUserTyping`, seul écrivain de l'état que l'en-tête rend — et
+personne ne l'avait déstructuré.
+
+1. **Un `useCallback` remis à une couche transport et dont AUCUNE branche n'écrit ni n'appelle est
+   presque toujours une moitié de câblage perdue.** Le test bon marché : « ce callback produit-il un
+   effet observable dans au moins un chemin ? ». Si la réponse est non, chercher la fonction qu'il
+   aurait dû appeler — elle est en général exportée par un hook du même fichier.
+2. **Un préfixe `_` sur un paramètre est une AFFIRMATION, pas une preuve.** Ici `_username` et
+   `_isTyping` — les deux valeurs qui portent toute l'information — étaient marqués inutilisés par
+   la personne qui venait justement d'oublier de les utiliser.
+3. **Une fonctionnalité qui marche sur une surface et pas sur l'autre masque la panne au test
+   manuel.** `use-stream-socket.ts` tient sa PROPRE copie du handler typing et la câble juste : les
+   indicateurs marchaient sur l'accueil, donc « les indicateurs marchent ». Quand deux surfaces
+   réimplémentent le même câblage, vérifier les DEUX, ou n'en garder qu'une.
+
+## Leçon 130 — un test qui écrit « may or may not » n'est pas un test, c'est la note de son auteur (2026-08-12, routine messaging, cycle 86)
+
+Deux tests de `useConversationTyping` s'appelaient « should stop typing on conversation change if
+active » et « should stop typing on unmount if active ». Ni l'un ni l'autre n'assertait quoi que ce
+soit sur `stopTyping` ; tous deux portaient un commentaire du type « The cleanup effect may or may
+not call stopTyping depending on React's cleanup timing ». Ils étaient verts, comptés dans la suite,
+et nommaient exactement le comportement cassé.
+
+1. **Un titre qui promet un comportement et un corps qui n'affirme rien, c'est pire qu'un test
+   absent** : le nom occupe la place, et une recherche « est-ce testé ? » répond oui.
+2. **« Ça dépend du timing de React » est la formulation d'une hypothèse non instruite.**
+   L'ordonnancement des nettoyages et des effets est déterministe et documenté (tous les nettoyages
+   avant tous les effets) : il se raisonne, il ne s'invoque pas comme une incertitude.
+3. **Le repérage est mécanique** : `rg -l "may or may not|peut ou non" __tests__/` et, plus large, un
+   `it(...)` dont le corps ne contient aucun `expect`. Les deux se cherchent en une commande.
+4. Corollaire de la leçon 128 sous un autre angle : là-bas le double validait les deux versions du
+   code ; ici c'est l'ABSENCE d'assertion qui les validait toutes les deux.
+
+## Leçon 131 — dans un clone superficiel, « en avance / en retard » est une fiction, et `merge-base` le dit (2026-08-12, routine messaging, cycle 86)
+
+Au démarrage, `git log --oneline origin/main..HEAD` annonçait 334 commits d'avance et 340 de retard,
+avec un `origin/main` daté de trois jours plus tôt portant des numéros de PR INFÉRIEURS à ceux de la
+branche. Tout invitait à conclure à une divergence à réconcilier — et donc à un merge inutile et
+risqué. La branche et `main` étaient en réalité **le même commit**.
+
+1. **Le signal qui tranche est `git merge-base HEAD origin/main` qui ÉCHOUE** (aucun ancêtre commun).
+   Deux branches d'un même dépôt en ont toujours un : son absence ne dit pas « divergence », elle dit
+   « historique tronqué ». Confirmer avec `git rev-parse --is-shallow-repository` et
+   `wc -l .git/shallow`.
+2. **Le piège d'écriture** : `git merge-base A B | xargs git log -1` sur une sortie VIDE exécute
+   `git log -1` sans révision, donc affiche HEAD — et fabrique la preuve rassurante que HEAD est
+   l'ancêtre commun. Ne jamais piper un `merge-base` dans `xargs` sans garde.
+3. **L'autorité est le distant, pas le ref local.** `git ls-remote --heads origin main` a répondu en
+   une commande que `main` valait exactement HEAD. Un `git fetch` ordinaire n'avait pas corrigé le
+   ref local greffé ; `git update-ref` sur le sha du distant, si.
+4. Corollaire : une routine qui commence par « où en est ma branche ? » doit poser cette question au
+   DISTANT tant qu'elle n'a pas vérifié la profondeur du clone.
+
+## Leçon 132 — deux sessions de la même routine peuvent écrire le même correctif en parallèle ; la tête instruite ne réserve rien (2026-08-12, routine messaging, cycle 87)
+
+Le cycle 86 a légué une « Priorité 1 » nommée et argumentée. Deux sessions l'ont lue et l'ont
+implémentée **en même temps** : celle-ci (`claude/keen-hamilton-tpltop`) et
+`claude/keen-hamilton-8m3aqm`, qui a mergé la sienne sur `main` pendant que celle-ci finissait la
+vérification. Les deux ont convergé au nom de méthode près — `retractTypingIn`, même signature à id
+déjà normalisé, même ordre, même refus de re-résoudre la conversation. Découvert seulement au
+`git fetch` final, après trois commits.
+
+1. **Une tête instruite est une file de lecture, pas un verrou.** Elle dit quoi faire ensuite, elle
+   ne dit à personne que quelqu'un d'autre l'a commencé. Tant qu'il n'existe pas de mécanisme
+   d'exclusion, l'ordre de priorité est un aimant à collisions : plusieurs sessions démarrent par
+   l'item 1.
+2. **`git fetch origin main` AVANT d'écrire, pas seulement avant de merger.** Le coût est d'une
+   seconde ; le coût de l'omission est un correctif entier à jeter. À refaire aussi en cours de
+   route sur les cycles longs.
+3. **Quand la collision est constatée, la version mergée gagne — sans rejouer les arbitrages.**
+   Ici main avait fait deux choix différents des miens (dépendance optionnelle plutôt que requise ;
+   `try/catch` au point d'appel plutôt que dans la retraction). Tous deux défendables. Les
+   re-litiger aurait produit du churn sur du code déjà revu et mergé, pour une préférence.
+4. **Ce qui doit survivre, c'est ce que l'autre n'avait pas.** Mes trois tests de `retractTypingIn`
+   (main n'en avait aucun : sa couverture passait entièrement par `ConversationHandler`) et deux
+   garanties de coût qu'il n'affirmait pas. Un merge « je prends tout de main » les aurait perdus ;
+   un merge « je garde tout de moi » aurait écrasé son travail. Le tri se fait test par test.
+5. **Un test à moi affirmait un contrat que la version retenue ne tient pas** (« la retraction ne
+   rejette jamais » — vrai chez moi, faux chez main qui garde chez l'appelant). Le garder tel quel
+   l'aurait rendu rouge ; le supprimer aurait perdu la couverture. **Le réécrire pour affirmer ce
+   que la version retenue garantit vraiment** (l'ordre untrack-avant-I/O) est la seule issue qui ne
+   perd rien. Un test importé d'une implémentation concurrente doit être relu contre CELLE qui reste.
+
+---
+
+## Leçon 133 — un rollback « inconditionnel » qui écrit `undefined` dans React Query ne défait rien (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Deux mutations de réaction gardaient leur rollback derrière `if (context?.previousData)`,
+ce qui laissait vivre l'état FABRIQUÉ par `onMutate` sur un cache vide. Le correctif évident —
+retirer le garde et appeler `setQueryData(key, context?.previousData)` — a laissé les tests
+**ROUGES**.
+
+**La leçon.** `setQueryData(key, undefined)` est un **no-op** : React Query interprète `undefined`
+comme « ne rien changer » (même règle que pour un updater qui renvoie `undefined`). Restaurer
+l'ABSENCE de donnée n'est pas une écriture, c'est un `removeQueries`. Un instantané optimiste a donc
+deux états de restauration, pas un :
+
+| `previousData` | Restauration correcte |
+|---|---|
+| une valeur | `setQueryData(key, previousData)` |
+| `undefined` | `removeQueries({ queryKey, exact: true })` |
+
+**Généralisation.** Chaque fois qu'un rollback prétend « remettre exactement l'état d'avant », se
+demander si « l'état d'avant » pouvait être *rien*. Beaucoup d'API traitent l'absence comme une
+non-instruction plutôt que comme une valeur ; le cas vide est alors le seul que le rollback ne
+couvre pas — et c'est précisément celui où `onMutate` a inventé le plus.
+
+**Ce qui l'a attrapé.** Le test RED écrit AVANT le correctif, et surtout re-lancé APRÈS : sans lui,
+le rollback inconditionnel aurait été committé comme une correction, avec sa jolie explication, sans
+rien corriger du tout. Un correctif qui semble évident mérite quand même son passage au vert.
+
+---
+
+## Leçon 134 — un test peut passer par FUITE de mock, et le correctif qui le casse a raison (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Après avoir gardé le `reconnect()` de montage sur les diagnostics de connexion, deux
+tests jusque-là verts sont tombés : « should attempt reconnection on mount if token available » et
+son jumeau anonyme. Ni l'un ni l'autre ne posait de diagnostics — ils héritaient d'un
+`mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true })` posé par un test « Initial
+State » **soixante lignes plus haut**.
+
+**La leçon.** `jest.clearAllMocks()` remet à zéro les APPELS, pas les IMPLÉMENTATIONS (`mockReturnValue`
+survit ; il faut `resetAllMocks` / `mockReset`). Un `beforeEach` qui n'appelle que `clearAllMocks`
+laisse donc chaque test hériter des stubs de ses prédécesseurs — dans l'ORDRE de déclaration, ce qui
+rend la fuite invisible tant qu'on lance le fichier entier.
+
+**Le réflexe à avoir.** Quand un correctif fait tomber un test qui ne le concerne pas
+frontalement, se demander d'abord *pourquoi ce test passait avant*. Ici la réponse était : parce que
+le code de production **ignorait** la valeur que le test ne posait pas. Le test n'affirmait donc rien
+sur la précondition qu'il prétendait couvrir. Le corriger = rendre la précondition EXPLICITE, pas
+neutraliser le correctif.
+
+**Signature à reconnaître.** Un test qui devient sensible à un mock qu'il ne configure pas est un
+test dont la précondition était implicite. C'est vrai à chaque fois qu'on rend un code de production
+*plus* attentif à son état : les tests qui passaient par indifférence deviennent des tests qui
+passent par hasard.
+
+---
+
+## Leçon 135 — cartographier ce que l'environnement NE PEUT PAS exécuter, et l'écrire dans la tête de cycle (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Trois cycles de suite (86, 87, 88) ont buté sur l'absence de toolchain Swift pour les
+242 « source guards » iOS. Le cycle 88 a découvert une seconde zone morte : les tests du translator
+sont incollectables parce que `numpy`/`torch` s'installent depuis l'index PyTorch, **bloqué par le
+proxy** — quatre tentatives d'installation (pip système, pip du venv `uv`, `uv pip`) avant de le
+constater.
+
+**La leçon.** Une zone non exécutable n'est pas un échec ponctuel, c'est une **propriété stable de
+l'environnement**. Ne pas la consigner condamne chaque cycle suivant à la redécouvrir au prix de
+plusieurs minutes et d'un faux espoir. La tête de cycle porte désormais un tableau explicite
+(iOS ✗, translator ✗, gateway/web ✓ + prérequis d'installation).
+
+**Corollaire sur ce qu'on livre quand même.** L'impossibilité de tester n'interdit pas de corriger —
+elle change le standard de preuve. Le retrait du doublon audio du translator a été livré parce que
+sa sûreté est établie par **lecture des deux côtés du contrat** (producteur, et consommateur
+`extractAudioBinaryFrames` qui résout par index borné), pas parce qu'on l'espérait sans risque. Ce
+qui est dû dans ce cas, c'est de l'ÉCRIRE : le commit et le dossier de cycle disent tous deux que ce
+correctif-là n'est pas couvert par un test vert. Un correctif non testé qui se présente comme testé
+est le vrai défaut.
+
+---
+## Leçon 136 — une question d'identité réputée « à trancher » est presque toujours déjà tranchée par le handler JUMEAU (2026-08-12, routine messaging, cycle 88)
+
+Le cycle 87 a instruit le join anonyme, prouvé le défaut, écarté le faux gel qui semblait le
+protéger — puis s'est arrêté sur une question qu'il a jugée non tranchable seul : quelle identité
+mettre dans le `userId` d'un `conversation:joined` pour un participant sans compte ? Le `SocketUser`
+anonyme porte `id` ET `participantId` ; « envoyer la mauvaise fait d'un accusé une désinformation
+d'identité » ; trancher « demande de lire ce que les clients font ». L'item est reparti au cycle
+suivant, non livré.
+
+La réponse tenait en deux `grep` et n'exigeait aucune toolchain :
+
+1. **Le handler jumeau l'envoyait déjà.** `handleConversationLeave` émet `conversation:left` avec la
+   clé de `socketToUser` — `participant.id` pour un anonyme. La paire join/leave partage un payload
+   et une sémantique : si l'un expédie cette identité en production depuis toujours, l'autre n'a
+   aucune décision à prendre, il a une divergence à supprimer. **Chercher le geste symétrique AVANT
+   de déclarer une question ouverte** : leave/join, add/remove, subscribe/unsubscribe.
+2. **Les clients ne lisaient pas le champ.** `rg "conversation:joined"` rend cinq sites ; les trois
+   consommateurs (web `use-socket-cache-sync`, iOS `ConversationSyncEngine` et `ParticipantsView`)
+   n'utilisent que `conversationId`. Le seul contrat est que le champ soit PRÉSENT — le struct Swift
+   le déclare non optionnel, donc l'omettre casserait le décodage. Une question d'identité se pose à
+   qui la lit ; quand personne ne la lit, il n'y a pas de désinformation possible, seulement une
+   convention à respecter.
+3. **Et une troisième source disait la même chose** : `ROOMS.user(userId ?? id)`, la room personnelle
+   que ce socket a DÉJÀ rejointe, plus l'en-tête de `getUnreadCount` qui documente accepter un
+   `Participant.id`. Trois sites concordants, zéro ambiguïté résiduelle.
+
+La leçon de méthode, et elle est plus large que ce cas : **« il faudrait lire les clients » est une
+tâche de dix minutes, pas un motif de report.** Le cycle 87 a écrit trois paragraphes pour expliquer
+pourquoi il ne tranchait pas — plus de travail que la vérification elle-même. Quand un dossier
+s'arrête sur « demanderait de lire X », faire la lecture de X est le pas suivant, pas un blocage à
+léguer. Le blocage LÉGITIME (leçon 43) est celui qui exige une machine ou un accès qu'on n'a pas :
+compiler du Swift, déclencher un workflow sur une porte fermée. Lire un fichier dans le dépôt qu'on
+a déjà cloné n'en fait pas partie.
+
+---
+
+## Leçon 137 — la leçon 132 s'est reproduite en pire : le `git fetch` d'ouverture ne protège de rien, seul celui d'AVANT-CHAQUE-ITEM protège (2026-08-12, routine messaging, cycle 88)
+
+Le cycle 87 avait perdu UN correctif à une session concurrente et en avait tiré la leçon 132, dont
+le point 2 disait déjà : « `git fetch origin main` AVANT d'écrire, pas seulement avant de merger.
+À refaire aussi en cours de route sur les cycles longs. » Le cycle 88 a ouvert par un `git fetch`
+propre — `origin/main` valait exactement HEAD, aucune collision en vue — puis a travaillé trois
+heures sans en refaire un. Pendant ce temps, `claude/keen-hamilton-...` (session
+`013bGFApHREf7fPySWkrZZ5Y`) livrait la PR #2884 : **les trois mêmes correctifs**, plus deux autres
+de la même liste. Découvert au `mergeable_state: "dirty"` de ma propre PR, après six commits et une
+CI complète.
+
+1. **Un `fetch` d'ouverture ne dit rien de l'avenir.** Il atteste qu'à l'instant T personne n'avait
+   commencé — pas que personne ne commencera. Sur un cycle de plusieurs heures, c'est l'information
+   la moins utile du lot. La vérification qui protège est celle qu'on fait **juste avant d'écrire
+   chaque item**, et **juste avant d'ouvrir la PR**.
+2. **Le coût croît avec la qualité du travail.** Trois correctifs RED-prouvés, 654 suites vertes,
+   une PR de 200 lignes, une CI complète de 13 minutes : tout cela était déjà sur `main`, écrit par
+   quelqu'un d'autre, avant que ma CI ne finisse. Plus la routine travaille proprement, plus une
+   collision non détectée coûte cher.
+3. **Le salvage se fait test par test, arbitrage par arbitrage** (leçon 132.3–132.5). Ici : trois
+   implémentations quasi identiques → main partout ; deux de mes tests affirmaient MES arbitrages
+   (cible canonique rendue, clé de cache normalisée) que main a tranchés autrement → supprimés, pas
+   « défendus » ; un seul test m'a survécu, le cas capitalisé (`'FR'`) que la couverture de main ne
+   portait pas. **Un cycle entier pour un test.**
+4. **Ce qu'il reste à construire.** Tant qu'aucun mécanisme d'exclusion n'existe, la seule défense
+   praticable est procédurale et doit vivre dans la tête de cycle, pas dans une leçon qu'on relit
+   après coup : *avant d'écrire l'item N, `git fetch origin main && git log --oneline -15 origin/main`
+   et chercher le mot-clé de l'item.* Une seconde de commande contre trois heures de travail.

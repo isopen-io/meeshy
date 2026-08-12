@@ -59,6 +59,7 @@ import {
 } from '../../middleware/admin-user-auth.middleware';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -1110,7 +1111,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
             type: true,
             avatar: true,
             isActive: true,
-            memberCount: true,
+            // Même règle que `GET /conversations` : la colonne `memberCount`
+            // n'est écrite par personne, donc l'écran admin affichait
+            // « 0 membres » sur toute conversation créée depuis la migration
+            // héritée. Le compte vient de la base.
+            _count: { select: conversationActiveMemberCountSelect },
             communityId: true,
             createdAt: true,
             lastMessageAt: true,
@@ -1143,9 +1148,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // first slice; the full group list is paged via the dedicated endpoint),
       // and surface the target user's membership separately for convenience.
       const data = conversations.map((conv) => {
-        const participants = (conv as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
+        const { _count, ...convData } = conv as typeof conv & { _count: { participants: number } };
+        const participants = (convData as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
         const membership = participants.find((p) => p.userId === userId) ?? null;
-        return { ...conv, participants, membership };
+        return { ...convData, memberCount: _count.participants, participants, membership };
       });
 
       return sendPaginatedSuccess(reply, data, {

@@ -745,29 +745,6 @@ describe('CallStore', () => {
     });
   });
 
-  describe('setReconnecting', () => {
-    it('should set isReconnecting=true and store attempt number when attempt > 0', () => {
-      act(() => {
-        useCallStore.getState().setReconnecting(3);
-      });
-
-      const state = useCallStore.getState();
-      expect(state.isReconnecting).toBe(true);
-      expect(state.reconnectAttempt).toBe(3);
-    });
-
-    it('should set isReconnecting=false when attempt is 0', () => {
-      act(() => {
-        useCallStore.getState().setReconnecting(2);
-        useCallStore.getState().setReconnecting(0);
-      });
-
-      const state = useCallStore.getState();
-      expect(state.isReconnecting).toBe(false);
-      expect(state.reconnectAttempt).toBe(0);
-    });
-  });
-
   describe('setConnectionQuality', () => {
     it('should store the given connection quality level', () => {
       act(() => {
@@ -1078,7 +1055,6 @@ describe('CallStore', () => {
     it('should reset extended state fields to their defaults', () => {
       act(() => {
         useCallStore.getState().setIceServers([{ urls: 'stun:stun.example.com' }]);
-        useCallStore.getState().setReconnecting(5);
         useCallStore.getState().setConnectionQuality('poor');
       });
 
@@ -1088,8 +1064,6 @@ describe('CallStore', () => {
 
       const state = useCallStore.getState();
       expect(state.iceServers).toBeNull();
-      expect(state.isReconnecting).toBe(false);
-      expect(state.reconnectAttempt).toBe(0);
       expect(state.connectionQuality).toBeNull();
     });
   });

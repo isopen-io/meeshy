@@ -577,6 +577,126 @@ final class ConversationStoreTests: XCTestCase {
                        "a stale broadcast must not overwrite the preview paired with the newer timestamp")
     }
 
+    // MARK: - Prisme de la ligne de liste après une édition
+    //
+    // Le défaut fermé ici : après une ÉDITION, la ligne de liste affichait le
+    // texte D'AVANT, indéfiniment. `resolvedLastMessagePreview` PRÉFÈRE la
+    // traduction hydratée par `GET /conversations` à `lastMessagePreview` ; le
+    // gateway périme `Message.translations` dans la même écriture que
+    // l'édition, mais rien sur le fil ne le disait, et la carte de l'ANCIEN
+    // texte restait la valeur rendue.
+
+    func test_applyConversationUpdated_edit_sameTimestamp_appliesPreviewGroup() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-1"
+        conv.lastMessagePreview = "Hello"
+        await store.hydrate(conv)
+
+        // Une édition ne crée pas un nouveau message : `createdAt` est INCHANGÉ.
+        // Un `>` strict jetait donc tout le groupe sur le seul chemin qui en
+        // avait besoin.
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: t0,
+            lastMessageId: "msg-1",
+            lastMessagePreview: "Hello (edited)"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessagePreview, "Hello (edited)",
+                       "an edit carries the SAME lastMessageAt — equal is not stale")
+    }
+
+    func test_applyConversationUpdated_replacedEmptyMap_expiresStaleTranslations() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessagePreview = "Hello"
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: t0,
+            lastMessagePreview: "Hello (edited)",
+            lastMessageTranslations: .replaced([:]),
+            lastMessageOriginalLanguage: "en"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertNil(after.lastMessageTranslations,
+                     "a received empty map expires the stale one — the row must fall back to the original")
+        XCTAssertEqual(after.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "Hello (edited)",
+                       "the row must render the NEW text, not the pre-edit translation")
+    }
+
+    func test_applyConversationUpdated_replacedMap_installsReaderPrism() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: t0,
+            lastMessagePreview: "Hello",
+            lastMessageTranslations: .replaced(["fr": "Bonjour"]),
+            lastMessageOriginalLanguage: "en"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour"])
+        XCTAssertEqual(after.lastMessageOriginalLanguage, "en")
+    }
+
+    // Un renommage ne parle pas d'aperçu : la clé est absente du payload et la
+    // carte ne doit PAS être touchée, sinon la ligne retomberait sur l'original
+    // alors que rien du dernier message n'a changé.
+    func test_applyConversationUpdated_unchangedTranslations_leavesPrismAlone() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Renamed"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.title, "Renamed")
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour"],
+                       "a metadata-only update must not expire the prism")
+    }
+
+    func test_applyConversationUpdated_staleLastMessageAt_leavesPrismAlone() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        await store.hydrate(conv)
+
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: older,
+            lastMessagePreview: "stale",
+            lastMessageTranslations: .replaced([:])
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "Bonjour"],
+                       "the prism belongs to the monotone group — a stale payload must not expire it")
+    }
+
     func test_applyConversationUpdated_staleLastMessageAt_unrelatedFieldsStillApplied() async {
         let (store, _, _, _) = makeStore()
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)

@@ -98,12 +98,19 @@
     <string name="feed_composer_take_photo">Take a photo</string>
     <string name="feed_composer_take_video">Record a video</string>
     <string name="feed_composer_attach_file">Attach a file</string>
+    <string name="feed_composer_record_voice">Record audio</string>
     <string name="feed_composer_remove_media">Remove media</string>
+    <string name="feed_composer_add_location">Add my location</string>
+    <string name="feed_composer_remove_location">Remove location</string>
+    <string name="feed_composer_location_unavailable">Location unavailable — check your location settings and try again</string>
     <string name="feed_composer_media_limit">You can attach up to %1$d items</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Post</string>
     <string name="feed_composer_type_hint">Switch between reel and post</string>
+    <string name="feed_composer_language_button">Post language: %1$s</string>
+    <string name="feed_composer_language_title">Post language</string>
+    <string name="feed_composer_language_search">Search a language</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Post options</string>

@@ -58,6 +58,14 @@ class OutboxRepository @Inject constructor(
     suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
 
     /**
+     * Distinct per-conversation message lanes ([OutboxLanes.forMessage]) currently holding at
+     * least one non-exhausted row, oldest-holding-lane first. [OutboxFlushWorker] discovers
+     * which dynamic lanes to drain from this on every pass — a lane's concrete id is only known
+     * at enqueue time, unlike [OutboxLaneMap.sharedDrainLanes]'s fixed shared lanes.
+     */
+    suspend fun activeMessageLanes(): List<String> = outboxDao.activeMessageLanes()
+
+    /**
      * Current [OutboxState] of [cmid], or `null` when the row is gone (delivered
      * and deleted, or discarded). Used by the drainer to resolve a `dependsOn`
      * gate across lanes — a prerequisite need not share the dependent's lane.

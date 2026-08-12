@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
+import { useI18n, type TFunction } from '@/hooks/useI18n';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 import type { CallInitiateAck } from '@meeshy/shared/types/video-call';
@@ -56,6 +57,7 @@ interface UseVideoCallReturn {
  */
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
   const { user } = useAuth();
+  const { t } = useI18n('calls');
 
   // A double-click (or a re-render firing the click handler twice) before the
   // first getUserMedia + call:initiate round-trip settles used to acquire a
@@ -77,12 +79,12 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
    */
   const startCall = useCallback(async (type: CallMediaType = 'video') => {
     if (!conversation) {
-      toast.error('Please select a conversation first');
+      toast.error(t('calls.toasts.selectConversation'));
       return;
     }
 
     if (conversation.type !== 'direct') {
-      toast.error('Calls are only available for direct conversations');
+      toast.error(t('calls.toasts.directOnly'));
       return;
     }
 
@@ -105,7 +107,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       const socket = meeshySocketIOService.getSocket();
 
       if (!socket?.connected) {
-        toast.error('Connection error. Please try again.');
+        toast.error(t('calls.toasts.connectionError'));
         stopPreauthorizedStream(stream);
         startCallInFlightRef.current = false;
         return;
@@ -140,7 +142,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         // either way.
         startCallInFlightRef.current = false;
         stopPreauthorizedStream(stream);
-        toast.error('Failed to start call. Please try again.');
+        toast.error(t('calls.toasts.startFailed'));
         return;
       }
 
@@ -157,7 +159,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       // staring at a "Starting call..." toast with no further feedback.
       if (!ack?.success) {
         stopPreauthorizedStream(stream);
-        toast.error(ack?.error?.message ?? 'Failed to start call. Please try again.');
+        toast.error(ack?.error?.message ?? t('calls.toasts.startFailed'));
         return;
       }
 
@@ -213,13 +215,13 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         });
       }
 
-      toast.success('Starting call...');
+      toast.success(t('calls.toasts.startingCall'));
     } catch (error: unknown) {
       startCallInFlightRef.current = false;
       stopPreauthorizedStream(stream);
-      handleMediaError(error);
+      handleMediaError(error, t);
     }
-  }, [conversation, user]);
+  }, [conversation, user, t]);
 
   return {
     startCall,
@@ -229,19 +231,19 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
 /**
  * Gère les erreurs d'accès aux médias
  */
-function handleMediaError(error: unknown): void {
+function handleMediaError(error: unknown, t: TFunction): void {
   if (error instanceof Error) {
     switch (error.name) {
       case 'NotAllowedError':
-        toast.error('Camera/microphone permission denied.');
+        toast.error(t('calls.toasts.micPermissionDenied'));
         break;
       case 'NotFoundError':
-        toast.error('No camera or microphone found.');
+        toast.error(t('calls.toasts.micNotFound'));
         break;
       default:
-        toast.error(`Failed to access camera/microphone: ${error.message}`);
+        toast.error(t('calls.toasts.micAccessFailed', { message: error.message }));
     }
   } else {
-    toast.error('Failed to access camera/microphone');
+    toast.error(t('calls.toasts.micAccessFailedGeneric'));
   }
 }

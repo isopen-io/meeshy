@@ -66,6 +66,43 @@ data class MagicLinkValidateRequest(
     val token: String,
 )
 
+/** Reponse de GET auth/2fa/status. */
+@Serializable
+data class TwoFactorStatusInfo(
+    val enabled: Boolean = false,
+    val enabledAt: String? = null,
+    val hasBackupCodes: Boolean = false,
+    val backupCodesCount: Int = 0,
+)
+
+/** Reponse de POST auth/2fa/setup — QR code + secret d'un enrolement en cours. */
+@Serializable
+data class TwoFactorSetupInfo(
+    val secret: String,
+    val qrCodeDataUrl: String,
+    val otpauthUrl: String,
+)
+
+/** Reponse de POST auth/2fa/enable et auth/2fa/backup-codes. */
+@Serializable
+data class TwoFactorBackupCodesInfo(
+    val message: String = "",
+    val backupCodes: List<String> = emptyList(),
+)
+
+/** Corps de POST auth/2fa/enable et auth/2fa/backup-codes (regeneration). */
+@Serializable
+data class TwoFactorCodeRequest(
+    val code: String,
+)
+
+/** Corps de POST auth/2fa/disable. */
+@Serializable
+data class TwoFactorDisableRequest(
+    val password: String,
+    val code: String? = null,
+)
+
 interface AuthApi {
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): ApiResponse<AuthSession>
@@ -109,4 +146,19 @@ interface AuthApi {
 
     @POST("auth/magic-link/validate")
     suspend fun validateMagicLink(@Body body: MagicLinkValidateRequest): ApiResponse<AuthSession>
+
+    @GET("auth/2fa/status")
+    suspend fun getTwoFactorStatus(): ApiResponse<TwoFactorStatusInfo>
+
+    @POST("auth/2fa/setup")
+    suspend fun beginTwoFactorSetup(): ApiResponse<TwoFactorSetupInfo>
+
+    @POST("auth/2fa/enable")
+    suspend fun enableTwoFactor(@Body body: TwoFactorCodeRequest): ApiResponse<TwoFactorBackupCodesInfo>
+
+    @POST("auth/2fa/disable")
+    suspend fun disableTwoFactor(@Body body: TwoFactorDisableRequest): ApiResponse<Unit>
+
+    @POST("auth/2fa/backup-codes")
+    suspend fun regenerateTwoFactorBackupCodes(@Body body: TwoFactorCodeRequest): ApiResponse<TwoFactorBackupCodesInfo>
 }

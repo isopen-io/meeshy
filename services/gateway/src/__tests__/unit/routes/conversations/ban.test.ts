@@ -88,6 +88,12 @@ function makePrisma(opts: {
             : null
         ),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Membres actifs APRÈS l'écriture : ils nomment les rooms personnelles de
+      // la diffusion et portent l'effectif absolu du payload.
+      findMany: jest.fn<any>().mockResolvedValue([
+        { id: 'part-curr', userId: 'user-curr' },
+        { id: 'part-anon', userId: null },
+      ]),
     },
   };
 }
@@ -105,16 +111,23 @@ function makePrisma(opts: {
  */
 function makeSocketRecorder() {
   const order: string[] = [];
-  const emits: { room: string; event: string; payload: any }[] = [];
+  const emits: { room: string; rooms: string[]; event: string; payload: any }[] = [];
   const leftRooms: string[] = [];
 
+  // `.to()` CHAÎNE, comme le vrai : `emitToConversationParticipants` écrit
+  // `io.to(fil).to(perso1).to(perso2).emit(...)` pour ne livrer qu'une copie par
+  // socket. `room` retenu ci-dessous reste la PREMIÈRE room de la chaîne (le
+  // fil), et `rooms` porte la chaîne entière.
+  const chain = (rooms: string[]): any => ({
+    to: (room: string) => chain([...rooms, room]),
+    emit: (event: string, payload: any) => {
+      order.push(`emit:${event}`);
+      emits.push({ room: rooms[0], rooms, event, payload });
+    },
+  });
+
   const io = {
-    to: (room: string) => ({
-      emit: (event: string, payload: any) => {
-        order.push(`emit:${event}`);
-        emits.push({ room, event, payload });
-      },
-    }),
+    to: (room: string) => chain([room]),
     in: (_room: string) => ({
       fetchSockets: async () => [
         {
@@ -303,6 +316,12 @@ function makeUnbanPrisma() {
         .mockResolvedValueOnce({ id: 'part-curr', role: 'admin' })
         .mockResolvedValueOnce({ id: 'part-tgt' }),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Membres actifs APRÈS la levée : la cible réintégrée en fait partie,
+      // c'est ce qui lui vaut d'être adressée sur sa room personnelle.
+      findMany: jest.fn<any>().mockResolvedValue([
+        { id: 'part-curr', userId: 'user-curr' },
+        { id: 'part-tgt', userId: TARGET_ID },
+      ]),
     },
   };
 }

@@ -65,13 +65,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // Local-only: which output the user wants remote audio on. Never synced to
+  // peers (unlike controls.audioEnabled/videoEnabled) — it drives `muted` on
+  // every <video> element playing a remote stream, nothing else.
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
 
   // Local self-view dragging + ticking call duration (extracted hooks).
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
     initial: { x: 20, y: 20 },
   });
+  // Vague 110 (2026-08-12): anchor on `answeredAt`, never `startedAt`.
+  // `startedAt` is stamped at ring-start (use-video-call.ts, CallManager's
+  // acceptOrJoinCall) — for the CALLER specifically, that's the instant the
+  // callee's device starts ringing, not when they pick up. Feeding it
+  // straight into the ticking clock baked the entire ring delay into every
+  // subsequent second of "call duration" shown on screen. `answeredAt` is
+  // unset until the call is actually answered (CallManager's
+  // handleParticipantJoined / acceptOrJoinCall), so the clock correctly
+  // reads 0:00 while ringing and only starts ticking once picked up.
   const { seconds: callDuration, label: callDurationLabel } = useCallDuration(
-    currentCall?.startedAt
+    currentCall?.answeredAt
   );
 
   // New state for fullscreen mode and disconnected participants
@@ -85,7 +98,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -132,7 +145,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
   // reliability dashboard blind to web calls.
-  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
+  useCallAnalyticsReporter({ callId, connectionState, isReconnecting, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -381,6 +394,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       cleanup();
     };
   }, []);
+
+  // Toggles whether remote audio is audible. Purely local playback state —
+  // never emitted to the socket (unlike audio/video), since it has no
+  // meaning for the other participants.
+  const handleToggleSpeaker = () => {
+    setSpeakerEnabled((prev) => !prev);
+  };
 
   // Handle media toggles
   const handleToggleAudio = () => {
@@ -692,7 +712,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
             <VideoStream
               key={displayParticipant[0]}
               stream={displayParticipant[1]}
-              muted={false}
+              muted={!speakerEnabled}
               isLocal={false}
               className="w-full h-full object-cover"
               participantName={
@@ -752,6 +772,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isAudioEnabled={participant?.isAudioEnabled ?? true}
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
+              muted={!speakerEnabled}
               initialPosition={{ x: 20 + index * 160, y: 20 }}
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
@@ -778,9 +799,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <CallControls
         audioEnabled={controls.audioEnabled}
         videoEnabled={controls.videoEnabled}
+        speakerEnabled={speakerEnabled}
         videoSuspended={videoSuspended}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
+        onToggleSpeaker={handleToggleSpeaker}
         onSwitchCamera={handleSwitchCamera}
         onToggleAudioEffects={() => setShowAudioEffects(!showAudioEffects)}
         onToggleStats={() => setShowStats(!showStats)}

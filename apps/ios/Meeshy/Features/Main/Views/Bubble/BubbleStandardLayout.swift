@@ -102,6 +102,13 @@ struct BubbleStandardLayout: View {
     /// unchanged.
     let onPlayAudio: ((String) -> Void)?
     let onScrollToMessage: ((String) -> Void)?
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// tels quels jusqu'à `AudioMediaView.conversationName` /
+    /// `.audioQueueTailProvider` (single-track ET carousel), pour que le
+    /// plein écran audio ouvert SANS lecture déjà active porte la même
+    /// carte Now Playing / avance auto que le chemin `playAudio` existant.
+    let conversationName: String?
+    let audioQueueTailProvider: ((String) -> [QueuedAudio])?
 
     // MARK: - Bindings (state owned by ThemedMessageBubble wrapper)
 
@@ -813,6 +820,8 @@ struct BubbleStandardLayout: View {
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
                     onPlayAudio: onPlayAudio,
+                    conversationName: conversationName,
+                    audioQueueTailProvider: audioQueueTailProvider,
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
                     onTapConsentNotice: onTapConsentNotice
@@ -1341,6 +1350,8 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
+                conversationName: conversationName,
+                audioQueueTailProvider: audioQueueTailProvider,
                 embedsCaptionInWidget: embedsCaption,
                 voiceConsentMissing: voiceConsentMissing,
                 onTapConsentNotice: onTapConsentNotice

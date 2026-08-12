@@ -154,6 +154,14 @@ enum MyStoryCardPresentation {
         }
     }
 
+    /// L'anneau d'export vers la photothèque remplace la vignette nue
+    /// UNIQUEMENT pendant un job en vol pour CETTE carte — décision pure,
+    /// testée sans rendre la vue (même famille que
+    /// `StoryExportRailButtons.resolve`, l'équivalent au rail du lecteur).
+    static func showsSaveProgressRing(saveProgress: Double?) -> Bool {
+        saveProgress != nil
+    }
+
     static func moreActions(for kind: MyStoryCardKind,
                             capabilities: MyStoriesCapabilities = .current) -> [MyStoryMoreAction] {
         switch kind {

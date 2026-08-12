@@ -407,12 +407,20 @@ export function CallManager() {
       // Add participant to call
       addParticipant(event.participant);
 
-      // Update call status to 'active' if it was 'initiated'
+      // Update call status to 'active' if it was 'initiated'. This is also
+      // the caller's true "answered" moment (Vague 110, 2026-08-12): the
+      // first participant to join a still-ringing call is the callee
+      // picking up. Stamp `answeredAt` here — it's what VideoCallInterface
+      // anchors the visible call-duration clock on, instead of `startedAt`
+      // (set at ring-start in use-video-call.ts), so the ring delay is never
+      // counted as talk time. Guarded by the same 'initiated' check so a
+      // later participant joining a group call never re-stamps it.
       const { currentCall } = useCallStore.getState();
       if (currentCall && currentCall.status === 'initiated') {
         setCurrentCall({
           ...currentCall,
           status: 'active',
+          answeredAt: new Date(),
         });
       }
 
@@ -488,6 +496,20 @@ export function CallManager() {
         return;
       }
 
+      // Same guard, pre-accept: before the user has answered anything,
+      // `trackedCall` is still null, so the guard above short-circuits and
+      // falls through — even though a DIFFERENT call is ringing
+      // (`incomingCall`, local state, distinct from the store). The gateway's
+      // call:ended fan-out reaches every conversation member's user room, not
+      // just call participants (so a still-ringing callee can learn a call it
+      // was never near ended — `callEndedFanout.ts`'s `resolveCallEndedRooms`),
+      // so this is a realistic delivery, not a contrived one. Mirrors how
+      // `handleAnsweredElsewhere` already scopes itself to
+      // `incomingCall?.callId === event.callId`.
+      if (!trackedCall && incomingCall && incomingCall.callId !== event.callId) {
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 
@@ -543,7 +565,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall, incomingCall]
   );
 
   /**
@@ -713,14 +735,19 @@ export function CallManager() {
         setIceServers(ack.data.iceServers);
       }
 
-      // Create call session in store
+      // Create call session in store. `answeredAt` (Vague 110, 2026-08-12) is
+      // what VideoCallInterface anchors the visible call-duration clock on —
+      // for the callee this IS the answer moment, unlike the caller whose
+      // `startedAt` is stamped back at ring-start (use-video-call.ts).
+      const answeredAt = new Date();
       setCurrentCall({
         id: params.callId,
         conversationId: params.conversationId,
         mode: params.mode,
         status: 'active',
         initiatorId: params.initiatorId,
-        startedAt: new Date(),
+        startedAt: answeredAt,
+        answeredAt,
         participants: params.participants,
       } as CallSession);
 

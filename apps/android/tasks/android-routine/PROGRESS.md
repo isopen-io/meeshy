@@ -1,5 +1,912 @@
 # Progress — state & what to do next
 
+> On 2026-08-12 **conversation-list live-presence data plumbing landed** (slice
+> `conversation-list-live-presence`, feature-parity §B "Conversations list" — the "conversation-
+> participant presence" candidate the prior slice's own note explicitly flagged as now-unblocked).
+> **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search "apps/android
+> OR apps/ios"` found no interrupted run (3 unrelated PRs at scan time, none matching this
+> routine's naming). Confirmed the gap for real before coding: grepped `presenceState`/
+> `PresenceState`/`isOnline` under `:feature:conversations`/`:feature:chat` and found zero hits —
+> unlike Contacts (which at least had stale REST `isOnline` data to overlay onto), conversation
+> rows/the chat header have ZERO presence indication whatsoever, since `ApiConversation.
+> participants` carries no `isOnline`/`lastActiveAt` fields at all. Checked iOS's own
+> `ConversationListView.swift`: `presenceManager.presenceState(for: conversation.
+> participantUserId ?? "")` confirms iOS resolves this from a GLOBAL `PresenceManager` singleton
+> keyed by userId, not from the conversation payload either — validating that a live-socket-only
+> resolution (no REST fallback) is the correct, parity-matching approach on Android too, not a
+> workaround. **Shipped (production, all `apps/android`)**: new `ApiConversation.
+> otherParticipantUserId(currentUserId): String?` (`:sdk-core/theme/ConversationAccent.kt`) —
+> refactored the existing `otherParticipantName` to share a new private `otherParticipant(
+> currentUserId): ApiParticipant?` lookup (the direct-type gate moved from `displayTitle`'s own
+> call site into this shared helper, a behavior-preserving refactor — `displayTitle`'s own 9
+> pre-existing tests re-ran green, unchanged, confirming no regression) rather than duplicating the
+> participant-matching logic a second time. `ConversationListViewModel.observePresence()` (new,
+> called from `init`) collects the exact SAME `MessageSocketManager.userStatus`/`.presenceSnapshot`
+> flows the prior slice's Contacts wiring already established and fixed the wire-contract of —
+> mirrors `ContactsListViewModel.observePresence()` almost verbatim (same eager-start rationale:
+> hot `SharedFlow`s, no replay). New `ConversationListUiState.presenceByUserId: Map<String,
+> UserStatusEvent>` + `presenceStateFor(conversation, nowEpochMillis): PresenceState?` (resolves
+> the other participant's id, looks up the live map, derives `PresenceState` via the existing
+> `UserPresence.state()` SSOT — the same one `FriendRequestUser.presenceState()` already uses).
+> **Deliberate, documented scope cut — the actual UI wiring is NOT done this run**: unlike the
+> Contacts slice (where `ContactsListTab.kt` already rendered a presence dot from stale data, so
+> feeding it live data was the entire job), `ConversationRow`/`ConversationRowContent` in
+> `ConversationListScreen.kt` render NO presence dot at all yet, and are deeply parameterized
+> across 2+ Composable layers (`ConversationRow` → `ConversationRowContent`) plus their top-level
+> list-rendering call site — threading a new `presenceState: PresenceState?` parameter through
+> would have materially widened this slice's diff/risk beyond the data-plumbing piece. Scoped this
+> run to the ViewModel-side foundation only, mirroring the `chat-composer-prefill-draft` →
+> `widget-quick-reply` foundation-then-consumer split that worked well two runs ago. **+9 new
+> tests** (`ConversationAccentTest`: resolves the other participant's id for a direct conversation,
+> null for group, null with no other participant, null when a participant has no userId;
+> `ConversationListViewModelTest`: a live status event is stored in the map, a snapshot populates
+> every user in one pass, `presenceStateFor` resolves live presence for the other participant, is
+> null for a group conversation even with matching live data present, is null when nothing has
+> arrived yet). **Mutation-proven**, two axes: neutralizing `otherParticipant`'s direct-type gate
+> (`if (type.lowercase() !in directConversationTypes) return null` removed) fails **exactly** the
+> group-conversation test (12 others green); neutralizing the snapshot merge in
+> `observePresence()` (the `.copy(presenceByUserId = ...)` replaced with a no-op) fails **exactly**
+> the snapshot-population test (46 others green). Both applied via a scratch `cp`-backed edit
+> (never `git checkout --`), restored via `cp`, diffed clean against the backup afterward.
+> **Process note, stated honestly** (same pattern as the prior slice): the `ConversationListUiState`
+> additions and `observePresence()` wiring were written before their own tests for this small,
+> mechanical piece — proven via the mutation pass above rather than a strict prior RED run; the
+> `otherParticipantUserId` extraction WAS written test-first (`ConversationAccentTest.kt` edited
+> before `ConversationAccent.kt`). **Gate**: `./apps/android/meeshy.sh check` → **`BUILD
+> SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression; zero test
+> failures across every module's XML reports). Reviewer **PASS** (diff `apps/android` only — 4
+> files, confirmed via `git status --short`; SDK purity — `otherParticipantUserId` lives in
+> `:sdk-core` (a pure data extension, correct), the presence-overlay state/collection lives in
+> `:feature:conversations`'s ViewModel (product decision, correct per the established `Contacts`
+> precedent); SSOT — reuses `UserPresence.state()`, `MessageSocketManager`'s existing flows, the
+> now-corrected `UserStatusEvent`/`PresenceSnapshotEvent` DTOs, zero re-implementation; no coverage
+> floor lowered; no tautological tests). **Not attempted this run** (compile+test-only; no
+> simulator/emulator session). **Next slice candidates (not attempted this run)**: the UI wiring
+> this slice deliberately deferred — thread `presenceStateFor`'s result into `ConversationRow`'s
+> avatar (a dot overlay, mirroring `ContactsListTab.kt`'s own `meeshyPresenceDotColor(...)` usage)
+> and/or the chat header (`ChatScreen`'s toolbar, matching iOS's `ConversationView` presence
+> display); a SECOND, small opportunistic fix noticed but not actioned: `directConversationTypes`
+> is independently duplicated as a `private val` in BOTH `:sdk-core/theme/ConversationAccent.kt`
+> and (separately) the `:app/widget` widget presentations — not unified this run (cross-module,
+> `:app` already depends on `:sdk-core` so this IS fixable, but out of scope for this slice); mark-
+> read widget action; Google Assistant App Actions; on-device transcription for the Feed audio
+> composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding; PiP; Conversation lock;
+> the onboarding carousel — per the orchestrator's guidance these remain documented, real gaps.
+
+> On 2026-08-11 **live contact presence sync landed, plus a real wire-contract bug fix**
+> (slice `presence-live-contacts-overlay`, feature-parity §"Contacts list" — the previously-
+> deferred "presence-cache foundation for conversation participants" candidate, investigated and
+> right-sized down to its first real, self-contained consumer rather than built as unconsumed
+> infrastructure). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open
+> --search "apps/android OR apps/ios"` found no interrupted run (2 unrelated `apps/ios`/`apps/web`
+> PRs at scan time). Investigated what a "presence-cache foundation" would actually need before
+> writing any code: grepped for `PresenceState`/`UserPresence` usage, found
+> `MessageSocketManager` already declares and `.attach()`-es listeners for `user:status` and
+> `presence:snapshot` — **but grepping every call site of both flows found zero consumers
+> anywhere in the app**, dead-but-wired infrastructure exactly like the earlier
+> `outbox-message-lane-discovery`/email-phone-change slices' own pattern. **A deeper bug found
+> before wiring a consumer**: `UserStatusEvent`/`PresenceSnapshotEvent` (`:core:model`) don't even
+> match the real gateway payload — checked `packages/shared/types/socketio-events.ts`'s
+> `UserStatusEvent`/`PresenceSnapshotEventData` (`{userId, username, isOnline, lastActiveAt}` /
+> `{users: [...]}`) against the Android DTOs (`status: String`/`lastSeenAt`/flat
+> `onlineUserIds: List<String>`) — zero matching field names. Confirmed the gateway genuinely
+> emits these events for real (`SERVER_EVENTS.USER_STATUS` in `MeeshySocketIOManager.ts`'s
+> `_broadcastUserStatus`, not a dead/unused constant) before concluding this was a real, fixable
+> bug rather than dead code on both ends. **Shipped (production, all `apps/android`)**: fixed both
+> DTOs' field names/types to match the real gateway contract (`PresenceSnapshotEvent` now reuses
+> `UserStatusEvent` per entry rather than duplicating an identical nested shape). Found the
+> concrete first consumer by checking where presence is ALREADY rendered from stale data:
+> `ContactsListTab.kt`'s `friend.presenceState(System.currentTimeMillis())` reads straight off the
+> roster's last full `/friends` REST fetch (`presence-away-indicator`, 2026-07-04) — never updated
+> live, frozen until the next reload. New pure `PresenceOverlay` (`:feature:contacts`, mirrors the
+> placement of the package's existing `ContactList`/`ContactFilterCounts` pure helpers)
+> `applyStatus`/`applySnapshot` merge a live event onto the roster by `userId`, leaving every other
+> row untouched. `ContactsListViewModel.observePresence()` (new, called from `init` alongside the
+> existing `observeFriendshipCache()`) collects both `MessageSocketManager` flows — **started
+> eagerly, not lazily**: `MessageSocketManager`'s own doc comment warns its flows are hot
+> `SharedFlow`s with no replay, so a late subscriber genuinely misses events, matching the
+> existing `observeFriendshipCache()` precedent's own eager `init`-time start. **+15 new tests**
+> (`UserStatusEventTest`, `:core:model`: decodes a real status broadcast, an offline frame with
+> privacy-hidden `lastActiveAt`, a snapshot's nested user list, an empty snapshot; `PresenceOverlayTest`:
+> matching-friend update, other-friends untouched, unknown-userId no-op, snapshot multi-update,
+> friend-absent-from-snapshot untouched, empty-snapshot no-op; `ContactsListViewModelTest`: a live
+> status event updates presence without a full reload — asserted via `coVerify(exactly = 1)` on
+> `receivedRequests` to prove no extra refetch fires, a snapshot updates matching friends
+> likewise, a status event for a userId not in the roster is a no-op). **Mutation-proven**, two
+> axes: neutralizing `PresenceOverlay.applyStatus`'s id match (`friend.id == event.userId` →
+> `true`) fails **exactly** the 2 tests asserting isolation (unknown-id no-op at both the pure and
+> VM level; 28 others green); neutralizing the DTO field mapping itself (renaming `isOnline` to a
+> non-matching `isOnlineFlag` backing property, reproducing the exact class of bug fixed) fails
+> **exactly** the 2 decode tests asserting a live `true`/populated value (2 others — the `false`/
+> empty-default cases — stay green, since they can't distinguish a correct decode from a silent
+> fallback-to-default). Both applied via a scratch `cp`-backed edit (never `git checkout --`),
+> restored via `cp`, diffed clean against the backup afterward. **Process note, stated honestly**:
+> the DTO field-rename and the `ContactsListViewModel.observePresence()` wiring were written
+> before their own tests (implementation-first for these two small, mechanical pieces), then
+> proven via the mutation pass above rather than a strict prior RED run — the core
+> `PresenceOverlay` merge logic itself WAS written test-first (RED confirmed: `PresenceOverlay`
+> didn't exist when `PresenceOverlayTest.kt` was written, compile failure until the object was
+> added). **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching
+> every prior slice — no build-graph regression; zero test failures across every module's XML
+> reports). Reviewer **PASS** (diff `apps/android` only — 6 files, confirmed via `git status
+> --short`; SDK purity — `PresenceOverlay`'s pure merge lives in `:feature:contacts` (a product
+> decision about how the Contacts screen paints presence, not yet a proven-reusable atom — single
+> consumer so far, correctly app-side per "duplicate until a 3rd call site" for this class of
+> glue), the DTO fix lives in `:core:model` (a pure data-shape correction, not orchestration);
+> SSOT — reuses `MessageSocketManager`'s existing (already-`.attach()`-ed) socket infrastructure
+> and the existing `UserPresence.state()`/`FriendRequestUser.presenceState()` rendering pipeline
+> unchanged, zero re-implementation; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; no simulator/emulator session —
+> a future run should install-and-verify against the live gateway with the shared `atabeth`
+> account, confirming a second device/session toggling online/offline actually repaints the
+> Contacts row live without leaving/re-entering the screen). **Deliberate, documented scope cut**:
+> conversation-participant presence (the original "favorite-contacts status badge" gap noted in
+> the widget slice) is NOT wired this run — this slice fixed the shared wire-contract bug and
+> proved it out on the ALREADY-EXISTING Contacts consumer first (smaller, safer, immediately
+> useful blast radius); a future slice can now reuse the corrected `UserStatusEvent`/
+> `PresenceSnapshotEvent` DTOs directly for conversation participants without redoing this
+> investigation. **Next slice candidates (not attempted this run)**: conversation-participant
+> presence (foundation now unblocked by this slice); mark-read widget action (still
+> deprioritized); Google Assistant App Actions; on-device transcription for the Feed audio
+> composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location
+> attachment; PiP (calls + media); Conversation lock (needs its own scoping pass); the onboarding
+> carousel (needs a design pass) — per the orchestrator's guidance these remain documented, real
+> gaps warranting planning/decomposition passes rather than bare re-grepping.
+
+> On 2026-08-11 **a stale `feature-parity.md` checkbox was found and corrected** (slice
+> `feature-parity-stale-checkbox-audio-translate` — a broad-sweep RE-PROUVER pass after the
+> home-screen widget epic wrapped up at 4/4 widgets, per the orchestrator's standing "continue the
+> broad sweep" guidance rather than tunneling further into the same area). **RE-PROUVEN before
+> starting**: `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"` found
+> no interrupted run (empty result). Investigated "Ad-hoc blocking text translation" (unchecked)
+> as a candidate slice: read iOS's `MessageLanguageDetailView.translateTo` in full — it calls
+> `TranslationService.shared.translate(messageId:)`, and its own doc comment explains that passing
+> `messageId` routes the gateway's `/translate-blocking` endpoint into a "retranslation" branch
+> that both persists AND broadcasts via `message:translation` (no separate socket call needed).
+> Before writing any Android code for this, grepped for an existing Android equivalent —
+> found `ChatViewModel.onExplorerRetranslate(messageId, code)` (wired from
+> `MessageDetailExplorer`'s per-language retranslate affordance, the exact same long-press →
+> "Explore languages" sheet root `CLAUDE.md` documents as the sole translation-exploration entry
+> point) already calling `MessageRepository.requestTranslation(messageId, targetLanguage)` — a
+> real, synchronous REST call that persists its result, matching iOS's "blocking" semantics
+> exactly. Confirmed fully tested, not a stub: 7 `MessageRepositoryTest` cases + ~10
+> `ChatViewModelTest` cases covering success/failure/idempotency/in-flight-guard/edge cases. **No
+> code change needed** — checked the box and documented the finding in `feature-parity.md` in
+> place, matching the `settings-two-factor-auth` slice's own precedent of fixing stale checkboxes
+> discovered while re-proving an item. **Also investigated and explicitly DEFERRED (not
+> attempted, too large for a single slice without decomposition)**: "Conversation lock" (master
+> PIN setup/change/remove + per-conversation 4-digit lock + unlock-all) — confirmed a genuine,
+> unshipped gap (zero Android hits for `ConversationLock`/`masterPin` outside an unrelated
+> `ConversationDraftStore` false-positive; iOS has 5+ files: `ConversationLockSheet.swift`,
+> `SecurityView.swift`, plus context-menu/row/overlay wiring) — a real security feature needing its
+> own scoping pass (PIN storage, biometric unlock, per-conversation vs master-PIN interaction),
+> not a mechanical port; "First-run onboarding carousel with live feature demo + animated step
+> backgrounds" — confirmed zero Android implementation (`onboarding`/`Onboarding` greps hit only
+> the registration wizard, an unrelated flow) but is heavily animation/visual-design-driven with
+> thin testable logic (likely just "which page index is active"), a poor fit for this routine's
+> TDD-evidence rhythm without a dedicated design pass first. **Gate**: `./apps/android/meeshy.sh
+> check` → **`BUILD SUCCESSFUL`** (970 tasks — no code touched, so trivially unchanged from the
+> prior run's count). Reviewer **PASS** (diff `apps/android` only — a single line in
+> `feature-parity.md`; no tests needed since no production logic changed; the box being checked is
+> itself evidence-backed by the 17 existing tests cited above, not a bare assertion). **Next slice
+> candidates (not attempted this run)**: mark-read widget action (still deprioritized — thin
+> glue, low test value); Google Assistant App Actions (`shortcuts.xml`) for the voice-triggered
+> half of the shortcuts epic — needs external Assistant indexing/review; a presence-cache
+> foundation for conversation participants; on-device transcription for the Feed audio composer;
+> Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location attachment; PiP
+> (calls + media); Conversation lock (needs its own scoping/decomposition pass, per this run's
+> finding above); the onboarding carousel (needs a design pass before a slice can TDD it
+> meaningfully) — per the orchestrator's guidance these all remain documented, real gaps warranting
+> planning/decomposition passes rather than bare re-grepping.
+
+> On 2026-08-11 **home-screen widgets' fourth sub-slice landed**: `QuickReplyWidget`
+> (slice `widget-quick-reply`, feature-parity §"Home-screen widgets" — the natural next step
+> after the prior slice laid the exact foundation this widget needed). **RE-PROUVEN before
+> starting**: `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"`
+> found no interrupted run of this routine (empty result — no open PRs at all at scan time).
+> Re-read iOS's `QuickReplyWidgetView` in full (not from memory) before coding: featured
+> conversation = `entry.conversations.first(where: isUnread) ?? entry.conversations.first` over
+> the SAME `ConversationProvider` the recent-conversations widget shares (confirming the
+> pinned-first-then-recency ordering reuse was correct, not assumed); 4 canned-reply buttons —
+> "👍", "OK", "Thanks!", "Call me" — deep-linking (on iOS) to a dead `meeshy://quickreply/{id}`
+> host (per the prior slice's own finding). **Shipped (production, all `apps/android`)**: new
+> `QuickReplyWidgetPresentation` (`:app/widget`, pure) reuses the exact pinned-first-then-recency
+> `sortedWith`/`ConversationRowTime` block already established by the two sibling widgets, then
+> applies `ordered.firstOrNull { it.unreadCount > 0 } ?: ordered.firstOrNull()` — the direct port
+> of iOS's own selection rule — mapping the featured conversation's `title`/`preview` via the
+> same `displayTitle()`/`lastMessagePreview()` SSOTs. New `QuickReplyDeepLink.uri(conversationId,
+> draftText)` (`:app/widget`, pure) builds `meeshy://conversation/{id}?draft={encoded}` via
+> `java.net.URLEncoder` — the matching JVM-testable counterpart to `ChatViewModel.initialDraft`'s
+> own `java.net.URLDecoder` (never `android.net.Uri.encode`/`.decode`, which silently no-op under
+> this module's plain JVM unit tests, per the prior slice's own `NOTES.md` entry). `QuickReplyWidget`
+> (Glance) shows the featured conversation's title/preview plus 4 chips — 👍 (no localization
+> needed) + 3 new localized strings (`widget_quick_reply_ok`/`_thanks`/`_call_me`, en/fr/es/pt) —
+> each chip's tap fires the now-real `CONVERSATION_DRAFT_DEEP_LINK` from the prior slice.
+> **Deliberately prefills rather than auto-sends**: a blind background send from a cold widget
+> process has no confirmation step; opening the conversation with the reply already typed (ready
+> to confirm with a tap) matches the "quick, not blind" posture better, and needed zero new
+> message-sending plumbing in the widget process itself. **+14 new tests**
+> (`QuickReplyWidgetPresentationTest`: empty→null, an unread conversation wins over a more-recent
+> read one, a pinned-but-read conversation is skipped in favor of an unread one, no-unread falls
+> back to most-recent, no-unread-and-no-recency-tie falls back to pinned, direct/group title
+> resolution, preview reuse, empty-message fallback; `QuickReplyDeepLinkTest`: plain text, space
+> encoding, literal `+` escaped so it never round-trips as a space, emoji encoding, conversation id
+> passthrough). **Mutation-proven**, two axes: neutralizing the unread-first selection
+> (`ordered.firstOrNull { it.unreadCount > 0 } ?: ...` → `ordered.firstOrNull()`) fails **exactly**
+> the 2 unread-selection tests (7 others green); neutralizing the URI encoding
+> (`URLEncoder.encode(draftText, "UTF-8")` → the raw `draftText`) fails **exactly** the 3
+> encoding-focused tests (2 others — plain ASCII and id-passthrough — stay green, since those
+> inputs need no encoding either way). Both applied via a scratch `cp`-backed edit (never `git
+> checkout --`), restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior
+> slice — no build-graph regression; zero test failures across every module's XML reports).
+> Reviewer **PASS** (diff `apps/android` only, confirmed via `git status --short` — 11 files, all
+> under `apps/android`; SDK purity — the pure selection/URI-building decisions live in
+> `:app/widget` (correctly, per the grain test: product decisions, not reusable atoms — mirrors
+> every sibling widget's own precedent); SSOT — reuses `displayTitle`/`lastMessagePreview`/
+> `ConversationRowTime`/`WidgetEntryPoint`/`directConversationTypes`/the now-real
+> `CONVERSATION_DRAFT_DEEP_LINK`, zero re-implementation; no coverage floor lowered; no
+> tautological tests). **Not attempted this run** (compile+test-only per the local JVM gate; no
+> simulator/emulator session for on-device verification — a future run should install-and-verify
+> that a real tap on a Quick Reply chip actually opens the conversation with the reply text
+> pre-filled in the composer, closing the loop this slice and the prior one only proved
+> independently at the unit-test level). **Deliberate, documented scope cut**: matches the exact
+> canned-reply set iOS ships (👍/OK/Thanks!/Call me) rather than inventing a different or
+> user-configurable set — true visual parity, only the WIRING differs (and improves on iOS's own
+> dead one). **Next slice candidates (not attempted this run)**: mark-read widget action (still
+> deprioritized — thin glue, low test value); Google Assistant App Actions (`shortcuts.xml`) for
+> the voice-triggered half of the shortcuts epic — needs external Assistant indexing/review; a
+> presence-cache foundation for conversation participants; on-device transcription for the Feed
+> audio composer; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location
+> attachment; PiP (calls + media) — per the orchestrator's guidance this remains a documented,
+> real, multi-slice-epic gap warranting a planning/decomposition pass rather than a bare re-grep.
+> With this slice, all 4 of iOS's `MeeshyWidgets` widgets (`UnreadCountWidget`,
+> `RecentConversationsWidget`, `FavoriteContactsWidget`, `QuickReplyWidget`) now have an Android
+> counterpart — the "Home-screen widgets" checklist item's remaining scope is refinement
+> (mark-read, additional sizes/kinds, push-refresh, presence badge) plus the separate Assistant
+> App Actions half, not missing widget kinds.
+
+> On 2026-08-11 **chat-composer prefill-draft mechanism landed** (slice
+> `chat-composer-prefill-draft`, feature-parity §"Home-screen widgets" — picked from the prior
+> slice's own explicit "Next slice candidates" list: unlocking a genuinely working Quick Reply
+> widget, since iOS's own is confirmed dead — a real opportunity to EXCEED iOS parity, not just
+> match it). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search
+> "apps/android OR apps/ios"` found no interrupted run of this routine — the sole open PR
+> (`#2851`) is an unrelated concurrent `apps/web` session. Also considered `LanguagePickerDialog`
+> consolidation (3 near-identical pickers) as a candidate this run, but discarded it after reading
+> both existing dialogs (`RegionalLanguageDialog`/`ComposerLanguagePickerDialog`) in full: each is
+> backed by a DIFFERENT pure filter source (`RegionalLanguageSelection`/`LanguageStepSelection`),
+> so a shared extraction would only unify the `@Composable` shell — pure UI glue, exempt from
+> `TDD-COVERAGE.md`, meaning the slice would ship with genuinely zero new unit tests (the same
+> disqualifying reason `mark-read` was deprioritized two runs ago). **Shipped (production, all
+> `apps/android`)**: `ChatViewModel` gains an optional `DRAFT_ARG` (`"draft"`) nav argument —
+> `initialDraft` reads it from `SavedStateHandle`, decodes it (`java.net.URLDecoder`, NOT
+> `android.net.Uri.decode` — see `NOTES.md` for why), and seeds the composer's INITIAL `_state`
+> value directly. **Zero new precedence logic needed**: the already-existing, already-tested
+> `DraftAutosave.restore(stored, currentDraft, isEditing)` guard (`currentDraft.isNotBlank() ->
+> null`, i.e. "never clobber a non-empty composer") already refuses to overwrite a seeded value —
+> a nav-arg-provided draft naturally wins over a stale persisted one with no new decision branch,
+> reusing the existing SSOT exactly as designed rather than adding a parallel precedence rule.
+> New deep-link pattern `Routes.CONVERSATION_DRAFT_DEEP_LINK`
+> (`meeshy://conversation/{id}?draft={draft}`) added alongside (not replacing) the 4 existing
+> conversation deep links — a genuinely new shape for this codebase (first `?query={arg}` deep
+> link pattern; the `navArgument(... nullable = true; defaultValue = null)` optional-arg mechanism
+> itself is an established precedent, e.g. `CallRoute`'s own optional args). **+6 new tests**
+> (`ChatViewModelTest`: seeds the composer immediately from the nav arg; a nav-arg draft takes
+> priority over a stale persisted draft; a blank/absent nav arg never blocks the persisted-draft
+> restore, matches the existing `a_stored_reply_draft_re_arms_the_reply_when_the_conversation_
+> opens` regression baseline unchanged; a percent-encoded arg decodes correctly; a malformed
+> percent sequence — e.g. a literal `%` with no following hex digits — falls back to the raw text
+> instead of crashing, a real robustness concern since this text ultimately originates from an
+> external, not-fully-trusted URI). **Mutation-proven**, two axes: neutralizing the seed
+> (`draft = initialDraft.orEmpty()` → `draft = ""`) fails **exactly** the 3 seeding-focused tests
+> (8 others green); neutralizing the decode call (`URLDecoder.decode(...)` → the raw undecoded
+> string) fails **exactly** the percent-encoding test (10 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the
+> backup afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970
+> tasks, matching every prior slice — no build-graph regression; zero test failures across every
+> module's XML reports). Reviewer **PASS** (diff `apps/android` only, confirmed via `git status
+> --short` — `MeeshyApp.kt` + `ChatViewModel.kt` + its test, 3 files; SDK purity — N/A here, this
+> is app-side navigation/ViewModel wiring, correctly in `:app`/`:feature:chat`, no SDK boundary
+> crossed; SSOT — reuses `DraftAutosave.restore`'s existing idle guard verbatim, zero
+> re-implementation of precedence logic; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; the new `?draft=` deep-link
+> QUERY PARAM pattern itself — as opposed to the ViewModel-level wiring, which IS unit tested — has
+> no local precedent in this codebase and was not on-device verified; a future run should
+> install-and-verify that tapping a real `meeshy://conversation/{id}?draft=...` URI actually seeds
+> the composer, not just that the ViewModel behaves correctly given a populated `SavedStateHandle`).
+> **Next slice candidates (not attempted this run)**: the Quick Reply widget itself (Glance, canned
+> reply chips — 👍/OK/Thanks!/Call me, mirroring iOS's OWN button set even though iOS's wiring is
+> dead — deep-linking via the now-real `CONVERSATION_DRAFT_DEEP_LINK`, prefilling but NOT
+> auto-sending, matching the "opens the conversation with the reply ready to confirm" posture
+> rather than a blind background send from a cold widget process); Google Assistant App Actions
+> (`shortcuts.xml`) for the voice-triggered half of the shortcuts epic — needs external Assistant
+> indexing/review, still a larger, non-locally-verifiable follow-up; the mark-read widget action
+> (still deprioritized — thin glue, low test value); a presence-cache foundation for conversation
+> participants; on-device transcription for the Feed audio composer; Voice-cloning onboarding
+> wizard; map/search/reverse-geocoding for the location attachment; PiP (calls + media) — per the
+> orchestrator's guidance this remains a documented, real, multi-slice-epic gap warranting a
+> planning/decomposition pass rather than a bare re-grep.
+
+> On 2026-08-11 **dynamic launcher shortcuts landed** (slice `dynamic-launcher-shortcuts`,
+> feature-parity §"App Actions / dynamic shortcuts" — the prior widget slice's own "Quick reply
+> widget" candidate was investigated first and DISQUALIFIED this run, see below; this slice was
+> picked instead after that investigation surfaced it). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open --search "apps/android OR apps/ios"` found no
+> interrupted run (3 open PRs, `#2846`/`#2848`/`#2849`, all unrelated concurrent sessions —
+> `apps/web`/`apps/ios calls`/`apps/web`, none matching this routine's branch naming). **A real
+> finding that changed this run's plan**: investigated "Quick reply widget" (the top "next slice"
+> candidate from the prior entry) by reading iOS's `MeeshyWidgets.swift` `QuickReplyWidgetView`/
+> `QuickReplyButton` in full — its 4 canned-reply buttons deep-link via
+> `meeshy://quickreply/{id}?text=...`, but `grep`ping the ENTIRE iOS app
+> (`DeepLinkRouter.swift`'s full `switch` over recognized hosts) found **no `quickreply` case
+> anywhere** — iOS's own Quick Reply widget is dead/decorative in production today: tapping any of
+> the 4 buttons opens the app via an unhandled URL host with no defined fallback behavior. The
+> SAME grep also confirmed the `meeshy://contact/{id}` host `FavoriteContactsWidget` uses on iOS is
+> equally unhandled — retroactively validating this routine's own earlier choice (prior slice) to
+> reuse `meeshy://conversation/{id}` on Android instead of inventing a matching `contact` host.
+> Porting Quick Reply faithfully would have replicated iOS's bug rather than shipped real value;
+> building a genuinely working version needs a new prefill-draft mechanism in the chat composer
+> (no `initialDraft`/`prefillText` nav-arg exists anywhere in `:feature:chat` today, confirmed by
+> grep) — real, moderate scope, explicitly NOT attempted this run; logged as its own right-sized
+> future slice rather than either faking it or quietly skipping the finding. Pivoted instead to
+> "App Actions / dynamic shortcuts" from the same candidate list, and further narrowed IT after
+> reading iOS's `MeeshyAppIntents.swift` (431 lines) in full: iOS's `MeeshyAppShortcuts` bundles 5
+> Siri/`AppIntents` phrases (Send Message, Call Contact, Translate, Open Recent Conversation, Check
+> Notifications) — 4 of which need Siri's own natural-language contact/parameter resolution with no
+> direct Android equivalent, while Android's own nearest analogue for VOICE triggering (Google
+> Assistant "App Actions" via `shortcuts.xml` capability bindings) needs external Assistant
+> indexing/review and isn't reliably locally verifiable in this environment. Scoped this run to
+> just the always-local, fully-testable slice of the epic: dynamic launcher shortcuts (long-press
+> the launcher icon), Android's closest equivalent to iOS's simplest intent,
+> `OpenRecentConversationIntent`. **Shipped (production, all `apps/android`)**: new
+> `DynamicShortcutsPresentation` (`:app/shortcuts`, pure) sorts cached conversations pinned-first
+> then by `ConversationRowTime.epochMillis` descending (the exact ordering SSOT the two prior
+> widget slices already established and validated), caps at a caller-supplied `maxCount` (clamped
+> to ≥0 — a negative value, defensive against any future caller misuse, never crashes), and maps
+> each row via the existing `ApiConversation.displayTitle()` SSOT — zero re-implementation, third
+> reuse of the exact pattern (`*Presentation.from()`) this app's home-screen widgets already
+> established twice. `DynamicShortcutsPublisher` (`:app/shortcuts`, thin Android glue) reads the
+> device's own real max via `ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)` (never
+> a hardcoded guess — OEM launchers vary), builds one `ShortcutInfoCompat` per row (app-icon
+> `IconCompat`, `meeshy://conversation/{id}` intent — reuses the identical deep-link construction
+> pattern both widgets already use, matched by the same pre-existing `navDeepLink`), and calls
+> `ShortcutManagerCompat.setDynamicShortcuts(...)` (a full-replace call, not an add — so a stale
+> shortcut for a since-deleted/renamed conversation self-corrects on the very next publish with no
+> dedicated cleanup logic needed). `MainActivity` gains two `@Inject` fields
+> (`ConversationRepository`, `SessionRepository` — both already `@Singleton`-scoped, no new DI
+> wiring) and a new `onResume()` override that launches a `lifecycleScope` coroutine to publish —
+> a plain, cheap, idempotent one-shot Room read (no network, no polling loop, matches the "Instant
+> App" cache-first principle) rather than a dedicated live-update hook into the conversation list's
+> own sync pipeline (deliberately narrower than a "live" system, exactly mirroring both widgets'
+> own "static/OS-or-lifecycle-triggered refresh only" precedent). **+9 new tests**
+> (`DynamicShortcutsPresentationTest`: empty list, direct-conversation other-participant name,
+> group-conversation own title, pinned-before-recent ordering, recency ordering among unpinned, cap
+> respected, a zero max count (rate-limited device) yields no shortcuts, a negative max count is
+> clamped rather than crashing, shortcut id matches conversation id). **Mutation-proven**, two axes:
+> neutralizing the recency sort key (`ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE` →
+> `0L`) fails **exactly** `among unpinned conversations, the most recently active sorts first` (8
+> others green); neutralizing the cap clamp (`maxCount.coerceAtLeast(0)` → `Int.MAX_VALUE`) fails
+> **exactly** the 3 cap-focused tests (`the presentation caps at the device-reported max count`,
+> `a max count of zero...resolves to no shortcuts`, `a negative max count is treated as zero...`; 6
+> others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`), restored via
+> `cp`, diffed clean against the backup afterward. **Gate**: `./apps/android/meeshy.sh check` →
+> **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice — no build-graph regression; zero
+> test failures across every module's XML reports). Reviewer **PASS** (diff `apps/android` only,
+> confirmed via `git status --short` — `MainActivity.kt` + 2 new files under `:app/shortcuts` +
+> their test; SDK purity — the pure ordering/cap/map decision lives in `:app/shortcuts` (correctly,
+> per the grain test: a product decision, not a reusable atom — mirrors both sibling widgets'
+> precedent exactly), the `ShortcutManagerCompat` glue is exempt framework code; SSOT — reuses
+> `displayTitle`/`ConversationRowTime`/`ConversationRepository.cachedConversations`/
+> `SessionRepository.currentUserId`, zero re-implementation; no coverage floor lowered; no
+> tautological tests). **Not attempted this run** (compile+test-only per the local JVM gate; no
+> simulator/emulator session for on-device verification — a future run should install-and-verify
+> that a real long-press on the launcher icon shows the shortcuts, correctly ordered, and that
+> tapping one opens the right conversation). **Next slice candidates (not attempted this run)**: a
+> chat-composer prefill-draft mechanism (would unlock a GENUINELY working Quick Reply widget, since
+> iOS's own is confirmed dead — a real opportunity to exceed iOS parity, not just match it); Google
+> Assistant App Actions (`shortcuts.xml` capability bindings) for the voice-triggered half of this
+> same epic — needs external Assistant indexing/review, flagged as its own larger follow-up rather
+> than a right-sized single slice; the mark-read widget action (still deprioritized — thin glue,
+> low test value, see two runs ago); a presence-cache foundation for conversation participants; on-
+> device transcription for the Feed audio composer; a shared `:sdk-ui` `LanguagePickerDialog`;
+> Voice-cloning onboarding wizard; map/search/reverse-geocoding for the location attachment; PiP
+> (calls + media) — per the orchestrator's guidance this remains a documented, real, multi-slice-
+> epic gap warranting a planning/decomposition pass rather than a bare re-grep.
+
+> On 2026-08-11 **home-screen widgets' third sub-slice landed**: `FavoriteContactsWidget`
+> (slice `widget-favorite-contacts`, feature-parity §"Home-screen widgets" — picked from the
+> prior slice's own explicit "Next slice candidates" list, per the orchestrator's standing
+> guidance). **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open --search
+> "apps/android OR apps/ios"` found no interrupted run of this routine — the sole open PR
+> (`#2846`) is an unrelated concurrent session on `apps/web`. Confirmed the prior run's own
+> "widget-recent-conversations" PR (`#2841`) had in fact already merged and finished CI while its
+> session ended (matches the documented "itérations 25, 29, 37, 38" recovery pattern exactly) —
+> finalized it first (squash-merged, `tasks/lane-cursor.md` pushed as its own dedicated commit,
+> stale remote branch deleted) before picking this new slice, rather than starting fresh work on
+> top of an unfinished prior run. Read iOS's `WidgetDataManager.publishFavoriteContacts` +
+> `MeeshyWidgets.FavoriteContactsWidget`/`FavoriteContactsProvider` before coding: a "favorite
+> contact" on iOS is **not a distinct concept** — it's `conversations.filter { isPinned &&
+> type == .direct }.prefix(8)`, mapped to `id`/`name`/`avatar`/`status` (`lastSeenText` or
+> `"Offline"`)/`accentColor`. **Shipped (production, all `apps/android`)**: new
+> `FavoriteContactsWidgetPresentation` (`:app/widget`, pure — same placement precedent as its two
+> siblings) filters `resolvedPreferences?.isPinned == true && type in directConversationTypes`,
+> sorts by `ConversationRowTime.epochMillis` descending (reused, not reimplemented — matches the
+> recency ordering `RecentConversationsWidgetPresentation` already applies, and mirrors iOS's own
+> implicit reliance on an already-recency-ordered upstream list), caps at 8 (iOS's own
+> `.prefix(8)`), and maps each row via the same two existing SSOTs the sibling widget uses
+> (`ApiConversation.displayTitle()`, `ApiConversation.accentHex()`). `directConversationTypes`
+> (previously `private` in `RecentConversationsWidgetPresentation.kt`) is now `internal` and
+> imported here — a one-line hoist, not a duplication, since it is a correctness-sensitive
+> business rule ("what counts as a 1:1 chat") shared by two call sites now, not disposable UI
+> glue. `FavoriteContactsWidget` (Glance `LazyColumn`, up to 8 rows, an accent-colored
+> initial-letter avatar circle per row) reads the same Room-only
+> `ConversationRepository.cachedConversations()` + persisted `TokenStore.userId` the
+> `RecentConversationsWidget` already reads via the shared `WidgetEntryPoint` — no new Hilt
+> plumbing needed, both existing accessors were already exposed. Tapping a row deep-links via the
+> already-wired `meeshy://conversation/{id}` (`Routes.CONVERSATION_SINGULAR_DEEP_LINK`) rather
+> than inventing an Android equivalent of iOS's own `meeshy://contact/{id}` route (which doesn't
+> exist on this platform and whose only real payload, even on iOS, is the same conversation id) —
+> a deliberate, documented parity decision, not a scope gap: opening the chat directly is at least
+> as good UX as opening a contact profile for what is, underneath, a favorite chat partner.
+> **A real, documented gap found and left open, not silently worked around**: Android's
+> `ApiConversation.participants` (`ApiParticipant`) carries no `isOnline`/`lastActiveAt` fields at
+> all — unlike iOS's `MeeshyConversation.lastSeenText`, there is currently no data source this
+> widget could read synchronously to render a presence status line/badge without adding a new
+> presence-cache dependency; the row therefore omits the online/offline indicator iOS's own face
+> shows, an explicit scope cut rather than a fabricated fallback. **+8 new tests**
+> (`FavoriteContactsWidgetPresentationTest`: empty list, other-participant-name resolution, an
+> unpinned direct conversation excluded, a pinned group conversation excluded, a mix of favorites
+> and non-favorites keeping only the true favorites, recency ordering, the 8-row cap, accent-color
+> passthrough). **Mutation-proven**, two axes: neutralizing the pinned+direct filter
+> (`.filter { it.resolvedPreferences?.isPinned == true && ... }` → `.filter { true }`) fails
+> **exactly** the 3 exclusion-focused tests (`an unpinned direct conversation is not a favorite`,
+> `a pinned group conversation is not a favorite contact`, `a mix of favorites and non-favorites
+> keeps only the favorites`; 5 others green); neutralizing the recency sort key
+> (`ConversationRowTime.epochMillis(it) ?: Long.MIN_VALUE` → `0L`) fails **exactly** `among
+> favorites, the most recently active sorts first` (7 others green). Both applied via a scratch
+> `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the backup
+> afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression; zero test failures across every
+> module's XML reports, `grep -L 'failures="0"'` empty). Reviewer **PASS** (diff `apps/android`
+> only, confirmed via `git status --short` — 10 files, all under `apps/android`; SDK purity — the
+> pure filter/sort/cap/map decision lives in `:app/widget` (correctly, per the grain test: a
+> product decision, not a reusable atom — mirrors both sibling widgets' own precedent exactly);
+> SSOT — reuses `displayTitle`/`accentHex`/`ConversationRowTime`/`cachedConversations`/
+> `WidgetEntryPoint`/`directConversationTypes` (hoisted, not duplicated), zero re-implementation;
+> no coverage floor lowered; no tautological tests). **Not attempted this run** (compile+test-only
+> per the local JVM gate; no simulator/emulator session for on-device verification — a future run
+> should install-and-verify against the live gateway with the shared `atabeth` account, confirming
+> a real pinned direct conversation renders as a favorite row and a pinned group does not). **Next
+> slice candidates (not attempted this run)**: Quick reply widget (still zero-hit — likely the
+> hardest of the four, Glance's interactive-input story for a text field inside a widget needs its
+> own investigation); the mark-read widget action (plumbing confirmed present via `javap` in the
+> prior slice, `ActionCallback`/`actionRunCallback` — genuinely thin glue with almost no new pure
+> decision logic to TDD beyond the already-tested `isUnread` gate, worth reconsidering only once a
+> presence-cache foundation or another action-callback use case makes the "first ActionCallback in
+> this app" investment pay off across more than one call site); a presence-cache foundation for
+> conversation participants (would unlock the favorite-contacts status badge AND several other
+> gaps at once — worth a dedicated foundation slice rather than bolting a one-off presence read
+> onto this widget); on-device transcription for the Feed audio composer; a shared `:sdk-ui`
+> `LanguagePickerDialog`; Voice-cloning onboarding wizard; map/search/reverse-geocoding for the
+> location attachment; PiP (calls + media) — per the orchestrator's guidance this remains a
+> documented, real, multi-slice-epic gap warranting a planning/decomposition pass rather than a
+> bare re-grep.
+
+> On 2026-08-11 **home-screen widgets' second sub-slice landed**: `RecentConversationsWidget`
+> (slice `widget-recent-conversations`, feature-parity §"Home-screen widgets" — RE-PROUVEN via the
+> orchestrator's explicit candidate list: "sous-tranches suivantes du widget écran d'accueil").
+> **RE-PROUVEN before starting**: `git branch -r`/`gh pr list --state open` found no interrupted
+> run of this routine — the one open PR (`#2835`, `claude/keen-hamilton-lvgpqw`) is an unrelated
+> concurrent session on `apps/ios` (naming doesn't match this routine, CI still running at scan
+> time). Re-read the actual widget code from the prior slice (`UnreadCountWidget.kt`,
+> `UnreadWidgetEntryPoint.kt`) rather than trusting the note: confirmed only the unread-count face
+> exists (`grep`-confirmed zero `RecentConversations`/`FavoriteContacts`/`QuickReply` widget files),
+> matching the prior run's own "Restent" list. Read iOS's `MeeshyWidgets.swift` (all 4 widgets) +
+> `WidgetDataManager.swift` end to end before coding — the ordering rule (`isPinned` first, then
+> `lastMessageAt` descending, `.reversed()` composition) and the sender-prefix rule
+> (`formatLastMessage`: `"\(sender): \(preview)"` only when `type != .direct`) both come directly
+> from there, not invented. **Shipped (production, all `apps/android`)**: new
+> `RecentConversationsWidgetPresentation` (`:app/widget`, pure — mirrors the `UnreadWidgetPresentation`
+> precedent's placement, a product decision not a reusable atom) sorts cached conversations
+> pinned-first then by `ConversationRowTime.epochMillis` (existing `:feature:conversations` SSOT,
+> reused not reimplemented), caps at 5, and maps each row via **three existing SSOTs**:
+> `ApiConversation.displayTitle()` (`:sdk-core/theme`), `ApiConversation.accentHex()`
+> (`:sdk-core/theme` — satisfies root `CLAUDE.md`'s "every conversation-context component uses
+> accentColor" rule), and `lastMessagePreview()` (`:feature:conversations`, string resources reused
+> via `me.meeshy.feature.conversations.R` — zero re-implementation of the photo/video/voice/file/
+> location/sender-prefix labels). `RecentConversationsWidget` (Glance `LazyColumn`, up to 5 rows,
+> a small accent-hex color chip per row, bold title when unread) reads the same Room-only
+> `ConversationRepository.cachedConversations()` the unread-count widget already reads (no
+> network, renders instantly from cache even offline). Tapping a row launches an explicit
+> `Intent(ACTION_VIEW, "meeshy://conversation/{id}", context, MainActivity::class.java)` via
+> `androidx.glance.appwidget.action.actionStartActivity(Intent)` (a DIFFERENT overload than the
+> base `androidx.glance.action.actionStartActivity<T>()` the empty state still uses — verified via
+> `javap` on the Glance 1.1.1 jars in `~/.gradle/caches` before writing any code, since the base
+> package has no `Intent`-accepting overload at all) — matched by the app's own pre-existing
+> `Routes.CONVERSATION_SINGULAR_DEEP_LINK` `navDeepLink` (Navigation-Compose 2.8.3's automatic
+> Activity-intent deep-link consumption, confirmed via `libs.versions.toml` + the absence of any
+> manual `handleDeepLink()` call — this Navigation version wires it automatically). **A genuine
+> foundation gap found and closed en route**: resolving a direct conversation's *other* participant
+> needs the current user's id, but `SessionRepository.currentUserId` is in-memory only, populated
+> exclusively by the app's normal startup flow (`AuthRepository.restoreSession()` from
+> `MainActivity`/a ViewModel) — a `GlanceAppWidgetReceiver`-triggered cold process never runs that
+> flow, so it would have silently read `null` most of the time (misattributing "the other
+> participant" whenever the signed-in user happens to sort first in `participants`). Added
+> `TokenStore.userId: String?` (`:core:network`, same shape as the existing `jwt`/`sessionToken`
+> fields, persisted via the same `EncryptedSharedPreferences` — `EncryptedTokenStore.clear()`
+> already wiped it for free since it clears the whole prefs file), written by
+> `SessionRepository.adopt()`/`.refresh()` alongside the in-memory publish, cleared by `.clear()`.
+> The widget's shared `WidgetEntryPoint` (renamed from `UnreadWidgetEntryPoint` — it now serves
+> both widgets, `git mv` preserved history) exposes `tokenStore()` alongside
+> `conversationRepository()`. **+16 new tests** (12 `RecentConversationsWidgetPresentationTest`:
+> empty list, other-participant-name resolution, direct-vs-group sender prefix incl. the "vous"
+> label, unread true/false, pinned-before-recent ordering, recency ordering among unpinned, the
+> 5-row cap, accent-color passthrough, no-last-message fallback; 4 new `SessionRepositoryTest`
+> cases covering `adopt`/`clear`/`refresh` persisting-or-clearing `tokenStore.userId`).
+> **Mutation-proven**, two axes on the new presentation logic: neutralizing the pinned-first sort
+> key (`it.resolvedPreferences?.isPinned == true` → `false`) fails **exactly**
+> `a pinned conversation sorts before a more recently active unpinned one` (11 others green);
+> neutralizing the sender-prefix gate (`!in directConversationTypes` → `true`) fails **exactly**
+> `a direct conversation's preview carries no sender prefix` (11 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the
+> backup afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression; zero test failures across every module,
+> confirmed via `grep -rL 'failures="0"'` over every touched module's XML reports). Reviewer
+> **PASS** (diff `apps/android` only, confirmed via `git diff --stat origin/main` — 16 files, all
+> under `apps/android`; SDK purity — the pure ordering/mapping decision lives in `:app/widget`
+> (correctly, per the grain test: it's a product decision, not a reusable atom — mirrors the
+> `UnreadWidgetPresentation` precedent exactly), `TokenStore.userId` is a passive persisted field
+> with zero "when to do X" logic (an atom, correctly in `:core:network`); SSOT — reuses
+> `displayTitle`/`accentHex`/`lastMessagePreview`/`ConversationRowTime`/`cachedConversations`, zero
+> re-implementation; no coverage floor lowered; no tautological tests). **Not attempted this run**
+> (compile+test-only per the local JVM gate; no simulator/emulator session for on-device
+> verification against the live gateway and a real signed-in `TokenStore.userId` — a future run
+> should install-and-verify with the shared `atabeth` account, confirming a real direct
+> conversation's row shows the CONTACT's name and a group row shows the correct sender prefix on a
+> genuine cold-process widget update, not just the unit-tested decision). **Deliberate, documented
+> scope cut**: no mark-read quick action yet (iOS's `MarkConversationReadIntent` uses
+> `AppIntent`/`Button(intent:)`; the Android equivalent is Glance's `actionRunCallback` +
+> `ActionCallback` — confirmed present in the Glance 1.1.1 API via the same `javap` pass, so the
+> plumbing exists, but wiring the first `ActionCallback` in this app is its own increment, not
+> bundled into a widget that already touched `TokenStore`/`SessionRepository`); no push-refresh on
+> data change (still the standing `WidgetCenter.reloadAllTimelines()`-equivalent gap, shared with
+> `UnreadCountWidget`); only one resizable face (iOS ships 3 explicit `WidgetFamily` layouts —
+> Android's continuous resize was judged sufficient parity for a first pass, matching the existing
+> `UnreadCountWidget`'s own single-face precedent). **Next slice candidates (not attempted this
+> run)**: Favorite contacts / Quick reply widgets (both still zero-hit); the mark-read widget
+> action just scoped above; on-device transcription for the Feed audio composer (still the
+> standing candidate); a shared `:sdk-ui` `LanguagePickerDialog`; Voice-cloning onboarding wizard;
+> map/search/reverse-geocoding for the location attachment; PiP (calls + media) — per the
+> orchestrator's guidance this remains a documented, real, multi-slice-epic gap warranting a
+> planning/decomposition pass rather than a bare re-grep (last re-confirmed zero-hit iteration
+> 44/45, not re-checked again this run).
+
+> On 2026-08-11 **Contacts-list mood-emoji presence landed** (slice
+> `contacts-mood-emoji-presence`, feature-parity §J — a broad-sweep find, per the orchestrator's
+> "continue the broad sweep of `feature-parity.md`" guidance). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (zero open
+> PRs, no branch with recent commits/activity — every `origin/claude/apps/*` branch is stale, oldest
+> observed 2026-07-10, none within 24h). Re-read the actual §J "Contacts list" bullet's own
+> "**Pending:** mood-emoji presence" note against the real code, not just the note: grepped
+> `moodEmoji` across `apps/android/feature/contacts` — genuinely zero hits, all 4
+> `MeeshyAvatar(...)` call sites (`ContactsListTab`, `ContactsScreen`, `DiscoverTab`, `BlockedTab`)
+> never pass it. **The twist**: `MeeshyAvatar` (`:sdk-ui`) already renders a full `moodEmoji: String?`
+> badge (bottom-end overlay, mutually exclusive with the presence dot) — it shipped with the avatar
+> atom itself at some earlier, undocumented point, just never fed a real value from any contacts
+> surface. So this slice is purely the missing **orchestration wire** (which screen decides *which*
+> mood to show), not a new UI atom — exactly the SDK-purity grain test in root `CLAUDE.md`: the atom
+> was already SDK-side, the "when/which" decision was the actual gap, and that decision is app-side.
+> Read iOS `ContactsListTab.swift` (`statusViewModel.statusForUser(userId:)?.moodEmoji` fed into
+> `MeeshyAvatar`) and `StatusViewModel.statusForUser` (`statuses.first { $0.userId == userId }`)
+> before coding. **Shipped (production, all `apps/android`)**: new pure
+> `List<StatusEntry>.statusForUser(userId) → StatusEntry?` (`:sdk-core/status/StatusMapper.kt`,
+> exact port of the iOS lookup, sits next to the existing `orderedForBar` SSOT) backs a new
+> `ContactsListUiState.moodEmojiFor(userId) → String?` (blank-guarded, defense-in-depth even though
+> `StatusMapper.toStatusEntry()` already structurally guarantees a non-blank `moodEmoji` at
+> creation). `ContactsListViewModel` gains a `StatusBarCache` dependency — **reused, not
+> reimplemented**: it's the same `:sdk-core` singleton the Feed status bar already populates as its
+> L1 in-memory cache — and reads its **FRIENDS**-mode snapshot synchronously in `load()`, no
+> dedicated network fetch of its own. `valueOrNull` (existing `CacheResult` SSOT, precedent:
+> `CategoryRepository`) collapses Fresh/Stale/Syncing uniformly since a decorative avatar badge
+> doesn't need a freshness distinction; a cold/never-loaded cache just means no badges paint yet —
+> exactly iOS's own behaviour before its Feed status bar has ever loaded (no popup, no error, the
+> row simply renders without the badge). +9 tests (4 `StatusMapperTest`: found/absent/empty-list/
+> first-of-duplicates; 5 `ContactsListViewModelTest`: pure state blank-guard, live emoji painted
+> from the FRIENDS cache on load, no emoji for a friend with no live status, and — the one genuinely
+> risky wiring detail — the DISCOVER-mode cache never leaking into a Contacts row). **Mutation-
+> proven**, two axes: dropping `moodEmojiFor`'s `.takeIf { it.isNotBlank() }` guard fails **exactly**
+> the pure state test `moodEmojiFor resolves the live mood emoji from moodStatuses` (21 others
+> green); swapping the cache read from `StatusFeedMode.FRIENDS` to `.DISCOVER` fails **exactly** the
+> two mode-scoped tests (`a friend with a live status paints...` + `the DISCOVER status cache never
+> leaks...`, 19 others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`),
+> restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice —
+> no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git diff --stat origin/main` — 5 files, `feature/contacts` + `sdk-core/status` only; SDK purity —
+> the pure lookup lives in `:sdk-core`, the injected `StatusBarCache` singleton is consumed not
+> reimplemented, all "which mode / when to read" orchestration stays app-side in the
+> `:feature:contacts` ViewModel; SSOT — reuses `MeeshyAvatar`'s existing badge slot, `StatusBarCache`,
+> `valueOrNull`, zero re-implementation; no coverage floor lowered; no tautological tests). **Not
+> attempted this run** (compile+test-only per the local JVM gate; no simulator/emulator session for
+> on-device verification — a future run should install-and-verify against the live gateway with the
+> shared `atabeth` account, confirming a real friend's live mood status renders on their Contacts
+> avatar). **Deliberate, documented scope cut**: only the Contacts tab is wired (the checklist bullet
+> this closes is specifically "Contacts list"); Discover/Requests/Blocked tabs' `MeeshyAvatar(...)`
+> call sites still pass no `moodEmoji` — a natural, small follow-up (same pattern, Discover would read
+> the **DISCOVER**-mode cache, not FRIENDS). No cross-screen reactivity: a mood set/cleared while
+> Contacts is already open only shows up on the next `load()` (pull-to-retry or re-entry), never live
+> via a socket/Flow — matches the "best-effort decoration, not primary content" scope; iOS itself has
+> no dedicated live-update wiring into this specific row either. **Housekeeping still outstanding,
+> not actioned this run**: `NOTES.md` remains ~1650 lines, over the ~1500-line hygiene threshold —
+> still needs its own dedicated archive commit (never bundled with a slice) on a future run; flagged
+> again at the prior run and not yet picked up. **This very entry now also pushes `PROGRESS.md`
+> itself just past ~1500 lines** — the next run (any lane) should open a dedicated
+> `chore(tasks): archive PROGRESS.md` increment (keep the ~300 newest lines, move the rest to
+> `PROGRESS-archive-2026-08.md`) before or alongside the `NOTES.md` archive, never bundled with a
+> slice/item commit. **Next slice candidates (not attempted this run)**:
+> the Discover/Requests/Blocked mood-emoji follow-up just noted above; on-device transcription for
+> the Feed audio composer (still the standing candidate, needs its own foundation — parallel
+> `AudioRecord` PCM capture or a post-hoc `MediaCodec` AAC→PCM decode, since the composer currently
+> records MPEG_4/AAC not raw PCM); a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker
+> UIs still exist); Voice-cloning onboarding wizard / voice-profile management (§K, both still
+> unshipped); map/search/reverse-geocoding for the location attachment; **widgets/PiP categorical
+> re-check, re-confirmed zero-hit this run too**: `grep -rli "glanceappwidget\|appwidgetprovider"` and
+> `grep -rli "picture-in-picture\|pictureinpicture\|enterPip\|PipParams"` across all of `apps/android`
+> both return **zero** matches (Q. Cross-cutting infrastructure already carries the explicit
+> `- [ ] Home-screen widgets (...)` line from the iteration-19 audit-gap fix; PiP only has the H.
+> Calls section's partial `- [~] Call states: ... PiP / floating call pill` line, not a standalone
+> entry). This remains a real, planned, multi-slice-epic gap — not a missing checklist line, not a
+> false "next slice" note — needing its own concrete sub-slice decomposition pass (e.g. a minimal
+> static `GlanceAppWidget` scaffold as the first foundation slice) before it can be picked up as a
+> right-sized single-run slice; documented here again explicitly per the orchestrator's standing
+> guidance rather than re-grepped-and-dropped silently.
+
+> On 2026-08-11 **the hard-press conversation preview popover landed** (slice
+> `conversation-hardpress-preview`, feature-parity §B — a genuine gap RE-PROUVEN, not just
+> re-copied from the note, via a broad sweep of `feature-parity.md`'s ~136 unchecked boxes per the
+> orchestrator's explicit "continue the broad sweep" guidance). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (only two
+> unrelated open web PRs, `#2810`/`#2811`, both `apps/web` and already merged into `origin/main` by
+> the time this run finished — origin/main advanced under this run purely from other concurrent
+> sessions, confirmed via `git status --short` showing only `apps/android` files touched, never via
+> the noisier `git diff origin/main` two-dot form which conflates "your branch is behind" with
+> "your branch changed something"; `git diff origin/main...HEAD` or plain `git status` is the
+> correct check in this multi-worktree repo where `refs/remotes/origin/main` is shared across every
+> worktree and can move mid-run from an unrelated session's fetch). Read iOS's
+> `ConversationPreviewView` (`ConversationListHelpers.swift`) closely before coding: a header
+> (avatar/title/member-count/pin+mute badges/action buttons) plus a scroll of the last 5 cached
+> messages rendered as real, non-interactive `ThemedMessageBubble`s, shown via native
+> `.contextMenu(menuItems:preview:)` ABOVE the action menu on long-press; messages are loaded once
+> per row into `ConversationListViewModel.previewMessages[id]` (cache-first via
+> `CacheCoordinator.shared.messages.load`, `Array(data.suffix(5))`, background-refresh on
+> stale/empty). **Shipped (production, all `apps/android`)**: new `MessageDao.recentForConversation`
+> (`ORDER BY createdAt DESC LIMIT :limit`, a genuinely new bounded query — the existing
+> `listForConversation` loads a conversation's ENTIRE history unbounded, wasteful for a "last 5"
+> peek on an actively-used thread) → `MessageRepository.recentMessages(conversationId, limit=5)`, a
+> cache-ONLY read (no `messagesStream`/SWR machinery, no background revalidate — deliberately
+> narrower than iOS's own background-refresh half: a peek the user might dismiss in under a second
+> should never spawn unbounded background sync work). Shared the entity→domain decode step
+> (`MessageEntity.toLocalMessage()`, `:sdk-core`) between this new method and the existing
+> `MessageCacheSource.observe()`, removing the prior duplication rather than adding a third copy.
+> `ConversationListViewModel` gains `previewMessages: Map<String, List<LocalMessage>>` state +
+> `loadPreviewMessages(id)` (double-load guard via a `containsKey` + in-flight `Set` check, mirrors
+> iOS's `previewMessages[id] == nil && !previewLoadingInFlight.contains`) + `currentUser: MeeshyUser?`
+> alongside the existing `currentUserId` (so the preview card can resolve the Prisme Linguistique —
+> `MeeshyUser` already implements `ContentLanguagePreferences` — without a second session read at
+> render time). New pure `previewLines()` (`:feature:conversations`) reuses `lastMessagePreview`
+> (the row's own last-message formatter) verbatim per message via a small `ApiMessage →
+> ApiConversationLastMessage` adapter feeding `message.displayContent(prefs)` — the SAME Prisme
+> resolution the row's own preview line already gets, never `translations.first()`, per root
+> `CLAUDE.md`'s explicit "le prisme s'applique... aux previews" rule. `combinedClickable`'s
+> `onLongClick` now fires `onLoadPreview()` before opening the menu; `ConversationContextMenu`'s
+> `DropdownMenu` gained a new `ConversationPreviewCard` (title + pin/mute badges + up to 5 message
+> lines, or a loading/empty label) as its FIRST child, `HorizontalDivider()`, then the pre-existing
+> action items — mirrors iOS's preview-above-menu shape without needing a custom `Popup` (Compose's
+> `DropdownMenu` content lambda already accepts arbitrary composables, not just
+> `DropdownMenuItem`s). +19 new tests (3 `MessageDaoTest`: newest-first ordering scoped to the
+> conversation, limit respected, unknown-conversation empty; 4 `MessageRepositoryTest`: chronological
+> order, zero network calls, cold-cache empty, local send-state passthrough; 8
+> `ConversationPreviewMessagesTest`: empty list, ordering, sender prefix, "vous" label, media-type
+> fallback, Prisme-preferred-translation-wins, no-match-shows-original, null-prefs-still-resolves-
+> Prisme; 4 `ConversationListViewModelTest`: populates on load, never re-queries the same
+> conversation twice, doesn't re-query while already in flight, independent per-conversation state).
+> **Mutation-proven**, two axes: neutralizing `loadPreviewMessages`'s already-loaded guard (`if
+> (_state.value.previewMessages.containsKey(id)) return` → `if (false) return`) fails **exactly**
+> `load_preview_messages_never_queries_the_repository_twice_for_the_same_conversation` (41 others
+> green); neutralizing `previewLines`'s Prisme call (`message.displayContent(resolved)` →
+> `message.content`) fails **exactly** the "Prisme preferred translation wins" + "null preferences
+> still resolves Prisme" tests (6 others green) — both applied via a scratch `cp`-backed edit
+> (never `git checkout --`), restored via `cp`, diffed clean against the backup afterward. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching every prior slice —
+> no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git status --short`; SDK purity — the entity decode + bounded query + cache-only repository read
+> live in `:sdk-core`/`:core:database` as stateless building blocks, all orchestration [double-load
+> guard, state map] and Compose UI glue stay app-side in `:feature:conversations`; SSOT — reuses
+> `lastMessagePreview`/`LanguageResolver`/`ApiMessage.displayContent`, zero re-implementation; no
+> coverage floor lowered; no tautological tests). **Full on-device verification against the live
+> gateway** (`meeshy_pixel8`, real `atabeth` account): hit a genuine, HOST-CONTENTION-caused
+> `ActivityManager` ANR mid-verification (load average ~7-8, three concurrent Claude Code sessions
+> plus an active Xcode `xctest` run sharing the host with this emulator) — diagnosed via `adb
+> logcat`'s `InputDispatcher: … spent Nms processing MotionEvent` lines (proves the SYSTEM was slow
+> to *deliver* the touch, not that the app failed to *handle* one already delivered) before
+> concluding it was unrelated to the diff; recovered via "Close app" + relaunch once host load
+> visibly dropped, zero code changes needed (see `NOTES.md` for the full diagnostic writeup — a
+> reusable playbook for the next host-contention false-positive). Once recovered: long-pressed the
+> real `Belva Tano` thread (`uiautomator dump` + a grepped `content-desc="Belva Tano"` bounds
+> attribute, center-tapped via `input touchscreen swipe x y x y 700`) — the preview card rendered
+> the real title plus 5 real cached messages in chronological order (Portuguese content, proving the
+> Prisme/decode pipeline round-trips real gateway data, not a fixture), divider, then the unchanged
+> Pin/Mute/Mark-as-read/Archive/category-search menu below. Tapped outside to dismiss (clean, no
+> crash, returned to the list) then re-opened the SAME row: the card rendered instantly with
+> identical content (proves the already-loaded cache-hit guard skips the redundant Room query on a
+> real device, not just in the mocked unit test). `adb logcat` checked across the whole session for
+> `FATAL EXCEPTION`/`AndroidRuntime` app crashes — none (the one `D AndroidRuntime: Shutting down VM`
+> line was normal noise from an earlier `am force-stop`, not a crash). Emulator left idle on the
+> conversation list afterward. **Deliberate, documented scope cut**: no member-count line, no
+> call/search/info quick-action buttons in the card (iOS's `ConversationPreviewView` has both) —
+> the core value (a peek at recent activity before deciding an action) is delivered; the extra chrome
+> would need new callback wiring this slice didn't need to touch. **Also inherited, not introduced,
+> a pre-existing `lastMessagePreview` quirk**: a mid-list message with blank content and no
+> recognized media type falls back to the same "No messages yet" label the row uses for a WHOLE
+> empty conversation — seen live on-device on the real `Belva Tano` thread, documented in `NOTES.md`
+> rather than fixed here (out of scope: this slice reuses the formatter, not rewrites its fallback
+> semantics). **Housekeeping flagged, not actioned this run**: `NOTES.md` is now ~1630 lines, over
+> the ~1500-line hygiene threshold — needs its own dedicated archive commit (never bundled with a
+> slice) on a future run. **Next slice candidates (not attempted this run)**: on-device transcription
+> for the Feed audio composer (still the standing candidate — confirmed via `grep`/websearch this run
+> that Android's `RecognizerIntent.EXTRA_AUDIO_SOURCE` genuinely supports feeding a custom PCM audio
+> source to `SpeechRecognizer` for on-device recognition, unlike the framework's live-mic-only
+> reputation — but the composer currently records `MediaRecorder` MPEG_4/AAC, not raw PCM, so a real
+> implementation needs either a parallel `AudioRecord` PCM capture during recording or a post-hoc
+> `MediaCodec` AAC→PCM decode step first; right-sized as its own foundation slice, not attempted
+> here); a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker UIs still exist); Voice-
+> cloning onboarding wizard / voice-profile management (§K, both still unshipped); map/search/
+> reverse-geocoding for the location attachment; widgets/PiP — per the orchestrator's standing
+> guidance this remains a documented, real gap needing a planning pass, not re-grepped again this
+> run (already re-confirmed zero-hit at iteration 44/45).
+
+> On 2026-08-11 **"Change email / phone" landed** (slice `settings-account-contact-change`,
+> feature-parity §K — found via the orchestrator's explicit "broad sweep of `feature-parity.md`"
+> guidance rather than staying scoped to the Feed composer). **RE-PROUVEN before starting**:
+> `git branch -r`/`gh pr list --state open` found no interrupted run of this routine (the one open
+> PR, `#2807`, is an unrelated concurrent session on `apps/ios` calls, headRef doesn't match this
+> routine's naming). Confirmed the gap for real, not just from the note: `grep`ping
+> `changeEmail|verifyEmailChange|changePhone|verifyPhoneChange` across `apps/android` found the
+> wire-level plumbing already complete (`UserApi`/`UserRepository`, `UserRequests.kt` DTOs, all
+> pre-existing) but **zero** call sites under `feature/` or `app/` — the same "wired but unconsumed"
+> shape as the note claimed, now independently confirmed. Read iOS's `SecurityView.swift` (1053
+> lines) end to end before coding: email confirms out-of-band (a link mailed to the new address —
+> `submitEmailChange()`/`resendEmailVerification()` only; iOS never calls `verifyEmailChange`
+> anywhere in production code either, confirmed via grep — only its test mocks reference it, so
+> skipping that wire-up on Android is TRUE parity, not a scope cut) with a 60s resend cooldown
+> Timer; phone confirms in-app via a 6-digit SMS code (`submitPhoneChange()` → `verifyPhoneCode()`).
+> Both sections also expose a "Verify" quick action for an already-set-but-unverified value that
+> resubmits without opening the editor first. **Shipped (production, all `apps/android`)**: new
+> `AccountContactViewModel`/`AccountContactScreen` (`:feature:settings`), reached via a new
+> "Email & phone" Settings row between Two-factor and Active sessions. Reuses
+> `SignupFieldValidation.isEmailValidLocally`/`isPhoneValidLocally` (`:core:model`, already the
+> registration wizard's SSOT) for the local submit gates — no new validator duplicated. Reuses
+> `MagicLinkCountdown` (`:core:model`, previously magic-link-login-only) verbatim for the 60s email
+> resend cooldown — same `start`/`tick`/`canResend`/`expired` shape the magic-link flow already
+> uses, just a second call site; deliberately did NOT rename/generalize the type for this (only the
+> 2nd occurrence — this codebase's established convention is to duplicate small glue until a 3rd
+> call site forces a shared abstraction, and `MagicLinkCountdown`'s shape was already fully generic,
+> so reusing beat both renaming and reimplementing). Phone code entry filters non-digits +
+> truncates to 6 as typed (mirrors iOS's `.adaptiveOnChange` filter), so `canVerifyPhoneCode` is a
+> plain length check. Error mapping follows the `TwoFactorErrorKind`/`ChangePasswordError`
+> precedent — a fixed per-action `AccountContactErrorKind` the screen localizes (en/fr/es/pt),
+> never the gateway's raw English message (`contact-change.ts`'s `sendBadRequest` calls are
+> free-text, not structured codes). Verify-phone-code 400 maps to a dedicated "incorrect or expired
+> code" message (mirrors iOS's own targeted P1 fix for this exact case), other failures generic.
+> On success, `verifyPhoneCode()` calls `SessionRepository.refresh()` so the displayed number
+> updates immediately (mirrors iOS's `authManager.checkExistingSession()`). Both flows are
+> inherently *online* (the gateway must reach a real inbox/handset) — online-only like
+> `ChangePasswordViewModel`, never optimistic/offline-queued like `ProfileViewModel`. +31 tests
+> (`AccountContactViewModelTest`: buffer editing, both submit gates, success/failure transitions,
+> the cooldown tick/expire/resend-unlock cycle via `advanceTimeBy`, the double-tap in-flight guard
+> on both submit paths and phone-verify, the two "Verify current value" quick actions, and
+> field-scoped error clearing — editing email never clears a phone error and vice versa).
+> **Mutation-proven**: neutralizing `canVerifyPhoneCode`'s length check (`== PHONE_CODE_LENGTH` →
+> `true`) fails **exactly** `canVerifyPhoneCode_falseUntilExactlySixDigits` +
+> `verifyPhoneCode_whenInvalid_doesNothing` (29 others green); neutralizing
+> `toPhoneVerifyErrorKind`'s `httpStatus == 400` branch fails **exactly**
+> `verifyPhoneCode_http400_mapsToInvalidCode` (30 others green). Both applied via a scratch
+> `cp`-backed edit (never `git checkout --`), restored via `cp`, diffed clean against the backup
+> afterward. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks,
+> matching every prior slice — no build-graph regression). Reviewer **PASS** (diff `apps/android`
+> only; SDK purity — the two reused pure SSOTs live in `:core:model`, all orchestration/network/
+> session-refresh glue stays app-side in `:feature:settings`; SSOT — no re-implementation of
+> email/phone format validation or countdown ticking; no coverage floor lowered; no tautological
+> tests). **Not attempted this run** (no simulator/emulator session for on-device verification —
+> this run was compile+test-only per the local JVM gate; a future run should install-and-verify
+> against the live gateway with the shared `atabeth` account, following the same
+> `uiautomator dump` + real `bounds=` discipline as every prior on-device pass in this file).
+> **Next slice candidates (not attempted this run)**: on-device transcription for the Feed audio
+> attachment (still the standing candidate, needs its own foundation); a shared `:sdk-ui`
+> `LanguagePickerDialog` (3 near-identical picker UIs now exist — registration inline grid,
+> Settings' `RegionalLanguageDialog`, the Feed composer's `ComposerLanguagePickerDialog`); Voice-
+> cloning onboarding wizard / voice-profile management (§K, both still unchecked, both genuinely
+> unshipped — no `VoiceProfile`/`VoiceCloning` surface exists anywhere in `apps/android`); map/
+> search/reverse-geocoding for the location attachment (needs a Maps SDK dependency + API key);
+> widgets/PiP categorical re-check — per the orchestrator's standing guidance, NOT re-grepped this
+> run (already re-confirmed zero-hit at iteration 44/45, already has checklist lines from the
+> iteration-19 audit-gap fix — this remains a documented, real, multi-slice-epic gap needing a
+> concrete sub-slice decomposition pass, not another bare re-grep).
+
+> On 2026-08-11 **two-factor authentication was restored** (slice `settings-two-factor-auth`,
+> feature-parity §L — a RE-PROUVER find during a broad re-sweep of `feature-parity.md`'s ~140
+> unchecked boxes, per the orchestrator's explicit "the Feed composer is quasi-bouclé, re-balaie
+> largement" guidance). **The finding**: `SettingsScreen.kt`'s 2FA row was removed the day before
+> (commit `761164959`, "2FA : ligne retiree — aucune route gateway n'existe") — but that claim was
+> factually wrong. `services/gateway/src/routes/two-factor.ts` + `TwoFactorService.ts` register
+> real, tested, live endpoints under `auth/2fa` (`status`/`setup`/`enable`/`disable`/`verify`/
+> `backup-codes`, present since a much older commit `c44ded3d5`, long before the removal), and iOS
+> already ships this exact flow end to end (`TwoFactorViewModel`/`TwoFactorSetupView`/
+> `TwoFactorService` in `packages/MeeshySDK`). This is the Android port. **Shipped (production, all
+> `apps/android`)**: `TwoFactorCode` (`:core:model`, pure TOTP/backup-code format validation
+> mirroring the gateway's `two-factor-schemas.ts` zod rules: exactly 6 digits for
+> enable/backup-codes, 6-8 alphanumeric for disable) + `TwoFactorQrDataUrl` (`:core:model`, pure
+> base64-payload extraction from the setup QR `data:image/png;base64,...` URL — kept independent
+> of `Base64.decode`/`BitmapFactory`, which stay screen-side glue). `AuthApi`/`AuthRepository` gain
+> the 6 `auth/2fa` endpoints (mirrors the existing `auth/sessions` pattern verbatim). New
+> `TwoFactorViewModel` (`:feature:settings`) drives a `TwoFactorStage` state machine — `STATUS` →
+> `SETUP` (QR + secret + TOTP confirm) → `BACKUP_CODES`, plus `DISABLE` (password + code) and
+> `REGENERATE_CODES` — each failure mapped to a fixed per-action `TwoFactorErrorKind` (mirrors
+> iOS's own fixed localized strings rather than parsing the server message). `TwoFactorScreen` is
+> pure Compose glue. Settings row restored (reused an orphaned-since-yesterday
+> `settings_two_factor` string resource), wired through new `Routes.TWO_FACTOR`. **+33 tests** (13
+> `TwoFactorCodeTest`, 7 `TwoFactorQrDataUrlTest`, 20 `TwoFactorViewModelTest` — status load,
+> setup→enable→backup-codes happy path, backup-code regeneration, disable, the malformed-code/
+> missing-password local gates, the `confirmSetup` double-tap guard, and the per-action failure→
+> error-kind mapping). Also updated the four call-sites of `AuthApi`'s fake test double
+> (`AuthRepositoryTest`, `SessionRepositoryTest`, `AuthViewModelTest`, `RegistrationViewModelTest`)
+> to implement the 5 new interface methods so the interface change stayed compile-clean everywhere.
+> **Mutation-proven**: dropping `isValidTotp`'s length check fails **exactly** the 3
+> boundary-length tests (10 others green); dropping `confirmSetup`'s stage/gate check fails
+> **exactly** the malformed-code and in-flight-guard tests (18 others green). Both applied via a
+> scratch `cp`-backed edit (never `git checkout --`), restored via `cp`. **Gate**:
+> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, matching the prior slice's
+> count — no build-graph regression). Reviewer **PASS** (diff `apps/android` only, confirmed via
+> `git diff --stat origin/main` — no other files touched; SDK purity — the two pure validators live
+> in `:core:model`, all orchestration/state-machine/Android-framework glue [Base64 decode, Bitmap
+> decode] stays app-side in `:feature:settings`; SSOT — reuses `AuthRepository`/`NetworkResult`/
+> `apiCall`/`apiCallUnit`, no reimplementation; no coverage floor lowered; no tautological tests).
+> **Full on-device verification against the live gateway** (`meeshy_pixel8`, real `atabeth` account
+> — the same shared account used across this whole routine, NOT a disposable test account):
+> installed the fresh build (`:app:installDebug` — `./meeshy.sh check` alone does not install),
+> relaunched, session auto-restored. Every tap resolved via `uiautomator dump` + a grepped
+> `bounds=`/clickable-ancestor attribute. Navigated Settings → Privacy & Security → **Two-factor
+> auth** (row correctly positioned between Change password and Active sessions, exactly as coded):
+> confirmed **Disabled** status rendered from a real `GET https://gate.meeshy.me/api/v1/auth/2fa/
+> status` (`200`, 97ms, `adb logcat`). Tapped **Set up two-factor authentication**: a real `POST
+> .../auth/2fa/setup` (`200`, 154ms) returned a genuine secret + QR data URL, and the screen
+> rendered an actual scannable QR code image (decoded via `TwoFactorQrDataUrl.base64Payload` →
+> `Base64.decode` → `BitmapFactory` on a REAL server payload, not a synthetic fixture) plus the
+> manual-entry secret text; the **Activate** button correctly rendered disabled/greyed (empty code
+> input → `canConfirmCode` gate false). **Deliberately stopped here** rather than completing the
+> enable flow: computing a valid live TOTP code from the secret was possible, but actually calling
+> `/enable` would have toggled real 2FA on this shared, password-unknown-to-this-session account —
+> an unacceptable risk of locking every future run of this routine (both lanes use this account)
+> out of it. Verified the safe exit path instead: tapped the back arrow, confirmed `cancel()` fired
+> **zero** network calls (`adb logcat` filtered on `2fa` — empty since the setup call), returned to
+> `STATUS` showing **Disabled** again — proving `setup()` is non-destructive/idempotent and the
+> account was left in the exact state it started in. `adb logcat` checked across the whole session
+> for `FATAL EXCEPTION`/`AndroidRuntime` crashes — none. Emulator left on the Settings screen
+> afterward (not mid-flow). **Also fixed two stale `feature-parity.md` checkboxes discovered while
+> re-proving this item**: "Active device sessions" was already fully shipped (`761164959`,
+> 2026-08-10) but never checked off — confirmed still live on-device this run, now checked.
+> **Next slice candidates (not attempted this run)**: "Change email / phone (two-step
+> verification)" — the wire-level plumbing already exists (`UserApi.changeEmail`/`verifyEmailChange`/
+> `resendEmailChangeVerification`/`changePhone`/`verifyPhoneChange`, `UserRequests.kt` models) but
+> **no UI screen consumes it anywhere** — a genuine gap, right-sized for a dedicated slice (iOS's
+> `SecurityView` has the reference flow inline); on-device transcription for the Feed audio
+> attachment (still the standing candidate, needs its own foundation); a shared `:sdk-ui`
+> `LanguagePickerDialog` (3 near-identical picker UIs now exist); map/search/reverse-geocoding for
+> the location attachment; widgets/PiP — per the orchestrator's guidance this remains a documented,
+> real gap needing a planning pass, not a re-grep (last re-confirmed zero-hit iteration 44/45, not
+> re-checked again this run per the standing guidance to stop bare re-grepping it).
+
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`PROGRESS-archive-2026-08.md`](./PROGRESS-archive-2026-08.md) (same prepend/newest-first order).
 > Archived 2026-08-10 (routine iteration 30, hygiene pass — pure archiving increment, no
@@ -9,763 +916,3 @@
 > inverted-list decomposition, `notification-channel-id-drift`,
 > `feed-composer-reel-classification`).
 
-> On 2026-08-10 **real `MediaRecorder` voice capture landed, closing the chat voice pill's own
-> standing "pending follow-up"** (slice `chat-voice-recording-capture`, §Q — the routine's own
-> two-item candidate list from `chat-voice-recording-pill`, 2026-07-15: "real MediaRecorder/
-> AudioRecord capture feeding meter(), and the voice-attachment send pipeline"). **RE-PROUVEN
-> before starting**: found two stale-but-recent remote branches
-> (`claude/apps/android/feed-composer-media-attachments`, `claude/apps/ios/inline-video-top-
-> controls`) via `git branch -r` — both diffed byte-identical to already-merged main commits
-> (`dd151eac4` #2759, `7f49bf904` #2767), i.e. lost-the-race duplicates from a concurrent
-> session, not interrupted work of this routine; deleted both remote branches (no PR to close,
-> nothing to adopt) before choosing a slice. Read `ChatScreen.kt`'s composer: confirmed the
-> pill's tick loop only ever called `.tick()`, never `.meter()` — `VoiceRecordingPill`'s own
-> `RecordingWaveform` doesn't even read `session.levels`, it paints a fully synthetic
-> `rememberInfiniteTransition` animation (its own doc comment already said so) — and Stop/Send
-> both discarded the take unconditionally. **Shipped (production, all `apps/android`)**: new pure
-> `me.meeshy.sdk.model.waveform.MicAmplitudeDecibels.toDecibels` (`:core:model`, alongside
-> `AudioLevelNormalizer`) converts `MediaRecorder.getMaxAmplitude()`'s linear PCM reading
-> (`0..32767`) to the dB domain the existing normalizer expects — genuinely new surface, not a
-> port, since Android has no direct dB-metering API unlike iOS's `AVAudioRecorder.averagePower`.
-> New pure `VoiceRecordingFile.next(nowMillis)` (`:feature:chat`, mirrors `:feature:feed`'s
-> `CameraCaptureFile` byte-for-byte) names `voice_<millis>.m4a`. `ChatComposer` now: requests
-> `RECORD_AUDIO` on Mic tap (mirrors `feature:calls`' `CallPermissions`/`withMediaPermissions`
-> pattern verbatim), starts a real `MediaRecorder` (`MPEG_4`/`AAC`, API-31-aware constructor
-> branch) writing into `cacheDir/voice`, polls `maxAmplitude` every 100 ms tick and feeds it
-> through `MicAmplitudeDecibels.toDecibels` into `VoiceRecordingSession.meter()`. Rewrote
-> `RecordingWaveform` to render `session.levels` directly (`animateFloatAsState` per bar) instead
-> of the synthetic placeholder. Stop and Send both finalise the take identically (no staging tray
-> exists anywhere in this composer — every other attachment kind sends on pick too) and, only on
-> a `Completed` outcome (`canSend` already gates both buttons), hand the real bytes to the
-> **existing, unmodified** `onPickFile`/`ChatViewModel.sendFileAttachment` — zero VM changes,
-> since `AttachmentMessageType.forMime("audio/mp4")` already resolves `"audio"` and
-> `ComposerSendGate` already gates it on `canSendAudios`. +10 tests (`MicAmplitudeDecibelsTest`:
-> silence floor, defensive negative amplitude, full/half-scale dB, monotonicity, above-reference
-> safety; `VoiceRecordingFileTest`: naming determinism/uniqueness, mirroring
-> `CameraCaptureFileTest`). **Mutation-proven**: hardcoding `toDecibels` to always return
-> `FLOOR_DB` fails **exactly** the 4 discriminating tests (monotonicity, full/half-scale,
-> above-reference) — the 2 silence-floor tests (already expecting `FLOOR_DB`) correctly stay
-> green; reverted via a scratch `cp`-backed edit (never `git checkout --`), re-confirmed green.
-> **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, zero failures).
-> Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model`/`:feature:chat` files + 2 new
-> test files, `VoiceRecordingPill.kt`/`ChatScreen.kt` edited; SDK purity — the dB conversion is a
-> stateless building block reusable by any future recorder, "when/how to request the mic and
-> wire it" stays app-side; SSOT — `AttachmentMessageType`/`ComposerSendGate`/`MimeTypeResolver`
-> all reused verbatim, zero new classification logic; no coverage floor lowered; no tautological
-> tests). **Full on-device verification against the live gateway**: tapped the real Mic button
-> (exact `uiautomator dump` bounds), confirmed Android's system mic-in-use indicator appeared
-> (genuine hardware capture), recorded ~24s, confirmed via `run-as` a real growing
-> `voice_<millis>.m4a` file (67 KB mid-recording) in `cacheDir/voice`. Tapped Send: `adb logcat`
-> confirmed a real `POST /api/v1/attachments/upload` (`Content-Type: audio/mp4`, 89706-byte body)
-> returning 200 with the gateway's **own independent server-side audio probe** —
-> `duration:22427,bitrate:16932,sampleRate:8000,codec:"MPEG-4/AAC",channels:2` — definitive proof
-> of genuine playable AAC audio, not silence-shaped garbage. **Investigation dead-end, confirmed
-> NOT a bug in this diff**: the resulting message stayed locally-pending (clock icon) after the
-> upload succeeded — traced to the pre-existing two-stage `OutboxFlushWorker` dependency chain
-> (`messageLanes`, computed once at the START of `doWork()`, needs a SEPARATE later flush pass
-> once the media graft resolves the `dependsOn`, not a re-check within the same pass) —
-> corroborated as pre-existing and unrelated to this diff because **other, older test messages
-> already sitting in this exact conversation's local outbox from unrelated prior verification
-> sessions** (`flip-test-verify`, `ime-verify-flip-c3` — plain text, no attachment dependency at
-> all) show the identical stuck-pending symptom, and a fresh plain-text message sent during this
-> same verification pass got stuck the same way. This diff never touches `OutboxFlushWorker`/
-> `MessageRepository`/the drain code — same family as the iOS
-> `reference_persistent_queue_must_not_wake_only_on_a_network_edge` finding (a persistent queue
-> that only wakes on one trigger silently stalls). **New backlog candidate, not attempted this
-> run**: make `OutboxFlushWorker` re-drain newly-eligible message lanes within the same `doWork()`
-> pass once a dependency it just delivered unblocks them (or schedule a same-run second pass) —
-> affects every chat attachment send (file, clipboard, now voice), not scoped to this slice.
-> **Next slice candidates (not attempted this run)**: the `OutboxFlushWorker` same-run re-drain
-> fix above; the §Q persistent TUS checkpoint store (Room table, resume-after-app-kill); 409
-> HEAD-recovery; a dedicated `WorkManager` foreground upload-progress chain; location/per-post-
-> language attachments for the Feed composer; widgets/PiP (re-grepped this run too — still zero
-> `AppWidgetProvider`/`GlanceAppWidget`/`PictureInPicture` hits, due for a real pass soon per the
-> ~5-run cadence).
-
-> On 2026-08-10 **TUS chunked upload landed — sub-slice 1 of the standing "chunked/resumable
-> large-video TUS upload" candidate, decomposed this run instead of attempted whole** (slice
-> `tus-chunked-upload-core`, feature-parity §Q — flagged for several runs as "the largest/riskiest
-> open candidate, likely needs its own sub-slice decomposition before starting"). **RE-PROUVEN
-> before starting**: `git branch -r`/`gh pr list --state open` found only two branches touched in
-> the prior 24h (`claude/apps/android/feed-composer-media-attachments`,
-> `claude/apps/ios/inline-video-top-controls`), both already merged (PRs #2759, #2767) — no
-> interrupted run to resume. Read `TusUploadRepository`/`TusApi` end to end (still exactly the
-> single-shot, whole-file-in-one-PATCH shape the doc comments described) and the gateway's
-> `services/gateway/src/routes/uploads/tus-handler.ts` to confirm the server side is a genuine
-> `@tus/server` mount — meaning it ALREADY speaks multi-PATCH chunked uploads per the tus.io
-> protocol, nothing server-side needed to change; the client just never split the body. **Concrete
-> decomposition worked out before coding, to keep this run's slice small and low-risk**: sub-slice 1
-> (this run) chunks the body into bounded PATCH calls **within one upload session**, deferring
-> persistent-checkpoint/resume-after-app-kill (needs a Room table + reading the source file lazily
-> instead of the already-fully-resident `MediaUploadItem.bytes`) and 409 HEAD-recovery to later
-> sub-slices — both explicitly out of scope this run, not silently dropped. **Shipped (production,
-> all `apps/android`)**: new pure `TusChunkPlan.chunks(totalBytes, chunkSize): List<TusChunkRange>`
-> (`:core:model`, alongside `TusUploadContext`/`TusUploadMetadata`) computes chunk boundaries —
-> zero-byte body → one zero-length final chunk (still needs a PATCH to reach `onUploadFinish`);
-> body ≤ chunk size → one final chunk unchanged from before; exact multiples and remainders split
-> correctly, exactly one range ever marked `isFinal`. `TusApi` gains `uploadChunk` (`Response<Unit>`)
-> for every non-final chunk — the gateway's `@tus/server` returns a bare `204 No Content` for any
-> PATCH that doesn't reach the declared upload length, so it can never decode as `uploadData`'s
-> `ApiResponse<TusUploadFinishData>` envelope, which only the FINAL chunk's PATCH actually returns
-> (confirmed by reading `onUploadFinish`'s own `status_code: 200` JSON-body branch in
-> `tus-handler.ts` — every earlier PATCH falls through to the TUS server's own default response).
-> A new `TusApi.patchChunk` extension (`:core:network`, alongside the pre-existing `createSession`)
-> keeps `retrofit2.Response` confined to `:core:network` — mirrors the existing precedent exactly,
-> `:sdk-core` never references `Response` directly. New `chunkCall` helper in `ApiCall.kt` (mirrors
-> `headerCall` minus the header extraction — success/failure is the only signal a `204` carries).
-> `TusUploadRepository.upload` now loops `TusChunkPlan.chunks(item.bytes.size, chunkSizeBytes)`:
-> every non-final range PATCHes via `patchChunk`, stopping and returning the failure immediately if
-> any chunk fails; the final range still goes through the pre-existing `uploadData` path unchanged.
-> `chunkSizeBytes` defaults to a new `DEFAULT_CHUNK_SIZE_BYTES` (10 MB, matches iOS
-> `TusUploadManager.chunkSize`) and is a function parameter (not a constructor field) specifically
-> so Dagger/Hilt injection stays untouched — a raw `Long` constructor parameter would need its own
-> qualified binding and break `@Inject constructor`. A body no larger than one chunk (every existing
-> caller today — compressed images) produces exactly the same single `uploadData` PATCH as before;
-> all 13 pre-existing `TusUploadRepositoryTest` cases stayed green unchanged, proving zero behaviour
-> drift for the common case. +9 tests (`TusChunkPlanTest`: zero-byte/under/exact/multiple/remainder
-> boundaries, contiguity, length-sum invariant, exactly-one-final invariant, negative-input
-> rejection; `ApiCallTest`: 3 `chunkCall` cases mirroring `headerCall`'s; `TusUploadRepositoryTest`:
-> 4 new — single-chunk-still-uses-uploadData, multi-chunk-splits-correctly, ordered-offsets-with-
-> correct-final-remainder-length, intermediate-chunk-failure-stops-before-the-final-PATCH).
-> **Mutation-proven**: hardcoding `TusChunkRange.isFinal` to always `false` in `TusChunkPlan` fails
-> **exactly** the 5 tests asserting `isFinal`/finish-shape (the other 5 — contiguity, length-sum,
-> both `require` rejections — stay green); inverting `TusUploadRepository`'s `if (!range.isFinal)`
-> branch fails 11 of the file's 17 tests (every path whose final/non-final routing the condition
-> gates — the 6 that stay green are the create-session-failure paths that never reach the chunk
-> loop at all), a strong, broad-impact kill confirming the branch is exercised end-to-end. Both
-> mutations applied via a scratch `cp`-backed edit (never `git checkout --`), restored via `cp`,
-> re-confirmed green before continuing. **Gate**: `./apps/android/meeshy.sh check` →
-> **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero
-> failures). Reviewer **PASS** (diff `apps/android` only — 4 production files edited
-> [`TusUpload.kt`, `TusApi.kt`, `ApiCall.kt`, `TusUploadRepository.kt`], 3 test files
-> touched/added; SDK purity — everything stays inside `:core:model`/`:core:network`/`:sdk-core`,
-> no product-decision code, exactly the "stateless building block" layer this belongs in; SSOT —
-> the chunk-boundary math lives in exactly one place, reused by the only caller; no coverage floor
-> lowered; no tautological tests). **No on-device verification this run**: this slice is purely
-> internal to the TUS client's own PATCH-count/boundary logic with no observable UI surface (the
-> composer/story flows that call `TusUploadRepository.upload` are unchanged from the caller's
-> perspective — same `NetworkResult<List<UploadedMedia>>` contract, same default chunk size larger
-> than any file a manual on-device pass could practically produce) — the mutation-proven unit
-> coverage is the appropriate verification depth for this internal a plumbing change, matching how
-> `story-media-tus-upload` itself was verified (unit-level) before any on-device pass was layered
-> on top by a later slice. **Next slice candidates (not attempted this run)**: persistent
-> checkpoint store (Room table, survive app kill, resume from stored `byteOffset` — needs
-> `MediaUploadItem` to read from a file lazily instead of holding the whole `ByteArray` resident,
-> a larger change than this run's); 409 HEAD-recovery (client/server offset desync); a dedicated
-> `WorkManager` foreground chain with upload progress (feature-parity.md line ~175); location/audio/
-> per-post-language attachments for the Feed composer; widgets/PiP (re-grepped this run too — still
-> zero `AppWidgetProvider`/`GlanceAppWidget`/`PictureInPicture` hits, due for a real pass).
-
-> On 2026-08-10 **the Feed post composer's generic file-attachment sub-slice landed** (slice
-> `feed-composer-file-attachment`, feature-parity §F — the routine's own standing "files,
-> location, audio, per-post language" candidate, decomposed this run rather than attempted
-> whole: file attachment picked first as the smallest/lowest-risk sub-slice, reusing the
-> composer's existing MIME-agnostic upload pipeline verbatim). **RE-PROUVEN before starting**:
-> read `FeedComposerDraft.kt`'s own doc comment (still listing "file, location and audio
-> attachments" as deferred) and `FeedComposerSheet.kt`'s doc comment (same), confirmed via
-> `git branch -r`/`gh pr list --state open` that the two most-recently-touched branches
-> (`feed-composer-media-attachments`, `ios/inline-video-top-controls`) were both already merged
-> with no open PR — no interrupted run to resume, nothing to adopt. Read `getAttachmentType`
-> (`packages/shared/types/attachment.ts`) and `UploadProcessor.validateFile`
-> (`services/gateway/src/services/attachments/UploadProcessor.ts`) end to end to re-prove the
-> `post`-context TUS pipeline already accepts arbitrary MIME types (classified, only
-> size-limited, never type-rejected) before assuming a document upload needed any gateway-side
-> plumbing — it didn't. **Shipped (production, all `apps/android`)**: a fifth attach tile
-> (`Icons.Filled.AttachFile`) launches `ActivityResultContracts.OpenMultipleDocuments()` (any
-> MIME type), dispatched through the **exact same** `dispatchPicked` pipeline every other tile
-> (gallery, camera-photo, camera-video) already uses — zero new upload/error-handling logic.
-> Unlike `PickMultipleVisualMedia`, `OpenMultipleDocuments` has no `maxItems<=1` crash
-> constraint (the reason `FeedMediaPicker`'s single-vs-multi routing exists for the gallery
-> tile), so the file tile needs no picker-mode routing of its own — `dispatchPicked` already
-> caps to `draft.remainingMediaSlots` and surfaces the limit message on overflow, and the tile
-> is disabled via the same `attachEnabled` gate as the other three. The one genuinely new
-> rendering decision — a picked document has no image/video thumbnail to show — lives in a new
-> pure `UploadedMedia.hasThumbnailPreview` extension (`FeedComposerDraft.kt`), **reusing**
-> `MediaKindClassifier` (`:core:model`, the SSOT for MIME→kind originally built for the
-> auto-download gate) rather than re-sniffing MIME prefixes locally: `IMAGE`/`VIDEO` preview as
-> a real thumbnail (`AsyncImage`, unchanged), everything else (a document, `AUDIO`/
-> `AUDIO_TRANSLATION`, an unclassifiable/blank MIME type) falls back to a generic
-> `Icons.AutoMirrored.Filled.InsertDriveFile` icon tile — `ReelComposition`'s own doc comment
-> ("documents and every other kind never qualify" as a reel) had already anticipated exactly
-> this case, confirmed no change needed there. +5 tests (`FeedComposerDraftTest`: image/video
-> preview as thumbnail, document/audio/blank-mime-type fallback to the generic icon).
-> **Mutation-proven**: hardcoding `hasThumbnailPreview` to always return `true` fails **exactly**
-> the 3 discriminating fallback tests — the other 37 in the file, including every pre-existing
-> reel-classification/publish-gate/media-accumulation test, stayed green; reverted via a scratch
-> `cp`-backed edit (never `git checkout --`), re-confirmed green before continuing. **Gate**:
-> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
-> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only —
-> 2 production files edited [`FeedComposerDraft.kt`, `FeedComposerSheet.kt`], 4 locale
-> `strings.xml` [en/fr/es/pt, `feed_composer_attach_file` carries zero format specifiers so
-> `FeedStringLocalizationParityTest`'s positional-specifier check is a non-issue], 1 test file
-> extended; SDK purity — the "how to render an unpreviewable attachment" decision lives in
-> `:feature:feed`, the MIME classification itself is reused from `:core:model`, never
-> duplicated; SSOT honoured; no coverage floor lowered; no tautological tests). **Full
-> on-device verification against the live gateway this run**: pushed a real non-media file to
-> the emulator's Downloads folder, tapped the new tile via exact `uiautomator dump` bounds,
-> confirmed the system DocumentsUI picker opened (`mCurrentFocus` resolved to
-> `com.google.android.documentsui/...PickActivity`) and listed the pushed file; picked it,
-> confirmed via screenshot the composer rendered a genuine generic-file-icon tile (not a
-> broken/blank thumbnail) with the same remove-X overlay every other attached item has.
-> `adb logcat` confirmed two independent real TUS round-trips for two different non-media MIME
-> types across two attempts (`text/plain` and, when the system picker's Recent-file ordering
-> shifted between openings, `text/xml` — both equally valid proof the classifier handles
-> arbitrary document kinds, not just one), both carrying `uploadcontext=post`. Published the
-> resulting post for real (`POST /api/v1/posts` → success, `media` array populated with the
-> attached document); `GET /api/v1/posts/:id` (via the bearer token pulled straight from
-> logcat, no separate login) confirmed the persisted attachment plus Prisme translations
-> generated (fr/es/ar/pt); the test post was deleted afterward (`DELETE` →
-> `{"deleted":true}`), confirmed gone via a follow-up `GET` → 404. Emulator returned to the
-> home screen afterward (idle, not mid-app), the pushed test file and on-device dump artifacts
-> removed. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
-> `UploadedMedia` (`:core:model`) doesn't carry the original filename the gateway's TUS
-> response discards on this upload path, unlike iOS's `MessageAttachment.fileName`; adding it
-> is a separately-scoped follow-up touching the wire model, not a rendering-only change.
-> **feature-parity.md's §F Create-post bullet now records generic file attachment done**
-> alongside camera photo/video capture. **Next slice candidates (not attempted this run)**:
-> location attachment for the Feed composer (needs a place-picker UI — Android has no reusable
-> static location-picker component yet, only the unrelated live-location-sharing feature in
-> chat; a heavier lift than file attachment was); audio+transcription attachment (blocked on
-> the still-pending `MediaRecorder`/`AudioRecord` capture core, per feature-parity.md §Q — no
-> Android audio recorder exists yet at all, chat or feed); per-post language override (needs a
-> language-picker component — none exists yet outside the auth registration flow's inline
-> menu); chunked/resumable large-video TUS upload (still the largest/riskiest open candidate,
-> likely needs its own sub-slice decomposition); widgets/PiP (still zero
-> `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check, due for another
-> explicit re-check soon per the ~5-run cadence).
-
-> On 2026-08-10 **the Feed post composer's camera-video capture fast-follow landed** (slice
-> `feed-composer-video-capture`, feature-parity §F — the routine's own standing candidate from
-> the prior camera-photo-capture slice's deliberate scope cut, re-proven still genuinely unshipped
-> by grepping `apps/android` for `ACTION_VIDEO_CAPTURE`/`CaptureVideo` before starting: zero hits
-> besides the doc comment noting it as a follow-up). **Re-proved the scope before coding**: read
-> `FeedComposerSheet.kt`'s existing `launchCamera`/`CameraCaptureFile` photo-capture pair end to
-> end, confirmed both merged branches (`feed-composer-media-attachments` #2759,
-> `claude/apps/ios/inline-video-top-controls` #2767) were the only branches touched in the prior
-> 24h and both already merged — no interrupted run to resume, no concurrent claim on this slice.
-> **Shipped (production, all `apps/android`)**: a third attach tile
-> ([Icons.Filled.Videocam]) mirrors the photo tile exactly — `ActivityResultContracts.
-> CaptureVideo()` launches the system `ACTION_VIDEO_CAPTURE` activity, writing into a fresh
-> [CameraCaptureFile.nextVideo]-named destination in the **same** `captures/` cache directory the
-> photo tile already uses (no new `file_paths.xml` entry needed), dispatched through the
-> **exact same** `dispatchPicked` pipeline gallery picks and the photo tile already use.
-> **Re-proved the same URI-permission bug class applies here before writing any code, rather than
-> assuming it**: decompiled `ActivityResultContracts.CaptureVideo()`'s bytecode (`javap` on the
-> same `activity-1.9.3` AndroidX jar used for the photo-capture bug) and confirmed
-> `createIntent()` is the byte-for-byte identical shape as `TakePicture()`'s — plain
-> `EXTRA_OUTPUT`, no `FLAG_GRANT_WRITE_URI_PERMISSION` — so the fix already shipped for photo
-> capture was known to be needed here too before ever touching a device, not a guess later
-> confirmed. **Refactor while extending, not duplicating**: the `queryIntentActivities`+
-> `grantUriPermission` dance and the `capturesDir`/`File`/`FileProvider.getUriForFile`
-> construction (previously inlined once in `launchCamera`) became two small private `Context`
-> extensions (`grantCaptureWritePermission(action, uri)`, `createCaptureUri(fileName)`) shared by
-> both `launchCamera` and the new `launchVideoCapture` — keeps the one bug-prone piece (the
-> permission grant) in exactly one place instead of risking the fix drifting between two copies
-> the next time either needs adjustment. `CameraCaptureFile` gains `nextVideo(nowMillis)`
-> (`video_<millis>.mp4`, distinct prefix/extension from the photo `capture_<millis>.jpg` so the
-> two never collide in the shared cache directory) alongside the existing `next` — same
-> pure-builder shape, +6 tests (naming, determinism, cross-instant distinctness, extension, and a
-> same-instant no-collision-with-photo test). **Mutation-proven**: hardcoding `nextVideo` to
-> ignore its `nowMillis` parameter and always resolve `0L` fails **exactly** the 2 discriminating
-> tests ("names the file from the given instant", "two different instants produce two different
-> video file names") — the other 7 tests in the file, including all 4 pre-existing photo tests,
-> stayed green; mutation applied via a scratch `cp`-backed edit (never `git checkout --`),
-> restored via `cp`, re-confirmed green before continuing. **Gate**:
-> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
-> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only — 2
-> production files edited [`CameraCaptureFile.kt`, `FeedComposerSheet.kt`], 4 locale `strings.xml`
-> [en/fr/es/pt, each carrying zero format specifiers so `FeedStringLocalizationParityTest`'s
-> positional-specifier check is a non-issue], 1 test file extended; SDK purity — everything stays
-> inside `:feature:feed` alongside its photo-capture precedent; SSOT — the permission-grant/
-> destination-Uri logic is now genuinely shared, not copy-pasted; no coverage floor lowered; no
-> tautological tests). **Full on-device verification against the live gateway this run** (no
-> repeat of the photo-capture slice's severe shared-host contention — `meeshy_pixel8` already
-> booted/idle, moderate load): installed the freshly built debug APK over the existing session
-> (`adb install -r -d`), opened the Feed composer, tapped the new video tile — confirmed via
-> `uiautomator dump` bounds (not estimated screenshot coordinates, which mis-tapped once first)
-> that the system `com.android.camera2` app opened in genuine VIDEO mode (red `REC 00:0x`
-> indicator, distinct from the photo shutter UI), recorded a ~3s clip, confirmed the composer's
-> existing in-flight spinner tile appeared immediately on return. `adb logcat` confirmed the real
-> TUS `POST`+`PATCH` round-trip: `filename=video_1786394334180.mp4`, `filetype=video/mp4`,
-> `uploadcontext=post`, a full 1,260,047-byte single-`PATCH` upload — the `video_`/`.mp4` naming
-> from `CameraCaptureFile.nextVideo` confirmed verbatim in the real request, not just unit-tested
-> in isolation. Published the resulting post for real (`POST /api/v1/posts` → 201): the gateway
-> independently probed the video (`duration: 13982`, `width: 1280`, `height: 720`) and
-> **auto-classified it `type: "REEL"`** — the existing `ReelComposition` duration-floor rule
-> (`feed-composer-reel-classification`, landed earlier the same day) firing correctly against a
-> genuinely-captured video for the first time, with the composer's `Reel⇄Post` override chip
-> appearing exactly as it does for a qualifying gallery-picked video — confirms the new capture
-> path composes cleanly with the existing classification pipeline rather than needing its own
-> special-casing. `GET /api/v1/posts/:id` confirmed the persisted media (`fileUrl`/`thumbnailUrl`
-> both resolving to real files) before the test post was deleted via `DELETE /api/v1/posts/:id`
-> (`{"deleted":true}`), confirmed gone via a follow-up `GET` → 404. Emulator left idle on the Feed
-> screen afterward (a normal app screen, not mid-camera/mid-composer). **feature-parity.md's §F
-> Create-post bullet now records camera-video capture done** alongside the earlier camera-photo
-> capture. **Next slice candidates (not attempted this run)**: chunked/resumable large-video TUS
-> upload (checkpoint store, HEAD recovery, survives app kill — still the largest/riskiest open
-> candidate, likely needs its own sub-slice decomposition before starting rather than one run);
-> files/location/audio/per-post-language attachments for the Feed composer; widgets/PiP (still
-> zero `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check, last
-> re-verified several runs ago — due for another explicit re-check soon per the ~5-run cadence).
-
-> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 3 (IME on-device verification) landed —
-> confirmed free, exactly as the decomposition predicted, zero production code changed** (item
-> `chat-inverted-list-ime-verify`, feature-parity §C — the routine's own standing "sub-slice 3,
-> likely free, verification-only" candidate from the prior 2 runs). **RE-PROUVEN before starting**:
-> re-read the sub-slice 2 entry above plus the `## §C inverted-list rewrite — concrete decomposition`
-> section to confirm sub-slice 3 was still genuinely open (not silently done by a concurrent
-> session) — `feature-parity.md`'s §C bullet still listed it as the sole remaining item, and
-> `git branch -r`/`gh pr list --state open` turned up no in-flight work on it (the two branches
-> touched in the last 24h, `claude/apps/android/feed-composer-media-attachments` and
-> `claude/apps/ios/inline-video-top-controls`, were both already merged — PRs #2759 and #2767). No
-> code changes were anticipated by the decomposition and none were needed. **Verified on-device**
-> (emulator `meeshy_pixel8`, already running/idle, host load ~6-8 — light, no contention this run):
-> built + installed the current `main` APK (already carrying the sub-slice 2 flip via commit
-> `2e1d03178`) over the existing session, opened the same real conversation used for sub-slice 2's
-> own verification (~40+ historical messages, `flip-test-verify` marker still present from that
-> run). (1) Tapping the `Message` composer field opens the soft keyboard; the list resizes with
-> **zero dedicated IME-handling code** — the reversed list's bottom edge (index 0, the newest
-> content) stays naturally anchored just above the composer/keyboard, exactly the benefit the
-> decomposition predicted for an inverted list, no `imePadding`/`Scaffold` adjustment needed. (2)
-> Sent a new text message (`ime-verify-flip-c3`) **with the keyboard still open**: auto-scroll-to-
-> newest fires correctly, the new bubble appears immediately above the composer with no visual
-> glitch — confirms behaviour #2 (auto-scroll-on-new-message) composes cleanly with the IME, not
-> just in isolation. (3) Dismissing the keyboard (`KEYCODE_BACK`) restores the list to full height
-> cleanly, the newest message stays anchored at the bottom. Zero crashes across the whole sequence
-> (`adb logcat` checked for `FATAL EXCEPTION`/`AndroidRuntime` — none from the app). Emulator
-> returned to the home screen afterward (idle, not mid-app), device-side screenshots/dumps cleaned
-> up. **feature-parity.md's §C inverted-list bullet now records all 3 sub-slices done — the §C
-> inverted-list rewrite is complete.** No `apps/android` production code changed this run (pure
-> verification pass), so this run's diff is `apps/android/tasks/` docs only (`feature-parity.md` +
-> this file) — still `apps/android`-only per the merge gate, no PR-worthy production risk. **Next
-> slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
-> (checkpoint store, HEAD recovery, survives app kill — still the largest/riskiest open candidate);
-> video capture fast-follow to the Feed composer's camera-capture slice (`ACTION_VIDEO_CAPTURE`,
-> same `FileProvider`/grant pattern, smaller now that the permission-grant lesson is written down);
-> files/location/audio/per-post-language attachments for the Feed composer; widgets/PiP (still
-> zero `AppWidgetProvider`/`GlanceAppWidget` hits per the standing angle-mort check).
-
-> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 2 (the actual visible flip) landed**
-> (slice `chat-inverted-list-flip`, feature-parity §C — this run's own decomposition from the
-> previous iteration, sub-slice 2 of 2 code sub-slices; sub-slice 3 is verification-only).
-> **RE-PROUVEN before starting**: re-grepped `apps/android` for `reverseLayout` — zero hits,
-> confirming the flip genuinely hadn't landed yet; re-read `ChatScreen.kt`'s 3050 lines and the
-> `## §C inverted-list rewrite — concrete decomposition` section below (written last iteration) to
-> confirm all 7 index-dependent behaviours it lists are still exactly as described. **Shipped
-> (production, all `apps/android`)**: `ChatScreen`'s `LazyColumn` gains `reverseLayout = true` fed
-> `renderedItems = listItems.asReversed()` (a cheap `List` VIEW, not a copy — the item-order
-> reversal and `reverseLayout`'s own bottom-anchored direction cancel, so the on-screen reading
-> order stays oldest-top/newest-bottom, unchanged). All 7 behaviours (initial scroll target,
-> auto-scroll-on-new-message, search-hit jump, quoted-reply jump, `isNearBottom`, the
-> `PinnedDayHeader` pill, the load-older trigger) are rewired from `ChatListOrientation.TopDown` to
-> `ChatListOrientation.BottomUp`. Two new pure functions land in `ChatScrollGeometry`:
-> `bottomEdgeIndex`/`topEdgeIndex(firstVisibleIndex, lastVisibleIndex, orientation)` — the single
-> place that translates Compose's own first/last-visible-index pair into the chat's semantic
-> bottom-edge/old-edge readings, which swap under `reverseLayout` (TopDown's bottom edge is the
-> *highest* visible index; BottomUp's is the *lowest*, and vice-versa for the old edge). Both
-> `InitialScrollTarget.of` and `PinnedDayHeader.governingDayMillis` gain an orientation-aware
-> overload (the single-arg forms kept as thin `TopDown`-defaulting wrappers, zero behaviour change
-> for existing callers/tests). **The one genuinely new piece of logic, not just rewiring**:
-> `PinnedDayHeader`'s governing-day scan direction. Reversing item order also reverses each day's
-> `[DayHeader, message...]` block into `[message..., DayHeader]` — the header now sits AFTER the
-> rows it governs, not before — so the `BottomUp` arm scans forward (`top..items.lastIndex`)
-> instead of backward (`top downTo 0`). Worked out on paper against a concrete 2-day example before
-> writing the implementation (documented in the function's own doc comment), then verified by the
-> mutation test below. The "loading older" spinner `item(key = "loading-older")` moves from BEFORE
-> `items(renderedItems)` to AFTER it in the `LazyColumn` scope — under `reverseLayout` the highest
-> Compose item index renders at the visual top, so it now correctly floats above the oldest
-> currently-loaded message instead of the newest. **+14 tests** across `ChatScrollGeometryTest` (4:
-> `bottomEdgeIndex`/`topEdgeIndex`, both orientations), `PinnedDayHeaderTest` (5: the new
-> orientation-aware overload's `BottomUp` scan, including the "clamp past the end lands on the
-> earliest header, floats nothing" edge case), `InitialScrollTargetTest` (5: the orientation-aware
-> overload, including empty-list and single-message). **Mutation-proven, all 3 new/changed pure
-> surfaces**: swapping `bottomEdgeIndex`'s two branches fails exactly the 2 discriminating tests
-> (`TopDown`/`BottomUp` "the bottom edge is..."); swapping `topEdgeIndex`'s fails exactly the other
-> 2; swapping `PinnedDayHeader`'s scan-direction branches fails exactly 6 tests spanning both
-> orientations. Each mutation applied via a scratch Python edit + `cp` backup (not `git checkout --`,
-> which would have discarded the real uncommitted diff alongside the mutation — caught and redone
-> correctly after the first attempt clobbered the legitimate changes; see lessons). **Gate**:
-> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
-> all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff `apps/android` only, all
-> under `:feature:chat` — 4 production files edited [`ChatScreen.kt`, `ChatScrollGeometry.kt`,
-> `PinnedDayHeader.kt`, `InitialScrollTarget.kt`], 3 test files extended; SDK purity — everything
-> stays inside `:feature:chat`, same grain as the sibling pure objects; SSOT — orientation threading
-> reuses the sub-slice-1 `ChatListOrientation` enum verbatim, zero re-implementation; no coverage
-> floor lowered; no tautological tests). **On-device verification — the actual differentiator for
-> this slice, done properly this run** (emulator `meeshy_pixel8`, already-booted and idle, shared
-> host load ~17-30 — moderate, not the earlier-documented ~450 contention spike): installed the
-> freshly built debug APK over the existing session (`adb install -r -d`, preserves login/data),
-> opened a real conversation with 40+ historical messages. Confirmed, screenshot-by-screenshot: (1)
-> cold-open lands exactly on the newest message at the bottom, zero manual scroll; (2) swiping
-> toward history 5× triggers `loadOlder()` repeatedly, paginating from "Today" back to "Saturday 4
-> July" with zero crashes (logcat checked for `FATAL EXCEPTION`/`AndroidRuntime` — none from the
-> app); (3) the floating `PinnedDayHeaderPill` shows the correct governing day ("Saturday 4 July")
-> while scrolled into history — the on-device proof the new scan-direction logic is actually
-> correct, not just internally consistent; (4) the "scroll to bottom" FAB appears when scrolled into
-> history and disappears at the bottom (`isNearBottom`/`bottomEdgeIndex` correct); tapping it
-> animates smoothly back to the exact same newest message; (5) in-conversation search for
-> `REPRO-B-1638` reports "1/1" and highlights the exact matching bubble (the `renderedItems.
-> indexOfFirst` jump, content-driven and orientation-agnostic by construction, confirmed for real);
-> (6) sending a new own message ("flip-test-verify") auto-scrolls to reveal it at the bottom with no
-> manual action (auto-scroll-on-new-message, reusing the same `isNearBottom`/`bottomIndex`
-> primitives already proven by (4)). Quoted-reply jump not separately exercised on-device — it is
-> the exact same `renderedItems.indexOfFirst` + `animateScrollToItem` shape as the search jump
-> already proven in (5), sharing 100% of its code path. Emulator left idle at the home screen
-> afterward (not mid-app/mid-keyboard) to avoid disrupting other concurrent sessions sharing the
-> host. **feature-parity.md's §C inverted-list bullet records sub-slice 2 as done**, still listing
-> sub-slice 3 (IME on-device verification, expected to be "free" per the decomposition note) as the
-> sole remaining item. **Next slice candidates (not attempted this run)**: sub-slice 3 (soft-
-> keyboard/IME resize interaction on-device check — likely free, verification-only, no new logic
-> expected); chunked/resumable large-video TUS upload; video capture fast-follow to the Feed
-> composer's camera-capture slice (`ACTION_VIDEO_CAPTURE`); files/location/audio/per-post-language
-> attachments for the Feed composer; PROGRESS.md is back under the ~1500-line archive threshold
-> after the prior run's archiving pass, no action needed yet.
-
-> On 2026-08-10 **the §C inverted-list rewrite's sub-slice 1 (safe prep) landed** (slice
-> `chat-scroll-geometry`, feature-parity §C — this run's own prior-run decomposition, picked up
-> rather than re-deferred). **RE-PROUVEN before starting**: re-grepped `apps/android` for
-> `reverseLayout`/`ChatScrollGeometry` — zero hits, confirming both that the flip genuinely
-> hasn't landed yet and that no concurrent session had already claimed this exact sub-slice; then
-> re-read `ChatScreen.kt`'s actual scroll effects (not just the decomposition note) to confirm the
-> 3 ad-hoc index computations it describes as genuinely inline: the private `LazyListState.
-> isNearBottom` extension, the bare `listItems.lastIndex` used as the auto-scroll-to-bottom target
-> (2 call sites), and the `index <= LOAD_OLDER_THRESHOLD` load-older trigger. **Shipped (production,
-> all `apps/android`)**: new pure `ChatScrollGeometry` (`:feature:chat`, same module/grain as its
-> `InitialScrollTarget`/`PinnedDayHeader` siblings) + `ChatListOrientation.TopDown|BottomUp` enum,
-> exposing `bottomIndex`/`isNearBottom`/`isNearOldEnd` as orientation-parameterised pure functions —
-> zero Compose/`LazyListState` dependency, fully unit-testable in isolation. `ChatScreen` rewired
-> through it under `TopDown` at all 3 sites (the private `isNearBottom` extension replaced by a thin
-> `lastVisibleItemIndex()` glue function; `LOAD_OLDER_THRESHOLD`/`BOTTOM_TOLERANCE_ITEMS` moved into
-> the new object, duplicate top-level consts deleted) — **output is byte-for-byte identical to
-> before**: `isNearBottom`'s `TopDown` arm reproduces the exact same guard + tolerance comparison,
-> `bottomIndex(lastIndex, TopDown) == lastIndex` so both `animateScrollToItem` call sites are
-> unchanged, and `isNearOldEnd`'s `TopDown` arm reproduces `edgeIndex <= LOAD_OLDER_THRESHOLD`
-> verbatim (ignoring `lastIndex`, exactly as the original ad-hoc check did — the original never
-> looked at list size for this trigger either). **Deliberate scope trim, documented rather than
-> silently omitted**: `PinnedDayHeader.governingDayMillis` (behaviour #6 of the decomposition's 7,
-> the pinned-header scan direction) is left untouched this run — it is already its own pure, tested
-> SSOT (not ad-hoc arithmetic duplicated in `ChatScreen.kt` the way the other 3 were), so migrating
-> its internal scan to delegate to `ChatScrollGeometry` before sub-slice 2 actually needs a
-> `BottomUp` caller there would be premature surface-area/risk on an already-solid, already-tested
-> object for zero behavioural gain this run — left as part of sub-slice 2's own scope instead.
-> **+17 `ChatScrollGeometryTest`** covering both orientations: `bottomIndex` (TopDown/BottomUp,
-> single-row, empty list `-1`), `isNearBottom` (exact edge, within/past tolerance, reader-in-history,
-> empty/single-row-always-true for both orientations), `isNearOldEnd` (exact edge, within/past
-> threshold, both orientations). **Mutation-proven**: flipping `isNearOldEnd`'s `TopDown` comparison
-> from `<=` to `<` failed **exactly** the 1 discriminating boundary test (`within threshold of index
-> zero is near the old end`), the other 17 stayed green; reverted and re-confirmed clean before
-> commit. **Gate**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full
-> `assembleDebug` + all-module `testDebugUnitTest`, zero failures). Reviewer **PASS** (diff
-> `apps/android` only — 2 new `:feature:chat` files [`ChatScrollGeometry.kt` + its test], 1
-> production file edited [`ChatScreen.kt`: 3 call sites rewired, 1 private extension replaced, 2
-> duplicate consts deleted]; SDK purity — pure screen-scoped geometry lives in `:feature:chat`
-> alongside its `InitialScrollTarget`/`PinnedDayHeader` precedents, not misplaced into `:sdk-core`;
-> SSOT — one orientation-aware object replacing 3 duplicated ad-hoc index checks; no coverage floor
-> lowered; no tautological tests; zero visible behaviour change, confirmed by construction not just
-> by the green full-suite run). `ChatScreen.kt` itself stays untested directly (Compose glue,
-> `TDD-COVERAGE.md`-exempt, same as its `InitialScrollTarget`/`PinnedDayHeader` precedents) — the
-> regression guard is the pure `TopDown` arm reproducing the original math exactly, provable by
-> inspection (documented above) rather than a screen-level test. **feature-parity.md's pinned-day-
-> header §C bullet's "Reste : inverted list pending" tail flips to record sub-slice 1 done**, still
-> listing sub-slice 2 (the visible `reverseLayout` flip + rewiring the remaining `BottomUp` call
-> sites, incl. `PinnedDayHeader`) and sub-slice 3 (IME on-device verification) as open. **Next slice
-> candidates (not attempted this run)**: chunked/resumable large-video TUS upload (checkpoint store,
-> HEAD recovery, survives app kill); the §C inverted-list rewrite's sub-slice 2 (the actual visible
-> flip — now unblocked by this run's sub-slice 1, still the largest remaining candidate: `reverseLayout
-> = true`, `listItems.asReversed()`, rewire `PinnedDayHeader` + the 2 `indexOfFirst` jump sites onto
-> `BottomUp`, verify on-device); video capture fast-follow to the Feed composer's camera-capture slice
-> (`ACTION_VIDEO_CAPTURE`, same `FileProvider`/grant pattern, smaller now that the permission-grant
-> lesson is written down); files/location/audio/per-post-language attachments for the Feed composer;
-> the gateway-side per-type `channelId` fast-follow to the notification-channel-id-drift slice (out of
-> lane scope, needs a `services/gateway` change).
->
-> On 2026-08-10 **the Feed post composer's camera-photo capture sub-slice landed, and a real
-> Android platform bug was found and fixed along the way** (slice
-> `feed-composer-camera-capture`, feature-parity §F — the routine's own standing candidate,
-> re-proven still genuinely unshipped by re-reading `FeedComposerSheet`'s own doc comment and
-> confirming `apps/android` still had zero `TakePicture`/`FileProvider` usage anywhere).
-> **Shipped (production, all `apps/android`)**: a second attach tile (`Icons.Filled.PhotoCamera`,
-> mirror of iOS's `camera.fill` composer button) launches the system `ACTION_IMAGE_CAPTURE`
-> activity via `ActivityResultContracts.TakePicture()`, writing into a fresh
-> `CameraCaptureFile`-named destination under `context.cacheDir/captures` (new `file_paths.xml`
-> `cache-path`, resolved through the app's existing GDPR-export `FileProvider` authority) — the
-> resulting Uri is dispatched through the **exact same** `dispatchPicked` pipeline the gallery
-> pickers already use, so zero new upload/error-handling logic; the button shares the gallery
-> tile's exact `canAddMore && !isUploading` enablement gate. **A genuine, on-device-confirmed
-> platform bug found and fixed in the same slice**: decompiling `ActivityResultContracts.
-> TakePicture`'s bytecode (`javap` on the AndroidX `activity` jar from the local Gradle cache)
-> showed `createIntent()` is only `Intent(ACTION_IMAGE_CAPTURE).putExtra(EXTRA_OUTPUT, uri)` —
-> it never sets `FLAG_GRANT_WRITE_URI_PERMISSION`, so an implicitly-resolved camera app (the
-> system picks a package at launch time; the calling app doesn't know which in advance) has no
-> permission to write into a `FileProvider` Uri the calling app owns. The first on-device pass
-> (stock AOSP camera, `meeshy_pixel8`) reproduced this exactly before the fix: the camera
-> activity opened normally, the shutter appeared to capture, control returned to the composer —
-> but the destination `captures/` directory stayed empty (confirmed via `adb shell run-as ... ls`)
-> and no TUS upload ever fired, because the launcher's callback silently resolved
-> `success = false` into the existing (correct) cancel/discard branch. This class of bug is
-> invisible to any JVM/Robolectric test — only a real device (or a real launched Activity)
-> exercises the actual cross-app URI-permission boundary. **Fixed** with the canonical,
-> Android-documented pattern for exactly this problem: before `takePicture.launch(uri)`,
-> `context.packageManager.queryIntentActivities(Intent(ACTION_IMAGE_CAPTURE), MATCH_DEFAULT_ONLY)`
-> then `context.grantUriPermission(pkg, uri, FLAG_GRANT_WRITE_URI_PERMISSION or
-> FLAG_GRANT_READ_URI_PERMISSION)` for every resolved package — not a novel workaround, the same
-> pattern Android's own official "capture images" guide documents. **Deliberate, documented scope
-> cut vs. iOS**: photo capture only — iOS's `CameraView` is a custom AVFoundation screen with an
-> in-app photo/video toggle (`camera.fill` → `.photo`/`.video` cases); Android delegates entirely
-> to the system camera app's own `ACTION_IMAGE_CAPTURE` intent, so (a) no in-app camera preview UI
-> was built (a materially bigger, separately-scoped increment) and (b) no `CAMERA` runtime
-> permission request was needed here — the system camera app owns that permission, not the
-> caller. Video capture (`ACTION_VIDEO_CAPTURE`, its own destination MIME/extension) stays a
-> separately-scoped follow-up. New pure `CameraCaptureFile.next(nowMillis)` (`:feature:feed`,
-> same split `me.meeshy.sdk.model.export.DataExportFileBuilder` uses — the instant is an explicit
-> parameter, never read internally) names the destination file; +4 tests, mutation-proven
-> (hardcoding the filename to ignore the `nowMillis` parameter fails **exactly** the 2
-> discriminating tests — "names the file from the given instant", "two different instants
-> produce two different file names" — the other 2 stay green). **Gate**:
-> `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` +
-> all-module `testDebugUnitTest`, zero failures, re-confirmed clean after the permission-grant
-> fix too). Reviewer **PASS** (diff `apps/android` only — 2 new `:feature:feed` files
-> [`CameraCaptureFile.kt` + its test], `FeedComposerSheet.kt` edited [imports, launcher, gate
-> reuse], `file_paths.xml` +1 `cache-path`, 4 locale `strings.xml` [en/fr/es/pt, 1 new key each];
-> SDK purity — the pure filename builder lives in `:feature:feed` at the same grain as its
-> `FeedMediaPicker`/`FeedMediaUploader` siblings, the actual `File`/`FileProvider`/permission-
-> grant I/O stays coverage-exempt glue in the Composable, consistent with this file's own
-> `readMediaUploadItem` precedent; SSOT — reused `dispatchPicked`/`FeedMediaPicker.modeFor`/the
-> gallery tile's enablement rule verbatim, zero new upload or error-handling logic; no coverage
-> floor lowered; no tautological tests). **On-device verification partially blocked by severe
-> shared-host contention this run — documented honestly, not silently claimed complete**: the
-> pre-fix pass ran clean on `meeshy_pixel8` and is what surfaced the URI-permission bug in the
-> first place (composer opened, camera tile rendered with the correct content-description,
-> tapping it launched the real system `com.android.camera2` `CaptureActivity` — confirmed via
-> full hardware-camera-initialization logcat — shutter tap returned control to the composer).
-> Re-confirming the FULL round-trip (capture → upload → thumbnail) after applying the fix hit
-> host load spiking past **450** mid-session (`uptime`; other concurrent agent sessions on this
-> shared box — consistent with the project's own documented
-> `feedback_shared_disk_contention_multi_session` pattern) — the emulator process became so
-> CPU-starved it never completed boot across two fresh launches and a `kill -9`+restart cycle
-> (~30 minutes total, host 1-min load eventually back down to ~3 but the qemu process itself
-> stayed wedged at near-zero incremental CPU time, confirmed via repeated `ps aux` sampling).
-> Stopped retrying past that point rather than stall the run indefinitely (`tasks/lessons.md`-
-> style principle already documented in this file's own `feed-post-composer-text` entry) — the
-> post-fix correctness rests on code-level evidence instead of a second on-device capture:
-> decompiled bytecode proving the exact gap, and the fix being Android's own publicly documented
-> canonical pattern for this exact problem, not a speculative guess. A quick on-device
-> confirmation pass once this shared box is quieter is a natural, cheap follow-up — not a
-> precondition the routine's own rules require before merging here, given the strength of the
-> remaining evidence and that every local/JVM gate is green. **feature-parity.md's "Create post"
-> §F bullet's camera-capture line flips from "no existing pattern" to shipped**, still listing
-> files/location/audio/language-override/durable-outbox as open follow-ups. **Next slice
-> candidates (not attempted this run)**: chunked/resumable large-video TUS upload (checkpoint
-> store, HEAD recovery, survives app kill — re-proven this run to still be the largest/riskiest
-> remaining candidate, current `TusUploadRepository` does the whole file in one `PATCH` at
-> `Upload-Offset: 0`, no chunking primitive exists yet); the §C inverted-list rewrite — this run
-> did a deep, concrete re-read of `ChatScreen.kt`'s actual scroll/list logic specifically to
-> attempt the decomposition the last several runs kept promising and deferring (see the new
-> `## §C inverted-list rewrite — concrete decomposition` section below, added this run rather than
-> re-typing the same "genuinely large, attempt one next time" note a further time); video capture
-> fast-follow to this slice (`ACTION_VIDEO_CAPTURE`, same FileProvider/grant pattern, smaller now
-> that the permission-grant lesson is written down); files/location/audio/per-post-language
-> attachments for the Feed composer; PROGRESS.md archiving (now past the ~1500-line threshold,
-> flagged above — its own dedicated `apps/android`-only PR, not bundled with a slice).
-
-## §C inverted-list rewrite — concrete decomposition (2026-08-10)
-
-Re-verified genuinely still open (`ChatScreen.kt`, 3050 lines, no `reverseLayout` anywhere) and,
-per the routine's own standing instruction ("attempt a concrete sub-slice decomposition rather
-than re-deferring"), read `buildChatListItems`/`ChatListItems.kt` and every one of the 7
-index-dependent `LazyColumn`/`LaunchedEffect` behaviours end to end (not just re-confirming the
-"genuinely large" verdict again) to produce this. The 7: (1) initial one-shot scroll-to-unread-
-or-newest (`InitialScrollTarget.of` + `listState.scrollToItem`), (2) auto-scroll-on-new-message
-(bottom = `listItems.lastIndex`), (3) jump-to-search-hit (`indexOfFirst` + `animateScrollToItem`),
-(4) jump-to-quoted-reply (same shape as 3), (5) `isNearBottom` derivation (near `lastIndex`),
-(6) `PinnedDayHeader.governingDayMillis` (scans from `firstVisibleItemIndex` **toward** index 0),
-(7) load-older trigger (`firstVisibleItemIndex <= LOAD_OLDER_THRESHOLD`, i.e. near index 0).
-
-**Key finding that de-risks the eventual flip**: Compose's `reverseLayout = true` + feeding the
-**reversed** `listItems` (`listItems.asReversed()`, cheap — `ChatListItems` stays completely
-unchanged, still emits oldest-first with headers before their groups) is enough to get the
-correct VISUAL result for free — two reversals (the list itself, then `reverseLayout`'s own
-bottom-anchored layout direction) cancel out, so top-to-bottom reading order stays identical to
-today. The genuinely hard part isn't the rendering flip itself, it's that ALL SEVEN behaviours
-above hardcode "bottom = last index, top = index 0" and must be rewired **simultaneously** to
-"bottom = index 0, top = last index" of the reversed list, or the app silently breaks in 7
-different, individually-hard-to-notice ways at once (this is why every prior run correctly
-called this "not a one-line change").
-
-**Sub-slice 1 (safe prep, zero visible behaviour change, do this first)**: extract a pure,
-orientation-parameterised `ChatScrollGeometry` object (or similar — exact name TBD by whoever
-picks this up) that answers, given a `reversed: Boolean` (or a small
-`ChatListOrientation.TopDown | BottomUp` enum) plus a list size/index: "which index is
-newest/bottom", "is index X near-bottom", "which direction does the pinned-header scan run",
-"which index range counts as near-the-old-end for the load-older trigger". Wire `ChatScreen`'s
-CURRENT behaviour through it unchanged (`TopDown` only) — this is a pure refactor, fully covered
-by the app's existing behavioural chat tests (regression-proof: if scroll/pagination/pinning
-behaviour changes even slightly, an existing test catches it), PLUS new unit tests proving the
-`BottomUp` arm's index math is correct **in isolation**, before it's ever wired into a real
-screen. Low risk, independently shippable, and turns sub-slice 2 into "just wire it up" instead
-of "get 7 pieces of index arithmetic right at the same time."
-
-**Sub-slice 2 (the actual user-visible flip)**: set `reverseLayout = true` on the `LazyColumn`,
-feed it `listItems.asReversed()`, and rewire all 7 call sites to call the now-proven
-`ChatScrollGeometry.____(..., BottomUp)` instead of their current ad-hoc index arithmetic. Verify
-on-device (real device/emulator, not just JVM tests — this is exactly the kind of change where a
-subtle off-by-one in the load-older threshold or the pinned-header scan direction wouldn't show
-up any other way): scroll-to-bottom on open, auto-stick-to-bottom on a new own/incoming message
-while already at the bottom (and NOT stick when reading history), load-older firing when
-scrolling toward the OLD end (now visually the top, index-wise the tail of the reversed list),
-the floating day-header pill tracking the correct governing day while scrolling, search/quoted-
-reply jump landing on the right bubble.
-
-**Sub-slice 3 (verification-only follow-up, likely free)**: soft-keyboard/IME resize interaction
-— a genuinely inverted list is a common reason to invert chat lists in the first place (the
-list's bottom edge naturally stays pinned to the keyboard without extra scroll-compensation
-code). Worth an explicit on-device check once sub-slice 2 lands: this may already work for free,
-or may reveal `ChatScreen`'s current `imePadding`/`Scaffold` wiring needs a small adjustment —
-either way it's a verification pass, not new logic, so keep it separate from sub-slice 2's
-gate rather than blocking the flip on it.
-
-This decomposition is deliberately NOT attempted as code in this run (this run's own slice/PR is
-the Feed camera-capture increment above, diff `apps/android`-only, one increment per run) — it's
-the documentation output the routine has been asking for across ~10+ runs on this exact item.
-
-> On 2026-08-10 **a real FCM channel-id-drift bug got found and fixed** (slice
-> `notification-channel-id-drift`, feature-parity §M — this run's periodic angle-mort category
-> check, on the standing §M `NotificationChannel` taxonomy line the prior run added but didn't
-> implement). **RE-PROUVEN before choosing**: rather than jumping straight to the "curated 80-type
-> taxonomy" framing of that line, read `services/gateway/src/services/PushNotificationService.ts`
-> `sendViaFCM` end to end first — found the gateway already sends `message.android.notification.
-> channelId = 'meeshy_notifications'` for every Android non-call push, but `MeeshyFcmService` had
-> only ever created a channel named `meeshy_messages`, and only lazily inside `onMessageReceived`.
-> Cross-checked Android/FCM semantics: a push carrying both a `notification` and a `data` block
-> (every non-call push today) is auto-rendered by the OS/Play services when the app is
-> backgrounded or killed — `onMessageReceived` never runs in that case, so the system posts
-> directly against the gateway's `channelId`. Grepped the manifest for a `com.google.firebase.
-> messaging.default_notification_channel_id` fallback too — absent — so with no
-> `meeshy_notifications` channel ever created client-side, that push is either dropped outright or
-> folded into a generic, unbranded system "Miscellaneous" channel with none of the intended
-> importance/sound, exactly backwards from the scenario push exists for (the foregrounded case,
-> where `onMessageReceived` DOES run, was never actually affected — channel creation there already
-> worked). A real, live, currently-shipping defect, not a missing feature. **Fixed (production,
-> all `apps/android`)**: new `NotificationChannelIds` (`:app`, SSOT replacing the two ad-hoc
-> constant sets previously duplicated in `MeeshyFcmService`'s companion) renames the client's
-> message channel id to `meeshy_notifications` — byte-for-byte matching the gateway's own literal
-> — and a new `NotificationChannelInstaller` creates it **eagerly at process start**
-> (`MeeshyApplication.onCreate`, Hilt-injected) instead of only lazily inside the one handler
-> that's exactly the one that doesn't run in the failure scenario; it also deletes the orphaned
-> pre-drift `meeshy_messages` channel (channels are immutable once created — same "delete +
-> recreate under a new id" migration `CHANNEL_CALLS` already took `meeshy_calls` v1→v2).
-> `MeeshyFcmService`'s own lazy `createNotificationChannel` call in the foreground-received path
-> stays as a harmless, idempotent belt-and-suspenders, now pointing at the same SSOT id.
-> **+4 `NotificationChannelInstallerTest`** (Robolectric): creates the channel under the
-> gateway-matching id at `IMPORTANCE_HIGH`, deletes the stale legacy channel, idempotent across
-> repeated `install()` calls (no duplicate), never touches the calls channel. **Robolectric gotcha
-> hit and fixed**: the `:app` module's ambient default SDK resolution silently fell back to API 21
-> (well below the O+ `NotificationChannel` API), producing a `NoSuchMethodError` rather than a
-> clear "unsupported SDK" error — pinned `@Config(sdk = [26])` to the app's own `minSdk` floor
-> instead of trusting the default; `testImplementation(libs.androidx.test.ext.junit)` also needed
-> adding to `:app` (present in `:sdk-core` but not `:app`) for `ApplicationProvider` to resolve.
-> Mutation-proven: commenting out the legacy-delete call fails **exactly** the 1 discriminating
-> test, the other 3 stay green. **Gate**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL`
-> (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero failures). Reviewer
-> **PASS** (diff `apps/android` only — 2 new `:app` files [`NotificationChannelIds.kt`,
-> `NotificationChannelInstaller.kt`] + 1 new test, `MeeshyApplication.kt`/`MeeshyFcmService.kt`
-> edited, 1 dependency line added; SDK purity — this is app-specific `MeeshyFcmService`/
-> `MeeshyApplication` glue, correctly in `:app` not `:sdk-core`, same precedent as
-> `DeclinedCallStore`/`CrashDiagnosticsRecorder`; SSOT — one channel-id source of truth replacing
-> two duplicated constant sets; no coverage floor lowered; no tautological tests). **Verified
-> on-device** (`meeshy_pixel8` emulator, fresh app launch, no push sent): `adb shell dumpsys
-> notification` confirms `NotificationChannel{mId='meeshy_notifications', mImportance=4,
-> mDeleted=false}` exists for `me.meeshy.app.debug` the instant the process starts, before any
-> message push ever arrives. **feature-parity.md's §M taxonomy bullet flips `[ ]` → `[~]`** — the
-> concrete id-mismatch defect is closed and the SSOT + eager-install foundation is laid, but the
-> full curated *multi*-channel taxonomy (a distinct channel per category, each individually
-> mutable in system settings) still needs the gateway to send a **per-type** `channelId` instead
-> of the one hardcoded literal it sends today — a `services/gateway` change, outside this lane's
-> `apps/android`-only scope, left as an explicitly separate, larger follow-up. **Next slice
-> candidates (not attempted this run)**: chunked/resumable large-video TUS upload (checkpoint
-> store, HEAD recovery, survives app kill); the §C inverted-list rewrite (still deferred without a
-> concrete sub-slice decomposition, many runs running — re-verify genuinely large before deferring
-> again rather than re-typing the same note); camera capture for the Feed composer (needs a
-> genuinely new `TakePicture`/`FileProvider` pattern, not yet established anywhere in the Android
-> app); the gateway-side per-type `channelId` fast-follow to this slice (out of lane scope, needs
-> a `services/gateway` change — flag for the user or a dedicated cross-lane task, not this
-> routine's Android-only diff); the noticed-not-chased Friends/Discover tab content question
-> (still outside this routine's mandate per the user's 2026-08 note).
-> On 2026-08-10 **the Feed post composer's reel-classification sub-slice landed** (slice
-> `feed-composer-reel-classification`, feature-parity §F — the orchestrator's documented next
-> sub-step after the photo/video attachments slice). **RE-PROUVEN before starting**: grepped
-> `services/gateway/src/services/PostService.ts` (`createPost`) and confirmed the gateway only ever
-> *degrades* a client-claimed `REEL` back to `POST` when the composition doesn't qualify — it never
-> auto-*upgrades* a `POST` claim, even when the attached media would qualify. Cross-checked
-> `FeedViewModel.publishPost`/`FeedComposerDraft`: every Android-authored post hardcoded
-> `type = "POST"`, confirming a REAL, currently-live parity gap — any Android post with a qualifying
-> video/audio (≥3s) or ≥2 images was permanently stuck as a plain post and could never surface on the
-> Reels surface, unlike iOS (`FeedView.composerOverlay` + `ReelComposition.defaultType`, "un post
-> n'est un RÉEL que si sa composition porte une vidéo, un audio, ou au moins deux images", directive
-> user 2026-08-02). **Shipped (production, all `apps/android`)**: a new pure `ReelComposition`
-> (`:core:model`) — third mirror of the SAME rule already living in the iOS SDK (`FeedModels.swift`)
-> and the gateway (`services/gateway/src/services/posts/reelComposition.ts`) — computing
-> `qualifiesAsReel`/`defaultType` from a media list's `mimeType`/`durationMs`. **No on-device
-> duration-extraction plumbing needed**: read `services/gateway/src/routes/uploads/tus-handler.ts`
-> end to end and confirmed the gateway's `ffprobe`-backed `metadataManager.extractMetadata` runs
-> SYNCHRONOUSLY before the TUS finish response, so `UploadedMedia.durationMs` (already surfaced by
-> the `story-media-tus-upload`/`feed-composer-media-attachments` slices' own `TusUploadRepository`)
-> already carries the server-authoritative duration the instant an upload completes — the same wire
-> shape (`MediaAttachmentWire`) every upload path shares. Added `PostType.REEL` (`:core:model`,
-> previously only `POST`/`STORY`/`STATUS` — confirmed zero exhaustive-`when`/ordinal-persistence call
-> sites anywhere in the app before adding it, so the insertion is additive-safe). `FeedComposerDraft`
-> now tracks `media: List<UploadedMedia>` instead of bare ids (`mediaIds` is a computed projection,
-> so no behavioural change to anything reading it) and gained `qualifiesAsReel`/`postType`/
-> `forcePlainPost`/`withForcePlainPost` — `postType` resolves `REEL` when qualifying and not
-> author-overridden, else `POST`, and `publishRequest()` now carries the resolved wire `type`.
-> `FeedComposerSheet` shows a small Réel⇄Post override chip (`PlayCircle`/`Description` icons already
-> established elsewhere in `:feature:feed` for the same semantics) **only when the composition
-> qualifies** — byte-for-byte the same conditional gate iOS uses around its own toggle, so removing
-> an image back down to one both de-qualifies AND hides the chip on both platforms identically.
-> `FeedViewModel.publishPost` gained a `type` param (defaulted to `PostType.POST.name`, so every other
-> call site is unaffected) threaded straight to `PostRepository.create`. **+28 tests**:
-> `ReelCompositionTest` (13 — video/audio/image qualification, the 3s duration floor at/under/missing,
-> images never subject to the floor, case-insensitive MIME matching, `defaultType` incl.
-> `forcePlainPost` override), `FeedComposerDraftTest` (+14 net new — fresh draft is POST, single image
-> never qualifies, ≥2 images/qualifying video default to REEL, short/missing-duration video does not
-> qualify, force-override on a qualifying vs. non-qualifying composition, de-qualification on
-> `withoutMedia` removal, publish request carries the resolved type both ways), `FeedViewModelTest`
-> (+1 — `publishPost` sends a caller-resolved `REEL` type through to the repository unchanged).
-> `FeedMediaPickerTest`/existing `FeedComposerDraftTest` cases mechanically updated for the
-> `mediaIds: List<String>` → `media: List<UploadedMedia>` constructor shape (same behaviour, new
-> fixture shape — a small local `media(id, mimeType, durationMs)` test factory added to both files).
-> **Mutation-proven, three independent axes**: (a) forcing `ReelComposition`'s private
-> `meetsMinDuration` to always return `true` failed **exactly** the 3 duration-floor-sensitive tests
-> (`under 3s does NOT qualify`, `missing duration does NOT qualify`, `a video under 3 seconds defaults
-> to POST`), the other 10 `ReelCompositionTest` cases stayed green; (b) loosening the image-count
-> threshold from `>= 2` to `>= 1` failed **exactly** the 2 single-image-must-not-qualify tests across
-> both files, everything else (2484 total tests in the `:core:model` run) stayed green; (c) hardcoding
-> `FeedComposerDraft.postType` to ignore `forcePlainPost` (passing a literal `false` instead) failed
-> **exactly** the 2 tests asserting the override, the other 33 `FeedComposerDraftTest` cases stayed
-> green. All three reverted and re-run clean before commit. **Gate**: `./apps/android/meeshy.sh check`
-> → **`BUILD SUCCESSFUL`** (970 tasks, full `assembleDebug` + all-module `testDebugUnitTest`, zero
-> failures anywhere in the monorepo, confirmed both immediately after the mutation-proof reverts and
-> again on a clean rerun). Reviewer **PASS** (diff `apps/android` only — 2 new `:core:model` files
-> [`ReelComposition.kt` + its test] + 1 line added to the existing `PostType` enum, 4 `:feature:feed`
-> production files edited [`FeedComposerDraft.kt`/`FeedComposerSheet.kt`/`FeedScreen.kt`/
-> `FeedViewModel.kt`] + 3 existing test files mechanically updated + 1 extended, 4 locale
-> `strings.xml` [en/fr/es/pt, `FeedStringLocalizationParityTest` green — 3 new keys per locale]; SDK
-> purity — the stateless `ReelComposition` rule engine lives in `:core:model` exactly like its iOS SDK
-> counterpart, the "which media reached this draft, is the author overriding" product decision stays
-> in `:feature:feed`'s `FeedComposerDraft`, same split as every prior TUS-adjacent slice; SSOT — reused
-> `UploadedMedia.mimeType`/`durationMs` verbatim rather than inventing a second on-device
-> duration-extraction path, reused the `PlayCircle`/`Description` icons already established for the
-> same reel/post semantics elsewhere in this module; no coverage floor lowered; no tautological
-> tests). Not yet verified on-device this run (the toggle is a small conditional chip with no new
-> network shape — the underlying wire-format proof point, "does the gateway actually honor a
-> REEL-classified post typed on Android," piggybacks on the same TUS round-trip
-> `feed-composer-media-attachments` already verified live against the gateway; a dedicated on-device
-> pass confirming the chip's appear/disappear + a real `type: "REEL"` request body is a natural
-> next-run candidate if useful, not required by the local gate this run).
-> **Next slice candidates (not attempted this run)**: chunked/resumable large-video TUS upload
-> (checkpoint store, HEAD recovery, survives app kill); the §C inverted-list rewrite decomposition
-> (still deferred without an attempt, many runs running); the §M `NotificationChannel` taxonomy gap (2
-> channels vs. ~80 backend types); camera capture for the Feed composer (needs a genuinely new
-> `TakePicture`/`FileProvider` pattern, not yet established anywhere in the Android app); the
-> noticed-not-chased Friends/Discover tab content question from the prior `feed-composer-media-
-> attachments` run.

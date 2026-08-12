@@ -558,6 +558,49 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
       action: 'listened',
     }));
   });
+
+  it('emits playPositionMs/durationMs/percentage when both are reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+      durationMs: 10000,
+      percentage: 25,
+    }));
+  });
+
+  it('omits percentage when durationMs is not reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+    }));
+    const lastCall = mockEmit.mock.calls[mockEmit.mock.calls.length - 1];
+    expect(lastCall[1]).not.toHaveProperty('percentage');
+  });
+
+  it('clamps percentage to 100 when playPositionMs exceeds durationMs', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'watched', playPositionMs: 12000, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'watched',
+      percentage: 100,
+    }));
+  });
 });
 
 // ─── Error paths not covered in messages.test.ts ─────────────────────────────

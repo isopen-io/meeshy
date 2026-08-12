@@ -43,14 +43,6 @@ describe('postsService', () => {
     });
   });
 
-  describe('getStories', () => {
-    it('calls GET /posts/feed/stories', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-      await postsService.getStories();
-      expect(mockApi.get).toHaveBeenCalledWith('/posts/feed/stories');
-    });
-  });
-
   describe('getStatuses', () => {
     it('calls GET /posts/feed/statuses', async () => {
       mockApi.get.mockResolvedValue({ success: true, data: [] });
@@ -178,6 +170,22 @@ describe('postsService', () => {
       await postsService.sharePost('post-1', 'twitter');
       expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter' });
     });
+
+    it('calls POST /posts/:postId/share with generateLink:true and returns the tracked link', async () => {
+      mockApi.post.mockResolvedValue({
+        success: true,
+        data: { shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' },
+      });
+      const result = await postsService.sharePost('post-1', { generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { generateLink: true });
+      expect(result).toEqual({ shared: true, shareCount: 3, shortUrl: 'https://meeshy.me/l/abc123', token: 'abc123' });
+    });
+
+    it('combines platform and generateLink in the options form', async () => {
+      mockApi.post.mockResolvedValue({ success: true });
+      await postsService.sharePost('post-1', { platform: 'twitter', generateLink: true });
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/share', { platform: 'twitter', generateLink: true });
+    });
   });
 
   describe('pinPost', () => {
@@ -262,6 +270,30 @@ describe('postsService', () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
       await postsService.recordImpression('post-1', 'notification');
       expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'notification' });
+    });
+  });
+
+  describe('recordMediaDownloads', () => {
+    it('calls POST /posts/:postId/downloads with mediaIds and default surface detail', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1']);
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1'], surface: 'detail' });
+    });
+
+    it('forwards an explicit surface', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
+      await postsService.recordMediaDownloads('post-1', ['media-1', 'media-2'], 'feed');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1', 'media-2'], surface: 'feed' });
+    });
+
+    it('is a no-op when mediaIds is empty (never hits the network)', async () => {
+      await postsService.recordMediaDownloads('post-1', []);
+      expect(mockApi.post).not.toHaveBeenCalled();
+    });
+
+    it('never throws — best-effort analytics must not break the download UX', async () => {
+      mockApi.post.mockRejectedValue(new Error('network down'));
+      await expect(postsService.recordMediaDownloads('post-1', ['media-1'])).resolves.toBeUndefined();
     });
   });
 

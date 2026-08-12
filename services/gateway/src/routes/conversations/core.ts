@@ -23,7 +23,8 @@ import {
   createConversationRequestSchema,
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
+import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -38,6 +39,7 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
@@ -161,7 +163,7 @@ export const conversationDetailInclude = {
     }
   },
   _count: {
-    select: { participants: { where: { isActive: true } } }
+    select: conversationActiveMemberCountSelect
   }
 } as const;
 
@@ -372,12 +374,55 @@ export function registerCoreRoutes(
         }
       }
 
+      // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
+      // ce que « mis à jour » veut dire :
+      //   - iOS   : `ConversationSyncEngine.deltaSyncCore`
+      //   - web   : `syncConversationsDelta` (use-conversations-delta-sync.ts)
+      // Il porte son propre index (`@@index([isActive, updatedAt])`). La borne
+      // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
+      // re-télécharge pas la ligne qu'il détient déjà.
+      let isDeltaPage = false;
       if (updatedSince) {
         const sinceDate = new Date(updatedSince);
         if (!isNaN(sinceDate.getTime())) {
           whereClause.updatedAt = { gt: sinceDate };
+          isDeltaPage = true;
         }
       }
+
+      // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
+      // TRONQUÉE est rattrapable.
+      //
+      // Le `limit` est plafonné à 100 (voir plus haut) et les deux clients
+      // avancent leur watermark au max des `updatedAt` REÇUS. Trié par
+      // `lastMessageAt` décroissant — l'ordre de l'écran de liste, sans aucun
+      // rapport avec le filtre — les lignes coupées ne sont pas « les plus
+      // anciennes mises à jour » : le prochain `updatedSince` passe PAR-DESSUS
+      // et ne les revoit qu'à la réconciliation complète (1×/24 h sur iOS).
+      // Pendant ce temps la liste affiche des compteurs de non-lus et des
+      // aperçus périmés sans qu'aucun signal ne l'indique.
+      //
+      // Trié par `updatedAt` croissant, les lignes coupées sont exactement
+      // celles dont l'`updatedAt` est SUPÉRIEUR à celui de la dernière ligne
+      // rendue : le watermark qui les enjambait pointe désormais dessus, et
+      // l'appel delta suivant les rend. La troncature devient une pagination
+      // naturelle, sans aucun changement client. `id` départage les égalités
+      // pour que deux appels identiques rendent la même page.
+      //
+      // Résidu assumé : plus de `limit` conversations portant la MÊME
+      // milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
+      // la borne stricte `gt` ne peut pas reprendre. Le web traite déjà une page
+      // PLEINE comme une preuve d'incomplétude et escalade vers la relecture
+      // complète (`DELTA_PAGE_LIMIT`, use-conversations-delta-sync.ts) : c'est
+      // ce cas-là, et lui seul, qui reste à sa charge.
+      //
+      // Le curseur `before` garde la main : il BORNE sur `lastMessageAt`, donc
+      // une page ordonnée par `updatedAt` le rendrait incohérent. Aucun client
+      // ne combine les deux aujourd'hui — la garde existe pour que celui qui
+      // essaiera obtienne une pagination cohérente plutôt qu'un mélange.
+      const orderBy = isDeltaPage && !beforeCursor
+        ? [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
+        : { lastMessageAt: 'desc' as const };
 
       t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
@@ -396,7 +441,14 @@ export function registerCoreRoutes(
           banner: true,
           avatar: true,
           communityId: true,
-          memberCount: true,
+          // Effectif compté par la base, PAS la colonne dénormalisée du même
+          // nom : voir `conversationActiveMemberCountSelect`. La ligne de liste
+          // en dépend visiblement (badge de groupe iOS `memberCount > 1`,
+          // saturation de la couleur d'accent `min(memberCount/100, 1) × 0.2`),
+          // et la colonne rendait `0` pour toute conversation créée depuis la
+          // migration héritée : badge absent, et couleur d'accent différente
+          // entre la liste et le fil ouvert, qui lui compte.
+          _count: { select: conversationActiveMemberCountSelect },
           isAnnouncementChannel: true,
           participants: {
             take: 5,
@@ -479,7 +531,7 @@ export function registerCoreRoutes(
             }
           }
         },
-        orderBy: { lastMessageAt: 'desc' }
+        orderBy
       });
       perfTimings.conversationsQuery = performance.now() - t0;
 
@@ -645,8 +697,17 @@ export function registerCoreRoutes(
           | { translations?: unknown; originalLanguage?: string | null }
           | undefined;
 
+        // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
+        // le schéma wire ne déclare pas, et le champ que les clients lisent est
+        // `memberCount`. Le laisser passer paierait la sérialisation d'un objet
+        // que `fast-json-stringify` strippe.
+        const { _count: activeMembers, ...conversationData } = conversation as typeof conversation & {
+          _count: { participants: number };
+        };
+
         return {
-          ...conversation,
+          ...conversationData,
+          memberCount: activeMembers.participants,
           participants: membersWithUser,
           title: displayTitle,
           // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
@@ -831,13 +892,16 @@ export function registerCoreRoutes(
                 userId
               ));
 
-      // Calculer le unreadCount pour l'utilisateur courant
+      // Calculer le unreadCount pour l'utilisateur courant.
+      // `resolveCallerParticipant` et pas un `where: { userId }` ecrit a la main :
+      // pour un invite de lien partage, `authContext.userId` PORTE un
+      // `Participant.id` (branche anonyme d'`UnifiedAuthService`), donc la clause
+      // manuelle comparait un id de participant a la colonne `userId` et ne
+      // matchait rien. Le compteur retombait silencieusement a 0 — et ce 0
+      // ecrasait ensuite le badge que le socket venait de pousser juste.
       let unreadCount = 0;
       try {
-        const participant = await prisma.participant.findFirst({
-          where: { conversationId, userId, isActive: true },
-          select: { id: true },
-        });
+        const participant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
         if (participant) {
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(prisma);
@@ -1402,12 +1466,38 @@ export function registerCoreRoutes(
       const socketIOHandler = fastify.socketIOHandler
       const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
-        const room = ROOMS.conversation(id)
-        io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        // La room de conversation ne suffit pas, et c'est le MÊME raisonnement
+        // qui a fait naître `emitConversationPreviewUpdate` pour l'autre moitié
+        // de ce payload : un participant posé sur l'écran de LISTE a quitté
+        // `conversation:<id>` et n'est joignable que par sa room personnelle.
+        // Sans elle, un renommage — ou un changement d'avatar, de bannière, de
+        // mode lent, de canal d'annonce — n'atteignait que ceux qui avaient le
+        // fil ouvert. La ligne de liste de tous les autres gardait l'ancien
+        // titre jusqu'à un rechargement complet.
+        //
+        // Le helper chaîne les rooms (au plus UNE copie par socket, même pour
+        // un client qui est à la fois dans le fil et dans sa room) et nomme la
+        // room d'un participant sans compte par son `Participant.id`
+        // (`userId ?? id`) — la seule ligne que chaque copie de ce code avait
+        // ratée. Les participants inactifs sont écartés : quitter une
+        // conversation, c'est cesser d'en recevoir les métadonnées.
+        //
+        // Le payload ne porte AUCUNE clé `lastMessage*`, et c'est délibéré :
+        // le tri-état client distingue « clé absente » (cet événement ne parle
+        // pas du dernier message) de « clé nulle » (la carte du Prisme est
+        // périmée). Un `lastMessageTranslations: null` posé ici effacerait une
+        // traduction parfaitement valide sur toutes les lignes de liste.
+        emitToConversationParticipants({
+          io,
           conversationId: id,
-          ...changedFields,
-          updatedBy: { id: userId },
-          updatedAt: new Date().toISOString(),
+          participants: updatedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+          payload: {
+            conversationId: id,
+            ...changedFields,
+            updatedBy: { id: userId },
+            updatedAt: new Date().toISOString(),
+          },
         })
       }
 
@@ -1485,18 +1575,30 @@ export function registerCoreRoutes(
 
       // Marquer la conversation comme inactive plutôt que de la supprimer
       const now = new Date()
-      await prisma.conversation.update({
+      // Les participants sont ramenés PAR l'écriture : le fan-out ci-dessous a
+      // besoin de nommer leurs rooms personnelles, et une seconde requête pour
+      // les lire pourrait tomber sur un état déjà modifié.
+      const closedConversation = await prisma.conversation.update({
         where: { id: conversationId },
-        data: { isActive: false, closedAt: now, closedBy: userId }
+        data: { isActive: false, closedAt: now, closedBy: userId },
+        include: { participants: { select: { id: true, userId: true, isActive: true } } }
       });
 
-      // Broadcast closure to all members
+      // Broadcast closure to all members — ce que le commentaire annonçait sans
+      // que le code le fasse. Adressée à la seule room de conversation, la
+      // clôture n'atteignait que les membres ayant le fil OUVERT ; tous les
+      // autres gardaient la ligne dans leur liste et n'apprenaient la fermeture
+      // qu'en tapant dessus. Même raison que le renommage ci-dessus : la room
+      // personnelle est le seul endroit où joindre un client posé sur la liste.
       const io = fastify.socketIOHandler?.getManager()?.getIO()
       if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(
-          SERVER_EVENTS.CONVERSATION_CLOSED,
-          { conversationId, closedBy: userId, closedAt: now.toISOString() }
-        )
+        emitToConversationParticipants({
+          io,
+          conversationId,
+          participants: closedConversation.participants.filter(p => p.isActive),
+          events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+          payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
+        })
       }
 
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });

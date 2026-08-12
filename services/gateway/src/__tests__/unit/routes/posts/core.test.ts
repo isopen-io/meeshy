@@ -199,6 +199,47 @@ describe('GET /posts/:postId — success', () => {
   });
 });
 
+describe('GET /posts/:postId — repostOf carries the original\'s reach counters through serialization', () => {
+  it('returns repostOf.viewCount unfiltered — no Fastify response schema on this route truncates it (piège a)', async () => {
+    // Chantier reposts cohérents & watermark, tâche 1, piège (a) : les schémas
+    // de réponse Fastify tronquent silencieusement tout champ non listé. Cette
+    // route (`GET /posts/:postId`) et son voisin `GET /posts/feed` n'en
+    // déclarent AUCUN (`schema.response` absent de core.ts/feed.ts/
+    // interactions.ts) — `sendSuccess` sérialise le payload de PostService
+    // tel quel. Ce test PROUVE le bout-en-bout HTTP : `repostOf.viewCount`
+    // (ajouté au `select` de `repostOfInclude`, postIncludes.ts) atteint bien
+    // le JSON envoyé au client, pas seulement l'objet Prisma en mémoire.
+    mockGetPostById.mockResolvedValueOnce({
+      id: POST_ID,
+      type: 'POST',
+      content: 'Reposted!',
+      repostOfId: 'original-post-id',
+      repostOf: {
+        id: 'original-post-id',
+        type: 'POST',
+        content: 'Original content',
+        viewCount: 42,
+        repostCount: 3,
+        shareCount: 7,
+        bookmarkCount: 5,
+        impressionCount: 120,
+        likeCount: 10,
+        commentCount: 2,
+      },
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
+    expect(res.statusCode).toBe(200);
+    const { repostOf } = res.json().data;
+    expect(repostOf.viewCount).toBe(42);
+    expect(repostOf.repostCount).toBe(3);
+    expect(repostOf.shareCount).toBe(7);
+    expect(repostOf.bookmarkCount).toBe(5);
+    expect(repostOf.impressionCount).toBe(120);
+    await app.close();
+  });
+});
+
 describe('GET /posts/:postId — not found', () => {
   it('returns 404 when post does not exist', async () => {
     mockGetPostById.mockResolvedValueOnce(null);
