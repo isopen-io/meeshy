@@ -48,6 +48,40 @@ public struct StoryExportWatermark: @unchecked Sendable {
     /// Gap between logo and text, as a fraction of the (square) logo side.
     static let logoGapRatio: CGFloat = 0.18
 
+    // MARK: - Layout (SSOT partagée)
+
+    /// Coin occupé à l'instant `seconds` : bas-droite sur la première fenêtre,
+    /// haut-gauche sur la suivante, et ainsi de suite.
+    static func isBottomRight(at seconds: Double) -> Bool {
+        Int(floor(seconds / segmentDuration)) % 2 == 0
+    }
+
+    /// Opacité effective à l'instant `seconds` — `baseOpacity` modulée par le
+    /// fondu de chaque bascule de coin. `0` signifie « rien à peindre ».
+    func alpha(at seconds: Double) -> CGFloat {
+        let segment = floor(seconds / Self.segmentDuration)
+        let local = seconds - segment * Self.segmentDuration
+        let fadeIn = min(1, local / Self.fadeDuration)
+        let fadeOut = min(1, (Self.segmentDuration - local) / Self.fadeDuration)
+        return baseOpacity * max(0, min(fadeIn, fadeOut))
+    }
+
+    /// Rectangle du bloc (logo carré + gap + texte) à l'instant `seconds`.
+    ///
+    /// Source unique de la mise en page : `draw` peint dedans, et le bake
+    /// vidéo hors-story (`MeeshyVideoWatermarkBaker`) s'en sert pour ne rendre
+    /// QUE cette zone par frame au lieu d'une planche pleine taille.
+    func blockRect(renderSize: CGSize, at seconds: Double) -> CGRect {
+        let totalW = renderSize.width * widthFraction
+        let totalH = totalW / blockAspect
+        let margin = renderSize.width * marginFraction
+        let origin = Self.isBottomRight(at: seconds)
+            ? CGPoint(x: renderSize.width - margin - totalW,
+                      y: renderSize.height - margin - totalH)
+            : CGPoint(x: margin, y: margin)
+        return CGRect(origin: origin, size: CGSize(width: totalW, height: totalH))
+    }
+
     // MARK: - Drawing
 
     /// Draws the watermark for slide time `seconds` into `cg`, which the
@@ -55,21 +89,15 @@ public struct StoryExportWatermark: @unchecked Sendable {
     @MainActor
     public func draw(in cg: CGContext, renderSize: CGSize, at seconds: Double) {
         let segment = Int(floor(seconds / Self.segmentDuration))
-        let isBottomRight = segment % 2 == 0
         let local = seconds - Double(segment) * Self.segmentDuration
 
-        let fadeIn = min(1, local / Self.fadeDuration)
-        let fadeOut = min(1, (Self.segmentDuration - local) / Self.fadeDuration)
-        let alpha = baseOpacity * max(0, min(fadeIn, fadeOut))
-        guard alpha > 0.01 else { return }
+        let opacity = alpha(at: seconds)
+        guard opacity > 0.01 else { return }
 
-        let totalW = renderSize.width * widthFraction
-        let totalH = totalW / blockAspect
-        let margin = renderSize.width * marginFraction
-        let origin = isBottomRight
-            ? CGPoint(x: renderSize.width - margin - totalW,
-                      y: renderSize.height - margin - totalH)
-            : CGPoint(x: margin, y: margin)
+        let block = blockRect(renderSize: renderSize, at: seconds)
+        let totalW = block.width
+        let totalH = block.height
+        let origin = block.origin
 
         let logoSide = totalH
         let gap = logoSide * Self.logoGapRatio
@@ -78,7 +106,7 @@ public struct StoryExportWatermark: @unchecked Sendable {
                               width: max(0, totalW - logoSide - gap), height: totalH)
 
         cg.saveGState()
-        cg.setAlpha(alpha)
+        cg.setAlpha(opacity)
         cg.setShadow(offset: CGSize(width: 0, height: 2), blur: 6,
                      color: UIColor.black.withAlphaComponent(0.45).cgColor)
         Self.drawAnimatedLogo(in: cg, rect: logoRect, localTime: local, globalTime: seconds)

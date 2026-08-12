@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 import MeeshySDK
 
 // MARK: - Image Viewer View
@@ -359,13 +360,7 @@ public struct ImageFullscreen: View {
         saveState = .saving
         HapticFeedback.light()
         Task {
-            // Route through the shared cache pipeline: the bytes are almost
-            // always already resident from rendering the bubble, so this
-            // avoids a redundant network round-trip, works offline, and
-            // PhotoLibraryManager gates on add-only authorization (the app's
-            // Info.plist carries NSPhotoLibraryAddUsageDescription) so a
-            // denied permission resolves to `false` rather than crashing.
-            let saved = await PhotoLibraryManager.shared.saveFromURL(url.absoluteString, kind: .image)
+            let saved = await saveStamped(url)
             if saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                 AttachmentStatusReporter.report(attachmentId: attId, body: body)
@@ -380,5 +375,32 @@ public struct ImageFullscreen: View {
                 }
             }
         }
+    }
+
+    /// Enregistre l'image MARQUÉE dans la photothèque.
+    ///
+    /// Les octets viennent du cache partagé : ils sont presque toujours déjà
+    /// résidents (la bulle vient de les afficher), donc pas d'aller-retour
+    /// réseau redondant, et ça marche hors ligne. `PhotoLibraryManager` gate
+    /// sur l'autorisation add-only (l'app porte `NSPhotoLibraryAddUsageDescription`),
+    /// donc un refus se résout en `false` plutôt qu'en crash.
+    ///
+    /// La marque suit la MÊME règle que le flux unifié de l'app
+    /// (`MediaSaveBranding`) : filigrane fixe sur les images, jamais sur un
+    /// format animé, et un marquage impossible n'empêche jamais
+    /// l'enregistrement — on écrit alors les octets d'origine.
+    @MainActor
+    private func saveStamped(_ url: URL) async -> Bool {
+        guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
+            return false
+        }
+        guard MeeshyImageWatermark.supports(pathExtension: url.pathExtension),
+              let image = UIImage(data: data),
+              let stamped = MeeshyImageWatermark.stamped(
+                image, username: AuthManager.shared.currentUser?.username)
+        else {
+            return await PhotoLibraryManager.shared.saveImage(data)
+        }
+        return await PhotoLibraryManager.shared.saveImage(stamped)
     }
 }
