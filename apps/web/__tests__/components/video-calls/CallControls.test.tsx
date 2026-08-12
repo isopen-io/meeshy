@@ -41,4 +41,41 @@ describe('CallControls', () => {
     fireEvent.click(screen.getByTestId('toggle-video'));
     expect(onToggleVideo).toHaveBeenCalledTimes(1);
   });
+
+  // The speaker button used to always render and flip a purely local boolean
+  // with zero effect on actual audio output (root cause + fix live in
+  // VideoCallInterface/VideoStream — this component is now a dumb presenter).
+  // It must render ONLY when the caller (VideoCallInterface) proves there's
+  // an alternate output device to route to — same precedent already
+  // established here by `onSwitchCamera`/`supportsCameraSwitch`.
+  describe('speaker toggle — only rendered when it can actually do something', () => {
+    it('does not render when onToggleSpeaker is omitted (unsupported browser / single output device)', () => {
+      render(<CallControls {...baseProps} />);
+      expect(
+        screen.queryByRole('button', { name: 'calls.controls.speakerOff' })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'calls.controls.speakerOn' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders and invokes onToggleSpeaker when supplied', () => {
+      const onToggleSpeaker = jest.fn();
+      render(<CallControls {...baseProps} speakerEnabled onToggleSpeaker={onToggleSpeaker} />);
+
+      const button = screen.getByRole('button', { name: 'calls.controls.speakerOff' });
+      fireEvent.click(button);
+
+      expect(onToggleSpeaker).toHaveBeenCalledTimes(1);
+    });
+
+    it('reflects speakerEnabled=false in its accessible name', () => {
+      render(
+        <CallControls {...baseProps} speakerEnabled={false} onToggleSpeaker={jest.fn()} />
+      );
+      expect(
+        screen.getByRole('button', { name: 'calls.controls.speakerOn' })
+      ).toBeInTheDocument();
+    });
+  });
 });

@@ -75,3 +75,55 @@ describe('VideoStream — disconnected overlay tracks isDisconnected both ways',
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 });
+
+// `setSinkId` (audio output device routing, "speaker" toggle) — feature
+// gated, since jsdom (like Safari) has no HTMLMediaElement.setSinkId at all.
+// Root cause fixed here: CallControls' speaker button used to flip a purely
+// local boolean with zero effect on where remote audio actually plays.
+describe('VideoStream — sinkId routes audio output via setSinkId when supported', () => {
+  afterEach(() => {
+    delete (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId;
+  });
+
+  it('never calls setSinkId when the browser does not implement it (default jsdom, like Safari)', () => {
+    // No setSinkId on the prototype at all — must not throw.
+    expect(() =>
+      render(<VideoStream stream={null} sinkId="device-2" participantName="Alice" />)
+    ).not.toThrow();
+  });
+
+  it('calls setSinkId with the given device id when the browser supports it', () => {
+    const setSinkId = jest.fn().mockResolvedValue(undefined);
+    (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId = setSinkId;
+
+    render(<VideoStream stream={null} sinkId="device-2" participantName="Alice" />);
+
+    expect(setSinkId).toHaveBeenCalledWith('device-2');
+  });
+
+  it('calls setSinkId("") to restore the default output when sinkId goes back to null', () => {
+    const setSinkId = jest.fn().mockResolvedValue(undefined);
+    (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId = setSinkId;
+
+    const { rerender } = render(
+      <VideoStream stream={null} sinkId="device-2" participantName="Alice" />
+    );
+    expect(setSinkId).toHaveBeenLastCalledWith('device-2');
+
+    rerender(<VideoStream stream={null} sinkId={null} participantName="Alice" />);
+    expect(setSinkId).toHaveBeenLastCalledWith('');
+  });
+
+  it('swallows a rejected setSinkId instead of crashing the call UI', async () => {
+    const setSinkId = jest.fn().mockRejectedValue(new Error('NotFoundError'));
+    (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId = setSinkId;
+
+    expect(() =>
+      render(<VideoStream stream={null} sinkId="missing-device" participantName="Alice" />)
+    ).not.toThrow();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+});

@@ -41,9 +41,16 @@ const useAdaptiveDegradationMock = jest.fn(() => ({ videoSuspended: false }));
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (k: string) => k, isLoading: false }),
 }));
-// VideoStream carries heavy WebRTC/ref machinery — stub it for the fullscreen-region test.
+// VideoStream carries heavy WebRTC/ref machinery — stub it for the
+// fullscreen-region test. Props are captured so the sinkId pass-through
+// (speaker toggle routing, Vague 111) can be asserted without exercising
+// VideoStream's own setSinkId logic (covered by VideoStream.test.tsx).
+const remoteVideoStreamPropsSpy = jest.fn();
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: () => <div data-testid="remote-video-stream" />,
+  VideoStream: (props: Record<string, unknown>) => {
+    remoteVideoStreamPropsSpy(props);
+    return <div data-testid="remote-video-stream" />;
+  },
 }));
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
@@ -1033,6 +1040,98 @@ describe('VideoCallInterface (container)', () => {
         await Promise.resolve();
       });
       await suspendPromise;
+    });
+  });
+
+  // Vague 111 (2026-08-12): the speaker button used to always render and flip
+  // a purely local boolean in CallControls with zero effect on where remote
+  // audio actually plays — every VideoStream kept its default output no
+  // matter what the icon/aria-label claimed. VideoCallInterface now owns real
+  // `setSinkId`-backed routing, and the button only renders when there's an
+  // alternate output device to route to (mirrors the pre-existing
+  // supportsCameraSwitch precedent for onSwitchCamera).
+  describe('Speaker toggle — real setSinkId routing, not a fake affordance', () => {
+    afterEach(() => {
+      // @ts-expect-error -- test-only cleanup of a property defined per-test
+      delete navigator.mediaDevices;
+      delete (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId;
+    });
+
+    it('hides the speaker button when the browser has at most one audio output device', async () => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest
+            .fn()
+            .mockResolvedValue([{ kind: 'audiooutput', deviceId: 'default' }]),
+        },
+      });
+      (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId = jest.fn();
+
+      render(<VideoCallInterface callId="call1" />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        screen.queryByRole('button', { name: 'calls.controls.speakerOff' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('hides the speaker button when setSinkId is unsupported even with 2+ devices (Safari)', async () => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([
+            { kind: 'audiooutput', deviceId: 'default' },
+            { kind: 'audiooutput', deviceId: 'device-2' },
+          ]),
+        },
+      });
+      // Deliberately no setSinkId on the prototype.
+
+      render(<VideoCallInterface callId="call1" />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        screen.queryByRole('button', { name: 'calls.controls.speakerOff' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('toggles between the default output and the alternate device, and routes every rendered VideoStream', async () => {
+      storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([
+            { kind: 'audiooutput', deviceId: 'default' },
+            { kind: 'audiooutput', deviceId: 'device-2' },
+          ]),
+        },
+      });
+      (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId = jest.fn();
+
+      render(<VideoCallInterface callId="call1" />);
+
+      const speakerOffButton = await screen.findByRole('button', {
+        name: 'calls.controls.speakerOff',
+      });
+      // Default output — every VideoStream instance gets sinkId=null.
+      expect(remoteVideoStreamPropsSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sinkId: null })
+      );
+
+      fireEvent.click(speakerOffButton);
+
+      // Routed to the alternate device, and the button's own label flips.
+      await screen.findByRole('button', { name: 'calls.controls.speakerOn' });
+      expect(remoteVideoStreamPropsSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sinkId: 'device-2' })
+      );
+
+      storeState.remoteStreams = new Map();
     });
   });
 });

@@ -7208,3 +7208,89 @@ confiance moindre — à vérifier avant fix) :
 - `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
   — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
   sévérité, probablement pas suffisant pour son propre cycle isolément.
+
+## Vague 111 — le bouton « haut-parleur » (web) ne routait jamais l'audio, il basculait un booléen local sans effet (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, la Vague 110 (PR #2874,
+ouverte par la session précédente) était encore non mergée au démarrage de ce cycle — CI entièrement
+verte (15/15 checks) et `mergeable_state: clean` vérifiés avant merge — mergée par cette session pour
+débloquer `main` avant de commencer un nouveau candidat, branche `claude/upbeat-dirac-nvj2vl` remise à
+`origin/main` (`03e90d891`) ensuite. Candidat pris directement dans le « Reste ouvert » loggé par la
+Vague 110 (runner-up de son propre audit web) plutôt que ré-auditer à froid.
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/video-calls/CallControls.tsx`) :
+  `handleSpeakerToggle` ne faisait que `setSpeakerEnabled(!speakerEnabled)` — aucun appel à une API de
+  routage audio. `rg setSinkId apps/web` ne remontait **aucune** occurrence dans tout le client web :
+  le bouton, libellé sans ambiguïté « Turn off speaker » / « Speaker off » dans les 4 locales
+  (`en/es/fr/pt`), ne changeait jamais où l'audio distant joue réellement — un mensonge d'interface
+  100% silencieux et reproductible, la même classe de bug que les multiples "no-op silencieux" déjà
+  traités par cette routine (Vague 107 filtres vidéo, etc.), ici côté web plutôt qu'iOS.
+- **Fix** : implémentation réelle via `HTMLMediaElement.setSinkId` (routage de périphérique de sortie
+  audio), feature-détectée à deux niveaux — l'API elle-même (absente de Safari) ET l'existence d'au
+  moins 2 périphériques `audiooutput` énumérés (le cas courant : un seul poste, rien à cibler). Suit
+  exactement le précédent déjà établi dans ce même fichier pour `onSwitchCamera` / `supportsCameraSwitch`
+  (bouton caméra masqué, pas désactivé, quand une seule caméra existe) — cohérence avec un idiome
+  préexistant plutôt qu'un nouveau pattern inventé :
+  - `VideoCallInterface.tsx` (seul ancêtre commun à `CallControls` et à tous les `VideoStream` rendus,
+    sibling l'un de l'autre) : possède désormais `audioOutputDeviceId`/`audioOutputDevices`
+    (énumération `navigator.mediaDevices.enumerateDevices()` au montage, filtrée `audiooutput`),
+    `speakerAvailable` (API + ≥2 périphériques) et `handleToggleSpeaker` (bascule déterministe entre
+    `null` = sortie par défaut et `audioOutputDevices[1].deviceId` = sortie alternative). Transmis en
+    prop à `CallControls` (`speakerEnabled`, `onToggleSpeaker`) et à **chaque** `VideoStream` rendu
+    (le participant principal plein écran ET chaque `DraggableParticipantOverlay`) via un nouveau prop
+    `sinkId`.
+  - `CallControls.tsx` : `handleSpeakerToggle`/`speakerEnabled` locaux supprimés — composant
+    entièrement présentateur pour ce contrôle désormais (aligné sur la doc `onSwitchCamera` déjà en
+    place). Le bouton entier ne se rend que si `onToggleSpeaker` est fourni (masqué, jamais un simple
+    `disabled` visible-mais-mort — même sémantique que le bouton caméra).
+  - `VideoStream.tsx` : nouveau prop `sinkId` ; un effet applique `videoRef.current.setSinkId(sinkId ??
+    '')` (feature-détecté, `''` = restaure la sortie par défaut du navigateur) sur chaque changement,
+    catch silencieux + `logger.warn` sur rejet (ex. périphérique débranché) au lieu de crasher l'UI
+    d'appel.
+  - `DraggableParticipantOverlay.tsx` : `sinkId` ajouté au type de props, transmis tel quel au
+    `VideoStream` interne (pass-through pur).
+- **Tests** (TDD) : 4 nouveaux cas `VideoStream.test.tsx` (aucun appel si `setSinkId` absent du
+  prototype — jsdom, comme Safari ; appel avec le deviceId fourni quand supporté ; `setSinkId('')` au
+  retour à `null` ; rejet avalé sans crash) ; 2 nouveaux cas `DraggableParticipantOverlay.test.tsx`
+  (pass-through du prop, `null` par défaut) ; 3 nouveaux cas `CallControls.test.tsx` (bouton absent
+  sans `onToggleSpeaker`, rendu + invoqué quand fourni, libellé accessible reflète `speakerEnabled`) ;
+  3 nouveaux cas `VideoCallInterface.test.tsx` (bouton masqué avec ≤1 périphérique ; bouton masqué si
+  `setSinkId` absent même avec 2+ périphériques ; bascule réelle — `sinkId` transmis à CHAQUE
+  `VideoStream` rendu passe de `null` à `'device-2'` au clic, libellé du bouton suit). Sweep complet
+  `--testPathPatterns="[Cc]all"` — **49 suites / 430 tests verts**, 0 régression. `npx tsc --noEmit` :
+  compte identique AVANT/APRÈS (diff ligne à ligne des deux runs, mêmes erreurs `TS2571`/`TS18046`
+  pré-existantes sur `VideoCallInterface.tsx`, décalées seulement par les lignes ajoutées) — aucune
+  nouvelle erreur introduite. `bun run build` (packages/shared) + `prisma generate` exécutés en
+  prérequis (absents au démarrage de ce cycle, cf. CLAUDE.md), sans rapport avec ce diff. `eslint`
+  local indisponible dans ce sandbox (erreur préexistante « Converting circular structure to JSON »
+  sur la résolution des plugins flat-config, sans rapport avec ce diff) — délégué à la CI (job
+  « Quality (bun) »).
+- **Aucune clé i18n touchée** : les 4 chaînes `speakerOff`/`speakerOn`/`speakerOnLabel`/
+  `speakerOffLabel` existaient déjà dans les 4 locales et restent utilisées telles quelles — seule leur
+  VÉRACITÉ change (elles décrivent enfin ce que le bouton fait réellement).
+- **Portée volontairement non étendue** : aucune UI de sélection explicite du périphérique (dropdown
+  "Choisir la sortie audio") — la sémantique bouton on/off à 2 états est préservée à l'identique de
+  l'UI existante ; un vrai sélecteur multi-périphériques serait un changement de design produit, hors
+  scope d'un fix de bug. Le "device[1]" ciblé par le fix est arbitraire (deuxième périphérique
+  énuméré, pas nécessairement un "haut-parleur" au sens propre) — c'est la meilleure approximation
+  disponible côté Web (contrairement à iOS/Android natif, aucune API navigateur n'expose un concept
+  "écouteur interne vs haut-parleur" sur un même appareil) ; documenté ici pour qu'un futur cycle avec
+  accès à un vrai navigateur multi-périphériques puisse affiner le choix de périphérique cible si
+  besoin.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle, portée limitée à un candidat par audit) : dead code /
+god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox. **Candidats pour la Vague 112** (runners-up déjà identifiés, non traités) :
+- `handleParticipantJoined` (web, `CallManager.tsx`) bascule `status` vers `'active'` sur le premier
+  `call:participant-joined`, qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché
+  (cf. Vague 104 côté gateway pour le même symptôme sur un chemin différent) — sémantique de `status`,
+  distincte de l'ancre du chrono déjà fixée Vague 110.
+- `CallInfoOverlay`'s `participantCount` affiche brièvement « 0 participant » avant l'arrivée de
+  l'event de join côté CALLER — cosmétique, faible sévérité.

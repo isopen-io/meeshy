@@ -9,7 +9,6 @@ import React, { useState } from 'react';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, SwitchCamera, Volume2, VolumeX, Sparkles, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { logger } from '@/utils/logger';
 import { useI18n } from '@/hooks/useI18n';
 
 interface CallControlsProps {
@@ -25,6 +24,16 @@ interface CallControlsProps {
   onHangUp: () => void;
   audioEffectsActive?: boolean;
   showStats?: boolean;
+  /**
+   * Audio output routing (`setSinkId`), owned by VideoCallInterface — it's
+   * the one place that can reach every rendered VideoStream. This button only
+   * renders when `onToggleSpeaker` is supplied AND the browser actually has
+   * an alternate output device to switch to (mirrors `onSwitchCamera`'s own
+   * `supportsCameraSwitch` gate, same precedent: hide a control the platform
+   * can't back, never leave a live-looking one that silently does nothing).
+   */
+  speakerEnabled?: boolean;
+  onToggleSpeaker?: () => void;
 }
 
 export function CallControls({
@@ -39,9 +48,10 @@ export function CallControls({
   onHangUp,
   audioEffectsActive = false,
   showStats = false,
+  speakerEnabled = true,
+  onToggleSpeaker,
 }: CallControlsProps) {
   const { t } = useI18n('calls');
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
   const videoAutoPaused = videoEnabled && videoSuspended;
 
@@ -53,16 +63,6 @@ export function CallControls({
       });
     }
   }, []);
-
-  const handleSpeakerToggle = async () => {
-    try {
-      const newEnabled = !speakerEnabled;
-      setSpeakerEnabled(newEnabled);
-      logger.debug('[CallControls]', 'Speaker toggled', { enabled: newEnabled });
-    } catch (error) {
-      logger.error('[CallControls]', 'Failed to toggle speaker', { error });
-    }
-  };
 
   return (
     <div
@@ -156,26 +156,29 @@ export function CallControls({
         </Button>
       )}
 
-      {/* Speaker Toggle */}
-      <Button
-        size="icon"
-        variant="default"
-        onClick={handleSpeakerToggle}
-        className={cn(
-          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
-          speakerEnabled
-            ? 'bg-gray-700 hover:bg-gray-600 text-white'
-            : 'bg-gray-800 hover:bg-gray-700 text-white'
-        )}
-        aria-label={speakerEnabled ? t('calls.controls.speakerOff') : t('calls.controls.speakerOn')}
-        title={speakerEnabled ? t('calls.controls.speakerOnLabel') : t('calls.controls.speakerOffLabel')}
-      >
-        {speakerEnabled ? (
-          <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
-        ) : (
-          <VolumeX className="w-5 h-5 md:w-6 md:h-6" />
-        )}
-      </Button>
+      {/* Speaker Toggle — only rendered when it can actually do something,
+          see the `onToggleSpeaker` doc above. */}
+      {onToggleSpeaker && (
+        <Button
+          size="icon"
+          variant="default"
+          onClick={onToggleSpeaker}
+          className={cn(
+            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
+            speakerEnabled
+              ? 'bg-gray-700 hover:bg-gray-600 text-white'
+              : 'bg-gray-800 hover:bg-gray-700 text-white'
+          )}
+          aria-label={speakerEnabled ? t('calls.controls.speakerOff') : t('calls.controls.speakerOn')}
+          title={speakerEnabled ? t('calls.controls.speakerOnLabel') : t('calls.controls.speakerOffLabel')}
+        >
+          {speakerEnabled ? (
+            <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
+          ) : (
+            <VolumeX className="w-5 h-5 md:w-6 md:h-6" />
+          )}
+        </Button>
+      )}
 
       {/* Audio Effects Toggle */}
       {onToggleAudioEffects && (

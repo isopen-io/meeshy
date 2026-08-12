@@ -9,6 +9,14 @@ import React, { useEffect, useRef } from 'react';
 import { MicOff, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
+
+// `setSinkId` (audio output device selection) is still experimental and
+// missing from TS's lib.dom `HTMLMediaElement` typings — feature-detected at
+// call time, so a narrow structural type is enough here.
+type SinkCapableMediaElement = HTMLVideoElement & {
+  setSinkId?: (sinkId: string) => Promise<void>;
+};
 
 interface VideoStreamProps {
   stream: MediaStream | null;
@@ -20,6 +28,10 @@ interface VideoStreamProps {
   isVideoEnabled?: boolean;
   isDisconnected?: boolean;
   onRemove?: () => void;
+  /** Audio output device to route this participant's remote audio through
+   *  (Volume2/VolumeX "speaker" control, CallControls). `null`/`undefined`
+   *  means the browser's default output — no `setSinkId` call is made. */
+  sinkId?: string | null;
 }
 
 export function VideoStream({
@@ -32,6 +44,7 @@ export function VideoStream({
   isVideoEnabled = true,
   isDisconnected = false,
   onRemove,
+  sinkId = null,
 }: VideoStreamProps) {
   const { t } = useI18n('calls');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,6 +56,20 @@ export function VideoStream({
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  // Route this element's audio output (speaker toggle, CallControls). Only
+  // called when the browser actually supports it (Chrome/Edge; unsupported on
+  // Safari) — CallControls already gates the toggle button itself on the same
+  // feature check, so `sinkId` only ever becomes non-null where this can
+  // succeed, but a fresh element still needs the call at mount time too.
+  useEffect(() => {
+    const el = videoRef.current as SinkCapableMediaElement | null;
+    if (!el || typeof el.setSinkId !== 'function') return;
+
+    el.setSinkId(sinkId ?? '').catch((error) => {
+      logger.warn('[VideoStream]', 'Failed to set audio output device', { error, sinkId });
+    });
+  }, [sinkId]);
 
   // Handle disconnection: show "Disconnected" for 2 seconds, then trigger removal.
   // isDisconnected can flip back to false on this SAME instance — the parent

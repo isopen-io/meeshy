@@ -1,8 +1,15 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// VideoStream pulls in heavy WebRTC/ref machinery — stub it to a marker node.
+// VideoStream pulls in heavy WebRTC/ref machinery — stub it to a marker node,
+// capturing props so the pass-through of `sinkId` (speaker toggle routing)
+// can be asserted without exercising VideoStream's own setSinkId logic
+// (covered by VideoStream.test.tsx).
+const videoStreamPropsSpy = jest.fn();
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: () => <div data-testid="video-stream" />,
+  VideoStream: (props: Record<string, unknown>) => {
+    videoStreamPropsSpy(props);
+    return <div data-testid="video-stream" />;
+  },
 }));
 
 // t() returns the key so we can assert the accessible name deterministically.
@@ -61,5 +68,36 @@ describe('DraggableParticipantOverlay — fullscreen control keyboard a11y', () 
     const { onDoubleClick } = renderOverlay();
     fireEvent.click(screen.getByRole('button', { name: 'calls.stream.fullscreen' }));
     expect(onDoubleClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DraggableParticipantOverlay — forwards sinkId to VideoStream', () => {
+  beforeEach(() => {
+    videoStreamPropsSpy.mockClear();
+  });
+
+  it('passes a non-null sinkId straight through', () => {
+    render(
+      <DraggableParticipantOverlay
+        participantId="p1"
+        stream={{} as MediaStream}
+        participantName="Alice"
+        sinkId="device-2"
+      />
+    );
+    expect(videoStreamPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sinkId: 'device-2' })
+    );
+  });
+
+  it('defaults to null (browser default output) when omitted', () => {
+    render(
+      <DraggableParticipantOverlay
+        participantId="p1"
+        stream={{} as MediaStream}
+        participantName="Alice"
+      />
+    );
+    expect(videoStreamPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ sinkId: null }));
   });
 });

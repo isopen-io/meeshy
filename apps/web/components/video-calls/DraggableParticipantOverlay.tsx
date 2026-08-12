@@ -23,6 +23,8 @@ interface DraggableParticipantOverlayProps {
   initialPosition?: { x: number; y: number };
   onDoubleClick?: () => void;
   onRemove?: () => void;
+  /** Forwarded to the inner VideoStream — see VideoStream's `sinkId` doc. */
+  sinkId?: string | null;
 }
 
 export function DraggableParticipantOverlay({
@@ -35,6 +37,7 @@ export function DraggableParticipantOverlay({
   initialPosition = { x: 20, y: 20 },
   onDoubleClick,
   onRemove,
+  sinkId = null,
 }: DraggableParticipantOverlayProps) {
   const { t } = useI18n('calls');
   const [position, setPosition] = useState(initialPosition);
@@ -125,6 +128,7 @@ export function DraggableParticipantOverlay({
         isVideoEnabled={isVideoEnabled}
         isDisconnected={isDisconnected}
         onRemove={onRemove}
+        sinkId={sinkId}
       />
 
       {/* Fullscreen button (on hover) */}

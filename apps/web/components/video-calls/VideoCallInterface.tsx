@@ -66,6 +66,41 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
+  // Audio output routing ("speaker" toggle, CallControls). `null` = browser
+  // default output — every VideoStream (main + overlays) reads this same
+  // value, so it's owned here rather than duplicated per-component. Real
+  // `setSinkId`-backed routing (previously a pure UI no-op, see
+  // CallControls' `onToggleSpeaker` doc): unsupported browsers (Safari) or a
+  // single-output-device machine (the common case) never populate
+  // `audioOutputDevices` beyond one entry, and the button hides itself
+  // rather than pretending to work.
+  const [audioOutputDeviceId, setAudioOutputDeviceId] = useState<string | null>(null);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devices) => {
+        setAudioOutputDevices(devices.filter((device) => device.kind === 'audiooutput'));
+      })
+      .catch(() => {
+        // best effort — the speaker button simply stays hidden
+      });
+  }, []);
+
+  const supportsAudioOutputSelection =
+    typeof HTMLMediaElement !== 'undefined' &&
+    typeof (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId === 'function';
+  const speakerAvailable = supportsAudioOutputSelection && audioOutputDevices.length > 1;
+
+  const handleToggleSpeaker = useCallback(() => {
+    if (!speakerAvailable) return;
+    setAudioOutputDeviceId((current) =>
+      current === null ? (audioOutputDevices[1]?.deviceId ?? null) : null
+    );
+  }, [audioOutputDevices, speakerAvailable]);
+
   // Local self-view dragging + ticking call duration (extracted hooks).
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
     initial: { x: 20, y: 20 },
@@ -720,6 +755,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                 )?.isVideoEnabled ?? true
               }
               isDisconnected={disconnectedParticipants.has(displayParticipant[0])}
+              sinkId={audioOutputDeviceId}
               onRemove={() => {
                 const { removeRemoteStream, removePeerConnection } = useCallStore.getState();
                 removeRemoteStream(displayParticipant[0]);
@@ -761,6 +797,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isAudioEnabled={participant?.isAudioEnabled ?? true}
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
+              sinkId={audioOutputDeviceId}
               initialPosition={{ x: 20 + index * 160, y: 20 }}
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
@@ -796,6 +833,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         onHangUp={handleHangUp}
         audioEffectsActive={audioEffectsActive}
         showStats={showStats}
+        speakerEnabled={audioOutputDeviceId === null}
+        onToggleSpeaker={speakerAvailable ? handleToggleSpeaker : undefined}
       />
 
       {/* Call Duration & Participant Count */}
