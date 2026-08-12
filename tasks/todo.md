@@ -100,6 +100,12 @@ apparente — **à confirmer par lecture avant tout code** :
   depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de la
   routine** — inchangé aux cycles 86 à 89. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` vers la branche
+  passent, le `push --delete` non — quatre tentatives, 403 constant, donc une politique de droits
+  et non un aléa réseau. `claude/keen-hamilton-6o1jgj` est restée en place après le merge de la
+  PR #2894. Conséquence pratique : la consigne « supprimer la branche après merge » n'est pas
+  exécutable ici, et les branches mergées s'accumulent — à purger depuis un contexte qui a le
+  droit (cf. `tasks/branch-purge-*.sh`).
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
   toujours pas.
 - **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
