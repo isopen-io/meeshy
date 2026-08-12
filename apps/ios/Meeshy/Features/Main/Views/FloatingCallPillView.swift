@@ -75,10 +75,12 @@ enum CallPillStatus: Equatable {
 
 // MARK: - Floating Call Pill View
 
-/// Bannière d'appel réduite — pleine largeur façon WhatsApp, montée en
-/// `safeAreaInset(.top)` sur TOUTE l'app (CallPresentationLayer) : le contenu
-/// est repoussé en dessous (jamais de défilement derrière) et le fond remonte
-/// sous la status bar jusqu'au bord haut du viewport (immersif). Toucher la
+/// Bannière d'appel réduite — pleine largeur façon WhatsApp, montée en tête
+/// du VStack de compression de frame (CallPresentationLayer) : la frame de
+/// TOUTE l'app (NavigationStack et headers de destinations compris) commence
+/// sous la bannière — jamais de contenu caché ou inaccessible derrière — et
+/// le fond remonte sous la status bar jusqu'au bord haut du viewport
+/// (immersif). Toucher la
 /// bannière revient au plein écran ; le bouton « agrandir » dédié a été retiré
 /// (redondant avec le tap, retour user 2026-07-04), les chevrons décoratifs de
 /// bord aussi (retour user 2026-08-12). L'avatar réel du correspondant est
@@ -150,11 +152,12 @@ struct FloatingCallPillView: View {
                 // passe son seuil WCAG contre les deux arrêts du dégradé.
                 Color.black.opacity(CallBannerContrast.scrimOpacity)
             }
-            // Immersif façon WhatsApp : la bannière vit dans un
-            // safeAreaInset(.top), donc SOUS la status bar — seul son décor
-            // déborde jusqu'au bord haut du viewport, sinon la bande status
-            // bar laisse voir le contenu scrollé derrière la barre. Le layout
-            // du contenu (contrôles, avatar) reste dans la safe area.
+            // Immersif façon WhatsApp : la bannière est posée en tête du
+            // VStack de compression (CallPresentationLayer), donc SOUS la
+            // status bar — seul son décor déborde jusqu'au bord haut du
+            // viewport, sinon la bande status bar laisse voir le contenu
+            // scrollé derrière la barre. Le layout du contenu (contrôles,
+            // avatar) reste dans la safe area.
             .ignoresSafeArea(.container, edges: .top)
         )
         .offset(x: pillDragOffset)
