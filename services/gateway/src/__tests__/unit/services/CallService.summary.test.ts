@@ -28,9 +28,14 @@ import { Prisma } from '@meeshy/shared/prisma/client';
 type MockFn = jest.Mock<any>;
 
 const createMockPrisma = () => ({
-  // `update` resolves by default so persistCallStats' `.update(...).catch(...)`
+  // `updateMany` resolves by default so persistCallStats' `.updateMany(...).catch(...)`
   // chains on a real Promise (the impl writes best-effort and swallows errors).
-  callSession: { findUnique: jest.fn() as MockFn, update: (jest.fn() as MockFn).mockResolvedValue(undefined) },
+  // Defaults to `{ count: 1 }` (lock won / snapshot still fresh) so pre-existing
+  // tests that don't exercise the race path are unaffected.
+  callSession: {
+    findUnique: jest.fn() as MockFn,
+    updateMany: (jest.fn() as MockFn).mockResolvedValue({ count: 1 })
+  },
   participant: { findFirst: jest.fn() as MockFn },
   message: {
     create: jest.fn() as MockFn,
@@ -194,6 +199,26 @@ describe('CallService.createCallSummaryMessage', () => {
     prisma.message.create.mockRejectedValue(new Error('db down'));
 
     await expect(sut.createCallSummaryMessage(CALL_ID)).rejects.toThrow('db down');
+  });
+
+  /**
+   * Jumeau du témoin de `CallService.liveMessage.test.ts` : le résumé d'appel
+   * est un message comme un autre pour l'aperçu de conversation, le compte de
+   * non-lus et le delta `/sync`, tous gardés par `deletedAt: null`
+   * (présent-et-null — une colonne absente ne l'apparie pas sur MongoDB).
+   * Un « Appel manqué » sans la colonne ne ferait jamais monter le badge.
+   */
+  it('marks the call summary message as live so the deletedAt:null readers match it', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    expect(Object.prototype.hasOwnProperty.call(data, 'deletedAt')).toBe(true);
+    expect(data.deletedAt).toBeNull();
   });
 });
 
@@ -406,7 +431,7 @@ describe('CallService.persistCallStats', () => {
   beforeEach(() => jest.clearAllMocks());
 
   const lastUpdateData = (prisma: ReturnType<typeof createMockPrisma>) =>
-    (prisma.callSession.update.mock.calls[0]?.[0] as any)?.data;
+    (prisma.callSession.updateMany.mock.calls[0]?.[0] as any)?.data;
 
   it('stores the (sent, received) pair as a coherent unit, not per-field max', async () => {
     const { sut, prisma } = makeSUT();
@@ -429,7 +454,7 @@ describe('CallService.persistCallStats', () => {
 
     await sut.persistCallStats(CALL_ID, { bytesSent: 1_800_000, bytesReceived: 100_000 });
 
-    expect(prisma.callSession.update).not.toHaveBeenCalled();
+    expect(prisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('overwrites when the new report total is larger', async () => {
@@ -456,7 +481,7 @@ describe('CallService.persistCallStats', () => {
 
     await sut.persistCallStats(CALL_ID, { bytesSent: 1, bytesReceived: 1, level: 'good' });
 
-    expect(prisma.callSession.update).not.toHaveBeenCalled();
+    expect(prisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('ignores an unknown quality tier', async () => {
@@ -465,6 +490,27 @@ describe('CallService.persistCallStats', () => {
 
     await sut.persistCallStats(CALL_ID, { level: 'amazing' });
 
-    expect(prisma.callSession.update).not.toHaveBeenCalled();
+    expect(prisma.callSession.updateMany).not.toHaveBeenCalled();
   });
+
+  it('scopes the write to the read (bytesSent, bytesReceived) snapshot to guard against a concurrent write', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 100, bytesReceived: 200 });
+
+    await sut.persistCallStats(CALL_ID, { bytesSent: 900, bytesReceived: 900 });
+
+    expect(prisma.callSession.updateMany).toHaveBeenCalledWith({
+      where: { id: CALL_ID, bytesSent: 100, bytesReceived: 200 },
+      data: { bytesSent: 900, bytesReceived: 900 }
+    });
+  });
+
+  it('drops the report without throwing when the snapshot is stale (concurrent write already advanced the row)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 0, bytesReceived: 0 });
+    prisma.callSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(sut.persistCallStats(CALL_ID, { bytesSent: 500, bytesReceived: 600 })).resolves.toBeUndefined();
+  });
+
 });

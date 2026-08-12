@@ -1,4 +1,5 @@
 import XCTest
+import ImageIO
 @testable import Meeshy
 
 @MainActor
@@ -154,6 +155,44 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertFalse(result.data.isEmpty)
     }
 
+    // MARK: - compressImageData — HEIC transcoded to web-safe JPEG
+
+    /// A photo shot on iPhone with "High Efficiency" enabled arrives here as
+    /// real HEIC bytes. The web client cannot render HEIC inline — the
+    /// output MUST be actual JPEG (mime AND bytes), not HEIC data wearing a
+    /// `.jpg` extension.
+    func test_compressImageData_heicMagicBytes_transcodesToRealJPEG() async {
+        let sut = makeSUT()
+        let heicData = makeHEICData()
+
+        let result = await sut.compressImageData(heicData, maxDimension: 2048)
+
+        XCTAssertEqual(result.mimeType, "image/jpeg")
+        XCTAssertEqual(result.fileExtension, "jpg")
+        XCTAssertFalse(result.data.isEmpty)
+        let magic = [UInt8](result.data.prefix(3))
+        XCTAssertEqual(magic, [0xFF, 0xD8, 0xFF], "output bytes must be a real JPEG stream, not renamed HEIC")
+        XCTAssertNotNil(UIImage(data: result.data))
+    }
+
+    // MARK: - compressImageData — HEIC downsample failure must not mislabel bytes
+
+    /// If ImageIO fails to decode/downsample a genuinely HEIC-tagged buffer
+    /// (corrupt transfer, exotic container), the fallback MUST return the
+    /// untouched original bytes tagged with the ORIGINAL detected mime
+    /// ("image/heic") — never hardcode "image/jpeg" over real HEIC bytes,
+    /// which would reintroduce the exact "lying extension" bug this branch
+    /// was merged to eliminate, just on the failure path instead of success.
+    func test_compressImageData_corruptHEICBytes_downsampleFails_preservesBytesAndOriginalMime() async {
+        let sut = makeSUT()
+        let corruptHEICData = makeCorruptHEICMagicBytes()
+
+        let result = await sut.compressImageData(corruptHEICData, maxDimension: 2048)
+
+        XCTAssertEqual(result.data, corruptHEICData, "must not alter bytes when transcode fails")
+        XCTAssertEqual(result.mimeType, "image/heic", "must not mislabel undecoded HEIC bytes as image/jpeg")
+    }
+
     // MARK: - compressImageData — PNG format preservation
 
     func test_compressImageData_pngFormat_preservesMimeType() async {
@@ -253,6 +292,32 @@ final class MediaCompressorTests: XCTestCase {
         data[1] = 0x49  // I
         data[2] = 0x46  // F
         data[3] = 0x38  // 8
+        return data
+    }
+
+    /// Encodes a real HEIC container via ImageIO — the same encoder
+    /// `MediaCompressor` itself uses — so `detectMimeType`'s `ftyp` sniff and
+    /// the ImageIO decode path both see genuine bytes, not a magic-byte stub.
+    private func makeHEICData(width: CGFloat = 200, height: CGFloat = 200) -> Data {
+        let image = makeTestImage(width: width, height: height)
+        guard let cgImage = image.cgImage else { return Data() }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil) else { return Data() }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest), "test host must support HEIC encoding")
+        return data as Data
+    }
+
+    /// Carries a valid `ftyp` box signature (what `detectMimeType` sniffs to
+    /// classify as HEIC) but no actual decodable HEIC container after it —
+    /// ImageIO's `CGImageSourceCreateThumbnailAtIndex` fails on this input,
+    /// exercising `MediaCompressor`'s downsample-failure fallback path.
+    private func makeCorruptHEICMagicBytes() -> Data {
+        var data = Data(count: 32)
+        data[4] = 0x66  // f
+        data[5] = 0x74  // t
+        data[6] = 0x79  // y
+        data[7] = 0x70  // p
         return data
     }
 

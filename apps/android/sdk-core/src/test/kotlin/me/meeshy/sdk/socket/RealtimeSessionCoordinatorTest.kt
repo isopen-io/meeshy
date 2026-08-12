@@ -10,12 +10,14 @@ class RealtimeSessionCoordinatorTest {
     private val socketManager: SocketManager = mockk(relaxed = true)
     private val messageSocketManager: MessageSocketManager = mockk(relaxed = true)
     private val socialSocketManager: SocialSocketManager = mockk(relaxed = true)
+    private val categorySocketManager: CategorySocketManager = mockk(relaxed = true)
     private val callSignalManager: CallSignalManager = mockk(relaxed = true)
 
     private fun coordinator() = RealtimeSessionCoordinator(
         socketManager = socketManager,
         messageSocketManager = messageSocketManager,
         socialSocketManager = socialSocketManager,
+        categorySocketManager = categorySocketManager,
         callSignalManager = callSignalManager,
     )
 
@@ -27,6 +29,7 @@ class RealtimeSessionCoordinatorTest {
             socketManager.connect()
             messageSocketManager.attach()
             socialSocketManager.attach()
+            categorySocketManager.attach()
             callSignalManager.attach()
         }
     }
@@ -41,6 +44,7 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 1) { socketManager.connect() }
         verify(exactly = 1) { messageSocketManager.attach() }
         verify(exactly = 1) { socialSocketManager.attach() }
+        verify(exactly = 1) { categorySocketManager.attach() }
         verify(exactly = 1) { callSignalManager.attach() }
     }
 
@@ -85,6 +89,7 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 2) { socketManager.connect() }
         verify(exactly = 2) { messageSocketManager.attach() }
         verify(exactly = 2) { socialSocketManager.attach() }
+        verify(exactly = 2) { categorySocketManager.attach() }
         verify(exactly = 2) { callSignalManager.attach() }
         verify(exactly = 1) { socketManager.disconnect() }
     }

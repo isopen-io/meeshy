@@ -57,6 +57,33 @@ struct SectionDropDelegate: DropDelegate {
     }
 }
 
+// MARK: - Conversation List Empty Branch
+
+/// Distinguishes `ConversationListView`'s possible "nothing to render"
+/// branches so the CORRECT placeholder is picked — only relevant once
+/// `groupedConversations` is already known empty. Pure/`nonisolated` (no
+/// SwiftUI/MainActor dependency) so it's directly unit-testable (audit
+/// 2026-07-20: the "créez-en une" CTA flashed during cold-start `.idle` —
+/// skeleton was gated strictly on `.loading` — and reused verbatim for an
+/// ACTIVE search with zero matches, misleadingly implying zero
+/// conversations). `loadState` is resolved BEFORE the search branch (fix
+/// 2026-07-21): `.idle`/`.loading` ONLY occur while the cold, cache-less
+/// first fetch is in flight (`ConversationListViewModel.performLoadConversations`'s
+/// `.expired`-with-nothing-recovered / `.empty` branches) — the search field
+/// is always focusable, so a user typing during that window must still see
+/// the cache-first skeleton, never a definitive "no results for your
+/// search" (a still-loading state is not a result). Once the load has
+/// settled (`.loaded`/`.offline`/`.error`/`.cachedFresh`/`.cachedStale`),
+/// an active search with zero matches takes priority over every other
+/// state. Top-level (not nested) — matches this codebase's established
+/// `nonisolated enum` placement convention.
+nonisolated enum ConversationListEmptyBranch: Equatable {
+    case skeleton
+    case searchNoResults
+    case syncError
+    case createFirstConversation
+}
+
 // MARK: - Conversation List View
 struct ConversationListView: View {
     @Binding var isScrollingDown: Bool
@@ -89,9 +116,20 @@ struct ConversationListView: View {
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
     private var blockService: BlockService { BlockService.shared }
-    // Lecture directe sans @ObservedObject — évite que chaque event presence force
-    // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
+    // Lecture directe sans @ObservedObject sur PresenceManager lui-même —
+    // observer l'objet entier re-déclencherait ce body à CHAQUE mutation de
+    // `presenceMap` (un event `user:status` par contact), pas seulement
+    // quand une pastille visible change réellement.
     private var presenceManager: PresenceManager { PresenceManager.shared }
+    /// Signal ciblé et débouncé (`PresenceRefreshSignal`, PresenceManager.swift)
+    /// — SEUL élément observé pour la présence. Sa valeur n'est jamais lue :
+    /// le simple fait qu'elle change re-diffe la liste, et le gate
+    /// `.equatable()` de chaque row (qui compare déjà `presenceState`)
+    /// décide seul si CETTE row doit se reconstruire. Avant ce signal,
+    /// personne n'observait `PresenceManager` : les pastilles ne se
+    /// rafraîchissaient que par coïncidence, au gré d'un autre re-render
+    /// (audit 2026-07-20, "pastilles jamais rafraîchies sur user:status").
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -99,9 +137,6 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
-    @State private var showStatusBubble = false
-    @State private var selectedStatusEntry: StatusEntry?
-    @State private var moodBadgeAnchor: CGPoint = .zero
 
     // Search and Filters
     @FocusState var isSearching: Bool
@@ -152,9 +187,6 @@ struct ConversationListView: View {
 
     // Invite sheet
     @State var inviteSheetConversation: Conversation? = nil
-
-    // Status republication
-    @State private var republishStatusEntry: StatusEntry? = nil
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
@@ -259,14 +291,73 @@ struct ConversationListView: View {
         self.selectedConversationId = selectedConversationId
     }
 
-    // The filtered and grouped conversations are now calculated on a background queue 
+    // The filtered and grouped conversations are now calculated on a background queue
     // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
+
+    // MARK: - Empty Branch Resolution
+
+    nonisolated static func emptyBranch(
+        loadState: LoadState,
+        loadFailed: Bool,
+        searchTextIsEmpty: Bool
+    ) -> ConversationListEmptyBranch {
+        switch loadState {
+        case .idle, .loading:
+            // Cold, cache-less first fetch still in flight: a still-loading
+            // state is never a definitive result, so this wins over an
+            // active search — never show "no results" while we don't yet
+            // know whether the cache is genuinely empty (fix 2026-07-21).
+            return .skeleton
+        default:
+            guard searchTextIsEmpty else { return .searchNoResults }
+            return loadFailed ? .syncError : .createFirstConversation
+        }
+    }
+
+    // MARK: - Preview Auto-Load Eligibility
+    //
+    // Pure/testable (no SwiftUI/MainActor dependency) — same `firstIndex`
+    // scan shape as `triggerLoadMoreIfNeeded` below, but NOT the same call
+    // cadence: `triggerLoadMoreIfNeeded` fires from `.onAppear` (once per
+    // scroll-triggered row appearance), while this runs on every
+    // `conversationRow` body evaluation for every on-screen row — including
+    // re-renders driven by `presencePulse`. The caller (`sectionsContent`)
+    // hoists the `orderedConversationIds` array build to ONCE per body pass
+    // instead of once per row to keep that repeated cost bounded. Gates
+    // `ConversationRowItem.enableAutoPreviewLoad` to the first `limit`
+    // entries of `orderedConversationIds` — the caller MUST pass the
+    // actually-rendered order (flattened `groupedConversations`), never the
+    // raw unfiltered/ungrouped `conversationViewModel.conversations`: a
+    // filtered/sectioned view's visible rows can fall entirely outside the
+    // full-account top-20 by recency, permanently starving their auto-load
+    // (fix 2026-07-21; audit 2026-07-20 introduced the limit itself: every
+    // row firing its preview-prefetch `.task` on appear meant 1 REST call
+    // per newly-visible row on a cold cache).
+    nonisolated static func shouldAutoLoadPreview(
+        conversationId: String,
+        orderedConversationIds: [String],
+        limit: Int
+    ) -> Bool {
+        guard limit > 0, let idx = orderedConversationIds.firstIndex(of: conversationId) else { return false }
+        return idx < limit
+    }
 
     @ViewBuilder
     private var sectionsContent: some View {
+        // Flattened render order across EVERY visible section — pinned →
+        // user categories (declared order) → other — mirrors exactly what
+        // `ConversationListViewModel.groupConversations` painted on screen.
+        // Computed ONCE per body pass here (not per row) and threaded down
+        // through `sectionView`/`sectionConversations` to `conversationRow`:
+        // ranking `enableAutoPreviewLoad` against
+        // `conversationViewModel.conversations` (the raw, unfiltered,
+        // ungrouped account-wide list) used to silently starve auto-load for
+        // any filtered/sectioned view whose visible rows don't line up with
+        // the full-account top-20 by recency (fix 2026-07-21).
+        let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
         LazyVStack(spacing: 8) {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
-                sectionView(for: group)
+                sectionView(for: group, orderedConversationIds: orderedConversationIds)
             }
         }
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
@@ -280,7 +371,10 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func sectionView(for group: (section: ConversationSection, conversations: [Conversation])) -> some View {
+    private func sectionView(
+        for group: (section: ConversationSection, conversations: [Conversation]),
+        orderedConversationIds: [String]
+    ) -> some View {
         // Hide section header when there are no user categories (flat list)
         if !isSingleUngroupedSection {
             SectionHeaderView(
@@ -317,7 +411,7 @@ struct ConversationListView: View {
 
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSingleUngroupedSection || expandedSections.contains(group.section.id) {
-            sectionConversations(group.conversations)
+            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds)
                 .padding(.horizontal, 16)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
@@ -327,19 +421,26 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func sectionConversations(_ conversations: [Conversation]) -> some View {
+    private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
         // rowWidth derives from the actual containing column width (iPad
-        // left column is much narrower than `UIScreen.main.bounds.width`)
-        // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
-        // On iPad the column ratio is roughly 0.38 of the screen, so we
+        // left column is much narrower than the window) minus
+        // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
+        // On iPad the column ratio is roughly 0.38 of the window, so we
         // clamp to that floor explicitly to avoid text overflow.
+        //
+        // Measured against the window, not `UIScreen.main.bounds`: the ratio
+        // is meant to approximate a *column of the app*, and taken against the
+        // display it described a column of space the app does not own in Split
+        // View — the row then budgeted more width than it had and the text it
+        // was sized to protect overflowed anyway.
+        let windowWidth = DeviceLayout.windowSize.width
         let baseWidth = horizontalSizeClass == .regular
-            ? min(UIScreen.main.bounds.width * 0.42, 520)
-            : UIScreen.main.bounds.width - 32
+            ? min(windowWidth * 0.42, 520)
+            : windowWidth - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
-                conversationRow(for: conversation, rowWidth: rowWidth)
+                conversationRow(for: conversation, rowWidth: rowWidth, orderedConversationIds: orderedConversationIds)
                     .onAppear {
                         // Cursor-based infinite scroll: trigger `loadMore`
                         // 5 rows before the loaded tail. The ViewModel
@@ -369,7 +470,7 @@ struct ConversationListView: View {
     // type-metadata instantiation crash on low-memory devices. This builder
     // only wires the row's inputs; the returned `some View` is the nominal
     // `ConversationRowItem`, which keeps the enclosing list type small.
-    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, orderedConversationIds: [String]) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
@@ -413,6 +514,11 @@ struct ConversationListView: View {
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
+            enableAutoPreviewLoad: Self.shouldAutoLoadPreview(
+                conversationId: conversation.id,
+                orderedConversationIds: orderedConversationIds,
+                limit: ConversationRowMetrics.autoPreviewLoadRowLimit
+            ),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
                 // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
@@ -459,40 +565,12 @@ struct ConversationListView: View {
         return true
     }
 
-    func shareConversationLink(for conversation: Conversation) async {
-        do {
-            let linkName = "Rejoins la conversation \"\(conversation.name)\""
-            let welcome = "Rejoins moi pour échanger sans filtre ni barrière..."
-            let request = CreateShareLinkRequest(
-                conversationId: conversation.id,
-                name: linkName,
-                description: welcome,
-                allowAnonymousMessages: true,
-                allowAnonymousFiles: false,
-                allowAnonymousImages: true,
-                allowViewHistory: true,
-                requireAccount: false,
-                requireNickname: true,
-                requireEmail: false,
-                requireBirthday: false
-            )
-            let result = try await ShareLinkService.shared.createShareLink(request: request)
-            let shareURL = "https://meeshy.me/join/\(result.linkId)"
-            await MainActor.run {
-                let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    var topVC = rootVC
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    activityVC.popoverPresentationController?.sourceView = topVC.view
-                    topVC.present(activityVC, animated: true)
-                }
-            }
-            HapticFeedback.success()
-        } catch {
-            HapticFeedback.error()
-        }
-    }
+    // `shareConversationLink(for:)` used to live here: it minted a join link and
+    // pushed a `UIActivityViewController` onto the top-most view controller. It
+    // had no caller left — the live affordance is `onCreateShareLink`, which
+    // routes to `InviteFriendsSheet` (a real sheet, with editable link options).
+    // Removed with the rest of the hand-rolled share presentations, along with
+    // the two hardcoded French strings it carried.
 
     // MARK: - Swipe Actions
 
@@ -674,21 +752,10 @@ struct ConversationListView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-        .withStatusBubble()
-        .sheet(item: $republishStatusEntry) { entry in
-            StatusComposerView(
-                viewModel: statusViewModel,
-                initialEmoji: entry.moodEmoji,
-                initialText: entry.content,
-                viaUsername: entry.username,
-                repostOfId: entry.id,
-                repostAudioUrl: entry.audioUrl
-            )
-            .presentationDetents([.medium])
-        }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -725,14 +792,6 @@ struct ConversationListView: View {
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
-                }
-            }
-            .overlay {
-                if showStatusBubble, let status = selectedStatusEntry {
-                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble, onRepublish: { entry in
-                        republishStatusEntry = entry
-                    })
-                        .zIndex(200)
                 }
             }
             .overlay { conversationContextMenuOverlay }
@@ -873,66 +932,93 @@ struct ConversationListView: View {
                     // Skeleton ONLY when cold-start with no cached groups —
                     // cache-first principle: any cached/stale data must
                     // render immediately, no skeleton on top of it.
-                    // Drive the gate from `loadState == .loading` (not the
-                    // legacy `isLoading` flag) so cachedStale/cachedFresh
-                    // paths bypass the placeholder even on first paint.
-                    if conversationViewModel.loadState == .loading
-                        && conversationViewModel.groupedConversations.isEmpty {
-                        LazyVStack(spacing: 8) {
-                            ForEach(0..<6, id: \.self) { index in
-                                SkeletonConversationRow()
-                                    .staggeredAppear(index: index, baseDelay: 0.04)
+                    // `Self.emptyBranch` distinguishes cold-start `.idle` (show
+                    // skeleton, not the "créez-en une" CTA — it used to flash
+                    // for a frame before `loadConversations()`'s first `await`
+                    // even flips `loadState` to `.loading`) from an ACTIVE
+                    // search with zero matches (dedicated "no results" state,
+                    // never the misleading "you have no conversations" CTA).
+                    if conversationViewModel.groupedConversations.isEmpty {
+                        switch Self.emptyBranch(
+                            loadState: conversationViewModel.loadState,
+                            loadFailed: conversationViewModel.loadFailed,
+                            searchTextIsEmpty: conversationViewModel.searchText.isEmpty
+                        ) {
+                        case .skeleton:
+                            LazyVStack(spacing: 8) {
+                                ForEach(0..<6, id: \.self) { index in
+                                    SkeletonConversationRow()
+                                        .staggeredAppear(index: index, baseDelay: 0.04)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .transition(.opacity)
+                        case .searchNoResults:
+                            EmptyStateView(
+                                icon: "magnifyingglass",
+                                title: String(localized: "search.no_results"),
+                                subtitle: String(localized: "search.try_other_terms")
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
+                        case .syncError:
+                            // Cold-start sync failed AND cache is empty: offer a
+                            // retry instead of the misleading "no conversations"
+                            // placeholder. This is the path users hit after a
+                            // cold start with stale/expired token or network
+                            // issues — previously they were trapped on an empty
+                            // list with no feedback.
+                            EmptyStateView(
+                                icon: "exclamationmark.arrow.triangle.2.circlepath",
+                                title: String(localized: "conversations.error.title"),
+                                subtitle: String(localized: "conversations.error.subtitle"),
+                                actionLabel: String(localized: "conversations.error.retry"),
+                                onAction: {
+                                    Task { await conversationViewModel.forceRefresh() }
+                                }
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
+                        case .createFirstConversation:
+                            EmptyStateView(
+                                icon: "bubble.left.and.bubble.right",
+                                title: String(localized: "conversations.empty.title"),
+                                subtitle: String(localized: "conversations.empty.subtitle"),
+                                actionLabel: String(localized: "conversations.empty.action"),
+                                onAction: {
+                                    onNewConversation?()
+                                }
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
                         }
-                        .padding(.horizontal, 16)
-                        .transition(.opacity)
-                    } else if conversationViewModel.groupedConversations.isEmpty && conversationViewModel.loadFailed {
-                        // Cold-start sync failed AND cache is empty: offer a
-                        // retry instead of the misleading "no conversations"
-                        // placeholder. This is the path users hit after a
-                        // cold start with stale/expired token or network
-                        // issues — previously they were trapped on an empty
-                        // list with no feedback.
-                        EmptyStateView(
-                            icon: "exclamationmark.arrow.triangle.2.circlepath",
-                            title: String(localized: "conversations.error.title"),
-                            subtitle: String(localized: "conversations.error.subtitle"),
-                            actionLabel: String(localized: "conversations.error.retry"),
-                            onAction: {
-                                Task { await conversationViewModel.forceRefresh() }
-                            }
-                        )
-                        .padding(.top, 60)
-                        .transition(.opacity)
-                    } else if conversationViewModel.groupedConversations.isEmpty {
-                        EmptyStateView(
-                            icon: "bubble.left.and.bubble.right",
-                            title: String(localized: "conversations.empty.title"),
-                            subtitle: String(localized: "conversations.empty.subtitle"),
-                            actionLabel: String(localized: "conversations.empty.action"),
-                            onAction: {
-                                onNewConversation?()
-                            }
-                        )
-                        .padding(.top, 60)
-                        .transition(.opacity)
                     } else {
                         sectionsContent
                             .transition(.opacity)
-                    }
 
-                    // Pagination footer driven by `paginationState`.
-                    // - .loadingMore: spinner while a page is in flight
-                    // - .exhausted:   discreet "all loaded" hint once
-                    //                 the gateway signalled hasMore=false
-                    //                 (only shown for non-trivial lists)
-                    // - .error:       inline retry button (transient
-                    //                 errors keep hasMore=true)
-                    // - .idle:        invisible spacer that triggers
-                    //                 loadMore via onAppear once the
-                    //                 user reaches the tail (back-up to
-                    //                 the per-row threshold trigger)
-                    ConversationPaginationFooter()
+                        // Pagination footer driven by `paginationState`.
+                        // - .loadingMore: spinner while a page is in flight
+                        // - .exhausted:   discreet "all loaded" hint once
+                        //                 the gateway signalled hasMore=false
+                        //                 (only shown for non-trivial lists)
+                        // - .error:       inline retry button (transient
+                        //                 errors keep hasMore=true)
+                        // - .idle:        invisible spacer that triggers
+                        //                 loadMore via onAppear once the
+                        //                 user reaches the tail (back-up to
+                        //                 the per-row threshold trigger)
+                        //
+                        // Rendered ONLY inside this `else` (non-empty list): an
+                        // empty list already surfaces its OWN error/empty state
+                        // — the `.syncError` branch above carries its own big
+                        // "Retry" (forceRefresh). Rendering the pagination
+                        // footer alongside it stacked a SECOND "Couldn't load
+                        // more / Retry" (paginationState `.error` → loadMore) on
+                        // a cold-start sync failure — the duplicate-retry bug.
+                        // Pagination is only meaningful when there is content to
+                        // page through.
+                        ConversationPaginationFooter()
+                    }
 
                     Color.clear.frame(height: 280)
                         .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in

@@ -8,10 +8,12 @@
 import React, { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
+import { CallErrorBoundary } from '@/components/video-calls/CallErrorBoundary';
 import { useAuth } from '@/hooks/use-auth';
 import { useCallStore } from '@/stores/call-store';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CallInitiatedEvent, CallParticipantJoinedEvent } from '@meeshy/shared/types/video-call';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -48,90 +50,87 @@ export default function CallPage({ params }: CallPageProps) {
       return;
     }
 
-    // Auto-join the call
-    const joinCall = async () => {
-      setIsJoining(true);
-      setError(null);
+    // Auto-join the call. The socket listeners and the join-timeout are
+    // registered synchronously in the effect body (not inside an async
+    // closure) so the function returned here is the effect's REAL cleanup —
+    // React only runs a cleanup returned directly from the effect callback,
+    // never one returned by a Promise the effect merely calls. Registering
+    // them from inside `async () => {...}; joinCall();` (as before) meant
+    // React always saw `undefined` as this effect's cleanup: the listeners
+    // and the 10s timeout survived unmount/re-run, permanently stacking up
+    // on the shared socket singleton on every call-page visit.
+    setIsJoining(true);
+    setError(null);
 
-      try {
-        const socket = meeshySocketIOService.getSocket();
-        if (!socket) {
-          throw new Error('No socket connection. Please refresh the page.');
-        }
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) {
+      const message = 'No socket connection. Please refresh the page.';
+      setError(message);
+      setIsJoining(false);
+      toast.error(message);
+      logger.error('[CallPage]', 'Failed to join call', { error: message });
+      return;
+    }
 
-        logger.info('[CallPage]', 'Auto-joining call', { callId });
+    logger.info('[CallPage]', 'Auto-joining call', { callId });
 
-        // Emit join event. Apply the server-provided ICE servers (STUN +
-        // time-limited TURN) returned in the ack so the RTCPeerConnection is
-        // built with TURN credentials instead of falling back to STUN-only.
-        socket.emit(CLIENT_EVENTS.CALL_JOIN, {
-          callId,
-          settings: {
-            audioEnabled: true,
-            videoEnabled: true,
-          },
-        }, (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
-          if (ack?.success && ack.data?.iceServers?.length) {
-            setIceServers(ack.data.iceServers);
-          }
-        });
+    // Set a timeout for joining
+    const timeout = setTimeout(() => {
+      setError('Failed to join call. The call may not exist or has ended.');
+      setIsJoining(false);
+    }, 10000);
 
-        // Wait for call:participant-joined or call:initiated event
-        // The CallManager component will handle these events and update the store
-
-        // Set a timeout for joining
-        const timeout = setTimeout(() => {
-          setError('Failed to join call. The call may not exist or has ended.');
-          setIsJoining(false);
-        }, 10000);
-
-        // Listen for successful join
-        const handleParticipantJoined = (event: unknown) => {
-          if (event.callId === callId) {
-            clearTimeout(timeout);
-            setIsJoining(false);
-            setInCall(true);
-            socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-          }
-        };
-
-        const handleCallInitiated = (event: unknown) => {
-          if (event.callId === callId) {
-            clearTimeout(timeout);
-            setIsJoining(false);
-            setCurrentCall({
-              id: event.callId,
-              conversationId: event.conversationId,
-              mode: event.mode,
-              status: 'active',
-              initiatorId: event.initiator.userId,
-              startedAt: new Date(),
-              participants: event.participants,
-            });
-            setInCall(true);
-            socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
-          }
-        };
-
-        socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-        socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
-
-        // Cleanup
-        return () => {
-          clearTimeout(timeout);
-          socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-          socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to join call';
-        setError(message);
+    // Listen for successful join
+    const handleParticipantJoined = (event: CallParticipantJoinedEvent) => {
+      if (event.callId === callId) {
+        clearTimeout(timeout);
         setIsJoining(false);
-        toast.error(message);
-        logger.error('[CallPage]', 'Failed to join call', { error: err });
+        setInCall(true);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
       }
     };
 
-    joinCall();
+    const handleCallInitiated = (event: CallInitiatedEvent) => {
+      if (event.callId === callId) {
+        clearTimeout(timeout);
+        setIsJoining(false);
+        setCurrentCall({
+          id: event.callId,
+          conversationId: event.conversationId,
+          mode: event.mode,
+          status: 'active',
+          initiatorId: event.initiator.userId,
+          startedAt: new Date(),
+          participants: event.participants,
+        });
+        setInCall(true);
+        socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
+      }
+    };
+
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+    socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
+
+    // Emit join event. Apply the server-provided ICE servers (STUN +
+    // time-limited TURN) returned in the ack so the RTCPeerConnection is
+    // built with TURN credentials instead of falling back to STUN-only.
+    socket.emit(CLIENT_EVENTS.CALL_JOIN, {
+      callId,
+      settings: {
+        audioEnabled: true,
+        videoEnabled: true,
+      },
+    }, (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+      if (ack?.success && ack.data?.iceServers?.length) {
+        setIceServers(ack.data.iceServers);
+      }
+    });
+
+    return () => {
+      clearTimeout(timeout);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+      socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
+    };
   }, [callId, user, isLoading, currentCall, router, setCurrentCall, setInCall, setIceServers]);
 
   // Handle call ended - redirect to home
@@ -198,7 +197,11 @@ export default function CallPage({ params }: CallPageProps) {
   }
 
   if (currentCall) {
-    return <VideoCallInterface callId={callId} />;
+    return (
+      <CallErrorBoundary>
+        <VideoCallInterface callId={callId} />
+      </CallErrorBoundary>
+    );
   }
 
   return (

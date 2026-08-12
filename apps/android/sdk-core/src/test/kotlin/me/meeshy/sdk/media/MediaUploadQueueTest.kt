@@ -4,7 +4,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.outbox.MediaUploadPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -70,6 +73,23 @@ class MediaUploadQueueTest {
         assertThat(row.kindEnum).isEqualTo(OutboxKind.UPLOAD_MEDIA)
         assertThat(row.stateEnum).isEqualTo(OutboxState.PENDING)
         assertThat(row.dependsOn).isNull()
+    }
+
+    @Test
+    fun `enqueue without a context leaves the row payload blank (legacy MessageAttachment upload)`() = runTest {
+        queue.enqueue(item())
+
+        val row = outbox.deliverable(OutboxLanes.MEDIA).single()
+        assertThat(row.payload).isEmpty()
+    }
+
+    @Test
+    fun `enqueue with a TUS context persists it on the row for the drain sender to read`() = runTest {
+        queue.enqueue(item(), context = TusUploadContext.STORY)
+
+        val row = outbox.deliverable(OutboxLanes.MEDIA).single()
+        val payload = Json.decodeFromString<MediaUploadPayload>(row.payload)
+        assertThat(payload.uploadContext).isEqualTo(TusUploadContext.STORY.wire)
     }
 
     @Test

@@ -331,7 +331,7 @@ sequenceDiagram
     deactivate SocketIO
 
     Browser->>Browser: Other users receive USER_STATUS
-    Note over Browser: usersService.updateUserStatus(userId, {<br/>  isOnline: false,<br/>  lastActiveAt: new Date()<br/>})<br/><br/>OnlineIndicator: 🟠 Away (si < 30min)<br/>ou ⚪ Offline (si > 30min)
+    Note over Browser: usersService.updateUserStatus(userId, {<br/>  isOnline: false,<br/>  lastActiveAt: new Date()<br/>})<br/><br/>OnlineIndicator (décroissance depuis lastActiveAt gelé) :<br/>🟢 online ≤60s · 🟠 away ≤3min · ⚪ idle ≤5min · rien >5min
 ```
 
 **Durée totale**: ~50-150ms
@@ -624,15 +624,16 @@ sequenceDiagram
     activate Logic
 
     Logic->>Logic: now = Date.now()
-    Logic->>Logic: lastActive = new Date(user.lastActiveAt).getTime()
-    Logic->>Logic: diffMinutes = (now - lastActive) / 60000
+    Logic->>Logic: getUserPresenceStatus(user, now)<br/>(@meeshy/shared — source de vérité, règle 1/3/5)
 
-    alt diffMinutes < 5
-        Logic-->>Service: { status: "online", color: "#10b981", label: "En ligne" }
-    else diffMinutes < 30
-        Logic-->>Service: { status: "away", color: "#f59e0b", label: "Absent" }
-    else diffMinutes >= 30
-        Logic-->>Service: { status: "offline", color: "#6b7280", label: "Hors ligne" }
+    alt isOnline (garde ≤5min) OU elapsed ≤ 60s
+        Logic-->>Service: { status: "online", color: "#34D399", label: "En ligne" } (pulse)
+    else elapsed ≤ 3min
+        Logic-->>Service: { status: "away", color: "#FBBF24", label: "Absent" }
+    else elapsed ≤ 5min
+        Logic-->>Service: { status: "idle", color: "#9CA3AF", label: "Inactif" } (gris affiché)
+    else elapsed > 5min
+        Logic-->>Service: { status: "offline" } (aucun dot rendu sur l'avatar)
     end
 
     deactivate Logic

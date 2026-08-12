@@ -4,6 +4,16 @@ import '@testing-library/jest-dom';
 import { ConversationView } from '../../../components/conversations/ConversationView';
 import type { Conversation, User, Message, Participant, UserRoleEnum } from '@meeshy/shared/types';
 
+// Capture la fonction `resolveLanguage` passée à `useSeenMessages` pour vérifier
+// que le chemin « langue réellement affichée » suit le SSOT du Prisme (deviceLocale
+// en 4e priorité) sans avoir à simuler IntersectionObserver.
+const mockSeenLanguageCapture: { fn?: (id: string) => string | null } = {};
+jest.mock('@/hooks/use-seen-messages', () => ({
+  useSeenMessages: (opts: { resolveLanguage?: (id: string) => string | null }) => {
+    mockSeenLanguageCapture.fn = opts.resolveLanguage;
+  },
+}));
+
 // Mock utils
 jest.mock('@/utils/token-utils', () => ({
   getAuthToken: jest.fn(() => ({ value: 'mock-token' })),
@@ -577,6 +587,58 @@ describe('ConversationView', () => {
       );
 
       expect(screen.getByTestId('conversation-header')).toBeInTheDocument();
+    });
+  });
+
+  describe('Read-receipt language resolution (Prisme SSOT)', () => {
+    beforeEach(() => {
+      mockSeenLanguageCapture.fn = undefined;
+    });
+
+    it('reports the deviceLocale translation, not the original, when in-app prefs are empty', () => {
+      // Lecteur dont le SEUL signal de langue est la locale appareil (4e priorité).
+      const user = {
+        ...mockCurrentUser,
+        systemLanguage: '',
+        regionalLanguage: '',
+        customDestinationLanguage: '',
+        deviceLocale: 'it',
+      } as any;
+      const messages = [
+        {
+          id: 'msg-de',
+          originalLanguage: 'de',
+          translations: [{ targetLanguage: 'it' }, { targetLanguage: 'en' }],
+        } as any,
+      ];
+
+      render(<ConversationView {...defaultProps} currentUser={user} messages={messages} />);
+
+      // La bulle affiche l'italien (une traduction existe pour la deviceLocale) ;
+      // le suivi de lecture doit déclarer 'it', pas l'original 'de'.
+      expect(mockSeenLanguageCapture.fn?.('msg-de')).toBe('it');
+    });
+
+    it('reports the in-app preferred translation, keeping deviceLocale subordinate', () => {
+      const user = {
+        ...mockCurrentUser,
+        systemLanguage: 'fr',
+        regionalLanguage: '',
+        customDestinationLanguage: '',
+        deviceLocale: 'it',
+      } as any;
+      const messages = [
+        {
+          id: 'msg-en',
+          originalLanguage: 'en',
+          translations: [{ targetLanguage: 'fr' }, { targetLanguage: 'it' }],
+        } as any,
+      ];
+
+      render(<ConversationView {...defaultProps} currentUser={user} messages={messages} />);
+
+      // systemLanguage 'fr' prime sur la deviceLocale 'it'.
+      expect(mockSeenLanguageCapture.fn?.('msg-en')).toBe('fr');
     });
   });
 

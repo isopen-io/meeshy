@@ -56,4 +56,26 @@ public class ReportRepository @Inject constructor(
         val request = ReportRequestBuilder.forMessage(messageId, reason, details) ?: return null
         return apiCall { reportApi.create(request) }.map { }
     }
+
+    /** L'analogue post de [reportUser] — memes gardes de session et d'inertie. */
+    public suspend fun reportPost(
+        postId: String,
+        reason: ReportReason,
+        details: String?,
+    ): NetworkResult<Unit>? {
+        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
+        val request = ReportRequestBuilder.forPost(postId, reason, details) ?: return null
+        return apiCall { reportApi.create(request) }.map { }
+    }
+
+    /** L'analogue story de [reportUser] — memes gardes de session et d'inertie. */
+    public suspend fun reportStory(
+        storyId: String,
+        reason: ReportReason,
+        details: String?,
+    ): NetworkResult<Unit>? {
+        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
+        val request = ReportRequestBuilder.forStory(storyId, reason, details) ?: return null
+        return apiCall { reportApi.create(request) }.map { }
+    }
 }

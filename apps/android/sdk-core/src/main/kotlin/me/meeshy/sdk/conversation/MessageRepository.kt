@@ -70,6 +70,20 @@ class MessageRepository @Inject constructor(
     }
 
     /**
+     * Cache-only read of a conversation's [limit] most recent messages, oldest
+     * first — a "peek" surface (hard-press preview card) that must render
+     * instantly without a network round-trip. Deliberately skips the
+     * background-revalidate half of [messagesStream]'s stale-while-revalidate
+     * contract: a preview the user may dismiss within a second should never
+     * trigger unbounded background sync work. Empty on a never-synced
+     * conversation (mirrors [messagesStream]'s cold-cache [CacheResult.Empty]).
+     */
+    suspend fun recentMessages(conversationId: String, limit: Int = PREVIEW_LIMIT): List<LocalMessage> =
+        messageDao.recentForConversation(conversationId, limit)
+            .asReversed()
+            .map { it.toLocalMessage() }
+
+    /**
      * Backwards pagination: fetches the page of messages older than the oldest
      * cached server row (`before` cursor) and appends it to the Room cache.
      * The freshness watermark is untouched — history pages do not make the
@@ -546,6 +560,7 @@ class MessageRepository @Inject constructor(
 
     private companion object {
         const val OLDER_PAGE_SIZE = 30
+        const val PREVIEW_LIMIT = 5
         const val RANK_SENT = 0
         const val RANK_DELIVERED = 1
         const val RANK_READ = 2

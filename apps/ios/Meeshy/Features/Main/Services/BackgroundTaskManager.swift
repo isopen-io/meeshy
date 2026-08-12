@@ -4,6 +4,14 @@ import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "background")
 
+/// startup-08 — enveloppe `BGTaskScheduler.cancel` pour rendre le chemin de
+/// logout testable : l'API réelle n'offre aucun moyen d'observer un cancel
+/// après coup, seule l'injection d'un espion le permet.
+protocol BGTaskCancelling {
+    func cancel(taskRequestWithIdentifier identifier: String)
+}
+extension BGTaskScheduler: BGTaskCancelling {}
+
 @MainActor
 final class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
@@ -24,7 +32,19 @@ final class BackgroundTaskManager {
     private var activeSyncTask: Task<Void, Never>?
     private var activePrefetchTask: Task<Void, Never>?
 
-    private init() {}
+    // startup-08 — chaque handler BGTask doit vérifier une session vivante ;
+    // une tâche soumise avant le logout survit sinon et se re-planifie sur un
+    // appareil déconnecté (delta sync 401 en boucle, prefetch sur cache vidé).
+    private let authTokenProvider: @MainActor () -> String?
+    private let taskCanceller: BGTaskCancelling
+
+    init(
+        authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
+        taskCanceller: BGTaskCancelling = BGTaskScheduler.shared
+    ) {
+        self.authTokenProvider = authTokenProvider
+        self.taskCanceller = taskCanceller
+    }
 
     private var syncFailureCount: Int {
         get { UserDefaults.standard.integer(forKey: Self.syncFailureCountKey) }
@@ -114,9 +134,30 @@ final class BackgroundTaskManager {
         }
     }
 
+    // MARK: - Session gate (startup-08)
+
+    /// `false` = déconnecté : le handler doit `setTaskCompleted(success: false)`
+    /// SANS se replanifier — sinon la tâche continue de réveiller un appareil
+    /// déconnecté indéfiniment.
+    func hasLiveSession() -> Bool {
+        authTokenProvider() != nil
+    }
+
+    /// Annule les deux BGTask requests en attente (chemin logout MeeshyApp).
+    /// Ne touche PAS `me.meeshy.cache.background-flush` (filet de flush cache
+    /// SDK, identifiant distinct) — volontairement absent d'ici.
+    func cancelAllScheduled() {
+        taskCanceller.cancel(taskRequestWithIdentifier: Self.conversationSyncTaskId)
+        taskCanceller.cancel(taskRequestWithIdentifier: Self.messagePrefetchTaskId)
+    }
+
     // MARK: - Task Handlers
 
     private func handleConversationSync(task: BGAppRefreshTask) async {
+        guard hasLiveSession() else {
+            task.setTaskCompleted(success: false)
+            return
+        }
         let syncTask = Task<Bool, Never> {
             // Pull : récupère les nouveautés depuis le dernier checkpoint.
             let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
@@ -149,6 +190,10 @@ final class BackgroundTaskManager {
     }
 
     private func handleMessagePrefetch(task: BGProcessingTask) async {
+        guard hasLiveSession() else {
+            task.setTaskCompleted(success: false)
+            return
+        }
         scheduleMessagePrefetch()
 
         let prefetchTask = Task {

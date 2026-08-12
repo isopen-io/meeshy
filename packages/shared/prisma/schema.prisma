@@ -284,15 +284,17 @@ model User {
   postComments       PostComment[]     @relation("UserPostComments")
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
   postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
+  messageMentions    Mention[]         @relation("UserMessageMentions")
   commentMentions    CommentMention[]  @relation("UserCommentMentions")
   postMentions       PostMention[]     @relation("UserPostMentions")
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
+  postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")
   postEngagements    PostEngagement[]  @relation("UserPostEngagements")
 
   // Story audio library
-  storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
+  storyAudioUploads Sound[] @relation("StoryAudioUploads")
 
   // Agent global profile (1:1)
   agentGlobalProfile AgentGlobalProfile?
@@ -330,6 +332,18 @@ model Conversation {
   /// Denormalized member count for performance
   memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
+  /// null tant qu'aucun message n'a été envoyé dans une conversation `direct`.
+  /// Source de vérité unique pour la visibilité des DM vides (voir Prisme
+  /// design doc 2026-08-04) — jamais backfillé sur les conversations
+  /// existantes : le champ est ABSENT (pas `null`) sur tout document créé
+  /// avant cette migration. Un `NOT: { firstMessageSentAt: null }` seul ne
+  /// matche PAS les documents où le champ est ABSENT sur le connecteur
+  /// MongoDB de Prisma (il ne matche que present-et-non-null) — une lecture
+  /// décidant la visibilité DOIT donc combiner les deux : `OR: [{ NOT: {
+  /// firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }]`
+  /// (posé ⇒ visible OU absent-legacy ⇒ visible). Même idiome que
+  /// `deletedForMe` dans `routes/conversations/core.ts`.
+  firstMessageSentAt DateTime?
 
   // ============================================
   // WRITE PERMISSIONS
@@ -533,7 +547,6 @@ model Participant {
   reactions               Reaction[]
   statusEntries           MessageStatusEntry[]
   readCursors             ConversationReadCursor[]
-  mentions                Mention[]
   callParticipations      CallParticipant[]
   attachmentStatusEntries AttachmentStatusEntry[]
   attachmentReactions     AttachmentReaction[]
@@ -960,6 +973,13 @@ model MessageStatusEntry {
   /// Whether view-once content was revealed/unblurred
   revealedAt   DateTime?
 
+  // ===== LANGUE CONSULTÉE =====
+  /// Codes des versions linguistiques dans lesquelles ce message a été lu.
+  /// Union de la langue résolue au moment de la lecture et des bascules
+  /// manuelles vers une autre traduction.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewedLanguages String[] @default([])
+
   // ===== METADATA =====
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1006,6 +1026,23 @@ model AttachmentStatusEntry {
   totalListenDurationMs Int       @default(0)
   /// Whether audio was played to completion
   listenedComplete      Boolean   @default(false)
+  /// Trace CHRONOLOGIQUE et MOTIVÉE de l'écoute :
+  /// `[{startMs, endMs, endedBy}]`, `endedBy` ∈ pause | seek | muted |
+  /// completed | dismissed | superseded.
+  ///
+  /// Restitue l'INTERACTION, pas seulement le volume écouté : s'arrêter en
+  /// pause, sauter ailleurs ou laisser le média finir ne racontent pas la même
+  /// chose. `lastPlayPositionMs` ne dit que le point d'arrêt.
+  ///
+  /// Trois lectures en découlent sans champ supplémentaire — le cardinal donne
+  /// le nombre d'écoutes ININTERROMPUES, la fusion des chevauchements donne la
+  /// couverture UNIQUE, et l'écart avec `totalListenDurationMs` (qui compte les
+  /// replays) dit que des passages ont été revus.
+  ///
+  /// Ordre chronologique, jamais trié par position : écouter la fin puis
+  /// revenir au début doit rester lisible dans cet ordre.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  listenSegments        Json?
 
   // ===== VIDEO-SPECIFIC =====
   /// When user watched video (first play)
@@ -1018,12 +1055,32 @@ model AttachmentStatusEntry {
   totalWatchDurationMs Int       @default(0)
   /// Whether video was watched to completion
   watchedComplete      Boolean   @default(false)
+  /// Trace chronologique et motivée du visionnage — même forme et mêmes
+  /// lectures que `listenSegments`. Champ distinct par cohérence avec la
+  /// séparation audio/vidéo déjà en place dans ce modèle.
+  watchSegments        Json?
 
   // ===== IMAGE-SPECIFIC =====
   /// Time spent viewing image (ms)
   viewDurationMs Int?
   /// Whether image was zoomed
   wasZoomed      Boolean @default(false)
+  /// Nombre d'ouvertures de l'image. Strict miroir de `listenCount` /
+  /// `watchCount` : `markImageAsViewed` écrasait `viewedAt` sans rien compter,
+  /// si bien qu'une image regardée dix fois était indistinguable d'une image
+  /// entrevue une seule.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewCount      Int     @default(0)
+
+  // ===== LANGUE CONSULTÉE =====
+  /// Codes des versions linguistiques dans lesquelles ce média a été consommé
+  /// (transcription affichée, piste traduite écoutée). Set : l'ordre n'a pas de
+  /// sens, seule la présence compte.
+  ///
+  /// Rien ne reliait jusqu'ici une consommation à sa langue : la résolution est
+  /// calculée à la volée côté client et perdue aussitôt.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewedLanguages String[] @default([])
 
   // ===== DOCUMENT-SPECIFIC =====
   /// Number of pages viewed (for PDFs)
@@ -1096,10 +1153,16 @@ model ConversationReadCursor {
   /// Last message ID that was read
   lastReadMessageId String?   @db.ObjectId
   lastReadAt        DateTime?
+  /// createdAt of `lastReadMessageId` — the chronological key the cursor-advance
+  /// freshness guard orders by (ObjectId hex order is only second-accurate and
+  /// diverges across gateway processes; see MessageReadStatusService).
+  lastReadMessageCreatedAt DateTime?
 
   /// Last message ID that was delivered
   lastDeliveredMessageId String?   @db.ObjectId
   lastDeliveredAt        DateTime?
+  /// createdAt of `lastDeliveredMessageId` — see `lastReadMessageCreatedAt`.
+  lastDeliveredMessageCreatedAt DateTime?
 
   /// Cached unread count (updated on new message or read)
   unreadCount Int @default(0)
@@ -1182,21 +1245,38 @@ model PostReaction {
   @@index([userId, postId])
 }
 
-/// Mention d'un participant dans un message
+/// Mention d'un utilisateur dans un message — jumeau de `CommentMention` et
+/// `PostMention`, et keyé comme eux sur `User`.
+///
+/// Une mention nomme une PERSONNE, pas une adhésion à une conversation : elle
+/// doit survivre au départ de celle qui est nommée, et l'inbox `/mentions/me`
+/// la lit transversalement à toutes les conversations (un utilisateur possède
+/// un `Participant` par conversation — keyer là-dessus imposerait une jointure
+/// à chaque lecture, et une cascade qui effacerait l'historique au retrait d'un
+/// membre).
 model Mention {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId
   messageId            String   @db.ObjectId
-  mentionedParticipantId String @db.ObjectId
+  /// `User.id` de la personne nommée.
+  ///
+  /// Le nom PHYSIQUE de la colonne reste `mentionedParticipantId` : ce champ a
+  /// été déclaré comme une relation vers `Participant` alors qu'écrivains et
+  /// lecteurs y ont toujours mis un `User.id`. Le `@map` corrige le TYPE sans
+  /// déplacer une seule donnée. Les lignes réécrites en `Participant.id` par
+  /// `scripts/migrations/migrate-to-participant-model.ts` — invisibles depuis
+  /// l'inbox depuis lors — sont reconverties par
+  /// `scripts/migrations/repair-mention-user-ids.ts`.
+  mentionedUserId      String   @map("mentionedParticipantId") @db.ObjectId
   mentionedAt          DateTime @default(now())
 
-  message              Message     @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
-  mentionedParticipant Participant @relation(fields: [mentionedParticipantId], references: [id], onDelete: Cascade)
+  message              Message @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser        User    @relation("UserMessageMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, mentionedParticipantId], name: "message_participant_mention_unique")
+  @@unique([messageId, mentionedUserId], name: "message_user_mention_unique")
   @@index([messageId])
-  @@index([mentionedParticipantId])
+  @@index([mentionedUserId])
   @@index([mentionedAt])
-  @@index([mentionedParticipantId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
+  @@index([mentionedUserId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
 }
 
 /// Demande d'amitié entre utilisateurs
@@ -1294,7 +1374,14 @@ model Notification {
   user User @relation(fields: [userId], references: [id])
 
   // ===== INDEXES =====
-  @@index([userId, isRead])
+  /// `expiresAt` en 3e clé, pas un index de plus : toute requête que
+  /// [userId, isRead] servait est servie par son préfixe. Les lectures d'inbox
+  /// filtrent désormais `expiresAt = null OU > maintenant` (cf.
+  /// `visibleNotificationsWhere`) — sans la clé dans l'index, ce filtre force
+  /// un fetch de chaque document candidat sur un compteur qui tourne à CHAQUE
+  /// notification créée ; avec elle, les deux branches du OU restent deux
+  /// plages d'index et le compte reste couvert.
+  @@index([userId, isRead, expiresAt])
   @@index([userId, type])
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
@@ -1638,7 +1725,7 @@ model AdminBroadcast {
 /// Signalement de contenu inapproprié
 model Report {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
-  /// Type de contenu signalé: message, user, conversation, community
+  /// Type de contenu signalé: message, user, conversation, community, post, story, sound
   reportedType     String
   /// ID de l'entité signalée
   reportedEntityId String    @db.ObjectId
@@ -2771,7 +2858,7 @@ model PushToken {
 /// Type de contenu social
 enum PostType {
   POST   // Permanent — feed classique (texte, media, reposts, commentaires)
-  REEL   // Permanent — feed immersif plein écran (vidéo / images / audio). Type choisi au front à la création (média → REEL par défaut) ; l'auteur peut forcer POST.
+  REEL   // Permanent — feed immersif plein écran. Règle produit 2026-08-02 : composition QUALIFIANTE exigée (une vidéo, un audio, ou >= 2 images) — une image seule reste un POST. L'auteur peut forcer POST ; le gateway dégrade en POST toute création REEL non qualifiante (reelComposition.ts, miroir du SDK ReelComposition).
   STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
   STATUS // Éphémère 1h  — mood textuel avec audio optionnel
 }
@@ -2823,6 +2910,23 @@ model Post {
   /// contenu vers leur token `/l/<token>` (clic tracé + redirection) sans
   /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
   metadata         Json?
+
+  /// Coordonnée de découvrabilité géographique — GeoJSON Point
+  /// `{ type: "Point", coordinates: [lng, lat] }`, déjà quantifiée par le
+  /// serveur à la précision choisie (ou exacte, si demandée). SÉPARÉ de
+  /// `metadata.location` (qui reste dédié à l'affichage — badge/carte sur le
+  /// contenu publié, ne pas toucher) : deux opt-in indépendants, deux usages
+  /// indépendants. `null` pour tout post publié avant cette fonctionnalité
+  /// (aucune rétro-indexation) ainsi que pour tout post dont l'auteur n'a pas
+  /// activé la découvrabilité par proximité.
+  /// Prisma ne sait déclarer aucun index MongoDB `2dsphere` sur un champ —
+  /// cet index est créé via `$runCommandRaw` au bootstrap du gateway
+  /// (`InitService.ensurePostGeoIndex`), pas ici.
+  geoPoint         Json?
+  /// Précision de découvrabilité appliquée à `geoPoint` :
+  /// `"EXACT" | "NEIGHBORHOOD" | "CITY" | "REGION"`. `null` si `geoPoint`
+  /// est `null` (découvrabilité désactivée pour ce post).
+  geoPrecision     String?
 
   // ============================================
   // CONTEXTE
@@ -2907,12 +3011,23 @@ model Post {
   postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
+  /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
+  /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
+  /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
+  /// des médias. Ne pas « réconcilier » les deux, l'écart porte l'information.
+  downloadCount      Int @default(0)
 
   // ============================================
   // FLAGS
   // ============================================
   isPinned  Boolean   @default(false)
   isEdited  Boolean   @default(false)
+  /// null = jamais édité en CONTENU, non-null = horodatage de la dernière
+  /// édition de contenu (texte / storyEffects / médias). Distinct de
+  /// `updatedAt`, qui bouge sur CHAQUE écriture (compteurs de vues inclus) —
+  /// les clients s'appuient dessus pour céder la garde « viewed monotone »
+  /// après une édition de story (reset d'engagement, directive 2026-07-29).
+  contentEditedAt DateTime?
   /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 
@@ -2932,11 +3047,13 @@ model Post {
   anonymousOpens AnonymousPostOpen[]
   impressions PostImpression[]
   bookmarks   PostBookmark[]
+  mediaDownloads PostMediaDownload[]
   engagements PostEngagement[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
   postReactions PostReaction[] @relation("PostReactionsTable")
   /// Mentions dans le corps du post
   postMentions  PostMention[]  @relation("PostMentions")
+  postHashtags  PostHashtag[]  @relation("PostHashtags")
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
@@ -2962,26 +3079,77 @@ model AnonymousPostOpen {
   @@index([postId])
 }
 
-/// Bibliothèque de sons d'arrière-plan pour les stories
-model StoryBackgroundAudio {
+/// Bibliothèque de sons — entité de première classe, réutilisable et créditée.
+/// `@@map` fige la collection historique : aucune donnée n'est déplacée.
+model Sound {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   uploaderId  String   @db.ObjectId
   uploader    User     @relation("StoryAudioUploads", fields: [uploaderId], references: [id])
   fileUrl     String
+  /// Chaîne NEUTRE. Le crédit se résout à la lecture via `uploader` : figer un
+  /// @pseudo ici le publierait à vie, même après renommage ou suppression de compte.
   title       String
+  /// DÉPRÉCIÉ — secondes. Écrire `durationMs`.
   duration    Int
+  durationMs  Int?
   usageCount  Int      @default(0)
+  /// Retire de la DÉCOUVERTE seulement. N'arrête pas la diffusion : voir `mutedAt`.
   isPublic    Boolean  @default(true)
-  /// Généré automatiquement par le pipeline TTS depuis un audio existant
+  /// ARRÊT DE DIFFUSION (DMCA, modération). Consulté par la route de service.
+  mutedAt     DateTime?
+  contentHash String?
+  sourcePostId String? @db.ObjectId
+  /// PostMedia d'origine — la lecture iOS ne sait résoudre qu'un postMediaId.
+  canonicalPostMediaId String? @db.ObjectId
+  /// Vignette du CONTENU d'origine, dénormalisée à la capture pour le sélecteur
+  /// de sons : le résoudre à la lecture ferait un N+1 sur chaque page de liste.
+  /// Dénormaliser est acceptable ici — c'est un visuel, pas une identité (à
+  /// l'inverse du pseudo, qui doit rester résolu par la relation `uploader`).
+  /// Nul pour un upload manuel, sans post source. Le client dégrade alors sur
+  /// `coverThumbHash`, puis sur l'avatar de l'uploadeur.
+  coverUrl       String?
+  coverThumbHash String?
+  /// Nullable : Prisma/MongoDB lève à la LECTURE sur un champ requis absent.
+  mimeType    String?
+  /// Nullable pour la même raison — les documents hérités n'ont pas ce champ.
+  waveform    Float[]
   isAutoGenerated Boolean @default(false)
-  /// Code langue source de l'audio original
   sourceLanguage  String?
-  /// ID StoryBackgroundAudio original si cette entrée est une variante de langue
-  variantOf       String? @db.ObjectId
+  /// Variantes de langue — MÊME FORME que `PostMedia.translations` (lot C).
+  translations    Json?
   createdAt   DateTime @default(now())
 
+  usages      SoundUsage[]
+
+  @@unique([uploaderId, contentHash])
   @@index([usageCount])
   @@index([uploaderId])
+  /// `GET /static/:filename` vérifie `mutedAt` par ÉGALITÉ sur `fileUrl` à
+  /// chaque lecture audio. Sans cet index, chaque écoute scanne la collection.
+  @@index([fileUrl])
+  @@map("StoryBackgroundAudio")
+}
+
+/// Un usage = une piste d'un post. Source de vérité serveur du lien post↔son.
+model SoundUsage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  soundId   String   @db.ObjectId
+  sound     Sound    @relation(fields: [soundId], references: [id], onDelete: Cascade)
+  postId    String   @db.ObjectId
+  /// `StoryAudioPlayerObject.id` — sans lui on ignore QUELLE piste utilise le son.
+  trackId   String
+  viaPostId String?  @db.ObjectId
+  startMs   Int?
+  endMs     Int?
+  /// Horodatage de la dernière fois où l'auteur a lui-même déplacé la fenêtre
+  /// de source (par opposition à avoir accepté la fenêtre par défaut).
+  /// `null` tant qu'aucune republication n'a explicitement ajusté la fenêtre.
+  windowAdjustedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([postId, trackId])
+  @@index([soundId])
+  @@index([postId])
 }
 
 /// Media attaché à un post (images, vidéos, audio, documents)
@@ -3058,6 +3226,28 @@ model PostMedia {
   /// }
   translations Json?
 
+  /// Propriétaire de l'upload — la SEULE chose qui empêche un tiers de
+  /// revendiquer un média en attente (`postId: null`) dont il a deviné l'id.
+  /// Les ObjectId voisins ne diffèrent que d'un compteur, et un upload
+  /// abandonné reste réclamable jusqu'au nettoyage des orphelins : sans ce
+  /// champ, la garde de rattachement se réduisait à « personne ne l'a pris
+  /// avant moi ».
+  ///
+  /// Nullable UNIQUEMENT pour les lignes héritées, le temps du rattrapage
+  /// (`scripts/backfill-postmedia-uploader.ts`). Toute création nouvelle le
+  /// pose. La garde de rattachement est TOLÉRANTE tant que des `null`
+  /// subsistent — cf. `services/posts/mediaOwnership.ts`.
+  ///
+  /// Pas de relation Prisma : la contrainte utile est la comparaison à
+  /// l'auteur qui réclame, et une cascade sur suppression de compte effacerait
+  /// la propriété au lieu de la conserver.
+  uploaderId   String?  @db.ObjectId
+
+  /// Nombre de fois que CE média précis a été téléchargé : +1 par média
+  /// effectivement enregistré. Voir la note sur `Post.downloadCount` — la somme
+  /// des `downloadCount` des médias d'un poste ne vaut PAS celui du poste.
+  downloadCount Int     @default(0)
+
   createdAt    DateTime @default(now())
 
   post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -3065,6 +3255,9 @@ model PostMedia {
 
   @@index([postId, order])
   @@index([commentId, order])
+  /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
+  /// parmi les médias en attente).
+  @@index([uploaderId, postId])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -3196,6 +3389,39 @@ model PostBookmark {
 
   @@unique([postId, userId])
   @@index([userId, createdAt])
+}
+
+/// Téléchargement d'un média de poste par un utilisateur.
+///
+/// Historique COMPLET : un même utilisateur re-téléchargeant le même média
+/// produit une nouvelle ligne (jamais d'upsert). Le dédupliqué reste calculable
+/// par distinct(userId). Les totaux, eux, se lisent en O(1) sur
+/// `Post.downloadCount` / `PostMedia.downloadCount` — cette table n'est JAMAIS
+/// agrégée pour répondre à un « combien ».
+model PostMediaDownload {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  /// Pas de relation Prisma vers PostMedia, délibérément : une cascade
+  /// effacerait la trace analytique en même temps que le média détaché ou
+  /// supprimé, alors qu'on veut précisément la conserver. Même raisonnement
+  /// que `PostMedia.uploaderId`, qui se passe de relation pour la même raison.
+  mediaId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Surface d'origine de l'action : feed | detail | reel
+  surface   String   @default("detail")
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostMediaDownloads", fields: [userId], references: [id])
+
+  /// Téléchargeurs uniques d'un poste · « cet utilisateur a-t-il téléchargé ? »
+  @@index([postId, userId])
+  /// Grain média sur une fenêtre temporelle.
+  @@index([mediaId, createdAt])
+  /// Historique de téléchargement d'un utilisateur.
+  @@index([userId, createdAt])
+  /// Balayage par période, rollups futurs, TTL éventuel.
+  @@index([createdAt])
 }
 
 /// Statut d'une demande de suppression de compte
@@ -3830,4 +4056,38 @@ model PostMention {
   @@index([postId])
   @@index([mentionedUserId])
   @@index([mentionedAt])
+}
+
+model Hashtag {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Normalisé minuscule — clé de correspondance. La casse d'affichage
+  /// d'origine vit sur PostHashtag, pas ici (un même tag peut être tapé
+  /// "#Paris" et "#paris" par deux auteurs différents).
+  tag         String   @unique
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+  postHashtags PostHashtag[]
+
+  @@index([usageCount(sort: Desc)])
+}
+
+/// Jointure post↔hashtag. Miroir de PostMention, MAIS avec un comportement
+/// différent à l'édition : les lignes retirées SONT supprimées (voir
+/// HashtagService.reconcileRemovedHashtags), contrairement à PostMention qui
+/// laisse ses lignes orphelines (acceptable là-bas car rien n'y compte).
+model PostHashtag {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String   @db.ObjectId
+  hashtagId  String   @db.ObjectId
+  /// Casse telle que tapée par l'auteur — affichage uniquement.
+  display    String
+  createdAt  DateTime @default(now())
+
+  post       Post     @relation("PostHashtags", fields: [postId], references: [id], onDelete: Cascade)
+  hashtag    Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, hashtagId], name: "post_hashtag_unique")
+  @@index([hashtagId])
+  @@index([postId])
 }

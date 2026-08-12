@@ -32,6 +32,49 @@ import * as path from 'path';
 
 const API_URL = process.env.GATEWAY_URL || 'http://localhost:3000';
 const VOICE_API_PREFIX = `${API_URL}/api/v1/voice`;
+const AUTH_API_PREFIX = `${API_URL}/api/v1/auth`;
+
+// Jeton de session utilisé par apiRequest() ci-dessous. Rempli par
+// registerTestUser() dans le beforeAll() de chaque bloc test.describe.
+//
+// SECURITY: les routes voice n'acceptent plus l'en-tête `x-user-id` comme
+// preuve d'identité — cet en-tête n'était protégé par aucune vérification
+// cryptographique et permettait à n'importe quel appelant anonyme d'usurper
+// l'identité de n'importe quel utilisateur (CWE-290 / CWE-807). L'identité
+// doit désormais provenir exclusivement d'une session authentifiée
+// (`Authorization: Bearer <jeton>`), exactement comme un vrai client.
+let authToken = '';
+
+// Inscrit un vrai utilisateur de test via l'API d'authentification et
+// renvoie un jeton de session réel — comme le ferait n'importe quel client
+// légitime (jamais via x-user-id).
+async function registerTestUser(prefix: string): Promise<{ token: string; userId: string }> {
+  const unique = Date.now().toString(36);
+  const response = await fetch(`${AUTH_API_PREFIX}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: `${prefix}${unique}`.slice(0, 16),
+      email: `${prefix}-${unique}@test.meeshy.local`,
+      password: 'Test1234!Voice',
+      firstName: 'Voice',
+      lastName: 'Benchmark',
+      systemLanguage: 'fr',
+      regionalLanguage: 'fr',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to register voice benchmark test user: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  if (!body.success || !body.data?.token || !body.data?.user?.id) {
+    throw new Error(`Unexpected register response shape: ${JSON.stringify(body)}`);
+  }
+
+  return { token: body.data.token, userId: body.data.user.id };
+}
 
 // Supported languages matching XTTS-v2 capabilities
 const SUPPORTED_LANGUAGES: Record<string, string> = {
@@ -198,13 +241,16 @@ function generateVoiceTypes() {
   };
 }
 
-// API request helper with timing
+// API request helper with timing.
+//
+// S'authentifie par défaut avec le jeton de session courant (authToken,
+// posé par registerTestUser() dans le beforeAll du bloc en cours).
 async function apiRequest(
   endpoint: string,
   options: {
     method?: string;
     body?: any;
-    userId?: string;
+    token?: string | null;
     timeout?: number;
   } = {}
 ): Promise<{ response: Response; duration: number }> {
@@ -212,8 +258,9 @@ async function apiRequest(
     'Content-Type': 'application/json',
   };
 
-  if (options.userId) {
-    headers['x-user-id'] = options.userId;
+  const token = options.token === undefined ? authToken : options.token;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
@@ -265,12 +312,15 @@ test.describe('Voice Translation Benchmark Tests', () => {
   // Skip E2E tests in CI environment (requires Gateway + Translator services running)
   test.skip(process.env.CI === 'true', 'E2E tests require local services (Gateway + Translator) to be running. Run locally with services started.');
 
-  const testUserId = `benchmark-user-${Date.now()}`;
   let voiceTypes: ReturnType<typeof generateVoiceTypes>;
   const benchmarkResults: BenchmarkResult[] = [];
 
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     voiceTypes = generateVoiceTypes();
+    // Authentification réelle : on s'inscrit comme le ferait n'importe quel
+    // client, puis apiRequest() utilise le jeton renvoyé automatiquement.
+    const { token } = await registerTestUser('vbench');
+    authToken = token;
   });
 
   test.afterAll(async () => {
@@ -319,7 +369,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should analyze high-pitch voice correctly', async () => {
       const { response, duration } = await apiRequest('/analyze', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.highPitch,
           analysisTypes: ['pitch', 'timbre', 'mfcc'],
@@ -348,7 +397,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should analyze low-pitch voice correctly', async () => {
       const { response, duration } = await apiRequest('/analyze', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.lowPitch,
           analysisTypes: ['pitch', 'timbre', 'mfcc'],
@@ -377,7 +425,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should extract MFCC features', async () => {
       const { response } = await apiRequest('/analyze', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.varied,
           analysisTypes: ['mfcc'],
@@ -399,7 +446,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should analyze timbre characteristics', async () => {
       const { response } = await apiRequest('/analyze', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.mediumPitch,
           analysisTypes: ['timbre'],
@@ -425,7 +471,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
 
       const { response, duration } = await apiRequest('/compare', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64_1: audio,
           audioBase64_2: audio,
@@ -453,7 +498,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should differentiate distinct voices', async () => {
       const { response, duration } = await apiRequest('/compare', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64_1: voiceTypes.highPitch,
           audioBase64_2: voiceTypes.lowPitch,
@@ -497,7 +541,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
           const translateStart = Date.now();
           const { response: translateResponse } = await apiRequest('/translate', {
             method: 'POST',
-            userId: testUserId,
             timeout: PERFORMANCE_THRESHOLDS.TRANSLATE_SYNC,
             body: {
               audioBase64: voiceTypes.mediumPitch,
@@ -530,7 +573,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
           if (translation.translations[targetLang]?.audioBase64) {
             const { response: compareResponse } = await apiRequest('/compare', {
               method: 'POST',
-              userId: testUserId,
               body: {
                 audioBase64_1: voiceTypes.mediumPitch,
                 audioBase64_2: translation.translations[targetLang].audioBase64,
@@ -573,7 +615,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
       // Submit async job
       const { response: submitResponse, duration: submitDuration } = await apiRequest('/translate/async', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.varied,
           targetLanguages: ['fr', 'es', 'de'],
@@ -607,9 +648,7 @@ test.describe('Voice Translation Benchmark Tests', () => {
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
 
-        const { response: statusResponse } = await apiRequest(`/job/${jobId}`, {
-          userId: testUserId,
-        });
+        const { response: statusResponse } = await apiRequest(`/job/${jobId}`);
 
         if (statusResponse.ok) {
           const statusData = await statusResponse.json();
@@ -680,7 +719,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
 
         const { response, duration: responseTime } = await apiRequest('/analyze', {
           method: 'POST',
-          userId: testUserId,
           body: {
             audioBase64: audio,
             analysisTypes: ['pitch', 'timbre'],
@@ -728,7 +766,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
     test('should create voice profile from audio', async () => {
       const { response, duration } = await apiRequest('/profiles', {
         method: 'POST',
-        userId: testUserId,
         body: {
           name: 'Benchmark Test Voice',
           audioBase64: voiceTypes.varied,
@@ -760,7 +797,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
 
       const { response, duration } = await apiRequest('/translate', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: voiceTypes.mediumPitch,
           targetLanguages: ['fr'],
@@ -785,7 +821,6 @@ test.describe('Voice Translation Benchmark Tests', () => {
       if (profileId) {
         await apiRequest(`/profiles/${profileId}`, {
           method: 'DELETE',
-          userId: testUserId,
         });
         console.log(`Cleaned up voice profile: ${profileId}`);
       }
@@ -797,12 +832,17 @@ test.describe('Voice Translation Error Scenarios', () => {
   // Skip E2E tests in CI environment (requires Gateway + Translator services running)
   test.skip(process.env.CI === 'true', 'E2E tests require local services (Gateway + Translator) to be running. Run locally with services started.');
 
-  const testUserId = `error-test-${Date.now()}`;
+  test.beforeAll(async () => {
+    // Authentification réelle, indépendante du bloc précédent — ce bloc de
+    // tests est un test.describe distinct et ne doit pas dépendre de l'ordre
+    // d'exécution des autres blocs pour être authentifié.
+    const { token } = await registerTestUser('verrtest');
+    authToken = token;
+  });
 
   test('should handle unsupported language gracefully', async () => {
     const { response } = await apiRequest('/translate', {
       method: 'POST',
-      userId: testUserId,
       body: {
         audioBase64: generateTestAudio({ duration: 1 }),
         targetLanguages: ['xyz'], // Invalid language code
@@ -819,7 +859,6 @@ test.describe('Voice Translation Error Scenarios', () => {
   test('should handle empty audio gracefully', async () => {
     const { response } = await apiRequest('/translate', {
       method: 'POST',
-      userId: testUserId,
       body: {
         audioBase64: '',
         targetLanguages: ['fr'],
@@ -835,7 +874,6 @@ test.describe('Voice Translation Error Scenarios', () => {
   test('should handle invalid base64 audio', async () => {
     const { response } = await apiRequest('/translate', {
       method: 'POST',
-      userId: testUserId,
       body: {
         audioBase64: 'not-valid-base64!!!',
         targetLanguages: ['fr'],
@@ -852,7 +890,6 @@ test.describe('Voice Translation Error Scenarios', () => {
   test('should handle too many target languages', async () => {
     const { response } = await apiRequest('/translate', {
       method: 'POST',
-      userId: testUserId,
       body: {
         audioBase64: generateTestAudio({ duration: 1 }),
         targetLanguages: Object.keys(SUPPORTED_LANGUAGES), // All 16 languages
@@ -873,7 +910,6 @@ test.describe('Voice Translation Error Scenarios', () => {
 
     const { response } = await apiRequest('/translate', {
       method: 'POST',
-      userId: testUserId,
       body: {
         audioBase64: shortAudio,
         targetLanguages: ['fr'],

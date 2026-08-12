@@ -62,4 +62,31 @@ final class AppDatabaseRecoveryTests: XCTestCase {
         XCTAssertEqual(count, 1,
             "a valid store must be reused, not deleted and recreated (no data loss)")
     }
+
+    // MARK: - In-memory fallback migration (P3 hardening)
+
+    func test_inMemoryWriter_migrationSucceeds_returnsUsableMigratedEphemeralStore() throws {
+        let (writer, ephemeral) = AppDatabase.inMemoryWriter()
+
+        XCTAssertTrue(ephemeral)
+        let migrated = try writer.read { db in try db.tableExists("cache_entries") }
+        XCTAssertTrue(migrated, "the default in-memory writer must run the real migrations")
+    }
+
+    /// If the injected migration throws, the fallback must NOT crash the host
+    /// app (that is the entire point of degrading to in-memory) — it still
+    /// returns a usable, ephemeral writer, just without the schema applied.
+    func test_inMemoryWriter_migrationThrows_stillReturnsUsableEphemeralWriterWithoutCrashing() throws {
+        struct StubMigrationFailure: Error {}
+
+        let (writer, ephemeral) = AppDatabase.inMemoryWriter { _ in
+            throw StubMigrationFailure()
+        }
+
+        XCTAssertTrue(ephemeral, "must still degrade to in-memory rather than propagate the failure")
+        // The queue itself stays usable even though the schema never landed —
+        // proves the do/catch swallowed the throw without tearing down the writer.
+        let result = try writer.read { db in try db.tableExists("cache_entries") }
+        XCTAssertFalse(result, "a failed migration must not silently pretend the schema exists")
+    }
 }

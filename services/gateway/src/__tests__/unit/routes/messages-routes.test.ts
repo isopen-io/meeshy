@@ -65,7 +65,22 @@ const mockHandleMessage = jest.fn<any>().mockResolvedValue({ success: true, data
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
+// `participantAuth` — la porte des routes de LECTURE. On capture les options
+// pour verrouiller `allowAnonymous: true` (un invité de lien partagé entre) sans
+// perdre `requireAuth: true` (un appelant sans jeton n'entre pas).
+const mockAuthMiddlewareOptions: any[] = [];
+const mockParticipantAuthMiddleware = jest.fn();
+jest.mock('../../../middleware/auth', () => ({
+  createUnifiedAuthMiddleware: (_prisma: any, options: any) => {
+    mockAuthMiddlewareOptions.push(options);
+    return mockParticipantAuthMiddleware;
+  },
+}));
+// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
+// et interroge le double Prisma de ce fichier : un mock de module complet le
+// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 jest.mock('../../../utils/response', () => ({
@@ -214,6 +229,7 @@ import {
   SendMessageBodySchema,
   registerMessagesRoutes,
 } from '../../../routes/conversations/messages';
+import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -222,6 +238,7 @@ const USER_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const PART_ID = '507f1f77bcf86cd799439055';
 const OTHER_USER_ID = '507f1f77bcf86cd799439066';
+const ANON_PART_ID = '507f1f77bcf86cd799439077';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
@@ -270,7 +287,10 @@ const createMockFastify = () => {
   const routes: Record<string, Record<string, Function>> = {};
   const routeOpts: Record<string, Record<string, any>> = {};
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+  // Chainable, like Socket.IO's real `BroadcastOperator`: the receipt fan-out
+  // chains one `.to()` per participant room so a socket in several of them gets
+  // a single copy.
+  const mockTo: jest.Mock = jest.fn(() => ({ to: mockTo, emit: mockEmit }));
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, enqueueOfflineMessageMutation: mockEnqueueOfflineMutation });
@@ -1089,6 +1109,23 @@ describe('POST /conversations/:id/mark-read', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 0 });
   });
 
+  // Cascade notifications : le raccourci « 0 non-lu → ne rien faire » ne doit
+  // PAS sauter le marquage des notifications de la conversation — une réaction
+  // ou une mention arrivée sur un message déjà lu a créé une notification alors
+  // que le compteur de messages non lus est resté à 0.
+  it('marks conversation notifications as read even on the unreadCount===0 shortcut', async () => {
+    mockGetUnreadCount.mockResolvedValue(0);
+    const markConvNotifs = jest.fn<any>().mockResolvedValue(1);
+    fastify.notificationService = { markConversationNotificationsAsRead: markConvNotifs };
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(markConvNotifs).toHaveBeenCalledWith(USER_ID, 'resolved-conv-id');
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 0 });
+  });
+
   it('marks messages as read and broadcasts when unreadCount > 0', async () => {
     mockGetUnreadCount.mockResolvedValue(3);
     const reply = makeReply();
@@ -1102,6 +1139,56 @@ describe('POST /conversations/:id/mark-read', () => {
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
+  });
+
+  // Suivi de lecture exact — @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+
+  it('forwards the reported messageIds so only displayed messages are frozen', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
+      reply
+    );
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      { messageIds: ['507f1f77bcf86cd799439013'] }
+    );
+  });
+
+  it('still marks read without a body — deployed clients post none', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(makeRequest({ body: undefined }), reply);
+    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
+    // Pas d'ids rapportés → repli fenêtre, surtout pas un lot vide qui ne
+    // figerait rien et perdrait la lecture pour ces versions.
+    const options = mockMarkMessagesAsRead.mock.calls[0][3];
+    expect(options?.messageIds).toBeUndefined();
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 3 });
+  });
+
+  it('rejects a malformed messageIds payload with 400', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(makeRequest({ body: { messageIds: ['pas-un-objectid'] } }), reply);
+    expect(mockSendBadRequest).toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).not.toHaveBeenCalled();
+  });
+
+  it('freezes reported ids even when the cursor reports zero unread', async () => {
+    // Le curseur bute sur un trou, donc unreadCount vaut 0 alors que le client
+    // vient d'afficher des messages situés APRÈS ce trou. Le raccourci
+    // « 0 non-lu → ne rien faire » perdrait ces lectures.
+    mockGetUnreadCount.mockResolvedValue(0);
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
+      reply
+    );
+    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
   });
 });
 
@@ -1374,7 +1461,16 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
+  it('404 when message belongs to another conversation', async () => {
+    prisma.message.findFirst.mockResolvedValue(null);
+    const reply = makeReply();
+    await getHandler_()(makeReqWithMsg(), reply);
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
   it('happy path: unpins message and broadcasts via socket', async () => {
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID });
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
@@ -1395,6 +1491,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('error path → 500', async () => {
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockRejectedValue(new Error('DB error'));
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
@@ -1524,6 +1621,122 @@ describe('GET /conversations/:id/pinned-messages', () => {
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
+  });
+
+  /**
+   * Cycle 67 — la colonne `Message.translations` est une CARTE Mongo
+   * (`{ "fr": { text, … } }`), jamais un tableau. Les quatre témoins ci-dessus
+   * la posent tous à `null`, le seul cas qui ne déclenche pas le défaut : la
+   * route versait la carte telle quelle dans une réponse dont le schéma déclare
+   * `translations: { type: 'array' }`, et `fast-json-stringify` JETTE plutôt que
+   * de coercer — 500 sur la route entière dès qu'une épingle porte une
+   * traduction, c'est-à-dire dès que le Prisme a tourné.
+   *
+   * Le vrai sérialiseur est branché ici (le harness le double par défaut) : le
+   * témoin porte sur la FORME émise, pas sur l'appel au transformateur.
+   */
+  const realTransformTranslationsToArray = jest.requireActual<
+    typeof import('../../../utils/translation-transformer')
+  >('../../../utils/translation-transformer').transformTranslationsToArray;
+
+  const pinnedWithTranslations = (translations: unknown) => ({
+    id: MSG_ID,
+    conversationId: CONV_ID,
+    senderId: PART_ID,
+    content: 'Hello',
+    originalLanguage: 'en',
+    messageType: 'text',
+    editedAt: null,
+    deletedAt: null,
+    replyToId: null,
+    forwardedFromId: null,
+    forwardedFromConversationId: null,
+    pinnedAt: new Date(),
+    pinnedBy: USER_ID,
+    isViewOnce: false,
+    isBlurred: false,
+    expiresAt: null,
+    effectFlags: 0,
+    translations,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    sender: null,
+    attachments: [],
+    _count: { reactions: 0, replies: 0 },
+  });
+
+  it('sérialise les traductions au format API, jamais la carte Mongo brute', async () => {
+    mockTransformTranslationsToArray.mockImplementation(realTransformTranslationsToArray);
+    prisma.message.findMany.mockResolvedValue([
+      pinnedWithTranslations({
+        fr: { text: 'Bonjour', translationModel: 'medium', createdAt: new Date('2026-08-11T00:00:00Z') },
+      }),
+    ]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    expect(reply._body.data[0].translations).toEqual([
+      expect.objectContaining({
+        id: `${MSG_ID}-fr`,
+        messageId: MSG_ID,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour',
+      }),
+    ]);
+  });
+
+  it('rend un tableau vide quand la colonne est nulle (jamais null ni la carte)', async () => {
+    mockTransformTranslationsToArray.mockImplementation(realTransformTranslationsToArray);
+    prisma.message.findMany.mockResolvedValue([pinnedWithTranslations(null)]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    expect(reply._body.data[0].translations).toEqual([]);
+  });
+
+  it('restitue `location` sur un message épinglé géolocalisé', async () => {
+    // Lot 1 : un message épinglé est une bulle complète — sans le hoist,
+    // l'épingle affiche tout SAUF la position qu'elle était censée fixer.
+    const geoPinnedMsg = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+      content: '',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      editedAt: null,
+      deletedAt: null,
+      replyToId: null,
+      forwardedFromId: null,
+      forwardedFromConversationId: null,
+      pinnedAt: new Date(),
+      pinnedBy: USER_ID,
+      isViewOnce: false,
+      isBlurred: false,
+      expiresAt: null,
+      effectFlags: 0,
+      translations: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', firstName: 'Alice', lastName: 'Smith', displayName: 'Alice', avatar: null, isOnline: false },
+      },
+      attachments: [],
+      _count: { reactions: 0, replies: 0 },
+    };
+    prisma.message.findMany.mockResolvedValue([geoPinnedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
   });
 });
 
@@ -1768,6 +1981,36 @@ describe('GET /conversations/:id/messages/search', () => {
     await getHandler_()(makeSearchReq(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
   });
+
+  it('restitue `location` sur un resultat de recherche geolocalise', async () => {
+    // Lot 1 : un resultat de recherche est une bulle complete elle aussi —
+    // sans le hoist, le message trouve n'affiche jamais sa position.
+    const geoMatch = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello world',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      translations: null,
+      createdAt: new Date(),
+      senderId: PART_ID,
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+      },
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([geoMatch]) // content matches
+      .mockResolvedValueOnce([]); // translation candidates
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello'), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1902,6 +2145,34 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(replyTo.sender.username).toBe('bob_user');
   });
 
+  it('Lot 2 : replyTo geolocalise restitue `location` (hoist sur l objet cite, pas la racine)', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const msg = makeMessage({
+      replyTo: {
+        id: 'reply-msg-id',
+        content: 'original reply',
+        originalLanguage: 'fr',
+        metadata: { location: GEO },
+        sender: {
+          id: PART_ID,
+          displayName: 'Bob',
+          avatar: null,
+          username: null,
+          user: { username: 'bob_user', displayName: 'Bob Full', avatar: null },
+        },
+      },
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const replyTo = reply._body.data[0].replyTo;
+    expect(replyTo.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    // La racine elle-même n'est pas géolocalisée ici — le hoist ne doit pas
+    // fabriquer une position sur le message qui cite.
+    expect(reply._body.data[0].location).toBeUndefined();
+  });
+
   it('forwarded message enrichment: adds forwardedFrom and forwardedFromConversation', async () => {
     const msg = makeMessage({ forwardedFromId: 'fwd-msg-id', forwardedFromConversationId: 'fwd-conv-id' });
     const forwardedMsg = {
@@ -1928,6 +2199,30 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(result.forwardedFrom.sender.username).toBe('orig_bob');
     expect(result.forwardedFromConversation).toBeDefined();
     expect(result.forwardedFromConversation.title).toBe('Original Convo');
+  });
+
+  it('Lot 2 : message transfere geolocalise restitue `location` sur forwardedFrom', async () => {
+    const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+    const msg = makeMessage({ forwardedFromId: 'fwd-msg-id' });
+    const forwardedMsg = {
+      id: 'fwd-msg-id',
+      content: 'original content',
+      messageType: 'text',
+      createdAt: new Date('2024-01-01'),
+      senderId: 'orig-part-id',
+      conversationId: 'fwd-conv-id',
+      metadata: { location: GEO },
+      sender: { id: 'orig-part-id', userId: 'orig-user-id', displayName: 'Original Bob', avatar: null, user: { username: 'orig_bob' } },
+      attachments: [],
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([msg])
+      .mockResolvedValueOnce([forwardedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const result = reply._body.data[0];
+    expect(result.forwardedFrom.location).toMatchObject({ name: 'Times Square' });
   });
 
   it('markMessagesAsReceived error: caught in fire-and-forget, handler still succeeds', async () => {
@@ -2069,6 +2364,63 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
     );
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
   });
+
+  // ── the actor read-sync pair travels on this route too ─────────────────────
+  // `ReadStatusUpdatedEventData` declares `lastReadAt` and `unreadCount` as a
+  // pair on `type: 'read'`, and consumers require BOTH before applying either
+  // (iOS `ConversationStoreSocketBridge` guards `let lastReadAt, let unreadCount
+  // else { return }`). This route omitted them while its twin
+  // (`message-read-status.ts`) sent them — and this is the route iOS posts to
+  // for every read, so its multi-device read sync never started at all.
+
+  it('carries the actor lastReadAt + unreadCount on a read broadcast', async () => {
+    const lastReadAt = new Date('2024-06-03T10:00:00Z');
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt });
+    mockGetUnreadCount.mockResolvedValue(4);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'read-status:updated',
+      expect.objectContaining({ type: 'read', lastReadAt, unreadCount: 4 }),
+    );
+  });
+
+  it('reports a null frontier when the actor has no read cursor yet', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+    // Pre-mark count first (3 — otherwise the route short-circuits with nothing
+    // to mark), then the post-mark count the broadcast carries.
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValue(0);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'read-status:updated',
+      expect.objectContaining({ type: 'read', lastReadAt: null, unreadCount: 0 }),
+    );
+  });
+
+  it('still resets the actor badge when read receipts are disabled', async () => {
+    // Badge reset is internal multi-device sync, not a peer disclosure: it must
+    // survive the privacy branch that suppresses the receipt broadcast.
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockGetUnreadCount.mockResolvedValue(7);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ unreadCount: 7 }),
+    );
+    expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2151,16 +2503,18 @@ describe('POST /conversations/:id/messages — coverage extension', () => {
 describe('POST /conversations/:id/mark-unread — coverage extension', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-unread'];
 
-  it('latestMessage found but participantForCursor=null → 403', async () => {
-    prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: PART_ID })
-      .mockResolvedValueOnce(null);
-    prisma.message.findFirst
-      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date() })
-      .mockResolvedValueOnce(null);
+  it('un seul appelant, une seule résolution : le participant est résolu AVANT de chercher le dernier message', async () => {
+    // Ce test pinnait `participantForCursor`, une SECONDE lecture du même
+    // participant faite juste avant l'écriture du curseur — elle reposait la
+    // même question à la même base, avec la copie de la règle d'identité qui
+    // oubliait les invités de lien partagé. La seconde lecture n'existe plus :
+    // le refus, lui, doit tomber plus tôt qu'avant, pas plus tard.
+    prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Not a participant');
+    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
+    expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('previousMessage=null: upserts cursor with lastReadMessageId=null', async () => {
@@ -2199,6 +2553,48 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
   });
 
+  it('race guard orders by createdAt, not ObjectId string: an older message whose ObjectId sorts HIGHER than the cursor is still stale', async () => {
+    // The cursor points at a message read concurrently that is genuinely NEWER
+    // (createdAt later) but whose ObjectId string sorts BELOW latestMessage's —
+    // the same-second cross-process inversion. Ordering by ObjectId string would
+    // (wrongly) treat latestMessage as fresh and rewind past the fresher read;
+    // ordering by createdAt correctly detects it as stale and skips the rewind.
+    const CURSOR_MSG_ID = '507f1f77bcf86cd799439010'; // sorts below latestMessage
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
+      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: '507f1f77bcf86cd799439999', createdAt: new Date('2024-06-10T00:00:00.100Z') }) // latestMessage: older, higher ObjectId
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: new Date('2024-06-09') }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({
+      lastReadMessageId: CURSOR_MSG_ID,
+      lastReadMessageCreatedAt: new Date('2024-06-10T00:00:00.500Z') // newer than latestMessage
+    });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+  });
+
+  it('rewind writes lastReadMessageCreatedAt alongside lastReadMessageId (keeps the cursor pair consistent)', async () => {
+    const prevCreatedAt = new Date('2024-06-09T12:00:00Z');
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID })
+      .mockResolvedValueOnce({ id: PART_ID });
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: prevCreatedAt }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ lastReadMessageId: 'prev-msg-id', lastReadMessageCreatedAt: prevCreatedAt }),
+        update: expect.objectContaining({ lastReadMessageId: 'prev-msg-id', lastReadMessageCreatedAt: prevCreatedAt })
+      })
+    );
+  });
+
   it('cursor already exactly at latestMessage (not stale) → proceeds with the rewind as normal', async () => {
     prisma.participant.findFirst
       .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
@@ -2221,27 +2617,39 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
 describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverage', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('participant with userId=null: covers !p.userId continue branch in room-chaining loop', async () => {
+  // A participant with no `User` row used to be skipped outright by this
+  // fan-out, so an anonymous participant never learned that a peer had read
+  // anything. It is now addressed by the id its personal room is named after.
+  it('participant with userId=null: addressed by its participant id', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // Participant with null userId → takes the `continue` branch (line 342)
-    prisma.participant.findMany.mockResolvedValue([{ userId: null }]);
+    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
     mockGetUnreadCount.mockResolvedValue(1);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // emitter.emit still called (loop skipped the null-userId entry)
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
     expect(fastify._mockEmit).toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 1 });
   });
 
-  it('participant with real userId: covers loop body and catch when .to() is not chainable', async () => {
+  it('participant with real userId: addressed by its user id', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // Non-null userId → loop body runs; emitter.to(userRoom) throws TypeError (mock not chainable)
-    // → broadcastReadStatus catch block (line 350) swallows the error
-    prisma.participant.findMany.mockResolvedValue([{ userId: OTHER_USER_ID }]);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
     mockGetUnreadCount.mockResolvedValue(4);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // Handler still succeeds — broadcastReadStatus error is swallowed
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
+  });
+
+  // The receipt is a side channel: the read itself is already committed when it
+  // runs, so a broken emitter must not turn a successful mark-read into a 500.
+  it('a broadcast failure is swallowed and the response still succeeds', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
+    mockGetUnreadCount.mockResolvedValue(4);
+    fastify._mockTo.mockReturnValueOnce({ emit: fastify._mockEmit });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
   });
 });
@@ -2849,6 +3257,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin — no socketIOHandl
     (noSocketFastify as any).socketIOHandler = null;
     registerMessagesRoutes(noSocketFastify, prisma as any, translationService, optionalAuth, requiredAuth);
     const handler = noSocketFastify._routes['DELETE']['/conversations/:id/messages/:messageId/pin'];
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID });
     const reply = makeReply();
     await handler(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
@@ -2910,9 +3319,14 @@ describe('POST /conversations/:id/messages/:messageId/consume — null value bra
   const makeReqWithMsg = () => makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
 
   it('maxViewOnceCount null → 1, viewOnceCount null → 1 (lines 2256-2257)', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: null, conversationId: CONV_ID });
+    // Intention inchangée : l'arithmétique de repli sur les deux colonnes
+    // nullables. Le spectateur est désormais RÉSOLU — la consommation
+    // s'attribue à un participant depuis qu'elle ne se dépense qu'une fois
+    // par spectateur — sans quoi ce cas ne va plus jusqu'au calcul.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: null, viewOnceCount: null, conversationId: CONV_ID });
     prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: null });
-    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+    prisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 1 });
     const reply = makeReply();
     await getHandler()(makeReqWithMsg(), reply);
     const result = mockSendSuccess.mock.calls[0][1] as any;
@@ -2920,14 +3334,18 @@ describe('POST /conversations/:id/messages/:messageId/consume — null value bra
     expect(result.viewOnceCount).toBe(1);
   });
 
-  it('viewParticipant=null: statusEntry skipped (line 2265 false branch)', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: 2, conversationId: CONV_ID });
-    prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: 1 });
+  it('viewParticipant=null: rien n’est écrit, et rien n’est dépensé', async () => {
+    // Intention inchangée — « aucune entrée de statut n'est écrite quand le
+    // spectateur ne se résout pas » — et ÉTENDUE : le budget de vue unique ne
+    // se dépense pas davantage. Il se dépensait, sans laisser la moindre trace
+    // de qui l'avait dépensé.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: 2, viewOnceCount: 0, conversationId: CONV_ID });
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler()(makeReqWithMsg(), reply);
     expect(prisma.messageStatusEntry.updateMany).not.toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(mockSendForbidden).toHaveBeenCalled();
   });
 
   it('socketIOHandler=null: consume without broadcast (line 2274 false)', async () => {
@@ -3039,25 +3457,30 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
 describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () => {
   const getMarkReadHandler = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('emits CONVERSATION_UNREAD_UPDATED with unreadCount=0 to the reading user room after mark-read', async () => {
+  // Le badge reset porte le RESTE RÉEL recompté après marquage — jamais un 0
+  // codé en dur : en lecture exacte/partielle, le curseur n'avance que sur le
+  // préfixe contigu réellement affiché, des messages restent légitimement non
+  // lus. Un 0 en dur viderait à tort le badge sur TOUS les appareils du lecteur.
+  it('emits CONVERSATION_UNREAD_UPDATED with the recomputed remaining unread after mark-read', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
     // No other participants — avoids chaining issue so READ_STATUS_UPDATED also fires cleanly.
     prisma.participant.findMany.mockResolvedValue([]);
-    mockGetUnreadCount.mockResolvedValue(3);
+    // 1er appel = garde pré-marquage (3 non-lus), 2e = recompte post-marquage (1 restant).
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
 
     await getMarkReadHandler()(makeRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
-      unreadCount: 0,
+      unreadCount: 1,
     });
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(false);
     prisma.participant.findMany.mockResolvedValue([]);
-    mockGetUnreadCount.mockResolvedValue(3);
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
 
     await getMarkReadHandler()(makeRequest(), makeReply());
 
@@ -3071,5 +3494,107 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Le suivi de lecture d'un participant SANS COMPTE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('mark-read / read / mark-unread — un invité de lien partagé', () => {
+  // Un double qui ÉVALUE le `where` : une garde revenue à `userId` seul ne
+  // trouve plus cette ligne, et le test rougit. `userId: null` est la ligne
+  // réelle d'un participant sans compte.
+  const ROWS: MongoDocument[] = [
+    { id: ANON_PART_ID, userId: null, conversationId: 'resolved-conv-id', isActive: true },
+  ];
+
+  const anonymousRequest = (overrides: any = {}) =>
+    makeRequest({
+      authContext: {
+        type: 'anonymous',
+        isAuthenticated: true,
+        isAnonymous: true,
+        participantId: ANON_PART_ID,
+        // Le piège : pour un anonyme, `userId` PORTE un `Participant.id`.
+        userId: ANON_PART_ID,
+        hasFullAccess: false,
+      },
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    prisma.participant.findFirst.mockImplementation(findFirstIn(ROWS) as any);
+    prisma.participant.findMany.mockResolvedValue([]);
+  });
+
+  it('mark-read avance le curseur de l\'invité au lieu de lui répondre 403', async () => {
+    mockGetUnreadCount.mockResolvedValue(2);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(
+      ANON_PART_ID, 'resolved-conv-id', undefined, undefined,
+    );
+  });
+
+  it('mark-read remet à zéro le badge de l\'invité dans SA room personnelle', async () => {
+    // `ROOMS.user(Participant.id)` : celle qu'`AuthHandler` fait rejoindre aux
+    // sockets anonymes, et celle qu'`emitUnreadCountsToRecipients` adresse déjà.
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockGetUnreadCount.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
+
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+  });
+
+  it('/read acquitte la conversation de l\'invité', async () => {
+    mockGetUnreadCount.mockResolvedValue(1);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/read'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(ANON_PART_ID, 'resolved-conv-id');
+  });
+
+  it('mark-unread rembobine le curseur de l\'invité', async () => {
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2026-08-01') })
+      .mockResolvedValueOnce(null);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/mark-unread'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          conversation_participant_cursor: expect.objectContaining({ participantId: ANON_PART_ID }),
+        }),
+      }),
+    );
+  });
+
+  it('les trois routes de lecture acceptent un authentifié SANS COMPTE, jamais un anonyme sans jeton', () => {
+    // La porte, pas la clé : `requiredAuth` (allowAnonymous: false) répondait 403
+    // avant même de regarder la conversation. `requireAuth: true` reste — un
+    // appelant sans jeton du tout n'entre pas.
+    const readRoutes = ['/conversations/:id/mark-read', '/conversations/:id/read', '/conversations/:id/mark-unread'];
+    for (const route of readRoutes) {
+      expect(fastify._routeOpts['POST'][route].preValidation).toEqual([mockParticipantAuthMiddleware]);
+    }
+    expect(mockAuthMiddlewareOptions).not.toHaveLength(0);
+    for (const options of mockAuthMiddlewareOptions) {
+      expect(options).toEqual({ requireAuth: true, allowAnonymous: true });
+    }
   });
 });

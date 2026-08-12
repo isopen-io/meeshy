@@ -7,6 +7,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
+import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { conversationMessageStatsService } from './ConversationMessageStatsService';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -403,7 +405,8 @@ export class MaintenanceService {
           originalName: true,
           fileSize: true,
           createdAt: true,
-          uploadedBy: true
+          uploadedBy: true,
+          fileUrl: true
         }
       });
 
@@ -416,10 +419,16 @@ export class MaintenanceService {
 
       let successCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
       let totalSize = 0;
 
       for (const attachment of orphanedAttachments) {
         try {
+          if (await this.isReferencedAsProfileMedia(attachment.fileUrl)) {
+            skippedCount++;
+            continue;
+          }
+
           await this.attachmentService.deleteAttachment(attachment.id);
           successCount++;
           totalSize += attachment.fileSize;
@@ -432,11 +441,39 @@ export class MaintenanceService {
       }
 
       const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-      logger.info(`✅ [CLEANUP] Nettoyage terminé: ${successCount} attachments supprimés (${totalSizeMB} MB libérés), ${failCount} échecs`);
+      logger.info(`✅ [CLEANUP] Nettoyage terminé: ${successCount} attachments supprimés (${totalSizeMB} MB libérés), ${skippedCount} médias de profil conservés, ${failCount} échecs`);
 
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des attachments orphelins:', error);
     }
+  }
+
+  /**
+   * Un upload de profil (avatar/bannière de User, Conversation ou Community)
+   * passe par POST /attachments/upload et reste messageId:null — il est donc
+   * indiscernable d'un orphelin. On le protège en vérifiant si son fileUrl
+   * (relatif) est référencé, en forme relative ou absolue, par un champ
+   * avatar/banner : le match par suffixe couvre les deux formes.
+   */
+  private async isReferencedAsProfileMedia(fileUrl: string | null | undefined): Promise<boolean> {
+    if (!fileUrl) {
+      return false;
+    }
+
+    const referencesFileUrl = {
+      OR: [
+        { avatar: { endsWith: fileUrl } },
+        { banner: { endsWith: fileUrl } }
+      ]
+    };
+
+    const [user, conversation, community] = await Promise.all([
+      this.prisma.user.findFirst({ where: referencesFileUrl, select: { id: true } }),
+      this.prisma.conversation.findFirst({ where: referencesFileUrl, select: { id: true } }),
+      this.prisma.community.findFirst({ where: referencesFileUrl, select: { id: true } })
+    ]);
+
+    return Boolean(user || conversation || community);
   }
 
   /**
@@ -454,23 +491,34 @@ export class MaintenanceService {
       // Trouver les messages vides via MongoDB raw query :
       // content whitespace-only ($regex), pas de soft-delete, >24h,
       // et pas d'attachements liés (lookup + match vide)
-      const emptyMessageIds = await this.prisma.message.findRaw({
+      const emptyMessages = await this.prisma.message.findRaw({
         filter: {
           content: { $regex: '^\\s*$' },
           deletedAt: null,
           createdAt: { $lt: { $date: staleThreshold.toISOString() } },
         },
         options: {
-          projection: { _id: 1 },
+          // `conversationId` est projeté pour le recalcul de `lastMessageAt`,
+          // plus bas : sans lui, ce balayage retire le message mais laisse la
+          // conversation triée dessus.
+          projection: { _id: 1, conversationId: 1 },
         },
-      }) as unknown as Array<{ _id: { $oid: string } }>;
+      }) as unknown as Array<{ _id: { $oid: string }; conversationId?: { $oid: string } | string }>;
 
-      if (!emptyMessageIds.length) {
+      if (!emptyMessages.length) {
         logger.info('✅ [CLEANUP] Aucun message vide trouvé');
         return;
       }
 
-      const candidateIds = emptyMessageIds.map(m => m._id.$oid);
+      const conversationOf = new Map<string, string>();
+      for (const doc of emptyMessages) {
+        const conversationId = typeof doc.conversationId === 'string'
+          ? doc.conversationId
+          : doc.conversationId?.$oid;
+        if (conversationId) conversationOf.set(doc._id.$oid, conversationId);
+      }
+
+      const candidateIds = emptyMessages.map(m => m._id.$oid);
 
       // Filtrer ceux qui ont des attachements (relation MessageAttachment.messageId)
       const withAttachments = await this.prisma.messageAttachment.findMany({
@@ -495,6 +543,37 @@ export class MaintenanceService {
       });
 
       logger.info(`✅ [CLEANUP] ${result.count} messages vides soft-deleted`);
+
+      // Quatrième écrivain de `deletedAt` sur un message, et le seul en LOT.
+      // Il n'appelle pas `applyMessageRemovalEffects` : un message vide (contenu
+      // blanc, aucun attachement — c'est le critère de sélection) ne porte aucun
+      // `/l/<token>`, il n'y a donc rien à désactiver. Reste le curseur de la
+      // liste des conversations, qu'il laissait pointer sur le message fantôme
+      // qu'il venait justement de retirer. Dédupliqué par conversation : le
+      // recalcul est le même pour dix messages d'une même conversation.
+      const touchedConversations = [
+        ...new Set(toDelete.map((id) => conversationOf.get(id)).filter((id): id is string => Boolean(id))),
+      ];
+      for (const conversationId of touchedConversations) {
+        try {
+          await recomputeConversationLastMessageAt(this.prisma, conversationId);
+        } catch (error) {
+          logger.error(`❌ [CLEANUP] Recalcul lastMessageAt échoué pour conversation=${conversationId}:`, error);
+        }
+
+        // Les compteurs de conversation, eux, ne peuvent pas être décrémentés
+        // ici : ce balayage ne tient de ses messages que leur id et leur
+        // conversation, jamais l'auteur ni le contenu qu'un décrément demande.
+        // Le recalcul autoritatif est donc le seul geste possible — et il
+        // répare en passant la dérive déjà accumulée. Il ne s'applique qu'aux
+        // conversations dont les compteurs existent : un balayage nocturne ne
+        // doit pas se mettre à FABRIQUER des lignes à la place des lecteurs.
+        try {
+          await conversationMessageStatsService.recomputeIfTracked(this.prisma, conversationId);
+        } catch (error) {
+          logger.error(`❌ [CLEANUP] Recalcul des compteurs échoué pour conversation=${conversationId}:`, error);
+        }
+      }
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des messages vides:', error);
     }

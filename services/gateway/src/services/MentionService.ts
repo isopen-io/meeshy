@@ -717,14 +717,17 @@ export class MentionService {
    * Valide les permissions de mention selon le type de conversation
    *
    * @param conversationId - ID de la conversation
-   * @param mentionedUserIds - IDs des utilisateurs à mentionner
-   * @param senderId - ID de l'utilisateur qui envoie le message
+   * @param mentionedUserIds - `User.id` des utilisateurs à mentionner
+   * @param senderId - `User.id` de l'expéditeur — le MÊME espace que
+   *   `mentionedUserIds`, puisque la règle des conversations directes les
+   *   compare entre eux. `null` pour un expéditeur anonyme : il ne possède
+   *   aucun `User.id`, donc ne peut être aucun des mentionnés.
    * @returns Résultat de validation avec les userIds valides et invalides
    */
   async validateMentionPermissions(
     conversationId: string,
     mentionedUserIds: string[],
-    senderId: string
+    senderId: string | null
   ): Promise<MentionValidationResult> {
     if (mentionedUserIds.length === 0) {
       return {
@@ -851,7 +854,7 @@ export class MentionService {
         this.prisma.mention.create({
           data: {
             messageId,
-            mentionedParticipantId: userId
+            mentionedUserId: userId
           }
         }).catch((error: any) => {
           // Ignorer les erreurs de doublons (code P2002)
@@ -873,28 +876,48 @@ export class MentionService {
     const mentions = await this.prisma.mention.findMany({
       where: { messageId },
       include: {
-        mentionedParticipant: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
+        mentionedUser: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
           }
         }
       }
     });
 
-    return mentions.map(m => m.mentionedParticipant?.user).filter(Boolean) as User[];
+    return mentions.map(m => m.mentionedUser).filter(Boolean) as User[];
   }
 
   /**
-   * Récupère les mentions récentes pour un utilisateur
+   * Récupère les mentions récentes pour un utilisateur.
+   *
+   * L'admission est celle de `GET /mentions/messages/:messageId`, la route
+   * soeur du même fichier : le message ne doit pas avoir été retiré, et
+   * l'appelant doit être un participant TOUJOURS actif de sa conversation.
+   *
+   * La garde vit ici plutôt que dans la route parce que la ligne `Mention`
+   * n'est atteignable QUE par cette fonction — c'est le seul endroit qu'un
+   * futur lecteur ne peut pas oublier. Sans elle, l'inbox était le seul chemin
+   * du gateway qui rendait `Message.content` sans vérifier `deletedAt` :
+   *
+   *  - un message RAPPELÉ par son auteur disparaissait de la conversation pour
+   *    tout le monde (`MESSAGE_DELETED` diffusé, `translations` vidées) mais
+   *    restait lisible en clair, avec son auteur et le titre de la
+   *    conversation, dans l'inbox de chaque personne qu'il nommait —
+   *    définitivement : aucun écrivain ne supprime jamais la ligne `Mention`
+   *    (l'unique `mention.deleteMany` du dépôt est la réconciliation
+   *    d'édition), et le `onDelete: Cascade` du schéma ne se déclenche que sur
+   *    une suppression PHYSIQUE, que le retrait doux ne fait jamais ;
+   *  - une personne retirée d'un groupe continuait d'y lire une entrée dont le
+   *    titre de conversation est relu LIVE à chaque appel.
+   *
+   * Filtrage à la LECTURE, et non purge des lignes au retrait du message : il
+   * couvre du même coup les lignes déjà en base (aucun script de réparation) et
+   * le cas appartenance, qu'aucun nettoyage à l'écriture ne pourrait voir.
    *
    * @param userId - ID de l'utilisateur
    * @param limit - Nombre maximum de mentions à retourner
@@ -903,7 +926,18 @@ export class MentionService {
   async getRecentMentionsForUser(userId: string, limit: number = 50) {
     const mentions = await this.prisma.mention.findMany({
       where: {
-        mentionedParticipantId: userId
+        mentionedUserId: userId,
+        message: {
+          deletedAt: null,
+          conversation: {
+            participants: {
+              some: {
+                userId,
+                isActive: true
+              }
+            }
+          }
+        }
       },
       include: {
         message: {

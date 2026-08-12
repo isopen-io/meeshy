@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import os
 
 actor PendingStatusQueue {
     static let shared = PendingStatusQueue()
@@ -76,14 +77,20 @@ actor PendingStatusQueue {
 
     private func load() -> [PendingAction] {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let actions = try? JSONDecoder().decode([PendingAction].self, from: data) else {
+              let actions = JSONDecoder().decodeOrLog([PendingAction].self, from: data, field: "pending status actions", logger: Logger.pendingStatus) else {
             return []
         }
         return actions
     }
 
     private func save(_ actions: [PendingAction]) {
-        let data = try? JSONEncoder().encode(actions)
+        let data = JSONEncoder().encodeOrLog(actions, field: "pending status actions", logger: Logger.pendingStatus)
         UserDefaults.standard.set(data, forKey: key)
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let pendingStatus = Logger(subsystem: "me.meeshy.app", category: "pending-status")
 }

@@ -39,7 +39,7 @@ struct ActiveSessionsView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "sessions_back", defaultValue: "Retour"))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -73,14 +73,28 @@ struct ActiveSessionsView: View {
                 .tint(MeeshyColors.indigo500)
             Spacer()
         } else if viewModel.sessions.isEmpty {
-            Spacer()
-            Text(String(localized: "sessions_empty", defaultValue: "Aucune session active"))
-                .font(MeeshyFont.relative(15, weight: .medium))
-                .foregroundColor(theme.textMuted)
-            Spacer()
+            emptyState
         } else {
             sessionsList
         }
+    }
+
+    // MARK: - Empty State
+
+    // Bare `Text` (icon-less, non-grouped) replaced by the shared native
+    // `ContentUnavailableView` wrapper (iOS 17+, faithful iOS 16 fallback) —
+    // parity with FriendRequestListView (185i) / StarredMessagesView (175i).
+    // Adds a semantic SF Symbol that scales with Dynamic Type, a guiding
+    // subtitle, and native title+description VoiceOver grouping. The existing
+    // `sessions_empty` key is reused for the title (0 catalog edit). maxHeight
+    // fill keeps it vertically centred like the former Spacer sandwich.
+    private var emptyState: some View {
+        AdaptiveContentUnavailableView(
+            String(localized: "sessions_empty", defaultValue: "Aucune session active"),
+            systemImage: "laptopcomputer.and.iphone",
+            description: Text(String(localized: "sessions_empty_subtitle", defaultValue: "Vos appareils connectés apparaîtront ici."))
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Sessions List
@@ -167,7 +181,7 @@ struct ActiveSessionsView: View {
                         .font(MeeshyFont.relative(20))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                 }
-                .accessibilityLabel(String(localized: "sessions_revoke", defaultValue: "Revoquer cette session"))
+                .accessibilityLabel(String(localized: "sessions_revoke", defaultValue: "Révoquer cette session"))
             }
         }
         .padding(.horizontal, 14)
@@ -192,7 +206,7 @@ struct ActiveSessionsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "trash")
                     .font(MeeshyFont.relative(13, weight: .semibold))
-                Text(String(localized: "sessions_revoke_all", defaultValue: "Revoquer toutes les autres sessions"))
+                Text(String(localized: "sessions_revoke_all", defaultValue: "Révoquer toutes les autres sessions"))
                     .font(MeeshyFont.relative(14, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -205,7 +219,7 @@ struct ActiveSessionsView: View {
         }
         .disabled(viewModel.isRevoking)
         .opacity(viewModel.isRevoking ? 0.6 : 1.0)
-        .accessibilityLabel(String(localized: "sessions_revoke_all_label", defaultValue: "Revoquer toutes les autres sessions"))
+        .accessibilityLabel(String(localized: "sessions_revoke_all_label", defaultValue: "Révoquer toutes les autres sessions"))
     }
 }
 

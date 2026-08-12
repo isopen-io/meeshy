@@ -7,6 +7,27 @@ import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
+import { normalizeLanguageCode } from './language-normalize.js';
+
+const DEFAULT_PAGE_LIMIT = 20;
+const MAX_PAGE_LIMIT = 100;
+
+/**
+ * Clamp a query-string `limit` to `[1, MAX_PAGE_LIMIT]`, falling back to the
+ * default ONLY when the input is missing or unparsable (`NaN`). An explicit
+ * `'0'`/`'-5'` is a real number and floors to 1 — it is never falsy-coerced to
+ * the default. Single source shared by both pagination schemas.
+ */
+function clampLimit(val: string | undefined): number {
+  const parsed = parseInt(val ?? '', 10);
+  const requested = Number.isNaN(parsed) ? DEFAULT_PAGE_LIMIT : parsed;
+  return Math.min(Math.max(1, requested), MAX_PAGE_LIMIT);
+}
+
+function clampOffset(val: string | undefined): number {
+  const parsed = parseInt(val ?? '', 10);
+  return Math.max(0, Number.isNaN(parsed) ? 0 : parsed);
+}
 
 /**
  * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
@@ -28,6 +49,26 @@ const supportedLanguageCode = z
   .max(5)
   .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
   .transform((code) => code.toLowerCase());
+
+/**
+ * Code de langue de destination personnalisée (priorité 3 du Prisme). Contrairement
+ * à {@link supportedLanguageCode}, ce champ n'exige pas que le code figure dans la
+ * liste des langues supportées, mais il DOIT être canonique en base : un locale
+ * région/script-taggé de plateforme (`'fr-FR'`, `'en_US'`) persisté verbatim comme
+ * `'fr-fr'` / `'en-us'` ne matcherait aucune `MessageTranslation.targetLanguage`
+ * (clé lowercase) et forcerait la résolution du Prisme sur le message original.
+ *
+ * Canonicalisation au write boundary via le SSOT {@link normalizeLanguageCode}
+ * (`'fr-FR'`/`'fr_FR'` → `'fr'`, `'en-US'` → `'en'`), avec repli `.toLowerCase()`
+ * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
+ * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
+ * inchangé, seul le stockage des codes région-taggés est corrigé.
+ */
+const customDestinationLanguageCode = z
+  .string()
+  .min(2)
+  .max(5)
+  .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
  * Valider un schéma Zod et retourner une erreur standardisée
@@ -63,19 +104,21 @@ export function validateSchema<T>(
  * Schémas de validation réutilisables
  */
 export const CommonSchemas = {
-  // Pagination — coerce defensively: the `|| default` must be applied AFTER
-  // parseInt so non-numeric ('abc' → NaN) and negative ('-5') query strings fall
-  // back to safe bounds instead of leaking into Prisma `take`/`skip`. Mirrors the
-  // gateway's validatePagination (services/gateway/src/utils/pagination.ts).
+  // Pagination — the default is the fallback for MISSING/unparsable input only
+  // (`NaN`). An explicit but below-minimum value (`'0'`, `'-5'`) is a real parsed
+  // number and must clamp to the floor of 1 — never be falsy-coerced to the
+  // default. The former `parseInt(...) || 20` conflated `0` with "absent", so
+  // `limit=0` leaked a full page (20) while `limit=-5` clamped to 1. Truly
+  // mirrors the gateway's validatePagination (services/gateway/src/utils/pagination.ts).
   pagination: z.object({
-    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
-    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
+    limit: z.string().optional().transform((val) => clampLimit(val)),
+    offset: z.string().optional().transform((val) => clampOffset(val)),
   }),
 
   // Message pagination
   messagePagination: z.object({
-    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
-    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
+    limit: z.string().optional().transform((val) => clampLimit(val)),
+    offset: z.string().optional().transform((val) => clampOffset(val)),
     before: z.string().optional(),
   }),
   
@@ -207,7 +250,7 @@ export const UserSchemas = {
     phoneNumber: z.string().optional(),
     systemLanguage: supportedLanguageCode.optional(),
     regionalLanguage: supportedLanguageCode.optional(),
-    customDestinationLanguage: z.string().min(2).max(5).transform((code) => code.toLowerCase()).nullable().optional(),
+    customDestinationLanguage: customDestinationLanguageCode.nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
     timezone: z.string().optional(),
   }),
@@ -237,6 +280,33 @@ const noEmoji = (val: string | undefined) => {
   return !containsEmoji(val);
 };
 
+const HTTP_PROTOCOLS = new Set(['http:', 'https:']);
+
+/**
+ * Vérifie qu'une valeur est une URL web navigable (http/https uniquement).
+ *
+ * `z.url()` et `new URL()` se contentent de PARSER : `javascript:alert(1)`,
+ * `data:text/html,...` et `file:///etc/passwd` passent tous les deux. Toute
+ * destination qu'un utilisateur fournit et qu'un autre finira par ouvrir doit
+ * donc être contrainte sur le schéma, sans quoi le lien devient un vecteur
+ * d'exécution de script sur notre origine.
+ *
+ * Source de vérité pour la règle « URL sortante sûre » côté TypeScript.
+ */
+export function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    return HTTP_PROTOCOLS.has(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Schéma Zod réutilisable pour une destination web fournie par un utilisateur.
+ */
+export const httpUrlSchema = z.string().refine(isHttpUrl, 'URL invalide : http(s) uniquement');
+
 // =============================================================================
 // USER UPDATE SCHEMAS (for routes)
 // =============================================================================
@@ -257,9 +327,11 @@ export const updateUserProfileSchema = z.object({
   phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
   systemLanguage: supportedLanguageCode.optional(),
-  regionalLanguage: supportedLanguageCode.optional(),
+  // Chaîne vide autorisée = effacement de la langue secondaire (mirror de
+  // customDestinationLanguage). resolveUserLanguage traite '' comme absent.
+  regionalLanguage: z.union([z.literal(''), supportedLanguageCode]).optional(),
   customDestinationLanguage: z
-    .union([z.literal(''), z.null(), z.string().min(2).max(5).transform((code) => code.toLowerCase())])
+    .union([z.literal(''), z.null(), customDestinationLanguageCode])
     .optional(),
   autoTranslateEnabled: z.boolean().optional(),
   voicePublic: z.boolean().optional(),
@@ -1488,8 +1560,12 @@ export const NotificationPreferenceSchemas = {
     contactRequestEnabled: z.boolean().optional(),
     memberJoinedEnabled: z.boolean().optional(),
     dndEnabled: z.boolean().optional(),
-    dndStartTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
-    dndEndTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    // Canonical zero-padded HH:MM — same form enforced by the gateway
+    // (notification-schemas, isValidDndTime) and the NotificationPreferenceSchema
+    // default schema. A single-digit hour ("9:00") would break the lexicographic
+    // window comparison in isWithinDnd, so it must be rejected at this boundary.
+    dndStartTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
+    dndEndTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
   }),
 };
 

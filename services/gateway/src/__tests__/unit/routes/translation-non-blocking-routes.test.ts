@@ -81,6 +81,8 @@ const DB_MESSAGE = {
 type PrismaOpts = {
   messageFindUnique?: typeof DB_MESSAGE | null | Error;
   conversationFindFirst?: typeof DB_CONVERSATION | null | Error;
+  /** `null` = l'appelant ne participe pas à la conversation visée. */
+  participantFindFirst?: { id: string } | null | Error;
 };
 
 function opt<T>(v: T | undefined, fallback: T): T {
@@ -100,6 +102,11 @@ function makePrisma(opts: PrismaOpts = {}) {
     },
     conversation: {
       findFirst: mockFn(opt(opts.conversationFindFirst, DB_CONVERSATION)),
+    },
+    // La traduction porte le contenu des messages : chaque route du module
+    // vérifie désormais que l'appelant participe à la conversation.
+    participant: {
+      findFirst: mockFn(opt(opts.participantFindFirst, { id: 'part-1' })),
     },
   };
 }
@@ -125,6 +132,7 @@ async function buildApp(prismaOpts: PrismaOpts = {}): Promise<FastifyInstance> {
     (req as unknown as Record<string, unknown>).authContext = {
       type: 'registered',
       userId: USER_ID,
+      isAuthenticated: true,
       isAnonymous: false,
       hasFullAccess: true,
     };
@@ -278,6 +286,7 @@ describe('GET /status/:messageId/:language', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/status/${MSG_ID}/fr`,
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -291,6 +300,7 @@ describe('GET /status/:messageId/:language', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/status/${MSG_ID}/fr`,
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -304,13 +314,14 @@ describe('GET /status/:messageId/:language', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/status/${MSG_ID}/fr`,
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(500);
   });
 
   it('passes correct messageId and language to getTranslation', async () => {
     mockGetTranslation.mockResolvedValue(null);
-    await app.inject({ method: 'GET', url: `/status/${MSG_ID}/de` });
+    await app.inject({ method: 'GET', url: `/status/${MSG_ID}/de`, headers: AUTH });
     expect(mockGetTranslation).toHaveBeenCalledWith(MSG_ID, 'de');
   });
 });
@@ -327,6 +338,7 @@ describe('GET /conversation/:identifier', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/conversation/${CONV_IDENTIFIER}`,
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -342,6 +354,7 @@ describe('GET /conversation/:identifier', () => {
     const res = await appNoConv.inject({
       method: 'GET',
       url: '/conversation/unknown-identifier',
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(404);
     await appNoConv.close();
@@ -352,6 +365,7 @@ describe('GET /conversation/:identifier', () => {
     const res = await appErr.inject({
       method: 'GET',
       url: `/conversation/${CONV_IDENTIFIER}`,
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
@@ -361,6 +375,7 @@ describe('GET /conversation/:identifier', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/conversation/${CONV_IDENTIFIER}`,
+      headers: AUTH,
     });
     const body = res.json();
     expect(body.data).toMatchObject({
@@ -370,5 +385,62 @@ describe('GET /conversation/:identifier', () => {
       messageCount: expect.any(Number),
       memberCount: expect.any(Number),
     });
+  });
+});
+
+// ─── Cloisonnement : la traduction porte le CONTENU des messages ─────────────
+//
+// Trois trous formaient une chaîne exploitable : `/status` n'avait aucune
+// garde et rendait le texte traduit — donc déchiffré — de n'importe quel
+// message à qui devinait un identifiant ; `/translate` chargeait bien les
+// participants du message visé mais ne les consultait jamais, si bien qu'un
+// compte quelconque déclenchait la retraduction d'un message d'autrui avant
+// d'aller le lire ; `/conversation/:identifier` exposait titre, type et
+// nombre de membres sans identité.
+
+describe('cloisonnement des conversations', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('refuse /status à un appelant sans identité', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/status/${MSG_ID}/fr` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('refuse /status à un compte étranger à la conversation', async () => {
+    const app = await buildApp({ participantFindFirst: null });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/status/${MSG_ID}/fr`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(403);
+    // Et surtout : le service de traduction n'est jamais interrogé.
+    expect(mockGetTranslation).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse la retraduction d\'un message d\'une conversation étrangère', async () => {
+    const app = await buildApp({ participantFindFirst: null });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/translate',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ message_id: MSG_ID, target_language: 'fr' }),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockHandleNewMessage).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse /conversation/:identifier à un appelant sans identité', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/conversation/${CONV_IDENTIFIER}`,
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
   });
 });

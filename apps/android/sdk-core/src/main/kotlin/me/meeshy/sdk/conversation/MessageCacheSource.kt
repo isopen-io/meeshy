@@ -3,7 +3,6 @@ package me.meeshy.sdk.conversation
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
@@ -49,14 +48,7 @@ internal class MessageCacheSource(
             if (rows.isEmpty() && syncedAt == null) {
                 null
             } else {
-                rows.map { row ->
-                    LocalMessage(
-                        message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload),
-                        sendState = row.sendState
-                            ?.let { LocalSendState.valueOf(it) }
-                            ?: LocalSendState.SYNCED,
-                    )
-                }
+                rows.map { it.toLocalMessage() }
             }
         }
 
