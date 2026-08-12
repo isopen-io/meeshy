@@ -3,13 +3,18 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
-import { NotificationService } from '../../services/notifications/NotificationService';
+import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
+import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
+import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -27,6 +32,16 @@ function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
   return post;
 }
 
+/**
+ * Hisse `metadata.location` en top-level `location`, sur le post ET sur
+ * chaque commentaire de son aperçu embarqué (`post.comments`) — voir
+ * `hoistLocationDeep` (services/location/sharedPlace.ts). Appliqué à la fois
+ * à la réponse REST et au payload socket (contrairement à `trackingLinks`,
+ * qui ne hissait jusqu'ici que le payload socket, et qui ne descend pas dans
+ * `comments`). No-op si rien ne porte de lieu.
+ */
+const hoistLocation = hoistLocationDeep;
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -34,7 +49,7 @@ export function registerCoreRoutes(
 ) {
   const postService = new PostService(prisma);
   const mentionService = new MentionService(prisma);
-  const notificationService = new NotificationService(prisma);
+  const hashtagService = new HashtagService(prisma);
 
   // POST /posts — Create a new post
   //
@@ -67,8 +82,9 @@ export function registerCoreRoutes(
         kind: 'createPost',
         op: () => postService.createPost({
           ...parsed.data,
+          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
           type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? 'PUBLIC',
+          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
         }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
@@ -80,33 +96,47 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
+        const broadcastPost = hoistLocation(hoistTrackingLinks(post)) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch(() => {});
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
         }
       }
 
-      // Trigger async translation for posts/stories with text content (fire-and-forget)
+      // Trigger async translation for text content (fire-and-forget).
+      //
+      // G2 — seules les STORY sont EXCLUES : leur `content` est déjà traduit
+      // par le pipeline audience-driven du service
+      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
+      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
+      // des écritures concurrentes dans `Post.translations`.
+      //
+      // La condition testait `=== 'POST'`, ce qui laissait REEL et STATUS
+      // sans aucun pipeline — ni ici, ni dans le service. Or le feed de
+      // production est fait presque uniquement de REEL portant du texte :
+      // vérifié le 2026-07-27, 40 REEL consécutifs sans une seule traduction.
+      // Le Prisme ne s'appliquait donc pas au gros du contenu. On exclut
+      // désormais STORY explicitement, pour qu'un futur type soit couvert
+      // par défaut plutôt qu'oublié en silence.
       const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && (
-        postType === 'POST' ||
-        (postType === 'STORY' && parsed.data.content?.trim())
-      );
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
       if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
           translationService.translatePost(
             (post as any).id,
             parsed.data.content,
-            parsed.data.originalLanguage ?? (post as any).originalLanguage,
+            // Use the canonical language persisted by createPost (SSOT) rather
+            // than the raw client claim — it already incorporates the normalized
+            // claim (or the detected fallback) and matches the NLLB source keys.
+            (post as any).originalLanguage,
             authContext.registeredUser.id,
-          ).catch(() => {});
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts]: translate post failed'));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -117,46 +147,67 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, [postContent])
         : [];
 
-      let mentionedUserIdsForDedup: string[] = [];
+      // GW1 — use the DECORATED instance (wired push+socket+email by
+      // server.ts), never a bare local NotificationService: a bare instance
+      // persists notifications but silently drops every push and socket emit
+      // (friend_new_post/friend_new_story/friend_new_mood never delivered).
+      // The guard keeps degraded boot working (decoration happens after
+      // SocketIOManager init; standalone harnesses may not have it).
+      const notifService = fastify.notificationService;
 
-      // Persist and notify post-body mentions (fire-and-forget)
+      // Persist and notify post-body mentions. Single entry point shared with
+      // the edit path (services/posts/postMentions.ts) — never throws.
+      const createdMentions = await resolvePostMentions({
+        prisma,
+        mentionService,
+        notificationService: notifService,
+        post: {
+          id: (post as any).id as string,
+          authorId: authContext.registeredUser.id,
+          // Discriminant d'entité → surface ouverte au tap côté client.
+          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+          // Audience du post — décide qui, parmi les nommés, a le droit d'être
+          // prévenu. Un mentionné hors audience recevait l'extrait du contenu.
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        },
+        content: postContent,
+        onError: (err: unknown) => {
+          fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
+        },
+      });
+      // L'éventail vers les amis exclut les mentionnés : `user_mentioned` prime
+      // sur `friend_new_post`, sinon un ami nommé reçoit les deux.
+      const mentionedUserIdsForDedup = [...createdMentions.mentionedUserIds];
+
       if (postContent) {
-        const usernames = mentionService.extractMentions(postContent);
-        if (usernames.length > 0) {
-          const usernameMap = await mentionService.resolveUsernames(usernames);
-          const mentionedUserIds = Array.from(usernameMap.values()).map((u) => u.id);
-          if (mentionedUserIds.length > 0) {
-            mentionedUserIdsForDedup = mentionedUserIds;
-            const postId = (post as any).id as string;
-            const posterId = authContext.registeredUser.id;
-            mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
-              fastify.log.error(`[POST /posts] post mention persist failed: ${err}`);
-            });
-            notificationService.createPostMentionNotificationsBatch({
-              postId,
-              posterId,
-              mentionedUserIds,
-              postExcerpt: postContent.slice(0, 100),
-            }).catch((err: unknown) => {
-              fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
-            });
-          }
+        const hashtags = hashtagService.extractHashtags(postContent);
+        if (hashtags.length > 0) {
+          hashtagService.createPostHashtags((post as any).id as string, hashtags).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts] hashtag persist failed: ${err}`);
+          });
         }
       }
 
       // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
-      notificationService.createFriendContentNotificationsBatch({
-        postId: (post as any).id as string,
-        authorId: authContext.registeredUser.id,
-        contentType: postTypeForNotif,
-        excerpt: postContent?.slice(0, 100),
-        excludeUserIds: mentionedUserIdsForDedup,
-      }).catch((err: unknown) => {
-        fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
-      });
+      if (notifService) {
+        const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
+        notifService.createFriendContentNotificationsBatch({
+          postId: (post as any).id as string,
+          authorId: authContext.registeredUser.id,
+          contentType: postTypeForNotif,
+          excerpt: postContent?.slice(0, 100),
+          postCreatedAt: (post as any).createdAt ?? undefined,
+          postExpiresAt: (post as any).expiresAt ?? undefined,
+          excludeUserIds: mentionedUserIdsForDedup,
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        }).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
+        });
+      }
 
-      return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -191,7 +242,7 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, contentStrings)
         : [];
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -216,7 +267,27 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, parsed.data);
+      // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
+      // objet = remplacement validé par le MÊME parseSharedPlace que la
+      // création (jamais de passthrough du bloc client vers metadata).
+      let locationUpdate: SharedPlace | null | undefined;
+      if (parsed.data.location !== undefined) {
+        if (parsed.data.location === null) {
+          locationUpdate = null;
+        } else {
+          const place = parseSharedPlace(parsed.data.location);
+          if (!place) {
+            return sendBadRequest(reply, 'Invalid location', { code: 'INVALID_LOCATION' });
+          }
+          locationUpdate = place;
+        }
+      }
+
+      const baseUpdateData = parsed.data.content !== undefined
+        ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
+        : parsed.data;
+      const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -233,28 +304,41 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, updateContentStrings)
         : [];
 
-      // Persist and notify post-body mentions on edit (re-fires all; idempotent via P2002 swallow)
+      // Une édition RÉCONCILIE : elle retire les lignes des partants et ne
+      // prévient que les entrants. Le bloc qui vivait ici recréait sans jamais
+      // supprimer, et renotifiait tout le monde à chaque édition.
       const editedContent = (post as any).content as string | undefined;
-      if (editedContent) {
-        const editUsernames = mentionService.extractMentions(editedContent);
-        if (editUsernames.length > 0) {
-          const editUsernameMap = await mentionService.resolveUsernames(editUsernames);
-          const editMentionedUserIds = Array.from(editUsernameMap.values()).map((u) => u.id);
-          if (editMentionedUserIds.length > 0) {
-            const editPosterId = authContext.registeredUser.id;
-            mentionService.createPostMentions(postId, editMentionedUserIds).catch((err: unknown) => {
-              fastify.log.error(`[PUT /posts/:postId] post mention persist failed: ${err}`);
-            });
-            notificationService.createPostMentionNotificationsBatch({
-              postId,
-              posterId: editPosterId,
-              mentionedUserIds: editMentionedUserIds,
-              postExcerpt: editedContent.slice(0, 100),
-            }).catch((err: unknown) => {
-              fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
-            });
-          }
+      await reconcilePostMentions({
+        prisma,
+        mentionService,
+        notificationService: fastify.notificationService,
+        post: {
+          id: postId,
+          authorId: authContext.registeredUser.id,
+          // Discriminant d'entité → surface ouverte au tap côté client.
+          type: (post as any).type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+          // Audience APRÈS édition : `post` est le document rendu par
+          // `updatePost`, donc restreindre la visibilité d'un post et y ajouter
+          // une mention dans la même requête applique bien la NOUVELLE règle.
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        },
+        content: editedContent,
+        onError: (err: unknown) => {
+          fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
+        },
+      });
+
+      {
+        const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
+        if (editHashtags.length > 0) {
+          hashtagService.createPostHashtags(postId, editHashtags).catch((err: unknown) => {
+            fastify.log.error(`[PUT /posts/:postId] hashtag persist failed: ${err}`);
+          });
         }
+        hashtagService.reconcileRemovedHashtags(postId, editHashtags.map((h) => h.tag)).catch((err: unknown) => {
+          fastify.log.error(`[PUT /posts/:postId] hashtag reconcile failed: ${err}`);
+        });
       }
 
       // Broadcast post edits. Each type has its own event so clients can listen narrowly:
@@ -264,16 +348,26 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
+        // Second chemin d'enrichissement (le premier est la création
+        // ci-dessus) : le lieu — posé à la création OU modifié/retiré par
+        // l'édition (tri-état `location`, merge metadata dans `updatePost`)
+        // — doit rester visible sur CE broadcast aussi, sinon un post modifié
+        // après coup (visibilité, contenu…) republierait sans sa position.
+        const broadcastPost = hoistLocation(post as unknown as Record<string, unknown>) as unknown as Post;
         if (updatedPostType === 'STORY') {
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          // Même prédicat que le reset d'engagement du service — les deux ne
+          // peuvent pas diverger sur un même payload.
+          socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
+            engagementReset: storyContentEditRequested(parsed.data),
+          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
         }
       }
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });
@@ -288,7 +382,7 @@ export function registerCoreRoutes(
     }
   });
 
-  // DELETE /posts/:postId — Soft delete (author only)
+  // DELETE /posts/:postId — Soft delete (auteur, ou modérateur et plus avec audit)
   fastify.delete('/posts/:postId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -299,22 +393,21 @@ export function registerCoreRoutes(
       }
 
       const { postId } = request.params;
-      const result = await postService.deletePost(postId, authContext.registeredUser.id);
+      const result = await postService.deletePost(postId, authContext.registeredUser.id, {
+        actorRole: authContext.registeredUser.role,
+      });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast deletion via Socket.IO (use correct event based on post type)
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        if (result.type === 'STATUS') {
-          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
-        } else if (result.type === 'STORY') {
-          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch(() => {});
-        } else {
-          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
-        }
-      }
+      // `deletePost` autorise « l'auteur OU un modérateur et plus » : l'acteur
+      // n'est donc pas forcément l'auteur, et c'est bien l'auteur que la
+      // diffusion attend (voir `broadcastPostRemoval`, invariant 1).
+      broadcastPostRemoval(
+        fastify.socialEvents,
+        result,
+        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+      );
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
@@ -342,14 +435,22 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const post = await postService.getPostById(postId);
+      // Le viewer DOIT être transmis : sans lui, `getPostById` retombe sur le
+      // filtre anonyme (`visibility: PUBLIC`) et ne trouve rien d'autre qu'une
+      // publication publique. Une story Meeshy étant réservée aux contacts par
+      // défaut, la route répondait « Post not found » à un lecteur pourtant
+      // légitime — et la feuille « Traductions » du lecteur restait sur un
+      // anneau tournant sans fin (constaté au simulateur le 2026-07-27).
+      const post = await postService.getPostById(postId, authContext.registeredUser.id);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       try {
         const translationService = PostTranslationService.shared;
-        await translationService.translateOnDemand(postId, parsed.data.targetLanguage);
+        await translationService.translateOnDemand(postId, parsed.data.targetLanguage, {
+          force: parsed.data.force,
+        });
       } catch {
         return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
       }

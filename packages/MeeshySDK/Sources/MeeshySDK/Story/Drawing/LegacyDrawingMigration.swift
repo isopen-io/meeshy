@@ -45,7 +45,7 @@ extension StoryDrawingStroke {
             case .pen:    tool = .pen
             case .marker: tool = .marker
             case .pencil: tool = .pen
-            @unknown default: tool = .pen
+            default: tool = .pen
             }
 
             return StoryDrawingStroke(

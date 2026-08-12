@@ -383,10 +383,7 @@ describe('POST /users/register-device-token', () => {
     const req = makeRequest({ body: { platform: 'ios' } }); // no token or apnsToken
     await route.handler(req, reply);
 
-    expect(reply.status).toHaveBeenCalledWith(400);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
+    expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('returns 400 on ZodError (invalid platform)', async () => {
@@ -398,7 +395,7 @@ describe('POST /users/register-device-token', () => {
     });
     await route.handler(req, reply);
 
-    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('returns 500 on unexpected DB error', async () => {
@@ -517,7 +514,7 @@ describe('DELETE /users/register-device-token', () => {
     const req = makeRequest({ body: { token: 'short' } }); // min 10 chars
     await route.handler(req, reply);
 
-    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('handles null body by treating it as empty object (no filter)', async () => {

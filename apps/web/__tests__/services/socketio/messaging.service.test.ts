@@ -18,6 +18,11 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_CONSUMED: 'message:consumed',
   SYSTEM_MESSAGE: 'system:message',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+  MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+  PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+  LINK_MESSAGE_NEW: 'link:message:new',
+  MESSAGE_PINNED: 'message:pinned',
+  MESSAGE_UNPINNED: 'message:unpinned',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -35,6 +40,10 @@ const CLIENT_EVENTS_MOCK = {
 // Mock for REST fallback via dynamic import('../conversations')
 const mockConversationsServiceSendMessage = jest.fn();
 const mockConversationsServiceMarkAsReceived = jest.fn();
+
+// Mock for the share-link REST fallback (anonymous senders)
+const mockAnonymousCanSendViaLink = jest.fn();
+const mockAnonymousSendMessage = jest.fn();
 
 // ─── jest.mock() calls ────────────────────────────────────────────────────────
 jest.mock('@/utils/logger', () => ({
@@ -54,6 +63,11 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_CONSUMED: 'message:consumed',
     SYSTEM_MESSAGE: 'system:message',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+    MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+    PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+    LINK_MESSAGE_NEW: 'link:message:new',
+    MESSAGE_PINNED: 'message:pinned',
+    MESSAGE_UNPINNED: 'message:unpinned',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -82,6 +96,15 @@ jest.mock('@/services/conversations', () => ({
   conversationsService: {
     sendMessage: (...args: unknown[]) => mockConversationsServiceSendMessage(...args),
     markAsReceived: (...args: unknown[]) => mockConversationsServiceMarkAsReceived(...args),
+  },
+}));
+
+// Mock dynamic import('@/services/anonymous-chat.service') used by the
+// share-link REST fallback
+jest.mock('@/services/anonymous-chat.service', () => ({
+  anonymousChatService: {
+    canSendViaLink: () => mockAnonymousCanSendViaLink(),
+    sendMessage: (...args: unknown[]) => mockAnonymousSendMessage(...args),
   },
 }));
 
@@ -167,6 +190,9 @@ describe('MessagingService', () => {
     jest.clearAllMocks();
     mockConversationsServiceSendMessage.mockReset();
     mockConversationsServiceMarkAsReceived.mockReset();
+    mockAnonymousSendMessage.mockReset();
+    // Default: a registered sender. The anonymous branch is opt-in per test.
+    mockAnonymousCanSendViaLink.mockReturnValue(false);
   });
 
   // ─── setCurrentUserId / isOwnMessage ──────────────────────────────────────
@@ -705,6 +731,85 @@ describe('MessagingService', () => {
       });
     });
 
+    describe('message:attachment-updated', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageAttachmentUpdated(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { conversationId: 'conv-1', messageId: 'msg-1', attachment: { id: 'att-1', mimeType: 'audio/mp4', transcription: 'Hello' } };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_ATTACHMENT_UPDATED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:pending-delivered', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onPendingMessagesDelivered(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        socket._trigger(SERVER_EVENTS_MOCK.PENDING_MESSAGES_DELIVERED, { count: 3, conversationIds: ['c-1'] });
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith({ count: 3, conversationIds: ['c-1'] });
+      });
+    });
+
+    describe('message:pinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessagePinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1', pinnedBy: 'user-1', pinnedAt: new Date().toISOString() };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_PINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:unpinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageUnpinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1' };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_UNPINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('link:message:new', () => {
+      it('forwards link message data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onLinkMessageNew(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { message: { id: 'link-msg-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link' } };
+        socket._trigger(SERVER_EVENTS_MOCK.LINK_MESSAGE_NEW, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
     describe('mention:created', () => {
       it('calls mention listener', async () => {
         const svc = new MessagingService();
@@ -1092,7 +1197,7 @@ describe('MessagingService', () => {
       expect((payload as any).content).toBe('[Encrypted]');
     });
 
-    it('continues without encryption when encrypt throws', async () => {
+    it('aborts send when encrypt throws to prevent plaintext leak', async () => {
       const handlers = makeEncryptionHandlers({
         getConversationMode: jest.fn().mockResolvedValue('aes-256-gcm'),
         encrypt: jest.fn().mockRejectedValue(new Error('encrypt failed')),
@@ -1107,7 +1212,8 @@ describe('MessagingService', () => {
       });
 
       const result = await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      expect(socket.emit).not.toHaveBeenCalled();
     });
 
     it('skips encryption when mode is null', async () => {
@@ -1451,6 +1557,84 @@ describe('MessagingService', () => {
     });
   });
 
+  // ─── REST fallback for anonymous (share-link) senders ─────────────────────
+  //
+  // An anonymous participant holds no JWT — only an `anon_*` session token,
+  // which `POST /conversations/:id/messages` cannot authenticate. Routing them
+  // there means the fallback answers 401 for every anonymous sender, so a
+  // WebSocket ack error loses the message outright. Their endpoint is the
+  // share-link route, which authenticates on `X-Session-Token`.
+
+  describe('sendMessageViaRest — anonymous share-link sender', () => {
+    function makeAckFailingSocket() {
+      const socket = makeSocket();
+      socket.emit.mockImplementation((_event: string, _data: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false });
+      });
+      return socket;
+    }
+
+    function makeLinkResponse(overrides: Record<string, unknown> = {}) {
+      return {
+        messageId: 'srv-msg-1',
+        message: { id: 'srv-msg-1', conversationId: 'conv-1', senderId: 'part-1', clientMessageId: 'cid_test-1234' },
+        ...overrides,
+      };
+    }
+
+    it('falls back to the share-link route, never to the JWT-only conversations route', async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockResolvedValue(makeLinkResponse());
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result).toEqual({ success: true, messageId: 'srv-msg-1', clientMessageId: 'cid_test-1234' });
+      expect(mockConversationsServiceSendMessage).not.toHaveBeenCalled();
+    });
+
+    it("carries the caller's clientMessageId so the optimistic row reconciles instead of duplicating", async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockResolvedValue(makeLinkResponse());
+
+      const svc = new MessagingService();
+      await svc.sendMessage(
+        makeAckFailingSocket() as unknown as TypedSocket,
+        makeSendOptions({ content: 'Bonjour', originalLanguage: 'fr', replyToId: 'msg-42' })
+      );
+
+      expect(mockAnonymousSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Bonjour',
+          originalLanguage: 'fr',
+          replyToId: 'msg-42',
+          clientMessageId: 'cid_test-1234',
+        })
+      );
+    });
+
+    it('reports failure when the share-link route also fails', async () => {
+      mockAnonymousCanSendViaLink.mockReturnValue(true);
+      mockAnonymousSendMessage.mockRejectedValue(new Error('link route 410'));
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result).toEqual({ success: false });
+      expect(mockConversationsServiceSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('leaves the registered-sender fallback on the conversations route', async () => {
+      mockConversationsServiceSendMessage.mockResolvedValue({ data: { id: 'rest-msg-9' } });
+
+      const svc = new MessagingService();
+      const result = await svc.sendMessage(makeAckFailingSocket() as unknown as TypedSocket, makeSendOptions());
+
+      expect(result.messageId).toBe('rest-msg-9');
+      expect(mockAnonymousSendMessage).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── emitWithTimeout ─────────────────────────────────────────────────────
 
   describe('emitWithTimeout (via sendMessage)', () => {
@@ -1631,6 +1815,66 @@ describe('MessagingService', () => {
       expect(attachListeners.size).toBe(1);
       unsub();
       expect(attachListeners.size).toBe(0);
+    });
+  });
+
+  describe('onMessageAttachmentUpdated', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageAttachmentUpdated(listener);
+      const listenerSet = (svc as any).messageAttachmentUpdatedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onPendingMessagesDelivered', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onPendingMessagesDelivered(listener);
+      const listenerSet = (svc as any).pendingDeliveredListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onLinkMessageNew', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onLinkMessageNew(listener);
+      const listenerSet = (svc as any).linkMessageNewListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessagePinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessagePinned(listener);
+      const listenerSet = (svc as any).messagePinnedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessageUnpinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageUnpinned(listener);
+      const listenerSet = (svc as any).messageUnpinnedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
     });
   });
 

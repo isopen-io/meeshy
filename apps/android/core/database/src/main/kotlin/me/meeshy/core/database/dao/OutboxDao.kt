@@ -16,11 +16,38 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE lane = :lane AND state != 'EXHAUSTED' ORDER BY createdAt ASC")
     public suspend fun deliverableForLane(lane: String): List<OutboxEntity>
 
+    /**
+     * Distinct dynamic per-conversation message lanes (`"message:<conversationId>"`, see
+     * `me.meeshy.sdk.outbox.OutboxLanes.forMessage`) currently holding at least one
+     * non-exhausted row, ordered by each lane's oldest row. A message lane's concrete id is
+     * only known at enqueue time (unlike the fixed shared lanes), so the flush worker must
+     * discover which lanes to drain rather than enumerate them ahead of time. The `'message:'`
+     * prefix is duplicated from `OutboxLanes.forMessage` rather than referenced — `core:database`
+     * sits below `sdk-core` in the module graph and cannot depend on it.
+     */
+    @Query(
+        "SELECT lane FROM outbox WHERE lane LIKE 'message:%' AND state != 'EXHAUSTED' " +
+            "GROUP BY lane ORDER BY MIN(createdAt) ASC",
+    )
+    public suspend fun activeMessageLanes(): List<String>
+
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
     @Query("SELECT * FROM outbox WHERE cmid = :cmid")
     public suspend fun find(cmid: String): OutboxEntity?
+
+    /**
+     * Rows that hold a given prerequisite among their (possibly multi-valued)
+     * `dependsOn` set, oldest first. [pattern] is a `LIKE` membership pattern built
+     * by `OutboxDependencyKey.likePattern`; `ESCAPE '\'` keeps a `cmid`'s `_`
+     * literal.
+     */
+    @Query("SELECT * FROM outbox WHERE dependsOn LIKE :pattern ESCAPE '\\' ORDER BY createdAt ASC")
+    public suspend fun findDependents(pattern: String): List<OutboxEntity>
+
+    @Query("UPDATE outbox SET payload = :payload, updatedAt = :now WHERE cmid = :cmid")
+    public suspend fun updatePayload(cmid: String, payload: String, now: Long)
 
     @Upsert
     public suspend fun upsert(row: OutboxEntity)

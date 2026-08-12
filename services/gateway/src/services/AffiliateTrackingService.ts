@@ -105,8 +105,8 @@ export class AffiliateTrackingService {
       });
 
       if (existingRelation) {
-        return { 
-          success: true, 
+        return {
+          success: true,
           data: {
             id: existingRelation.id,
             status: existingRelation.status
@@ -114,7 +114,35 @@ export class AffiliateTrackingService {
         };
       }
 
-      // Créer la relation d'affiliation
+      // Réserver une place de façon atomique AVANT de créer la relation.
+      // Le pré-check `currentUses >= maxUses` (plus haut) est un simple fast-path :
+      // deux conversions concurrentes peuvent toutes deux le franchir quand
+      // `currentUses === maxUses - 1`, créer chacune une relation puis incrémenter,
+      // dépassant le cap (TOCTOU). La clause conditionnelle `updateMany({ where:
+      // { currentUses: { lt: maxUses } } })` est sérialisée côté DB : au plus
+      // `maxUses` incréments réussissent. `count === 0` = le cap a été atteint dans
+      // la fenêtre de course → on rejette AVANT de créer la relation (pas de rollback).
+      if (affiliateToken.maxUses !== null && affiliateToken.maxUses !== undefined) {
+        const reserved = await prisma.affiliateToken.updateMany({
+          where: { id: affiliateToken.id, currentUses: { lt: affiliateToken.maxUses } },
+          data: { currentUses: { increment: 1 } }
+        });
+
+        if (reserved.count === 0) {
+          return { success: false, error: 'Limite d\'utilisation atteinte' };
+        }
+      } else {
+        // Token illimité : increment atomique inconditionnel (jamais `currentUses + 1`
+        // calculé en JS, qui perdrait une incrémentation sous concurrence).
+        await prisma.affiliateToken.update({
+          where: { id: affiliateToken.id },
+          data: {
+            currentUses: { increment: 1 }
+          }
+        });
+      }
+
+      // Créer la relation d'affiliation (la place est déjà réservée atomiquement).
       const affiliateRelation = await prisma.affiliateRelation.create({
         data: {
           affiliateTokenId: affiliateToken.id,
@@ -125,25 +153,41 @@ export class AffiliateTrackingService {
         }
       });
 
-      // Mettre à jour le compteur d'utilisation
-      await prisma.affiliateToken.update({
-        where: { id: affiliateToken.id },
-        data: {
-          currentUses: affiliateToken.currentUses + 1
-        }
-      });
-
-      // Créer automatiquement une demande d'amitié entre les utilisateurs
+      // Créer automatiquement une demande d'amitié entre les utilisateurs (ou
+      // accepter une demande préexistante dans un autre statut) — FriendRequest
+      // n'a pas d'index unique, donc un simple create() peut créer un doublon
+      // désynchronisé plutôt qu'échouer ; on vérifie d'abord les deux sens.
       try {
-        await prisma.friendRequest.create({
-          data: {
-            senderId: affiliateToken.createdBy,
-            receiverId: userId,
-            status: 'accepted' // Accepter automatiquement pour les affiliations
-          }
+        const existingFriendRequest = await prisma.friendRequest.findFirst({
+          where: {
+            OR: [
+              { senderId: affiliateToken.createdBy, receiverId: userId },
+              { senderId: userId, receiverId: affiliateToken.createdBy },
+            ],
+          },
         });
+
+        if (existingFriendRequest) {
+          if (existingFriendRequest.status !== 'accepted') {
+            await prisma.friendRequest.update({
+              where: { id: existingFriendRequest.id },
+              data: { status: 'accepted', respondedAt: new Date() },
+            });
+          }
+        } else {
+          await prisma.friendRequest.create({
+            data: {
+              senderId: affiliateToken.createdBy,
+              receiverId: userId,
+              status: 'accepted' // Accepter automatiquement pour les affiliations
+            }
+          });
+        }
       } catch (friendRequestError) {
-        // Ignorer l'erreur si la demande d'amitié existe déjà
+        logger.error(
+          'Erreur synchronisation friend request affiliation',
+          friendRequestError instanceof Error ? friendRequestError : new Error(String(friendRequestError))
+        );
       }
 
       // Marquer la session comme convertie si elle existe
@@ -170,6 +214,7 @@ export class AffiliateTrackingService {
             });
           }
         } catch (sessionError) {
+          logger.error('Failed to persist affiliate session data', sessionError instanceof Error ? sessionError : new Error(String(sessionError)));
         }
       }
 
@@ -248,12 +293,14 @@ export class AffiliateTrackingService {
           }
         }),
 
-        // Statistiques groupées par statut
+        // Statistiques groupées par statut — même filtre que la liste `referrals`
+        // pour que le décompte par statut reste cohérent avec `totalReferrals`.
+        // Sans cela, un filtre (tokenId/status/dates) réduit `totalReferrals`
+        // mais laissait la ventilation completed/pending/expired non filtrée,
+        // pouvant excéder le total et mal attribuer les compteurs par token.
         prisma.affiliateRelation.groupBy({
           by: ['status'],
-          where: {
-            affiliateUserId: userId
-          },
+          where: whereClause,
           _count: {
             status: true
           }

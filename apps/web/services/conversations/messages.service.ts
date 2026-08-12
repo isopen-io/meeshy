@@ -4,7 +4,9 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
+import { splitConsumedLanguages } from '@/utils/consumed-language';
 import type {
   Message,
   SendMessageRequest,
@@ -15,6 +17,12 @@ import type {
   GetMessagesResponse,
   MarkAsReadResponse,
 } from './types';
+
+/** ObjectId MongoDB — écarte les ids optimistes `cid_<uuid>` des messages en vol. */
+const SERVER_MESSAGE_ID = /^[0-9a-fA-F]{24}$/;
+
+/** Plafond du lot accepté par `MarkReadBodySchema` côté gateway. */
+const MARK_READ_BATCH_LIMIT = 200;
 
 /**
  * Service pour les opérations sur les messages
@@ -39,20 +47,32 @@ export class MessagesService {
     page = 1,
     limit = 20,
     cursor?: string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    after?: string
   ): Promise<GetMessagesResponse> {
     try {
-      const requestKey = `messages-${conversationId}`;
-      const controller = this.createRequestController(requestKey);
-
       const offset = (page - 1) * limit;
 
       const queryParams: Record<string, unknown> = { limit };
-      if (cursor) {
+      let mode: 'after' | 'before' | 'offset';
+      if (after) {
+        queryParams.after = after;
+        mode = 'after';
+      } else if (cursor) {
         queryParams.before = cursor;
+        mode = 'before';
       } else {
         queryParams.offset = offset;
+        mode = 'offset';
       }
+
+      // La clé d'annulation inclut le MODE de lecture. Scopée à la seule
+      // conversation, elle faisait s'annuler mutuellement les deux lectures
+      // légitimement concurrentes d'une conversation ouverte — la pagination
+      // (offset/before) et le rattrapage avant (after) — celle qui perdait la
+      // course remontait `REQUEST_CANCELLED` et ses messages disparaissaient.
+      const requestKey = `messages-${conversationId}-${mode}`;
+      const controller = this.createRequestController(requestKey);
 
       if (signal) {
         signal.addEventListener('abort', () => controller.abort(), { once: true });
@@ -73,7 +93,7 @@ export class MessagesService {
       this.pendingRequests.delete(requestKey);
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
-        console.warn('⚠️ Structure de réponse inattendue:', response.data);
+        logger.warn('[Messages]', 'Structure de réponse inattendue', { data: response.data });
         return MessagesService.EMPTY_MESSAGES_RESPONSE;
       }
 
@@ -96,7 +116,7 @@ export class MessagesService {
         throw new Error('REQUEST_CANCELLED');
       }
 
-      console.error('❌ Erreur lors du chargement des messages:', error);
+      logger.error('[Messages]', 'Erreur lors du chargement des messages', { error });
       return MessagesService.EMPTY_MESSAGES_RESPONSE;
     }
   }
@@ -118,10 +138,54 @@ export class MessagesService {
   }
 
   /**
-   * Marquer une conversation comme lue
+   * Marquer une conversation comme lue.
+   *
+   * `messageIds` porte les messages RÉELLEMENT affichés. Sans eux, le gateway
+   * retombe sur son chemin historique par fenêtre temporelle, qui déclare lus
+   * des messages jamais montrés — ouvrir une conversation à 200 non-lus les
+   * marquait tous lus.
+   *
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
    */
-  async markAsRead(conversationId: string): Promise<void> {
-    await apiService.post(`/conversations/${conversationId}/mark-as-read`);
+  async markAsRead(
+    conversationId: string,
+    messageIds?: readonly string[],
+    /**
+     * Version linguistique réellement affichée pour chacun de ces messages.
+     * Absente pour un appelant qui ne la connaît pas — mieux vaut ne rien
+     * déclarer qu'attribuer au lecteur une langue qu'il n'a pas vue.
+     */
+    consumedLanguages?: ReadonlyMap<string, string | null>
+  ): Promise<void> {
+    const url = `/conversations/${conversationId}/mark-as-read`;
+
+    // Les messages en cours d'envoi portent un `cid_<uuid>` et non un ObjectId.
+    // En laisser passer un ferait rejeter TOUT le lot en 400, donc perdre les
+    // lectures réelles qui l'accompagnaient.
+    const serverIds = (messageIds ?? []).filter(id => SERVER_MESSAGE_ID.test(id));
+
+    if (serverIds.length === 0) {
+      // Un corps `{messageIds: []}` signifierait « rien n'a été affiché » et
+      // ferait travailler le serveur pour rien. L'absence de corps conserve le
+      // repli historique, seul comportement sûr pour un appel non informé.
+      await apiService.post(url);
+      return;
+    }
+
+    // Le serveur plafonne à 200. On garde les plus récents : ce sont ceux que
+    // l'utilisateur vient de voir.
+    const reported = serverIds.slice(-MARK_READ_BATCH_LIMIT);
+
+    // Les langues sont restreintes au lot RÉELLEMENT envoyé : déclarer la
+    // langue d'un message écarté par le plafond ferait rejeter le corps entier
+    // (le serveur n'accepte que des identifiants du lot).
+    const languages = consumedLanguages
+      ? splitConsumedLanguages(
+          new Map(reported.map(id => [id, consumedLanguages.get(id) ?? null]))
+        )
+      : {};
+
+    await apiService.post(url, { messageIds: reported, ...languages });
   }
 
   /**

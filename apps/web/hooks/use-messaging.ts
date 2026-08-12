@@ -17,6 +17,7 @@ import {
   handleMessageError,
   createStandardMessageCallbacks
 } from '@/utils/messaging-utils';
+import { detectComposeLanguage } from '@/utils/language-detection';
 import type { User } from '@/types';
 
 interface TypingUser {
@@ -217,9 +218,12 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     setIsSending(true);
     setSendError(null);
 
+    // Déterminer la langue source : la détection du contenu est autoritaire ;
+    // le profil (originalLanguage || systemLanguage) sert de repli.
+    // Déclaré avant le try/catch pour être accessible dans le catch (failed-message store).
+    const sourceLanguage = detectComposeLanguage(content, originalLanguage || systemLanguage);
+
     try {
-      // Déterminer la langue source (originalLanguage ou langue système de l'utilisateur)
-      const sourceLanguage = originalLanguage || systemLanguage;
 
       // Préparer les métadonnées
       const metadata = prepareMessageMetadata(content, sourceLanguage);
@@ -269,7 +273,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
         addFailedMessage({
           conversationId,
           content,
-          originalLanguage: originalLanguage || systemLanguage,
+          originalLanguage: sourceLanguage,
           attachmentIds: attachmentIds || [],
           replyToId,
           ...(clientMessageId ? { clientMessageId } : {}),

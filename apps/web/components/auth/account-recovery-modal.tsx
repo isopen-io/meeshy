@@ -85,7 +85,7 @@ export function AccountRecoveryModal({
 
     const validationResult = validation.validateEmail(
       flow.recoveryEmail,
-      t('forgotPassword.errors.invalidEmail') || 'Email invalide'
+      t('forgotPassword.errors.invalidEmail', 'Please enter a valid email address')
     );
 
     if (!validationResult.isValid) {
@@ -99,7 +99,7 @@ export function AccountRecoveryModal({
   const handlePhoneLookup = async () => {
     const validationResult = validation.validatePhone(
       flow.recoveryPhone,
-      t('phoneReset.errors.invalidPhone') || 'Numéro invalide'
+      t('phoneReset.errors.invalidPhone', 'Invalid phone number')
     );
 
     if (!validationResult.isValid) {
@@ -118,7 +118,7 @@ export function AccountRecoveryModal({
     const validationResult = validation.validateIdentity(
       flow.guessUsername,
       flow.guessEmail,
-      t('phoneReset.errors.identityRequired') || 'Veuillez remplir tous les champs'
+      t('phoneReset.errors.identityRequired', 'Please fill in all fields')
     );
 
     if (!validationResult.isValid) {
@@ -132,7 +132,7 @@ export function AccountRecoveryModal({
   const handleVerifyCode = async () => {
     const validationResult = validation.validateOtpCode(
       flow.otpCode,
-      t('phoneReset.errors.codeRequired') || 'Code requis'
+      t('phoneReset.errors.codeRequired', 'Please enter the 6-digit code')
     );
 
     if (!validationResult.isValid) {
@@ -237,10 +237,10 @@ export function AccountRecoveryModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md overflow-hidden">
         <DialogTitle className="sr-only">
-          {t('register.wizard.recoverAccount') || 'Récupération de compte'}
+          {t('register.wizard.recoverAccount', 'Recover my account')}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {t('register.wizard.recoverAccountDescription') || 'Récupérez l\'accès à votre compte existant'}
+          {t('register.wizard.recoverAccountDescription', 'An account already exists with this information. Would you like to recover your account?')}
         </DialogDescription>
         <AnimatePresence mode="wait">
           {renderContent()}

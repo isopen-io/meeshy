@@ -266,6 +266,12 @@ export function mergeClientHeaders(
   // Enrichir geoData si headers présents
   let enrichedGeo = geoData;
   if (country || city || timezone || region) {
+    // `location` doit refléter le résultat de la fusion (valeurs client
+    // prioritaires), pas le couple brut des headers : un override partiel
+    // (ex. `x-meeshy-country` seul) laissait sinon la `location` déduite de
+    // l'IP en contradiction avec le `country` client.
+    const mergedCity    = city    || geoData?.city    || null;
+    const mergedCountry = country || geoData?.country || null;
     enrichedGeo = {
       ...(geoData ?? {
         ip: '', country: null, countryName: null,
@@ -276,7 +282,7 @@ export function mergeClientHeaders(
       ...(city     ? { city }     : {}),
       ...(timezone ? { timezone } : {}),
       ...(region   ? { region }   : {}),
-      location: city && country ? `${city}, ${country}` : (geoData?.location ?? null),
+      location: formatLocation(mergedCity, mergedCountry) ?? geoData?.location ?? null,
     };
   }
 

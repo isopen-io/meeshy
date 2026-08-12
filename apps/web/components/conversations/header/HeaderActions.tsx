@@ -33,7 +33,7 @@ interface HeaderActionsProps {
   onToggleMute: () => void;
   onToggleArchive: () => void;
   onShareConversation: () => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
 }
 
 export const HeaderActions = memo(function HeaderActions({
@@ -56,22 +56,22 @@ export const HeaderActions = memo(function HeaderActions({
           size="icon"
           variant="ghost"
           className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200"
-          aria-label={t('conversationHeader.menuActions') || 'Menu des actions'}
+          aria-label={t('conversationHeader.menuActions', 'Actions')}
         >
           <MoreVertical className="h-5 w-5" aria-hidden="true" />
-          <span className="sr-only">{t('conversationHeader.menuActions') || 'Menu des actions'}</span>
+          <span className="sr-only">{t('conversationHeader.menuActions', 'Actions')}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={onOpenSettings}>
           <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
-          {t('conversationHeader.settings') || 'Paramètres'}
+          {t('conversationHeader.settings', 'Settings')}
         </DropdownMenuItem>
 
         {onOpenGallery && (
           <DropdownMenuItem onClick={onOpenGallery}>
             <Image className="h-4 w-4 mr-2" aria-hidden="true" />
-            {t('conversationHeader.viewImages') || 'Voir les images'}
+            {t('conversationHeader.viewImages', 'View images')}
           </DropdownMenuItem>
         )}
 
@@ -104,7 +104,7 @@ export const HeaderActions = memo(function HeaderActions({
 
         <DropdownMenuItem onClick={onShareConversation}>
           <Share2 className="h-4 w-4 mr-2" aria-hidden="true" />
-          {t('conversationHeader.share') || 'Partager'}
+          {t('conversationHeader.share', 'Share')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

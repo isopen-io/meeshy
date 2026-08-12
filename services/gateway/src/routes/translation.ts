@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -273,6 +273,16 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
   // Route principale de traduction
   fastify.post<{ Body: TranslateRequest }>('/translate-blocking', {
+    // SECURITY: authentification obligatoire.
+    // Sans ce `preHandler`, `request.user` restait `undefined` pour tout
+    // appelant anonyme, et la vérification d'appartenance à la conversation
+    // (plus bas) — écrite comme `if (userId) { ... }` — était purement et
+    // simplement SAUTÉE : n'importe qui connaissant un `message_id` obtenait
+    // le contenu traduit d'une conversation à laquelle il n'appartenait pas
+    // (CWE-862, IDOR). Aligné sur le chemin socket équivalent qui authentifie
+    // systématiquement avant de servir une traduction
+    // (socketio/MeeshySocketIOManager.ts:_handleTranslationRequest).
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Supports both new message translation and retranslation of existing messages. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
       tags: ['translation'],
@@ -335,20 +345,24 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
         // SECURITY: E2EE messages cannot be translated by the server
         if (existingMessage.encryptionMode === 'e2ee') {
-          return reply.status(400).send({
-            success: false,
-            error: 'E2EE_NOT_TRANSLATABLE',
-            message: 'End-to-end encrypted messages cannot be translated by the server'
-          });
+          return sendBadRequest(reply, 'E2EE_NOT_TRANSLATABLE', { message: 'End-to-end encrypted messages cannot be translated by the server' });
         }
 
-        // Vérifier l'accès (optionnel, selon vos besoins)
+        // SECURITY: vérification d'appartenance INCONDITIONNELLE.
+        // L'ancienne version enfermait ce contrôle dans `if (userId) { ... }` :
+        // sans authentification, `userId` valait `undefined`, la condition
+        // était fausse, et le bloc entier — y compris le refus — était sauté.
+        // Le `preHandler` ci-dessus garantit déjà qu'on n'arrive ici
+        // qu'authentifié, mais le contrôle reste volontairement inconditionnel
+        // et fail-closed : une absence d'identité doit produire un refus,
+        // jamais un passage, même si cette route est un jour dupliquée sans
+        // son preHandler.
         const userId = request.user?.userId;
-        if (userId) {
-          const hasAccess = existingMessage.conversation.participants.some((member: any) => member.userId === userId);
-          if (!hasAccess) {
-            return sendForbidden(reply, 'Access denied to this message');
-          }
+        const hasAccess = !!userId && existingMessage.conversation.participants.some(
+          (member: any) => member.userId === userId
+        );
+        if (!hasAccess) {
+          return sendForbidden(reply, 'Access denied to this message');
         }
 
         // Utiliser le texte du message existant si pas fourni
@@ -431,11 +445,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // Créer les données du message
         const senderId = request.user?.userId;
         if (!senderId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'AUTH_REQUIRED',
-            message: 'Authentication required for new message translation'
-          });
+          return sendUnauthorized(reply, 'Authentication required for new message translation');
         }
 
         // Resolve the user's participantId in this conversation
@@ -575,11 +585,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const { text } = request.body;
 
       if (!text || text.length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'VALIDATION_ERROR',
-          message: 'Text is required'
-        });
+        return sendBadRequest(reply, 'VALIDATION_ERROR', { message: 'Text is required' });
       }
 
       // Détection simple basée sur des patterns
@@ -607,16 +613,21 @@ export async function translationRoutes(fastify: FastifyInstance) {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown language detection error';
       logError(request.log, 'Language detection error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'DETECTION_ERROR',
-        message: errorMessage
-      });
+      return sendInternalError(reply, errorMessage);
     }
   });
 
   // Route de test pour le service de traduction
   fastify.get('/test', {
+    // SECURITY: authentification obligatoire.
+    // Cette route déclenche un VRAI job sur le pipeline de traduction (ZMQ) —
+    // ce n'est pas un simple ping. Ouverte sans authentification, elle offrait
+    // à n'importe quel appelant anonyme un vecteur gratuit et illimité de
+    // sollicitation du pipeline ML (abus de ressources / coût). Aucune sonde
+    // d'infra du dépôt ne cible cette route pour ses healthchecks (elles
+    // ciblent `/health`), donc exiger l'authentification ne casse aucun
+    // appelant légitime connu.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Test the translation service by translating a sample text ("Hello world" from English to French). This endpoint is useful for health checks and verifying that the translation service is operational. Returns the translation result with metadata.',
       tags: ['translation'],
@@ -644,6 +655,10 @@ export async function translationRoutes(fastify: FastifyInstance) {
               }
             }
           }
+        },
+        401: {
+          description: 'Unauthorized - invalid or missing authentication',
+          ...errorResponseSchema
         },
         500: {
           description: 'Internal server error - test failed',
@@ -674,12 +689,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const testResult = await translationService.getTranslation(handleResult.messageId, 'fr');
 
       if (!testResult) {
-        return reply.send({
-          success: false,
-          error: 'TEST_FAILED',
-          message: 'Translation service test failed - no result available',
-          data: { message_id: handleResult.messageId }
-        });
+        return sendError(reply, 500, 'TEST_FAILED', { message: `Translation service test failed - no result available (messageId: ${handleResult.messageId})` });
       }
 
       return sendSuccess(reply, {
@@ -696,11 +706,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown translation test error';
-      return reply.send({
-        success: false,
-        error: 'TEST_FAILED',
-        message: errorMessage
-      });
+      return sendError(reply, 500, 'TEST_FAILED', { message: errorMessage });
     }
   });
 }

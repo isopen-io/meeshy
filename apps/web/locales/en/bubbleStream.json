@@ -152,6 +152,10 @@
       "searchPlaceholder": "Type to search for a user...",
       "noResults": "No user found for \"{query}\"",
       "helpText": "↑↓ navigate • Enter select • Esc close"
-    }
+    },
+    "bubble": {
+      "forwarded": "Forwarded"
+    },
+    "newMessagesWhileAway": "new messages"
   }
 }

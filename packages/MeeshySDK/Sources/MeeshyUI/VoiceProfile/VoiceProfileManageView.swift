@@ -12,7 +12,7 @@ public struct VoiceProfileManageView: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -54,7 +54,7 @@ public struct VoiceProfileManageView: View {
             HStack(spacing: 12) {
                 Image(systemName: viewModel.profile?.isReady == true ? "waveform.circle.fill" : "waveform.circle")
                     .font(.system(size: 36))
-                    .foregroundColor(Color(hex: viewModel.profile?.isReady == true ? "2ECC71" : accentColor))
+                    .foregroundColor(viewModel.profile?.isReady == true ? MeeshyColors.success : Color(hex: accentColor))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(statusTitle)
@@ -147,7 +147,7 @@ public struct VoiceProfileManageView: View {
             Toggle("", isOn: $viewModel.cloningEnabled)
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .onChange(of: viewModel.cloningEnabled) { newValue in
+                .adaptiveOnChange(of: viewModel.cloningEnabled) { _, newValue in
                     Task { await viewModel.toggleCloning(enabled: newValue) }
                 }
         }

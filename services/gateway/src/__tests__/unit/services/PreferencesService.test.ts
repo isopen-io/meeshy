@@ -199,66 +199,6 @@ describe('PreferencesService', () => {
   });
 
   // ============================================================================
-  // ENCRYPTION PREFERENCES TESTS
-  // ============================================================================
-
-  describe('getEncryptionPreferences', () => {
-    it('should return encryption preferences with key status', async () => {
-      const mockUser = {
-        signalIdentityKeyPublic: 'public-key-123',
-        signalRegistrationId: 12345,
-        signalPreKeyBundleVersion: 1,
-        lastKeyRotation: new Date()
-      };
-
-      const mockUserFeature = {
-        encryptionPreference: 'optional'
-      };
-
-      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
-      mockPrisma.userFeature.findUnique.mockResolvedValue(mockUserFeature);
-
-      const result = await service.getEncryptionPreferences('user-123');
-
-      expect(result).toEqual({
-        encryptionPreference: 'optional',
-        hasSignalKeys: true,
-        signalRegistrationId: 12345,
-        signalPreKeyBundleVersion: 1,
-        lastKeyRotation: mockUser.lastKeyRotation
-      });
-    });
-
-    it('should throw error if user not found', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.getEncryptionPreferences('user-123')
-      ).rejects.toThrow('User not found');
-    });
-  });
-
-  describe('updateEncryptionPreference', () => {
-    it('should update encryption preference', async () => {
-      const result = await service.updateEncryptionPreference('user-123', {
-        encryptionPreference: 'always'
-      });
-
-      // TODO: Le service ne sauvegarde pas encore, il retourne juste la valeur
-      expect(result).toEqual({ encryptionPreference: 'always' });
-      // Pas d'appel à la base de données pour l'instant (TODO dans le service)
-    });
-
-    it('should validate encryption preference value', async () => {
-      await expect(
-        service.updateEncryptionPreference('user-123', {
-          encryptionPreference: 'invalid' as any
-        })
-      ).rejects.toThrow('Invalid encryption preference');
-    });
-  });
-
-  // ============================================================================
   // THEME PREFERENCES TESTS
   // ============================================================================
 
@@ -372,6 +312,80 @@ describe('PreferencesService', () => {
         data: { systemLanguage: 'es' }
       });
     });
+
+    it('lowercases language codes at the write boundary (Prisme invariant)', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'en',
+        regionalLanguage: 'fr',
+        customDestinationLanguage: 'de'
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
+
+      await service.updateLanguagePreferences('user-123', {
+        systemLanguage: 'EN',
+        regionalLanguage: 'Fr',
+        customDestinationLanguage: 'DE'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { systemLanguage: 'en', regionalLanguage: 'fr', customDestinationLanguage: 'de' }
+      });
+    });
+
+    // Region/script-tagged platform locales (iOS `Locale.current.identifier` =
+    // 'fr_FR', web `navigator.language` = 'fr-FR') must be REDUCED to their
+    // canonical primary subtag at the write boundary — not merely lowercased.
+    // A raw `.toLowerCase()` persists 'fr-fr', which matches no lowercase-keyed
+    // MessageTranslation.targetLanguage ('fr') and no NLLB source mapping,
+    // fragmenting translation lookups and per-language stats (same class of bug
+    // the Message.originalLanguage write-boundary fix addressed). SSOT:
+    // normalizeLanguageCode from @meeshy/shared.
+    it('canonicalizes region-tagged locales at the write boundary (fr-FR -> fr)', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        customDestinationLanguage: 'zh'
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
+
+      await service.updateLanguagePreferences('user-123', {
+        systemLanguage: 'fr-FR',
+        regionalLanguage: 'en_US',
+        customDestinationLanguage: 'zh-Hant-HK'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { systemLanguage: 'fr', regionalLanguage: 'en', customDestinationLanguage: 'zh' }
+      });
+    });
+
+    // A supported ISO 639-3 code with no ISO 639-1 equivalent ('bas', 'ewo')
+    // is already canonical and must be preserved verbatim — never truncated to
+    // a 2-letter prefix (which would silently collide with an unrelated
+    // language). Falls back to `.toLowerCase()` only for codes normalizeLanguageCode
+    // cannot reduce, so behavior for unknown codes is unchanged.
+    it('preserves a supported ISO 639-3 code at the write boundary (bas)', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'bas',
+        regionalLanguage: null,
+        customDestinationLanguage: null
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
+
+      await service.updateLanguagePreferences('user-123', {
+        systemLanguage: 'bas-CM'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { systemLanguage: 'bas' }
+      });
+    });
   });
 
   // ============================================================================
@@ -425,6 +439,96 @@ describe('PreferencesService', () => {
       await service.resetPrivacyPreferences('user-123');
 
       expect(mockPrisma.userPreference.deleteMany).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================================
+  // UNCOVERED PATHS COVERAGE
+  // ============================================================================
+
+  describe('updateNotificationPreferences — invalid dndEndTime', () => {
+    it('should throw when dndEndTime has invalid format', async () => {
+      await expect(
+        service.updateNotificationPreferences('user-123', { dndEndTime: 'bad-time' })
+      ).rejects.toThrow('Invalid dndEndTime format');
+    });
+  });
+
+  describe('updateThemePreferences — invalid fontSize', () => {
+    it('should throw when fontSize is invalid', async () => {
+      await expect(
+        service.updateThemePreferences('user-123', { fontSize: 'huge' as any })
+      ).rejects.toThrow('Invalid font size');
+    });
+  });
+
+  describe('resetThemePreferences', () => {
+    it('should delete theme-related user preferences', async () => {
+      mockPrisma.userPreference.deleteMany.mockResolvedValue({ count: 4 });
+
+      await service.resetThemePreferences('user-123');
+
+      expect(mockPrisma.userPreference.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-123',
+          key: { in: ['theme', 'font-family', 'font-size', 'compact-mode'] }
+        }
+      });
+    });
+  });
+
+  describe('getLanguagePreferences — user not found', () => {
+    it('should throw when user does not exist', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getLanguagePreferences('user-999')
+      ).rejects.toThrow('User not found');
+    });
+  });
+
+  describe('updateLanguagePreferences — customDestinationLanguage', () => {
+    it('should update customDestinationLanguage when provided', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'fr',
+        regionalLanguage: null,
+        customDestinationLanguage: 'de'
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue(null);
+
+      const result = await service.updateLanguagePreferences('user-123', {
+        customDestinationLanguage: 'de'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { customDestinationLanguage: 'de' }
+      });
+      expect(result.customDestinationLanguage).toBe('de');
+    });
+  });
+
+  describe('updateLanguagePreferences — autoTranslate', () => {
+    it('should upsert auto-translate preference when provided', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'fr',
+        regionalLanguage: null,
+        customDestinationLanguage: null
+      });
+      mockPrisma.userPreference.upsert.mockResolvedValue({});
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'true' });
+
+      const result = await service.updateLanguagePreferences('user-123', {
+        autoTranslate: true
+      });
+
+      expect(mockPrisma.userPreference.upsert).toHaveBeenCalledWith({
+        where: { userId_key: { userId: 'user-123', key: 'auto-translate' } },
+        create: { userId: 'user-123', key: 'auto-translate', value: 'true', valueType: 'boolean' },
+        update: { value: 'true' }
+      });
+      expect(result.autoTranslate).toBe(true);
     });
   });
 });

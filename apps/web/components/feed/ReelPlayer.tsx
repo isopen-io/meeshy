@@ -1,8 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Post } from '@meeshy/shared/types/post';
+import Link from 'next/link';
+import type { Post, PostMedia } from '@meeshy/shared/types/post';
+import { useI18n } from '@/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/initials';
+import { PostContentText } from '@/components/v2/PostContentText';
 import {
   X,
   Heart,
@@ -14,6 +18,9 @@ import {
   Volume2,
   VolumeX,
   Play,
+  Flag,
+  Repeat2,
+  Download,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -22,31 +29,90 @@ function authorName(post: Post): string {
   return post.author?.displayName ?? post.author?.username ?? 'Meeshy';
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+/**
+ * Same `<a download>` DOM pattern as the chat lightboxes
+ * (ImageLightbox/VideoLightbox `handleDownload`) — a browser-native save,
+ * no service call.
+ */
+function triggerMediaDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadFileName(media: { id: string; mimeType: string; alt?: string | null }): string {
+  const ext = media.mimeType.split('/')[1]?.split(';')[0];
+  return ext ? `${media.alt || media.id}.${ext}` : media.alt || media.id;
 }
 
 /**
  * Prisme Linguistique pick: prefer a translation matching `userLanguage`,
  * otherwise the original content. Never falls back to an arbitrary language.
  */
-function resolveCaption(post: Post, userLanguage?: string): string {
+function resolveCaption(post: Pick<Post, 'content' | 'translations'>, userLanguage?: string): string {
   const original = post.content ?? '';
   if (!userLanguage || !post.translations || typeof post.translations !== 'object') return original;
   const entry = (post.translations as Record<string, { text?: string }>)[userLanguage];
   return entry?.text ?? original;
 }
 
-function firstVideo(post: Post) {
-  return post.media?.find((m) => m.mimeType.startsWith('video/'));
+/**
+ * Repost-aware caption: the reposter's own content wins when present (a
+ * quote repost always sets it) — otherwise the original's, resolved through
+ * the same Prisme mechanism. A plain repost carries no content of its own,
+ * so it naturally falls through to the original.
+ */
+function resolveDisplayCaption(post: Post, userLanguage?: string): string {
+  const own = resolveCaption(post, userLanguage);
+  if (own) return own;
+  return post.repostOf ? resolveCaption(post.repostOf, userLanguage) : own;
 }
-function firstImage(post: Post) {
-  return post.media?.find((m) => m.mimeType.startsWith('image/'));
+
+/**
+ * A reposted REEL carries no media of its own — the gateway only snapshots
+ * ephemeral types (STORY/STATUS) into `repostOf`, a REEL repost stays a bare
+ * pointer. Falls back to the original's media, mirroring iOS
+ * `primaryReelDisplayMedia` (ReelFeedCard.swift:118-145).
+ *
+ * `ownerId` is the id of whichever post the returned media rows actually
+ * belong to server-side (`PostMedia.postId`) — the gateway's download
+ * endpoint filters `postMedia.findMany({ id in [...], postId })`, so any
+ * caller crediting a download MUST use this id, never the displayed reel's
+ * id, or the original's media rows never match and the ping silently
+ * records zero. Media and owner are resolved together so they can never
+ * diverge.
+ */
+function resolveReelMedia(post: Post): { media: readonly PostMedia[]; ownerId: string } {
+  if (post.media && post.media.length > 0) return { media: post.media, ownerId: post.id };
+  if (post.repostOf?.media && post.repostOf.media.length > 0) {
+    return { media: post.repostOf.media, ownerId: post.repostOf.id ?? post.id };
+  }
+  return { media: post.media ?? [], ownerId: post.id };
+}
+
+/** Displayed counters mirror the original's when it's a repost (Task 2 parity). */
+function displayCount(post: Post, key: 'likeCount' | 'commentCount'): number {
+  return post.repostOf?.[key] ?? post[key];
+}
+
+function repostAuthorHandle(original: Partial<Post>): string {
+  return original.author?.username ?? original.author?.displayName ?? '';
 }
 
 // ─── Action rail button ──────────────────────────────────────────────────
+
+interface RailButtonProps {
+  label: string;
+  count?: number;
+  active?: boolean;
+  activeColor?: string;
+  onClick: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}
 
 function RailButton({
   label,
@@ -55,29 +121,22 @@ function RailButton({
   activeColor,
   onClick,
   children,
-}: {
-  label: string;
-  count?: number;
-  active?: boolean;
-  activeColor?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+}: RailButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className="flex flex-col items-center gap-1 text-white"
+      className="flex flex-col items-center gap-1 text-white group"
     >
       <span
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm transition-transform active:scale-90"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm transition-all group-active:scale-90 group-hover:bg-black/50"
         style={active && activeColor ? { color: activeColor } : undefined}
       >
         {children}
       </span>
-      {typeof count === 'number' && <span className="text-xs font-medium tabular-nums">{count}</span>}
+      {typeof count === 'number' && <span className="text-xs font-medium tabular-nums drop-shadow-sm">{count}</span>}
     </button>
   );
 }
@@ -102,6 +161,12 @@ export interface ReelPlayerProps {
   onComment: () => void;
   onShare: () => void;
   onBookmark: () => void;
+  onReport?: () => void;
+  onRepost?: () => void;
+  /** `owningPostId` is the post the downloaded media actually belongs to
+   *  server-side — the displayed reel's id for its own media, the
+   *  original's id when the media was resolved from `repostOf`. */
+  onDownload?: (mediaId: string, owningPostId: string) => void;
 }
 
 /**
@@ -128,15 +193,21 @@ export function ReelPlayer({
   onComment,
   onShare,
   onBookmark,
+  onReport,
+  onRepost,
+  onDownload,
 }: ReelPlayerProps) {
+  const { t } = useI18n('reel');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
 
-  const video = firstVideo(reel);
-  const image = firstImage(reel);
+  const { media: reelMedia, ownerId: reelMediaOwnerId } = resolveReelMedia(reel);
+  const video = reelMedia.find((m) => m.mimeType.startsWith('video/'));
+  const image = reelMedia.find((m) => m.mimeType.startsWith('image/'));
+  const downloadTarget = video ?? image;
   const name = authorName(reel);
-  const caption = resolveCaption(reel, userLanguage);
+  const caption = resolveDisplayCaption(reel, userLanguage);
 
   const goNext = useCallback(() => {
     if (hasNext) onNext();
@@ -208,10 +279,10 @@ export function ReelPlayer({
       className={`${
         embedded ? 'absolute inset-0' : 'fixed inset-0 z-50'
       } flex items-center justify-center bg-black select-none`}
-      aria-label={`Reel ${index + 1} sur ${total}`}
+      aria-label={t('player.position', { current: index + 1, total })}
       onWheel={onWheel}
     >
-      <h1 className="sr-only">Reel de {name}</h1>
+      <h1 className="sr-only">{t('player.byAuthor', { name })}</h1>
 
       {/* Media stage (9:16) */}
       <div className="relative h-full w-full max-w-[min(100vw,calc(100vh*9/16))]">
@@ -227,13 +298,13 @@ export function ReelPlayer({
               playsInline
               muted={muted}
               onClick={togglePlay}
-              aria-label={video.alt ?? `Reel de ${name}`}
+              aria-label={video.alt ?? t('player.byAuthor', { name })}
             />
             {paused && (
               <button
                 type="button"
                 onClick={togglePlay}
-                aria-label="Lecture"
+                aria-label={t('player.play', 'Play')}
                 className="absolute inset-0 flex items-center justify-center"
               >
                 <Play className="h-16 w-16 text-white/90 drop-shadow-lg" fill="currentColor" />
@@ -244,7 +315,7 @@ export function ReelPlayer({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image.fileUrl}
-            alt={image.alt ?? `Reel de ${name}`}
+            alt={image.alt ?? t('player.byAuthor', { name })}
             className="h-full w-full object-contain bg-black"
           />
         ) : (
@@ -254,12 +325,15 @@ export function ReelPlayer({
         )}
 
         {/* Top bar */}
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 z-10">
           <button
             type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label={t('player.close', 'Close')}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/50 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -267,19 +341,19 @@ export function ReelPlayer({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={goPrev}
+              onClick={(e) => { e.stopPropagation(); goPrev(); }}
               disabled={!hasPrev}
-              aria-label="Reel précédent"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+              aria-label={t('player.previous', 'Previous reel')}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-all disabled:opacity-30 hover:bg-black/50"
             >
               <ChevronUp className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={goNext}
+              onClick={(e) => { e.stopPropagation(); goNext(); }}
               disabled={!hasNext}
-              aria-label="Reel suivant"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+              aria-label={t('player.next', 'Next reel')}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-all disabled:opacity-30 hover:bg-black/50"
             >
               <ChevronDown className="h-5 w-5" />
             </button>
@@ -287,9 +361,9 @@ export function ReelPlayer({
           {video ? (
             <button
               type="button"
-              onClick={toggleMute}
-              aria-label={muted ? 'Activer le son' : 'Couper le son'}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
+              onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+              aria-label={muted ? t('player.unmute', 'Unmute') : t('player.mute', 'Mute')}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/50 transition-colors"
             >
               {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
             </button>
@@ -299,31 +373,63 @@ export function ReelPlayer({
         </div>
 
         {/* Action rail */}
-        <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5">
-          <RailButton label="J’aime" count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={onLike}>
+        <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5 z-10">
+          <RailButton label={t('player.like', 'Like')} count={displayCount(reel, 'likeCount')} active={isLiked} activeColor="#fb7185" onClick={(e) => { e.stopPropagation(); onLike(); }}>
             <Heart className="h-6 w-6" fill={isLiked ? 'currentColor' : 'none'} />
           </RailButton>
-          <RailButton label="Commenter" count={reel.commentCount} onClick={onComment}>
+          <RailButton label={t('player.comment', 'Comment')} count={displayCount(reel, 'commentCount')} onClick={(e) => { e.stopPropagation(); onComment(); }}>
             <MessageCircle className="h-6 w-6" />
           </RailButton>
-          <RailButton label="Partager" onClick={onShare}>
+          <RailButton label={t('player.share', 'Share')} onClick={(e) => { e.stopPropagation(); onShare(); }}>
             <Share2 className="h-6 w-6" />
           </RailButton>
-          <RailButton label="Enregistrer" active={isBookmarked} activeColor="#fbbf24" onClick={onBookmark}>
+          <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={(e) => { e.stopPropagation(); onBookmark(); }}>
             <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
           </RailButton>
+          {onRepost && (
+            <RailButton label={t('player.repost', 'Repost')} onClick={(e) => { e.stopPropagation(); onRepost(); }}>
+              <Repeat2 className="h-6 w-6" />
+            </RailButton>
+          )}
+          {onDownload && downloadTarget && (
+            <RailButton
+              label={t('player.download', 'Download')}
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerMediaDownload(downloadTarget.fileUrl, downloadFileName(downloadTarget));
+                onDownload(downloadTarget.id, reelMediaOwnerId);
+              }}
+            >
+              <Download className="h-6 w-6" />
+            </RailButton>
+          )}
+          {onReport && (
+            <RailButton label={t('player.report', 'Report')} onClick={(e) => { e.stopPropagation(); onReport(); }}>
+              <Flag className="h-6 w-6" />
+            </RailButton>
+          )}
         </div>
 
         {/* Author + caption */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pb-6 pr-20 text-white">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-9 w-9 ring-2 ring-white/70">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pb-8 pr-20 text-white z-10">
+          {reel.repostOf && (
+            <Link
+              href={`/reel/${reel.repostOf.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mb-2 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
+            >
+              <Repeat2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{t('player.repostedFrom', 'Reposted from')} @{repostAuthorHandle(reel.repostOf)}</span>
+            </Link>
+          )}
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 ring-2 ring-white/50">
               {reel.author?.avatar ? <AvatarImage src={reel.author.avatar} alt="" /> : null}
-              <AvatarFallback>{initials(name)}</AvatarFallback>
+              <AvatarFallback className="bg-indigo-600">{getInitials(name)}</AvatarFallback>
             </Avatar>
-            <span className="font-semibold">{name}</span>
+            <span className="font-semibold text-lg drop-shadow-sm">{name}</span>
           </div>
-          {caption && <p className="mt-2 line-clamp-3 text-sm text-white/90">{caption}</p>}
+          {caption && <PostContentText content={caption} className="mt-3 line-clamp-3 text-sm text-white/90 leading-relaxed drop-shadow-sm" />}
         </div>
 
       </div>

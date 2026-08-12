@@ -50,7 +50,7 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
 
     nonisolated func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData {
         await MainActor.run { loginCallCount += 1 }
-        return try await MainActor.run { try loginResult.get() }
+        return try loginResult.get()
     }
 
     nonisolated func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData {
@@ -59,47 +59,47 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
             lastCompleteLoginWith2FAToken = twoFactorToken
             lastCompleteLoginWith2FACode = code
         }
-        return try await MainActor.run { try completeLoginWith2FAResult.get() }
+        return try completeLoginWith2FAResult.get()
     }
 
     nonisolated func register(request: RegisterRequest) async throws -> LoginResponseData {
         await MainActor.run { registerCallCount += 1 }
-        return try await MainActor.run { try registerResult.get() }
+        return try registerResult.get()
     }
 
     nonisolated func requestMagicLink(email: String, deviceFingerprint: String?) async throws -> Int {
         await MainActor.run { requestMagicLinkCallCount += 1 }
-        return try await MainActor.run { try requestMagicLinkResult.get() }
+        return try requestMagicLinkResult.get()
     }
 
     nonisolated func validateMagicLink(token: String) async throws -> LoginResponseData {
         await MainActor.run { validateMagicLinkCallCount += 1 }
-        return try await MainActor.run { try validateMagicLinkResult.get() }
+        return try validateMagicLinkResult.get()
     }
 
     nonisolated func requestPasswordReset(email: String) async throws {
         await MainActor.run { requestPasswordResetCallCount += 1 }
-        try await MainActor.run { try requestPasswordResetResult.get() }
+        try requestPasswordResetResult.get()
     }
 
     nonisolated func resetPassword(token: String, newPassword: String) async throws {
         await MainActor.run { resetPasswordCallCount += 1 }
-        try await MainActor.run { try resetPasswordResult.get() }
+        try resetPasswordResult.get()
     }
 
     nonisolated func sendPhoneCode(phoneNumber: String) async throws {
         await MainActor.run { sendPhoneCodeCallCount += 1 }
-        try await MainActor.run { try sendPhoneCodeResult.get() }
+        try sendPhoneCodeResult.get()
     }
 
     nonisolated func verifyPhone(phoneNumber: String, code: String) async throws -> VerifyPhoneResponse {
         await MainActor.run { verifyPhoneCallCount += 1 }
-        return try await MainActor.run { try verifyPhoneResult.get() }
+        return try verifyPhoneResult.get()
     }
 
     nonisolated func verifyEmail(code: String) async throws {
         await MainActor.run { verifyEmailCallCount += 1 }
-        try await MainActor.run { try verifyEmailResult.get() }
+        try verifyEmailResult.get()
     }
 
     nonisolated func verifyEmailWithCode(code: String, email: String) async throws {
@@ -108,7 +108,7 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
             lastVerifyEmailCode = code
             lastVerifyEmailEmail = email
         }
-        try await MainActor.run { try verifyEmailWithCodeResult.get() }
+        try verifyEmailWithCodeResult.get()
     }
 
     nonisolated func resendVerificationEmail(email: String) async throws {
@@ -116,22 +116,22 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
             resendVerificationEmailCallCount += 1
             lastResendEmail = email
         }
-        try await MainActor.run { try resendVerificationEmailResult.get() }
+        try resendVerificationEmailResult.get()
     }
 
     nonisolated func checkAvailability(username: String?, email: String?, phone: String?) async throws -> AvailabilityResponse {
         await MainActor.run { checkAvailabilityCallCount += 1 }
-        return try await MainActor.run { try checkAvailabilityResult.get() }
+        return try checkAvailabilityResult.get()
     }
 
     nonisolated func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData {
         await MainActor.run { refreshTokenCallCount += 1 }
-        return try await MainActor.run { try refreshTokenResult.get() }
+        return try refreshTokenResult.get()
     }
 
     nonisolated func me() async throws -> MeeshyUser {
         await MainActor.run { meCallCount += 1 }
-        return try await MainActor.run { try meResult.get() }
+        return try meResult.get()
     }
 
     nonisolated func logout() async {

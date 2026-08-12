@@ -128,8 +128,13 @@ class Synthesizer:
             if len(current_segment) + len(sentence) + 1 <= max_chars:
                 current_segment = (current_segment + " " + sentence).strip()
             else:
-                # Sauvegarder le segment actuel s'il n'est pas vide
-                if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                # La phrase ne tient pas dans le segment courant. On DOIT vider ce
+                # dernier avant de l'écraser plus bas — même s'il est plus court que
+                # MIN_SEGMENT_CHARS : ne pas le sauvegarder ici le perdrait
+                # silencieusement (texte absent de l'audio synthétisé). Un segment
+                # court est un moindre mal ; la fusion du tout dernier segment court
+                # reste gérée en fin de fonction.
+                if current_segment:
                     segments.append(current_segment)
                     current_segment = ""
 
@@ -147,7 +152,9 @@ class Synthesizer:
                             if current_segment.startswith(", "):
                                 current_segment = current_segment[2:]
                         else:
-                            if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                            # Idem : vider tout buffer non vide avant de l'écraser,
+                            # sinon un fragment court serait perdu.
+                            if current_segment:
                                 segments.append(current_segment)
                             current_segment = part
 
@@ -349,6 +356,12 @@ class Synthesizer:
         output_filename = f"{file_id}_{target_language}.{output_format}"
         output_path = str(self.output_dir / "translated" / output_filename)
 
+        # Les backends écrivent via `torchaudio.save()`, qui ne sait pas encoder
+        # tous les conteneurs de livraison (opus en particulier, cf. D1). La
+        # synthèse se fait donc toujours en WAV ; `_convert_format()` produit
+        # ensuite le format demandé via ffmpeg/libopus.
+        synth_path = output_path if output_format == "wav" else output_path.rsplit(".", 1)[0] + ".wav"
+
         # Convertir text en string si nécessaire
         text_str = str(text) if not isinstance(text, str) else text
         text_str = text_str.strip()
@@ -443,9 +456,8 @@ class Synthesizer:
                     temp_concat_path = str(self.output_dir / "segments" / f"{file_id}_{target_language}_full.wav")
                     await self._concatenate_audios(segment_paths, temp_concat_path)
                     # Déplacer vers la destination finale
-                    output_path_wav = output_path.rsplit(".", 1)[0] + ".wav"
-                    shutil.move(temp_concat_path, output_path_wav)
-                    output_path = output_path_wav
+                    shutil.move(temp_concat_path, synth_path)
+                    output_path = synth_path
                 else:
                     raise RuntimeError("Aucun segment audio généré")
             else:
@@ -454,10 +466,11 @@ class Synthesizer:
                     text=text,
                     language=target_language,
                     speaker_audio_path=speaker_audio_path,
-                    output_path=output_path,
+                    output_path=synth_path,
                     conditionals=conditionals,
                     **kwargs
                 )
+                output_path = synth_path
 
             # Ajuster la vitesse de l'audio (ralentir de 10% par défaut)
             if AUDIO_SPEED_FACTOR != 1.0:

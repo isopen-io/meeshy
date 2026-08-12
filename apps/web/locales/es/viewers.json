@@ -19,7 +19,8 @@
     "downloadFile": "Descargar archivo",
     "delete": "Eliminar esta presentación",
     "fullscreen": "Abrir en pantalla completa",
-    "download": "Descargar"
+    "download": "Descargar",
+    "escToClose": "Presione Escape para cerrar"
   },
   "markdown": {
     "loadError": "No se puede cargar el archivo",
@@ -45,6 +46,7 @@
     "download": "Descargar",
     "copied": "Copiado al portapapeles",
     "copyError": "No se pudo copiar",
-    "loadError": "No se pudo cargar el archivo"
+    "loadError": "No se pudo cargar el archivo",
+    "escToClose": "Presione Escape para cerrar"
   }
 }

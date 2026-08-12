@@ -66,9 +66,9 @@ class MockPDFParse {
 
 // Setup mocks
 jest.mock('sharp', () => mockSharp);
-jest.mock('music-metadata', () => ({
-  parseFile: mockParseFile,
-}));
+// music-metadata est ESM-only (chargé via import() dynamique côté prod) : on ne peut
+// pas le jest.mock comme un module CJS. On injecte le mock dans le seam `musicMetadataLoader`
+// (voir beforeEach) qui court-circuite l'import dynamique.
 jest.mock('fluent-ffmpeg', () => ({
   ffprobe: mockFfprobe,
 }));
@@ -95,7 +95,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 // Import after mocks
-import { MetadataManager } from '../../../services/attachments/MetadataManager';
+import { MetadataManager, musicMetadataLoader } from '../../../services/attachments/MetadataManager';
 import type {
   AudioMetadata,
   VideoMetadata,
@@ -110,6 +110,8 @@ describe('MetadataManager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Injecte le mock parseFile dans le seam ESM (remplace l'ancien jest.mock('music-metadata'))
+    musicMetadataLoader.parseFile = mockParseFile;
     metadataManager = new MetadataManager(uploadBasePath);
 
     // Setup default sharp chain
@@ -798,6 +800,81 @@ describe('MetadataManager', () => {
         videoCodec: 'unknown',
         bitrate: 0,
       });
+    });
+
+    it('should fall back to the client-provided duration when ffprobe fails (Task 7 review, Important #1)', async () => {
+      mockFfprobe.mockImplementation((path: string, callback: Function) => {
+        callback(new Error('ffprobe failed'));
+      });
+
+      const result = await metadataManager.extractMetadata(
+        'test/video.mp4',
+        'video',
+        'video/mp4',
+        { duration: 8000 } // Client-extracted duration, in milliseconds
+      );
+
+      expect(result).toEqual({
+        duration: 8000,
+        width: 0,
+        height: 0,
+        fps: 0,
+        videoCodec: 'unknown',
+        bitrate: 0,
+      });
+    });
+
+    it('should fall back to the client-provided duration when ffprobe succeeds but reports no usable duration (Task 7 review, Important #1)', async () => {
+      const mockFfprobeData: Partial<FfprobeData> = {
+        streams: [
+          { codec_type: 'audio' } as FfprobeStream, // No video stream => ffprobe reports duration 0
+        ],
+        format: {} as any,
+      };
+
+      mockFfprobe.mockImplementation((path: string, callback: Function) => {
+        callback(null, mockFfprobeData);
+      });
+
+      const result = await metadataManager.extractMetadata(
+        'test/video.mp4',
+        'video',
+        'video/mp4',
+        { duration: 8000 }
+      );
+
+      expect(result.duration).toBe(8000);
+    });
+
+    it('keeps ffprobe as the authoritative duration source when it succeeds, even with a different client duration provided (Task 7 review, Important #1)', async () => {
+      const mockFfprobeData: Partial<FfprobeData> = {
+        streams: [
+          {
+            codec_type: 'video',
+            codec_name: 'h264',
+            width: 1280,
+            height: 720,
+            r_frame_rate: '30/1',
+          } as FfprobeStream,
+        ],
+        format: {
+          duration: 90, // Seconds -> 90000ms
+          bit_rate: '3000000',
+        } as any,
+      };
+
+      mockFfprobe.mockImplementation((path: string, callback: Function) => {
+        callback(null, mockFfprobeData);
+      });
+
+      const result = await metadataManager.extractMetadata(
+        'test/video.mp4',
+        'video',
+        'video/mp4',
+        { duration: 5000 } // Deliberately different from ffprobe's 90000ms
+      );
+
+      expect(result.duration).toBe(90000);
     });
 
     it('should extract metadata for PDF documents', async () => {

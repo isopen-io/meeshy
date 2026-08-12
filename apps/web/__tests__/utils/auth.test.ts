@@ -112,14 +112,21 @@ describe('auth', () => {
       expect(isUserAnonymous(user)).toBe(true);
     });
 
-    it('should return true for user with long id (> 20 chars)', () => {
-      const user = { id: 'a'.repeat(21) } as any;
-      expect(isUserAnonymous(user)).toBe(true);
+    it('should return false for a registered user with a 24-char Mongo ObjectId', () => {
+      authManager.getAnonymousSession.mockReturnValue(null);
+      // Un ObjectId Mongo fait 24 caractères hex : la longueur ne dit RIEN de
+      // l'anonymat. L'ancienne heuristique `id.length > 20` classait à tort
+      // TOUT utilisateur inscrit comme anonyme.
+      const user = { id: '507f1f77bcf86cd799439011' } as any;
+      expect(isUserAnonymous(user)).toBe(false);
     });
 
-    it('should return false for regular user', () => {
+    it('should return false for a registered user carrying isAnonymous: false', () => {
       authManager.getAnonymousSession.mockReturnValue(null);
-      const user = { id: '12345678901234567890' } as any; // Exactly 20 chars
+      // Le gateway émet `isAnonymous: false` sur l'objet user inscrit
+      // (AuthHandler). `hasOwnProperty('isAnonymous')` le classait anonyme dès
+      // que la propriété existait, même valant false.
+      const user = { id: '507f1f77bcf86cd799439011', isAnonymous: false } as any;
       expect(isUserAnonymous(user)).toBe(false);
     });
   });

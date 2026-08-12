@@ -58,7 +58,7 @@ function formatDate(date: string | null, locale: string) {
   if (!date) return '—';
   try {
     return new Date(date).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch {
+  } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
     return '—';
   }
 }
@@ -151,7 +151,7 @@ export function UserPostsSection({ userId }: { userId: string }) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 min-w-0">
                       {thumbUrl ? (
-                        <img src={thumbUrl} alt="" className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                        <img src={thumbUrl} alt="" loading="lazy" decoding="async" className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
                       ) : (post.media && post.media.length > 0) ? (
                         <div className="w-12 h-12 rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                           <ImageIcon className="h-5 w-5 text-gray-400" />

@@ -311,6 +311,57 @@ describe('CircuitBreaker', () => {
     });
   });
 
+  describe('Failure Window (failureWindowMs)', () => {
+    const failOnce = async (breaker: CircuitBreaker) => {
+      try {
+        await breaker.execute(() => Promise.reject(new Error('fail')));
+      } catch (e) {}
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(0);
+      circuitBreaker = new CircuitBreaker(defaultConfig); // threshold 3, window 60000
+    });
+
+    it('should NOT accumulate failures spread beyond the failure window', async () => {
+      // Three isolated failures, each separated by more than failureWindowMs,
+      // must each start a fresh window and never reach the threshold.
+      await failOnce(circuitBreaker);
+      jest.advanceTimersByTime(defaultConfig.failureWindowMs + 1);
+      await failOnce(circuitBreaker);
+      jest.advanceTimersByTime(defaultConfig.failureWindowMs + 1);
+      await failOnce(circuitBreaker);
+
+      const stats = circuitBreaker.getStats();
+      expect(stats.state).toBe(CircuitState.CLOSED);
+      expect(stats.failures).toBe(1);
+    });
+
+    it('should OPEN when failures reach threshold within the window', async () => {
+      // Three failures spread across (but inside) the 60s window still open.
+      await failOnce(circuitBreaker);
+      jest.advanceTimersByTime(defaultConfig.failureWindowMs / 3);
+      await failOnce(circuitBreaker);
+      jest.advanceTimersByTime(defaultConfig.failureWindowMs / 3);
+      await failOnce(circuitBreaker);
+
+      expect(circuitBreaker.getStats().state).toBe(CircuitState.OPEN);
+    });
+
+    it('should reset the running count once the window elapses', async () => {
+      await failOnce(circuitBreaker);
+      await failOnce(circuitBreaker);
+      expect(circuitBreaker.getStats().failures).toBe(2);
+
+      jest.advanceTimersByTime(defaultConfig.failureWindowMs + 1);
+      await failOnce(circuitBreaker);
+
+      const stats = circuitBreaker.getStats();
+      expect(stats.failures).toBe(1);
+      expect(stats.state).toBe(CircuitState.CLOSED);
+    });
+  });
+
   describe('OPEN State - Fail Fast', () => {
     beforeEach(async () => {
       circuitBreaker = new CircuitBreaker({

@@ -157,6 +157,16 @@ struct ConversationProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ConversationEntry) -> ()) {
+        // appgroup-05 — les samples ne servent QUE la galerie de widgets ;
+        // partout ailleurs, la donnée réelle (éventuellement vide).
+        if context.isPreview {
+            completion(ConversationEntry(
+                date: Date(),
+                conversations: ConversationEntry.sampleConversations,
+                unreadCount: 3
+            ))
+            return
+        }
         let entry = ConversationEntry(
             date: Date(),
             conversations: loadConversations(),
@@ -189,9 +199,12 @@ struct ConversationProvider: TimelineProvider {
     }
 
     private func loadConversations() -> [Conversation] {
+        // appgroup-05 — jamais de repli fabriqué : une clé absente (compte
+        // déconnecté, wipe de logout) ou un décodage raté rendent une liste
+        // VIDE, visible et diagnosticable — pas des conversations fictives.
         guard let sharedDefaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
               let data = sharedDefaults.data(forKey: WidgetSharedKeys.conversations) else {
-            return ConversationEntry.sampleConversations
+            return []
         }
 
         let decoder = JSONDecoder()
@@ -199,7 +212,7 @@ struct ConversationProvider: TimelineProvider {
         if let conversations = try? decoder.decode([Conversation].self, from: data) {
             return conversations
         }
-        return ConversationEntry.sampleConversations
+        return []
     }
 
     private func getUnreadCount() -> Int {
@@ -238,6 +251,25 @@ struct ConversationEntry: TimelineEntry {
             accentColor: WidgetColors.indigo400Hex
         )
     ]
+}
+
+// MARK: - Empty State (appgroup-05)
+/// État vide EXPLICITE : après le wipe de logout (appgroup-01) ou sur une
+/// installation fraîche, le widget dit d'ouvrir l'app au lieu d'afficher des
+/// conversations fabriquées.
+struct WidgetEmptyState: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "message")
+                .font(.title3)
+                .foregroundColor(.secondary)
+            Text(String(localized: "widget.empty.openApp", defaultValue: "Open Meeshy to get started"))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }
 
 // MARK: - Data Models
@@ -324,6 +356,8 @@ struct SmallConversationView: View {
                             .lineLimit(2)
                     }
                 }
+            } else {
+                WidgetEmptyState()
             }
 
             Spacer()
@@ -354,8 +388,12 @@ struct MediumConversationView: View {
                 }
             }
 
-            ForEach(entry.conversations.prefix(2)) { conversation in
-                conversationRow(conversation)
+            if entry.conversations.isEmpty {
+                WidgetEmptyState()
+            } else {
+                ForEach(entry.conversations.prefix(2)) { conversation in
+                    conversationRow(conversation)
+                }
             }
 
             Spacer()
@@ -432,6 +470,9 @@ struct LargeConversationView: View {
                 }
             }
 
+            if entry.conversations.isEmpty {
+                WidgetEmptyState()
+            }
             ForEach(entry.conversations.prefix(5)) { conversation in
                 Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
                     HStack(spacing: 12) {
@@ -648,6 +689,8 @@ struct QuickReplyWidgetView: View {
                         QuickReplyButton(text: "Call me", conversationId: conversation.id)
                     }
                 }
+            } else {
+                WidgetEmptyState()
             }
 
             Spacer()
@@ -696,6 +739,11 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FavoriteContactsEntry) -> ()) {
+        // appgroup-05 — samples réservés à la galerie (context.isPreview).
+        if context.isPreview {
+            completion(FavoriteContactsEntry(date: Date(), contacts: FavoriteContactsEntry.sampleContacts))
+            return
+        }
         let entry = FavoriteContactsEntry(date: Date(), contacts: loadFavorites())
         completion(entry)
     }
@@ -707,16 +755,18 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     private func loadFavorites() -> [FavoriteContact] {
+        // appgroup-05 — même règle que loadConversations : pas de repli
+        // fabriqué, une lecture morte doit se VOIR.
         guard let sharedDefaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
               let data = sharedDefaults.data(forKey: "favorite_contacts") else {
-            return FavoriteContactsEntry.sampleContacts
+            return []
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         if let contacts = try? decoder.decode([FavoriteContact].self, from: data) {
             return contacts
         }
-        return FavoriteContactsEntry.sampleContacts
+        return []
     }
 }
 
@@ -749,6 +799,9 @@ struct FavoriteContactsWidgetView: View {
                 Spacer()
             }
 
+            if entry.contacts.isEmpty {
+                WidgetEmptyState()
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 65))], spacing: 12) {
                 ForEach(entry.contacts.prefix(contactsToShow)) { contact in
                     Link(destination: URL(string: "meeshy://contact/\(contact.id)")!) {

@@ -28,7 +28,7 @@ function CheckEmailContent() {
   // Redirect if no reset was requested
   useEffect(() => {
     if (!resetRequested || !email) {
-      toast.error(t('checkEmail.errors.noRequest') || 'No password reset request found');
+      toast.error(t('checkEmail.errors.noRequest', "No password reset request found"));
       router.push('/forgot-password');
     }
   }, [resetRequested, email, router, t]);
@@ -80,7 +80,7 @@ function CheckEmailContent() {
           setCaptchaToken(token);
         },
         'error-callback': () => {
-          toast.error(t('checkEmail.errors.captchaFailed') || 'CAPTCHA verification failed');
+          toast.error(t('checkEmail.errors.captchaFailed', "CAPTCHA verification failed"));
         },
         'expired-callback': () => {
           setCaptchaToken('');
@@ -93,7 +93,7 @@ function CheckEmailContent() {
 
   const handleResendEmail = async () => {
     if (!email) {
-      toast.error(t('checkEmail.errors.noEmail') || 'Email address not found');
+      toast.error(t('checkEmail.errors.noEmail', "Email address not found"));
       return;
     }
 
@@ -112,7 +112,7 @@ function CheckEmailContent() {
     }
 
     if (!captchaToken) {
-      toast.error(t('checkEmail.errors.captchaRequired') || 'Please complete the CAPTCHA');
+      toast.error(t('checkEmail.errors.captchaRequired', "Please complete the CAPTCHA"));
       return;
     }
 
@@ -125,7 +125,7 @@ function CheckEmailContent() {
       });
 
       if (response.success) {
-        toast.success(t('checkEmail.success.resent') || 'Password reset email sent again');
+        toast.success(t('checkEmail.success.resent', "Password reset email sent again"));
         setResendCooldown(60); // 60 second cooldown
         setShowCaptcha(false);
         setCaptchaToken('');
@@ -133,7 +133,7 @@ function CheckEmailContent() {
     } catch (error) {
       console.error('[CheckEmailPage] Error resending email:', error);
       toast.error(
-        t('checkEmail.errors.resendFailed') || 'Failed to resend email. Please try again.'
+        t('checkEmail.errors.resendFailed', "Failed to resend email. Please try again.")
       );
     } finally {
       setIsResending(false);
@@ -202,11 +202,10 @@ function CheckEmailContent() {
                   </div>
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {t('checkEmail.title') || 'Vérifiez vos emails'}
+                  {t('checkEmail.title', "Check Your Email")}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('checkEmail.description') ||
-                    'Nous avons envoyé un lien de réinitialisation à votre adresse email'}
+                  {t('checkEmail.description', "We have sent a password reset link to your email address")}
                 </p>
               </div>
 
@@ -215,7 +214,7 @@ function CheckEmailContent() {
                 <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <AlertDescription className="ml-2">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {t('checkEmail.emailSentTo') || 'Email envoyé à'}:{' '}
+                    {t('checkEmail.emailSentTo', "Email sent to")}:{' '}
                     <span className="font-semibold">{email}</span>
                   </p>
                 </AlertDescription>
@@ -225,23 +224,22 @@ function CheckEmailContent() {
               <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400 mb-6">
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <span>{t('checkEmail.step1') || 'Vérifiez votre boîte de réception'}</span>
+                  <span>{t('checkEmail.step1', "Check your inbox for an email from Meeshy")}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
                   <span>
-                    {t('checkEmail.step2') || 'Cliquez sur le lien de réinitialisation'}
+                    {t('checkEmail.step2', "Click the password reset link in the email")}
                   </span>
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <span>{t('checkEmail.step3') || 'Créez un nouveau mot de passe sécurisé'}</span>
+                  <span>{t('checkEmail.step3', "Create a new secure password")}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
                   <span>
-                    {t('checkEmail.expiry') ||
-                      'Le lien expire dans 15 minutes pour votre sécurité'}
+                    {t('checkEmail.expiry', "The reset link will expire in 15 minutes for security")}
                   </span>
                 </p>
               </div>
@@ -250,8 +248,7 @@ function CheckEmailContent() {
               <Alert className="bg-gray-50/80 dark:bg-gray-800/50 border-gray-200/50 dark:border-gray-700/50 mb-6">
                 <AlertCircle className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <AlertDescription className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                  {t('checkEmail.spamWarning') ||
-                    "Vous ne trouvez pas l'email ? Vérifiez vos spams"}
+                  {t('checkEmail.spamWarning', "Can't find the email? Check your spam or junk folder")}
                 </AlertDescription>
               </Alert>
 
@@ -265,7 +262,7 @@ function CheckEmailContent() {
                       onClick={() => setShowCaptcha(false)}
                       className="flex-1 bg-white/50 dark:bg-gray-800/50"
                     >
-                      {t('checkEmail.cancel') || 'Annuler'}
+                      {t('checkEmail.cancel', "Cancel")}
                     </Button>
                     <Button
                       onClick={handleResendEmail}
@@ -275,12 +272,12 @@ function CheckEmailContent() {
                       {isResending ? (
                         <>
                           <div className="mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          {t('checkEmail.resending') || 'Envoi...'}
+                          {t('checkEmail.resending', "Sending...")}
                         </>
                       ) : (
                         <>
                           <Mail className="mr-2 h-4 w-4" />
-                          {t('checkEmail.confirmResend') || 'Envoyer'}
+                          {t('checkEmail.confirmResend', "Send Email")}
                         </>
                       )}
                     </Button>
@@ -294,7 +291,7 @@ function CheckEmailContent() {
                     className="flex-1"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    {t('checkEmail.backToLogin') || 'Retour'}
+                    {t('checkEmail.backToLogin', "Back to Login")}
                   </Button>
                   <div className="h-8 w-px bg-gray-200 dark:bg-gray-700" />
                   <Button
@@ -311,7 +308,7 @@ function CheckEmailContent() {
                     ) : (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        {t('checkEmail.resendButton') || 'Renvoyer'}
+                        {t('checkEmail.resendButton', "Resend Email")}
                       </>
                     )}
                   </Button>
@@ -325,7 +322,7 @@ function CheckEmailContent() {
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-white/70 dark:bg-gray-900/70 px-2 text-gray-500">
-                    {t('checkEmail.orUse') || 'ou utilisez'}
+                    {t('checkEmail.orUse', "or use")}
                   </span>
                 </div>
               </div>
@@ -336,7 +333,7 @@ function CheckEmailContent() {
                 className="w-full mt-4 bg-white/50 dark:bg-gray-800/50"
               >
                 <Phone className="mr-2 h-4 w-4" />
-                {t('checkEmail.resetByPhone') || 'Réinitialiser par téléphone'}
+                {t('checkEmail.resetByPhone', "Reset by Phone")}
               </Button>
             </div>
           </motion.div>
@@ -350,12 +347,12 @@ function CheckEmailContent() {
           className="mt-8 text-center text-sm text-muted-foreground"
         >
           <p>
-            {t('checkEmail.needHelp') || 'Besoin d\'aide ?'}{' '}
+            {t('checkEmail.needHelp', "Need help?")}{' '}
             <a
               href="/contact"
               className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
             >
-              {t('checkEmail.contactSupport') || 'Contactez le support'}
+              {t('checkEmail.contactSupport', "Contact Support")}
             </a>
           </p>
         </motion.div>

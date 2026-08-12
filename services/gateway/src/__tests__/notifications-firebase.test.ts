@@ -34,16 +34,15 @@ const mockFirebaseMessaging = {
   })
 };
 
-const mockFirebaseAdmin = {
-  messaging: jest.fn(() => mockFirebaseMessaging),
+// Mock modules Firebase (API modulaire firebase-admin 14)
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: {
-    cert: jest.fn()
-  }
-};
-
-// Mock module Firebase
-jest.mock('firebase-admin', () => mockFirebaseAdmin);
+  cert: jest.fn()
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => mockFirebaseMessaging)
+}));
 
 // Mock isomorphic-dompurify to avoid ESM chain (jsdom -> @exodus/bytes) that
 // Jest can't transform. Indirectly imported via NotificationService -> sanitize.ts.

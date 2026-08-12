@@ -8,6 +8,7 @@ public struct RepostPayload: Sendable, Codable {
     public let stickers: [StorySticker]
     public let drawingData: Data?
     public let audioPlayerObjects: [StoryAudioPlayerObject]
+    public let locationObjects: [StoryLocationObject]
     public let sourceCanvasSize: CGSize
     public let sourceSlideId: String
     public let sourceStoryItemId: String?
@@ -17,6 +18,7 @@ public struct RepostPayload: Sendable, Codable {
                 stickers: [StorySticker],
                 drawingData: Data?,
                 audioPlayerObjects: [StoryAudioPlayerObject],
+                locationObjects: [StoryLocationObject] = [],
                 sourceCanvasSize: CGSize,
                 sourceSlideId: String,
                 sourceStoryItemId: String?) {
@@ -25,9 +27,24 @@ public struct RepostPayload: Sendable, Codable {
         self.stickers = stickers
         self.drawingData = drawingData
         self.audioPlayerObjects = audioPlayerObjects
+        self.locationObjects = locationObjects
         self.sourceCanvasSize = sourceCanvasSize
         self.sourceSlideId = sourceSlideId
         self.sourceStoryItemId = sourceStoryItemId
+    }
+}
+
+/// Taille design du canvas source selon sa forme figée par l'auteur — même
+/// mapping que `StoryExporter`'s `canvasRenderSize` : un fond paysage impose
+/// 1920×1080, sinon le portrait 1080×1920 par défaut. Sans ça, le repost d'une
+/// story paysage transmettrait `CanvasGeometry.designSize` (portrait statique)
+/// comme `sourceCanvasSize`, faussant le rescale de `CanvasReprojector` pour
+/// tout contenu (texte/media/sticker) repositionné dans le nouveau post.
+private func repostSourceCanvasSize(for aspect: StoryCanvasAspect) -> CGSize {
+    switch aspect {
+    case .portrait:  return CanvasGeometry.designSize
+    case .landscape: return CGSize(width: CanvasGeometry.designHeight,
+                                    height: CanvasGeometry.designWidth)
     }
 }
 
@@ -39,7 +56,8 @@ extension StorySlide {
             stickers: effects.stickerObjects ?? [],
             drawingData: effects.drawingData,
             audioPlayerObjects: effects.audioPlayerObjects ?? [],
-            sourceCanvasSize: CanvasGeometry.designSize,
+            locationObjects: effects.locationObjects,
+            sourceCanvasSize: repostSourceCanvasSize(for: effects.canvasAspect),
             sourceSlideId: id,
             sourceStoryItemId: sourceStoryItemId
         )
@@ -57,7 +75,8 @@ extension StoryItem {
             stickers: storyEffects?.stickerObjects ?? [],
             drawingData: storyEffects?.drawingData,
             audioPlayerObjects: storyEffects?.audioPlayerObjects ?? [],
-            sourceCanvasSize: CanvasGeometry.designSize,
+            locationObjects: storyEffects?.locationObjects ?? [],
+            sourceCanvasSize: repostSourceCanvasSize(for: storyEffects?.canvasAspect ?? .portrait),
             sourceSlideId: id,
             sourceStoryItemId: id
         )

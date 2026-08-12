@@ -154,9 +154,8 @@ describe('CheckEmailPage', () => {
 
     it('should render resend button', () => {
       render(<CheckEmailPage />);
-      // The button text uses translation key checkEmail.confirmResend
       const buttons = screen.getAllByRole('button');
-      const resendButton = buttons.find(b => b.textContent?.includes('checkEmail'));
+      const resendButton = buttons.find(b => b.textContent?.includes('Resend Email'));
       expect(resendButton).toBeInTheDocument();
     });
 

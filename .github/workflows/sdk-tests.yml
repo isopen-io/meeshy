@@ -37,11 +37,28 @@ concurrency:
 jobs:
   sdk-tests:
     runs-on: macos-15
-    # Hard cap: the suite normally finishes in <15 min (incl. the one-time 18.2
-    # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
-    timeout-minutes: 25
+    # Hard cap, re-measured 2026-07-30. The old 25-min cap was calibrated on a
+    # suite that no longer exists: the last green run (#30161575001, 2026-07-25)
+    # took 12m32 total — 4m07 runtime provisioning + 8m09 build+test. Since then
+    # the package gained ~9.5k lines of tests over 77 new files (timeline pass)
+    # plus five video-export suites (StoryExportSinglePass, VideoFramePixel,
+    # FrameRate, Watermark, Branding) that do real AVFoundation encoding.
+    #
+    # Measured on run #30546762282: 5m14 provisioning + 4m20 compile + >15m30 of
+    # test execution, killed mid-suite by the cap. Run #30549812265 then went the
+    # full distance at 42m25 — WITH two export tests killed early by the per-test
+    # allowance, so the honest budget is higher still (see that allowance below).
+    # Locally the same 6132 tests run in 6m43 on Apple Silicon; the 3-vCPU runner
+    # is far slower on the encode-bound suites, which dominate the wall clock.
+    #
+    # 60 covers ~45 min of measured work plus the tail. It is NOT a healthy
+    # target: this suite now burns the better part of an hour of macOS runner per
+    # push. The structural fix is to move the AVFoundation export suites to their
+    # own nightly workflow so per-push feedback stays minutes, not an hour —
+    # until then this cap only exists so a hung job never sits for GitHub's 6h.
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
@@ -66,12 +83,21 @@ jobs:
       - name: Run SDK tests
         run: |
           rm -rf TestResults.xcresult
+          # Per-test allowance is 600, raised from 180 on 2026-07-30. Two export
+          # tests were killed by the 180 s allowance on run #30549812265 —
+          # ExportEquivalenceTests.test_export_frame_visually_resembles_live_render_at_t5s
+          # and StoryExportSinglePassTests.test_singlePass_withIdentity_matchesWrappedOutput
+          # — which take 20 s and 32 s locally. They are not hung: they encode real
+          # video, and the runner has no usable hardware encoder, so the gap is ~9x
+          # rather than the ~2.5x the rest of the suite shows. 180 s sat below the
+          # floor for that work and turned slow into red. This allowance is still
+          # the deadlock guard — it must stay well under timeout-minutes.
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
-            -maximum-test-execution-time-allowance 180 \
+            -maximum-test-execution-time-allowance 600 \
             -quiet
         working-directory: packages/MeeshySDK
 

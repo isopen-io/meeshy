@@ -46,7 +46,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
         className="fixed top-0 left-0 right-0 z-[9998] flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-md animate-in fade-in slide-in-from-top duration-300"
       >
         <WifiOff className="h-4 w-4 shrink-0" />
-        <span>{t('offlineMessage') || 'Vous êtes hors ligne — les messages seront envoyés à la reconnexion'}</span>
+        <span>{t('offlineMessage', 'Vous êtes hors ligne — les messages seront envoyés à la reconnexion')}</span>
       </div>
     );
   }
@@ -62,7 +62,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <RefreshCcw className="h-4 w-4 shrink-0 animate-spin-slow" />
           <span className="truncate">
-            {t('updateAvailable') || 'Une nouvelle version de Meeshy est disponible !'}
+            {t('updateAvailable', 'Une nouvelle version de Meeshy est disponible !')}
           </span>
         </div>
 
@@ -73,7 +73,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
             className="h-8 bg-white dark:bg-blue-900 text-blue-600 dark:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-800 border-none font-bold"
             onClick={handleUpdate}
           >
-            {t('updateNow') || 'Mettre à jour'}
+            {t('updateNow', 'Mettre à jour')}
           </Button>
 
           <Button
@@ -81,7 +81,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
             variant="ghost"
             className="h-8 w-8 text-white hover:bg-blue-700"
             onClick={handleDismiss}
-            aria-label={t('wait') || 'Attendre'}
+            aria-label={t('wait', 'Attendre')}
           >
             <X className="h-4 w-4" />
           </Button>

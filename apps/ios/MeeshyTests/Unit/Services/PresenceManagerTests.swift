@@ -5,8 +5,7 @@ import MeeshySDK
 @MainActor
 final class PresenceManagerTests: XCTestCase {
 
-    // Use typealias to disambiguate the app's UserPresence from the SDK's
-    private typealias AppUserPresence = Meeshy.UserPresence
+    private typealias AppUserPresence = UserPresence
 
     private var sut: PresenceManager!
 
@@ -27,8 +26,13 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
-    func test_state_whenOfflineWithLastActiveAt_returnsOffline() {
-        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date())
+    func test_state_whenOfflineActive2minAgo_returnsAway() {
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120))
+        XCTAssertEqual(presence.state, PresenceState.away)
+    }
+
+    func test_state_whenOfflineInactiveOver5min_returnsOffline() {
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-360))
         XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
@@ -38,27 +42,40 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_state_whenOnlineRecentActivity_returnsOnline() {
-        let recentDate = Date().addingTimeInterval(-60)
+        // -30s : confortablement dans la fenetre online (<= 60s), robuste aux ms
+        // ecoulees avant que `.state` relise Date() (la borne exacte 60s est
+        // testee de maniere deterministe dans UserPresenceStateTests via state(now:)).
+        let recentDate = Date().addingTimeInterval(-30)
         let presence = AppUserPresence(isOnline: true, lastActiveAt: recentDate)
         XCTAssertEqual(presence.state, PresenceState.online)
     }
 
-    func test_state_whenOnlineActivityUnder300s_returnsOnline() {
-        let borderDate = Date().addingTimeInterval(-299)
+    func test_state_whenConnectedWithStaleTimestamp_staysOnline() {
+        // isOnline backend est autoritatif : connecte = vert, meme si le
+        // dernier lastActiveAt date de quelques minutes (garde anti-stale 5 min).
+        let borderDate = Date().addingTimeInterval(-240) // 4 min : sous la garde
         let presence = AppUserPresence(isOnline: true, lastActiveAt: borderDate)
         XCTAssertEqual(presence.state, PresenceState.online)
     }
 
-    func test_state_whenOnlineActivityOver300s_returnsAway() {
-        let staleDate = Date().addingTimeInterval(-301)
-        let presence = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
-        XCTAssertEqual(presence.state, PresenceState.away)
+    func test_state_whenDisconnectedWithin5min_returnsIdle() {
+        let borderDate = Date().addingTimeInterval(-240) // 4 min : fenetre grise 3-5 min
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: borderDate)
+        XCTAssertEqual(presence.state, PresenceState.idle)
     }
 
-    func test_state_whenOnlineActivityLongAgo_returnsAway() {
-        let veryStaleDate = Date().addingTimeInterval(-3600)
+    func test_state_whenDisconnectedBeyond5min_returnsOffline() {
+        let staleDate = Date().addingTimeInterval(-600) // 10 min
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: staleDate)
+        XCTAssertEqual(presence.state, PresenceState.offline)
+    }
+
+    func test_state_whenOnlineButStaleOver5min_returnsOffline() {
+        // Garde anti-stale : isOnline=true avec lastActiveAt > 5min est une
+        // donnee incoherente -> la decroissance temporelle prime.
+        let veryStaleDate = Date().addingTimeInterval(-3600) // 60 min
         let presence = AppUserPresence(isOnline: true, lastActiveAt: veryStaleDate)
-        XCTAssertEqual(presence.state, PresenceState.away)
+        XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
     // MARK: - presenceState(for:)
@@ -81,10 +98,181 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_presenceState_knownAwayUser_returnsAway() {
-        let staleDate = Date().addingTimeInterval(-600)
-        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
+        let staleDate = Date().addingTimeInterval(-120)
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: staleDate)
         let state = sut.presenceState(for: "user-1")
         XCTAssertEqual(state, PresenceState.away)
+    }
+
+    // MARK: - noteActivity(userId:) — typing = signal de presence
+
+    func test_noteActivity_unknownUser_becomesOnline() {
+        sut.noteActivity(userId: "typer-1")
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.online)
+    }
+
+    func test_noteActivity_staleUser_bumpsBackToOnline() {
+        sut.presenceMap["typer-1"] = AppUserPresence(
+            isOnline: false,
+            lastActiveAt: Date().addingTimeInterval(-600)
+        )
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.offline)
+
+        sut.noteActivity(userId: "typer-1")
+
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.online)
+    }
+
+    func test_noteActivity_emptyUserId_isIgnored() {
+        sut.noteActivity(userId: "")
+        XCTAssertTrue(sut.presenceMap.isEmpty)
+    }
+
+    // MARK: - resolvedState(userId:isOnline:lastActiveAt:)
+
+    func test_resolvedState_knownUser_liveMapWins() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        let state = sut.resolvedState(userId: "user-1", isOnline: false, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.online)
+    }
+
+    func test_resolvedState_unknownUserOnline_returnsOnline() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.online)
+    }
+
+    func test_resolvedState_unknownUserOnlineWithinGuard_returnsOnline() {
+        // isOnline autoritatif : le snapshot REST dit connecte -> vert,
+        // tant que lastActiveAt reste sous la garde anti-stale de 5 min.
+        let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: Date().addingTimeInterval(-240))
+        XCTAssertEqual(state, PresenceState.online)
+    }
+
+    func test_resolvedState_unknownUserOnlineStale_decaysToOffline() {
+        // Au-dela de la garde 5 min, isOnline perime ne force plus le vert.
+        let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: Date().addingTimeInterval(-600))
+        XCTAssertEqual(state, PresenceState.offline)
+    }
+
+    func test_resolvedState_unknownUserOfflineActive2minAgo_returnsAway() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: false, lastActiveAt: Date().addingTimeInterval(-120))
+        XCTAssertEqual(state, PresenceState.away)
+    }
+
+    func test_resolvedState_unknownUserOfflineStale_returnsOffline() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: false, lastActiveAt: Date().addingTimeInterval(-1860))
+        XCTAssertEqual(state, PresenceState.offline)
+    }
+
+    func test_resolvedState_nilUserIdNilIsOnline_returnsOffline() {
+        let state = sut.resolvedState(userId: nil, isOnline: nil, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.offline)
+    }
+
+    // MARK: - isNearStateFlip(_:now:) — fenetres calees sur la regle 1/3/5
+
+    func test_isNearStateFlip_justPastOnlineBoundary_returnsTrue() {
+        let now = Date()
+        // 61s -> le flip online->away vient de se produire (fenetre 60-90s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-61)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-75)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-90)), now: now))
+    }
+
+    func test_isNearStateFlip_justPastAwayBoundary_returnsTrue() {
+        let now = Date()
+        // 181s -> flip away->idle (fenetre 180-210s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-181)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-210)), now: now))
+    }
+
+    func test_isNearStateFlip_justPastIdleBoundary_returnsTrue() {
+        let now = Date()
+        // 301s -> flip idle->offline (fenetre 300-330s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-301)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-330)), now: now))
+    }
+
+    func test_isNearStateFlip_betweenWindows_returnsFalse() {
+        let now = Date()
+        for elapsed in [50.0, 100, 150, 250, 350, 1830] {
+            XCTAssertFalse(
+                PresenceManager.isNearStateFlip(
+                    AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-elapsed)), now: now),
+                "elapsed \(elapsed)s ne doit traverser aucune fenetre de flip 1/3/5"
+            )
+        }
+    }
+
+    func test_isNearStateFlip_noLastActiveAt_returnsFalse() {
+        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: true, lastActiveAt: nil)))
+        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: false, lastActiveAt: nil)))
+    }
+
+    // MARK: - Cadence de recalcul
+
+    func test_recalcInterval_coversEveryFlipWindow() {
+        // Timer 30s = largeur des fenetres de flip : chaque transition 1/3/5
+        // est captee par le tick suivant (retard max 30s, contre 60s avant).
+        XCTAssertEqual(PresenceManager.recalcInterval, 30)
+    }
+
+    // MARK: - refreshSignal.presenceVersion (debounced re-render signal, audit 2026-07-20)
+    //
+    // `ConversationListView` observes `refreshSignal` INSTEAD of `PresenceManager`
+    // itself (see PresenceManager.swift header comment on `PresenceRefreshSignal`) —
+    // these tests exercise the REAL debounced wiring end-to-end, not just an
+    // isolated `bump()` call, since that's the whole point of the fix.
+
+    func test_presenceMapMutation_eventuallyBumpsRefreshSignal() async throws {
+        let before = sut.refreshSignal.presenceVersion
+
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertGreaterThan(
+            sut.refreshSignal.presenceVersion, before,
+            "A presenceMap mutation must eventually bump the debounced refresh signal"
+        )
+    }
+
+    func test_rapidPresenceMapMutations_coalesceIntoOneVersionBump() async throws {
+        let before = sut.refreshSignal.presenceVersion
+
+        // Three mutations fired back-to-back (no `await` between them) — the
+        // debounce must cancel+reschedule each time, netting out to exactly
+        // ONE bump instead of three (burst behavior during e.g. reconnect).
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.presenceMap["user-2"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.presenceMap["user-3"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertEqual(
+            sut.refreshSignal.presenceVersion, before + 1,
+            "3 mutations within the debounce window must coalesce into exactly ONE bump"
+        )
+    }
+
+    func test_noteActivity_alsoEventuallyBumpsRefreshSignal() async throws {
+        // `noteActivity` (typing:start) mutates `presenceMap` via the SAME
+        // didSet as every other writer — confirms the signal isn't wired to
+        // only one specific mutator.
+        let before = sut.refreshSignal.presenceVersion
+
+        sut.noteActivity(userId: "typer-1")
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertGreaterThan(sut.refreshSignal.presenceVersion, before)
     }
 
     // MARK: - seed(from:currentUserId:)
@@ -197,10 +385,15 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_seed_preservesLastActiveAt_awayState() {
-        let activeDate = Date().addingTimeInterval(-600)
+        // isOnline=false ici (pas true) : depuis la garde anti-stale (isOnline
+        // autoritatif jusqu'a 5min), un membre connecte resterait "online"
+        // meme avec un lastActiveAt vieux de 2min — cf.
+        // test_state_whenConnectedWithStaleTimestamp_staysOnline. La decroissance
+        // vers "away" ne s'observe que pour un membre deconnecte.
+        let activeDate = Date().addingTimeInterval(-120)
         let conversations = [makeConversation(members: [
             makeMemberJSON(userId: "me", isOnline: true, lastActiveAt: nil),
-            makeMemberJSON(userId: "other-1", isOnline: true, lastActiveAt: activeDate)
+            makeMemberJSON(userId: "other-1", isOnline: false, lastActiveAt: activeDate)
         ])]
 
         sut.seed(from: conversations, currentUserId: "me")

@@ -46,7 +46,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/app/admin/broadcasts/new/page.tsx`
 - [~] `apps/web/app/admin/broadcasts/page.tsx`
 - [~] `apps/web/app/admin/communities/page.tsx`
-- [ ] `apps/web/app/admin/debug.tsx`
+- [x] `apps/web/app/admin/debug.tsx`
 - [~] `apps/web/app/admin/invitations/page.tsx`
 - [~] `apps/web/app/admin/languages/page.tsx`
 - [~] `apps/web/app/admin/loading.tsx`
@@ -244,70 +244,75 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/index.ts`
 - [ ] `apps/web/components/not-found-page.tsx`
 
-## components/admin  (2/62 have a test)
+## components/admin  (38/62 have a test)
 
-- [ ] `apps/web/components/admin/AdminLayout.tsx`
-- [ ] `apps/web/components/admin/Charts.tsx`
-- [ ] `apps/web/components/admin/ChartsImpl.tsx`
-- [ ] `apps/web/components/admin/ConfirmDialog.tsx`
-- [ ] `apps/web/components/admin/TableSkeleton.tsx`
-- [ ] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
-- [ ] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentLiveTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentLlmTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
-- [ ] `apps/web/components/admin/agent/AgentOverviewTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentRolesSection.tsx`
-- [ ] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
-- [ ] `apps/web/components/admin/agent/ConversationPicker.tsx`
-- [ ] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
-- [ ] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
-- [ ] `apps/web/components/admin/agent/InfoIcon.tsx`
-- [ ] `apps/web/components/admin/agent/ScanControlPanel.tsx`
-- [ ] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
-- [ ] `apps/web/components/admin/agent/ScanLogDetail.tsx`
-- [ ] `apps/web/components/admin/agent/ScanLogTable.tsx`
-- [ ] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
-- [ ] `apps/web/components/admin/agent/UserDisplay.tsx`
-- [ ] `apps/web/components/admin/agent/UserPicker.tsx`
-- [~] `apps/web/components/admin/agent/config-form-merge.ts`
-- [ ] `apps/web/components/admin/ranking/ConversationRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/LinkRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/MessageRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingFilters.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingPodium.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingStats.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingStatsImpl.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingTable.tsx`
-- [ ] `apps/web/components/admin/ranking/UserRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/constants.ts`
-- [ ] `apps/web/components/admin/ranking/index.ts`
-- [~] `apps/web/components/admin/ranking/utils.tsx`
-- [ ] `apps/web/components/admin/settings/DatabaseSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/FeaturesSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/GeneralSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/MessagesSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/RateLimitingSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/SecuritySettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/ServerSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/SettingField.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsAlerts.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsHeader.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsStats.tsx`
-- [ ] `apps/web/components/admin/settings/UploadsSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/index.ts`
-- [ ] `apps/web/components/admin/user-detail/UserActivitySection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserContactInfoSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserGeolocationSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserLanguageSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserPersonalInfoSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserSecuritySection.tsx`
+- [x] `apps/web/components/admin/AdminLayout.tsx`
+- [x] `apps/web/components/admin/Charts.tsx`
+- [x] `apps/web/components/admin/ChartsImpl.tsx`
+- [x] `apps/web/components/admin/ConfirmDialog.tsx`
+- [x] `apps/web/components/admin/TableSkeleton.tsx`
+- [x] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
+- [x] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentLiveTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentLlmTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
+- [x] `apps/web/components/admin/agent/AgentOverviewTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentRolesSection.tsx`
+- [x] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
+- [x] `apps/web/components/admin/agent/ConversationPicker.tsx`
+- [x] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
+- [x] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
+- [x] `apps/web/components/admin/agent/InfoIcon.tsx`
+- [x] `apps/web/components/admin/agent/ScanControlPanel.tsx`
+- [x] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
+- [x] `apps/web/components/admin/agent/ScanLogDetail.tsx`
+- [x] `apps/web/components/admin/agent/ScanLogTable.tsx`
+- [x] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
+- [x] `apps/web/components/admin/agent/UserDisplay.tsx`
+- [x] `apps/web/components/admin/agent/UserPicker.tsx`
+- [x] `apps/web/components/admin/agent/config-form-merge.ts`
+- [x] `apps/web/components/admin/ranking/ConversationRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/LinkRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/MessageRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/RankingFilters.tsx`
+- [x] `apps/web/components/admin/ranking/RankingPodium.tsx`
+- [x] `apps/web/components/admin/ranking/RankingStats.tsx`
+- [x] `apps/web/components/admin/ranking/RankingStatsImpl.tsx`
+- [x] `apps/web/components/admin/ranking/RankingTable.tsx`
+- [x] `apps/web/components/admin/ranking/UserRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/constants.ts`
+- [x] `apps/web/components/admin/ranking/index.ts`
+- [x] `apps/web/components/admin/ranking/utils.tsx`
+- [x] `apps/web/components/admin/settings/DatabaseSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/FeaturesSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/GeneralSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/MessagesSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/RateLimitingSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/SecuritySettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/ServerSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/SettingField.tsx`
+- [x] `apps/web/components/admin/settings/SettingsAlerts.tsx`
+- [x] `apps/web/components/admin/settings/SettingsHeader.tsx`
+- [x] `apps/web/components/admin/settings/SettingsStats.tsx`
+- [x] `apps/web/components/admin/settings/UploadsSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/index.ts`
+- [x] `apps/web/components/admin/user-detail/UserActivitySection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserContactInfoSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserConversationsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserGeolocationSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserLanguageSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserMediaSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserPersonalInfoSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserPostsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserReportedMessagesSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserReportsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserSecuritySection.tsx`
 
 ## components/affiliate  (0/2 have a test)
 
@@ -866,14 +871,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/v2/layout/index.ts`
 - [ ] `apps/web/components/v2/theme.ts`
 
-## components/video  (2/6 have a test)
+## components/video  (6/6 have a test)
 
-- [ ] `apps/web/components/video/CompactVideoPlayer.tsx`
-- [ ] `apps/web/components/video/VideoControls.tsx`
-- [~] `apps/web/components/video/VideoLightbox.tsx`
-- [~] `apps/web/components/video/VideoPlayer.tsx`
-- [ ] `apps/web/components/video/VolumeControl.tsx`
-- [ ] `apps/web/components/video/index.ts`
+- [x] `apps/web/components/video/CompactVideoPlayer.tsx`
+- [x] `apps/web/components/video/VideoControls.tsx`
+- [x] `apps/web/components/video/VideoLightbox.tsx`
+- [x] `apps/web/components/video/VideoPlayer.tsx`
+- [x] `apps/web/components/video/VolumeControl.tsx`
+- [x] `apps/web/components/video/index.ts`
 
 ## components/video-call  (0/3 have a test)
 
@@ -928,7 +933,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-accessibility.ts`
 - [~] `apps/web/hooks/use-active-peer-connection.ts`
 - [~] `apps/web/hooks/use-adaptive-degradation.ts`
-- [ ] `apps/web/hooks/use-anonymous-messages.ts`
+- [x] `apps/web/hooks/use-anonymous-messages.ts` — supprimé (code mort, cycle 9)
 - [ ] `apps/web/hooks/use-anonymous-session.ts`
 - [ ] `apps/web/hooks/use-app-badge.ts`
 - [ ] `apps/web/hooks/use-audio-effects-analysis.ts`
@@ -999,7 +1004,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-registration-submit.ts`
 - [ ] `apps/web/hooks/use-registration-validation.ts`
 - [ ] `apps/web/hooks/use-registration-wizard.ts`
-- [~] `apps/web/hooks/use-resolved-theme.ts`
+- [x] `apps/web/hooks/use-resolved-theme.ts`
 - [ ] `apps/web/hooks/use-single-tap.ts`
 - [x] `apps/web/hooks/use-socketio-messaging.ts`
 - [ ] `apps/web/hooks/use-stream-messages.ts`
@@ -1011,7 +1016,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-unsaved-changes-warning.ts`
 - [ ] `apps/web/hooks/use-user-search.ts`
 - [~] `apps/web/hooks/use-user-status-realtime.ts`
-- [ ] `apps/web/hooks/use-video-playback.ts`
+- [x] `apps/web/hooks/use-video-playback.ts`
 - [ ] `apps/web/hooks/use-virtual-keyboard.ts`
 - [ ] `apps/web/hooks/use-voice-analysis.ts`
 - [ ] `apps/web/hooks/use-voice-profile-management.ts`
@@ -1027,13 +1032,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/useTextAttachmentDetection.ts`
 - [ ] `apps/web/hooks/useThrottle.ts`
 
-## hooks/admin  (1/5 have a test)
+## hooks/admin  (5/5 have a test)
 
-- [ ] `apps/web/hooks/admin/index.ts`
-- [ ] `apps/web/hooks/admin/use-admin-settings.ts`
-- [~] `apps/web/hooks/admin/use-agent-admin-events.ts`
-- [ ] `apps/web/hooks/admin/use-settings-save.ts`
-- [ ] `apps/web/hooks/admin/use-settings-validation.ts`
+- [x] `apps/web/hooks/admin/index.ts`
+- [x] `apps/web/hooks/admin/use-admin-settings.ts`
+- [x] `apps/web/hooks/admin/use-agent-admin-events.ts`
+- [x] `apps/web/hooks/admin/use-settings-save.ts`
+- [x] `apps/web/hooks/admin/use-settings-validation.ts`
 
 ## hooks/composer  (11/12 have a test)
 
@@ -1217,7 +1222,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## services  (12/42 have a test)
 
-- [ ] `apps/web/services/admin.service.ts`
+- [x] `apps/web/services/admin.service.ts`
 - [ ] `apps/web/services/advanced-translation.service.ts`
 - [ ] `apps/web/services/agent-admin.service.ts`
 - [ ] `apps/web/services/anonymous-chat.service.ts`
@@ -1270,24 +1275,24 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `apps/web/services/conversations/transformers.service.ts`
 - [~] `apps/web/services/conversations/types.ts`
 
-## services/markdown  (2/16 have a test)
+## services/markdown  (16/16 have a test)
 
-- [ ] `apps/web/services/markdown/cache.ts`
-- [ ] `apps/web/services/markdown/index.ts`
-- [ ] `apps/web/services/markdown/markdown-parser.ts`
-- [ ] `apps/web/services/markdown/parsers/block-parser.ts`
-- [ ] `apps/web/services/markdown/parsers/inline-parser.ts`
-- [ ] `apps/web/services/markdown/parsers/table-parser.ts`
-- [ ] `apps/web/services/markdown/renderers/block-renderer.ts`
-- [ ] `apps/web/services/markdown/renderers/inline-renderer.ts`
-- [ ] `apps/web/services/markdown/renderers/table-renderer.ts`
-- [ ] `apps/web/services/markdown/rules/constants.ts`
-- [ ] `apps/web/services/markdown/rules/emoji-map.ts`
-- [ ] `apps/web/services/markdown/rules/patterns.ts`
-- [ ] `apps/web/services/markdown/security/sanitizer.ts`
-- [ ] `apps/web/services/markdown/security/validators.ts`
-- [~] `apps/web/services/markdown/types.ts`
-- [~] `apps/web/services/markdown/utils.ts`
+- [x] `apps/web/services/markdown/cache.ts`
+- [x] `apps/web/services/markdown/index.ts`
+- [x] `apps/web/services/markdown/markdown-parser.ts`
+- [x] `apps/web/services/markdown/parsers/block-parser.ts`
+- [x] `apps/web/services/markdown/parsers/inline-parser.ts`
+- [x] `apps/web/services/markdown/parsers/table-parser.ts`
+- [x] `apps/web/services/markdown/renderers/block-renderer.ts`
+- [x] `apps/web/services/markdown/renderers/inline-renderer.ts`
+- [x] `apps/web/services/markdown/renderers/table-renderer.ts`
+- [x] `apps/web/services/markdown/rules/constants.ts`
+- [x] `apps/web/services/markdown/rules/emoji-map.ts`
+- [x] `apps/web/services/markdown/rules/patterns.ts`
+- [x] `apps/web/services/markdown/security/sanitizer.ts`
+- [x] `apps/web/services/markdown/security/validators.ts`
+- [x] `apps/web/services/markdown/types.ts`
+- [x] `apps/web/services/markdown/utils.ts`
 
 ## services/socketio  (2/9 have a test)
 
@@ -1347,7 +1352,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/console-override.ts`
 - [~] `apps/web/utils/conversation-id-utils.ts`
 - [~] `apps/web/utils/custom-toast.tsx`
-- [~] `apps/web/utils/date-format.ts`
+- [x] `apps/web/utils/date-format.ts`
 - [~] `apps/web/utils/debounce.ts`
 - [~] `apps/web/utils/error-context-collector.ts`
 - [ ] `apps/web/utils/fcm-manager.ts`
@@ -1381,7 +1386,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/service-worker-registration.ts`
 - [ ] `apps/web/utils/service-worker.ts`
 - [~] `apps/web/utils/socket-validator.ts`
-- [~] `apps/web/utils/tag-colors.ts`
+- [x] `apps/web/utils/tag-colors.ts`
 - [~] `apps/web/utils/token-utils.ts`
 - [ ] `apps/web/utils/translation-adapter.ts`
 - [ ] `apps/web/utils/translation-cleaner.ts`

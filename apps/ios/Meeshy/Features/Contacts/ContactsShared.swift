@@ -6,7 +6,7 @@ import MeeshyUI
 
 /// Top-level tabs of the People hub. The three primary surfaces of the
 /// redesigned contact view: the call journal, the dial pad, and the contact
-/// directory (which itself nests the `ContactsTab` sub-tabs).
+/// directory (an annuaire filtered by `ContactFilter`).
 enum PeopleTab: String, CaseIterable, Hashable {
     case calls = "Appels"
     case keypad = "Clavier"
@@ -21,17 +21,21 @@ enum PeopleTab: String, CaseIterable, Hashable {
     }
 }
 
-enum ContactsTab: String, CaseIterable, Hashable {
-    case contacts = "Contacts"
-    case requests = "Demandes"
+/// Sub-tabs of the **Découverte d'utilisateurs Meeshy** view (`PeopleDiscoveryView`).
+///
+/// Moved out of the contact directory so the Contacts tab stays an exploitable
+/// annuaire. Reachable from the floating menu ladder and from deep links
+/// (`Route.peopleDiscovery(DiscoveryTab)`). Order is the on-screen order:
+/// Decouvrir (the search landing) first, then Demandes, then Bloques.
+enum DiscoveryTab: String, CaseIterable, Hashable {
     case discover = "Decouvrir"
+    case requests = "Demandes"
     case blocked = "Bloques"
 
     var icon: String {
         switch self {
-        case .contacts: return "person.2.fill"
-        case .requests: return "person.badge.plus"
         case .discover: return "magnifyingglass"
+        case .requests: return "person.badge.plus"
         case .blocked: return "hand.raised.fill"
         }
     }
@@ -39,6 +43,10 @@ enum ContactsTab: String, CaseIterable, Hashable {
 
 // MARK: - Filter Enums
 
+/// Filtres de l'annuaire. `online`/`offline` partitionnent sur le flag binaire
+/// backend `isOnline` — contexte LABELLISÉ explicite, distinct de la règle
+/// d'affichage des dots 1/3/5 (`UserPresence.state`) : un contact « Hors
+/// ligne » du filtre peut encore porter un dot orange/gris (< 5 min).
 enum ContactFilter: String, CaseIterable {
     case all = "Tous"
     case online = "En ligne"
@@ -123,5 +131,53 @@ extension View {
             .trackScrollContentOffset { value in
                 if active { onChange(-value) }
             }
+    }
+}
+
+// MARK: - Friend List Aggregation
+
+/// Single source of truth for building the user's friend (contact) list from
+/// their accepted friend requests. The gateway exposes friendships only as
+/// `/friend-requests/received` + `/friend-requests/sent`; a "friend" is any
+/// request with `status == "accepted"`, in either direction. Shared by
+/// `ContactsListViewModel` (the Contacts directory) and
+/// `NewConversationViewModel` (the contact-first conversation picker) so the
+/// definition of "who is a contact" never drifts between the two surfaces.
+enum FriendListAggregator {
+    /// Merges accepted received + sent requests into a deduplicated,
+    /// online-first friend list. `currentUserId` is excluded defensively so a
+    /// self-referencing request can never surface the user as their own
+    /// contact. Pure function — no I/O, trivially testable.
+    static func aggregate(
+        received: [FriendRequest],
+        sent: [FriendRequest],
+        currentUserId: String
+    ) -> [FriendRequestUser] {
+        var friendMap: [String: FriendRequestUser] = [:]
+
+        for request in received where request.status == "accepted" {
+            if let sender = request.sender, sender.id != currentUserId {
+                friendMap[sender.id] = sender
+            } else if let receiver = request.receiver, receiver.id != currentUserId {
+                friendMap[receiver.id] = receiver
+            }
+        }
+
+        for request in sent where request.status == "accepted" {
+            if let receiver = request.receiver, receiver.id != currentUserId {
+                friendMap[receiver.id] = receiver
+            } else if let sender = request.sender, sender.id != currentUserId {
+                friendMap[sender.id] = sender
+            }
+        }
+
+        return friendMap.values.sorted { a, b in
+            let aOnline = a.isOnline ?? false
+            let bOnline = b.isOnline ?? false
+            if aOnline != bOnline { return aOnline }
+            let aDate = a.lastActiveAt ?? .distantPast
+            let bDate = b.lastActiveAt ?? .distantPast
+            return aDate > bDate
+        }
     }
 }

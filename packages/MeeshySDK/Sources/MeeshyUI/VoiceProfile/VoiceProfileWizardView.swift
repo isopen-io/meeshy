@@ -14,7 +14,7 @@ public struct VoiceProfileWizardView: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -197,7 +197,7 @@ public struct VoiceProfileWizardView: View {
             Text(String(localized: "voiceProfile.recording.title", defaultValue: "Enregistrez votre voix", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
 
-            Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun.", bundle: .module))
+            Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Trois enregistrements de dix secondes suffisent.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -207,6 +207,10 @@ public struct VoiceProfileWizardView: View {
                 accentColor: accentColor,
                 minimumSamples: 3,
                 minimumDurationSeconds: 10,
+                // La langue PARLÉE, pas celle de l'interface : on part de celle
+                // de l'utilisateur, il peut en changer avant le premier
+                // enregistrement.
+                initialLanguage: AuthManager.shared.currentUser?.systemLanguage,
                 onSamplesReady: { samples in
                     viewModel.voiceSamples = samples
                     viewModel.advanceFromRecording()
@@ -251,7 +255,7 @@ public struct VoiceProfileWizardView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 60))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
@@ -315,9 +319,13 @@ class VoiceProfileWizardViewModel: ObservableObject {
         }
         Task {
             do {
-                let formatter = ISO8601DateFormatter()
-                let dateStr = formatter.string(from: birthDate)
-                _ = try await voiceService.grantConsent(ageVerification: true, birthDate: dateStr)
+                // Le gateway valide `birthDate` en `format: 'date'` strict
+                // (YYYY-MM-DD) — un ISO8601 complet (avec heure) serait rejeté.
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+                let c = calendar.dateComponents([.year, .month, .day], from: birthDate)
+                let dateStr = String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+                _ = try await voiceService.grantConsent(voiceCloningConsent: false, birthDate: dateStr)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     currentStep = .recording
                 }

@@ -10,12 +10,28 @@ Responsabilités:
 
 import logging
 import asyncio
+import os
 import threading
 import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
+from config.settings import LANGUAGE_MAPPINGS
+
 logger = logging.getLogger(__name__)
+
+try:
+    from langdetect import detect_langs, DetectorFactory, LangDetectException
+    DetectorFactory.seed = 0  # déterministe
+    _LANGDETECT_OK = True
+except ImportError:
+    _LANGDETECT_OK = False
+
+DEFAULT_DETECT_LANGUAGE = os.getenv("TRANSLATOR_DEFAULT_DETECT_LANG", "fr")
+try:
+    DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
+except ValueError:
+    DETECT_MIN_CONFIDENCE = 0.80
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -174,43 +190,30 @@ class TranslatorEngine:
         self._pipeline_cache = LRUPipelineCache(max_size=cache_size)
         self._pipeline_lock = threading.Lock()
 
-        # Mapping des codes de langues NLLB
-        self.lang_codes = {
-            'fr': 'fra_Latn',
-            'en': 'eng_Latn',
-            'es': 'spa_Latn',
-            'de': 'deu_Latn',
-            'pt': 'por_Latn',
-            'zh': 'zho_Hans',
-            'ja': 'jpn_Jpan',
-            'ar': 'arb_Arab'
-        }
+        # Mapping des codes de langues NLLB — source unique : LANGUAGE_MAPPINGS
+        # (config/settings.py). L'ancien dict codé en dur ne couvrait que 8 des 40
+        # langues déclarées dans SUPPORTED_LANGUAGES ; les 32 autres tombaient sur
+        # le défaut `.get(code, 'eng_Latn'/'fra_Latn')` aux call sites de traduction
+        # → une demande de russe renvoyait silencieusement du français.
+        self.lang_codes = dict(LANGUAGE_MAPPINGS)
 
         logger.info("⚙️ TranslatorEngine initialisé")
 
-    def detect_language(self, text: str) -> str:
-        """
-        Détection de langue simple basée sur mots-clés
-
-        Args:
-            text: Texte à analyser
-
-        Returns:
-            Code langue détecté ('fr', 'en', 'es', 'de')
-        """
-        text_lower = text.lower()
-
-        # Mots caractéristiques par langue
-        if any(word in text_lower for word in ['bonjour', 'comment', 'vous', 'merci', 'salut']):
-            return 'fr'
-        elif any(word in text_lower for word in ['hello', 'how', 'you', 'thank', 'hi']):
-            return 'en'
-        elif any(word in text_lower for word in ['hola', 'como', 'estas', 'gracias']):
-            return 'es'
-        elif any(word in text_lower for word in ['guten', 'wie', 'geht', 'danke', 'hallo']):
-            return 'de'
-        else:
-            return 'en'  # Défaut
+    def detect_language(self, text: str, fallback: Optional[str] = None) -> str:
+        """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
+        arbitraire — repli sur `fallback` puis `DEFAULT_DETECT_LANGUAGE`."""
+        default = fallback if fallback is not None else DEFAULT_DETECT_LANGUAGE
+        cleaned = _URL_PATTERN.sub(" ", text or "").strip()
+        if not _LANGDETECT_OK or sum(c.isalpha() for c in cleaned) < 4:
+            return default
+        try:
+            ranked = detect_langs(cleaned)
+        except LangDetectException:
+            return default
+        top = ranked[0]
+        if top.prob < DETECT_MIN_CONFIDENCE:
+            return default
+        return top.lang.split("-")[0]  # zh-cn/zh-tw -> zh
 
     def _get_or_create_pipeline(
         self,

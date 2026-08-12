@@ -153,7 +153,11 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     handleStoryTextMock.mockClear();
   });
 
-  it('should trigger PostTranslationService.translatePost when type=STORY with non-empty content', async () => {
+  it('should NOT trigger PostTranslationService.translatePost for STORY content (G2 — owned by the audience-driven service pipeline)', async () => {
+    // G2 : le `content` d'une STORY est traduit par
+    // `PostService.triggerStoryTextTranslation` (audience-driven). Le pipeline
+    // route (`translatePost`, 5 langues fixes) doublait les jobs ZMQ et créait
+    // des écritures concurrentes dans `Post.translations`.
     const createdPost = buildCreatedPost({ type: 'STORY', content: 'Hello story caption' });
     const app = await buildApp(buildMockPostService(createdPost));
 
@@ -164,13 +168,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     });
 
     expect(res.statusCode).toBe(201);
-    expect(translatePostMock).toHaveBeenCalledTimes(1);
-    expect(translatePostMock).toHaveBeenCalledWith(
-      'post-id-123',
-      'Hello story caption',
-      null,
-      'user-id-abc',
-    );
+    expect(translatePostMock).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -182,7 +180,10 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     const res = await app.inject({
       method: 'POST',
       url: '/posts',
-      payload: { type: 'STORY' },
+      // Un media porte la story : le contenu TEXTE reste vide, ce que ce
+      // test verifie, mais la story n'est plus un objet vide (rejete depuis
+      // que CreatePostSchema exige un porteur).
+      payload: { type: 'STORY', mediaIds: ['media-1'] },
     });
 
     expect(res.statusCode).toBe(201);
@@ -198,7 +199,9 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     const res = await app.inject({
       method: 'POST',
       url: '/posts',
-      payload: { type: 'STORY', content: '   ' },
+      // Media porteur + contenu blanc : le texte reste non traduisible (ce
+      // que ce test verifie) sans que la story soit un objet vide.
+      payload: { type: 'STORY', content: '   ', mediaIds: ['media-1'] },
     });
 
     expect(res.statusCode).toBe(201);
@@ -229,12 +232,42 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     await app.close();
   });
 
-  it('should not double-translate: PostTranslationService and StoryTextObjectTranslationService run independently', async () => {
-    // PostTranslationService handles top-level content.
-    // StoryTextObjectTranslationService handles storyEffects.textObjects[n].translations.
-    // Neither route handler calls the other — they are triggered by separate ZMQ events.
-    // This test asserts that creating a STORY with content triggers translatePost exactly once
-    // and does NOT trigger handleTranslationCompleted (which is only called from ZMQ events).
+  // Le feed de production est composé quasi exclusivement de REEL portant du
+  // texte substantiel. Tant que le déclenchement était conditionné à
+  // `type === 'POST'`, aucun d'eux n'était traduit : vérifié le 2026-07-27 sur
+  // gate.meeshy.me, 40 REEL consécutifs sans une seule traduction, alors qu'un
+  // POST publié dans la même minute en recevait quatre en moins de dix
+  // secondes. Le Prisme ne s'appliquait donc pas au gros du feed.
+  it.each(['REEL', 'STATUS'])(
+    'should trigger PostTranslationService.translatePost when type=%s',
+    async (type) => {
+      const createdPost = buildCreatedPost({ type, content: 'Une phrase à traduire' });
+      const app = await buildApp(buildMockPostService(createdPost));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/posts',
+        payload: { type, content: 'Une phrase à traduire' },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(translatePostMock).toHaveBeenCalledTimes(1);
+      expect(translatePostMock).toHaveBeenCalledWith(
+        'post-id-123',
+        'Une phrase à traduire',
+        null,
+        'user-id-abc',
+      );
+
+      await app.close();
+    },
+  );
+
+  it('should not double-translate: the route triggers NEITHER story pipeline (G2)', async () => {
+    // G2 : la route ne déclenche AUCUN des deux services pour une STORY —
+    // le `content` appartient à `PostService.triggerStoryTextTranslation`
+    // (audience-driven, déclenché DANS le service à la création) et les
+    // textObjects à StoryTextObjectTranslationService (déclenché par ZMQ).
     const createdPost = buildCreatedPost({ type: 'STORY', content: 'Caption for story' });
     const app = await buildApp(buildMockPostService(createdPost));
 
@@ -249,9 +282,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     });
 
     expect(res.statusCode).toBe(201);
-    // PostTranslationService.translatePost called exactly once for the caption
-    expect(translatePostMock).toHaveBeenCalledTimes(1);
-    // StoryTextObjectTranslationService is NOT invoked from the HTTP route — only from ZMQ
+    expect(translatePostMock).not.toHaveBeenCalled();
     expect(handleStoryTextMock).not.toHaveBeenCalled();
 
     await app.close();

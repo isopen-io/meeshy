@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -14,6 +15,8 @@ final class UserProfileViewModel: ObservableObject {
     @Published var userStats: UserStats?
     @Published var isLoadingStats = false
     @Published var statsError: String?
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
 
     // MARK: - Dependencies
 
@@ -37,7 +40,7 @@ final class UserProfileViewModel: ObservableObject {
         self.authManager = authManager
         self.blockService = blockService
         self.profileUser = user
-        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
+        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
     }
 
     private var resolvedIdentifier: String? {
@@ -74,9 +77,16 @@ final class UserProfileViewModel: ObservableObject {
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
-        } catch let APIError.serverError(code, _) where code == 403 {
+        } catch MeeshyError.forbidden {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`, and 403 arrives as its own `.forbidden`
+            // case, never `.server`); this catch was dead code, so
+            // `isBlockedByTarget` was never set and the profile UI never
+            // reflected being blocked by the viewed user.
             isBlockedByTarget = true
-        } catch {}
+        } catch {
+            UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
+        }
     }
 
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
@@ -139,9 +149,17 @@ final class UserProfileViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         let snapshot = isBlocked
         isBlocked = true
+        // R6-4 — flip the CANONICAL blocklist too, not just this VM's local
+        // `isBlocked`. The swipe labels / row affordances read
+        // `BlockService.isBlocked(userId:)`, so without this the list stayed
+        // stale until the next network refresh. Rolled back on `.exhausted`.
+        blockService.setBlockedOptimistic(userId: userId, blocked: true)
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.isBlocked = snapshot },
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
             toast: "Impossible de bloquer cet utilisateur"
         )
         let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
@@ -149,6 +167,7 @@ final class UserProfileViewModel: ObservableObject {
             try await OfflineQueue.shared.enqueue(.blockUser, payload: payload)
         } catch {
             isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
         }
     }
 
@@ -157,9 +176,13 @@ final class UserProfileViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         let snapshot = isBlocked
         isBlocked = false
+        blockService.setBlockedOptimistic(userId: userId, blocked: false)
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.isBlocked = snapshot },
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
             toast: "Impossible de debloquer cet utilisateur"
         )
         let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
@@ -167,6 +190,7 @@ final class UserProfileViewModel: ObservableObject {
             try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
         } catch {
             isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
         }
     }
 
@@ -193,9 +217,22 @@ final class UserProfileViewModel: ObservableObject {
         }
     }
 
-    private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {
-        guard let userId = userId,
-              let blockedIds = authManager.currentUser?.blockedUserIds else { return false }
-        return blockedIds.contains(userId)
+    /// P1 — `blockService` (the canonical, live-updated blocklist source,
+    /// injected but previously unused here) is now consulted FIRST. The
+    /// login-time snapshot (`currentUser.blockedUserIds`) is kept only as a
+    /// fallback for the brief window right after login before
+    /// `AuthManager.warmSessionScopedCaches` → `BlockService.refreshCache()`
+    /// has finished hydrating. Without this, a block/unblock performed
+    /// elsewhere during the session (or in a PRIOR session on this device)
+    /// showed as "not blocked" the next time this profile sheet opened for
+    /// the same user, because the snapshot never changes after init.
+    private static func checkIsBlocked(
+        userId: String?,
+        authManager: AuthManaging,
+        blockService: BlockServiceProviding
+    ) -> Bool {
+        guard let userId else { return false }
+        if blockService.isBlocked(userId: userId) { return true }
+        return authManager.currentUser?.blockedUserIds?.contains(userId) ?? false
     }
 }

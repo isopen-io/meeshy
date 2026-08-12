@@ -100,6 +100,8 @@
       "searchPlaceholder": "Buscar por nombre o username...",
       "selectedMembers": "Miembros seleccionados ({count} en total, incluido usted)",
       "removeMember": "Quitar a {name}",
+      "selectMember": "Seleccionar a {name}",
+      "deselectMember": "Deseleccionar a {name}",
       "availableUsers": "Usuarios disponibles",
       "loadingUsers": "Cargando usuarios...",
       "noUsersFound": "No se encontraron usuarios para esta búsqueda",

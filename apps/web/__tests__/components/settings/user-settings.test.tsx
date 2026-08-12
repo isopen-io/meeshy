@@ -81,8 +81,12 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
-// Mock de la config API
+// Mock de la config API. Le spread de l'implémentation réelle est essentiel :
+// un mock exhaustif casse dès qu'un composant rendu ici touche un autre export
+// (`<AvatarImage>` → `buildAttachmentUrl` → `getBackendUrl`). Seul `buildApiUrl`
+// a besoin d'être figé pour les assertions sur `fetch`.
 jest.mock('@/lib/config', () => ({
+  ...jest.requireActual('@/lib/config'),
   buildApiUrl: (path: string) => `http://localhost:3001${path}`,
 }));
 
@@ -95,10 +99,6 @@ jest.mock('sonner', () => ({
 }));
 
 // Mock des utilitaires
-jest.mock('@/utils/user', () => ({
-  getUserInitials: (user: any) => user?.firstName?.[0] || 'U',
-}));
-
 jest.mock('@/utils/avatar-upload', () => ({
   validateAvatarFile: jest.fn(() => ({ valid: true })),
 }));

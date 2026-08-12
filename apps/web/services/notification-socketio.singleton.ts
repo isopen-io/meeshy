@@ -6,12 +6,23 @@
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { initialSyncSeqState, observeSyncSeq, type SyncSeqState } from '@/lib/sync/sync-seq-state';
 import type { Notification } from '@/types/notification';
 
 type NotificationCallback = (notification: Notification) => void;
 type NotificationReadCallback = (notificationId: string) => void;
 type NotificationDeletedCallback = (notificationId: string) => void;
 type CountsCallback = (counts: any) => void;
+
+/**
+ * Pourquoi le client a perdu de vue l'état serveur :
+ * - `gap` : un `_seq` a sauté (events reçus, mais pas tous) ;
+ * - `reconnect` : la socket s'est rétablie après une coupure, fenêtre pendant
+ *   laquelle AUCUN event n'est arrivé — la détection de gap ne couvre que les
+ *   events reçus, elle est donc aveugle à la coupure elle-même.
+ */
+export type SyncDesyncReason = 'gap' | 'reconnect';
+type SyncDesyncCallback = (reason: SyncDesyncReason) => void;
 
 class NotificationSocketIOSingleton {
   private socket: Socket | null = null;
@@ -29,6 +40,14 @@ class NotificationSocketIOSingleton {
   private countsCallbacks: Set<CountsCallback> = new Set();
   private connectCallbacks: Set<() => void> = new Set();
   private disconnectCallbacks: Set<(reason: string) => void> = new Set();
+  private desyncCallbacks: Set<SyncDesyncCallback> = new Set();
+
+  // SyncEngine — curseur `_seq` per-user (miroir de `SyncSeqTracker` iOS).
+  private syncSeq: SyncSeqState = initialSyncSeqState;
+  // Distingue le PREMIER `connect` d'un RE-connect : seul le second prouve une
+  // fenêtre aveugle. Au premier, les écrans montent avec `refetchOnMount:
+  // 'always'` — resynchroniser en plus ne ferait que doubler le fetch initial.
+  private hasConnectedBefore = false;
 
   /**
    * Initialise la connexion Socket.IO
@@ -74,12 +93,18 @@ class NotificationSocketIOSingleton {
 
     // Connexion établie
     this.socket.on('connect', () => {
+      const isReconnect = this.hasConnectedBefore;
       this.isConnected = true;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
+      this.hasConnectedBefore = true;
 
       // Notifier tous les callbacks de connexion
       this.connectCallbacks.forEach(cb => cb());
+
+      // SyncEngine — la coupure a créé une fenêtre aveugle : aucun event n'est
+      // arrivé, donc aucun `_seq` n'a pu révéler le trou. Signal inconditionnel.
+      if (isReconnect) this.emitDesync('reconnect');
     });
 
     // Déconnexion
@@ -96,8 +121,15 @@ class NotificationSocketIOSingleton {
       this.isConnecting = false;
     });
 
-    // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
+    // Nouvelle notification
     const handleNotification = (data: any) => {
+      // SyncEngine — observer le `_seq` AVANT de livrer l'event : un trou prouve
+      // que des notifications ont été manquées, et le client web n'a aucune
+      // autre voie de rattrapage (`staleTime: Infinity` côté React Query).
+      const observed = observeSyncSeq(this.syncSeq, data?._seq);
+      this.syncSeq = observed.state;
+      if (observed.gap) this.emitDesync('gap');
+
       // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {
         id: data.id,
@@ -134,7 +166,6 @@ class NotificationSocketIOSingleton {
     };
 
     this.socket.on(SERVER_EVENTS.NOTIFICATION_NEW, handleNotification);
-    this.socket.on(SERVER_EVENTS.NOTIFICATION, handleNotification); // Legacy support
 
     // Écouter l'événement d'authentification
     this.socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
@@ -176,6 +207,17 @@ class NotificationSocketIOSingleton {
     this.isConnecting = false;
     this.authToken = null;
     this.reconnectAttempts = 0;
+    // `_seq` est alloué PAR USER et persiste côté serveur : le curseur d'un
+    // compte ne veut rien dire pour le suivant. `disconnect()` n'est appelé que
+    // sur un changement de token, un logout ou un `reset()` — la reconnexion
+    // automatique de socket.io ne passe pas par ici, et c'est précisément ce
+    // qui permet au curseur de survivre à une coupure pour révéler son trou.
+    this.syncSeq = initialSyncSeqState;
+    this.hasConnectedBefore = false;
+  }
+
+  private emitDesync(reason: SyncDesyncReason): void {
+    this.desyncCallbacks.forEach(cb => cb(reason));
   }
 
   /**
@@ -237,10 +279,23 @@ class NotificationSocketIOSingleton {
   }
 
   /**
+   * SyncEngine — s'abonne aux pertes de synchronisation détectées par le
+   * transport (trou de `_seq`, ou reconnexion après coupure). Le transport
+   * SIGNALE ; la décision « quoi refetch » vit côté consommateur, miroir du
+   * découpage SDK/app iOS (`SyncSeqTracker.gapDetected` →
+   * `NotificationGapResyncCoordinator`).
+   */
+  public onSyncDesync(callback: SyncDesyncCallback): () => void {
+    this.desyncCallbacks.add(callback);
+    return () => this.desyncCallbacks.delete(callback);
+  }
+
+  /**
    * Réinitialise complètement le singleton
    */
   public reset(): void {
     this.disconnect();
+    this.desyncCallbacks.clear();
     this.notificationCallbacks.clear();
     this.readCallbacks.clear();
     this.deletedCallbacks.clear();

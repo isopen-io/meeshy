@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/use-i18n';
 
 import { Play, Pause, AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatDuration } from '@/utils/audio-formatters';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 // Hooks personnalisés
@@ -12,6 +13,9 @@ import { useAudioPlayback } from '@/hooks/use-audio-playback';
 import { useAudioTranslation } from '@/hooks/use-audio-translation';
 import { useAudioEffectsAnalysis } from '@/hooks/use-audio-effects-analysis';
 import { useAuth } from '@/hooks/use-auth';
+
+// Utilitaires
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 
 // Composants UI
 import { AudioProgressBar } from './AudioProgressBar';
@@ -62,15 +66,12 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
 
-  // Langues préférées de l'utilisateur pour auto-sélection audio
+  // Langues préférées de l'utilisateur pour auto-sélection audio — délègue à
+  // la résolution Prisme partagée (systemLanguage > regional > custom >
+  // deviceLocale), au lieu de réimplémenter l'ordre de priorité localement.
   const userLanguages = useMemo(() => {
     if (!user) return undefined;
-    const langs: string[] = [];
-    if (user.systemLanguage) langs.push(user.systemLanguage);
-    if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage)
-      langs.push(user.regionalLanguage);
-    if (user.customDestinationLanguage && !langs.includes(user.customDestinationLanguage))
-      langs.push(user.customDestinationLanguage);
+    const langs = getUserLanguagePreferences(user);
     return langs.length > 0 ? langs : undefined;
   }, [user]);
 
@@ -346,18 +347,6 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     mimeType: attachment.mimeType,
     isOwnMessage,
   });
-
-  const formatDuration = (seconds: number): string => {
-    if (!seconds || !isFinite(seconds)) return '0:00';
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div

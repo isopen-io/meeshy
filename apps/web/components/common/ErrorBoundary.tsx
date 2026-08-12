@@ -17,6 +17,24 @@ interface State {
   error?: Error;
 }
 
+// Mirrors public/chunk-recovery.js's patterns and one-shot sessionStorage
+// guard. That script only catches stale-chunk failures via window
+// 'error'/'unhandledrejection' events, which never fire when React catches
+// the failure here first — e.g. a stale client reference to a chunk a
+// newer deployment already deleted from disk surfaces as minified React
+// error #130 ("element type is invalid: got undefined") inside
+// componentDidCatch instead of an explicit ChunkLoadError reaching window.
+const STALE_DEPLOYMENT_RELOAD_KEY = '__meeshy_chunk_reload';
+
+function isStaleDeploymentError(message: string): boolean {
+  return (
+    message.includes('Loading chunk') ||
+    message.includes('ChunkLoadError') ||
+    message.includes('Failed to find Server Action') ||
+    message.includes('react.dev/errors/130')
+  );
+}
+
 function ErrorDisplay({ error, onRetry }: { error?: Error; onRetry: () => void }) {
   const { t } = useI18n('common');
 
@@ -64,6 +82,11 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.props.onError?.(error, errorInfo);
+
+    if (isStaleDeploymentError(error.message) && !sessionStorage.getItem(STALE_DEPLOYMENT_RELOAD_KEY)) {
+      sessionStorage.setItem(STALE_DEPLOYMENT_RELOAD_KEY, String(Date.now()));
+      window.location.reload();
+    }
   }
 
   private handleRetry = () => {

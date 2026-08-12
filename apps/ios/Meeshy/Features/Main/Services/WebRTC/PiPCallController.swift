@@ -12,7 +12,7 @@
 //
 //  Le protocole `PiPCallProviding` est WebRTC-free (UIView + AnyObject) pour que
 //  `CallManager`/`CallView` l'utilisent sans `#if`. L'implémentation et le choix
-//  du singleton sont gardés `#if canImport(WebRTC)` ; sinon `NoOpPiPController`.
+//  du singleton sont gardés sous garde de compilation WebRTC ; sinon `NoOpPiPController`.
 //
 
 import AVKit
@@ -44,6 +44,10 @@ protocol PiPCallProviding: AnyObject {
     func updateRemoteTrack(_ remoteTrack: AnyObject)
     /// Ajuste le framerate du PiP (thermal-aware).
     func setMaxFrameRate(_ fps: Int)
+    /// Le pair a coupé (ou rallumé) sa caméra distante. `true` remplace le flux
+    /// live par un placeholder générique dans le renderer, plutôt que de laisser
+    /// le dernier frame reçu figé indéfiniment dans la fenêtre PiP flottante.
+    func setRemoteVideoMuted(_ muted: Bool)
     func start()
     func stop()
     func tearDown()
@@ -60,6 +64,7 @@ final class NoOpPiPController: PiPCallProviding {
                    onStop: @escaping @MainActor () -> Void) {}
     func updateRemoteTrack(_ remoteTrack: AnyObject) {}
     func setMaxFrameRate(_ fps: Int) {}
+    func setRemoteVideoMuted(_ muted: Bool) {}
     func start() {}
     func stop() {}
     func tearDown() {}
@@ -84,7 +89,10 @@ final class PiPCallController: NSObject, PiPCallProviding {
     private var onStart: (@MainActor () -> Void)?
     private var onRestoreUI: (@MainActor () -> Void)?
     private var onStop: (@MainActor () -> Void)?
-    private var desiredFrameRate = 15
+    private var desiredFrameRate = QualityThresholds.pipFrameRateDefault
+    /// Applied to the renderer on attach so a mid-PiP camera toggle is
+    /// remembered even across a renderer re-attach (ICE restart, upgrade).
+    private var isRemoteVideoMuted = false
 
     override init() {
         isPiPSupported = AVPictureInPictureController.isPictureInPictureSupported()
@@ -152,6 +160,11 @@ final class PiPCallController: NSObject, PiPCallProviding {
         renderer?.setMaxFrameRate(fps)
     }
 
+    func setRemoteVideoMuted(_ muted: Bool) {
+        isRemoteVideoMuted = muted
+        renderer?.setRemoteVideoMuted(muted)
+    }
+
     func tearDown() {
         // Si un PiP est actif (ex : l'appel se termine pendant que la fenêtre
         // flotte par-dessus une autre app), l'arrêter AVANT de libérer le
@@ -168,36 +181,10 @@ final class PiPCallController: NSObject, PiPCallProviding {
         onStart = nil
         onRestoreUI = nil
         onStop = nil
-    }
-
-    // MARK: - Renderer attach/detach (un seul chemin lourd à la fois)
-
-    private func attachRenderer() {
-        guard renderer == nil, let remoteTrack else { return }
-        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
-        remoteTrack.add(renderer)
-        self.renderer = renderer
-    }
-
-    private func detachRenderer() {
-        if let renderer, let remoteTrack {
-            remoteTrack.remove(renderer)
-        }
-        renderer = nil
-        // Fuite — vider la file du layer (le surfaceView est un singleton
-        // persistant) pour ne pas retenir de CMSampleBuffer entre deux sessions.
-        // `renderer.reset()` (async, [weak self]) ne suffisait pas : le renderer
-        // est libéré avant que le flush ne tourne. On flush ici sur le main,
-        // sûr car plus aucun enqueue ne suivra (renderer détaché + nil).
-        flushSurface()
-    }
-
-    private func flushSurface() {
-        if #available(iOS 17.0, *) {
-            surfaceView.displayLayer.sampleBufferRenderer.flush()
-        } else {
-            surfaceView.displayLayer.flush()
-        }
+        // `PiPCallController` is a singleton, so a thermally-throttled fps from
+        // the previous call must not silently carry over into the next one.
+        desiredFrameRate = QualityThresholds.pipFrameRateDefault
+        isRemoteVideoMuted = false
     }
 }
 
@@ -232,6 +219,67 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
         Logger.pipController.error("PiP failed to start: \(error.localizedDescription, privacy: .public)")
         detachRenderer()
         onStop?()
+    }
+}
+
+// MARK: - Renderer attach/detach (un seul chemin lourd à la fois)
+
+extension PiPCallController {
+
+    func attachRenderer() {
+        guard renderer == nil, let remoteTrack else { return }
+        // `PiPVideoRenderer` bypasses WebRTC's own RTCMTLVideoView (which applies
+        // frame.rotation internally) and enqueues the raw, unrotated pixel buffer
+        // straight onto the display layer — so a portrait-held remote camera
+        // (the common case) renders sideways in the system PiP window unless the
+        // rotation is compensated here. `PiPVideoSampleBufferView.applyRotation`
+        // already existed for exactly this but was never wired to a rotation
+        // source; `onRotation` closes that loop.
+        let renderer = PiPVideoRenderer(
+            displayLayer: surfaceView.displayLayer,
+            maxFrameRate: desiredFrameRate,
+            onRotation: { [weak self] degrees in
+                Task { @MainActor [weak self] in
+                    self?.surfaceView.applyRotation(degrees)
+                }
+            }
+        )
+        // Applied BEFORE attaching to the track: if the peer's camera was
+        // already off when the renderer re-attaches (ICE restart mid-mute),
+        // the very first frame delivered must not slip through as a real one.
+        renderer.setRemoteVideoMuted(isRemoteVideoMuted)
+        remoteTrack.add(renderer)
+        self.renderer = renderer
+    }
+
+    func detachRenderer() {
+        guard let renderer else {
+            // Never attached (or already detached) — nothing can be mid-flight on
+            // a renderer queue, so a direct flush on MainActor is safe here.
+            flushSurface()
+            return
+        }
+        remoteTrack?.remove(renderer)
+        self.renderer = nil
+        // Vider la file du layer (le surfaceView est un singleton persistant) pour
+        // ne pas retenir de CMSampleBuffer entre deux sessions. `remoteTrack.
+        // remove(renderer)` n'arrête que les FUTURES frames — un bloc `consume()`
+        // déjà posté sur la serial queue du renderer peut encore être en vol. Un
+        // flush direct ici sur MainActor courrait donc ce bloc sur le même
+        // `AVSampleBufferDisplayLayer` partagé. `flushOnQueue()` route le flush à
+        // travers cette même serial queue (et attend qu'il tourne) : il s'exécute
+        // strictement après tout ce qui y était déjà posté, et un ré-attach rapide
+        // (qui crée un nouveau renderer/queue sur cette même surface persistante)
+        // ne peut pas non plus le courir.
+        renderer.flushOnQueue()
+    }
+
+    func flushSurface() {
+        if #available(iOS 17.0, *) {
+            surfaceView.displayLayer.sampleBufferRenderer.flush()
+        } else {
+            surfaceView.displayLayer.flush()
+        }
     }
 }
 

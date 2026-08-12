@@ -97,7 +97,7 @@ struct LoginView: View {
                 .accessibilityHidden(true)
 
                 Text("Meeshy")
-                    .font(MeeshyFont.relative(40, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 6, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.purple700, MeeshyColors.purple600, MeeshyColors.purple500],
@@ -105,8 +105,8 @@ struct LoginView: View {
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
-                    .padding(.bottom, 48)
+                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: MeeshyShadow.strong.radius, x: 0, y: MeeshyShadow.medium.y)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
                     .accessibilityAddTraits(.isHeader)
 
                 if authManager.requires2FA {
@@ -120,7 +120,7 @@ struct LoginView: View {
                 Spacer()
 
                 Button { showRegister = true } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(String(localized: "auth.login.no_account", bundle: .main))
                             .foregroundColor(theme.textMuted)
                         Text(String(localized: "auth.login.create_account", bundle: .main))
@@ -149,7 +149,7 @@ struct LoginView: View {
                 }
 
                 // Signature de marque partagée avec le splash (BrandSignature) :
-                // version + « Fait avec ❤️ par Services CEO » + logo.
+                // « Meeshy <version> · <build> » + « Par Services CEO » + logo.
                 BrandSignature()
                     .padding(.top, MeeshySpacing.md)
                     .opacity(showFields ? 1 : 0)
@@ -205,7 +205,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
     }
 
     private var savedAccountsList: some View {
@@ -256,7 +256,7 @@ struct LoginView: View {
             HStack(spacing: MeeshySpacing.md) {
                 accountAvatar(account, size: 44)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
                     Text(account.shortName)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
@@ -267,8 +267,8 @@ struct LoginView: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                Image(systemName: "chevron.forward")
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -297,19 +297,22 @@ struct LoginView: View {
                         accountPassword = ""
                     }
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                    // Chrome de retour : glyphe centré dans un cadre de tap fixe 36×36
+                    // (doctrine 82i) — gardé figé pour ne pas déborder le cercle.
+                    Image(systemName: "chevron.backward")
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize - 1, weight: .semibold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 36, height: 36)
+                        .meeshyTapTarget() // HIG minimum 44pt
                         .background(
                             Circle().fill(theme.inputBackground)
                         )
                 }
                 .bounceOnTap(scale: 0.90)
+                .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
                 accountAvatar(account, size: 40)
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 1) { // Tight typography
                     Text(account.shortName)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
@@ -325,7 +328,7 @@ struct LoginView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.fill")
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: 20)
+                    .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
                     .textContentType(.password)
@@ -336,7 +339,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -372,9 +375,9 @@ struct LoginView: View {
                             showNormalLogin = false
                         }
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 13, weight: .semibold))
+                        HStack(spacing: MeeshySpacing.sm - 2) {
+                            Image(systemName: "chevron.backward")
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             Text(String(localized: "auth.login.saved_accounts", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         }
@@ -389,7 +392,7 @@ struct LoginView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "person.fill")
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: 20)
+                    .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
                 TextField(String(localized: "auth.username.placeholder", bundle: .main), text: $username)
                     .textContentType(.username)
@@ -402,7 +405,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.username.placeholder", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -422,7 +425,7 @@ struct LoginView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.fill")
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: 20)
+                    .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
                     .textContentType(.password)
@@ -433,7 +436,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -482,7 +485,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
     }
 
     // MARK: - Reusable subviews
@@ -510,8 +513,8 @@ struct LoginView: View {
                             endPoint: .trailing
                         )
                     )
-                    .frame(height: 52)
-                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
+                    .frame(height: 52) // Standard action height
+                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: MeeshyShadow.strong.radius, y: MeeshyShadow.strong.y)
 
                 if authManager.isLoading {
                     ProgressView().tint(.white)
@@ -547,7 +550,7 @@ struct LoginView: View {
                 ForEach(MeeshyConfig.ServerEnvironment.allCases, id: \.rawValue) { env in
                     Button {
                         HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(MeeshyAnimation.springFast) {
                             selectedEnv = env
                             showCustomInput = env == .custom
                         }
@@ -556,10 +559,10 @@ struct LoginView: View {
                         }
                     } label: {
                         Text(env.label)
-                            .font(.system(size: 11, weight: selectedEnv == env ? .bold : .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: selectedEnv == env ? .bold : .medium))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                        .padding(.horizontal, MeeshySpacing.sm + 2)
+                        .padding(.vertical, MeeshySpacing.xs + 1)
                             .background(
                                 Capsule().fill(
                                     selectedEnv == env
@@ -575,7 +578,7 @@ struct LoginView: View {
             if showCustomInput || selectedEnv == .custom {
                 HStack(spacing: MeeshySpacing.sm) {
                     TextField("gate.example.com", text: $customHost)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .customHost)
@@ -588,10 +591,12 @@ struct LoginView: View {
                     } label: {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(MeeshyColors.brandGradient)
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(MeeshyFont.headlineSize + 1, weight: .semibold))
+                            .meeshyTapTarget()
                     }
                     .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     .bounceOnTap(scale: 0.90)
+                    .accessibilityLabel(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -608,7 +613,7 @@ struct LoginView: View {
             }
 
             Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular, design: .monospaced))
                 .foregroundColor(theme.textMuted.opacity(0.5))
         }
     }
@@ -642,7 +647,7 @@ struct LoginView: View {
     private var twoFactorSection: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Text(String(localized: "auth.login.two_factor.title", bundle: .main))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize + 2, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .padding(.bottom, MeeshySpacing.xs)
 
@@ -657,7 +662,7 @@ struct LoginView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "key.fill")
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: 20)
+                    .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
                 TextField(String(localized: "auth.login.two_factor.placeholder", bundle: .main), text: $twoFactorCode)
                     .keyboardType(.numberPad)
@@ -668,7 +673,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.login.two_factor.label", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -709,7 +714,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 focusedField = .twoFactorCode

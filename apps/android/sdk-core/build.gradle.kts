@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.sdk"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
@@ -42,7 +42,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+    api(libs.stream.webrtc)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+    implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
@@ -59,4 +62,10 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    // Test-only: TusUploadRepositoryTest constructs raw retrofit2.Response fixtures
+    // to stub TusApi.createUpload (the Location-header response createSession()
+    // reads). :core:network keeps retrofit an `implementation` (not `api`) dependency
+    // deliberately — production code here never touches retrofit2 types directly,
+    // routing through NetworkResult/createSession — so this stays test-scoped only.
+    testImplementation(libs.retrofit)
 }

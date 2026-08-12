@@ -25,42 +25,107 @@ jest.mock('../../../socketio/MeeshySocketIOManager', () => ({
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn(),
 }));
+jest.mock('../../../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+}));
 
 import { MeeshySocketIOHandler } from '../../../socketio/MeeshySocketIOHandler';
 
-function makeHandler() {
-  const handler = new MeeshySocketIOHandler({} as any, 'test-secret', {} as any);
-  const managerBroadcastMessage = jest.fn<(...args: any[]) => Promise<void>>().mockResolvedValue(undefined);
-  const managerBroadcast = jest.fn();
-  // `socketIOManager` est privé et n'est instancié que dans `setupSocketIO`
-  // (qui exige un vrai serveur HTTP) — on injecte un manager mocké pour
-  // tester la délégation de `broadcastMessage` de façon isolée.
-  (handler as any).socketIOManager = {
-    broadcastMessage: managerBroadcastMessage,
-    broadcast: managerBroadcast,
+function makeManager(overrides: Record<string, unknown> = {}) {
+  return {
+    broadcastMessage: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    broadcast: jest.fn<any>(),
+    sendToUser: jest.fn<any>().mockReturnValue(true),
+    getConnectedUsers: jest.fn<any>().mockReturnValue(['user-1', 'user-2']),
+    ...overrides,
   };
-  return { handler, managerBroadcastMessage, managerBroadcast };
+}
+
+function makeHandler(manager = makeManager()) {
+  const handler = new MeeshySocketIOHandler({} as any, 'test-secret', {} as any);
+  (handler as any).socketIOManager = manager;
+  return { handler, manager };
+}
+
+function makeHandlerNoManager() {
+  const handler = new MeeshySocketIOHandler({} as any, 'test-secret', {} as any);
+  return { handler };
 }
 
 describe('MeeshySocketIOHandler.broadcastMessage', () => {
   const message = { id: 'm_1', conversationId: 'c_1', content: 'hello' };
 
   it('délègue au broadcast par-conversation du manager (message:new dans la room)', async () => {
-    const { handler, managerBroadcastMessage } = makeHandler();
+    const { handler, manager } = makeHandler();
 
-    // La route REST accède au handler en `any` et l'appelle avec deux
-    // arguments — on reproduit ce site d'appel.
     await (handler as any).broadcastMessage(message, 'c_1');
 
-    expect(managerBroadcastMessage).toHaveBeenCalledTimes(1);
-    expect(managerBroadcastMessage).toHaveBeenCalledWith(message, 'c_1');
+    expect(manager.broadcastMessage).toHaveBeenCalledTimes(1);
+    expect(manager.broadcastMessage).toHaveBeenCalledWith(message, 'c_1');
   });
 
   it('ne retombe PAS sur un broadcast global system:message', async () => {
-    const { handler, managerBroadcast } = makeHandler();
+    const { handler, manager } = makeHandler();
 
     await (handler as any).broadcastMessage(message, 'c_1');
 
-    expect(managerBroadcast).not.toHaveBeenCalled();
+    expect(manager.broadcast).not.toHaveBeenCalled();
+  });
+
+  it('swallows manager error without throwing', async () => {
+    const { handler } = makeHandler(makeManager({
+      broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('manager down')),
+    }));
+
+    await expect((handler as any).broadcastMessage(message, 'c_1')).resolves.toBeUndefined();
+  });
+
+  it('is a no-op when socketIOManager is null', async () => {
+    const { handler } = makeHandlerNoManager();
+
+    await expect((handler as any).broadcastMessage(message, 'c_1')).resolves.toBeUndefined();
+  });
+});
+
+describe('MeeshySocketIOHandler.getConnectedUsers', () => {
+  it('returns array from manager', () => {
+    const { handler } = makeHandler();
+
+    const result = (handler as any).getConnectedUsers();
+
+    expect(result).toEqual(['user-1', 'user-2']);
+  });
+
+  it('returns empty array when socketIOManager is null', () => {
+    const { handler } = makeHandlerNoManager();
+
+    const result = (handler as any).getConnectedUsers();
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array and swallows error when manager throws', () => {
+    const { handler } = makeHandler(makeManager({
+      getConnectedUsers: jest.fn<any>().mockImplementation(() => { throw new Error('state corrupted'); }),
+    }));
+
+    const result = (handler as any).getConnectedUsers();
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe('MeeshySocketIOHandler.getManager', () => {
+  it('returns null before setupSocketIO', () => {
+    const { handler } = makeHandlerNoManager();
+
+    expect((handler as any).getManager()).toBeNull();
+  });
+
+  it('returns the injected manager after setup', () => {
+    const manager = makeManager();
+    const { handler } = makeHandler(manager);
+
+    expect((handler as any).getManager()).toBe(manager);
   });
 });

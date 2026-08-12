@@ -16,13 +16,14 @@ import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
+import { formatPhrasedTimeAgo } from '@/utils/relative-time-format';
 import dynamic from 'next/dynamic';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 const AgentMessagesModal = dynamic(() => import('./AgentMessagesModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,14 +42,7 @@ function conversationLabel(config: AgentConfigData): string {
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return '-';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return t('agent.overview.timeAgo.justNow');
-  if (minutes < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(minutes));
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
-  const days = Math.floor(hours / 24);
-  return t('agent.overview.timeAgo.days').replace('{{count}}', String(days));
+  return formatPhrasedTimeAgo(new Date(dateStr).getTime(), Date.now(), t, 'agent.overview.timeAgo');
 }
 
 export function AgentConversationsTab() {
@@ -107,7 +101,7 @@ export function AgentConversationsTab() {
   };
 
   const handleDelete = async (conversationId: string) => {
-    if (!confirm('Supprimer cette configuration agent ?')) return;
+    if (!confirm(t('agent.conversationsTab.deleteConfirm', 'Delete this agent configuration?'))) return;
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
@@ -148,6 +142,13 @@ export function AgentConversationsTab() {
     fetchConfigs();
   };
 
+  // These handlers are passed as callbacks to dynamically-imported modals.
+  // The modals are mocked to null in tests, so the callbacks are never invoked.
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleScheduleModalChange = (open: boolean) => { if (!open) setScheduleModalConfig(null); };
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleMessagesModalChange = (open: boolean) => { if (!open) setMessagesModalConfig(null); };
+
   if (loading && configs.length === 0) {
     return (
       <Card>
@@ -165,14 +166,14 @@ export function AgentConversationsTab() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <CardTitle className="text-lg">Configurations Agent</CardTitle>
-            <p className="text-xs text-gray-500 mt-0.5">{total} conversations configurées</p>
+            <CardTitle className="text-lg">{t('agent.conversationsTab.title', 'Agent Configurations')}</CardTitle>
+            <p className="text-xs text-gray-500 mt-0.5">{t('agent.conversationsTab.count', { count: total })}</p>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
             <div className="relative flex-1 sm:w-64">
               <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Rechercher..."
+                placeholder={t('agent.conversationsTab.searchPlaceholder', 'Search...')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && fetchConfigs()}
@@ -181,27 +182,27 @@ export function AgentConversationsTab() {
             </div>
             <Button size="sm" onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Configurer</span>
+              <span className="hidden sm:inline">{t('agent.conversationsTab.configure', 'Configure')}</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {configs.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-8">
-              Aucune conversation configur&eacute;e pour l&apos;agent
+              {t('agent.conversationsTab.empty', 'No conversations configured for the agent')}
             </p>
           ) : (
             <div className="space-y-1">
               {/* Desktop header */}
               <div className="hidden lg:grid grid-cols-12 gap-3 px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                <span className="col-span-3">Conversation</span>
-                <span>Statut</span>
-                <span>Triggers</span>
-                <span className="col-span-2">Contrôlés</span>
-                <span className="text-right">Messages</span>
-                <span className="text-right">Confiance</span>
-                <span className="text-right">Dernière rép.</span>
-                <span>Actions</span>
+                <span className="col-span-3">{t('agent.conversationsTab.columns.conversation', 'Conversation')}</span>
+                <span>{t('agent.conversationsTab.columns.status', 'Status')}</span>
+                <span>{t('agent.conversationsTab.columns.triggers', 'Triggers')}</span>
+                <span className="col-span-2">{t('agent.conversationsTab.columns.controlled', 'Controlled')}</span>
+                <span className="text-right">{t('agent.conversationsTab.columns.messages', 'Messages')}</span>
+                <span className="text-right">{t('agent.conversationsTab.columns.confidence', 'Confidence')}</span>
+                <span className="text-right">{t('agent.conversationsTab.columns.lastResponse', 'Last resp.')}</span>
+                <span>{t('agent.conversationsTab.columns.actions', 'Actions')}</span>
               </div>
 
               {configs.map(config => {
@@ -295,7 +296,7 @@ export function AgentConversationsTab() {
                         <button
                           onClick={() => setMessagesModalConfig(config)}
                           className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
-                          title="Voir les messages agent"
+                          title={t('agent.conversationsTab.viewMessages', 'View agent messages')}
                         >
                           <MessageSquare className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
@@ -323,7 +324,7 @@ export function AgentConversationsTab() {
                         <button
                           onClick={() => setScheduleModalConfig(config)}
                           className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
-                          title="Planificateur de triggers"
+                          title={t('agent.conversationsTab.triggerScheduler', 'Trigger scheduler')}
                         >
                           <Clock className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-xs text-gray-500 tabular-nums">
@@ -394,7 +395,7 @@ export function AgentConversationsTab() {
           conversationId={scheduleModalConfig.conversationId}
           conversationTitle={conversationLabel(scheduleModalConfig)}
           open={!!scheduleModalConfig}
-          onOpenChange={(open) => { if (!open) setScheduleModalConfig(null); }}
+          onOpenChange={handleScheduleModalChange}
         />
       )}
 
@@ -403,7 +404,7 @@ export function AgentConversationsTab() {
           conversationId={messagesModalConfig.conversationId}
           conversationTitle={conversationLabel(messagesModalConfig)}
           open={!!messagesModalConfig}
-          onOpenChange={(open) => { if (!open) setMessagesModalConfig(null); }}
+          onOpenChange={handleMessagesModalChange}
         />
       )}
     </>

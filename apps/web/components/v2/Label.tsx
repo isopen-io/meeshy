@@ -20,7 +20,7 @@ const Label = forwardRef<HTMLLabelElement, LabelProps>(
       >
         {children}
         {required && (
-          <span className="ml-1 text-[#C1292E]" aria-hidden="true">*</span>
+          <span className="ml-1 text-[var(--gp-error)]" aria-hidden="true">*</span>
         )}
       </label>
     );

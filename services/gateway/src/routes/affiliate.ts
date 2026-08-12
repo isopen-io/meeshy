@@ -5,6 +5,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
+import { SecuritySanitizer } from '../utils/sanitize';
 import { validatePagination } from '../utils/pagination';
 import {
   affiliateTokenSchema,
@@ -21,7 +22,7 @@ const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 const createAffiliateTokenSchema = z.object({
   name: z.string().min(1).max(100),
   maxUses: z.number().int().positive().optional(),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 const affiliateLinkSchema = z.object({
@@ -104,8 +105,16 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                 },
                 maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
                 currentUses: { type: 'number', description: 'Current use count' },
+                isActive: { type: 'boolean', description: 'Whether token is active' },
                 expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
-                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' }
+                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                _count: {
+                  type: 'object',
+                  properties: {
+                    affiliations: { type: 'number', description: 'Number of successful referrals' }
+                  }
+                },
+                clickCount: { type: 'number', description: 'Number of link clicks' }
               }
             }
           }
@@ -138,7 +147,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const affiliateToken = await fastify.prisma.affiliateToken.create({
         data: {
           token,
-          name,
+          name: SecuritySanitizer.sanitizeText(name),
           createdBy: userId,
           maxUses,
           expiresAt: expiresAt ? new Date(expiresAt) : null,
@@ -168,8 +177,11 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         affiliateLink,
         maxUses: affiliateToken.maxUses,
         currentUses: affiliateToken.currentUses,
+        isActive: !affiliateToken.expiresAt || affiliateToken.expiresAt > new Date(),
         expiresAt: affiliateToken.expiresAt?.toISOString(),
-        createdAt: affiliateToken.createdAt.toISOString()
+        createdAt: affiliateToken.createdAt.toISOString(),
+        _count: { affiliations: 0 },
+        clickCount: 0
       });
     } catch (error) {
       logger.error('Erreur création token affiliation', error as Error);
@@ -619,8 +631,15 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
    * Create affiliate relationship when user signs up
    */
   fastify.post('/affiliate/register', {
+    // La relation de parrainage porte désormais sur l'APPELANT, pas sur un
+    // identifiant fourni dans le corps. Sans cette garde, un anonyme forçait
+    // une relation d'ami acceptée entre le créateur d'un jeton et n'importe
+    // quel utilisateur, puis lisait les données de la victime via
+    // /affiliate/stats. Le client appelle cette route juste après
+    // l'inscription, une fois son jeton reçu : il peut donc s'authentifier.
+    onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
-      description: 'Convert an affiliate visit into a confirmed referral relationship when a user signs up. Links the new user to the affiliate who shared the token. Can use session key from track-visit or directly provide token. No authentication required (called during signup flow).',
+      description: 'Convert an affiliate visit into a confirmed referral relationship when a user signs up. Links the CALLER to the affiliate who shared the token. Authentication required: the referred user is always the authenticated caller.',
       tags: ['affiliate'],
       summary: 'Register affiliate referral',
       body: {
@@ -666,12 +685,23 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = registerAffiliateSchema.parse(request.body);
-      const { token, referredUserId, sessionKey } = body;
+      const { token, sessionKey } = body;
+
+      // `referredUserId` du corps est IGNORÉ : le référé est l'appelant
+      // authentifié, et lui seul. C'est ce qui empêche de forger une relation
+      // vers un tiers. Le champ reste accepté par le schéma pour ne pas casser
+      // les clients existants, mais il n'a plus aucun effet.
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const referredUserId = authContext?.userId;
+
+      if (!referredUserId) {
+        return sendUnauthorized(reply, 'Authentication required');
+      }
 
       const result = await AffiliateTrackingService.convertAffiliateVisit(
         fastify.prisma,
-        token, 
-        referredUserId, 
+        token,
+        referredUserId,
         sessionKey
       );
 

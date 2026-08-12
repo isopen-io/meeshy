@@ -109,6 +109,7 @@ data class ApiPost(
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,
+    val isBookmarkedByMe: Boolean? = null,
     val isViewedByMe: Boolean? = null,
     val currentUserReactions: List<String>? = null,
     val mentionedUsers: List<MentionedUser>? = null,
@@ -120,7 +121,7 @@ data class ApiPost(
  * language-keyed map (vs. the message list form), so we walk the preferred
  * languages and pick the first non-blank match — never an arbitrary entry.
  */
-private fun Map<String, ApiPostTranslationEntry>?.preferredEntry(
+internal fun Map<String, ApiPostTranslationEntry>?.preferredEntry(
     prefs: LanguageResolver.ContentLanguagePreferences,
 ): ApiPostTranslationEntry? {
     val translations = this?.takeIf { it.isNotEmpty() } ?: return null
@@ -142,6 +143,32 @@ fun ApiPost.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): 
 
 /** True when the displayed content is a translation rather than the original. */
 fun ApiPost.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
+    translations.preferredEntry(prefs) != null
+
+/**
+ * Content to display for a reposted/quoted post under the Prisme Linguistique:
+ * the preferred translation, or the original [ApiRepostOf.content] when no
+ * translation targets a preferred language. Same law as [ApiPost.displayContent]
+ * — the embedded post is prism-translated like any other post.
+ */
+fun ApiRepostOf.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
+    translations.preferredEntry(prefs)?.text ?: content.orEmpty()
+
+/** True when the reposted post's displayed content is a translation, not the original. */
+fun ApiRepostOf.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
+    translations.preferredEntry(prefs) != null
+
+/**
+ * Content to display for a comment under the Prisme Linguistique: the preferred
+ * translation, or the original [ApiPostComment.content] when no translation targets
+ * a preferred language. Same law as [ApiPost.displayContent] — a comment is
+ * prism-translated like any other content.
+ */
+fun ApiPostComment.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
+    translations.preferredEntry(prefs)?.text ?: content
+
+/** True when the comment's displayed content is a translation, not the original. */
+fun ApiPostComment.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
     translations.preferredEntry(prefs) != null
 
 /** A viewer of a post — port of APIPostViewer (PostModels.swift). */

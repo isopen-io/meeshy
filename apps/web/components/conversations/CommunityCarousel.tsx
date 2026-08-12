@@ -13,7 +13,7 @@ interface CommunityCarouselProps {
   conversations: Conversation[];
   selectedFilter: CommunityFilter;
   onFilterChange: (filter: CommunityFilter) => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
   preferencesMap?: Map<string, UserConversationPreferences>;
 }
 
@@ -64,7 +64,7 @@ export function CommunityCarousel({
     result.push({
       id: 'all',
       type: 'all',
-      title: t('conversationsList.all') || 'All',
+      title: t('conversationsList.all', 'All'),
       conversationCount: nonArchivedCount
     });
 
@@ -99,7 +99,7 @@ export function CommunityCarousel({
       result.push({
         id: 'reacted',
         type: 'reacted',
-        title: t('conversationsList.reacted') || 'Favorites',
+        title: t('conversationsList.reacted', 'Favorites'),
         conversationCount: reactedCount
       });
     }
@@ -114,7 +114,7 @@ export function CommunityCarousel({
     result.push({
       id: 'archived',
       type: 'archived',
-      title: t('conversationsList.archived') || 'Archived',
+      title: t('conversationsList.archived', 'Archived'),
       conversationCount: archivedCount
     });
 

@@ -1,6 +1,9 @@
 import Foundation
 import Photos
 import UIKit
+import os
+
+private let photoLog = Logger(subsystem: "com.meeshy.sdk", category: "photo-library")
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
 public final class PhotoLibraryManager: @unchecked Sendable {
@@ -21,7 +24,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     /// Save a UIImage to the Meeshy album.
     @discardableResult
     public func saveImage(_ image: UIImage) async -> Bool {
-        guard await requestAuthorization() else { return false }
+        guard await requestAuthorization() else {
+            photoLog.error("saveImage denied: photo library authorization refused")
+            return false
+        }
 
         // Resolve the album OUTSIDE the `performChanges` block. `fetchOrCreateAlbum`
         // calls `performChangesAndWait`, which dispatch_syncs onto the same
@@ -39,7 +45,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
                 }
-            } completionHandler: { success, _ in
+            } completionHandler: { success, error in
+                if !success {
+                    photoLog.error("saveImage performChanges failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                }
                 continuation.resume(returning: success)
             }
         }
@@ -48,7 +57,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     /// Save a video from a local file URL to the Meeshy album.
     @discardableResult
     public func saveVideo(at fileURL: URL) async -> Bool {
-        guard await requestAuthorization() else { return false }
+        guard await requestAuthorization() else {
+            photoLog.error("saveVideo denied: photo library authorization refused")
+            return false
+        }
 
         // Same dispatch deadlock fix as `saveImage`: resolve the album before
         // entering `performChanges` so we never dispatch_sync onto our own
@@ -63,20 +75,29 @@ public final class PhotoLibraryManager: @unchecked Sendable {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
                 }
-            } completionHandler: { success, _ in
+            } completionHandler: { success, error in
+                // Observabilité : ce chemin était totalement silencieux — un
+                // échec d'écriture (format refusé, disque plein) ne laissait
+                // aucune trace, rendant les régressions invisibles.
+                if !success {
+                    photoLog.error("saveVideo performChanges failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                }
                 continuation.resume(returning: success)
             }
         }
     }
 
-    /// Save media from a URL string. Downloads via cache, determines type from extension/MIME.
+    /// Save media from a URL string. Downloads via cache, routes to the image
+    /// or video save path based on the caller-supplied `kind` — replaces the
+    /// previous substring sniffing (`.contains("video")` / `.contains(".mp4")`),
+    /// which could misclassify any URL whose path merely contained one of
+    /// those substrings. `AttachmentKind` is the single source of truth for
+    /// media family (mirrors `MediaSaveRequest.kind` in the app's unified
+    /// save flow, `MediaSaveCoordinator.swift`).
     @discardableResult
-    public func saveFromURL(_ urlString: String) async -> Bool {
-        let lower = urlString.lowercased()
-        let isVideo = lower.contains(".mp4") || lower.contains(".mov") || lower.contains(".m4v") || lower.contains("video")
-
+    public func saveFromURL(_ urlString: String, kind: AttachmentKind) async -> Bool {
         do {
-            if isVideo {
+            if kind == .video {
                 let localURL = try await CacheCoordinator.shared.video.localFileURLOrThrow(for: urlString)
                 return await saveVideo(at: localURL)
             } else {
@@ -90,25 +111,22 @@ public final class PhotoLibraryManager: @unchecked Sendable {
 
     // MARK: - Authorization
 
+    /// Demande l'accès `.addOnly` (écriture seule). Délègue à
+    /// `DevicePermissions` — source unique des demandes TCC, dont le callback
+    /// est confiné `nonisolated` (cf. `DevicePermissions.swift`).
     public func requestAuthorization() async -> Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized, .limited:
-            return true
-        case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                    continuation.resume(returning: newStatus == .authorized || newStatus == .limited)
-                }
-            }
-        default:
-            return false
-        }
+        await DevicePermissions.requestPhotoLibraryAdd().isUsable
     }
 
     public var isAuthorized: Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        return status == .authorized || status == .limited
+        MediaPermissionState.photoLibraryAdd.isUsable
+    }
+
+    /// État courant, sans jamais prompter — permet aux appelants de distinguer
+    /// « pas encore demandé » d'un refus définitif (qui, lui, mérite un renvoi
+    /// vers les Réglages plutôt qu'un nouveau prompt qui n'apparaîtra jamais).
+    public var authorizationState: MediaPermissionState {
+        MediaPermissionState.photoLibraryAdd
     }
 
     // MARK: - Album Management

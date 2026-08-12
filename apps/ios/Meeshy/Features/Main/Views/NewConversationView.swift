@@ -54,6 +54,12 @@ struct NewConversationView: View {
                 resultsList
             }
         }
+        // Contact-first: load the user's contacts as soon as the picker opens,
+        // before any search is typed. Cache-First inside the VM keeps this
+        // instant when the friends cache is warm.
+        .task {
+            await viewModel.loadContacts()
+        }
         .adaptiveOnChange(of: searchQuery) { _, newValue in
             viewModel.search(query: newValue)
         }
@@ -113,15 +119,18 @@ struct NewConversationView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
+                // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
+                Image(systemName: "chevron.backward")
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
             Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -136,7 +145,7 @@ struct NewConversationView: View {
                             .tint(MeeshyColors.indigo400)
                     } else {
                         Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
@@ -154,11 +163,12 @@ struct NewConversationView: View {
     private var groupTitleField: some View {
         HStack(spacing: 10) {
             Image(systemName: "person.3.fill")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 14)
@@ -202,11 +212,12 @@ struct NewConversationView: View {
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
 
             Text(user.displayName ?? user.username)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
@@ -217,9 +228,10 @@ struct NewConversationView: View {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "accessibility.remove_selected_user", bundle: .main))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -239,11 +251,12 @@ struct NewConversationView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -257,9 +270,10 @@ struct NewConversationView: View {
                     viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(MeeshyFont.relative(14))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "accessibility.clear_search", bundle: .main))
             }
         }
         .padding(.horizontal, 14)
@@ -278,15 +292,22 @@ struct NewConversationView: View {
 
     // MARK: - Results List
 
+    /// The picker is contact-first: browsing the user's own contacts is the
+    /// default surface, and platform-wide search only takes over once the
+    /// query reaches the ViewModel's 2-character threshold. Below that the
+    /// contacts list stays visible so a single stray keystroke never blanks
+    /// the screen.
+    private var isSearchActive: Bool {
+        searchQuery.trimmingCharacters(in: .whitespaces).count >= 2
+    }
+
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 4) {
-                if viewModel.searchResults.isEmpty && !searchQuery.isEmpty && !viewModel.isSearching {
-                    emptyState
+                if isSearchActive {
+                    searchResultsSection
                 } else {
-                    ForEach(viewModel.searchResults) { user in
-                        userRow(user)
-                    }
+                    contactsSection
                 }
             }
             .padding(.horizontal, 16)
@@ -294,18 +315,118 @@ struct NewConversationView: View {
         }
     }
 
+    // MARK: - Search Results Section
+
+    @ViewBuilder
+    private var searchResultsSection: some View {
+        if viewModel.searchResults.isEmpty && !viewModel.isSearching {
+            emptyState
+        } else {
+            ForEach(viewModel.searchResults) { user in
+                userRow(user)
+            }
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.slash")
-                .font(.system(size: 36))
+                .font(MeeshyFont.relative(36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
+                .accessibilityHidden(true)
 
             Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Contacts Section (default surface)
+
+    @ViewBuilder
+    private var contactsSection: some View {
+        if viewModel.contacts.isEmpty {
+            if viewModel.isLoadingContacts {
+                contactsLoadingState
+            } else {
+                contactsEmptyState
+            }
+        } else {
+            contactsSectionHeader
+            ForEach(viewModel.contacts) { user in
+                userRow(user)
+            }
+        }
+    }
+
+    private var contactsSectionHeader: some View {
+        HStack {
+            Text(String(localized: "new_conversation.contacts.section", defaultValue: "Vos contacts", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundColor(theme.textMuted)
+                .textCase(.uppercase)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var contactsLoadingState: some View {
+        VStack(spacing: 4) {
+            ForEach(0..<6, id: \.self) { _ in
+                contactSkeletonRow
+            }
+        }
+        .padding(.top, 4)
+        .accessibilityLabel(String(localized: "new_conversation.contacts.loading", defaultValue: "Chargement des contacts", bundle: .main))
+    }
+
+    private var contactSkeletonRow: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(theme.textMuted.opacity(0.12))
+                .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(theme.textMuted.opacity(0.12))
+                    .frame(width: 120, height: 12)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(theme.textMuted.opacity(0.08))
+                    .frame(width: 80, height: 10)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .shimmer()
+        .accessibilityHidden(true)
+    }
+
+    private var contactsEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.2")
+                .font(MeeshyFont.relative(36))
+                .foregroundColor(theme.textMuted.opacity(0.5))
+                .accessibilityHidden(true)
+
+            Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+
+            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour d\u{00E9}marrer une conversation.", bundle: .main))
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
+        .accessibilityElement(children: .combine)
     }
 
     private func userRow(_ user: SearchedUser) -> some View {
@@ -330,16 +451,17 @@ struct NewConversationView: View {
                     accentColor: userColor,
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(user.displayName ?? user.username)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text("@\(user.username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -347,11 +469,12 @@ struct NewConversationView: View {
 
                 if isBlocked {
                     Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.8))
                     Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
+                        .accessibilityHidden(true)
                 } else {
                     if user.isOnline == true {
                         Circle()
@@ -359,9 +482,12 @@ struct NewConversationView: View {
                             .frame(width: 8, height: 8)
                     }
 
+                    // Selection state is conveyed to VoiceOver by the row's
+                    // `.isSelected` trait below; the glyph itself is decorative.
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                        .accessibilityHidden(true)
                 }
             }
             .opacity(isBlocked ? 0.5 : 1)
@@ -383,6 +509,22 @@ struct NewConversationView: View {
             )
         }
         .disabled(isBlocked)
+        .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // VoiceOver otherwise hears only "displayName, @username": the online dot
+    // (green Circle) and the "Bloqué" badge convey status by colour/shape alone
+    // (WCAG 1.4.1). Compose the status into the row label, mirroring the shipped
+    // ContactsListTab idiom and reusing its lowercase status key.
+    private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool) -> String {
+        var parts = [user.displayName ?? user.username, "@\(user.username)"]
+        if isBlocked {
+            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqu\u{00E9}", bundle: .main))
+        } else if user.isOnline == true {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // Networking is delegated to `NewConversationViewModel`. The view no
@@ -400,8 +542,29 @@ struct SearchedUser: Decodable, Identifiable {
     let displayName: String?
     let email: String?
     let isOnline: Bool?
-    let lastActiveAt: String?
+    let lastActiveAt: Date?
     let avatar: String?
+}
+
+extension SearchedUser {
+    /// Bridges an SDK `FriendRequestUser` (the contact list model) into the
+    /// picker's `SearchedUser` so the user's contacts render through the exact
+    /// same `userRow` and feed the same selection flow as platform search
+    /// results. `email` is absent from the friend payload (`nil`) — it is not
+    /// surfaced in the row anyway.
+    init(friend: FriendRequestUser) {
+        self.init(
+            id: friend.id,
+            username: friend.username,
+            firstName: friend.firstName,
+            lastName: friend.lastName,
+            displayName: friend.displayName,
+            email: nil,
+            isOnline: friend.isOnline,
+            lastActiveAt: friend.lastActiveAt,
+            avatar: friend.avatar
+        )
+    }
 }
 
 // MARK: - Notification Name

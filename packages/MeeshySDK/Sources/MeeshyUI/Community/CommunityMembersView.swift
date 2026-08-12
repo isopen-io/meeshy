@@ -98,11 +98,11 @@ public struct CommunityMembersView: View {
         }
     }
 
-    private var groupedMembers: [CommunityRole: [APICommunityMember]] {
+    private var groupedMembers: [MemberRole: [APICommunityMember]] {
         Dictionary(grouping: viewModel.members) { $0.communityRole }
     }
 
-    private func sectionHeader(role: CommunityRole, count: Int) -> some View {
+    private func sectionHeader(role: MemberRole, count: Int) -> some View {
         HStack(spacing: 6) {
             Image(systemName: role.icon)
                 .font(.system(size: 11))
@@ -126,7 +126,7 @@ public struct CommunityMembersView: View {
 struct MemberRow: View {
     let member: APICommunityMember
     let isCurrentUserAdmin: Bool
-    var onRoleChange: ((CommunityRole) -> Void)? = nil
+    var onRoleChange: ((MemberRole) -> Void)? = nil
     var onRemove: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -142,7 +142,7 @@ struct MemberRow: View {
                 context: .userListItem,
                 accentColor: accentColor,
                 avatarURL: user?.avatar,
-                presenceState: user?.isOnline == true ? .online : .offline
+                presenceState: UserPresence(isOnline: user?.isOnline ?? false).state
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -164,7 +164,7 @@ struct MemberRow: View {
 
             if isCurrentUserAdmin {
                 Menu {
-                    ForEach(CommunityRole.allCases, id: \.self) { role in
+                    ForEach(MemberRole.allCases, id: \.self) { role in
                         Button {
                             onRoleChange?(role)
                         } label: {
@@ -272,7 +272,7 @@ final class CommunityMembersViewModel: ObservableObject {
         }
     }
 
-    func updateRole(memberId: String, role: CommunityRole) async {
+    func updateRole(memberId: String, role: MemberRole) async {
         do {
             _ = try await service.updateMemberRole(
                 communityId: communityId,

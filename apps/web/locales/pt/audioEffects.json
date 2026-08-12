@@ -317,7 +317,21 @@
       "highConfidence": "Alta confiança",
       "mediumConfidence": "Confiança média",
       "veryLowConfidence": "Muito baixa",
-      "uncertain": "Incerto"
+      "uncertain": "Incerto",
+      "voiceProfile": {
+        "title": "Perfil de voz",
+        "titleYou": "Perfil de voz - Você",
+        "pitch": "Tom médio:",
+        "range": "Faixa:",
+        "gender": "Gênero:",
+        "age": "Idade:",
+        "voiceType": "Tipo de voz:",
+        "quality": "Qualidade (HNR):",
+        "speakingTime": "Tempo de fala: {seconds}s",
+        "primarySpeaker": "Locutor principal",
+        "unknownSpeaker": "Locutor desconhecido",
+        "createIdentity": "Crie uma identidade de voz para se identificar e ver os detalhes"
+      }
     },
     "timeline": {
       "title": "Linha do Tempo dos Efeitos",
@@ -362,7 +376,8 @@
       "scrollRight": "Rolar para a direita"
     },
     "closePanel": "Fechar painel de efeitos de áudio",
-    "clonedVoice": "Voz clonada"
+    "clonedVoice": "Voz clonada",
+    "moreInfo": "Mais informações"
   },
   "microphone": {
     "noMicDetected": "Nenhum microfone detectado.",

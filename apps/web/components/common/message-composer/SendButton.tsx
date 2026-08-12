@@ -30,8 +30,13 @@ export const SendButton: React.FC<SendButtonProps> = ({
       opacity: 0,
     },
     visible: {
-      scale: config.enableRotation ? [0, 1.3, 1] : [0, 1],
-      rotate: config.enableRotation ? [25, -5, 0] : 0,
+      // framer-motion 12 only supports two keyframes with spring/inertia
+      // transitions (see https://motion.dev/troubleshooting/spring-two-frames).
+      // The bounce/overshoot look is preserved by the spring's own physics —
+      // stiffness: 300 / damping: 20 is underdamped (damping ratio ≈ 0.58),
+      // so it naturally overshoots past scale 1 / rotate 0 before settling.
+      scale: config.enableRotation ? 1 : [0, 1],
+      rotate: config.enableRotation ? 0 : 0,
       opacity: 1,
       transition: config.enableRotation ? {
         type: 'spring',

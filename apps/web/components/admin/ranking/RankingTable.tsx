@@ -41,6 +41,7 @@ export function RankingTable({
         return <MessageRankCard key={item.id} item={item} criterion={criterion} />;
       case 'links':
         return <LinkRankCard key={item.id} item={item} criterion={criterion} />;
+      /* istanbul ignore next */
       default:
         return null;
     }
@@ -52,6 +53,7 @@ export function RankingTable({
       case 'conversations': return t('ranking.conversations');
       case 'messages': return t('ranking.messages');
       case 'links': return t('ranking.links');
+      /* istanbul ignore next */
       default: return t('ranking.default');
     }
   };

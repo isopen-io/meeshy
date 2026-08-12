@@ -166,11 +166,11 @@ public actor TusUploadManager {
         let mime = result.mimeType
         let store: DiskCacheStore?
         if mime.hasPrefix("image/") {
-            store = await CacheCoordinator.shared.images
+            store = CacheCoordinator.shared.images
         } else if mime.hasPrefix("video/") {
-            store = await CacheCoordinator.shared.video
+            store = CacheCoordinator.shared.video
         } else if mime.hasPrefix("audio/") {
-            store = await CacheCoordinator.shared.audio
+            store = CacheCoordinator.shared.audio
         } else {
             store = nil
         }
@@ -263,7 +263,10 @@ public actor TusUploadManager {
         // chunk so an OS suspend / app kill in the middle still leaves the
         // checkpoint in a state the next attempt can reuse.
         let fileHandle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? fileHandle.close() }
+        defer {
+            do { try fileHandle.close() }
+            catch { Self.logger.error("Upload file handle leaked: \(error.localizedDescription, privacy: .public)") }
+        }
         fileHandle.seek(toFileOffset: UInt64(offset))
 
         while offset < fileSize {
@@ -310,16 +313,26 @@ public actor TusUploadManager {
                     struct TusResponseData: Decodable {
                         let attachment: TusUploadResult
                     }
-                    if let parsed = try? decoder.decode(TusResponse.self, from: responseData),
-                       let attachment = parsed.data?.attachment {
-                        await store.delete(checkpointKey: checkpointKey)
-                        progressMap[fileId] = FileUploadProgress(
-                            fileId: fileId, fileName: fileName, fileSize: fileSize,
-                            status: .complete, percentage: 100, bytesUploaded: fileSize,
-                            error: nil, attachmentId: attachment.id
+                    do {
+                        let parsed = try decoder.decode(TusResponse.self, from: responseData)
+                        if let attachment = parsed.data?.attachment {
+                            await store.delete(checkpointKey: checkpointKey)
+                            progressMap[fileId] = FileUploadProgress(
+                                fileId: fileId, fileName: fileName, fileSize: fileSize,
+                                status: .complete, percentage: 100, bytesUploaded: fileSize,
+                                error: nil, attachmentId: attachment.id
+                            )
+                            emitProgress()
+                            return attachment
+                        }
+                        Self.logger.error("TUS finish body decoded but carried no attachment — upload succeeded server-side, client will retry the whole file")
+                    } catch {
+                        // Le fichier EST bien monté côté serveur : sans cette
+                        // trace, l'échec de parsing se traduit par un
+                        // ré-upload complet et silencieux.
+                        Self.logger.error(
+                            "TUS finish body undecodable — upload succeeded server-side, client will retry the whole file: \(error.localizedDescription, privacy: .public)"
                         )
-                        emitProgress()
-                        return attachment
                     }
                 }
 
@@ -433,7 +446,10 @@ public actor TusUploadManager {
     /// be exercised from tests without needing an actor hop.
     static func sha256Hex(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? handle.close() }
+        defer {
+            do { try handle.close() }
+            catch { logger.error("Hashing file handle leaked: \(error.localizedDescription, privacy: .public)") }
+        }
 
         var hasher = SHA256()
         while try autoreleasepool(invoking: { () throws -> Bool in

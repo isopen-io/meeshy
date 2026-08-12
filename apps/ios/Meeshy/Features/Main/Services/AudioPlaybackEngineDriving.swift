@@ -25,6 +25,8 @@ public protocol AudioPlaybackEngineDriving: AnyObject {
     func playLocal(url: URL)
     func togglePlayPause()
     func stop()
+    func pause()
+    func resumeFromInterruption()
     func seek(to fraction: Double)
     func skip(seconds: Double)
     func setSpeed(_ speed: PlaybackSpeed)
@@ -75,6 +77,7 @@ public struct ActiveAudioContext: Equatable, Sendable {
     public let senderName: String
     public let senderAvatarURL: String?
     public let durationMs: Int
+    public let receivedAt: Date
 
     public init(from queued: QueuedAudio,
                 conversationName: String,
@@ -87,11 +90,13 @@ public struct ActiveAudioContext: Equatable, Sendable {
         self.senderName = queued.senderName
         self.senderAvatarURL = queued.senderAvatarURL
         self.durationMs = queued.durationMs
+        self.receivedAt = queued.receivedAt
     }
 
     public init(attachmentId: String, messageId: String, conversationId: String,
                 conversationName: String, conversationArtworkURL: String?,
-                senderName: String, senderAvatarURL: String?, durationMs: Int) {
+                senderName: String, senderAvatarURL: String?, durationMs: Int,
+                receivedAt: Date = Date()) {
         self.attachmentId = attachmentId
         self.messageId = messageId
         self.conversationId = conversationId
@@ -100,5 +105,6 @@ public struct ActiveAudioContext: Equatable, Sendable {
         self.senderName = senderName
         self.senderAvatarURL = senderAvatarURL
         self.durationMs = durationMs
+        self.receivedAt = receivedAt
     }
 }

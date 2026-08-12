@@ -104,6 +104,19 @@ final class ComposerLayerActionsTests: XCTestCase {
         XCTAssertEqual(vm.currentEffects.textObjects.count, countBefore)
     }
 
+    // MARK: - addSticker (C13 — currentEffects source de vérité)
+
+    func test_addSticker_appendsToCurrentEffects_andBringsToFront() {
+        let vm = StoryComposerViewModel()
+        let a = vm.addSticker(emoji: "😀")
+        let b = vm.addSticker(emoji: "🔥")
+
+        XCTAssertEqual(vm.currentEffects.stickerObjects?.count, 2)
+        XCTAssertGreaterThan(vm.zIndex(for: b.id), vm.zIndex(for: a.id),
+                             "each new sticker lands on top")
+        XCTAssertNotEqual(a.x, b.x, "cascade offset avoids exact stacking")
+    }
+
     // MARK: - deleteElement
 
     func test_deleteElement_text_removesFromArray() throws {

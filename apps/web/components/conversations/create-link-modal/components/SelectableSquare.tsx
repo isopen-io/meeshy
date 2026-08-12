@@ -14,7 +14,12 @@ export function SelectableSquare({
 }: SelectableSquareProps) {
   return (
     <div
-      className={`p-4 rounded-lg border-2 transition-[color,background-color,border-color,box-shadow] ${
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+      className={`p-4 rounded-lg border-2 transition-[color,background-color,border-color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
         disabled
           ? 'opacity-50 cursor-not-allowed'
           : 'cursor-pointer hover:shadow-md'
@@ -24,6 +29,12 @@ export function SelectableSquare({
           : 'border-muted-foreground/20 hover:border-muted-foreground/40 dark:border-muted-foreground/30 dark:hover:border-muted-foreground/50 dark:bg-gray-800/50'
       }`}
       onClick={() => !disabled && onChange(!checked)}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onChange(!checked);
+        }
+      }}
     >
       <div className="flex items-start space-x-3">
         <div

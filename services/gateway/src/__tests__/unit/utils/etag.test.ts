@@ -40,6 +40,18 @@ describe('ifNoneMatchMatches', () => {
   it('is true when present in the array (repeated-header) form', () => {
     expect(ifNoneMatchMatches(['"x"', '"abc"'], etag)).toBe(true);
   });
+
+  it('is true when the client weakens the strong tag (RFC 7232 §3.2 weak comparison)', () => {
+    expect(ifNoneMatchMatches('W/"abc"', etag)).toBe(true);
+  });
+
+  it('is true when a weak-tagged value appears in a list', () => {
+    expect(ifNoneMatchMatches('"x", W/"abc"', etag)).toBe(true);
+  });
+
+  it('is false when a weak-tagged value does not match', () => {
+    expect(ifNoneMatchMatches('W/"def"', etag)).toBe(false);
+  });
 });
 
 describe('sendWithETag', () => {

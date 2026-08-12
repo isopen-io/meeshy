@@ -61,9 +61,25 @@ export interface StoryPreferences {
   storyNotificationsEnabled: boolean;
 }
 
+/**
+ * Server state, not a preference: whether a `SignalPreKeyBundle` row exists for
+ * this user. Written by `POST /signal/keys`, reported by
+ * `GET /me/preferences/encryption`.
+ *
+ * It cannot ride on the user object: `userSchema` — the response schema
+ * fast-json-stringify serializes `GET /auth/me` through — declares no signal
+ * field, so any the handler sets is dropped before the body is written.
+ */
+export interface EncryptionKeyStatus {
+  hasSignalKeys: boolean;
+  signalRegistrationId: number | null;
+  lastKeyRotation: string | null;
+}
+
 export interface UserPreferencesState {
   notifications: StoreNotificationPreferences;
   encryption: EncryptionPreferences;
+  encryptionKeys: EncryptionKeyStatus;
   privacy: StorePrivacyPreferences;
   language: LanguagePreferences;
   story: StoryPreferences;
@@ -86,6 +102,7 @@ export interface UserPreferencesActions {
   syncAll: () => Promise<void>;
   syncNotifications: () => Promise<void>;
   syncEncryption: () => Promise<void>;
+  syncEncryptionKeys: () => Promise<void>;
   syncPrivacy: () => Promise<void>;
 
   updateNotifications: (prefs: Partial<StoreNotificationPreferences>) => Promise<void>;
@@ -130,6 +147,12 @@ const DEFAULT_ENCRYPTION_PREFERENCES: EncryptionPreferences = {
   warnOnUnencrypted: false,
 };
 
+const DEFAULT_ENCRYPTION_KEY_STATUS: EncryptionKeyStatus = {
+  hasSignalKeys: false,
+  signalRegistrationId: null,
+  lastKeyRotation: null,
+};
+
 const DEFAULT_PRIVACY_PREFERENCES: StorePrivacyPreferences = {
   showOnlineStatus: true,
   showLastSeen: true,
@@ -156,6 +179,7 @@ const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
 const DEFAULT_STATE: UserPreferencesState = {
   notifications: DEFAULT_NOTIFICATION_PREFERENCES,
   encryption: DEFAULT_ENCRYPTION_PREFERENCES,
+  encryptionKeys: DEFAULT_ENCRYPTION_KEY_STATUS,
   privacy: DEFAULT_PRIVACY_PREFERENCES,
   language: DEFAULT_LANGUAGE_PREFERENCES,
   story: DEFAULT_STORY_PREFERENCES,
@@ -210,6 +234,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         await Promise.all([
           get().syncNotifications(),
           get().syncEncryption(),
+          get().syncEncryptionKeys(),
           get().syncPrivacy(),
         ]);
       },
@@ -271,6 +296,36 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           }
         } catch (error) {
           console.error('[UserPreferencesStore] Error syncing encryption:', error);
+        }
+      },
+
+      syncEncryptionKeys: async () => {
+        const token = authManager.getAuthToken();
+        if (!token) return;
+
+        try {
+          const response = await fetch(buildApiUrl('/me/preferences/encryption'), {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+
+          if (!response.ok) return;
+
+          const data = await response.json();
+          if (!data.success || !data.data) return;
+
+          const { hasSignalKeys, signalRegistrationId, lastKeyRotation } = data.data;
+
+          set({
+            encryptionKeys: {
+              hasSignalKeys: hasSignalKeys === true,
+              signalRegistrationId: signalRegistrationId ?? null,
+              lastKeyRotation: lastKeyRotation ?? null,
+            }
+          });
+        } catch (error) {
+          // Le dernier statut connu reste affiché : une panne réseau n'est pas
+          // la preuve que l'utilisateur a perdu ses clés.
+          console.error('[UserPreferencesStore] Error syncing encryption keys:', error);
         }
       },
 
@@ -497,6 +552,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         // Only persist these fields
         notifications: state.notifications,
         encryption: state.encryption,
+        encryptionKeys: state.encryptionKeys,
         privacy: state.privacy,
         language: state.language,
         story: state.story,
@@ -529,9 +585,11 @@ export const useNotificationPreferences = () => {
 export const useEncryptionPreferences = () => {
   return useUserPreferencesStore(useShallow(state => ({
     preferences: state.encryption,
+    keyStatus: state.encryptionKeys,
     update: state.updateEncryption,
     updateLocalSettings: state.updateEncryptionLocalSettings,
     sync: state.syncEncryption,
+    syncKeys: state.syncEncryptionKeys,
     shouldShowWarning: state.shouldShowEncryptionWarning,
   })));
 };

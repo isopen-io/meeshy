@@ -19,11 +19,14 @@ import MeeshySDK
 public enum ReaderTransitionResolver {
 
     /// Returns the rendered opacity for `media` at `currentTime`, accounting for any matching
-    /// `clipTransitions` (crossfade only — dissolve is handled by the engine compositor and is
-    /// transparent to the SwiftUI reader).
+    /// `clipTransitions`. `.crossfade` uses the canonical ramp; `.dissolve` is DEGRADED to the
+    /// same crossfade opacity ramp for live playback — the reader has no per-pixel compositor,
+    /// so without the fallback a serialized dissolve was invisible at read time. The MP4 export
+    /// keeps the real effect (`VideoCompositor` routes dissolve through
+    /// `DissolveVideoCompositor` / `CIDissolveTransition`).
     ///
     /// Outside the media's `[start, end]` window the resolver returns `0`. Inside the window
-    /// each matching crossfade contributes a multiplicative factor computed by
+    /// each matching transition contributes a multiplicative factor computed by
     /// `StoryRenderer.clipTransitionOpacity` so that the reader and compositor agree.
     public nonisolated static func opacity(
         for media: StoryMediaObject,
@@ -38,7 +41,7 @@ public enum ReaderTransitionResolver {
         let t = Double(currentTime)
         var opacity: Float = 1.0
 
-        for transition in transitions where transition.kind == .crossfade {
+        for transition in transitions.map(liveRenderableTransition) {
             let isOutgoing = transition.fromClipId == media.id
             let isIncoming = transition.toClipId == media.id
             guard isOutgoing || isIncoming else { continue }
@@ -58,6 +61,27 @@ public enum ReaderTransitionResolver {
         }
 
         return max(0, min(1, opacity))
+    }
+
+    /// Maps a serialized transition to the one the LIVE reader can actually
+    /// render: `.crossfade` passes through, `.dissolve` is normalised to an
+    /// equivalent `.crossfade` (degraded opacity ramp — the canonical
+    /// `StoryRenderer.clipTransitionOpacity` primitive stays crossfade-only so
+    /// the exporter's per-pixel dissolve path keeps its own semantics).
+    private nonisolated static func liveRenderableTransition(
+        _ transition: StoryClipTransition
+    ) -> StoryClipTransition {
+        switch transition.kind {
+        case .crossfade:
+            return transition
+        case .dissolve:
+            return StoryClipTransition(id: transition.id,
+                                       fromClipId: transition.fromClipId,
+                                       toClipId: transition.toClipId,
+                                       kind: .crossfade,
+                                       duration: transition.duration,
+                                       easing: transition.easing)
+        }
     }
 }
 

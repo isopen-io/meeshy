@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Combine
 import MeeshyUI
 import MeeshySDK
@@ -72,41 +73,40 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private var queue: [QueuedAudio] = []
-    /// BUG C — ids of attachments that have already finished/failed and been
-    /// removed from the head in `advanceQueue()`. `appendUpcoming` skips these
-    /// in addition to the live `queue`, closing the narrow window where a
-    /// re-emitted `$messages` could re-queue a just-finished audio before the
-    /// VM-side `listenedAttachmentIds` set updates. Cleared on a fresh
-    /// `play(...)` so replaying a track later in a new session still works.
+    /// Ids of attachments that finished or failed this session. `appendUpcoming`
+    /// skips these to close the race window where a re-emitted `$messages` could
+    /// re-queue an audio before the VM's `listenedAttachmentIds` set updates.
+    /// Cleared on fresh `play()` so prior tracks can be replayed in a new session.
     private var consumedAttachmentIds: Set<String> = []
-    /// Tracks already played (advanced-past) so `playPrevious()` can walk back —
-    /// the queue itself is forward-only. Most-recent is `history.last`. Capped
-    /// at `Self.maxHistory`; reset on a fresh `play(...)` / `close()`.
+    /// Already-played tracks enabling `playPrevious()` — the queue is forward-only.
+    /// Most-recent is `history.last`. Capped at `Self.maxHistory`; reset on `close()`.
     private var history: [QueuedAudio] = []
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
-    /// Defensive guard: `assign(to: &$)` does NOT auto-cancel a previous
-    /// subscription. If a future refactor accidentally calls
-    /// `wireEngineForwarding()` twice (e.g. after swapping engines), two
-    /// publishers would race to write the same `@Published` properties and
-    /// trigger value loops. The init is the single legitimate caller — any
-    /// subsequent call is a programmer error and must crash in DEBUG.
+    // `assign(to: &$)` does not cancel a prior subscription — a second call to
+    // `wireEngineForwarding()` would race two publishers on the same @Published
+    // properties. The precondition below enforces single-wire.
     private var isEngineWired = false
 
-    // MARK: - NowPlaying bridge state (Phase 8)
-    // Accessed from `ConversationAudioCoordinator+NowPlaying.swift` (same
-    // module, separate file) — internal access required so the extension can
-    // read/write these. The `_` prefix signals extension-only usage.
+    // MARK: - NowPlaying bridge state
+    // Written by `ConversationAudioCoordinator+NowPlaying.swift` (same-module extension).
+    // `internal` access + `_` prefix signals extension-only usage.
     var _isNowPlayingActivated = false
     var _nowPlayingCancellables = Set<AnyCancellable>()
-    /// Opaque tokens returned by `MPRemoteCommand.addTarget`. Stored for
-    /// future `deactivateNowPlayingBridge()` symmetry — currently unused
-    /// since the bridge is process-long (`activateNowPlayingBridge` is
-    /// called once at root mount and never torn down). The storage locks
-    /// the contract so a future deactivation path can call `removeTarget(_:)`
-    /// without first re-discovering the handlers.
+    // Opaque tokens from MPRemoteCommand.addTarget, kept for future deactivation symmetry.
     var _remoteCommandTokens: [Any] = []
+    /// Gate lue par `pushNowPlayingInfo()`. Sans elle, le premier tick de
+    /// progression republierait la carte que la suspension vient d'effacer.
+    var _isSuspendedBySystemCall = false
+    /// Mémo de l'artwork composé (avatar + badge icône) : `pushNowPlayingInfo`
+    /// tire à 4Hz — sans mémo, chaque tick relancerait la résolution d'avatar
+    /// et la composition. Clé = URL d'avatar retenue ("" = icône seule).
+    var _nowPlayingArtworkKey: String?
+    var _nowPlayingArtwork: UIImage?
+    /// Capturé À L'ENTRÉE de la suspension, avant que `PlaybackCoordinator.stopAll()`
+    /// n'écrase `isPlaying`. Décide si la fin d'appel relance la lecture.
+    private var _wasPlayingBeforeSystemCall = false
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
 
@@ -118,21 +118,24 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     // MARK: - Init
 
-    public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
+    public init(
+        engine: AudioPlaybackEngineDriving = AudioPlaybackManager(),
+        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never>? = nil
+    ) {
         self.engine = engine
-        // BUG A (round 4) — wire the app-side CallKit policy into the raw
-        // engine the bubbles talk to directly (`engineForBubble`). The bubble
-        // tap (and the lock-screen remote command) resolve to this concrete
-        // `AudioPlaybackManager` and call `togglePlayPause()` / `play()`
-        // straight on it, routing around the coordinator's own guards. Setting
-        // an opaque predicate on the engine closes that gap WITHOUT the SDK
-        // ever depending on `CallManager`.
+        // Bubble taps and lock-screen commands call the engine directly, bypassing
+        // the coordinator's guards. Setting playbackPermissionGuard closes that gap
+        // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
+            manager.sessionProfile = .content
             manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()
         wireAuthLogoutHook()
         wireSocketLifecycleHooks()
+        wireSessionInterruptionHooks(
+            sessionEvents ?? MediaSessionCoordinator.shared.events.eraseToAnyPublisher()
+        )
     }
 
     // MARK: - Public API
@@ -147,31 +150,239 @@ public final class ConversationAudioCoordinator: ObservableObject {
         }
         queue = [current] + tail
         queueCount = queue.count
-        // BUG C — a fresh play session starts a new lifecycle: previously
-        // consumed ids must be forgotten so the user can replay them.
+        // Fresh session: clear consumed ids so prior tracks can be replayed.
         consumedAttachmentIds = []
-        // A fresh session has no "previous" — drop the prior session's history.
         history = []
         currentName = conversationName
         currentArtwork = conversationArtworkURL
         startCurrentHead()
     }
 
+    /// Change la piste jouée pour l'attachment ACTIF (variante traduite Prisme
+    /// ou retour à l'original) en CONSERVANT le contexte et la file — le
+    /// sélecteur de langue du plein écran route ici pour que la carte système
+    /// et l'enchaînement survivent au changement de langue.
+    public func playVariant(urlString: String) {
+        guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+        guard activeContext != nil, !urlString.isEmpty, let head = queue.first else { return }
+        // Rejoue la tête avec la nouvelle URL — SANS ça, tout chemin qui
+        // rejoue `queue.first.fileUrl` (ex: `resumeAfterSystemCall()` via
+        // `startCurrentHead()`) ramènerait silencieusement l'audio à sa
+        // langue d'origine. `QueuedAudio` est immuable : rebuild champ à
+        // champ, seul `fileUrl` change. `ActiveAudioContext` ne porte pas
+        // d'URL — `activeContext` reste donc identique, comme attendu.
+        queue[0] = QueuedAudio(
+            attachmentId: head.attachmentId,
+            messageId: head.messageId,
+            conversationId: head.conversationId,
+            fileUrl: urlString,
+            durationMs: head.durationMs,
+            senderName: head.senderName,
+            senderAvatarURL: head.senderAvatarURL,
+            receivedAt: head.receivedAt
+        )
+        engine.play(urlString: urlString)
+    }
+
+    /// Change l'attachment ACTIF sans réinitialiser la session (nom de
+    /// conversation, historique) — le plein écran route ici quand on swipe
+    /// vers une AUTRE page pendant que le coordinator joue déjà la même
+    /// conversation, pour que la carte système et la file de secours
+    /// (« suivant ») survivent au changement de page.
+    ///
+    /// - Si `queued.attachmentId` est DÉJÀ dans la file : les entrées
+    ///   strictement avant lui basculent en historique (permet un
+    ///   `playPrevious()` cohérent), la file recommence à ce titre.
+    /// - Sinon : insère `queued` en tête, l'ancienne tête devient la suivante.
+    ///
+    /// `currentName`/`currentArtwork` ne sont JAMAIS touchés ici — c'est ce
+    /// qui garde le titre de conversation stable pendant la navigation.
+    public func playKeepingQueue(_ queued: QueuedAudio) {
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playKeepingQueue() ignored: a CallKit call is active")
+            return
+        }
+        guard activeContext != nil else { return }
+
+        if let idx = queue.firstIndex(where: { $0.attachmentId == queued.attachmentId }) {
+            let skipped = queue[..<idx]
+            history.append(contentsOf: skipped)
+            while history.count > Self.maxHistory { history.removeFirst() }
+            consumedAttachmentIds.formUnion(skipped.map(\.attachmentId))
+            queue.removeFirst(idx)
+        } else {
+            queue.insert(queued, at: 0)
+            consumedAttachmentIds.remove(queued.attachmentId)
+        }
+        queueCount = queue.count
+        startCurrentHead()
+    }
+
     public func togglePlayPause() {
-        // BUG E fix — same CallKit guard as `play()`. Without it, toggling
-        // play on an already-loaded engine steals the VoIP audio session
-        // during a call.
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
         }
+        // Un lecteur transitoire (préversion composer, statut, réel) a pu
+        // stopper le moteur via PlaybackCoordinator.willStartPlaying pendant
+        // que la file restait affichée (activeContext non-nil) : le moteur n'a
+        // plus de player chargé et un toggle serait un no-op silencieux — le
+        // bouton play de la carte système et du mini-player serait mort.
+        // Recharger la tête re-acquiert aussi la session .content (le flag
+        // sessionRequested a été remis à zéro par stop()). Même piège documenté
+        // sur resumeAfterSystemCall().
+        if activeContext != nil, engine.currentUrl == nil {
+            startCurrentHead()
+            return
+        }
         engine.togglePlayPause()
     }
-    public func playNext() { advanceQueue() }
+    public func playNext() {
+        // `advanceQueue()` consomme la tête de file, l'ajoute à
+        // `consumedAttachmentIds` et peut nil-er `activeContext`. Sans cette
+        // garde, un tap « suivant » sur la carte Control Center périmée pendant
+        // un appel DÉTRUISAIT la file — les autres transports étaient gardés,
+        // celui-ci ne l'était pas.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playNext() ignored: a CallKit call is active")
+            return
+        }
+        advanceQueue()
+    }
+
+    // MARK: - Suspension pendant un appel système
+
+    /// Suspend la publication vers les surfaces système le temps d'un appel.
+    ///
+    /// À appeler AVANT `PlaybackCoordinator.stopAll()` : celui-ci détruit le
+    /// lecteur (`player = nil`, `isPlaying = false`), donc la capture de « la
+    /// lecture était-elle en cours » doit le précéder. `@Published` émettant en
+    /// `willSet`, un abonné différé par `.receive(on:)` lirait déjà `false` —
+    /// d'où un push synchrone depuis `CallManager` plutôt qu'un abonnement.
+    ///
+    /// La file, l'historique et `activeContext` sont PRÉSERVÉS : c'est ce qui
+    /// rend la reprise possible. La position, elle, est déjà persistée par
+    /// `stop()` et restaurée par `applyResumePositionIfAvailable()`.
+    public func suspendForSystemCall() {
+        guard !_isSuspendedBySystemCall else { return }
+        _isSuspendedBySystemCall = true
+        _wasPlayingBeforeSystemCall = isPlaying
+        // Symétrique de `close()` : si une transition de piste était en vol
+        // quand l'appel Meeshy arrive, `PlaybackCoordinator.stopAll()` va
+        // annuler le chargement et l'edge isPlaying==true qui termine
+        // normalement ce background task ne surviendra jamais — sans cette
+        // ligne, la tâche survivrait jusqu'à l'expiration OS (~30s).
+        endAdvanceBackgroundTask()
+        // Une interruption système armée avant l'appel (Siri, autre appel) ne
+        // doit pas survivre à la frontière : sans ce reset, un
+        // `.interruptionEndedShouldResume` tardif renverserait la décision de
+        // `resumeAfterSystemCall()`.
+        wasPlayingBeforeInterruption = false
+        clearNowPlayingForSystemCall()
+        setRemoteCommandsEnabled(false)
+    }
+
+    /// Rétablit les surfaces système à la fin d'un appel, et relance la lecture
+    /// si elle était en cours au moment de l'interruption.
+    ///
+    /// La reprise passe par `startCurrentHead()` — un vrai `play(urlString:)`.
+    /// `togglePlayPause()` et `seek(to:)` sont des no-op ici : `stopAll()` a mis
+    /// `player` à nil et les deux gardent dessus.
+    ///
+    /// C'est `CallManager` qui décide QUAND appeler cette méthode (au retour à
+    /// `.idle`, différé d'un tour de runloop) : le coordinateur n'a pas à
+    /// connaître les états d'appel ni leurs fenêtres de settle.
+    public func resumeAfterSystemCall() {
+        guard _isSuspendedBySystemCall else { return }
+        _isSuspendedBySystemCall = false
+        setRemoteCommandsEnabled(true)
+
+        let shouldRestart = _wasPlayingBeforeSystemCall
+        _wasPlayingBeforeSystemCall = false
+
+        guard shouldRestart, activeContext != nil else {
+            pushNowPlayingForSystemCall()
+            return
+        }
+        // Le canvas story consomme le même front de fin d'appel et coupe tout
+        // autre lecteur via `PlaybackCoordinator.willStartPlaying`. S'il a repris,
+        // il est prioritaire — reprendre ici les couperait mutuellement.
+        guard !PlaybackCoordinator.shared.isAnyPlaying else {
+            pushNowPlayingForSystemCall()
+            return
+        }
+        startCurrentHead()
+    }
+
+    // MARK: - Interruptions système (Siri, appel cellulaire, route perdue)
+
+    /// Armé par `.interruptionBegan` UNIQUEMENT si la lecture était en cours ;
+    /// consommé par la fin d'interruption. Une pause déclenchée par un retrait
+    /// d'AirPods (`routeChangedOldDeviceUnavailable`) ne l'arme PAS —
+    /// convention iOS : débrancher = pause, sans reprise automatique.
+    private var wasPlayingBeforeInterruption = false
+
+    private func wireSessionInterruptionHooks(
+        _ events: AnyPublisher<MediaSessionCoordinator.Event, Never>
+    ) {
+        events
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.handleSessionEvent(event) }
+            .store(in: &cancellables)
+    }
+
+    /// `internal` : appelé en synchrone par les tests, par le sink en prod.
+    /// Les appels Meeshy (CallKit) ont leur propre chemin
+    /// `suspendForSystemCall`/`resumeAfterSystemCall` piloté par CallManager ;
+    /// pendant cette suspension, RTCAudioSession peut générer des
+    /// interruptions parasites — tout est ignoré ici.
+    func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
+        guard !_isSuspendedBySystemCall else { return }
+        guard activeContext != nil else { return }
+        switch event {
+        case .interruptionBegan:
+            guard isPlaying else { return }
+            wasPlayingBeforeInterruption = true
+            engine.pause()
+        case .interruptionEndedShouldResume:
+            guard wasPlayingBeforeInterruption else { return }
+            wasPlayingBeforeInterruption = false
+            guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+            engine.resumeFromInterruption()
+        case .interruptionEndedShouldNotResume:
+            wasPlayingBeforeInterruption = false
+        case .routeChangedOldDeviceUnavailable:
+            // Désarme INCONDITIONNELLEMENT, avant le guard `isPlaying` : une
+            // interruption déjà armée (ex. Siri en cours) ne doit pas survivre
+            // à un retrait d'AirPods pendant cette même interruption — sinon
+            // `.interruptionEndedShouldResume` relance la lecture alors que le
+            // périphérique de sortie vient d'être débranché. Convention iOS :
+            // débrancher = pause, sans reprise automatique.
+            wasPlayingBeforeInterruption = false
+            guard isPlaying else { return }
+            engine.pause()
+        case .routeChangedOther, .callEndedShouldResume:
+            break
+        }
+    }
 
     /// `true` when a prior track is available to jump back to. Drives the
     /// lock-screen `previousTrackCommand` enablement.
     public var hasPrevious: Bool { !history.isEmpty }
+
+    /// Position 0-based dans la file complète (déjà joués + courant + à venir),
+    /// publiée à la carte système (`MPNowPlayingInfoPropertyPlaybackQueueIndex`).
+    var queuePosition: (index: Int, count: Int) {
+        (history.count, history.count + queueCount)
+    }
+
+    /// Titre de carte « {conversation} — {date} » (parité WhatsApp : la date
+    /// du vocal est le repère principal quand on rattrape une file).
+    nonisolated static func nowPlayingTitle(
+        conversationName: String, receivedAt: Date
+    ) -> String {
+        "\(conversationName) — \(receivedAt.formatted(date: .numeric, time: .shortened))"
+    }
 
     /// Lock-screen / AirPods "previous". Mirrors the standard media convention:
     /// past `previousRestartThreshold` it restarts the current track; otherwise
@@ -213,6 +424,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func close() {
         engine.stop()
+        endAdvanceBackgroundTask()
         queue = []
         queueCount = 0
         history = []
@@ -225,8 +437,6 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func appendUpcoming(_ audio: QueuedAudio) {
         guard !queue.contains(where: { $0.attachmentId == audio.attachmentId }) else { return }
-        // BUG C — also skip ids already consumed (finished/failed) this session,
-        // even if they've already been removed from the live `queue`.
         guard !consumedAttachmentIds.contains(audio.attachmentId) else { return }
         queue.append(audio)
         queueCount = queue.count
@@ -236,15 +446,48 @@ public final class ConversationAudioCoordinator: ObservableObject {
         activeContext?.attachmentId == attachmentId
     }
 
+    // MARK: - Background task d'avance de file
+    //
+    // Entre deux pistes, le moteur peut toucher le réseau (cache miss). App en
+    // background, dès que l'audio se tait, l'OS peut suspendre le process AVANT
+    // le démarrage de la piste suivante — la file mourrait sur place. La
+    // transition est donc couverte par un beginBackgroundTask court, terminé au
+    // premier front isPlaying==true (ou à la fermeture/expiration).
+
+    var beginBackgroundTaskProvider: (@escaping @Sendable () -> Void) -> UIBackgroundTaskIdentifier = { handler in
+        UIApplication.shared.beginBackgroundTask(
+            withName: "meeshy.audio.queue-advance", expirationHandler: handler
+        )
+    }
+    var endBackgroundTaskProvider: (UIBackgroundTaskIdentifier) -> Void = { id in
+        UIApplication.shared.endBackgroundTask(id)
+    }
+    private var advanceTaskId: UIBackgroundTaskIdentifier = .invalid
+
+    private func beginAdvanceBackgroundTask() {
+        endAdvanceBackgroundTask()
+        advanceTaskId = beginBackgroundTaskProvider { [weak self] in
+            Task { @MainActor in self?.endAdvanceBackgroundTask() }
+        }
+    }
+
+    private func endAdvanceBackgroundTask() {
+        guard advanceTaskId != .invalid else { return }
+        endBackgroundTaskProvider(advanceTaskId)
+        advanceTaskId = .invalid
+    }
+
     // MARK: - Internals
 
     private func startCurrentHead() {
-        // BUG E fix — guard auto-advance + initial play here (the single
-        // engine-start chokepoint reached by both `play()` and
-        // `advanceQueue()`). Without it, a track finishing during a call would
-        // auto-advance and steal the VoIP audio session.
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("startCurrentHead() ignored: a CallKit call is active")
+            // A pending advance-queue background task (opened by advanceQueue()
+            // before calling this method) would otherwise never see the
+            // isPlaying==true edge that normally ends it — engine.play() is never
+            // reached. Ending it here covers ALL callers of startCurrentHead(),
+            // not just advanceQueue().
+            endAdvanceBackgroundTask()
             return
         }
         guard let head = queue.first else {
@@ -259,20 +502,14 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func advanceQueue() {
-        // B1 — capture the id + conversationId of the audio leaving the
-        // head BEFORE we mutate the queue so the VM-side subscribers can
-        // record exactly the attachment that just finished/failed in
-        // their `listenedAttachmentIds` set. Without this enrichment the
-        // auto-built queues would loop on the same audios indefinitely.
+        // Capture before removal so the publisher reports the audio that finished,
+        // not the next head.
         let finishedHead = queue.first
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
         if let finishedHead {
-            // BUG C — record the consumed id so a re-emitted `$messages` can't
-            // re-`appendUpcoming` it before the VM updates `listenedAttachmentIds`.
+            // Guard against $messages re-emitting before the VM records the listen.
             consumedAttachmentIds.insert(finishedHead.attachmentId)
-            // Remember the track we just left so `playPrevious()` can return to
-            // it. Keep the stack bounded (drop the oldest beyond the cap).
             history.append(finishedHead)
             if history.count > Self.maxHistory { history.removeFirst() }
             attachmentFinishedSubject.send(AttachmentFinishedEvent(
@@ -281,13 +518,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
             ))
         }
         if queue.isEmpty {
-            // B2 fix — when the queue empties, the engine was still alive
-            // and would play the just-loaded audio to natural end while the
-            // mini-player vanished. Explicitly stop it so playback halts
-            // atomically with the UI dismissal.
+            // Stop engine explicitly — without this, audio continues after the mini-player vanishes.
             engine.stop()
             activeContext = nil
+            endAdvanceBackgroundTask()
         } else {
+            beginAdvanceBackgroundTask()
             startCurrentHead()
         }
     }
@@ -307,6 +543,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
             guard let self else { return }
             Task { @MainActor in self.advanceQueue() }
         }
+        engine.isPlayingPublisher
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.endAdvanceBackgroundTask() }
+            .store(in: &cancellables)
     }
 
     private func wireAuthLogoutHook() {
@@ -346,11 +587,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
 #if DEBUG
 extension ConversationAudioCoordinator {
-    /// Test seam: directly seed `activeContext` so unit tests can exercise
-    /// router/observer behavior without driving the full play() + queue
-    /// machinery. `internal` + DEBUG-only so it's never reachable from a
-    /// release binary. The setter writes to the same `private(set)` storage
-    /// via this same-file extension, preserving production immutability.
+    /// Seeds `activeContext` for tests without driving the full `play()` + queue path.
     func test_setActiveContext(
         attachmentId: String,
         conversationId: String = "test-conv",
@@ -368,31 +605,19 @@ extension ConversationAudioCoordinator {
         )
     }
 
-    /// Storage backing the test override. `nonisolated(unsafe)` because the
-    /// coordinator is `@MainActor` and we want a synchronous setter from
-    /// tests already running on the main actor without crossing actor hops.
-    /// The override is only read by `sharedForTesting`, also `@MainActor`.
+    // `nonisolated(unsafe)` so tests running on @MainActor can set it synchronously.
     nonisolated(unsafe) private static var _testOverride: ConversationAudioCoordinator?
 
-    /// Install an alternate instance as the "shared" coordinator visible to
-    /// the background-transition lifecycle. Call `testResetShared()` from
-    /// `tearDown` so the next test starts from a clean slate.
     @MainActor
     static func testSetShared(_ instance: ConversationAudioCoordinator) {
         _testOverride = instance
     }
 
-    /// Drops any installed test override so production code goes back to
-    /// reading the real `.shared` instance.
     @MainActor
     static func testResetShared() {
         _testOverride = nil
     }
 
-    /// Single accessor used by the app-side background lifecycle so that
-    /// tests can substitute the engine without forking the production code
-    /// path. Returns the installed override when present, otherwise the
-    /// canonical `.shared` instance.
     @MainActor
     static var sharedForTesting: ConversationAudioCoordinator {
         _testOverride ?? .shared
@@ -400,11 +625,7 @@ extension ConversationAudioCoordinator {
 }
 #else
 extension ConversationAudioCoordinator {
-    /// Release builds never substitute the coordinator — `sharedForTesting`
-    /// is a pure alias for `.shared` and the override storage doesn't exist.
     @MainActor
-    static var sharedForTesting: ConversationAudioCoordinator {
-        .shared
-    }
+    static var sharedForTesting: ConversationAudioCoordinator { .shared }
 }
 #endif

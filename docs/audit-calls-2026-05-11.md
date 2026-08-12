@@ -1,5 +1,237 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
+> **Statut au 2026-07-08 (2)** (session `claude/loving-thompson-wyzy59`, meme
+> environnement Linux sans Xcode/simulateur ni acces SSH prod) :
+> - **P1-GW-8 (nouveau, corrige)** — `call:end` attendait `postCallSummary()`
+>   (retry interne 3 tentatives, backoff 1s/2s) **avant** son `ack?.({ success:
+>   true })`. Le client iOS (`emitCallEndWithAck`, 3s timeout) traite un ack en
+>   retard comme un echec : il ré-émet `call:end` en fire-and-forget ET arme
+>   `pendingEndReconciliationCallId` pour rejouer l'event à la prochaine
+>   reconnexion — alors que l'appel s'est en réalité terminé proprement côté
+>   serveur. Meme defaut dans `forceEndOrphanedCallAfterOptimisticBroadcast`
+>   (branches d'erreur de `call:end`, avant son propre `ack?.({ success: false
+>   })`). Fix : les deux sites postent desormais le resume ("Appel … · MM:SS")
+>   en fire-and-forget (`.catch()`, meme idiome que `handleMissedCall` juste en
+>   dessous) — `createCallSummaryMessage` est deja idempotent, aucune
+>   dependance d'ordre avec l'ack. Les 4 autres sites d'appel de
+>   `postCallSummary` (ringing-timeout, disconnect-grace, `call:leave`,
+>   `call:force-leave`) ne bloquent aucun ack cote client (evenements
+>   fire-and-forget ou callbacks internes sans socket en attente) — non
+>   touches, portee volontairement minimale. Nouveau test dans
+>   `CallEventsHandler-summary-retry.test.ts` (« acks call:end before
+>   postCallSummary retries resolve ») + suite gateway complete verifiee
+>   (513/513 suites, 13954/13955 tests, 1 skip pre-existant) + `tsc --noEmit`
+>   gateway (0 erreur).
+> - **iOS — identifie, NON corrige (pas d'acces Xcode/simulateur dans cet
+>   environnement)** : `CallManager.failCall()` n'a pas le meme guard
+>   `callState.isActive` que ses paths freres (`endCall()`/`handleRemoteEnd()`).
+>   Plusieurs sites async (`handleRemoteAnswer:2109`, `answerCall:1524`,
+>   `answerCallReady:1591`, `handleSignalOffer:1393`, offer de
+>   participant-joined:3838) n'utilisent que `currentCallId == callId` comme
+>   garde de vivacite — or `currentCallId` reste peuple pendant les 1.5s de la
+>   fenetre de "settle" apres une fin d'appel locale. Repro : l'utilisateur
+>   raccroche pile pendant qu'un SDP answer/offer est in-flight → l'operation
+>   echoue sur la connexion demontee → `failCall()` re-declenche
+>   `endCallInternal` en `.failed`, ecrasant la vraie raison de fin
+>   (`.local`/`.missed`/`.rejected`) dans l'UI, le snapshot UserDefaults ET le
+>   call-history cote gateway (le commentaire in-code le confirme :
+>   "le gateway écrase le dernier snapshot in_progress avec la raison
+>   terminale réelle"). Fix suggere (non applique) : `guard callState.isActive
+>   else { return }` en tete de `failCall()` — ferme les 6 sites d'un coup,
+>   meme style de garde que `endCall()`/`handleRemoteEnd()`. **A traiter dans
+>   une session avec build iOS pour compiler + faire tourner
+>   `./apps/ios/meeshy.sh test` avant tout commit** (regle CLAUDE.md non
+>   négociable, aucune modification Swift ce soir sans verification possible).
+> - **Gateway — identifie, non corrige (hors-scope volontaire cette session)** :
+>   `leaveParticipationAndBroadcast` (disconnect-grace expiry) et
+>   `forceEndOrphanedCallAfterOptimisticBroadcast` n'evacuent jamais les
+>   sockets survivants de `ROOMS.call(callId)` — contrairement au path
+>   `call:end` direct (`CallEventsHandler.ts:2762-2764`) et au GC
+>   (`CallCleanupService.forceEndCall`, deja corrige pour ce meme defaut de
+>   classe). Impact contenu (callId unique par session, pas de fuite d'evenements
+>   vers un appel different — juste une entree de room Socket.IO orpheline pour
+>   la duree de vie du socket). Backlog pour une session dediee.
+> - **Statut au 2026-07-08** (session `claude/loving-thompson-ccnlsc`, pas d'acces
+> Xcode/simulateur ni SSH prod dans cet environnement — memes contraintes que la
+> session precedente) :
+> - **Premier audit approfondi cote WEB** (jusqu'ici les audits se concentraient
+>   sur iOS + gateway ; la colonne "Web" du tableau ci-dessous etait a 0 sans
+>   qu'un audit dedie n'ait jamais tourne sur `apps/web/hooks/use-webrtc-p2p.ts`,
+>   `stores/call-store.ts`, `components/video-calls/*`). Deux bugs reels trouves
+>   et corriges, avec tests :
+>   - **P0-WEB-1** — `VideoCallInterface.tsx` : le cleanup différé (2s) sur
+>     `CALL_PARTICIPANT_LEFT` fermait la RTCPeerConnection **fraîchement
+>     rétablie** si le participant rejoignait dans la fenêtre de grâce (network
+>     blip, tab reload) — aucune vérification d'identité de connexion avant de
+>     détruire. Fix : snapshot de la connexion au moment du leave, comparaison
+>     d'identité au moment du timeout ; si différente (rejoin détecté), on ne
+>     touche ni au stream ni à la connexion ni au guard `offersCreatedFor`.
+>   - **P1-WEB-2** — `use-webrtc-p2p.ts` : `remoteDescriptionSetRef` /
+>     `iceCandidateQueueRef` / `webrtcServicesRef` n'étaient jamais nettoyés par
+>     participant (seulement au `cleanup()` global) → un rejoin héritait de
+>     l'état signaling du participant précédent (réponse initiale traitée comme
+>     renégociation, ICE candidates silencieusement droppés). Fix : nouvelle
+>     fonction `removeParticipant(id)` exportée par le hook, appelée par
+>     `VideoCallInterface` uniquement quand le rejoin N'est PAS détecté.
+>   - **P1-WEB-3** — même fichier : `createOffer`/`handleOffer` ne fermaient pas
+>     la RTCPeerConnection déjà enregistrée (`addPeerConnection`) si
+>     `createOffer()`/`createAnswer()` levait une exception après coup — fuite
+>     silencieuse. Fix : `removeParticipant(id)` dans les deux blocs `catch`.
+>   - **P2-WEB-4** (identifié, non corrigé) — `CallControls.tsx`
+>     `handleSpeakerToggle` ne fait que flipper un state local, aucun routage
+>     audio réel (`setSinkId`). Non corrigé cette session : nécessite de
+>     remonter l'état jusqu'aux éléments `<video>` de `VideoStream.tsx` (3
+>     fichiers à toucher), `setSinkId` n'est pas supporté par tous les
+>     navigateurs, et aucun matériel audio réel n'est disponible dans cet
+>     environnement pour vérifier un routage correct — un fix mal vérifié sur ce
+>     chemin risquerait de casser l'audio d'appels réels, pire que le no-op
+>     actuel (inoffensif). Backlog pour une session avec verification manuelle.
+>   - Non retenus (nécessitent un vrai navigateur/device pour verifier sans
+>     risque de faux-positif) : focus trap sur les overlays plein-ecran
+>     (accessibilite), race `ensureLocalStream`/`createOffer` concurrents
+>     (latent, masque par `isCallSupported` limitant a 1 pair), absence de
+>     verification `signal.from` contre `participants[]` cote client.
+> - **Re-sweep gateway ciblé** (5 fichiers : `CallEventsHandler.ts`,
+>   `CallService.ts`, `TURNCredentialService.ts`, `PushNotificationService.ts`,
+>   `call-schemas.ts`) contre le code actuel — tous les P0-4/5, P1-20/21/22,
+>   P2-GW-1/2/5 confirmes deja fixes (commentaires `Audit P2-GW-*` en place).
+>   Trois nouveaux problèmes trouvés et corrigés :
+>   - **P1-GW-5** — le guard "zombie-socket" sur `disconnect` bloquait
+>     **tout** grace/cleanup pour TOUS les appels de l'utilisateur dès qu'un
+>     AUTRE socket (même non lié à l'appel) restait dans `ROOMS.user(userId)`.
+>     Un device idle (iPad jamais entré dans l'appel) masquait un device
+>     crashé en plein appel → jamais nettoyé, jamais même par le GC 2h (le
+>     pair restait heartbeat-frais). Fix : scinder le check par statut d'appel
+>     — les appels **répondus** (active/reconnecting) vérifient désormais la
+>     présence dans `ROOMS.call(callId)` spécifiquement (mirroring
+>     `onDisconnectGraceExpired`'s propre logique) ; les appels **pré-réponse**
+>     (ringing/initiated) gardent l'ancien check global sur `ROOMS.user`
+>     (aucune room d'appel a checker avant reponse — c'est le scenario exact
+>     que le fix zombie-socket 2026-07-02 visait, non regresse).
+>   - **P1-GW-6** — `isPushAllowed` bloquait TOUTE push pendant les heures DND
+>     de l'utilisateur, y compris la sonnerie VoIP entrante, son annulation
+>     silencieuse (`call_cancel`) et le signal `call_answered_elsewhere` —
+>     aucun produit d'appel comparable (FaceTime, WhatsApp, Signal) ne
+>     bloque les appels via DND. Fix : nouveau flag `bypassDnd` sur
+>     `SendPushOptions`, applique aux 3 sites d'appel (jamais a
+>     `pushEnabled: false`, qui reste un opt-out explicite total).
+>   - **P2-GW-7** — `presence:app-state` restait le seul handler `call:*`-
+>     adjacent sans check `getUserId`/rate-limit (tous les autres en ont un
+>     depuis les sweeps 2026-07-03/07-05). Impact mineur (flag socket-local,
+>     pas d'ecriture DB) mais corrige par coherence : nouveau
+>     `SOCKET_RATE_LIMITS.PRESENCE_APP_STATE` (30/min).
+>   - Identifies mais **non corriges** (necessitent verification device/prod
+>     non disponible ici) : reap GC à un seul participant stale sur 2 en P2P
+>     (actuellement `getStaleHeartbeats`/`hasFreshLiveness` exigent que TOUS
+>     les participants soient stale), shape d'erreur d'ack `call:initiate`/
+>     `call:join` non conforme au type documente (`as unknown as` sur du texte
+>     brut au lieu de `{code, message}`), `postCallSummary` retry bloque l'ack
+>     de `call:end` de l'ender (~6s worst-case).
+> - **Verification complete** : `bun run test:coverage` gateway (510/510
+>   suites, 13865/13866 tests, 1 skip pre-existant) + suite Jest complete web
+>   (445/445 suites, 11020/11041 tests, 21 skips pre-existants) + `tsc --noEmit`
+>   gateway (0 erreur) + `tsc --noEmit` web (1201 erreurs, **identique avant/
+>   apres** — dette pre-existante non liee a cette session, verifiee par diff
+>   du compte d'erreurs sur `main` vs cette branche).
+>
+> **Statut au 2026-07-07** (session `claude/loving-thompson-l09qhh`, pas d'acces
+> Xcode/simulateur ni SSH prod dans cet environnement) :
+> - **Re-sweep complet des P0/P1** via 5 agents Explore paralleles (lifecycle/
+>   audio/CallKit iOS, WebRTC/codec/UI/gateway, gateway securite/authz) contre
+>   le code actuel de `main`. Resultat identique au 2026-07-04/05 : **tout est
+>   FIXED sauf P0-1, P1-11, et P1-13 (partiel)** — aucune regression, aucun
+>   nouveau P0/P1 trouve.
+> - **P1-16** : confirme deja FIXE sur `main` (commit `c97aa4ed`, poursuivi par
+>   un agent concurrent au-dela de mon propre correctif candidat identique —
+>   `CallEffectsOverlay` recoit aussi `callManager` du parent desormais, plus
+>   nettoyage de code mort `colorScheme`/`isDark`). Mon brouillon de fix
+>   local pour ce meme point a ete abandonne (deja present, evite un doublon).
+> - **P0-1 — ATTENTION pour les prochaines sessions** : j'ai commence a
+>   reimplementer le pattern template+sed (`turnserver.prod.conf` + substitution
+>   `TURN_SECRET` a l'entrypoint coturn de `docker-compose.prod.yml`), verifie
+>   syntaxiquement (`docker compose config --quiet`) et fonctionnellement (script
+>   shell isole, 4 cas testes). **Avant de pousser, j'ai trouve que ce pattern
+>   exact avait deja ete tente (commit `71b4b64a`) puis delibarement revert** —
+>   voir `docs/superpowers/specs/2026-05-11-docker-compose-prod-reconciliation-design.md`
+>   §8.2 : `config/turnserver.prod.conf` **n'existe pas sur le serveur prod reel**,
+>   et le chemin relatif y resout incorrectement une fois deploye. Reintroduire
+>   ce pattern sans d'abord deposer le fichier template + faire la rotation de
+>   secret **cote serveur (SSH)** casserait le demarrage de coturn (pire que
+>   l'etat actuel : secret errone silencieux → aujourd'hui calls degradent vers
+>   STUN-only ; apres ce "fix" mal coordonne → coturn ne demarre plus du tout).
+>   **J'ai annule mon brouillon avant de commiter.** P0-1 reste, comme documente
+>   le 2026-07-04/05, une tache necessitant un humain avec acces prod SSH pour
+>   coordonner : rotation du secret + depot de `config/turnserver.prod.conf` sur
+>   `/opt/meeshy/production/` + ce meme diff compose, en un seul changement
+>   atomique cote serveur ET repo.
+> - **Aucun changement de code pousse cette session** — rien de surete et non
+>   deja fait n'a ete trouve dans le perimetre accessible sans Xcode/SSH prod.
+>
+> **Statut au 2026-07-04** : verification systematique des 5 P0 + 18 P1
+> contre `main` (branche `claude/eager-hamilton-nykzoy`). **4/5 P0 et 28/31
+> P1 sont fixes** (deux mois de commits `fix(ios/calls)`/`feat(calls)`
+> continus). Restants confirmes :
+> - **P0-1 (TURN secret hardcode) reste ouvert EN PRODUCTION** —
+>   `docker-compose.prod.yml` monte `turnserver.conf` (secret public en
+>   clair), pas `turnserver.prod.conf`. Le pattern template+sed a deja ete
+>   tente (commit `71b4b64a`) puis delibarement revert
+>   (`docs/superpowers/specs/2026-05-11-docker-compose-prod-reconciliation-design.md`
+>   §8.2) car `config/turnserver.prod.conf` n'existe pas sur le serveur prod
+>   et le chemin relatif resolvait mal. Le fix reel necessite une
+>   coordination ops (rotation du secret + depot du fichier template sur
+>   `/opt/meeshy/production/config/` + mise a jour de `.env`) qu'un agent
+>   sans acces SSH prod ne peut pas faire en toute securite. **A traiter par
+>   un humain avec acces prod.**
+> - **P1-11** (CallKit `CXEndCallAction.fulfill()` synchrone avant le
+>   teardown async) — laisse en l'etat : le commentaire in-code documente un
+>   arbitrage deliberer (eviter un timeout CallKit sur l'action) qui ne peut
+>   pas etre valide sans test sur simulateur/device reel.
+> - **P1-16** (partiel) corrige dans cette meme branche : `CallView`
+>   n'accepte plus `callManager` en default `= CallManager.shared` — injecte
+>   par `RootView`/`iPadRootView` qui possedent deja leur propre instance.
+>   `IncomingCallView` etait deja corrige.
+> - Tous les autres P1 lus dans le code actuel sont FIXED (P0-2/3/4/5,
+>   P1-1..10, 12..15, 17..31).
+>
+> **Statut au 2026-07-05** (branche `claude/eager-hamilton-d5webr`, re-verification
+> ciblee gateway — pas d'acces Xcode/simulateur dans cet environnement, cote iOS
+> non re-verifie au-dela d'une lecture statique) :
+> - **Suite de tests gateway complete** (`bunx jest@30.4.2 --config=jest.config.json
+>   --coverage`, apres `prisma generate` + `bun run build` de `packages/shared`
+>   comme documente ci-dessus) : **483/509 suites vertes, 13289/13290 tests
+>   verts** ; les 26 suites en echec (`sync.test.ts`, `SequenceService.test.ts`,
+>   `notifications/*`, etc.) sont **toutes hors-perimetre appels** — meme cause
+>   racine partagee (`SequenceService.ts:1` importe `PrismaClient` depuis
+>   `@prisma/client` au lieu du client genere `@meeshy/shared/prisma/client`),
+>   **zero echec sur un fichier `Call*`**.
+> - **P2-GW-1, P2-GW-2, P2-GW-5** (fetchSockets O(N), callType hardcode dans le
+>   push missed-call, mismatch participantId) : confirmes FIXED dans le code
+>   actuel, chacun porte un commentaire `Audit P2-GW-*` a la ligne concernee
+>   (`CallEventsHandler.ts:1363` et `:3358`, `CallService.ts:1644-1669`).
+> - **RC-4** (`tasks/calls-fonctionnel-todo.md`, double instance `CallService`) :
+>   FIXED — `MeeshySocketIOManager.ts:212-213` cree l'unique instance partagee
+>   et l'injecte dans `CallEventsHandler`; `server.ts:816` la decore sur
+>   `fastify.callService` (consommee par `routes/calls.ts:80`); `CallCleanupService`
+>   la recoit via `setCallService()` (`server.ts:1311`, cf. le commentaire
+>   `RC-4` dans `CallCleanupService.ts:86-94`).
+> - **Dead code** `CallEventsHandler.ts` `private getSocketUserId()` (releve par
+>   un audit exploratoire cette session) : deja supprime entre-temps par un
+>   agent concurrent — confirme absent du code actuel (repo multi-agent, `main`
+>   force-push plusieurs fois pendant cette session).
+> - **CallEventQueue** (`apps/ios/.../Services/CallEventQueue.swift`, actor FSM
+>   type avec table de transition complete + `CallEventQueueTests.swift`) reste
+>   **construit mais non cable** dans `CallManager.swift` (aucune reference
+>   croisee) — c'est l'etape d'integration prevue par
+>   `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` §2.2/ADR-2,
+>   non tentee cette session : cable ce FSM dans un `CallManager` de 4783 lignes
+>   sans pouvoir compiler/tester sur simulateur (pas de Xcode dans cet
+>   environnement) serait une modification a fort risque sur une feature de prod
+>   sans verification possible — a traiter dans une session avec acces build iOS.
+> - Aucune regression, aucun nouveau P0/P1/P2 trouve cote gateway. Seuls
+>   P0-1 (secret TURN prod, acces SSH requis) et P1-11 (arbitrage CallKit
+>   deliberer, non validable sans device) restent ouverts, inchanges depuis
+>   hier.
+
 **Date** : 2026-05-11
 **Branche auditee** : `fix/audit-2026-05-11-hotfixes`
 **Methode** : 12 agents specialises en parallele (read-only) — iOS lifecycle, WebRTC, audio session, CallKit, NSE/VoIP push, UI, Gateway signaling, Gateway security, Web calls, Performance, Edge cases, Type alignment

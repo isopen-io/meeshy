@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import type {
   Conversation,
@@ -26,7 +27,7 @@ export class ConversationsCrudService {
    * Obtenir toutes les conversations de l'utilisateur avec pagination et filtres
    */
   async getConversations(options: GetConversationsOptions = {}): Promise<GetConversationsResponse> {
-    const { limit = 20, offset = 0, type, withUserId, before } = options;
+    const { limit = 20, offset = 0, type, withUserId, before, updatedSince } = options;
 
     const queryParams: Record<string, string> = {
       limit: limit.toString(),
@@ -38,6 +39,7 @@ export class ConversationsCrudService {
     }
     if (type) queryParams.type = type;
     if (withUserId) queryParams.withUserId = withUserId;
+    if (updatedSince) queryParams.updatedSince = updatedSince;
 
     const response = await apiService.get<{
       success: boolean;
@@ -173,7 +175,7 @@ export class ConversationsCrudService {
         transformersService.transformConversationData(conv)
       );
     } catch (error) {
-      console.error('[ConversationsCrudService] Error searching conversations:', error);
+      logger.error('[ConversationsCrud]', 'Error searching conversations', { error });
       return [];
     }
   }
@@ -197,7 +199,7 @@ export class ConversationsCrudService {
 
       return conversations;
     } catch (error) {
-      console.error('Erreur lors de la récupération des conversations avec l\'utilisateur:', error);
+      logger.error('[ConversationsCrud]', "Erreur lors de la récupération des conversations avec l'utilisateur", { error });
       return [];
     }
   }

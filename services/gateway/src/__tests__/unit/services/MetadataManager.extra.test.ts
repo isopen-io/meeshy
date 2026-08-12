@@ -70,7 +70,7 @@ jest.mock('fluent-ffmpeg', () => ({ ffprobe: (...a: unknown[]) => mockFfprobe(..
 // ─── music-metadata mock ──────────────────────────────────────────────────────
 
 const mockParseFile = jest.fn() as jest.Mock<any>;
-jest.mock('music-metadata', () => ({ parseFile: (...a: unknown[]) => mockParseFile(...a) }));
+// music-metadata est ESM-only : injecté via le seam `musicMetadataLoader` (cf. beforeEach), pas via jest.mock.
 
 // ─── sharp mock ───────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { MetadataManager } from '../../../services/attachments/MetadataManager';
+import { MetadataManager, musicMetadataLoader } from '../../../services/attachments/MetadataManager';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -126,6 +126,7 @@ describe('MetadataManager – extra coverage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    musicMetadataLoader.parseFile = mockParseFile;
     mgr = new MetadataManager(BASE);
 
     mockFsMkdir.mockResolvedValue(undefined);

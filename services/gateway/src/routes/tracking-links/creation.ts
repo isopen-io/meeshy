@@ -17,6 +17,8 @@ import {
   enrichTrackingLink
 } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { SecuritySanitizer } from '../../utils/sanitize';
+import { isHttpUrl } from '@meeshy/shared/utils/validation';
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -157,6 +159,26 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Le token personnalisé doit contenir au moins 5 caractères');
       }
 
+      // `conversationId` et `messageId` viennent du corps de la requête et
+      // n'étaient jamais vérifiés : l'authentification étant optionnelle sur
+      // cette route, un appelant anonyme rattachait un lien de suivi à
+      // n'importe quelle conversation. Rattacher exige désormais d'y
+      // participer ; créer un lien sans rattachement reste ouvert.
+      if (body.conversationId) {
+        const ctx = request.authContext;
+        const where = ctx?.isAnonymous && ctx.participantId
+          ? { id: ctx.participantId, conversationId: body.conversationId, isActive: true }
+          : { userId: ctx?.userId, conversationId: body.conversationId, isActive: true };
+
+        const participant = ctx?.isAuthenticated
+          ? await fastify.prisma.participant.findFirst({ where, select: { id: true } })
+          : null;
+
+        if (!participant) {
+          return sendForbidden(reply, 'Access denied to this conversation');
+        }
+      }
+
       const existingLink = await trackingLinkService.findExistingTrackingLink(
         body.originalUrl,
         body.conversationId
@@ -171,10 +193,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.createTrackingLink({
         originalUrl: body.originalUrl,
-        name: body.name,
-        campaign: body.campaign,
-        source: body.source,
-        medium: body.medium,
+        name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+        campaign: body.campaign ? SecuritySanitizer.sanitizeText(body.campaign) : body.campaign,
+        source: body.source ? SecuritySanitizer.sanitizeText(body.source) : body.source,
+        medium: body.medium ? SecuritySanitizer.sanitizeText(body.medium) : body.medium,
         createdBy,
         conversationId: body.conversationId,
         messageId: body.messageId,
@@ -188,11 +210,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Données invalides',
-          details: error.errors
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       if (error instanceof Error && error.message === 'Token already exists') {
         return sendConflict(reply, 'Ce token existe déjà');
@@ -591,13 +609,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const updatedLink = await trackingLinkService.deactivateTrackingLink(token);
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLink: updatedLink
-        },
-        message: 'Lien désactivé avec succès'
-      });
+      return sendSuccess(reply, { trackingLink: updatedLink }, { message: 'Lien désactivé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Deactivate tracking link error:', error);
@@ -810,12 +822,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
       }
 
-      if (body.originalUrl) {
-        try {
-          new URL(body.originalUrl);
-        } catch {
-          return sendBadRequest(reply, 'URL invalide');
-        }
+      // `new URL()` ne fait que parser : `javascript:` et `data:` passaient,
+      // et l'édition rouvrait donc le vecteur que la création interdit.
+      if (body.originalUrl && !isHttpUrl(body.originalUrl)) {
+        return sendBadRequest(reply, 'URL invalide : http(s) uniquement');
       }
 
       const updatedLink = await trackingLinkService.updateTrackingLink({
@@ -826,13 +836,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         newToken: body.newToken
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLink: enrichTrackingLink(updatedLink, request)
-        },
-        message: 'Lien mis à jour avec succès'
-      });
+      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink, request) }, { message: 'Lien mis à jour avec succès' });
 
     } catch (error) {
       if (error instanceof Error) {

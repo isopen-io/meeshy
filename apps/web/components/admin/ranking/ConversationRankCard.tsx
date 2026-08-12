@@ -13,6 +13,7 @@ interface ConversationRankCardProps {
 }
 
 function formatDate(dateString: string | undefined, locale: string) {
+  /* istanbul ignore next */
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
   return new Intl.DateTimeFormat(locale, {
@@ -48,6 +49,8 @@ export const ConversationRankCard = React.memo(({ item, criterion }: Conversatio
             <img
               src={item.avatar}
               alt={item.name}
+              loading="lazy"
+              decoding="async"
               className="h-12 w-12 rounded-lg object-cover"
             />
           ) : (

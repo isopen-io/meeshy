@@ -55,11 +55,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
-    public var leftA11yLabel: String? = nil
+    public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
     public var leftA11yActionName: String? = nil
-    public var rightA11yLabel: String? = nil
+    public var rightA11yLabel: String
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
@@ -73,16 +73,16 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public init(
         leftPosition: Binding<String>,
         rightPosition: Binding<String>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
-        leftA11yLabel: String? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
-        rightA11yLabel: String? = nil,
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
@@ -394,11 +394,11 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
-    public var leftA11yLabel: String? = nil
+    public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
     public var leftA11yActionName: String? = nil
-    public var rightA11yLabel: String? = nil
+    public var rightA11yLabel: String
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
@@ -412,16 +412,16 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public init(
         leftCorner: Binding<ButtonCorner>,
         rightCorner: Binding<ButtonCorner>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
-        leftA11yLabel: String? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
-        rightA11yLabel: String? = nil,
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
@@ -660,38 +660,66 @@ public struct NotificationBadge: View {
     public let count: Int
     @State private var isPulsing = false
 
+    // MARK: - Trame (exposée pour les tests)
+
+    public static let height: CGFloat = 18
+    /// Largeur plancher égale à la hauteur : à un chiffre, la pastille reste un
+    /// CERCLE. C'est ce qui la distingue d'une étiquette.
+    public static let minimumSize: CGFloat = height
+    /// De quoi loger trois glyphes (« 99+ ») sans rogner le texte.
+    public static let horizontalPadding: CGFloat = 6
+    /// Pas de gras : sur deux chiffres blancs dans un disque rouge saturé il
+    /// n'ajoute aucune lisibilité, il empâte les glyphes et fait baver le
+    /// compteur sur le bord. Le repère visuel est la pastille, pas la graisse.
+    public static let fontWeight: Font.Weight = .semibold
+
+    /// Texte du compteur. Au-delà de 99 on annonce « 99+ » — et non `min(count,
+    /// 99)`, qui affichait « 99 » : un nombre FAUX présenté comme exact.
+    public static func displayed(_ count: Int) -> String {
+        guard count > 0 else { return "" }
+        return count >= 100 ? "99+" : "\(count)"
+    }
+
     public init(count: Int) {
         self.count = count
     }
 
     public var body: some View {
         if count > 0 {
-            ZStack {
-                Circle()
-                    .fill(MeeshyColors.error.opacity(isPulsing ? 0.4 : 1.0))
-                    .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
-
-                Text("\(min(count, 99))")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 18, height: 18)
-                    .background(
-                        Circle()
-                            .fill(MeeshyColors.error)
-                            .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
-                    )
-            }
-            .offset(x: 16, y: -16)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    isPulsing = true
+            Text(Self.displayed(count))
+                .font(MeeshyFont.relative(10, weight: Self.fontWeight))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille
+                // s'ÉLARGIT. L'ancien 18×18 forçait « 71 » à rétrécir et aurait
+                // rendu « 99+ » illisible — on tronquait la donnée, ou sa
+                // lisibilité, pour protéger la mise en page.
+                .padding(.horizontal, Self.horizontalPadding)
+                .frame(minWidth: Self.minimumSize, minHeight: Self.height)
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.error)
+                        .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
+                )
+                // Halo pulsant en capsule et non en cercle : à trois glyphes un
+                // cercle centré déborderait des extrémités. `scaleEffect`
+                // reproduit l'ancienne respiration 18 → 28 à toute largeur.
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.error.opacity(0.4))
+                        .scaleEffect(isPulsing ? 1.55 : 1.0)
+                )
+                .offset(x: 16, y: -16)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
                 }
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isPulsing = false
+                .onDisappear {
+                    withTransaction(Transaction(animation: nil)) {
+                        isPulsing = false
+                    }
                 }
-            }
         }
     }
 }

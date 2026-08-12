@@ -13,6 +13,7 @@ import XCTest
 ///   of confidence.
 /// - At 10 words (`TextAnalyzer.wordCountThreshold`) detection stops —
 ///   the last accepted language is final for this message.
+@MainActor
 final class ComposerLanguageResolverTests: XCTestCase {
 
     // MARK: - Manual override always wins

@@ -88,6 +88,8 @@ jest.mock('@/hooks/use-i18n', () => ({
         'common.next': 'Vidéo suivante',
         'common.enterFullscreen': 'Plein écran',
         'common.exitFullscreen': 'Quitter le plein écran',
+        'common.videoLightboxKeyboardHelp':
+          'Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer',
       };
       return translations[key] || key;
     },
@@ -110,6 +112,8 @@ jest.mock('@/hooks/useI18n', () => ({
         'common.next': 'Vidéo suivante',
         'common.enterFullscreen': 'Plein écran',
         'common.exitFullscreen': 'Quitter le plein écran',
+        'common.videoLightboxKeyboardHelp':
+          'Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer',
       };
       return translations[key] || key;
     },
@@ -536,6 +540,282 @@ describe('VideoLightbox', () => {
     });
   });
 
+  describe('togglePlay pause branch', () => {
+    it('pauses video when togglePlay called while already playing', async () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      // Start playing
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+
+      // Pause by pressing space again (now isPlaying=true)
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+      expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    });
+
+    it('handles play() rejection gracefully', async () => {
+      (HTMLMediaElement.prototype.play as jest.Mock).mockRejectedValueOnce(new Error('play failed'));
+      render(<VideoLightbox {...defaultProps} />);
+
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+
+      // Error is swallowed — component still renders
+      expect(screen.getByText('test-video.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('Nav button clicks (inline onClick bodies)', () => {
+    it('clicking left nav button navigates to previous video', () => {
+      const videos = [
+        createMockVideo({ originalName: 'video1.mp4' }),
+        createMockVideo({ originalName: 'video2.mp4' }),
+      ];
+      render(<VideoLightbox {...defaultProps} videos={videos} initialIndex={1} />);
+
+      const prevButton = screen.getByLabelText(/précédente/i);
+      fireEvent.click(prevButton);
+
+      expect(screen.getByText('video1.mp4')).toBeInTheDocument();
+    });
+
+    it('clicking right nav button navigates to next video', () => {
+      const videos = [
+        createMockVideo({ originalName: 'video1.mp4' }),
+        createMockVideo({ originalName: 'video2.mp4' }),
+      ];
+      render(<VideoLightbox {...defaultProps} videos={videos} initialIndex={0} />);
+
+      const nextButton = screen.getByLabelText(/suivante/i);
+      fireEvent.click(nextButton);
+
+      expect(screen.getByText('video2.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('Download button', () => {
+    it('top-bar download button click triggers handleDownload', () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      // Mock DOM operations AFTER render so React's initial mount is unaffected
+      const mockLink = {
+        href: '',
+        download: '',
+        target: '',
+        click: jest.fn(),
+      };
+      const createSpy = jest.spyOn(document, 'createElement').mockReturnValueOnce(mockLink as any);
+      const appendSpy = jest.spyOn(document.body, 'appendChild').mockImplementationOnce(() => mockLink as any);
+      const removeSpy = jest.spyOn(document.body, 'removeChild').mockImplementationOnce(() => mockLink as any);
+
+      const downloadButton = screen.getByLabelText(/Télécharger/i);
+      fireEvent.click(downloadButton);
+
+      expect(mockLink.click).toHaveBeenCalled();
+      expect(mockLink.href).toBe('https://example.com/video.mp4');
+
+      createSpy.mockRestore();
+      appendSpy.mockRestore();
+      removeSpy.mockRestore();
+    });
+  });
+
+  describe('Seek range input', () => {
+    it('handleSeek updates currentTime via range input change', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+
+      const rangeInputs = container.querySelectorAll('input[type="range"]');
+      const seekInput = rangeInputs[0] as HTMLInputElement;
+
+      fireEvent.change(seekInput, { target: { value: '30' } });
+
+      expect(screen.getByText(/0:30/)).toBeInTheDocument();
+    });
+  });
+
+  describe('Volume controls', () => {
+    it('handleVolumeChange: unmutes when volume raised while muted', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+
+      // Mute first
+      fireEvent.keyDown(window, { key: 'm' });
+      expect(screen.getByTestId('volume-muted-icon')).toBeInTheDocument();
+
+      // Raise volume while muted → should unmute
+      const rangeInputs = container.querySelectorAll('input[type="range"]');
+      const volumeInput = rangeInputs[1] as HTMLInputElement;
+      fireEvent.change(volumeInput, { target: { value: '0.7' } });
+
+      expect(screen.getByTestId('volume-icon')).toBeInTheDocument();
+    });
+
+    it('bottom-bar mute button toggles mute state', () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      const muteButton = screen.getByLabelText(/Couper le son/i);
+      fireEvent.click(muteButton);
+
+      expect(screen.getByTestId('volume-muted-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('Video events', () => {
+    it('handleLoadedMetadata event sets duration and dimensions', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      Object.defineProperty(video, 'duration', { value: 90, configurable: true });
+      Object.defineProperty(video, 'videoWidth', { value: 1280, configurable: true });
+      Object.defineProperty(video, 'videoHeight', { value: 720, configurable: true });
+
+      fireEvent.loadedMetadata(video);
+
+      expect(screen.getByText(/1:30/)).toBeInTheDocument();
+    });
+
+    it('handleEnded event stops playback and sets time to duration', async () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      // Set up duration first
+      Object.defineProperty(video, 'duration', { value: 60, configurable: true });
+      fireEvent.loadedMetadata(video);
+
+      // Start playing
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+
+      // End the video
+      act(() => { fireEvent.ended(video); });
+
+      // Should show play icon (stopped)
+      expect(screen.getAllByTestId('play-icon').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Fullscreen change event', () => {
+    it('fullscreenchange event updates isFullscreen state', () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      // Simulate browser entering fullscreen
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: document.body,
+        configurable: true,
+      });
+
+      act(() => { fireEvent(document, new Event('fullscreenchange')); });
+
+      expect(screen.getByTestId('minimize-icon')).toBeInTheDocument();
+
+      // Cleanup
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: null,
+        configurable: true,
+      });
+    });
+  });
+
+  describe('isPlaying state rendering', () => {
+    it('shows Pause icon when video is playing', async () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+
+      expect(screen.getByTestId('pause-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('isFullscreen rendering', () => {
+    it('shows Minimize icon in bottom bar when isFullscreen is true', () => {
+      render(<VideoLightbox {...defaultProps} />);
+
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: document.body,
+        configurable: true,
+      });
+      act(() => { fireEvent(document, new Event('fullscreenchange')); });
+
+      expect(screen.getByTestId('minimize-icon')).toBeInTheDocument();
+
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: null,
+        configurable: true,
+      });
+    });
+
+    it('clicking fullscreen button in bottom bar calls toggleFullscreen', async () => {
+      const requestFullscreenMock = jest.fn().mockResolvedValue(undefined);
+      Object.defineProperty(HTMLVideoElement.prototype, 'requestFullscreen', {
+        value: requestFullscreenMock,
+        configurable: true,
+      });
+
+      render(<VideoLightbox {...defaultProps} />);
+
+      const fullscreenButton = screen.getByLabelText(/Plein écran/i);
+      await act(async () => { fireEvent.click(fullscreenButton); });
+
+      expect(requestFullscreenMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('Mobile layout (getVideoContainerStyle)', () => {
+    it('returns full-size style on narrow screens', () => {
+      const originalInnerWidth = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', { value: 375, configurable: true, writable: true });
+
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+
+      // The inner video container should have 100% dimensions (mobile path)
+      const styledDivs = Array.from(container.querySelectorAll('[style]'));
+      const mobileContainer = styledDivs.find((el) => {
+        const style = (el as HTMLElement).style;
+        return style.width === '100%';
+      });
+      expect(mobileContainer).toBeTruthy();
+
+      Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true, writable: true });
+    });
+  });
+
+  describe('Desktop layout with video dimensions', () => {
+    it('uses video aspect ratio for container on desktop after loadedmetadata', () => {
+      Object.defineProperty(window, 'innerWidth', { value: 1920, configurable: true, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 1080, configurable: true, writable: true });
+
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      Object.defineProperty(video, 'duration', { value: 60, configurable: true });
+      Object.defineProperty(video, 'videoWidth', { value: 1280, configurable: true });
+      Object.defineProperty(video, 'videoHeight', { value: 720, configurable: true });
+
+      act(() => { fireEvent.loadedMetadata(video); });
+
+      // Container should have pixel-based width/height (not percentages)
+      const styledDivs = Array.from(container.querySelectorAll('[style]'));
+      const pixelContainer = styledDivs.find((el) => {
+        const style = (el as HTMLElement).style;
+        return style.width && style.width.includes('px');
+      });
+      expect(pixelContainer).toBeTruthy();
+    });
+  });
+
+  describe('Animation frame cleanup', () => {
+    it('cancels rAF when play transitions back to stopped', async () => {
+      (global.requestAnimationFrame as jest.Mock).mockReturnValueOnce(42);
+
+      render(<VideoLightbox {...defaultProps} />);
+
+      // Start playing → rAF registered with id=42
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+
+      // Stop playing → cleanup should cancel id=42
+      await act(async () => { fireEvent.keyDown(window, { key: ' ' }); });
+
+      expect(global.cancelAnimationFrame).toHaveBeenCalledWith(42);
+    });
+  });
+
   describe('Accessibility', () => {
     it('should have accessible buttons with aria-labels', () => {
       render(<VideoLightbox {...defaultProps} />);
@@ -555,6 +835,184 @@ describe('VideoLightbox', () => {
 
       expect(screen.getByLabelText(/précédente/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/suivante/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Exit fullscreen path (lines 184-195)', () => {
+    it('clicking fullscreen button while fullscreenElement is set calls exitFullscreen', async () => {
+      const exitFullscreenMock = jest.fn().mockResolvedValue(undefined);
+      Object.defineProperty(document, 'exitFullscreen', {
+        value: exitFullscreenMock,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: document.body,
+        configurable: true,
+      });
+
+      render(<VideoLightbox {...defaultProps} />);
+
+      // Update isFullscreen state via event so button shows "Quitter le plein écran"
+      act(() => { fireEvent(document, new Event('fullscreenchange')); });
+
+      const fullscreenButton = screen.getByLabelText(/Quitter le plein écran/i);
+      await act(async () => { fireEvent.click(fullscreenButton); });
+
+      expect(exitFullscreenMock).toHaveBeenCalled();
+
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+    });
+  });
+
+  describe('handleResize with videoDimensions (lines 233-234)', () => {
+    it('fires window resize after loadedmetadata sets dimensions', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      Object.defineProperty(video, 'videoWidth', { value: 1280, configurable: true });
+      Object.defineProperty(video, 'videoHeight', { value: 720, configurable: true });
+      Object.defineProperty(video, 'duration', { value: 60, configurable: true });
+      act(() => { fireEvent.loadedMetadata(video); });
+
+      // Fire resize — handler reads new videoWidth/videoHeight when width > 0
+      act(() => { fireEvent(window, new Event('resize')); });
+
+      expect(screen.getByText('test-video.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('Video container click stopPropagation (line 496)', () => {
+    it('clicking video container does not close lightbox', () => {
+      const onClose = jest.fn();
+      const { container } = render(<VideoLightbox {...defaultProps} onClose={onClose} />);
+
+      // The motion.div (video container) is the parent element of the <video> tag
+      const videoParent = container.querySelector('video')?.parentElement;
+      if (videoParent) {
+        fireEvent.click(videoParent);
+      }
+
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Volume range click stopPropagation (line 654)', () => {
+    it('clicking volume range input does not close lightbox', () => {
+      const onClose = jest.fn();
+      const { container } = render(<VideoLightbox {...defaultProps} onClose={onClose} />);
+
+      const rangeInputs = container.querySelectorAll('input[type="range"]');
+      const volumeRange = rangeInputs[1];
+      if (volumeRange) {
+        fireEvent.click(volumeRange);
+      }
+
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('1-video navigation no-op (videos.length > 1 false branch)', () => {
+    it('ArrowLeft with single video does nothing', () => {
+      // defaultProps has 1 video; goToPrevious if-block is skipped
+      render(<VideoLightbox {...defaultProps} />);
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      expect(screen.getByText('test-video.mp4')).toBeInTheDocument();
+    });
+
+    it('ArrowRight with single video does nothing', () => {
+      render(<VideoLightbox {...defaultProps} />);
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+      expect(screen.getByText('test-video.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('Small swipe ignored (Math.abs(diff) <= minSwipeDistance false branch)', () => {
+    it('swipe distance below 50px does not navigate', () => {
+      const videos = [
+        createMockVideo({ originalName: 'video1.mp4' }),
+        createMockVideo({ originalName: 'video2.mp4' }),
+      ];
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} initialIndex={0} />);
+
+      const touchArea = container.querySelector('.absolute.inset-0');
+      if (touchArea) {
+        fireEvent.touchStart(touchArea, { touches: [{ clientX: 100 }] });
+        fireEvent.touchMove(touchArea, { touches: [{ clientX: 120 }] }); // diff = 20px < 50
+        fireEvent.touchEnd(touchArea);
+      }
+
+      expect(screen.getByText('video1.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('handleVolumeChange without mute (newVolume > 0 && isMuted false branch)', () => {
+    it('volume change when not muted does not call setIsMuted', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+
+      // isMuted is false initially; volume change should not unmute
+      const rangeInputs = container.querySelectorAll('input[type="range"]');
+      const volumeInput = rangeInputs[1] as HTMLInputElement;
+      fireEvent.change(volumeInput, { target: { value: '0.5' } });
+
+      // Volume icon (not muted) should still be visible
+      expect(screen.getByTestId('volume-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('handleTouchEnd early return (touchStartX=0)', () => {
+    it('touchEnd with no prior touchStart is a no-op', () => {
+      const videos = [
+        createMockVideo({ originalName: 'video1.mp4' }),
+        createMockVideo({ originalName: 'video2.mp4' }),
+      ];
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} initialIndex={0} />);
+
+      const touchArea = container.querySelector('.absolute.inset-0');
+      if (touchArea) {
+        // touchEnd without prior touchStart — both refs are 0, early return fires
+        fireEvent.touchEnd(touchArea);
+      }
+
+      // No navigation happened; still on first video
+      expect(screen.getByText('video1.mp4')).toBeInTheDocument();
+    });
+  });
+
+  describe('handleEnded false branch (duration=0)', () => {
+    it('handleEnded with duration=0 stops playing without setting currentTime', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      // Duration is 0 (no loadedmetadata fired) — if branch is false
+      act(() => { fireEvent.ended(video); });
+
+      // Component still renders, play icon visible
+      expect(screen.getAllByTestId('play-icon').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getVideoContainerStyle: height fits without adjustment (false branch of height > availableHeight)', () => {
+    it('uses width-based style when video aspect ratio is very wide', () => {
+      Object.defineProperty(window, 'innerWidth', { value: 1920, configurable: true, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 1080, configurable: true, writable: true });
+
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+      const video = container.querySelector('video')!;
+
+      // aspectRatio = 3200/400 = 8 → height = 1820/8 = 227.5 < availableHeight=810 (false branch)
+      Object.defineProperty(video, 'duration', { value: 60, configurable: true });
+      Object.defineProperty(video, 'videoWidth', { value: 3200, configurable: true });
+      Object.defineProperty(video, 'videoHeight', { value: 400, configurable: true });
+
+      act(() => { fireEvent.loadedMetadata(video); });
+
+      const styledDivs = Array.from(container.querySelectorAll('[style]'));
+      const pixelContainer = styledDivs.find((el) => {
+        const style = (el as HTMLElement).style;
+        return style.width && style.width.includes('px');
+      });
+      expect(pixelContainer).toBeTruthy();
     });
   });
 

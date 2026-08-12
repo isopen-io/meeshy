@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockReportService: ReportServiceProviding {
+final class MockReportService: ReportServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -44,7 +44,7 @@ final class MockReportService: ReportServiceProviding {
             lastReportMessageType = reportType
             lastReportMessageReason = reason
         }
-        try await MainActor.run { try reportMessageResult.get() }
+        try reportMessageResult.get()
     }
 
     nonisolated func reportUser(userId: String, reportType: String, reason: String?) async throws {
@@ -54,7 +54,7 @@ final class MockReportService: ReportServiceProviding {
             lastReportUserType = reportType
             lastReportUserReason = reason
         }
-        try await MainActor.run { try reportUserResult.get() }
+        try reportUserResult.get()
     }
 
     nonisolated func reportPost(postId: String, reportType: String, reason: String?) async throws {
@@ -70,7 +70,7 @@ final class MockReportService: ReportServiceProviding {
             lastReportStoryType = reportType
             lastReportStoryReason = reason
         }
-        try await MainActor.run { try reportStoryResult.get() }
+        try reportStoryResult.get()
     }
 
     nonisolated func reportConversation(conversationId: String, reportType: String, reason: String?) async throws {
@@ -80,7 +80,7 @@ final class MockReportService: ReportServiceProviding {
             lastReportConversationType = reportType
             lastReportConversationReason = reason
         }
-        try await MainActor.run { try reportConversationResult.get() }
+        try reportConversationResult.get()
     }
 
     // MARK: - Reset

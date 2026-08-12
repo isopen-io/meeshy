@@ -7,11 +7,11 @@ import MeeshyUI
 ///
 /// Three primary tabs sit under a collapsing header and swipe horizontally:
 /// **Appels** (call journal), **Clavier** (dial pad), **Contacts** (the
-/// directory, with its own sticky Tous / Demandes / Bloques / Decouvrir
-/// sub-tabs in `ContactsSection`).
+/// directory — an annuaire filtered by `ContactFilter`).
 ///
-/// Deep links still arrive as `.contacts(ContactsTab)`; they open the hub on
-/// the Contacts tab with that sub-tab pre-selected.
+/// Connection management and user discovery (Demandes / Decouvrir / Bloques)
+/// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
+/// reachable from the floating menu ladder.
 struct ContactsHubView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -19,19 +19,15 @@ struct ContactsHubView: View {
     @EnvironmentObject private var router: Router
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedTab: PeopleTab = .contacts
-    private let initialContactsSubTab: ContactsTab
 
     @StateObject private var keypadVM = KeypadViewModel()
     @StateObject private var callsVM = CallsViewModel()
-
-    init(initialTab: ContactsTab = .contacts) {
-        initialContactsSubTab = initialTab
-    }
+    @StateObject private var contactsListVM = ContactsListViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
             CollapsibleHeader(
-                title: selectedTab.rawValue,
+                title: tabTitle(selectedTab),
                 scrollOffset: scrollOffset,
                 onBack: { router.pop() },
                 titleColor: theme.textPrimary,
@@ -80,7 +76,7 @@ struct ContactsHubView: View {
                     Image(systemName: tab.icon)
                         .font(.footnote.weight(.medium))
 
-                    Text(tab.rawValue)
+                    Text(tabTitle(tab))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
@@ -102,13 +98,27 @@ struct ContactsHubView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.rawValue)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tabTitle(tab))\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// Localized display name for a People-hub tab. The raw enum value stays the
+    /// stable French key used for `.tag`/persistence; VoiceOver and the visible
+    /// label read this localized string instead.
+    private func tabTitle(_ tab: PeopleTab) -> String {
+        switch tab {
+        case .calls:
+            return String(localized: "contacts.tab.calls", defaultValue: "Appels", bundle: .main)
+        case .keypad:
+            return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
+        case .contacts:
+            return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        }
     }
 
     private func badgeCount(for tab: PeopleTab) -> Int {
         switch tab {
-        case .contacts: return FriendshipCache.shared.pendingReceivedCount
-        case .calls, .keypad: return 0
+        case .contacts, .calls, .keypad: return 0
         }
     }
 
@@ -130,8 +140,8 @@ struct ContactsHubView: View {
             )
             .tag(PeopleTab.keypad)
 
-            ContactsSection(
-                initialTab: initialContactsSubTab,
+            ContactsListTab(
+                viewModel: contactsListVM,
                 isActive: selectedTab == .contacts,
                 onScrollOffsetChange: { scrollOffset = $0 }
             )

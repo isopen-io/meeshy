@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.feature.feed"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig { minSdk = 26 }
 

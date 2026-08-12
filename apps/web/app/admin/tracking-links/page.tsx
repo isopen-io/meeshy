@@ -29,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 
 interface TrackingLinkAdmin {
   id: string;
@@ -244,9 +245,13 @@ export default function AdminTrackingLinksPage() {
     });
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(t('trackingLinks.copySuccess'));
+  const copyToClipboard = async (text: string) => {
+    const { success } = await copyTextToClipboard(text);
+    if (success) {
+      toast.success(t('trackingLinks.copySuccess'));
+    } else {
+      toast.error(t('trackingLinks.copyError'));
+    }
   };
 
   const getDeviceIcon = (device?: string) => {

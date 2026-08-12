@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Image as ImageIcon, Video, Music, FileText, Loader2 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
+import { formatFileSize } from '@meeshy/shared/types/attachment';
 
 interface AdminUserMedia {
   id: string;
@@ -36,13 +37,6 @@ function mediaKind(mime: string | null): 'image' | 'video' | 'audio' | 'file' {
   if (mime.startsWith('video/')) return 'video';
   if (mime.startsWith('audio/')) return 'audio';
   return 'file';
-}
-
-function formatSize(bytes: number | null): string {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const KIND_ICON = {
@@ -134,7 +128,7 @@ export function UserMediaSection({ userId }: { userId: string }) {
                     title={item.originalName || undefined}
                   >
                     {preview ? (
-                      <img src={preview} alt={item.originalName || ''} className="w-full h-full object-cover" />
+                      <img src={preview} alt={item.originalName || ''} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     ) : (
                       <Icon className="h-7 w-7 text-gray-400" />
                     )}
@@ -146,7 +140,7 @@ export function UserMediaSection({ userId }: { userId: string }) {
                     </span>
                     {item.fileSize ? (
                       <span className="absolute bottom-1 right-1 text-[10px] px-1 py-0.5 rounded bg-black/60 text-white">
-                        {formatSize(item.fileSize)}
+                        {formatFileSize(item.fileSize)}
                       </span>
                     ) : null}
                   </a>

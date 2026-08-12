@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -29,6 +30,81 @@ import MeeshyUI
 // freeze the UI. We therefore render a growing WINDOW (`visiblePosts`) that
 // starts small and extends via the infinite-scroll sentinel, bounding the
 // synchronous work to a handful of cards per frame.
+// MARK: - Stats band (pure counts + view)
+
+/// Compteurs du bandeau de stats en tête de l'onglet Postes d'un profil.
+/// Phase 1 (hybride) : dérivés des postes DÉJÀ chargés — donc des bornes basses
+/// tant que `hasMore` (affichées « N+ »). `posts` = type POST hors réels/stories.
+/// La phase 2 (backend) réalimentera le même bandeau avec des totaux exacts.
+struct ProfilePostsCounts: Equatable {
+    let posts: Int
+    let reels: Int
+    let stories: Int
+    let isApproximate: Bool
+
+    static func compute(from posts: [FeedPost], hasMore: Bool) -> ProfilePostsCounts {
+        ProfilePostsCounts(
+            posts: posts.filter { !$0.isReel && !$0.isStory }.count,
+            reels: posts.filter(\.isReel).count,
+            stories: posts.filter(\.isStory).count,
+            isApproximate: hasMore
+        )
+    }
+
+    /// « N+ » quand le compteur est une borne basse strictement positive, « N » sinon.
+    static func displayValue(_ value: Int, isApproximate: Bool) -> String {
+        (isApproximate && value > 0) ? "\(value)+" : "\(value)"
+    }
+}
+
+/// Bande horizontale de 3 mini-stats (Postes / Réels / Stories) affichée en tête
+/// du listing. Style aligné sur `miniStatChip` (icône + valeur arrondie + label).
+/// Valeurs opaques : agnostique de leur provenance (phase 1 dérivée / phase 2 backend).
+private struct ProfilePostsStatsBand: View {
+    let counts: ProfilePostsCounts
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    /// Profil non lié à une conversation → accent de marque (indigo500).
+    private let accentHex = "6366F1"
+
+    var body: some View {
+        HStack(spacing: 8) {
+            chip(icon: "square.grid.2x2.fill", value: counts.posts,
+                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main))
+            chip(icon: "play.rectangle.fill", value: counts.reels,
+                 label: String(localized: "profile.posts.stat.reels", defaultValue: "Réels", bundle: .main))
+            chip(icon: "circle.dashed", value: counts.stories,
+                 label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main))
+        }
+    }
+
+    private func chip(icon: String, value: Int, label: String) -> some View {
+        let display = ProfilePostsCounts.displayValue(value, isApproximate: counts.isApproximate)
+        return VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+            Text(display)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(theme.surfaceGradient(tint: accentHex))
+        .glassCard(cornerRadius: 14)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(display) \(label)"))
+    }
+}
+
 struct ProfileUserPostsList: View {
     let userId: String
     /// Opens a standard post (host pushes the full PostDetail).
@@ -39,6 +115,8 @@ struct ProfileUserPostsList: View {
 
     @StateObject private var viewModel: ProfileUserPostsViewModel
     @State private var shareableLink: ShareableLink?
+    /// Poste (ou réel) en édition via le menu « … » — parité avec `FeedView`.
+    @State private var editingPost: FeedPost?
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
 
@@ -70,10 +148,15 @@ struct ProfileUserPostsList: View {
                     emptyState
                 }
             } else {
+                ProfilePostsStatsBand(counts: viewModel.postsCounts)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
                         .onAppear { viewModel.trackImpression(post.id) }
                 }
+                .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
                     // Infinite-scroll sentinel — reveals more cached cards first
@@ -93,17 +176,23 @@ struct ProfileUserPostsList: View {
         .padding(.top, 8)
         .padding(.bottom, 24)
         .task { await viewModel.loadInitial() }
-        // FeedPostCard ends its body with `.withStatusBubble()`, which reads
-        // `@EnvironmentObject StatusBubbleController`. That object is injected at
-        // the RootView/iPadRootView level but does NOT reliably propagate across
-        // the `.sheet` boundary into UserProfileSheet — so without this the Postes
-        // tab crashes with `EnvironmentObject.error()` (SIGTRAP) the moment a card
-        // lays out. Re-injecting the shared singleton here is idempotent and adds
-        // no new re-render dependency (FeedPostCard already observes it).
-        .environmentObject(StatusBubbleController.shared)
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: [link.url])
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $editingPost) { post in
+            EditPostSheet(
+                originalContent: post.content,
+                originalLanguage: post.originalLanguage,
+                originalType: post.type,
+                media: post.media.map { EditablePostMedia($0) },
+                originalLocation: post.location,
+                isRepost: post.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                },
+                onDismiss: { editingPost = nil }
+            )
         }
     }
 
@@ -119,7 +208,8 @@ struct ProfileUserPostsList: View {
     }
 
     private func reelCard(_ post: FeedPost) -> some View {
-        ReelFeedCard(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCard(
             post: post,
             // No autoplay coordinator in the profile list — the card shows its
             // poster (PAUSED); tapping the media opens the immersive viewer where
@@ -142,14 +232,19 @@ struct ProfileUserPostsList: View {
             onShare: { id in Task { await share(id) } },
             // We are already inside this user's profile sheet — tapping the
             // (reposted) author is a no-op here to avoid stacking sheets.
-            onTapAuthor: { _ in }
+            onTapAuthor: { _ in },
+            onEdit: isOwnPost ? { post in editingPost = post } : nil,
+            onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
+            onReport: !isOwnPost ? { id in Task { await viewModel.report(id) } } : nil,
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
         )
         .equatable()
         .padding(.horizontal, 12)
     }
 
     private func postCard(_ post: FeedPost) -> some View {
-        FeedPostCard(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return FeedPostCard(
             post: post,
             isLiked: viewModel.isLiked(post),
             displayLikeCount: viewModel.likeCount(post),
@@ -163,9 +258,6 @@ struct ProfileUserPostsList: View {
             onQuote: { _ in openPost(post) },
             onShare: { id in Task { await share(id) } },
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-            },
             onSelectLanguage: { postId, language in
                 // Tap on a flag whose translation isn't loaded yet → request it.
                 // The result arrives via the social socket and patches the card.
@@ -178,9 +270,12 @@ struct ProfileUserPostsList: View {
                 // throttled to once per hour per user+post (shared with open).
                 recordView(post.id)
             },
-            onReport: { id in
+            onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
+            onReport: !isOwnPost ? { id in
                 Task { await viewModel.report(id) }
-            }
+            } : nil,
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil,
+            onEdit: isOwnPost ? { post in editingPost = post } : nil
         )
         .equatable()
     }
@@ -226,18 +321,21 @@ struct ProfileUserPostsList: View {
         shareableLink = ShareableLink(url: url)
     }
 
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // rather than a hand-rolled VStack — same pattern the peer lists
+    // `BookmarksView`/`ShareLinksView` already reuse. `compact` keeps it sized
+    // for this in-scroll (nested LazyVStack) section, and the shared component
+    // adds the guidance subtitle + a single combined VoiceOver label.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.text.square")
-                .font(.system(size: 44))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main))
-                .font(.body.weight(.semibold))
-                .foregroundColor(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        EmptyStateView(
+            icon: "square.text.square",
+            title: String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main),
+            subtitle: String(localized: "profile.posts.empty.subtitle", defaultValue: "Les publications apparaîtront ici", bundle: .main),
+            compact: true
+        )
+        .padding(.top, 40)
+        .padding(.bottom, 24)
     }
 }
 
@@ -326,6 +424,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     @Published private(set) var posts: [FeedPost] = []
     @Published var isLoading = false
     @Published var hasMore = true
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
     /// so the nested LazyVStack never builds the whole cached list at once.
     @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow
@@ -346,10 +446,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
 
-    // Impression batching — mirrors FeedView (dedup per session, 3s flush).
-    private var pendingImpressionIds: Set<String> = []
-    private var recordedImpressionIds: Set<String> = []
-    private var impressionTask: Task<Void, Never>?
+    /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
+    /// relance) portés par `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "profile")
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -372,6 +471,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     var visiblePosts: [FeedPost] { Array(posts.prefix(renderWindow)) }
     var hasMoreToRender: Bool { renderWindow < posts.count }
     var reels: [FeedPost] { posts.filter(\.isReel) }
+
+    /// Compteurs du bandeau de stats (phase 1 : dérivés des postes chargés).
+    var postsCounts: ProfilePostsCounts { .compute(from: posts, hasMore: hasMore) }
 
     // MARK: - Derived engagement state
 
@@ -529,7 +631,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
         guard let post = posts.first(where: { $0.id == postId }), !isReposted(post) else { return }
         repostedOverrides[postId] = true
         do {
-            _ = try await postService.repost(postId: postId, targetType: nil, content: nil, isQuote: false)
+            // `visibility: nil` = héritage de l'original. Un repost simple
+            // depuis le profil n'offre aucun sélecteur d'audience.
+            _ = try await postService.repost(postId: postId, targetType: nil, content: nil,
+                                             isQuote: false, visibility: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
         } catch {
             repostedOverrides[postId] = nil
@@ -537,17 +642,63 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    func sendComment(postId: String, content: String, parentId: String?) async {
-        do {
-            _ = try await postService.addComment(postId: postId, content: content, parentId: parentId, effectFlags: nil)
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "profile.posts.commentError", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-        }
-    }
+    // `sendComment` retiré (2026-07-24) : aucun call site. Les commentaires de
+    // cette liste passent par le viewer/détail hôte (PostDetailViewModel), pas
+    // par un composer inline ici — la méthode était du code mort trompeur.
 
     func report(_ postId: String) async {
         try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
         FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
+    }
+
+    // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)
+
+    func deletePost(_ postId: String) async {
+        let snapshot = posts
+        posts.removeAll { $0.id == postId }
+        do {
+            try await postService.delete(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+        } catch {
+            posts = snapshot
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await postService.pinPost(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+        }
+    }
+
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+        guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[idx]
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
+        posts[idx] = optimistic
+        do {
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[newIdx] = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
+            }
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+        } catch {
+            if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[rollbackIdx] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+        }
     }
 
     // MARK: - On-demand translation (mirrors FeedViewModel)
@@ -598,29 +749,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Impressions (batched, source "profile")
 
     func trackImpression(_ postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
-        scheduleImpressionFlush()
+        impressions.record(postId)
     }
 
-    private func scheduleImpressionFlush() {
-        impressionTask?.cancel()
-        impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.flushImpressions()
-        }
-    }
-
-    private func flushImpressions() async {
-        let batch = Array(pendingImpressionIds)
-        guard !batch.isEmpty else { return }
-        pendingImpressionIds.subtract(batch)
-        do {
-            try await postService.recordImpressions(postIds: batch, source: "profile")
-            // Mark recorded ONLY on success so a failed flush leaves the ids
-            // eligible to re-enqueue when the card next appears.
-            recordedImpressionIds.formUnion(batch)
-        } catch {}
+    /// À appeler quand la liste disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 }
