@@ -28,7 +28,10 @@ struct DiscoverTab: View {
             .padding(.bottom, 20)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
-        .refreshable { await viewModel.loadSuggestions() }
+        .refreshable {
+            guard viewModel.searchQuery.isEmpty else { return }
+            await viewModel.loadSuggestions(forceNetwork: true)
+        }
         .task {
             guard viewModel.searchQuery.isEmpty, viewModel.searchResults.isEmpty else { return }
             await viewModel.loadSuggestions()

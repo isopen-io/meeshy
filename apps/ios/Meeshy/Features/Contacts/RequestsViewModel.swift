@@ -47,29 +47,32 @@ final class RequestsViewModel: ObservableObject {
 
     // MARK: - Load Received
 
-    func loadReceived() async {
+    func loadReceived(forceNetwork: Bool = false) async {
         receivedOffset = 0
         let friendService = self.friendService
         let pageSize = self.pageSize
         let store = await CacheCoordinator.shared.friendRequests
         let loader = CacheFirstLoader(store: store, key: receivedKey)
         receivedRevalidationTask?.cancel()
-        receivedRevalidationTask = await loader.load(
-            fetch: {
-                let response = try await friendService.receivedRequests(offset: 0, limit: pageSize)
-                return response.data
-            },
-            setLoadState: { [weak self] state in
-                self?.loadState = state
-            },
-            apply: { [weak self] requests in
-                guard let self else { return }
-                self.receivedRequests = requests
-                self.receivedOffset = requests.count
-                // hasMore: assume more if we filled the page; refined by network response
-                self.receivedHasMore = requests.count >= pageSize
-            }
-        )
+        let fetch: @Sendable () async throws -> [FriendRequest] = {
+            let response = try await friendService.receivedRequests(offset: 0, limit: pageSize)
+            return response.data
+        }
+        let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
+            self?.loadState = state
+        }
+        let apply: @MainActor @Sendable ([FriendRequest]) -> Void = { [weak self] requests in
+            guard let self else { return }
+            self.receivedRequests = requests
+            self.receivedOffset = requests.count
+            // hasMore: assume more if we filled the page; refined by network response
+            self.receivedHasMore = requests.count >= pageSize
+        }
+        if forceNetwork {
+            await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return
+        }
+        receivedRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
     }
 
     func loadMoreReceived() async {
@@ -87,31 +90,34 @@ final class RequestsViewModel: ObservableObject {
 
     // MARK: - Load Sent
 
-    func loadSent() async {
+    func loadSent(forceNetwork: Bool = false) async {
         sentOffset = 0
         let friendService = self.friendService
         let pageSize = self.pageSize
         let store = await CacheCoordinator.shared.friendRequests
         let loader = CacheFirstLoader(store: store, key: sentKey)
         sentRevalidationTask?.cancel()
-        sentRevalidationTask = await loader.load(
-            fetch: {
-                let response = try await friendService.sentRequests(offset: 0, limit: pageSize)
-                // Filter pending only — historical filter preserved.
-                return response.data.filter { $0.status == "pending" }
-            },
-            setLoadState: { _ in
-                // Sent list intentionally does not drive `loadState`; the
-                // received list is the canonical loading surface for the
-                // Requests tab. Network failures here are silent.
-            },
-            apply: { [weak self] requests in
-                guard let self else { return }
-                self.sentRequests = requests
-                self.sentOffset = requests.count
-                self.sentHasMore = requests.count >= pageSize
-            }
-        )
+        let fetch: @Sendable () async throws -> [FriendRequest] = {
+            let response = try await friendService.sentRequests(offset: 0, limit: pageSize)
+            // Filter pending only — historical filter preserved.
+            return response.data.filter { $0.status == "pending" }
+        }
+        let setLoadState: @MainActor @Sendable (LoadState) -> Void = { _ in
+            // Sent list intentionally does not drive `loadState`; the
+            // received list is the canonical loading surface for the
+            // Requests tab. Network failures here are silent.
+        }
+        let apply: @MainActor @Sendable ([FriendRequest]) -> Void = { [weak self] requests in
+            guard let self else { return }
+            self.sentRequests = requests
+            self.sentOffset = requests.count
+            self.sentHasMore = requests.count >= pageSize
+        }
+        if forceNetwork {
+            await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return
+        }
+        sentRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
     }
 
     func loadMoreSent() async {

@@ -105,7 +105,14 @@ final class ContactsListViewModel: ObservableObject {
 
     // MARK: - Load Friends
 
-    func loadFriends() async {
+    func loadFriends(forceNetwork: Bool = false) async {
+        // Pull-to-refresh : le geste explicite veut le réseau, pas le
+        // raccourci cache `.fresh` qui rendrait le refresh silencieusement
+        // inopérant.
+        if forceNetwork {
+            await fetchFriendsFromNetwork(cacheKey: cacheKey)
+            return
+        }
         let cached = await CacheCoordinator.shared.friends.load(for: cacheKey)
 
         switch cached {

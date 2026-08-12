@@ -55,7 +55,7 @@ struct BlockedTab: View {
             .padding(.top, 8)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
-        .refreshable { await viewModel.loadBlocked() }
+        .refreshable { await viewModel.loadBlocked(forceNetwork: true) }
     }
 
     private func blockedRow(_ user: BlockedUser, index: Int) -> some View {

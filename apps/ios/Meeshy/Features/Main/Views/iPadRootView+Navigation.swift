@@ -477,9 +477,11 @@ extension iPadRootView {
                     }
                 }
             }
-            let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
-            let detail = underlying.map { " (\($0))" } ?? ""
-            FeedbackToastManager.shared.showError(String(localized: "conversation.open.error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main) + detail)
+            // Le détail brut (errorDescription) reste dans le log ci-dessus :
+            // MeeshyError.server transporte du texte de debug/décodage qui n'a
+            // rien à faire dans un toast utilisateur — même politique que
+            // ConversationViewModel.userFacingMessage(for:).
+            FeedbackToastManager.shared.showError(String(localized: "conversation.open.error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main))
         }
     }
 

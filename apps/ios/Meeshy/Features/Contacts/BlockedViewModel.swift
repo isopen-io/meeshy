@@ -25,14 +25,13 @@ final class BlockedViewModel: ObservableObject {
         revalidationTask?.cancel()
     }
 
-    func loadBlocked() async {
+    func loadBlocked(forceNetwork: Bool = false) async {
         let blockService = self.blockService
         let store = await CacheCoordinator.shared.blockedUsers
         let loader = CacheFirstLoader(store: store, key: cacheKey, networkMonitor: networkMonitor)
         revalidationTask?.cancel()
-        revalidationTask = await loader.load(
-            fetch: { try await blockService.listBlockedUsers() },
-            setLoadState: { [weak self] state in
+        let fetch: @Sendable () async throws -> [BlockedUser] = { try await blockService.listBlockedUsers() }
+        let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
                 guard let self else { return }
                 // Map the loader's transient states into the reduced surface the
                 // Blocked screen renders ("loading" vs "loaded" vs "error"). The
@@ -51,11 +50,15 @@ final class BlockedViewModel: ObservableObject {
                 case .idle:
                     self.loadState = .idle
                 }
-            },
-            apply: { [weak self] users in
-                self?.blockedUsers = users
             }
-        )
+        let apply: @MainActor @Sendable ([BlockedUser]) -> Void = { [weak self] users in
+            self?.blockedUsers = users
+        }
+        if forceNetwork {
+            await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
+            return
+        }
+        revalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
     }
 
     /// R6-4 incr.2 — unblock via l'outbox durable (survit offline + kill), pas

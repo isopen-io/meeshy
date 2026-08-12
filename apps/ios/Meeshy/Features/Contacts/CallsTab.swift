@@ -90,7 +90,7 @@ struct CallsTab: View {
             .padding(.top, 4)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
-        .refreshable { await viewModel.loadCalls() }
+        .refreshable { await viewModel.loadCalls(forceNetwork: true) }
     }
 }
 

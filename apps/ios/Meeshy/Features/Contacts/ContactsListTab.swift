@@ -97,7 +97,7 @@ struct ContactsListTab: View {
                 .padding(.top, 4)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
-            .refreshable { await viewModel.loadFriends() }
+            .refreshable { await viewModel.loadFriends(forceNetwork: true) }
         }
     }
 
