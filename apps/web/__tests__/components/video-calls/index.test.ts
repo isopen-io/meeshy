@@ -15,6 +15,16 @@
  * saturation/exposure) with zero production callers — never exported from this
  * barrel, never imported by VideoCallInterface or any other component. Removed
  * outright rather than left to rot a second time. See Vague 68.
+ *
+ * `CallStatusIndicator` (components/video-calls/CallStatusIndicator.tsx) duplicated
+ * `CallQualityOverlay`'s connection-quality badge — from a LESS accurate local
+ * `getQualityFromState()` reading the raw `RTCPeerConnectionState` instead of the
+ * real `qualityStats` — and duplicated the participant-name label `VideoStream`
+ * already renders on the video tile itself, while stacking at the exact same
+ * `absolute top-4 right-4` position as `CallQualityOverlay`: two black
+ * rounded-corner boxes rendered on top of each other the moment the connection
+ * degraded or stats were opened. Its `callDuration` prop was dead (destructured
+ * as `_callDuration`, never read). Removed outright. See Vague 117.
  */
 import fs from 'fs';
 import path from 'path';
@@ -22,6 +32,7 @@ import path from 'path';
 const indexPath = path.join(__dirname, '../../../components/video-calls/index.ts');
 const deadHookPath = path.join(__dirname, '../../../components/video-calls/hooks/useWebRTC.ts');
 const deadFiltersHookPath = path.join(__dirname, '../../../components/video-calls/hooks/useVideoFilters.ts');
+const deadStatusIndicatorPath = path.join(__dirname, '../../../components/video-calls/CallStatusIndicator.tsx');
 
 describe('video-calls index barrel', () => {
   it('does not export the dead/buggy useWebRTC hook', () => {
@@ -40,5 +51,21 @@ describe('video-calls index barrel', () => {
 
   it('does not ship the dead useVideoFilters hook file', () => {
     expect(fs.existsSync(deadFiltersHookPath)).toBe(false);
+  });
+
+  // Vague 117: CallStatusIndicator duplicated CallQualityOverlay's connection-quality
+  // badge (from a LESS accurate local getQualityFromState() instead of real
+  // qualityStats) and VideoStream's own participant-name label, while stacking at the
+  // exact same `absolute top-4 right-4` position as CallQualityOverlay — two
+  // black rounded-corner boxes rendered on top of each other. Its `callDuration`
+  // prop was dead (destructured as `_callDuration`, never read). Removed outright
+  // rather than left to rot a third time. See tasks/calls-fonctionnel-todo.md.
+  it('does not export the dead/duplicated CallStatusIndicator', () => {
+    const indexSource = fs.readFileSync(indexPath, 'utf-8');
+    expect(indexSource).not.toMatch(/CallStatusIndicator/);
+  });
+
+  it('does not ship the dead CallStatusIndicator file', () => {
+    expect(fs.existsSync(deadStatusIndicatorPath)).toBe(false);
   });
 });

@@ -7725,3 +7725,91 @@ déstructurée `_callDuration`, jamais utilisée — signe qu'il s'agit d'un pr�
 code en dur le mot anglais `"connection"` et n'appelle pas `useI18n`, seul point de l'UI d'appel
 encore non localisé après ce cycle** (Vague 116, nécessite 4 nouvelles clés de catalogue par locale,
 pas un simple retrait de préfixe comme le reste de ce cycle).
+
+## Vague 117 — `CallStatusIndicator` retiré : cluster de qualité dupliqué/superposé à `CallQualityOverlay` (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session,
+même journée que la Vague 116. Base explicite sur le développement précédent : `git fetch origin main`,
+branche locale réalignée sur `origin/main` (`61a483e9`, contient la Vague 116 — PR mergée). Aucune PR
+ouverte sur la branche désignée de cette session (`list_pull_requests` vide). Contrainte de sandbox
+inchangée : pas de toolchain Swift/Kotlin (`xcodebuild`/`swift`/`gradle` absents) — périmètre restreint
+à web+gateway, vérifiable localement. Repris directement l'item le plus concret du backlog « Reste
+ouvert » de la Vague 116 plutôt que de relancer un audit générique.
+
+- **Root cause confirmée par lecture directe** : `VideoCallInterface.tsx` monte à la fois
+  `<CallStatusIndicator connectionState callDuration participantName={remoteParticipant?.username ||
+  'Unknown'} />` et `<CallQualityOverlay stats={qualityStats} .../>` — les DEUX en
+  `absolute top-4 right-4` (`CallStatusIndicator.tsx:35`, `CallQualityOverlay.tsx:44`), sans le moindre
+  décalage vertical entre les deux. Deux pavés `bg-black/60 backdrop-blur-sm rounded-lg` se superposent
+  donc à l'écran pile au même endroit dès que `CallQualityOverlay` a quelque chose à montrer (qualité
+  dégradée, `showStats`, pill de survie, alertes distantes) — pas un cas limite, la position par défaut
+  des deux composants dans le DOM.
+  Les deux informations que `CallStatusIndicator` affichait étaient elles-mêmes dupliquées ailleurs et
+  MOINS fiables que leur double :
+  - Qualité : `CallStatusIndicator.getQualityFromState()` dérive une qualité approximative du seul
+    `RTCPeerConnectionState` brut (`'connected' → 'excellent'`, toujours, indépendamment de la vraie
+    perte de paquets/latence), alors que `CallQualityOverlay`/`ConnectionQualityBadge` lit les vraies
+    `qualityStats` mesurées.
+  - Nom du participant : `VideoStream.tsx:134` affiche déjà `participantName` en label sur la tuile
+    vidéo elle-même — `CallStatusIndicator` le réaffichait une seconde fois en haut à droite, avec en
+    plus un fallback `'Unknown'` codé en dur (jamais passé par `t()`, seule chaîne non traduite du
+    composant).
+  - `callDuration` (prop reçue) était mort : déstructuré `callDuration: _callDuration = 0`, jamais lu
+    dans le corps du composant — signe que `CallStatusIndicator` est un prédécesseur de `CallInfoOverlay`
+    (qui affiche la vraie durée, top-left) jamais retiré à l'introduction de ce dernier.
+  Aucun autre call site : `grep -rn CallStatusIndicator apps/web` ne remontait que l'export du barrel,
+  le composant lui-même et son import unique dans `VideoCallInterface.tsx` — sûr à supprimer entièrement
+  plutôt qu'à repositionner.
+- **Fix** : suppression pure du composant (fichier + import + usage JSX + export du barrel
+  `components/video-calls/index.ts`), suivant le précédent déjà établi dans ce même barrel pour
+  `useWebRTC` (Vague 33) et `useVideoFilters` (Vague 68) — documenté en tête du fichier de test du
+  barrel plutôt que dans `index.ts` lui-même (sinon le doc-comment matche sa propre regex de garde).
+  `connectionState` reste utilisé ailleurs dans `VideoCallInterface.tsx` (watchdog de connexion, label
+  `status.connecting` de la tuile vidéo vide) — aucune variable orpheline. 9 clés `status.{starting,
+  reconnecting,failed,disconnected,connected,quality.{excellent,good,poor,offline}}` des 4 fichiers de
+  locale (`locales/{en,fr,es,pt}/calls.json`) n'avaient plus aucun appelant après la suppression
+  (vérifié par grep exhaustif de chaque clé avant retrait) — retirées ; `status.connecting` conservé
+  (toujours utilisé par `VideoCallInterface.tsx:751`). `README.md` du dossier mis à jour (retrait de la
+  section + de la ligne d'arborescence, note « intentionally no CallStatusIndicator » suivant le même
+  style que les notes existantes pour `useWebRTC`/`useCallSignaling`).
+- **Tests** (TDD, RED confirmé avant fix — pas de `git stash` nécessaire, écrits puis exécutés avant
+  toute modification de production) :
+  - 2 nouveaux cas dans `index.test.ts` (garde du barrel, même patron que les gardes `useWebRTC`/
+    `useVideoFilters` déjà en place) : le barrel n'exporte plus `CallStatusIndicator`, le fichier n'est
+    plus livré. RED confirmé : les deux échouaient contre le code d'avant fix (`Received: true` /
+    export toujours présent).
+  - 1 nouveau cas dans `VideoCallInterface.test.tsx` : `screen.queryByText('Unknown')` absent après
+    rendu — le fallback codé en dur de `CallStatusIndicator`, jamais utilisé ailleurs dans l'arbre, sert
+    de sentinelle directe (pas besoin de compter les clusters DOM). RED confirmé :
+    `found <div class="text-white text-xs">Unknown</div>` avant le retrait du composant.
+  - Sweep complet `--testPathPatterns="[Cc]all"` (web) : **51 suites / 431 tests verts** (+3 nets vs.
+    Vague 116), 0 régression.
+  - `npx tsc --noEmit` (apps/web) : **1757 erreurs, baseline identique** (Vague 115/116 même chiffre),
+    zéro nouvelle erreur ; les erreurs pré-existantes sur `VideoCallInterface.tsx` (lignes 158-553,
+    `unknown`/socket-typing) sont toutes loin du site édité (~650) et inchangées.
+  - Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install
+    --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client`.
+  - `eslint`/`next lint` : indisponible dans ce sandbox (même erreur de config circulaire pré-existante
+    sur le plugin `react`, notée depuis plusieurs vagues).
+- **Portée volontairement non étendue** : les deux autres items « Reste ouvert » de la Vague 116
+  (`ConnectionQualityBadgeCompact` code en dur `"connection"`, `CallInfoOverlay.participantCount`
+  brièvement à 0) non traités ce cycle — un seul fix substantiel par cycle, cohérent avec le rythme
+  observé sur les vagues récentes. iOS/Android non touchés (aucune toolchain dans ce sandbox) ; le
+  god-object `CallManager.swift` (~5880 lignes) reste hors d'atteinte pour la même raison — tout
+  refactor de ce fichier sans compilateur Swift disponible serait invérifiable avant merge, donc non
+  entrepris.
+
+### Reste ouvert
+
+Reconduit (moins l'item `CallStatusIndicator`/`CallQualityOverlay` résolu ce cycle) : dead code /
+god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ; toolchains
+iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique de sortie audio
+(`setSinkId`, Vague 111, nécessite un vrai sélecteur multi-périphériques, pas un quick fix) ; guard
+`!isAnonymous` sur le poll `active-call` du bandeau (Vague 112, faible sévérité — 401 gaspillés, aucun
+impact fonctionnel) ; `CallInfoOverlay`'s `participantCount` affichant brièvement 0 côté caller
+(Vague 112, cosmétique, non traité) ; `ConnectionQualityBadgeCompact` (`ConnectionQualityBadge.tsx:130`)
+code en dur le mot anglais `"connection"` et n'appelle pas `useI18n`, seul point de l'UI d'appel encore
+non localisé (Vague 116, nécessite 4 nouvelles clés de catalogue par locale, pas un simple retrait de
+préfixe).

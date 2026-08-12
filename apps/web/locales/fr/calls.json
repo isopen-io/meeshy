@@ -23,18 +23,7 @@
       }
     },
     "status": {
-      "connecting": "Connexion en cours...",
-      "starting": "Démarrage...",
-      "reconnecting": "Reconnexion...",
-      "failed": "Échec de connexion",
-      "disconnected": "Déconnecté",
-      "connected": "Connecté",
-      "quality": {
-        "excellent": "Excellent",
-        "good": "Bon",
-        "poor": "Connexion médiocre",
-        "offline": "Hors ligne"
-      }
+      "connecting": "Connexion en cours..."
     },
     "controls": {
       "controls": "Commandes d'appel",
