@@ -478,6 +478,48 @@ export function registerCommentRoutes(
     }
   });
 
+  // POST /posts/:postId/comments/:commentId/translate — Traduction à la
+  // demande vers UNE langue (miroir de POST /posts/:postId/translate). Le
+  // résultat arrive via comment:translation-updated ; hors des 5 langues
+  // pré-générées, c'était le SEUL recours manquant du Prisme côté commentaires.
+  fastify.post('/posts/:postId/comments/:commentId/translate', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { commentId } = request.params;
+      const body = (request.body ?? {}) as { targetLanguage?: unknown; force?: unknown };
+      const targetLanguage = typeof body.targetLanguage === 'string' ? body.targetLanguage.trim() : '';
+      if (targetLanguage.length < 2 || targetLanguage.length > 5) {
+        return sendBadRequest(reply, 'Invalid targetLanguage', { code: 'VALIDATION_ERROR' });
+      }
+      const force = body.force === true;
+
+      // Lecture-scope : même garde que le fil (un lecteur autorisé à VOIR le
+      // fil peut en demander la traduction).
+      const thread = await loadCommentPostAcl(prisma, commentId);
+      if (!thread || !(await canUserConsumePost(prisma, thread.post, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
+
+      try {
+        PostTranslationService.shared.translateCommentOnDemand(commentId, targetLanguage, { force })
+          .catch((err) => fastify.log.warn({ err }, '[POST comments/:commentId/translate]: on-demand translate failed'));
+      } catch {
+        // PostTranslationService not initialized — skip silently
+      }
+
+      return sendSuccess(reply, { requested: true, targetLanguage });
+    } catch (error) {
+      fastify.log.error(`[POST comments/:commentId/translate] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // POST /posts/:postId/comments/:commentId/like — Like a comment
   fastify.post('/posts/:postId/comments/:commentId/like', {
     preValidation: [requiredAuth],

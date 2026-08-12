@@ -844,6 +844,24 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Pose une traduction de commentaire fraîchement arrivée (racine ou
+    /// réponse) — uniquement si la langue est préférée et que la ligne n'a pas
+    /// déjà une traduction plus prioritaire affichée.
+    func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
+        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }) else { return }
+        if let idx = comments.firstIndex(where: { $0.id == commentId }), comments[idx].translatedContent == nil {
+            comments[idx].translatedContent = text
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }), replies[idx].translatedContent == nil {
+                replies[idx].translatedContent = text
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
+
     /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
     /// partagé par l'optimiste local et l'écho socket `comment:updated`.
     func applyCommentUpdated(_ edited: FeedComment) {
@@ -1149,6 +1167,21 @@ class PostDetailViewModel: ObservableObject {
                     media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
                 self.applyCommentUpdated(updated)
+            }
+            .store(in: &socketCancellables)
+
+        // Traduction de commentaire arrivée (pipeline async ou demande à la
+        // demande) : pose `translatedContent` si la langue est PRÉFÉRÉE et
+        // qu'aucune traduction n'est déjà affichée — même règle unique que
+        // `FeedViewModel.applyCommentTranslation`.
+        socialSocket.commentTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                self.applyCommentTranslationUpdate(
+                    commentId: data.commentId, language: data.language, text: data.translation.text
+                )
             }
             .store(in: &socketCancellables)
 

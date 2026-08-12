@@ -2259,6 +2259,29 @@ extension StoryViewerView {
         }
     }
 
+    /// Traduction de commentaire arrivée pendant la lecture : pose
+    /// `translatedContent` (racine ou réponse) si la langue est préférée et
+    /// que la ligne n'affiche pas déjà une traduction plus prioritaire —
+    /// règle unique du Prisme (`FeedViewModel.applyCommentTranslation`).
+    func applyStoryCommentTranslationUpdated(_ data: SocketCommentTranslationUpdatedData) {
+        guard data.postId == currentStory?.id else { return }
+        let langs = resolvedViewerLanguageChain
+        guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+        let text = data.translation.text
+        if let idx = storyComments.firstIndex(where: { $0.id == data.commentId }),
+           storyComments[idx].translatedContent == nil {
+            storyComments[idx].translatedContent = text
+            return
+        }
+        for (key, var replies) in storyCommentRepliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+                replies[idx].translatedContent = text
+                storyCommentRepliesMap[key] = replies
+                return
+            }
+        }
+    }
+
     /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
     /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
     /// without constructing a live view (mirrors `rollingBackOptimisticComment`

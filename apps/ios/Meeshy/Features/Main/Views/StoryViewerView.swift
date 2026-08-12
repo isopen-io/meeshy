@@ -791,6 +791,11 @@ struct StoryViewerView: View {
         .onReceive(SocialSocketManager.shared.commentUpdated.receive(on: DispatchQueue.main)) { data in
             applyStoryCommentUpdated(data)
         }
+        // Traduction de commentaire arrivée : pose `translatedContent` dans
+        // l'overlay si la langue est préférée (chaîne du Prisme du viewer).
+        .onReceive(SocialSocketManager.shared.commentTranslationUpdated.receive(on: DispatchQueue.main)) { data in
+            applyStoryCommentTranslationUpdated(data)
+        }
     }
 
     var body: some View {

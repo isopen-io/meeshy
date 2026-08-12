@@ -26,6 +26,9 @@ struct ThreadedCommentSection: View {
     /// Édite un commentaire (contenu + effets visuels). Même règle
     /// d'éligibilité que la suppression : auteur uniquement.
     var onEditComment: ((FeedComment) -> Void)? = nil
+    /// Demande la traduction d'un commentaire vers la langue préférée du
+    /// lecteur — câblé par l'hôte (sheet / détail) vers le endpoint on-demand.
+    var onRequestTranslation: ((FeedComment) -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState? = nil
@@ -93,6 +96,7 @@ struct ThreadedCommentSection: View {
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),
                 onEditComment: editHandler(for: comment),
+                onRequestTranslation: onRequestTranslation.map { handler in { handler(comment) } },
                 showSeeReplies: showSeeReplies,
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
@@ -114,6 +118,7 @@ struct ThreadedCommentSection: View {
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
                         onEditComment: editHandler(for: reply),
+                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -151,6 +156,7 @@ struct ThreadedCommentSection: View {
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
                         onEditComment: editHandler(for: reply),
+                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -578,6 +584,13 @@ struct CommentsSheetView: View {
                                     onEditComment: { target in
                                         beginEditComment(target)
                                     },
+                                    onRequestTranslation: { target in
+                                        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                                        Task {
+                                            try? await PostService.shared.requestCommentTranslation(
+                                                postId: post.id, commentId: target.id, targetLanguage: lang)
+                                        }
+                                    },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
@@ -782,6 +795,32 @@ struct CommentsSheetView: View {
                 media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
             applyCommentEdit(updated)
+        }
+        // Traduction de commentaire arrivée (pipeline async ou demande à la
+        // demande) : pose `translatedContent` si la langue est préférée et
+        // qu'aucune traduction n'est déjà affichée (règle unique du Prisme —
+        // miroir de `FeedViewModel.applyCommentTranslation`).
+        .onReceive(
+            SocialSocketManager.shared.commentTranslationUpdated
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+            let text = data.translation.text
+            var current = liveComments ?? post.comments
+            if let idx = current.firstIndex(where: { $0.id == data.commentId }), current[idx].translatedContent == nil {
+                current[idx].translatedContent = text
+                liveComments = current
+                return
+            }
+            for (key, var replies) in repliesMap {
+                if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+                    replies[idx].translatedContent = text
+                    repliesMap[key] = replies
+                    return
+                }
+            }
         }
         // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
         // `StoryViewerView.applyCommentReactionEvent`) : l'ancien ±1 ne purgeait
@@ -1967,6 +2006,11 @@ struct CommentRowView: View, Equatable {
     /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
     /// l'utilisateur courant est l'auteur — même règle que la suppression.
     var onEditComment: (() -> Void)? = nil
+    /// Demande la traduction du commentaire vers la langue préférée du
+    /// lecteur (Prisme « Exploration ») — affiché quand AUCUNE traduction
+    /// n'est disponible et que la langue d'origine diffère. Le résultat
+    /// arrive via `comment:translation-updated`.
+    var onRequestTranslation: (() -> Void)? = nil
     /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
     /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
     /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
@@ -2007,6 +2051,9 @@ struct CommentRowView: View, Equatable {
     @State private var hasPlayedAppearanceEffect = false
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
+    /// Demande de traduction envoyée pour cette ligne (feedback immédiat,
+    /// l'icône passe en sablier jusqu'à l'arrivée du résultat).
+    @State private var translationRequested = false
 
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
@@ -2131,6 +2178,26 @@ struct CommentRowView: View, Equatable {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
                             .accessibilityHidden(true)
+                    } else if let onRequestTranslation,
+                              comment.originalLanguage != nil,
+                              comment.originalLanguage?.lowercased()
+                                != (AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr") {
+                        // Pas encore de traduction vers la langue préférée :
+                        // « Traduire » à la demande (langues hors des 5
+                        // pré-générées comprises) — le résultat remplit la
+                        // ligne via `comment:translation-updated`.
+                        Button {
+                            guard !translationRequested else { return }
+                            translationRequested = true
+                            onRequestTranslation()
+                            HapticFeedback.light()
+                        } label: {
+                            Image(systemName: translationRequested ? "hourglass" : "translate")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
+                        }
+                        .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
+                        .meeshyTapTarget(44)
                     }
 
                     Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)

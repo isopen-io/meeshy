@@ -278,6 +278,61 @@ export class PostTranslationService {
   }
 
   /**
+   * Traduction d'un COMMENTAIRE à la demande, vers la SEULE langue que le
+   * lecteur vient de choisir — miroir de `translateOnDemand` (posts). Sans
+   * cette voie, un lecteur hors des 5 langues pré-générées (`TOP_LANGUAGES`)
+   * n'avait AUCUN recours pour un commentaire, alors que le post en avait un.
+   * `force` rejoue une langue déjà traduite (bouton « Retraduire »).
+   */
+  async translateCommentOnDemand(
+    commentId: string,
+    targetLanguage: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const force = options.force === true;
+    const comment = await this.prisma.postComment.findUnique({
+      where: { id: commentId },
+      select: { content: true, originalLanguage: true, translations: true, postId: true },
+    });
+
+    if (!comment || !comment.content) {
+      log.warn('CommentTranslation: comment not found or empty', { commentId });
+      return;
+    }
+
+    if (isUrlOnly(comment.content)) {
+      log.info('CommentTranslation: skipping URL-only comment on-demand', { commentId, targetLanguage });
+      return;
+    }
+
+    const sourceLang = comment.originalLanguage ?? detectLanguage(comment.content);
+    if (sourceLang === targetLanguage) {
+      log.info('CommentTranslation: target same as source, skipping', { commentId, targetLanguage });
+      return;
+    }
+
+    const translations = (comment.translations ?? null) as Record<string, unknown> | null;
+    if (!force && translations?.[targetLanguage]) {
+      log.info('CommentTranslation: translation already cached', { commentId, targetLanguage });
+      return;
+    }
+
+    log.info('CommentTranslation: on-demand request', { commentId, sourceLang, targetLanguage });
+
+    try {
+      await this.zmqClient.translateToMultipleLanguages(
+        comment.content,
+        sourceLang,
+        [targetLanguage],
+        `comment:${commentId}`,
+        `comment_context:${comment.postId}`,
+      );
+    } catch (err) {
+      log.error('CommentTranslation: on-demand ZMQ send failed', err, { commentId });
+    }
+  }
+
+  /**
    * Listen for translation completed events from the ZMQ pipeline.
    * Filters on messageId prefix to distinguish post/comment translations.
    */

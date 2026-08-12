@@ -38,9 +38,14 @@ jest.mock('../../../services/PostCommentService', () => ({
   })),
 }));
 
+const mockTranslateCommentOnDemand = jest.fn<any>().mockResolvedValue(undefined);
+
 jest.mock('../../../services/posts/PostTranslationService', () => ({
   PostTranslationService: {
-    shared: { translateComment: jest.fn<any>().mockResolvedValue(undefined) },
+    shared: {
+      translateComment: jest.fn<any>().mockResolvedValue(undefined),
+      translateCommentOnDemand: (...a: any[]) => mockTranslateCommentOnDemand(...a),
+    },
   },
 }));
 
@@ -397,6 +402,44 @@ describe('POST /posts/:postId/comments — media not available', () => {
 });
 
 // ─── POST /posts/:postId/comments/:commentId/like ────────────────────────────
+
+// ─── POST /posts/:postId/comments/:commentId/translate ───────────────────────
+
+describe('POST /posts/:postId/comments/:commentId/translate — on-demand', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and fires the on-demand pipeline for the requested language', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'de' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.requested).toBe(true);
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: false });
+  });
+
+  it('forwards force=true for the « Retraduire » path', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'es', force: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'es', { force: true });
+  });
+
+  it('returns 400 for a malformed language', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/translate`,
+      payload: { targetLanguage: 'x' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
 
 // ─── PATCH /posts/:postId/comments/:commentId ────────────────────────────────
 

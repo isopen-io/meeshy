@@ -302,6 +302,21 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         return response.data
     }
 
+    /// Traduction d'un commentaire à la demande vers UNE langue (Prisme —
+    /// « Exploration ») : fire-and-forget, le résultat arrive via l'événement
+    /// socket `comment:translation-updated`. Miroir de `requestTranslation`
+    /// (posts) ; `force` rejoue une langue déjà traduite.
+    public func requestCommentTranslation(postId: String, commentId: String, targetLanguage: String, force: Bool = false) async throws {
+        struct TranslateCommentRequest: Encodable {
+            let targetLanguage: String
+            let force: Bool?
+        }
+        let body = TranslateCommentRequest(targetLanguage: targetLanguage, force: force ? true : nil)
+        let _: APIResponse<[String: AnyCodable]> = try await api.post(
+            endpoint: "/posts/\(postId)/comments/\(commentId)/translate", body: body
+        )
+    }
+
     public func likeComment(postId: String, commentId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
             endpoint: "/posts/\(postId)/comments/\(commentId)/like", method: "POST"

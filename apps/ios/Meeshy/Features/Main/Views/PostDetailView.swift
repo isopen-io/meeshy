@@ -515,6 +515,13 @@ struct PostDetailView: View {
                     commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
                     HapticFeedback.light()
                 },
+                onRequestTranslation: { target in
+                    let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                    Task {
+                        try? await PostService.shared.requestCommentTranslation(
+                            postId: postId, commentId: target.id, targetLanguage: lang)
+                    }
+                },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                 presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
