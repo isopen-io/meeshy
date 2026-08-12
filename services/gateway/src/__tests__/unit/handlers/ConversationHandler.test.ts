@@ -403,6 +403,27 @@ describe('ConversationHandler', () => {
       expect((calls[0][1] as { type: string }).type).not.toBe('read');
     });
 
+    // `participantId` doit porter un vrai `Participant.id` — celui que le
+    // contrôle d'appartenance vient de résoudre — et non l'identité de ROOM,
+    // qui est un `User.id` dès que le rejoignant a un compte. Les deux espaces
+    // d'id ne se croisent pas : y mettre le mauvais ne planterait rien, mais le
+    // champ mentirait sur ce qu'il nomme.
+    it('nomme la ligne Participant, pas l\'identité de room', async () => {
+      const prisma = makePrisma({
+        participantFindFirst: { id: 'part-42', bannedAt: null, leftAt: null, isActive: true },
+      });
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+
+      expect(socket.emit).toHaveBeenCalledWith('read-status:updated', expect.objectContaining({
+        participantId: 'part-42',
+        userId: USER_ID,
+      }));
+    });
+
     // Rien à rattraper dans une conversation vide : le résumé est nul et
     // l'appliquer ne dirait rien de plus qu'un silence.
     it('ne renvoie rien quand la conversation n\'a aucun message', async () => {

@@ -102,6 +102,13 @@ export class ConversationHandler {
         return;
       }
 
+      // La ligne `Participant` que le contrôle d'appartenance résout, quelle que
+      // soit la branche. Distincte de `participationId` plus bas, qui est
+      // l'identité de ROOM (`User.id` quand il y en a un) : les deux espaces
+      // d'id ne se croisent pas, et le rattrapage d'accusés doit remplir un
+      // champ `participantId` avec un vrai `Participant.id`.
+      let participantRowId: string | null = null;
+
       if (connectedUser.isAnonymous) {
         // Anonymous: verify participant owns this exact conversation
         const participantId = connectedUser.participantId;
@@ -109,6 +116,7 @@ export class ConversationHandler {
           where: { id: participantId, conversationId: normalizedId, isActive: true },
           select: { id: true },
         });
+        participantRowId = participant?.id ?? null;
         if (!participant) {
           socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
             conversationId: validated.conversationId,
@@ -124,6 +132,7 @@ export class ConversationHandler {
           where: { conversationId: normalizedId, userId },
           select: { id: true, bannedAt: true, leftAt: true, isActive: true },
         });
+        participantRowId = participant?.id ?? null;
 
         if (!participant) {
           socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
@@ -192,7 +201,7 @@ export class ConversationHandler {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }
 
-        await this._resyncReadStatusToSocket(socket, normalizedId, participationId, registeredUserId ?? null);
+        await this._resyncReadStatusToSocket(socket, normalizedId, participantRowId, registeredUserId ?? null);
       }
 
       if (registeredUserId) {
@@ -252,13 +261,21 @@ export class ConversationHandler {
    * il n'y a rien à rattraper, et les trois clients ignorent de toute façon un
    * résumé qui ne monte aucune coche.
    *
+   * `participantId` prend la ligne `Participant` résolue par le contrôle
+   * d'appartenance, JAMAIS l'identité de room (`participationId`), qui est un
+   * `User.id` dès que le rejoignant a un compte. Les deux espaces d'id ne se
+   * croisent pas : y mettre le mauvais ne planterait rien — iOS lit
+   * `userId ?? participantId` et le trouve non nul dans les deux cas — mais le
+   * champ mentirait sur ce qu'il nomme, et c'est ainsi que se fabriquent les
+   * confusions d'id que ce fichier documente ailleurs.
+   *
    * Best-effort : le join a réussi, la room est rejointe. Un rattrapage qui
    * échoue ne doit pas le défaire.
    */
   private async _resyncReadStatusToSocket(
     socket: Socket,
     conversationId: string,
-    participationId: string,
+    participantRowId: string | null,
     registeredUserId: string | null
   ): Promise<void> {
     try {
@@ -267,7 +284,7 @@ export class ConversationHandler {
 
       const payload = {
         conversationId,
-        participantId: participationId,
+        participantId: participantRowId,
         userId: registeredUserId,
         type: 'received' as const,
         updatedAt: new Date(),
