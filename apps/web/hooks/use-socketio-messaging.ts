@@ -62,7 +62,16 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     const hasAuthToken = typeof window !== 'undefined' && !!authManager.getAuthToken();
     const hasSessionToken = typeof window !== 'undefined' && !!authManager.getAnonymousSession()?.token;
 
-    if (hasAuthToken || hasSessionToken) {
+    // `reconnect()` n'est PAS « connecte si besoin » : c'est `disconnect()` puis
+    // un `connect()` différé par backoff exponentiel (`ConnectionService`,
+    // 1 000–2 000 ms au premier essai). Le lancer inconditionnellement au
+    // montage COUPAIT donc un socket sain pendant une à deux secondes — et cinq
+    // composants montent ce hook, si bien qu'ouvrir un profil suspendait le
+    // temps réel de tout ce qui était à l'écran. La garde est celle de
+    // l'étape 1C ci-dessous, qui fait le même geste correctement.
+    const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
+
+    if ((hasAuthToken || hasSessionToken) && !diagnostics?.isConnected && !diagnostics?.isConnecting) {
       // Forcer la connexion initiale dès le montage du composant
       meeshySocketIOService.reconnect();
     }
