@@ -1,4 +1,4 @@
-/// Pure source-selection helper for `MyStoryRow` thumbnails. The row's
+/// Pure source-selection helper for `MyStoryCard`/`MyStoryThumbnail`. The card's
 /// `thumbnailUrl` only ever reflects the raw background media — it never
 /// includes text, drawing, or stickers baked on top. `storyEffects.thumbHash`
 /// is a composite of every layer (cf. StoryReaderLoadingOverlay, which
@@ -20,5 +20,12 @@ enum MyStoryThumbnailResolver {
             return .remoteURL(url)
         }
         return .placeholder
+    }
+
+    /// Le composite local-first (même pipeline pixel-parfait que la publication et
+    /// l'autosave de brouillon) gagne toujours sur l'ancien repli — thumbHash serveur
+    /// pour Published, premier fichier média brut pour Drafts.
+    static func localCoverPath(renderedCover: String?, legacyFallback: String?) -> String? {
+        renderedCover ?? legacyFallback
     }
 }

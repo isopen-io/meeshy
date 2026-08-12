@@ -270,6 +270,55 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    // MARK: - Mute / speaker / camera-flip accessibility hints (audit fix)
+
+    func test_muteButton_hasAccessibilityHint() throws {
+        // Audit fix: unlike the video-pause button in the same controlButtonsRow
+        // (which passes a hint because its consequence isn't obvious), mute and
+        // speaker were the two outliers with no `hint:` argument at all.
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.toggleMute()") else {
+            XCTFail("CallView must wire the mute toggle action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -700, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.mute.hint"),
+            "The mute callControlButton call must pass hint: call.control.mute.hint so VoiceOver " +
+            "users know muting affects what the other party hears, not just their own label."
+        )
+    }
+
+    func test_speakerButton_hasAccessibilityHint() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.toggleSpeaker()") else {
+            XCTFail("CallView must wire the speaker toggle action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -700, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.speaker.hint"),
+            "The speaker callControlButton call must pass hint: call.control.speaker.hint."
+        )
+    }
+
+    func test_flipCameraButton_hasAccessibilityHint() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.switchCamera()") else {
+            XCTFail("CallView must wire the camera-flip action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("call.control.flipCamera.hint"),
+            "The camera-flip pipFrameButton call must pass hint: call.control.flipCamera.hint — " +
+            "its sibling pipFrameButton (filters) already does, so the omission wasn't deliberate."
+        )
+    }
+
     // MARK: - Effects toggle button accessibility
 
     func test_effectsToggleButton_hasAccessibilityHint() throws {
@@ -298,6 +347,30 @@ final class CallViewAccessibilityTests: XCTestCase {
             searchStart = labelRange.upperBound
         }
         XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
+    }
+
+    // MARK: - hasActiveEffects — advanced filters without a colorimetry preset
+
+    func test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone() throws {
+        // Regression guard — `hasActiveEffects` used to read `config.isEnabled`
+        // alone. `isEnabled` is only ever set true by picking a colorimetry
+        // preset; a user who enables background blur or skin smoothing
+        // WITHOUT ever picking a preset left `isEnabled` false, so the
+        // "Filtres" toolbar glyph never lit up even though a filter was
+        // silently active (VideoFilterPipeline.process has the same fix).
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var hasActiveEffects: Bool {") else {
+            XCTFail("CallView must declare hasActiveEffects")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let block = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains("hasAdvancedFilters"),
+            "hasActiveEffects must also check config.hasAdvancedFilters, not just " +
+            "config.isEnabled, or it misses background blur/skin smoothing enabled " +
+            "without a colorimetry preset."
+        )
     }
 
     // MARK: - End call button accessibility
@@ -452,6 +525,84 @@ final class CallViewAccessibilityTests: XCTestCase {
             "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
             "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
         )
+    }
+
+    // MARK: - Audio duration capsule VoiceOver context (212i)
+
+    /// Both audio-call surfaces render `Text(callManager.formattedDuration)` inside
+    /// a `.accessibilityElement(children: .combine)` capsule. On a HEALTHY link the
+    /// `TransientCallSignalGlyph` beside it is invisible, so the combined element
+    /// used to announce a context-free "1:23" — VoiceOver users could not tell it
+    /// was the call timer. The duration Text must carry an explicit label + value
+    /// (reusing the video badge's `call.duration.a11y.label`) so it reads
+    /// "Durée de l'appel, 1:23", while keeping `.combine` so the glyph's own
+    /// signal label still merges in when the link degrades.
+    private func audioDurationCapsuleVicinity(_ source: String, layout marker: String) throws -> String {
+        guard let layoutRange = source.range(of: marker) else {
+            XCTFail("CallView must define \(marker)")
+            return ""
+        }
+        guard let durationRange = source.range(
+            of: "Text(callManager.formattedDuration)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("\(marker) must render Text(callManager.formattedDuration)")
+            return ""
+        }
+        let end = source.index(durationRange.lowerBound, offsetBy: 1900, limitedBy: source.endIndex) ?? source.endIndex
+        return String(source[durationRange.lowerBound ..< end])
+    }
+
+    func test_audioCallLayout_durationCapsule_hasLabelledAccessibilityValue() throws {
+        let source = try callViewSource()
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var audioCallLayout: some View {")
+        XCTAssertTrue(
+            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
+            "audioCallLayout's duration Text must carry an explicit call.duration.a11y.label so " +
+            "VoiceOver announces the timer with context, not a context-free '1:23' when the signal " +
+            "glyph is invisible on a healthy link."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            "audioCallLayout's duration Text must expose the timer via .accessibilityValue so the " +
+            "static label reads once and the dynamic value updates separately (paired with the " +
+            "capsule's existing .updatesFrequently trait)."
+        )
+    }
+
+    func test_compactAudioCallHeader_durationCapsule_hasLabelledAccessibilityValue() throws {
+        let source = try callViewSource()
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var compactAudioCallHeader: some View {")
+        XCTAssertTrue(
+            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
+            "compactAudioCallHeader's duration Text must carry the same explicit " +
+            "call.duration.a11y.label — this caption-mode header has no status-pill row, so the " +
+            "labelled value is the only place the timer gains meaning for VoiceOver."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue."
+        )
+    }
+
+    /// Doctrine 206i/210i/211i: the capsule now collapses to `.ignore` (not
+    /// `.combine`) — combining previously let the signal glyph's own label
+    /// leak through and announce a naked "0:34" with no context when the
+    /// glyph was invisible on a healthy link. Unlike the video badge, the
+    /// audio layout already surfaces degraded-signal state via the separate
+    /// `statusPill` row, so folding the capsule into one opaque
+    /// call-duration-only element causes no information loss.
+    func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
+        let source = try callViewSource()
+        for marker in ["private var audioCallLayout: some View {", "private var compactAudioCallHeader: some View {"] {
+            let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
+            XCTAssertTrue(
+                vicinity.contains(".accessibilityElement(children: .ignore)"),
+                "\(marker)'s duration capsule must collapse to children: .ignore so the composed " +
+                "call-duration label reads instead of a context-free timer digit (signal state is " +
+                "already surfaced separately via statusPill)."
+            )
+        }
     }
 
     // MARK: - Video duration badge does not swallow child accessibility content

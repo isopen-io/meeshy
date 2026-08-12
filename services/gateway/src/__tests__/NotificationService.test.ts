@@ -17,6 +17,13 @@ import type { Notification, NotificationType } from '@meeshy/shared/types/notifi
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 // Mock Prisma
+//
+// Tout modèle interrogé sur le chemin d'une création de notification DOIT
+// figurer ici : un modèle absent ne lève pas « champ manquant » mais
+// « findUnique is not a function », et l'échec surgit à des dizaines de
+// lignes du test qui l'a causé. Les gardes ajoutées au service depuis
+// (refetch anti-fuite du message, mute par conversation, préférences,
+// incrustation des avatars vivants) interrogent chacune un modèle de plus.
 const mockPrisma = {
   notification: {
     create: jest.fn(),
@@ -30,12 +37,35 @@ const mockPrisma = {
   },
   user: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
   },
   conversation: {
     findUnique: jest.fn(),
   },
   message: {
     findUnique: jest.fn(),
+  },
+  participant: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+  },
+  friendRequest: {
+    findUnique: jest.fn(),
+  },
+  userPreferences: {
+    findUnique: jest.fn(),
+  },
+  userConversationPreferences: {
+    findMany: jest.fn(),
+  },
+  postComment: {
+    findUnique: jest.fn(),
+  },
+  postMedia: {
+    findMany: jest.fn(),
+  },
+  postReaction: {
+    findMany: jest.fn(),
   },
 } as any;
 
@@ -60,6 +90,34 @@ describe('NotificationService - Structure Groupée', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // `clearAllMocks` remet les compteurs d'appels à zéro mais NE purge PAS
+    // les implémentations : sans ces défauts, le `mockResolvedValue` du test
+    // précédent fuiterait dans le suivant. On repose donc un état neutre —
+    // « rien ne bloque » — que chaque test surcharge à sa guise.
+    //
+    // `message.findUnique` en particulier n'est pas optionnel : la garde
+    // anti-fuite en tête de `createMessageNotification` refetch le message
+    // et rend `null` s'il a disparu. Un mock qui rend `undefined` fait donc
+    // sortir la méthode AVANT tout `notification.create`, et le test échoue
+    // sur un `calls[0]` indéfini sans jamais dire pourquoi.
+    mockPrisma.message.findUnique.mockResolvedValue({
+      id: 'msg_123',
+      deletedAt: null,
+      expiresAt: null,
+      isViewOnce: false,
+      viewOnceCount: 0,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      messageType: 'text',
+      translations: null,
+    });
+    // Aucune conversation en sourdine : le filtre de mute laisse tout passer.
+    mockPrisma.userConversationPreferences.findMany.mockResolvedValue([]);
+    // Aucune préférence enregistrée → le service applique ses défauts.
+    mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
+    // Incrustation des avatars vivants : aucun acteur à rafraîchir.
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
     service = new NotificationService(mockPrisma);
     service.setSocketIO(mockIO);
   });
@@ -87,11 +145,11 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       const result = await service.createMessageNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         senderId: 'user_sender',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        preview: 'Salut! Comment vas-tu?',
+        messagePreview: 'Salut! Comment vas-tu?',
       });
 
       expect(result).toBeDefined();
@@ -106,8 +164,12 @@ describe('NotificationService - Structure Groupée', () => {
       expect(notificationData.priority).toBe('normal');
       expect(notificationData.content).toBe('Salut! Comment vas-tu?');
 
-      // PAS de title en DB
-      expect(notificationData.title).toBeUndefined();
+      // Le titre n'est plus « absent » mais explicitement `null` : le service
+      // persiste désormais `title`/`subtitle` comme source unique pour le push
+      // ET l'in-app, déjà localisés dans la langue résolue du destinataire.
+      // Quand aucune langue n'est résolue, il pose `null` — le client compose
+      // alors lui-même. `null`, pas `undefined` : le champ existe en base.
+      expect(notificationData.title).toBeNull();
 
       // ACTOR
       expect(notificationData.actor).toEqual({
@@ -117,17 +179,25 @@ describe('NotificationService - Structure Groupée', () => {
         avatar: 'https://cdn.example.com/alice.jpg',
       });
 
-      // CONTEXT
-      expect(notificationData.context).toEqual({
+      // CONTEXT. Le refetch anti-fuite en tête de méthode sert aussi à
+      // alimenter les champs que l'extension de notification iOS persiste
+      // sans réseau : `messageCreatedAt` et `messageType` viennent de la
+      // relecture, pas des paramètres d'appel.
+      expect(notificationData.context).toMatchObject({
         conversationId: 'conv_123',
         conversationTitle: 'Équipe Dev',
         conversationType: 'group',
         messageId: 'msg_123',
+        messageType: 'text',
       });
+      expect(notificationData.context.messageCreatedAt)
+        .toBe(new Date('2026-01-01T00:00:00Z').toISOString());
 
-      // METADATA
+      // METADATA. Un message sans pièce jointe ne porte aucun tableau
+      // `attachments` : la clé est omise plutôt que posée à vide.
       expect(notificationData.metadata).toEqual({
-        attachments: [],
+        action: 'view_message',
+        messagePreview: 'Salut! Comment vas-tu?',
       });
 
       // STATE
@@ -142,7 +212,7 @@ describe('NotificationService - Structure Groupée', () => {
       });
     });
 
-    it('NE devrait PAS stocker le champ title en DB', async () => {
+    it('ne stocke aucun titre figé quand la langue du destinataire est inconnue', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 'user_sender',
         username: 'bob',
@@ -154,15 +224,15 @@ describe('NotificationService - Structure Groupée', () => {
       mockPrisma.notification.create.mockImplementation((data) => data.data);
 
       await service.createMessageNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         senderId: 'user_sender',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        preview: 'Test message',
+        messagePreview: 'Test message',
       });
 
       const createCall = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.title).toBeUndefined();
+      expect(createCall.data.title).toBeNull();
     });
   });
 
@@ -183,11 +253,11 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       const result = await service.createMentionNotification({
-        userId: 'user_mentioned',
-        senderId: 'user_sender',
+        mentionedUserId: 'user_mentioned',
+        mentionerUserId: 'user_sender',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        messageContent: 'Merci @alice pour ton aide!',
+        messagePreview: 'Merci @alice pour ton aide!',
       });
 
       expect(result).toBeDefined();
@@ -200,8 +270,12 @@ describe('NotificationService - Structure Groupée', () => {
       // Context avec originalMessageId
       expect(createCall.data.context.messageId).toBe('msg_123');
 
-      // Metadata spécifique mention
-      expect(createCall.data.metadata).toHaveProperty('mentionContext');
+      // Metadata spécifique mention : l'aperçu du message mentionnant, plus
+      // l'action que le tap doit déclencher côté client.
+      expect(createCall.data.metadata).toEqual({
+        action: 'view_message',
+        messagePreview: 'Merci @alice pour ton aide!',
+      });
       expect(createCall.data.content).toContain('Merci @alice');
     });
   });
@@ -227,11 +301,11 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       const result = await service.createReactionNotification({
-        userId: 'user_author',
-        senderId: 'user_sender',
+        messageAuthorId: 'user_author',
+        reactorUserId: 'user_sender',
         messageId: 'msg_original',
         conversationId: 'conv_123',
-        emoji: '❤️',
+        reactionEmoji: '❤️',
       });
 
       expect(result).toBeDefined();
@@ -241,10 +315,13 @@ describe('NotificationService - Structure Groupée', () => {
       // Type
       expect(createCall.data.type).toBe('message_reaction');
 
-      // Metadata avec emoji
+      // Metadata avec emoji. Le contenu du message réagi est porté par
+      // `messageContent` (et non `messagePreview` comme pour une mention :
+      // une réaction cite le message d'autrui, elle n'en est pas l'aperçu).
       expect(createCall.data.metadata).toEqual({
+        action: 'view_message',
+        messageContent: 'Super idée!',
         reactionEmoji: '❤️',
-        messagePreview: 'Super idée!',
       });
     });
   });
@@ -265,7 +342,7 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       const result = await service.createMissedCallNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         callerId: 'user_caller',
         conversationId: 'conv_123',
         callSessionId: 'call_999',
@@ -289,10 +366,11 @@ describe('NotificationService - Structure Groupée', () => {
         callSessionId: 'call_999',
       });
 
-      // Metadata avec callType
+      // Metadata avec callType. Pas de `duration` : un appel manqué n'a par
+      // définition aucune durée, le champ a été retiré plutôt que posé à null.
       expect(createCall.data.metadata).toEqual({
+        action: 'view_conversation',
         callType: 'video',
-        duration: null,
       });
     });
   });
@@ -348,11 +426,11 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       await service.createMessageNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         senderId: 'user_sender',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        preview: 'Test',
+        messagePreview: 'Test',
       });
 
       // Vérifier l'émission Socket.IO — la room user-scoped `user:${id}` que les
@@ -372,9 +450,12 @@ describe('NotificationService - Structure Groupée', () => {
         })
       );
 
-      // Vérifier que title n'est PAS émis
+      // Le payload socket porte le même en-tête que la bannière native : le
+      // titre est le NOM DE L'ACTEUR, pas une phrase composée côté serveur.
+      // C'est ce qui permet à iOS de donner l'intention de communication au
+      // bon interlocuteur — un titre du type « Nouveau message » casserait ça.
       const emitCall = mockIO.emit.mock.calls[0][1];
-      expect(emitCall.title).toBeUndefined();
+      expect(emitCall.title).toBe('alice');
     });
   });
 
@@ -481,7 +562,9 @@ describe('NotificationService - Structure Groupée', () => {
         expect(notif).toHaveProperty('metadata');
         expect(notif).toHaveProperty('state');
         expect(notif).toHaveProperty('delivery');
-        expect(notif).not.toHaveProperty('title');
+        // Le champ existe désormais en base ; ce qui compte est qu'aucun titre
+        // figé ne soit relu ici quand rien n'a été persisté.
+        expect(notif.title ?? null).toBeNull();
       });
     });
   });

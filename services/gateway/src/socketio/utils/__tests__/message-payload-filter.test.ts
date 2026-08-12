@@ -149,6 +149,85 @@ describe('groupSocketsByLanguage', () => {
   });
 });
 
+describe('groupSocketsByLanguage — BCP-47 recipient language normalization', () => {
+  // Anonymous recipients carry a raw, un-normalized `language` (AuthHandler stores
+  // it verbatim) and NO resolvedLanguages, so grouping falls back to that raw value.
+  // A region/script-tagged code ('pt-BR', 'zh-Hant-HK') must be reduced to the
+  // 2-letter code that translations[].targetLanguage are stored as ('pt', 'zh'),
+  // otherwise the recipient's matching translation is stripped and the Prisme is
+  // violated (a translation existed but the reader falls back to the original).
+  it('normalizes a region-tagged fallback language so it matches 2-letter translation codes', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-anon'],
+      originalLanguage: 'fr',
+      socketToUser: () => 'anon-1',
+      resolveLanguages: () => [], // anonymous: never resolved
+      userLanguage: () => 'pt-BR',
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-anon'))!;
+    expect([...g.languages].sort()).toEqual(['fr', 'pt']);
+  });
+
+  it('normalizes region/script-tagged codes coming from resolveLanguages too (defensive)', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-x'],
+      originalLanguage: 'en',
+      socketToUser: () => 'u-x',
+      resolveLanguages: () => ['zh-Hant-HK'],
+      userLanguage: () => undefined,
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-x'))!;
+    expect([...g.languages].sort()).toEqual(['en', 'zh']);
+  });
+
+  it('normalizes a region-tagged original language', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-y'],
+      originalLanguage: 'pt-BR',
+      socketToUser: () => 'u-y',
+      resolveLanguages: () => ['en'],
+      userLanguage: () => undefined,
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-y'))!;
+    expect([...g.languages].sort()).toEqual(['en', 'pt']);
+  });
+
+  it('keeps an unrecognized code lowercased rather than dropping it', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-z'],
+      originalLanguage: 'fr',
+      socketToUser: () => 'u-z',
+      resolveLanguages: () => [],
+      userLanguage: () => 'ZZ',
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-z'))!;
+    expect([...g.languages].sort()).toEqual(['fr', 'zz']);
+  });
+
+  it('end-to-end: an anonymous pt-BR recipient keeps their pt translation (Prisme)', () => {
+    const payload = {
+      id: 'msg-pt',
+      content: 'Bonjour',
+      originalLanguage: 'fr',
+      translations: [
+        { targetLanguage: 'en', translatedContent: 'Hello' },
+        { targetLanguage: 'pt', translatedContent: 'Olá' },
+      ],
+    };
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-anon'],
+      originalLanguage: 'fr',
+      socketToUser: () => 'anon-1',
+      resolveLanguages: () => [],
+      userLanguage: () => 'pt-BR',
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-anon'))!;
+    const out = filterMessagePayloadForLanguages(payload, g.languages);
+    expect((out.translations as any[]).map((t) => t.targetLanguage).sort()).toEqual(['pt']);
+    expect(out.content).toBe('Bonjour');
+  });
+});
+
 describe('multi-device divergent languages (5.3 integration)', () => {
   it('each device receives only its languages + original', () => {
     const payload = basePayload(); // content fr, translations {en, es, de}

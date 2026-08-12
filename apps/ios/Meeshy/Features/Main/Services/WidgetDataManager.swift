@@ -1,6 +1,7 @@
 import Foundation
 import WidgetKit
 import MeeshySDK
+import os
 
 // MARK: - Widget-compatible Codable models (mirrors MeeshyWidgets target)
 
@@ -61,7 +62,10 @@ struct ConversationSnapshotPayload: Codable {
 final class WidgetDataManager: NotificationWidgetSink {
     static let shared = WidgetDataManager()
 
-    private let suiteName = "group.me.meeshy.apps"
+    private let suiteName: String
+    /// Seam de test — en production, les dossiers de staging sont résolus
+    /// depuis les helpers des consumers (App Group réel).
+    private let stagingDirectoriesOverride: [URL]?
     private let conversationsKey = "recent_conversations"
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
@@ -69,6 +73,8 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// Store keyé `[id: ConversationSnapshotPayload]` — résolution Local-First
     /// des détails de conversation pour la NSE + les widgets.
     private let snapshotsKey = "conversation_snapshots"
+    /// Environnement API courant, lu par les extensions (NSE + partage).
+    private let apiBaseURLKey = "meeshy_api_base_url"
     /// Borne de taille du store keyé (évite un blob App Group illimité).
     private let snapshotsCap = 500
 
@@ -82,7 +88,72 @@ final class WidgetDataManager: NotificationWidgetSink {
         return enc
     }()
 
-    private init() {}
+    private init() {
+        self.suiteName = "group.me.meeshy.apps"
+        self.stagingDirectoriesOverride = nil
+    }
+
+    /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
+    /// staging injectés pour vérifier `wipeAll()` sans toucher l'App Group réel.
+    init(suiteName: String, stagingDirectories: [URL]) {
+        self.suiteName = suiteName
+        self.stagingDirectoriesOverride = stagingDirectories
+    }
+
+    /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
+    ///
+    /// Purge les clés widget de l'App Group ET les dossiers de staging
+    /// (partages différés, blobs NSE) : le contenu du compte sortant ne doit
+    /// ni rester affiché sur l'écran d'accueil ni être rejoué sous le compte
+    /// suivant. Ne touche PAS `meeshy_api_base_url` (environnement, pas une
+    /// donnée de compte) ni `meeshy_active_user_id` (effacé par son setter au
+    /// logout) ; la base GRDB App Group est purgée par `wireOutboxLogoutHook`.
+    func wipeAll() {
+        if let defaults = sharedDefaults {
+            let accountKeys = [
+                conversationsKey, snapshotsKey, favoritesKey, lastUpdatedKey,
+                unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
+            ]
+            for key in accountKeys {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        let stagingDirs = stagingDirectoriesOverride ?? [
+            SharePendingSendConsumer.directoryURL(),
+            NSEPendingMessageConsumer.directoryURL(),
+            NSEPendingPostConsumer.directoryURL(),
+        ].compactMap { $0 }
+        for dir in stagingDirs {
+            do {
+                try FileManager.default.removeItem(at: dir)
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // Rien à purger — état déjà propre.
+                _ = error
+            } catch {
+                Logger.widgetData.error("wipeAll: staging dir \(dir.lastPathComponent, privacy: .public) not removed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        reloadTimelines()
+    }
+
+    // MARK: - Environnement API
+
+    /// Miroir de l'environnement API courant dans l'App Group.
+    ///
+    /// `NSEDataSync.resolveApiBaseURL` documente depuis toujours que « l'app
+    /// principale écrit `meeshy_api_base_url` » — sans qu'aucun code ne l'ait
+    /// jamais écrite : la NSE retombait donc systématiquement sur la
+    /// production. Bénin pour elle (son repli EST la production), mais
+    /// l'extension de partage lit la même clé et posterait, en Debug, vers
+    /// `gate.meeshy.me` au lieu de `localhost:3000`. Écrire cette clé corrige
+    /// les deux extensions d'un coup.
+    ///
+    /// Les lecteurs valident la valeur contre une allowlist et retombent sur la
+    /// production si elle en sort — un environnement inattendu ne peut donc pas
+    /// détourner un partage vers un hôte arbitraire.
+    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
+        sharedDefaults?.set(origin, forKey: apiBaseURLKey)
+    }
 
     // MARK: - NotificationWidgetSink
 
@@ -90,7 +161,12 @@ final class WidgetDataManager: NotificationWidgetSink {
         let widgetConversations = conversations
             .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
-            .prefix(10)
+            // 50 et non 10 : l'extension de partage lit cette MÊME clé pour
+            // proposer ses destinations, et 10 conversations font une liste
+            // frustrante. Les widgets tranchent au rendu (`.prefix(2)` /
+            // `.prefix(5)` dans MeeshyWidgets.swift) et ne présument jamais de
+            // la longueur du tableau — le changement leur est transparent.
+            .prefix(50)
             .map { conv in
                 WidgetConversation(
                     id: conv.id,
@@ -105,7 +181,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = try? encoder.encode(Array(widgetConversations)) else { return }
+              let data = encoder.encodeOrLog(Array(widgetConversations), field: "widget conversations", logger: Logger.widgetData) else { return }
 
         defaults.set(data, forKey: conversationsKey)
         defaults.set(Date().timeIntervalSince1970, forKey: lastUpdatedKey)
@@ -156,7 +232,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     unreadCount: conv.userState.unreadCount
                 )
             }
-        guard let data = try? encoder.encode(snapshots) else { return }
+        guard let data = encoder.encodeOrLog(snapshots, field: "widget snapshots", logger: Logger.widgetData) else { return }
         defaults.set(data, forKey: snapshotsKey)
     }
 
@@ -171,8 +247,9 @@ final class WidgetDataManager: NotificationWidgetSink {
     ) -> NotificationToastManager.ConversationPresentation? {
         guard let defaults = sharedDefaults,
               let data = defaults.data(forKey: snapshotsKey),
-              let snapshots = try? JSONDecoder().decode(
-                  [String: ConversationSnapshotPayload].self, from: data
+              let snapshots = JSONDecoder().decodeOrLog(
+                  [String: ConversationSnapshotPayload].self, from: data,
+                  field: "widget snapshots", logger: Logger.widgetData
               ),
               let payload = snapshots[id] else { return nil }
 
@@ -202,7 +279,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = try? encoder.encode(Array(favorites)) else { return }
+              let data = encoder.encodeOrLog(Array(favorites), field: "widget favorites", logger: Logger.widgetData) else { return }
 
         defaults.set(data, forKey: favoritesKey)
     }
@@ -248,4 +325,10 @@ final class WidgetDataManager: NotificationWidgetSink {
         }
         return ""
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let widgetData = Logger(subsystem: "me.meeshy.app", category: "widget-data")
 }

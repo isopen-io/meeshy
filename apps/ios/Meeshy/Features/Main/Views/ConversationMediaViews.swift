@@ -6,11 +6,29 @@ import MeeshySDK
 import MeeshyUI
 
 // MARK: - Share Sheet
+
+/// LE seul pont vers `UIActivityViewController` de l'app, toujours présenté
+/// DANS une `.sheet` SwiftUI (jamais en popover nu — le crash iPad historique
+/// du chemin audio venait d'un `UIActivityViewController` sans ancre popover,
+/// et SwiftUI résout la scène présentatrice lui-même : pas de parcours de
+/// `connectedScenes`, doctrine 215i/216i).
+///
+/// `onCompletion` est optionnel et n'installe un `completionWithItemsHandler`
+/// que s'il est fourni : les appelants qui n'ont rien à faire de l'issue du
+/// partage restent strictement inchangés.
 struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
+    /// `true` quand l'utilisateur a effectivement mené le partage à son terme.
+    var onCompletion: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        if let onCompletion {
+            controller.completionWithItemsHandler = { _, completed, _, _ in
+                onCompletion(completed)
+            }
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
@@ -95,6 +113,8 @@ struct DownloadBadgeView: View {
         .task {
             await downloader.checkCache(attachment)
         }
+        .accessibilityLabel(String(localized: "a11y.media.download.action", defaultValue: "Télécharger", bundle: .main))
+        .accessibilityValue(totalSizeText)
     }
 
     private var centredIdleBadge: some View {
@@ -184,6 +204,8 @@ struct DownloadBadgeView: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.6)))
         }
         .padding(4)
+        .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
+        .accessibilityValue(downloader.progress.formatted(.percent))
     }
 }
 
@@ -394,9 +416,44 @@ final class AttachmentDownloader: ObservableObject {
                     await store.store(data, for: resolvedKey)
                     return data
                 }
-                await MainActor.run { [weak self] in self?.activeByteTask = byteTask }
-                await store.registerInFlightDownload(byteTask, for: resolvedKey)
-                let data = try await byteTask.value
+                // registerInFlightDownload returns false when another call
+                // (a second bubble / language resolving to the SAME key)
+                // registered its own download for this exact key between the
+                // piggyback check above and this attempt — a race the initial
+                // `inFlightDownload(for:)` read can't close by itself. Honor
+                // the Bool: only claim ownership (and the cancel-button
+                // wiring via activeByteTask) when we actually won the race;
+                // otherwise cancel our now-redundant task and piggyback on
+                // the winner instead of running two full downloads at once.
+                let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)
+                let data: Data
+                if registered {
+                    await MainActor.run { [weak self] in self?.activeByteTask = byteTask }
+                    data = try await byteTask.value
+                } else {
+                    byteTask.cancel()
+                    if let existing = await store.inFlightDownload(for: resolvedKey) {
+                        data = try await existing.value
+                    } else {
+                        // The registry entry can self-clear (the winner
+                        // persists its payload, then its wrapper Task nils
+                        // the slot) between our failed `register` above and
+                        // this very read — both are actor hops with a real
+                        // suspension point in between. Falling back to OUR
+                        // own just-cancelled `byteTask` here would throw
+                        // `CancellationError` (its byte loop's
+                        // `Task.checkCancellation()`), which the outer
+                        // catch's cancellation guard below — written for the
+                        // explicit user-tap-cancel path, where `cancel()`
+                        // already resets state first — silently swallows,
+                        // stranding `isDownloading == true` forever with no
+                        // retry path. Read through the store's own
+                        // idempotent fetch instead: a cache hit if the
+                        // winner already persisted (the common case), or a
+                        // fresh coalesced fetch otherwise.
+                        data = try await store.data(for: resolvedKey)
+                    }
+                }
 
                 if case .image = cacheStore, let image = UIImage(data: data) {
                     DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
@@ -433,8 +490,12 @@ final class AttachmentDownloader: ObservableObject {
         HapticFeedback.light()
     }
 
+    /// Delegates to the single SDK-wide `formatMediaFileSize` helper (see
+    /// `MediaTypes.swift`) so download badges, the audio play-button label
+    /// and upload progress all render the exact same string for a given
+    /// byte count.
     static func fmt(_ bytes: Int64) -> String {
-        bytes.formatted(.byteCount(style: .file))
+        formatMediaFileSize(bytes)
     }
 }
 
@@ -511,6 +572,27 @@ struct AudioMediaView: View, Equatable {
     /// the bubble's visual output, so comparing them would force
     /// re-evaluation on every refresh.
     var onPlayAudio: ((String) -> Void)? = nil
+
+    /// Nom de la conversation — cold-open (F1) : porté par le cover plein
+    /// écran comme `AudioFullscreenSource.nowPlayingContextName` pour que la
+    /// carte Now Playing affiche la CONVERSATION, pas l'auteur seul. `nil`
+    /// pour les surfaces sans conversation (feed/commentaire/post/réel), qui
+    /// gardent le repli existant sur le nom de l'auteur. Wired par
+    /// `BubbleStandardLayout` -> `ThemedMessageBubble` ->
+    /// `MessageListViewController` depuis `ConversationViewModel.currentConversationName`.
+    /// **Excluded from Equatable** : n'affecte jamais le rendu de la bulle,
+    /// seulement une valeur consommée par une feuille présentée plus tard
+    /// (même traitement que `allAudioItems`).
+    var conversationName: String? = nil
+    /// Fournit, pour un `attachmentId` donné, les vocaux non écoutés qui le
+    /// suivent dans la conversation — cold-open (F1) : porté par le cover
+    /// plein écran comme `AudioFullscreenSource.queueTailProvider` pour que
+    /// l'avance auto fonctionne dès l'ouverture directe (sans lecture déjà
+    /// active). `nil` pour les surfaces sans conversation. Reçoit
+    /// `ConversationViewModel.audioQueueTail(after:)` verbatim (jamais
+    /// redéfini ici). **Excluded from Equatable** pour la même raison que
+    /// `onPlayAudio`.
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
 
     /// Caption pattern (MIMI-compatible, SOTA WhatsApp/Telegram) : quand le
     /// message contient à la fois un audio attachment et du texte content,
@@ -601,6 +683,61 @@ struct AudioMediaView: View, Equatable {
         return .audioTranslation
     }
 
+    /// Prisme Linguistique — resolves the STARTING transcription-display
+    /// language the same way `ConversationViewModel.preferredTranslation`
+    /// resolves text: walk the ordered preference chain (systemLanguage >
+    /// regionalLanguage > customDestinationLanguage > deviceLocale) and stop
+    /// at the first candidate that either matches the original language
+    /// (→ show original, `nil`) or has a matching translated-audio transcript
+    /// (→ that language code). `nil` when nothing matches — the strip then
+    /// defaults to the original, per the Prisme rule (never falls back to
+    /// `.first`). Prisme audio-follow (2026-08-09) — this value now ALSO
+    /// seeds which audio track plays, not just which transcription TEXT is
+    /// shown: it flows into `AudioPlayerView`'s `initialTranscriptionLanguage`
+    /// parameter, whose doc comment (`Sources/MeeshyUI/Media/AudioPlayerView.swift`,
+    /// search "Prisme audio-follow (2026-08-09)") carries the full playback
+    /// contract — see that doc rather than assuming playback is unaffected.
+    /// Internal (not `private`) so `@testable import` can observe the
+    /// resolution from MeeshyTests without exposing it publicly.
+    internal var resolvedPreferredTranscriptionLanguage: String? {
+        guard !translatedAudios.isEmpty else { return nil }
+        let prefs = ConversationLanguagePreferences(user: AuthManager.shared.currentUser)
+        let originalLanguage = message.originalLanguage.lowercased()
+        for lang in prefs.resolved {
+            let langLower = lang.lowercased()
+            if originalLanguage == langLower { return nil }
+            if translatedAudios.contains(where: { $0.targetLanguage.lowercased() == langLower }) {
+                return langLower
+            }
+        }
+        return nil
+    }
+
+    /// Cold-open (F1) : mappe un `AudioItem` vers l'`AudioFullscreenSource`
+    /// consommée par le `.fullScreenCover`, en portant `nowPlayingContextName`
+    /// / `queueTailProvider` — sans quoi un tap direct sur un vocal (aucune
+    /// lecture déjà active) perdrait le contexte conversation : la carte Now
+    /// Playing retomberait sur l'auteur seul et l'avance auto vers les
+    /// vocaux non écoutés suivants ne se déclencherait jamais.
+    /// `conversationName` vide (VM pas encore hydraté) est traité comme
+    /// absent — laisse `AudioFullscreenSource` retomber sur l'auteur plutôt
+    /// que d'afficher un titre vide. `queueTailProvider` capture
+    /// `item.attachment.id` PAR ITEM (pas l'attachment actif à l'ouverture) :
+    /// chaque page du pager doit résoudre SA PROPRE file "à suivre".
+    /// Internal (pas `private`) pour que `@testable import` teste le mapping
+    /// sans exposer publiquement le point de câblage.
+    internal func fullscreenSource(for item: ConversationViewModel.AudioItem) -> AudioFullscreenSource {
+        let contextName = (conversationName?.isEmpty ?? true) ? nil : conversationName
+        let attachmentId = item.attachment.id
+        return AudioFullscreenSource(
+            from: item,
+            nowPlayingContextName: contextName,
+            queueTailProvider: audioQueueTailProvider.map { provider in
+                { provider(attachmentId) }
+            }
+        )
+    }
+
     /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
     /// Ré-exécuté par `.task(id: currentAudioUrl)` quand l'URL bascule
     /// (file:// -> https:// à la réconciliation, ou changement de langue
@@ -641,7 +778,8 @@ struct AudioMediaView: View, Equatable {
                     message.content,
                     fontSize: 13,
                     color: isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4),
-                    mentionColor: MeeshyColors.indigo400,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: contactColor),
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
@@ -663,7 +801,13 @@ struct AudioMediaView: View, Equatable {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                allAudioItems: allAudioItems.map(AudioFullscreenSource.init(from:)),
+                // Cold-open (F1) : `fullscreenSource(for:)` câble
+                // conversationName / audioQueueTailProvider (nowPlayingContextName
+                // / queueTailProvider) sur CHAQUE item — un simple
+                // `AudioFullscreenSource(from:)` les laissait à leurs défauts
+                // (auteur seul, pas d'avance auto) même quand cette conversation
+                // les avait déjà résolus.
+                allAudioItems: allAudioItems.map(fullscreenSource(for:)),
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
                 mentionDisplayNames: mentionDisplayNames,
@@ -804,6 +948,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -836,6 +981,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -867,6 +1013,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -906,7 +1053,8 @@ struct AudioMediaView: View, Equatable {
                 message.content,
                 fontSize: 14,
                 color: isDark ? Color.white.opacity(0.92) : MeeshyColors.indigo950.opacity(0.92),
-                mentionColor: MeeshyColors.indigo400,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                 accentColor: Color(hex: contactColor),
                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
             )

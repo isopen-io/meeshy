@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { AuthRouteContext } from './types';
 import { invalidateAllSessions } from '../../services/SessionService';
+import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
 
@@ -45,6 +46,18 @@ export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
       }
 
       const count = await invalidateAllSessions(payload.userId, undefined, 'email_revoke_all');
+
+      // The page below says "All sessions disconnected". Until this call
+      // existed it was false: the rows were invalidated, every live socket kept
+      // streaming. This link is mailed on a suspicious login, so the socket an
+      // intruder holds is precisely the one it exists to cut.
+      await disconnectRevokedSessions({
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        userId: payload.userId,
+        reason: 'logout_all_devices',
+        onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket fanout failed on revoke-all-sessions'),
+      });
+
       reply.type('text/html').code(200);
       return `<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>All sessions disconnected</h2><p>${count} session(s) have been revoked. Please log in again.</p><p><a href="https://meeshy.me" style="color:#6366F1">Go to Meeshy</a></p></body></html>`;
     }

@@ -85,6 +85,21 @@ struct PendingImageWrapper: Identifiable {
     let image: UIImage
 }
 
+/// Le fournisseur de caméra rendu PRÉSENTABLE (S5).
+///
+/// `fullScreenCover(isPresented:)` présente dès que le drapeau passe à `true` —
+/// fournisseur injecté ou non — et un corps `if let provider` non satisfait donne
+/// alors un plein écran opaque au corps VIDE : aucun bouton de fermeture, et pas
+/// de swipe-down puisque le composer est lui-même en `fullScreenCover`. Le
+/// `item:` déplace la garantie du call site vers le TYPE.
+nonisolated struct PresentedCameraCapture: Identifiable {
+    /// Identité STABLE, et non un `UUID()` : le binding est recalculé à chaque
+    /// passe de rendu du composer, et `fullScreenCover(item:)` re-présente dès
+    /// que l'identité change — la caméra se rouvrirait en boucle.
+    let id = "story.composer.camera"
+    let provider: StoryCameraCaptureProvider
+}
+
 struct EditingMediaImage: Identifiable {
     let id = UUID()
     let elementId: String

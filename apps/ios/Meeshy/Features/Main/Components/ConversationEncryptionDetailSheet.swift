@@ -67,6 +67,10 @@ struct ConversationEncryptionDetailSheet: View {
                 Image(systemName: "lock.shield.fill")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.success)
+                    // Decorative status glyph — the adjacent "Active encryption"
+                    // title + mode subtitle carry the state, so hide the symbol
+                    // from VoiceOver rather than reading its SF Symbol name.
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.activeLabel",
                                 defaultValue: "Active encryption",
@@ -112,6 +116,9 @@ struct ConversationEncryptionDetailSheet: View {
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundColor(.secondary)
+                    // Decorative glyph — the "Encryption enabled" label + toggle
+                    // convey the state; hide the symbol from VoiceOver.
+                    .accessibilityHidden(true)
                 Text(String(localized: "conversation.encryption.detail.toggleEnabled",
                             defaultValue: "Encryption enabled",
                             bundle: .main))
@@ -137,6 +144,9 @@ struct ConversationEncryptionDetailSheet: View {
                 Image(systemName: "lock.open")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.warning)
+                    // Decorative status glyph — "Unencrypted conversation" title +
+                    // subtitle carry the state, so hide the symbol from VoiceOver.
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
                                 defaultValue: "Unencrypted conversation",
@@ -191,6 +201,9 @@ struct ConversationEncryptionDetailSheet: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "lock.fill")
+                            // Decorative glyph inside the button — the "Enable
+                            // encryption" text is the button's spoken label.
+                            .accessibilityHidden(true)
                         Text(String(localized: "conversation.encryption.detail.activate",
                                     defaultValue: "Enable encryption",
                                     bundle: .main)).fontWeight(.semibold)

@@ -47,6 +47,30 @@ sinon (groupe, n > 1) :
 | P3 | Live on-screen GRDB (`batchDeliverySync`) | `state→s`, `rAll/dAll` | ✅ `event.updatedAt` *(ajouté)* | `summary.totalMembers` (serveur, via handler) |
 | P4 | Affichage (`BubbleContentBuilder`) | rien — calcule `I` via resolver | — | `n = memberCount−1` |
 
+> ### ⚠️ Portée de cette preuve — note ajoutée le 2026-07-25
+>
+> Les théorèmes ci-dessous restent **valides tels qu'énoncés**. L1 (`rc ≤ N(c)`)
+> est une borne de cardinalité et tient quelle que soit la sémantique de « lu » ;
+> « jamais sur-déclaration » (§ synthèse) porte sur l'écart client↔serveur, pas
+> sur le serveur lui-même.
+>
+> Mais cette preuve établit que **le client reflète fidèlement les compteurs du
+> serveur**. Elle ne questionne jamais si l'ensemble « lu » du serveur correspond
+> à ce qui a été **réellement affiché**. Or il ne le faisait pas :
+> `freezeMessageStatus` gelait `readAt` sur toute la fenêtre temporelle
+> `(readAt précédent, maintenant]`, si bien qu'ouvrir une conversation à 200
+> non-lus les marquait tous lus.
+>
+> `ReadReceiptGate` (T3) ne couvre pas ce cas : il gate **quand** un accusé est
+> émis (app active, viewport en bas), pas **quels messages** il couvre. Un accusé
+> émis au bas d'une conversation en retard marquait quand même tout l'historique.
+>
+> Corrigé par `docs/superpowers/specs/2026-07-24-read-exactness-design.md` : le
+> gel est borné aux messages rapportés par le client et le curseur s'arrête au
+> premier message non vu. La bascule est opt-in
+> (`EXACT_READ_TRACKING_SINCE`), donc les propriétés décrites ici restent
+> intégralement en vigueur tant qu'elle n'est pas armée.
+
 **Lemmes serveur** (architecture curseur, vérifiés) :
 - **L1** : `rc ≤ N(c)` et `dc ≤ N(c)` — le serveur compte les participants actifs
   dont le curseur franchit `m.createdAt` ; il ne peut jamais sur-compter.

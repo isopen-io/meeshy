@@ -23,32 +23,75 @@ extension TimelineViewModel {
         if isCommitted { endClipDrag() }
     }
 
-    // MARK: - Trim helpers
+    // MARK: - Fenêtre d'un clip (début / fin / durée)
 
-    /// Trim the start handle of a clip by `deltaTimeSeconds` (positive = shrink from left).
-    /// Pushes a `TrimClipCommand` onto the stack.
-    public func trimClipStart(id: String, deltaTimeSeconds: Float) {
-        guard deltaTimeSeconds.isFinite else { return }
-        guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id) else { return }
-        // Clip « permanent » (duration nil — tout texte fraîchement posé) :
-        // le trim MATÉRIALISE sa fenêtre effective (start → slideDuration)
-        // puis l'ajuste — sans ça les poignées étaient inertes sur ces clips.
-        let currentDuration = clipDuration(id: id)
-            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
+    /// Fenêtre courante d'un clip. Un clip « permanent » (`duration == nil` —
+    /// tout texte fraîchement posé) n'a pas de durée stockée : on MATÉRIALISE
+    /// sa fenêtre effective, sinon les poignées restaient inertes sur lui.
+    func currentWindow(id: String) -> ClipWindowResolver.Window? {
+        guard let start = clipStartTime(id: id) else { return nil }
+        let duration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: start,
                                                       duration: nil,
                                                       slideDuration: project.slideDuration)
-        let newStart = max(0, currentStart + deltaTimeSeconds)
-        let actualDelta = newStart - currentStart
-        let newDuration = max(0.05, currentDuration - actualDelta)
-        let cmd = TrimClipCommand(
-            clipId: id, kind: kind,
-            oldStartTime: currentStart, oldDuration: currentDuration,
-            newStartTime: newStart, newDuration: newDuration
-        )
+        return ClipWindowResolver.Window(start: start, duration: duration)
+    }
+
+    /// Applique une intention d'édition à la fenêtre d'un clip et l'empile.
+    ///
+    /// Point de passage UNIQUE : c'est ici que les bornes s'appliquent, pour
+    /// que le stepper, le champ saisi et la poignée de piste produisent
+    /// exactement le même état. La commande choisie suit ce qui a changé — un
+    /// déplacement pur reste un `MoveClipCommand`, qui coalesce avec les
+    /// déplacements voisins dans la fenêtre du `CommandStack`.
+    /// Durée du média SOURCE, quand elle est connue — le composer la fige à
+    /// l'import dans `intrinsicDuration`. Au-delà, il n'y a plus d'image à
+    /// montrer que la dernière, figée : le clip mentirait sur son contenu à la
+    /// lecture comme à l'export.
+    ///
+    /// `nil` pour une story ancienne ou restaurée dont le champ n'a jamais été
+    /// peuplé, et pour l'audio, qui ne porte pas ce champ : aucune limite
+    /// connue, donc aucune limite appliquée.
+    private func nativeDurationLimit(id: String) -> Float? {
+        project.mediaObjects.first { $0.id == id }?.intrinsicDuration.map(Float.init)
+    }
+
+    private func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
+        guard let kind = clipKind(forId: id),
+              let current = currentWindow(id: id) else { return }
+        var resolved = ClipWindowResolver.resolve(edit, from: current)
+
+        // Plafond de durée native appliqué ICI, au point de passage unique :
+        // `trimClipEnd` exposait bien un paramètre `mediaDurationLimit`, mais
+        // aucun appelant de production ne le passait — une vidéo de 3 s se
+        // laissait étirer à 30 s. Le poser au chokepoint couvre d'un coup la
+        // poignée de piste, les steppers, les champs saisis et la barre
+        // tactile. Ne s'applique jamais à un déplacement, qui préserve la durée.
+        if let limit = nativeDurationLimit(id: id), resolved.duration > limit {
+            resolved = ClipWindowResolver.Window(start: resolved.start, duration: limit)
+        }
+
+        let startMoved = abs(resolved.start - current.start) > 0.0005
+        let durationChanged = abs(resolved.duration - current.duration) > 0.0005
+        // Un réglage sans effet ne doit pas empiler une entrée d'annulation vide.
+        guard startMoved || durationChanged else { return }
+
         do {
-            try cmd.apply(to: &project)
-            commandStack.push(.trimClip(cmd))
+            if durationChanged {
+                let cmd = TrimClipCommand(
+                    clipId: id, kind: kind,
+                    oldStartTime: current.start, oldDuration: current.duration,
+                    newStartTime: resolved.start, newDuration: resolved.duration
+                )
+                try cmd.apply(to: &project)
+                commandStack.push(.trimClip(cmd))
+            } else {
+                let cmd = MoveClipCommand(clipId: id, kind: kind,
+                                          oldStartTime: current.start,
+                                          newStartTime: resolved.start)
+                try cmd.apply(to: &project)
+                commandStack.push(.moveClip(cmd))
+            }
             scheduleEngineReconfigure()
             recomputeSlideDuration()
         } catch {
@@ -56,35 +99,90 @@ extension TimelineViewModel {
         }
     }
 
-    /// Trim the end handle of a clip by `deltaTimeSeconds` (positive = extend right).
-    /// Clamps to `mediaDurationLimit` when provided (source media length).
-    public func trimClipEnd(id: String, deltaTimeSeconds: Float, mediaDurationLimit: Float? = nil) {
-        guard deltaTimeSeconds.isFinite else { return }
+    // MARK: - Réglages ABSOLUS (champs saisissables de la fiche)
+
+    /// Pose le DÉBUT : le clip se déplace, sa durée est préservée.
+    public func setClipStart(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .move(to: seconds))
+    }
+
+    /// Pose la FIN : le début est préservé, la durée se recalcule.
+    public func setClipEnd(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .setEnd(seconds))
+    }
+
+    /// Pose la DURÉE : le début est préservé, la fin se déplace.
+    public func setClipDuration(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .setDuration(seconds))
+    }
+
+    // MARK: - Place dans le plan (position / taille / rotation / superposition)
+
+    /// Transformation courante d'une piste, telle que le projet la porte.
+    /// `nil` quand l'identifiant ne correspond à rien, ou à un audio — qui ne
+    /// se voit pas.
+    public func clipTransform(id: String) -> ClipTransform? {
+        if let m = project.mediaObjects.first(where: { $0.id == id }) {
+            return ClipTransform(x: m.x, y: m.y, scale: m.scale,
+                                 rotation: m.rotation, zIndex: m.zIndex)
+        }
+        if let t = project.textObjects.first(where: { $0.id == id }) {
+            return ClipTransform(x: t.x, y: t.y, scale: t.scale,
+                                 rotation: t.rotation, zIndex: t.zIndex)
+        }
+        return nil
+    }
+
+    /// Règle UN champ de la transformation, en préservant les autres. Le
+    /// bornage vit dans `ClipTransform.applying(_:)`, et l'écriture passe par
+    /// le `CommandStack` comme toute autre édition : une entrée d'annulation
+    /// par réglage, et un réglage sans effet n'en pose aucune.
+    public func setClipTransform(id: String, field: ClipTransform.Field) {
         guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id) else { return }
-        // Même matérialisation de fenêtre que trimClipStart pour les clips
-        // permanents (duration nil).
-        let currentDuration = clipDuration(id: id)
-            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
-                                                      duration: nil,
-                                                      slideDuration: project.slideDuration)
-        var newDuration = max(0.05, currentDuration + deltaTimeSeconds)
+              let current = clipTransform(id: id) else { return }
+        let updated = current.applying(field)
+        guard updated != current else { return }
+        let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
+                                         property: .transform(old: current, new: updated))
+        applySetClipProperty(cmd)
+    }
+
+    // MARK: - Réglages par PAS (steppers, poignées, actions d'accessibilité)
+
+    /// Déplacement EXACT du début d'un clip — les steppers ±0,1 s de
+    /// l'inspecteur.
+    ///
+    /// Ne passe volontairement PAS par `dragClip`. Celui-ci emprunte le chemin
+    /// du GESTE, qui applique l'aimantation magnétique : sa tolérance vaut
+    /// `8 pt / (50 × zoom)`, soit **0,16 s** au zoom par défaut — plus que le
+    /// pas de 0,1 s. Un clip posé à 0 (`slideStart` est un candidat d'aimant)
+    /// ou collé au bord d'un voisin revenait donc systématiquement à sa place :
+    /// le contrôle de précision était avalé par un aimant taillé pour un doigt.
+    ///
+    /// Les deux chemins ont des exigences opposées — le doigt VEUT accrocher,
+    /// le stepper veut la valeur qu'il annonce — d'où deux méthodes distinctes.
+    public func nudgeClipStart(id: String, by deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        applyWindow(id: id, edit: .move(to: w.start + deltaTimeSeconds))
+    }
+
+    // MARK: - Trim helpers
+
+    /// Poignée gauche : la FIN reste fixe, la durée absorbe le delta.
+    public func trimClipStart(id: String, deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        applyWindow(id: id, edit: .setStart(w.start + deltaTimeSeconds))
+    }
+
+    /// Poignée droite : le DÉBUT reste fixe. `mediaDurationLimit` borne à la
+    /// longueur du média source quand l'appelant la connaît.
+    public func trimClipEnd(id: String, deltaTimeSeconds: Float, mediaDurationLimit: Float? = nil) {
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        var target = w.end + deltaTimeSeconds
         if let limit = mediaDurationLimit {
-            newDuration = min(newDuration, limit)
+            target = min(target, w.start + limit)
         }
-        let cmd = TrimClipCommand(
-            clipId: id, kind: kind,
-            oldStartTime: currentStart, oldDuration: currentDuration,
-            newStartTime: currentStart, newDuration: newDuration
-        )
-        do {
-            try cmd.apply(to: &project)
-            commandStack.push(.trimClip(cmd))
-            scheduleEngineReconfigure()
-            recomputeSlideDuration()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        applyWindow(id: id, edit: .setEnd(target))
     }
 
     // MARK: - Add media / audio helpers
@@ -128,31 +226,15 @@ extension TimelineViewModel {
         trimClipEnd(id: id, deltaTimeSeconds: overlapWithNextSeconds)
     }
 
-    // MARK: - Slide duration pin (DurationHandle)
-
-    /// Pin direct de la durée de la slide (poignée en fin de ruler). Mutation
-    /// directe du projet, comme `extendSlideDurationIfNeeded` (le set de
-    /// commandes Plan 1 n'a pas de commande slide-duration) — le pin devient
-    /// `effects.timelineDuration` au commit (Option A : peut ÉTENDRE la slide
-    /// au-delà du contenu ou la ROGNER en deçà).
-    public func setSlideDuration(_ duration: Float) {
-        guard duration.isFinite else { return }
-        let clamped = max(1, min(600, duration))
-        guard abs(clamped - project.slideDuration) > 0.001 else { return }
-        project.slideDuration = clamped
-        if currentTime > clamped {
-            scrub(to: clamped, precise: true)
-        }
-        scheduleEngineReconfigure()
-    }
-
-    /// Prolongation « +10 s » de la bande d'opérations (retour user
-    /// 2026-07-20 : « agrandir et prolonger la durée de la timeline ») — même
-    /// clamp que le pin direct (max 600 s). La réduction reste au
-    /// `DurationHandle` du ruler.
-    public func extendSlideDuration(by seconds: Float = 10) {
-        setSlideDuration(project.slideDuration + seconds)
-    }
+    // MARK: - Durée de slide
+    //
+    // Aucun réglage manuel : `project.slideDuration` a un unique écrivain,
+    // `recomputeSlideDuration()`. `setSlideDuration` et `extendSlideDuration`
+    // ont été supprimés (2026-07-27) — ils écrivaient une valeur que le
+    // recalcul depuis le contenu effaçait à l'édition suivante, sans que rien
+    // ne marque qu'elle venait de l'auteur. Le plafond de 600 s qu'ils
+    // portaient vit désormais dans `ClipWindowResolver.maximumEnd`.
+    // Pour allonger une slide, on allonge un clip.
 
     // MARK: - Snap disabled toggle (two-finger drag override)
 
@@ -168,6 +250,7 @@ extension TimelineViewModel {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
         return nil
     }
 
@@ -181,11 +264,45 @@ extension TimelineViewModel {
             oldVolume = project.mediaObjects.first(where: { $0.id == id })?.volume ?? 1.0
         case .audio:
             oldVolume = project.audioPlayerObjects.first(where: { $0.id == id })?.volume ?? 1.0
-        case .text:
+        case .text, .sticker:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .volume(old: oldVolume, new: volume))
+        applySetClipProperty(cmd)
+    }
+
+    /// Mute UN-BOUTON depuis la timeline (pistes vidéo et audio). Persisté via
+    /// `volume` (0 = muet — la même convention que le composer, le reader et
+    /// l'export) et undoable : la commande `.volume` maintient le mémento de
+    /// restauration, donc mute → unmute rend le niveau quitté, pas 1.0 forcé.
+    /// No-op pour image / texte / sticker — rien à couper.
+    public func toggleClipMute(id: String) {
+        guard let kind = clipKind(forId: id) else { return }
+        // La SÉMANTIQUE du toggle vit dans le modèle (`StoryVolumeCarrying
+        // .toggleMute()`) : on la rejoue sur une COPIE pour dériver old/new,
+        // puis la commande `.volume` (undoable) applique la transition — son
+        // apply repasse par le mémento, donc modèle et historique restent
+        // cohérents.
+        let oldVolume: Float
+        let newVolume: Float
+        switch kind {
+        case .video:
+            guard let media = project.mediaObjects.first(where: { $0.id == id }),
+                  media.kind == .video else { return }
+            var probe = media
+            probe.toggleMute()
+            oldVolume = media.volume; newVolume = probe.volume
+        case .audio:
+            guard let audio = project.audioPlayerObjects.first(where: { $0.id == id }) else { return }
+            var probe = audio
+            probe.toggleMute()
+            oldVolume = audio.volume; newVolume = probe.volume
+        case .image, .text, .sticker:
+            return
+        }
+        let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
+                                         property: .volume(old: oldVolume, new: newVolume))
         applySetClipProperty(cmd)
     }
 
@@ -199,6 +316,8 @@ extension TimelineViewModel {
             oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn.map { Double($0) }
         case .text:
             oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn
+        case .sticker:
+            return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .fadeIn(old: oldFadeIn, new: Double(fadeIn)))
@@ -215,6 +334,8 @@ extension TimelineViewModel {
             oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut.map { Double($0) }
         case .text:
             oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut
+        case .sticker:
+            return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .fadeOut(old: oldFadeOut, new: Double(fadeOut)))
@@ -229,7 +350,7 @@ extension TimelineViewModel {
             oldLoop = project.mediaObjects.first(where: { $0.id == id })?.loop
         case .audio:
             oldLoop = project.audioPlayerObjects.first(where: { $0.id == id })?.loop
-        case .text:
+        case .text, .sticker:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -245,11 +366,26 @@ extension TimelineViewModel {
             oldBg = project.mediaObjects.first(where: { $0.id == id })?.isBackground
         case .audio:
             oldBg = project.audioPlayerObjects.first(where: { $0.id == id })?.isBackground
-        case .text:
+        case .text, .sticker:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .isBackground(old: oldBg, new: isBackground))
+        applySetClipProperty(cmd)
+    }
+
+    /// Coupe (ou rétablit) l'atténuation automatique de ce clip vidéo.
+    ///
+    /// Vidéo uniquement : c'est la piste des vidéos que le ducking atténue.
+    /// Appelée sur un audio, la commande n'écrirait rien — on sort avant de
+    /// pousser une entrée d'annulation qui ne défait rien.
+    public func setClipDuckingDisabled(id: String, isDisabled: Bool) {
+        guard let kind = clipKind(forId: id), kind == .video else { return }
+        let oldValue = project.mediaObjects.first(where: { $0.id == id })?.isDuckingDisabled
+        let cmd = SetClipPropertyCommand(
+            clipId: id, kind: kind,
+            property: .isDuckingDisabled(old: oldValue, new: isDisabled)
+        )
         applySetClipProperty(cmd)
     }
 
@@ -267,6 +403,8 @@ extension TimelineViewModel {
             oldName = project.audioPlayerObjects.first(where: { $0.id == id })?.name
         case .text:
             oldName = project.textObjects.first(where: { $0.id == id })?.name
+        case .sticker:
+            return
         }
         guard oldName != newName else { return }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -308,6 +446,9 @@ extension TimelineViewModel {
             snapshotAudio = nil
             snapshotText = project.textObjects.first(where: { $0.id == id })
             insertionIndex = project.textObjects.firstIndex(where: { $0.id == id }) ?? 0
+        case .sticker:
+            // Les stickers se suppriment depuis le canvas, pas la timeline.
+            return
         }
         let cmd = DeleteClipCommand(clipId: id, kind: kind,
                                     snapshotMedia: snapshotMedia,
@@ -334,6 +475,32 @@ extension TimelineViewModel {
                                       keyframeId: keyframeId,
                                       oldTime: snapshot.time, newTime: newTime)
         applyMoveKeyframeCommand(cmd)
+    }
+
+    /// Déplace un keyframe DANS LE TEMPS, d'un pas exact.
+    ///
+    /// `moveKeyframe(clipId:keyframeId:newTime:)` existait déjà mais n'avait
+    /// aucun appelant : toutes les surfaces d'édition passaient par la
+    /// surcharge « propriétés », qui code en dur `newTime: snapshot.time`.
+    /// Position, échelle, opacité et easing étaient réglables — l'INSTANT du
+    /// keyframe, lui, restait figé à celui de sa pose, et un keyframe mal
+    /// placé ne pouvait que se supprimer et se reposer.
+    ///
+    /// Le résultat est borné à la fenêtre du clip : hors d'elle, le keyframe
+    /// ne serait jamais interpolé — il disparaîtrait de la lecture tout en
+    /// restant listé.
+    public func nudgeKeyframeTime(clipId: String, keyframeId: String, by deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite,
+              let kind = clipKind(forId: clipId),
+              let snapshot = currentKeyframeSnapshot(clipId: clipId, keyframeId: keyframeId, kind: kind)
+        else { return }
+        let upperBound = clipDuration(id: clipId)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: clipStartTime(id: clipId) ?? 0,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
+        let newTime = min(max(0, snapshot.time + deltaTimeSeconds), upperBound)
+        guard abs(newTime - snapshot.time) > 0.0005 else { return }
+        moveKeyframe(clipId: clipId, keyframeId: keyframeId, newTime: newTime)
     }
 
     /// Push a transform / easing edit captured by `KeyframeInspector`.
@@ -400,7 +567,7 @@ extension TimelineViewModel {
         case .text:
             keyframe = project.textObjects.first(where: { $0.id == clipId })?
                 .keyframes?.first(where: { $0.id == keyframeId })
-        case .audio:
+        case .audio, .sticker:
             return nil
         }
         guard let kf = keyframe else { return nil }
@@ -430,6 +597,14 @@ extension TimelineViewModel {
             snapshot = keyframes[idx]
             insertionIndex = idx
         case .audio:
+            // Les clips audio portent désormais des keyframes de volume :
+            // refuser ici rendait leurs points impossibles à retirer.
+            let keyframes = project.audioPlayerObjects.first(where: { $0.id == clipId })?.keyframes ?? []
+            guard let idx = keyframes.firstIndex(where: { $0.id == keyframeId }) else { return }
+            snapshot = keyframes[idx]
+            insertionIndex = idx
+        case .sticker:
+            // Un sticker s'édite sur le canvas, pas dans la timeline.
             return
         }
         let cmd = DeleteKeyframeCommand(clipId: clipId, kind: kind,

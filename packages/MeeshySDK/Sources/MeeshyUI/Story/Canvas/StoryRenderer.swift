@@ -54,6 +54,16 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
+/// La pastille de lieu est hors timeline par design (voir doc `StoryLocationObject`
+/// dans MeeshySDK) : `nil` pour les quatre champs de timing en fait un item
+/// `isStatic` toujours visible, jamais gouverné par une fenêtre de lecture.
+extension StoryLocationObject: RenderableItem {
+    public var startTime: Double? { nil }
+    public var duration: Double? { nil }
+    public var fadeIn: Double? { nil }
+    public var fadeOut: Double? { nil }
+}
+
 extension RenderableItem {
     /// A static item has no timing windows, no fades, no keyframes — its rendered
     /// representation never changes during a slide, so it's a good rasterization
@@ -111,6 +121,7 @@ public enum StoryRenderer {
                               imageCache: ImageCacheReader? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
+                              mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale,
                               suppressDrawingOverlay: Bool = false) -> CALayer {
         let root = CALayer()
@@ -152,7 +163,8 @@ public enum StoryRenderer {
                                              geometry: geometry,
                                              mode: mode,
                                              resolver: resolver,
-                                             imageCache: imageCache)
+                                             imageCache: imageCache,
+                                             renderScale: contentsScale)
                         return mediaLayer
                     }
                     : nil
@@ -165,7 +177,8 @@ public enum StoryRenderer {
                                mode: mode,
                                languages: languages,
                                resolver: resolver,
-                               imageCache: imageCache)
+                               imageCache: imageCache,
+                               contentsScale: contentsScale)
                 }
             } else {
                 layer = renderItem(item,
@@ -174,7 +187,8 @@ public enum StoryRenderer {
                                    mode: mode,
                                    languages: languages,
                                    resolver: resolver,
-                                   imageCache: imageCache)
+                                   imageCache: imageCache,
+                                   contentsScale: contentsScale)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -228,6 +242,42 @@ public enum StoryRenderer {
                     let base = fade ?? kfOverrides.opacity ?? 1.0
                     layer.opacity = Float(base * Double(factor))
                 }
+            }
+
+            // Export overlay video: pose the decoded frame as the media layer's
+            // `contents` each tick. The live `AVPlayerLayer` isn't captured by
+            // `layer.render(in:)`, and the cache doesn't rebuild the layer per
+            // frame (a keyframe-less overlay has a constant signature), so the
+            // frame is refreshed HERE — the same out-of-signature post-pass the
+            // fade block above uses. nil (outside window / decode failure)
+            // clears the contents, matching the live end-of-clip hide.
+            if let mediaFrameProvider,
+               let media = item as? StoryMediaObject,
+               media.kind == .video, !media.isBackground,
+               let mediaLayer = layer as? StoryMediaLayer {
+                mediaLayer.applyExportFrame(mediaFrameProvider(media, time))
+            }
+
+            // C2 (2026-07-25) — MÊME post-passe pour les textes et stickers.
+            // `ItemSignature` ne retient que l'opacité des KEYFRAMES
+            // (`overrides.opacity ?? 1.0`), jamais l'enveloppe fadeIn/fadeOut :
+            // une fois la layer construite au premier tick où sa fenêtre
+            // s'ouvre, la signature ne bouge plus, le cache resert la même
+            // layer, et l'opacité du tick de CONSTRUCTION reste figée.
+            //
+            // Bug observé en production (2026-07-25) : un texte à
+            // `startTime = 20.006` avec `fadeIn = 0.5` était construit à
+            // t ≈ 20.01, donc à (20.01 − 20.006) / 0.5 ≈ 0.02, et restait à
+            // 2 % d'opacité pour toute la story — invisible. Le composer n'en
+            // souffrait pas : il rend en `.edit`, où la fenêtre temporelle est
+            // ignorée et où `contentHash` invalide la layer à chaque mutation.
+            //
+            // Ordre d'application aligné sur `renderItem` pour ces types :
+            // une opacité de keyframe est authored explicitement, elle gagne
+            // sur l'enveloppe fade qui n'est qu'un défaut.
+            if mode == .play, !(item is StoryMediaObject),
+               let resolved = resolvedNonMediaOpacity(item: item, at: time.seconds) {
+                layer.opacity = Float(resolved)
             }
 
             // A cached layer might still be attached to the previous frame's
@@ -288,6 +338,8 @@ public enum StoryRenderer {
             data = try? encoder.encode(media)
         } else if let sticker = item as? StorySticker {
             data = try? encoder.encode(sticker)
+        } else if let location = item as? StoryLocationObject {
+            data = try? encoder.encode(location)
         } else {
             data = nil
         }
@@ -296,8 +348,24 @@ public enum StoryRenderer {
             fallback.combine(UUID())
             return fallback.finalize()
         }
+        return contentKey(for: data)
+    }
+
+    /// Clé de contenu dérivée de TOUS les octets.
+    ///
+    /// `hasher.combine(data)` ne convient pas : `Data.hash(into:)` de
+    /// Foundation n'échantillonne qu'un PRÉFIXE BORNÉ (~80 octets) plus le
+    /// `count`, par souci de performance. Comme le JSON est encodé en
+    /// `.sortedKeys`, la position d'un champ y est stable — et tout champ
+    /// trié tardivement tombait hors de la fenêtre échantillonnée. Deux
+    /// couleurs hex ayant exactement la même longueur, `textColor` (octet
+    /// ~135) produisait deux hash IDENTIQUES : le cache servait une calque
+    /// périmée et le canvas gardait l'ancienne couleur, alors que `fontSize`
+    /// (octet ~50) passait. `combine(bytes:)` couvre l'intégralité du tampon.
+    nonisolated static func contentKey(for data: Data) -> Int {
         var hasher = Hasher()
-        hasher.combine(data)
+        hasher.combine(data.count)
+        data.withUnsafeBytes { hasher.combine(bytes: $0) }
         return hasher.finalize()
     }
 
@@ -330,6 +398,11 @@ public enum StoryRenderer {
         let foregroundMedias = (slide.effects.mediaObjects ?? []).filter { $0.isBackground == false }
         items.append(contentsOf: foregroundMedias)
         items.append(contentsOf: slide.effects.stickerObjects ?? [])
+        // Pastilles de lieu : doivent traverser le cycle collectItems → cache
+        // pour que `editContentHash` les couvre, sinon le rendu reste figé
+        // sur l'ancienne `place`/position après édition (le hash ne change
+        // pas donc `StoryLocationLayer` ne se re-dessine pas).
+        items.append(contentsOf: slide.locationObjects)
         return items
     }
 
@@ -355,14 +428,16 @@ public enum StoryRenderer {
                                    mode: RenderMode,
                                    languages: [String] = [],
                                    resolver: (@Sendable (String) -> URL?)? = nil,
-                                   imageCache: ImageCacheReader? = nil) -> CALayer {
+                                   imageCache: ImageCacheReader? = nil,
+                                   contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media,
                             geometry: geometry,
                             mode: mode,
                             resolver: resolver,
-                            imageCache: imageCache)
+                            imageCache: imageCache,
+                            renderScale: contentsScale)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
@@ -383,7 +458,8 @@ public enum StoryRenderer {
                 : text.text
             var displayObj = text
             displayObj.text = displayText
-            layer.configure(with: displayObj, geometry: geometry, mode: mode)
+            layer.configure(with: displayObj, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead. Applied
             // before keyframe overrides so that an explicit keyframe `opacity`
             // wins over the fade envelope (keyframes are authored explicitly,
@@ -401,9 +477,16 @@ public enum StoryRenderer {
             }
             return layer
         }
+        if let location = item as? StoryLocationObject {
+            let layer = StoryLocationLayer()
+            layer.configure(with: location, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
+            return layer
+        }
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
-            layer.configure(with: sticker, geometry: geometry, mode: mode)
+            layer.configure(with: sticker, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.
@@ -470,6 +553,28 @@ extension StoryRenderer {
     /// 2. Background image media object (`isBackground == true`, kind == .image`)
     /// 3. `effects.background` hex color string
     /// 4. Fallback: `.solidColor(.black)`
+    /// Clé de routage du fond : ce que `StoryBackgroundLayer.configure` tentera
+    /// d'abord comme URL directe, avant de retomber sur le resolver.
+    ///
+    /// Une URL DISTANTE prime sur le `postMediaId`. L'identifiant n'est pas une
+    /// URL : le layer doit le résoudre via le tableau `media[]` du post — et ce
+    /// tableau revient vide dès qu'un rattachement média↔post a échoué à la
+    /// publication. Constaté en production le 2026-08-01 : deux stories sans
+    /// aucun fond, alors que leur objet portait une `mediaURL` parfaitement
+    /// servable, jamais essayée parce que le `postMediaId` gagnait d'office.
+    ///
+    /// Les `file://` sont exclues quand un identifiant existe : les stories
+    /// publiées avant `sanitizedForServerPublish()` en portent qui pointent vers
+    /// la sandbox de l'AUTEUR, inaccessible à tout autre lecteur. Sans
+    /// identifiant en revanche (composer, média pas encore téléversé), la
+    /// `file://` locale EST la bonne source — c'est la sandbox de celui qui
+    /// regarde.
+    nonisolated static func backgroundRoutingKey(postMediaId: String,
+                                                 mediaURL: String?) -> String {
+        if let url = mediaURL, url.hasPrefix("http") { return url }
+        return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
+    }
+
     public static func renderBackground(slide: StorySlide,
                                         languages: [String]) -> StoryBackgroundLayer.Kind {
         // Video background object
@@ -477,9 +582,8 @@ extension StoryRenderer {
             // En composer édition la vidéo locale n'a pas encore de postMediaId
             // serveur ; on utilise alors directement la `mediaURL` (file://…)
             // que `StoryBackgroundLayer.configure` détecte par préfixe.
-            let routingKey = (!bgVideo.postMediaId.isEmpty)
-                ? bgVideo.postMediaId
-                : (bgVideo.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgVideo.postMediaId,
+                                                       mediaURL: bgVideo.mediaURL)
             // `mute` reste à `false` au niveau du renderer : c'est l'état
             // initial souhaité (la vidéo de fond porte de l'audio que le
             // viewer DOIT entendre par défaut). Le mute global de la sidebar
@@ -505,9 +609,8 @@ extension StoryRenderer {
             // (sortie PhotosPicker → temp file), on pousse la file URL dans le
             // champ `postMediaId` pour que `StoryBackgroundLayer.configure`
             // puisse la charger directement sans cache lookup.
-            let routingKey = (!bgImage.postMediaId.isEmpty)
-                ? bgImage.postMediaId
-                : (bgImage.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgImage.postMediaId,
+                                                       mediaURL: bgImage.mediaURL)
             return .image(postMediaId: routingKey,
                           thumbHash: slide.effects.thumbHash)
         }
@@ -559,15 +662,15 @@ extension StoryRenderer {
 extension StoryRenderer {
 
     /// Shared duration (seconds) of the slide opening AND closing transitions.
-    public nonisolated static let slideTransitionDuration: Double = 0.5
+    public nonisolated static let slideTransitionDuration: Double = 1.2
 
     /// Peak scale of the `.zoom` transition (opening settles 1.08 → 1.0,
     /// closing ramps 1.0 → 1.08).
-    nonisolated static let zoomTransitionScale: CGFloat = 1.08
+    public nonisolated static let zoomTransitionScale: CGFloat = 1.08
 
     /// Horizontal travel of the `.slide` transition, as a fraction of the
     /// canvas width (opening enters from +travel → 0, closing exits 0 → −travel).
-    nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
+    public nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
 
     /// Applies a slide-opening animation to `rootLayer` at playback position `elapsed`.
     ///
@@ -613,7 +716,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            mask.add(anim, forKey: "opening-reveal")
+            mask.add(anim, forKey: openingRevealAnimationKey)
 
         case .fade:
             let anim = CABasicAnimation(keyPath: "opacity")
@@ -622,7 +725,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-fade")
+            rootLayer.add(anim, forKey: openingFadeAnimationKey)
 
         case .zoom:
             let anim = CABasicAnimation(keyPath: "sublayerTransform")
@@ -632,7 +735,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-zoom")
+            rootLayer.add(anim, forKey: openingZoomAnimationKey)
 
         case .slide:
             let travel = rootLayer.bounds.width * slideTransitionTravelFraction
@@ -642,7 +745,7 @@ extension StoryRenderer {
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
-            rootLayer.add(anim, forKey: "opening-slide")
+            rootLayer.add(anim, forKey: openingSlideAnimationKey)
         }
     }
 }
@@ -652,6 +755,43 @@ extension StoryRenderer {
 extension StoryRenderer {
 
     nonisolated static let closingRevealMaskName = "closing-reveal-mask"
+
+    /// Keys of the `applyOpening` animations that write ROOT-LAYER properties
+    /// `applyClosing` also writes, grouped by the property they animate.
+    ///
+    /// They matter because the opening animations are installed with
+    /// `fillMode = .forwards` + `isRemovedOnCompletion = false`: once finished
+    /// they STAY attached to the layer and keep holding their `toValue` over
+    /// the model value — for the whole life of the canvas, `rootLayer` being a
+    /// stored `let` that `rebuildLayers()` never replaces. A playhead-driven
+    /// snapshot writing the model value is therefore invisible on screen until
+    /// the fill is removed. `opening-reveal` is absent on purpose: it animates
+    /// the MASK layer's `path`, and the closing reveal swaps the mask wholesale.
+    nonisolated static let openingFadeAnimationKey = "opening-fade"
+    nonisolated static let openingZoomAnimationKey = "opening-zoom"
+    nonisolated static let openingSlideAnimationKey = "opening-slide"
+    nonisolated static let openingRevealAnimationKey = "opening-reveal"
+
+    nonisolated static let openingOpacityAnimationKeys = [openingFadeAnimationKey]
+    nonisolated static let openingTransformAnimationKeys = [openingZoomAnimationKey,
+                                                            openingSlideAnimationKey]
+
+    /// Drops the opening fills that would override what `applyClosing` is about
+    /// to write — and ONLY those. An opening `.fade` left in place while the
+    /// slide exits by `.zoom` is harmless (different keyPath), so removing it
+    /// would truncate a still-running entrance for nothing.
+    @MainActor
+    private static func clearOpeningFill(for effect: StoryTransitionEffect,
+                                         on rootLayer: CALayer) {
+        switch effect {
+        case .fade:
+            openingOpacityAnimationKeys.forEach(rootLayer.removeAnimation(forKey:))
+        case .zoom, .slide:
+            openingTransformAnimationKeys.forEach(rootLayer.removeAnimation(forKey:))
+        case .reveal:
+            break
+        }
+    }
 
     /// Linear exit progress in `[0, 1]` of the slide-closing transition at
     /// `elapsed`: `0` before `totalDuration − slideTransitionDuration`, ramping
@@ -690,6 +830,15 @@ extension StoryRenderer {
                                     totalDuration: Double) {
         guard let effect else { return }
         let progress = closingProgress(totalDuration: totalDuration, at: elapsed)
+        // Once the exit has actually started, the entrance's fill-forward
+        // animation must go: it holds its `toValue` over the model layer, so
+        // every value written below would be computed, stored — and never seen.
+        // Strictly BEFORE the window (progress 0) the opening is left alone: on
+        // a slide shorter than twice `slideTransitionDuration` the two windows
+        // overlap, and the entrance keeps playing until the exit takes over.
+        if progress > 0 {
+            clearOpeningFill(for: effect, on: rootLayer)
+        }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -721,6 +870,13 @@ extension StoryRenderer {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        // Neutral means neutral ON SCREEN: assigning the model value is not
+        // enough while an opening fill still overrides it. `setMode` calls this
+        // BEFORE `applyOpening`, so a slide entering `.play` re-installs its own
+        // entrance right after — and a canvas going back to `.edit`, or reused
+        // for the next slide, stops inheriting the previous slide's.
+        (openingOpacityAnimationKeys + openingTransformAnimationKeys)
+            .forEach(rootLayer.removeAnimation(forKey:))
         rootLayer.opacity = 1
         rootLayer.sublayerTransform = CATransform3DIdentity
         if rootLayer.mask?.name == closingRevealMaskName {
@@ -872,6 +1028,35 @@ extension StoryRenderer {
 // MARK: - fadeOpacity
 
 extension StoryRenderer {
+
+    /// Opacité absolue à re-poser sur la layer d'un item NON-média à chaque
+    /// tick de `.play`, ou `nil` si l'item n'a ni enveloppe fade ni keyframe
+    /// d'opacité (la layer garde alors son opacité par défaut).
+    ///
+    /// Pourquoi une post-passe plutôt qu'un calcul au build : `ItemSignature`
+    /// (clé du `StoryRendererCache`) ne retient que l'opacité des KEYFRAMES
+    /// (`overrides.opacity ?? 1.0`), jamais l'enveloppe fadeIn/fadeOut. Une
+    /// layer construite au premier tick où sa fenêtre s'ouvre est ensuite
+    /// resservie telle quelle par le cache : sans re-pose, elle conserverait
+    /// à jamais l'opacité de son tick de construction.
+    ///
+    /// Bug corrigé (2026-07-25) : un texte à `startTime = 20.006` avec
+    /// `fadeIn = 0.5`, construit à t ≈ 20.01, restait figé à
+    /// (20.01 − 20.006) / 0.5 ≈ 2 % d'opacité — invisible pour toute la story.
+    /// Les médias avaient déjà leur post-passe (R14/C1) ; textes et stickers
+    /// non.
+    ///
+    /// Ordre : une opacité de keyframe est authored explicitement, elle prime
+    /// sur l'enveloppe fade qui n'est qu'un défaut — identique à `renderItem`.
+    public static func resolvedNonMediaOpacity(item: any RenderableItem,
+                                               at seconds: Double) -> Double? {
+        let keyframeOpacity = applyKeyframes(
+            keyframes: (item as? StoryTextObject)?.keyframes ?? [],
+            at: seconds,
+            startTime: item.startTime ?? 0
+        ).opacity
+        return keyframeOpacity ?? fadeOpacity(item: item, at: seconds)
+    }
 
     /// Returns the snapshot opacity in `[0, 1]` produced by the item's `fadeIn` /
     /// `fadeOut` envelope at the given absolute playback time.

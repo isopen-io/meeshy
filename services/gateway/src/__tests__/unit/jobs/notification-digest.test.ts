@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NotificationDigestJob } from '../../../jobs/notification-digest';
+import { matchesNotificationWhere } from '../../helpers/notification-where';
 
 const unread = (overrides: Record<string, unknown> = {}) => ({
   id: 'n1',
@@ -30,7 +31,7 @@ function makeMocks() {
   const prisma = {
     notification: {
       findMany: jest.fn() as jest.Mock<any>,
-      updateMany: jest.fn() as jest.Mock<any>,
+      update: jest.fn() as jest.Mock<any>,
     },
     userPreferences: { findFirst: jest.fn() as jest.Mock<any> },
     user: { findUnique: jest.fn() as jest.Mock<any> },
@@ -57,9 +58,15 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
       if (args?.select?.userId && args?.select?.delivery && !args?.orderBy) {
         return Promise.resolve([{ userId: 'user-1', delivery: { emailSent: false } }]);
       }
-      // Second call (processUser): full notifications for the user
+      // Second call (processUser): full notifications for the user.
+      // n1 was already push-delivered — the digest must NOT reset that flag.
       return Promise.resolve([
-        unread({ id: 'n1', context: { conversationId: 'conv-abc' }, createdAt: new Date('2026-05-30T12:00:00Z') }),
+        unread({
+          id: 'n1',
+          context: { conversationId: 'conv-abc' },
+          createdAt: new Date('2026-05-30T12:00:00Z'),
+          delivery: { emailSent: false, pushSent: true },
+        }),
         unread({ id: 'n2', context: { conversationId: 'conv-xyz' }, createdAt: new Date('2026-05-30T09:00:00Z') }),
       ]);
     });
@@ -67,7 +74,7 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     prisma.user.findUnique.mockResolvedValue({
       email: 'alice@example.com', displayName: 'Alice', username: 'alice', systemLanguage: 'fr', isActive: true,
     });
-    prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+    prisma.notification.update.mockResolvedValue({});
 
     magicLinkService.issueLoginTokenForUser.mockResolvedValue('RAWTOKEN123');
     emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
@@ -96,10 +103,23 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(JSON.stringify(data)).not.toContain('secret');
   });
 
-  it('marks notifications as emailed after a successful send', async () => {
+  it('marks notifications as emailed while PRESERVING each existing delivery state', async () => {
     await job.runNow();
-    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: ['n1', 'n2'] } } })
+
+    const updates = prisma.notification.update.mock.calls.map((c: any[]) => c[0]);
+    expect(updates.map((u: any) => u.where.id).sort()).toEqual(['n1', 'n2']);
+
+    // n1 had pushSent:true (flipped by a delivered push) — a blanket
+    // { emailSent, pushSent: false } write would corrupt the multi-channel
+    // tracking. The digest must spread the document's real delivery.
+    const n1 = updates.find((u: any) => u.where.id === 'n1');
+    expect(n1.data.delivery).toEqual(
+      expect.objectContaining({ emailSent: true, pushSent: true, emailSentAt: expect.any(String) })
+    );
+
+    const n2 = updates.find((u: any) => u.where.id === 'n2');
+    expect(n2.data.delivery).toEqual(
+      expect.objectContaining({ emailSent: true, pushSent: false })
     );
   });
 
@@ -145,6 +165,27 @@ describe('NotificationDigestJob — doWork edge cases', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
+  it('ne relance personne pour une notification dont le message éphémère a expiré', async () => {
+    const { prisma, emailService, magicLinkService } = makeMocks();
+    const rows = [
+      {
+        userId: 'user-1',
+        isRead: false,
+        expiresAt: new Date(Date.now() - 60_000),
+        delivery: { emailSent: false },
+      },
+    ];
+    prisma.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(rows.filter((r) => matchesNotificationWhere(r as any, args?.where)))
+    );
+    const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
+
+    await job.runNow();
+
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
   it('does not throw on a fatal DB error inside doWork', async () => {
     const { prisma, emailService, magicLinkService } = makeMocks();
     prisma.notification.findMany.mockRejectedValue(new Error('DB connection lost'));
@@ -154,7 +195,7 @@ describe('NotificationDigestJob — doWork edge cases', () => {
     expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
   });
 
-  it('logs warn and skips updateMany when email send returns success=false', async () => {
+  it('logs warn and skips the delivery updates when email send returns success=false', async () => {
     const { prisma, emailService, magicLinkService } = makeMocks();
     prisma.notification.findMany.mockImplementation((args: any) => {
       if (!args?.orderBy) return Promise.resolve([{ userId: 'u1', delivery: { emailSent: false } }]);
@@ -170,7 +211,7 @@ describe('NotificationDigestJob — doWork edge cases', () => {
     const job = new NotificationDigestJob(prisma, emailService, magicLinkService);
     await job.runNow();
 
-    expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+    expect(prisma.notification.update).not.toHaveBeenCalled();
   });
 
   it('catches per-user error and continues processing remaining users', async () => {
@@ -190,7 +231,7 @@ describe('NotificationDigestJob — doWork edge cases', () => {
     prisma.user.findUnique.mockResolvedValue({
       email: 'b@c.com', displayName: 'B', username: 'b', systemLanguage: 'en', isActive: true,
     });
-    prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+    prisma.notification.update.mockResolvedValue({});
     magicLinkService.issueLoginTokenForUser.mockResolvedValue('tok');
     emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
 
@@ -299,7 +340,7 @@ describe('NotificationDigestJob — batch sleep (> BATCH_SIZE users)', () => {
       prisma.user.findUnique.mockResolvedValue({
         email: 'x@y.com', displayName: 'X', username: 'x', systemLanguage: 'en', isActive: true,
       });
-      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+      prisma.notification.update.mockResolvedValue({});
       magicLinkService.issueLoginTokenForUser.mockResolvedValue('tok');
       emailService.sendNotificationDigestEmail.mockResolvedValue({ success: true });
 

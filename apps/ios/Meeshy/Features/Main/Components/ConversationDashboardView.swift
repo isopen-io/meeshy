@@ -29,9 +29,25 @@ struct ConversationDashboardView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     enum ChartPeriod: String, CaseIterable {
-        case week = "7j"
-        case month = "30j"
-        case all = "Tout"
+        case week
+        case month
+        case all
+
+        var shortLabel: String {
+            switch self {
+            case .week: return String(localized: "dashboard.period.week.short", defaultValue: "7j", bundle: .main)
+            case .month: return String(localized: "dashboard.period.month.short", defaultValue: "30j", bundle: .main)
+            case .all: return String(localized: "dashboard.period.all.short", defaultValue: "Tout", bundle: .main)
+            }
+        }
+
+        var accessibilityLabel: String {
+            switch self {
+            case .week: return String(localized: "dashboard.period.week", defaultValue: "7 derniers jours", bundle: .main)
+            case .month: return String(localized: "dashboard.period.month", defaultValue: "30 derniers jours", bundle: .main)
+            case .all: return String(localized: "dashboard.period.all", defaultValue: "Depuis le début", bundle: .main)
+            }
+        }
     }
 
     // MARK: - Body
@@ -393,7 +409,7 @@ struct ConversationDashboardView: View {
                     }
                     HapticFeedback.light()
                 } label: {
-                    Text(period.rawValue)
+                    Text(period.shortLabel)
                         .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .padding(.horizontal, 10)
@@ -402,6 +418,7 @@ struct ConversationDashboardView: View {
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
                 }
+                .accessibilityLabel(period.accessibilityLabel)
                 // Selection is otherwise signalled by fill + weight only — the
                 // `.isSelected` trait lets VoiceOver announce the active period
                 // (mirror of CallsTab.chip / GlobalSearchView.tabButton doctrine).

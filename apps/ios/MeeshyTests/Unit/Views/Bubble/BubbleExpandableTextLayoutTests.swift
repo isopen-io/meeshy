@@ -16,6 +16,7 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             mentionDisplayNames: [:],
             highlightTerm: nil,
             mentionTint: .blue,
+            hashtagTint: .purple,
             linkTint: .blue
         )
 
@@ -25,6 +26,7 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             mentionDisplayNames: [:],
             highlightTerm: nil,
             mentionTint: .blue,
+            hashtagTint: .purple,
             linkTint: .blue
         )
 
@@ -38,6 +40,7 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             mentionDisplayNames: [:],
             highlightTerm: nil,
             mentionTint: .blue,
+            hashtagTint: .purple,
             linkTint: .blue
         )
 
@@ -47,6 +50,7 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
             mentionDisplayNames: [:],
             highlightTerm: nil,
             mentionTint: .blue,
+            hashtagTint: .purple,
             linkTint: .blue
         )
 

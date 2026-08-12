@@ -700,10 +700,7 @@ public struct UserProfileSheet: View {
     }
 
     func formatRegistrationDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.locale = Locale(identifier: "fr_FR")
-        return formatter.string(from: date)
+        date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
     }
 
     func openFullscreenImage(url: String?, fallback: String) {
