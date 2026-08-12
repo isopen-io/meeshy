@@ -1416,18 +1416,15 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            // Status bar gradient — from very top edge of screen through status bar
+            // Scrim status bar — noir plein depuis le bord haut de l'écran à
+            // travers la zone status bar / Dynamic Island (le contenu scrollé
+            // — tuiles de jour comprises — n'y transparaît plus), puis les
+            // bandes de sortie partagées TopBarBottomFade : ~24 % de dégradé,
+            // 6 % transparent en bas (retour user 2026-08-12). Le header
+            // flottant reste net au-dessus (zIndex 100 > 99).
             VStack(spacing: 0) {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.black.opacity(0.75), location: 0),
-                        .init(color: Color.black.opacity(0.4), location: 0.55),
-                        .init(color: Color.clear, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 100)
+                TopBarBottomFade.gradient
+                    .frame(height: 100)
                 Spacer()
             }
             .ignoresSafeArea(edges: .top)

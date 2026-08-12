@@ -248,12 +248,12 @@ final class FloatingCallPillViewTests: XCTestCase {
         }
         let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
         XCTAssertTrue(
-            backgroundBlock.contains(".mask(CallBannerBottomFade.mask)"),
+            backgroundBlock.contains(".mask(TopBarBottomFade.gradient)"),
             "The banner decor (brandGradient + scrim) must be masked by " +
-            "CallBannerBottomFade so the bar ends in a transparent fade at its " +
+            "TopBarBottomFade so the bar ends in a transparent fade at its " +
             "bottom edge instead of a hard indigo line (user feedback 2026-08-12)."
         )
-        guard let maskRange = backgroundBlock.range(of: ".mask(CallBannerBottomFade.mask)"),
+        guard let maskRange = backgroundBlock.range(of: ".mask(TopBarBottomFade.gradient)"),
               let safeAreaRange = backgroundBlock.range(of: ".ignoresSafeArea(.container, edges: .top)") else {
             XCTFail("expected both the fade mask and the safe-area bleed on the banner decor")
             return
@@ -477,38 +477,42 @@ final class FloatingCallPillViewTests: XCTestCase {
     }
 }
 
-// MARK: - CallBannerBottomFade Value Tests
+// MARK: - TopBarBottomFade Value Tests
 
 // 2026-08-12 — retour user : « un dégradé transparent en bas avant d'atteindre
 // l'indigo complet — 6 % en bas de transparent, 20-30 % de dégradé ». Les
-// bandes du fondu sont des valeurs calibrées, gardées ici contre toute dérive.
+// bandes du fondu sont des valeurs calibrées partagées entre la bannière
+// d'appel (masque du décor indigo) et le scrim status bar de ConversationView
+// (noir plein + mêmes bandes de sortie) — gardées ici contre toute dérive.
 @MainActor
-final class CallBannerBottomFadeTests: XCTestCase {
+final class TopBarBottomFadeTests: XCTestCase {
 
     func test_transparentBottomBand_is6PercentOfHeight() {
-        XCTAssertEqual(CallBannerBottomFade.transparentFraction, 0.06, accuracy: 0.0001,
-                       "le bas de la bannière doit être totalement transparent sur 6 % de la hauteur")
+        XCTAssertEqual(TopBarBottomFade.transparentFraction, 0.06, accuracy: 0.0001,
+                       "le bas de la barre doit être totalement transparent sur 6 % de la hauteur")
     }
 
     func test_gradientBand_isWithinRequested20To30PercentRange() {
-        XCTAssertGreaterThanOrEqual(CallBannerBottomFade.gradientFraction, 0.20,
+        XCTAssertGreaterThanOrEqual(TopBarBottomFade.gradientFraction, 0.20,
                                     "la zone de dégradé doit couvrir au moins 20 % de la hauteur")
-        XCTAssertLessThanOrEqual(CallBannerBottomFade.gradientFraction, 0.30,
+        XCTAssertLessThanOrEqual(TopBarBottomFade.gradientFraction, 0.30,
                                  "la zone de dégradé ne doit pas dépasser 30 % de la hauteur")
     }
 
     func test_maskLocations_areOrderedWithinUnitRange() {
-        XCTAssertGreaterThan(CallBannerBottomFade.fadeStartLocation, 0)
-        XCTAssertLessThan(CallBannerBottomFade.fadeStartLocation,
-                          CallBannerBottomFade.fullyTransparentLocation)
-        XCTAssertLessThan(CallBannerBottomFade.fullyTransparentLocation, 1)
+        XCTAssertGreaterThan(TopBarBottomFade.fadeStartLocation, 0)
+        XCTAssertLessThan(TopBarBottomFade.fadeStartLocation,
+                          TopBarBottomFade.fullyTransparentLocation)
+        XCTAssertLessThan(TopBarBottomFade.fullyTransparentLocation, 1)
     }
 
-    func test_majorityOfBanner_staysFullIndigo() {
+    func test_majorityOfBar_staysFullyOpaque() {
         // Le fondu ne ronge que le bord bas : plus de la moitié de la hauteur
-        // reste à l'indigo complet, là où vivent nom, durée et contrôles —
-        // c'est le fond contre lequel CallBannerContrastTests calibre le scrim.
-        XCTAssertGreaterThanOrEqual(CallBannerBottomFade.fadeStartLocation, 0.5)
+        // reste à pleine opacité — côté bannière d'appel c'est le fond indigo
+        // contre lequel CallBannerContrastTests calibre le scrim, côté
+        // conversation c'est la barre noire qui masque le contenu scrollé
+        // derrière la status bar / Dynamic Island.
+        XCTAssertGreaterThanOrEqual(TopBarBottomFade.fadeStartLocation, 0.5)
     }
 }
 
