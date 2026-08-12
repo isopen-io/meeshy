@@ -12,6 +12,20 @@ import MeeshySDK
 /// - After a short timeout, surfaces a Retry + Close fallback to avoid infinite loading
 struct StoryViewerContainer: View {
     @ObservedObject var viewModel: StoryViewModel
+    /// Threadée EXPLICITEMENT vers la `ConnectionBanner` interne (ligne
+    /// ~117) depuis Task 3 (`ConnectionBanner` n'a plus d'`@EnvironmentObject`
+    /// propre). Lue ici via `@EnvironmentObject` car ce container est TOUJOURS
+    /// un descendant réel de l'injection : chacun de ses 4 points de montage
+    /// (`RootView`, `iPadRootView+Sheets`, `ConversationView`, `BookmarksView`)
+    /// ré-injecte explicitement `.environmentObject(conversationViewModel)`
+    /// sur son `.fullScreenCover` — jamais un `.overlay` racine composé, donc
+    /// hors du risque de crash documenté pour `ConnectionBanner`.
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    /// Idem : certains points de montage (`RootView`, `iPadRootView+Sheets`)
+    /// ré-injectent `.environment(\.isStoryViewerPresenting, true)` sur ce
+    /// même cover précisément pour que la pill interne se masque — threadée
+    /// explicitement pour préserver ce comportement exact.
+    @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
     let userId: String?
     @Binding var isPresented: Bool
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
@@ -114,7 +128,7 @@ struct StoryViewerContainer: View {
 
             // Connection status banner (banner manages its own socket observation)
             VStack {
-                ConnectionBanner()
+                ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting)
                     .padding(.top, 8)
                 Spacer()
             }

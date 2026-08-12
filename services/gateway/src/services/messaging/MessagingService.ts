@@ -15,6 +15,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { admitMessageForward, isForwardRefused } from './forwardAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -220,15 +221,42 @@ export class MessagingService {
               )
             : 'fr');
 
+      // 4.5. Admission du TRANSFERT — la dernière sortie de l'éphémère et de la
+      //      vue unique. Une copie transférée est une ligne `Message`
+      //      indépendante : sans ce garde elle naît sans échéance et sans
+      //      budget, et survit à la destruction de l'original. Posé ICI parce
+      //      que les trois transports d'envoi (REST, socket texte, socket
+      //      pièces jointes) convergent sur `handleMessage` — un garde par
+      //      route aurait été la quatrième copie d'une règle de permission.
+      //
+      //      Après le dedup précoce : sur un rejeu la ligne existe déjà, et
+      //      relire la source ne servirait qu'à payer une lecture de plus.
+      const forwardAdmission = await admitMessageForward(this.prisma, {
+        forwardedFromId: request.forwardedFromId,
+        at: new Date()
+      });
+      if (isForwardRefused(forwardAdmission)) {
+        logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
+        return this.createErrorResponse(
+          'Un message à vue unique ne peut pas être transféré',
+          requestId
+        );
+      }
+
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
       //    est propagé pour permettre le pattern catch-P2002 atomique au
       //    niveau Prisma (cf MessageProcessor.saveMessage). Si l'INSERT
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
+      //
+      //    `expiresAt` : l'échéance HÉRITÉE de la source prime sur celle que le
+      //    client a (ou n'a pas) envoyée — c'est tout l'objet du garde
+      //    ci-dessus. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
+          ...(forwardAdmission.expiresAt ? { expiresAt: forwardAdmission.expiresAt } : {}),
           originalLanguage,
           conversationId,
           senderId: participant!.id,

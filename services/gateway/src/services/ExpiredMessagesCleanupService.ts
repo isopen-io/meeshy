@@ -40,10 +40,21 @@ const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
  * laissant intacte la fuite AU REPOS, alors que c'est celle-ci que l'échéance
  * promet de fermer.
  *
- * Reste hors de cette passe, et sciemment : `metadata` (instantané de post
- * cité, résumé d'appel) et les lignes de localisation, qui ne sont pas le
- * contenu du message et dont l'effacement est une décision distincte —
- * consignée en dette dans `tasks/todo.md` plutôt qu'emportée en passant.
+ * `metadata` est détruit avec le reste, et la dette que le cycle 92 avait
+ * consignée là-dessus est close. Le raisonnement qui l'avait mis hors périmètre
+ * — « ce n'est pas le contenu du message » — était faux sur le champ où il
+ * comptait le plus : `MessageProcessor.saveMessage` y range le lieu partagé
+ * (`metadata.location`, stockage EN CLAIR assumé) et l'instantané figé du post
+ * cité (`metadata.postReplyTo` : contenu, vignette, compteurs). Une position
+ * GPS survivait donc à l'échéance du message qui la portait, en clair et pour
+ * toujours, pendant que le texte du même message était détruit — exactement la
+ * fuite au repos que cette passe a été écrite pour fermer. Il n'existe pas de
+ * modèle `MessageLocation` séparé : la localisation vit dans ce champ, et la
+ * seconde moitié de la dette se referme avec la première.
+ *
+ * L'effacement vient APRÈS la capture : `applyMessageRemovalEffects` lit
+ * `metadata` pour décompter les compteurs de conversation, et travaille sur la
+ * copie prise par le `select`, jamais sur une relecture de la ligne.
  *
  * ─── LES DEUX FAÇONS DONT CETTE PASSE POURRAIT FAIRE PIRE ───────────────────
  *
@@ -247,6 +258,7 @@ export class ExpiredMessagesCleanupService {
           content: '',
           encryptedContent: null,
           translations: null,
+          metadata: null,
           deletedAt: now,
         },
       });

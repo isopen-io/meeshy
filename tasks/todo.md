@@ -1,9 +1,9 @@
-# Tête instruite pour le cycle 93 — l'autodestruction serveur existe ; deux restes nommés, une famille à balayer
+# Tête instruite pour le cycle 95 — la veine « qui fait respecter cette promesse ? » a rendu TROIS fois ; la famille message est close, les familles Story/Post/Call sont intactes
 
-*Le cycle 92 a AUDITÉ, comme la tête du cycle 92 le demandait, et l'audit a rendu un défaut
-que huit cycles de travail sur le temps réel n'avaient pas vu : les messages autodestructibles
-ne s'autodétruisaient nulle part ailleurs que dans l'UI des clients. Le cycle 93 hérite pour la
-première fois depuis longtemps de restes NOMMÉS, avec site et scénario.*
+*Le cycle 94 a fermé la dernière sortie de la famille éphémère/vue-unique : le TRANSFERT. Les
+cycles 92, 93 et 94 forment maintenant un ensemble cohérent — la promesse est posée (92), la
+consommation la déclenche (93), et aucune copie ne s'en échappe (94). La même question n'a jamais
+été posée aux modèles `Story`, `Post` et `Call`.*
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
 >
@@ -21,81 +21,107 @@ première fois depuis longtemps de restes NOMMÉS, avec site et scénario.*
 > Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
 > COUVERTURE, pas l'intitulé.** Un doublon de défaut n'est pas un doublon de correctif.
 
-> ## Ce que le cycle 92 ajoute à la méthode : chercher la promesse, pas seulement l'événement
+> ## La méthode, validée trois fois : chercher la PROMESSE, pas l'événement
 >
-> Les cycles 85 à 91 ont tous cherché des défauts de la même forme — *un événement socket
-> manqué que rien ne rejoue*. Cette veine est riche et n'est pas épuisée. Mais elle a un angle
-> mort, et le cycle 92 est tombé dedans par accident en suivant la piste « rattrapage à la
-> reconnexion » : **une fonctionnalité peut n'avoir jamais eu d'implémentation serveur du
-> tout**. `expiresAt` était écrit par les deux transports d'envoi, décodé par les trois clients,
-> replié à l'écran par deux d'entre eux — toute la chaîne avait l'air branchée. Il manquait la
-> seule pièce que personne ne regarde parce qu'elle ne produit aucun événement : le balayage.
+> Les cycles 85 à 91 cherchaient tous des défauts de la même forme — *un événement socket manqué
+> que rien ne rejoue*. Le cycle 92 a ouvert une seconde veine, plus riche : **une fonctionnalité
+> peut n'avoir jamais eu d'implémentation serveur du tout**. Elle est indétectable en suivant les
+> événements, précisément parce qu'elle n'en produit aucun.
 >
-> **Question à poser à chaque champ de `schema.prisma` qui promet un comportement**
-> (`expiresAt`, `maxViewOnceCount`, `pinnedAt`, `bannedAt`, `mutedUntil`, `archivedAt`) :
+> **La question à poser à chaque champ de `schema.prisma` qui promet un comportement :**
 > *qui, côté serveur, fait respecter cette promesse ?* Si la réponse est « les clients », la
-> promesse est cosmétique — et un client modifié, un appel d'API brut ou une plateforme qui n'a
-> jamais implémenté le repli la rendent nulle.
+> promesse est cosmétique.
+>
+> Trois pour trois : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94).
+>
+> **Le corollaire que le cycle 94 ajoute, et il vaut pour toute la veine : quand une promesse a
+> plusieurs sorties, elles n'ont pas forcément la MÊME réponse.** La tête du cycle 93 posait le
+> choix « propager ou refuser » comme une décision produit unique. C'en était deux, et chacune
+> était forcée par ce qui ferme réellement le trou : propager tient la promesse éphémère (la copie
+> meurt), et ne tient PAS la promesse de vue unique (`viewOnceCount` repart à zéro — la copie rend
+> un budget neuf). **Vérifier que la réponse envisagée ferme le trou, plutôt que de la choisir sur
+> sa cohérence apparente avec la sortie voisine.**
 
-## Livré au cycle 92
+## Livré au cycle 94
 
-1. **`ExpiredMessagesCleanupService` — les messages autodestructibles se détruisent enfin côté
-   serveur.** À la minute : `content` et `encryptedContent` écrasés, traductions vidées, pièces
-   jointes supprimées (fichiers ET lignes), puis `deletedAt` posé — ce qui suffit à retirer le
-   message des ~119 lectures du modèle sans en toucher une seule. Cinquième écrivain de
-   `deletedAt`, il appelle `applyMessageRemovalEffects` comme les quatre autres. Index partiel
-   `expiresAt_ephemeral_partial` fourni en migration MongoDB.
+1. **`admitMessageForward` — le transfert ne défait plus la destruction.** Garde unique dans
+   `services/messaging/forwardAdmission.ts`, appelé depuis `MessagingService.handleMessage` (le
+   seul point où REST, socket texte et socket pièces jointes convergent avant l'écriture).
+   Éphémère → la copie hérite de la DURÉE de la source, recomptée depuis le transfert, et la
+   propriété est transitive sans code dédié. Vue unique → refus, comme WhatsApp et Signal.
+   Best-effort : source introuvable ou lecture en échec ⇒ le transfert dégénère en message
+   ordinaire (comportement d'avant, ne fuit rien de plus).
+2. **`Message.ephemeralDuration` est un champ MORT, constaté et documenté.** Zéro écrivain :
+   aucun des trois transports ne le transmet, `saveMessage` ne le range pas, il vaut `null` sur
+   toute la collection. Le garde reconstitue la durée par `expiresAt − createdAt`, seules colonnes
+   réellement peuplées. **À retirer du schéma, ou à câbler — mais ne jamais le LIRE en l'état.**
+3. **Constat annexe : `MessageAttachment.isViewOnce` n'a lui non plus aucun écrivain** sur le
+   chemin d'envoi (il n'est que lu, par `attachmentIncludes` et les mappings d'`AttachmentService`).
+   La vue unique vit donc entièrement au niveau `Message` — ce qui rend le garde suffisant, mais
+   fait du champ attachement une seconde promesse cosmétique, non traitée.
 
-## Ce que le cycle 93 doit faire — trois pistes, dont deux nommées par le cycle 92
+## Ce que le cycle 95 doit faire
 
-### 1. La même question, posée aux autres promesses du schéma (piste la plus riche)
+### 1. Poser la question aux modèles `Story`, `Post` et `Call` — la famille message est close
 
-`isViewOnce` / `maxViewOnceCount` sont le candidat le plus direct : `recordViewOnceConsumption`
-compte les spectateurs correctement, mais **rien ne détruit le message une fois le budget
-épuisé**. `isFullyConsumed` est lu par les clients pour masquer le média — exactement la même
-forme de promesse cosmétique que `expiresAt` avant le cycle 92, et le contenu reste servi.
-À VÉRIFIER avant d'écrire : le balayage est-il le bon chemin, ou la consommation elle-même
-(qui sait, elle, qu'elle vient d'épuiser le budget) ? Le second est plus juste et n'a pas de
-fenêtre résiduelle.
+C'est la suite naturelle, et elle n'a jamais été instruite. **Attention : `ExpiredStoriesCleanupService`
+existe déjà**, donc la famille story/post est PARTIELLEMENT couverte — chercher ce qu'il ne balaie
+PAS plutôt que de supposer le vide. Le bon filtre reste celui du cycle 93 : *un client déduit un
+comportement d'un champ dont AUCUN code serveur ne lit la valeur pour agir* — pas « le champ
+ressemble à une promesse ».
 
-Puis, dans l'ordre où le doute paraît légitime : `Participant.mutedUntil` (une sourdine expirée
-est-elle levée côté serveur, ou seulement affichée levée ?), `bannedAt`.
+### 2. VÉRIFIÉ au cycle 94, non traité : le budget de vue unique se contourne par un simple GET
 
-### 2. Les deux restes NOMMÉS de la destruction éphémère (dette assumée du cycle 92)
+**C'est la même forme de défaut, un cran plus bas, et il est confirmé dans le code.**
+`viewOnceCount` n'est incrémenté QUE par la route explicite
+`POST /conversations/:id/messages/:messageId/consume`. La route qui sert réellement les octets,
+`GET /attachments/:attachmentId` (`routes/attachments/download.ts`), ne gate que sur
+l'APPARTENANCE à la conversation : `callerMayReadAttachment` lit `messageId → conversationId` puis
+cherche un `Participant` actif, et ne regarde ni `isViewOnce`, ni `viewOnceCount`, ni `deletedAt`,
+ni `expiresAt`.
 
-- **`metadata` survit à la destruction.** Il porte l'instantané du post cité
-  (`metadata.postReplyTo` : contenu, vignette, compteurs) et le résumé d'appel. Ce n'est pas le
-  contenu du message, d'où sa mise hors périmètre — mais un message éphémère qui cite un post
-  laisse cet instantané en clair en base après sa destruction.
-- **Les lignes de localisation** (`MessageLocation`, cf. `LocationModels.swift`) ne sont pas
-  touchées : les coordonnées d'un partage de position éphémère survivent à son échéance.
+Conséquence : un membre — ou un `curl` muni d'un jeton valide — télécharge le média à vue unique
+autant de fois qu'il veut sans jamais appeler `consume`. Le budget n'est donc jamais épuisé,
+`isFullyConsumed` reste faux, `scheduleViewOnceBurn` n'est jamais appelé, et **le message ne brûle
+jamais**. Le cycle 93 a câblé la destruction sur un compteur que seuls les clients bien élevés
+alimentent.
 
-Les deux se traitent au même endroit (`ExpiredMessagesCleanupService._burn`) et méritent
-chacun leur test. Vérifier d'abord ce que la relocation lit encore : effacer un `metadata`
-qu'un AUTRE message référence serait pire que de le laisser.
+Ce n'est PAS un petit correctif : décider ce qui compte comme « une vue » côté serveur touche le
+préchargement de vignettes (`/thumbnail`), les requêtes Range (lecture vidéo en plusieurs morceaux
+— chacune ne doit pas coûter une vue) et le rejeu réseau. **C'est le chantier le plus rentable
+ouvert à ce jour, et il passe avant la prospection Story/Post/Call de la section 1** : celle-ci
+cherche des promesses non tenues, celui-là en a une, déjà localisée et déjà prouvée.
 
-**Le transfert est la troisième sortie, et elle n'est fermée par rien.** Transférer un message
-éphémère crée une ligne `Message` INDÉPENDANTE (`forwardedFromId` ne pointe que vers l'origine)
-qui ne porte ni `expiresAt` ni le drapeau `EPHEMERAL` : la copie survit à la destruction de
-l'original, en clair, sans échéance. Ce n'est pas un bug du balayage — c'est une décision
-produit qui n'a jamais été prise. WhatsApp et Signal interdisent le transfert d'un contenu à
-vue unique ; le point de décision ici serait `MessageProcessor.saveMessage` (propager
-`expiresAt`/`ephemeralDuration` depuis la source) ou l'admission de transfert (le refuser).
-À VÉRIFIER avant d'écrire : la citation (`replyToId`) n'a PAS ce défaut — le parent détruit
-rend une citation vide, ce qui est le comportement voulu.
+### 3. Les deux constats du cycle 93, toujours non instruits
 
-### 3. La veine « événement socket manqué », toujours ouverte
+- **`maxViewOnceCount: null` veut dire « 1 » partout dans le code et « tous les membres » dans le
+  commentaire du schéma** (la route fait `?? 1`). C'est le commentaire du schéma qui est faux, ou la
+  route ; trancher demande de savoir ce que les composeurs iOS/web envoient réellement.
+- **Le passif en base ne se rattrape pas tout seul.** `scheduleViewOnceBurn` n'est appelé que depuis
+  la route de consommation : un message épuisé AVANT la mise en service de ce chemin n'obtient
+  jamais son échéance. Une passe de rattrapage unique (`viewOnceCount >= maxViewOnceCount ?? 1` ET
+  `expiresAt` absent) fermerait le passif ; elle n'est toujours pas écrite.
 
-Inchangée depuis le cycle 92 et toujours non instruite :
+### 4. Les deux suivis que le cycle 94 ouvre
 
-- **Les autres chemins qui rendent un message invisible** ne repoussent pas la pastille de
-  non-lus. La modération admin est le candidat restant (l'expiration éphémère est traitée : le
-  balayage du cycle 92 passe par `applyMessageRemovalEffects`, mais **il n'émet AUCUN
-  `conversation:unread-updated` ni `message:deleted` en direct** — un client web connecté garde
-  le message affiché et lisible jusqu'au prochain rechargement, car le web n'a aucun traitement
-  d'éphémère. C'est le reste le plus visible du cycle 92, et le plus facile à fermer).
-- **Le rattrapage à la reconnexion vaut d'être cherché ailleurs** : réactions, épinglages,
-  statuts de présence.
+- **Aucun client ne masque `.forward` sur un message à vue unique.** L'action est offerte puis
+  refusée par le serveur — correct pour la sécurité, médiocre pour l'UX. Côté iOS le correctif est
+  contenu et purement logique : ajouter `isViewOnce` à `MessageMenuContext` (avec une valeur par
+  défaut, pour ne casser aucun site de construction) et filtrer `.forward` — et `.share`, qui est
+  la même sortie sous un autre nom — dans `MessageActionResolver.moreSections`.
+  **Non fait ici faute de toolchain Swift dans l'environnement de la routine** : le fichier est
+  PARTAGÉ par tous les worktrees iOS et une édition non compilée y est un risque net.
+- **`copyForwardedAttachments` copie `filePath` VERBATIM** : la copie et l'original partagent le
+  fichier sur disque, donc la destruction de l'original (`deleteAttachment` → `fs.unlink`) emporte
+  le média de la copie avant sa propre échéance. Défaut ANTÉRIEUR au cycle 94 (la copie perdait
+  déjà son fichier quand elle était permanente) et qui ne fuit rien — il dégrade. Le fermer
+  demande de dupliquer l'octet ou de compter les références.
+
+### 5. La veine « événement socket manqué », toujours ouverte
+
+- **La modération admin** reste le candidat restant parmi les chemins qui rendent un message
+  invisible sans repousser la pastille de non-lus.
+- **Le rattrapage à la reconnexion** vaut d'être cherché ailleurs : réactions, épinglages, présence.
 - **`tsc --noEmit` sur `apps/web` rend 1 224 diagnostics**, tous dans `__tests__/**` et tous
   pré-existants. Signal éteint ; assainir est un chantier en soi.
 
@@ -103,20 +129,20 @@ Inchangée depuis le cycle 92 et toujours non instruite :
 
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
   depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
-  la routine** — inchangé aux cycles 86 à 92. Exige une machine macOS.
+  la routine** — inchangé aux cycles 86 à 94. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
 - **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
-  `push --delete` non — quatre tentatives, 403 constant : une politique de droits, pas un aléa
-  réseau. Les branches mergées s'accumulent — à purger depuis un contexte qui a le droit
-  (cf. `tasks/branch-purge-*.sh`).
+  `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
+  droit (cf. `tasks/branch-purge-*.sh`).
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
   n'existe toujours pas.
 - **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
-  charge** (cycle 87). Non reproduit aux cycles 88 à 92.
-- **Les migrations MongoDB manuelles ne sont jouées par AUCUN déploiement** (constat repris de
-  `2026-08-04-post-media-download-indexes.mongodb.js`). L'index du cycle 92 est donc fourni mais
-  **pas appliqué** : sans lui le balayage fait un COLLSCAN par minute sur `Message`. À jouer à
-  la main sur la production, ou à automatiser — ce serait un chantier utile en soi.
+  charge** (cycle 87). Non reproduit aux cycles 88 à 94.
+- **Les migrations MongoDB manuelles ne sont jouées par AUCUN déploiement.** L'index du cycle 92
+  (`expiresAt_ephemeral_partial`) est fourni mais **pas appliqué** : sans lui le balayage fait un
+  COLLSCAN par minute sur `Message`. Les cycles 93 et 94 augmentent tous deux le débit de ce
+  balayage (la vue unique puis les copies transférées l'alimentent). À jouer à la main sur la
+  production, ou à automatiser — ce serait un chantier utile en soi.
 
 ## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
 
@@ -128,6 +154,117 @@ Inchangée depuis le cycle 92 et toujours non instruite :
 
 `bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
 et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+---
+
+# Cycle 93 — La vue unique ne se consommait nulle part, et « ce n'est pas le contenu » était faux
+
+*Branche `claude/keen-hamilton-9dbzne`. Deux correctifs, RED-prouvés avant correction, et une
+dette du cycle précédent close pour une raison que le cycle précédent n'avait pas vue.*
+
+## 0. Ce que la tête demandait, et l'ordre dans lequel il a fallu vérifier
+
+La tête du cycle 93 donnait trois pistes. La vérification a écarté la troisième avant d'écrire
+une ligne : elle annonçait que le balayage éphémère « n'émet AUCUN `conversation:unread-updated`
+ni `message:deleted` en direct », et le code portait déjà `_announce()` via
+`broadcastMessageMutation` — clos par les commits `b3e95ef0`/`6b9d32e6` du cycle 92 lui-même,
+après la rédaction de sa tête. **Une tête de cycle se vérifie contre le code, pas contre
+elle-même.** C'est consigné en tête du cycle 94 comme règle.
+
+Restaient la piste 1 (`isViewOnce`) et la piste 2 (les deux restes de la destruction éphémère).
+Les deux ont rendu.
+
+## 1. `isViewOnce` — le budget se comptait, rien ne le dépensait
+
+### Le défaut
+
+`recordViewOnceConsumption` (cycle 57) compte les spectateurs exactement. La route
+`POST /conversations/:id/messages/:messageId/consume` calcule `isFullyConsumed`. L'annonce
+`message:consumed` la porte à toute la room. Les clients masquent le média.
+
+**Et rien n'effaçait.** `content`, `encryptedContent` et les pièces jointes restaient servis par
+les ~119 lectures du modèle, qui sont toutes gardées par `deletedAt` seul — que personne ne posait
+sur un budget épuisé. Une réinstallation, un nouvel appareil, un appel d'API avec un jeton valide,
+ou simplement le client WEB — qui n'a AUCUN traitement de la vue unique et rend la photo comme
+n'importe quelle autre — relisaient indéfiniment ce que l'émetteur croyait consommé.
+
+Exactement la forme d'`expiresAt` avant le cycle 92 : toute la chaîne a l'air branchée, et il
+manque la seule pièce que personne ne regarde parce qu'elle ne produit aucun événement.
+
+### Le correctif : décider ici, détruire ailleurs
+
+La tête posait la bonne question — *le balayage, ou la consommation elle-même ?* La réponse est
+**les deux, et pas au même titre** :
+
+- la **consommation** est la seule à SAVOIR que le budget vient de s'épuiser ;
+- elle est la plus mauvaise place pour DÉTRUIRE : `consumeViewOnce` est attendu AVANT la
+  révélation de la bulle (iOS, `BubbleBlurRevealLifecycle`), et le média n'est pas toujours déjà
+  en cache. Effacer dans la foulée prendrait le contenu des mains du destinataire à l'instant
+  précis où il vient de payer sa vue.
+
+`scheduleViewOnceBurn` pose donc `expiresAt = now + VIEW_ONCE_BURN_GRACE_MS` (5 min) et laisse le
+balayage du cycle 92 exécuter — fichiers, clair, traductions, effets de retrait et annonce
+`message:deleted` comprises. **Aucune seconde implémentation de la destruction**, et la vue unique
+hérite gratuitement de tout ce que le balayage a coûté à écrire.
+
+### Les deux choses que ce correctif pouvait casser
+
+1. **Rallonger la vie d'un contenu.** Un message peut être à la fois éphémère et à vue unique. Un
+   `update` nu écrirait la grâce par-dessus un `expiresAt` de 30 s — une régression silencieuse
+   sur la plus forte des deux promesses. Le prédicat n'apparie que l'absence, le nul, et les
+   échéances POSTÉRIEURES à celle qu'on pose. La conséquence utile est l'idempotence gratuite :
+   un second appel ne réécrit rien.
+2. **Perdre la vue déjà payée.** La programmation est best-effort : une panne d'écriture est
+   journalisée, la réponse reste un succès. Échouer ici retirerait au spectateur un média dont la
+   revendication est déjà dépensée — sans rendre le contenu plus sûr pour autant. Non gardée par
+   `firstConsumption`, la programmation se rejoue et répare.
+
+### Ce que le correctif n'a délibérément PAS changé
+
+`maxViewOnceCount: null` vaut « 1 » dans la route (`?? 1`) et « tous les membres » dans le
+commentaire du schéma. Les clients agissent déjà sur le `isFullyConsumed` que la route calcule :
+le comportement effectif EST « 1 ». Faire respecter une sémantique et la changer dans le même
+geste aurait mélangé deux décisions. Porté en tête du cycle 94.
+
+## 2. `metadata` — la dette du cycle 92 reposait sur un raisonnement faux
+
+Le cycle 92 avait mis `metadata` hors périmètre au motif que « ce n'est pas le contenu du
+message ». Vérification faite, c'est faux là où ça compte :
+
+- `MessageProcessor.saveMessage` range le lieu partagé dans `metadata.location` — coordonnées
+  **en clair**, stockage assumé (`services/location/sharedPlace.ts`) ;
+- `metadata.postReplyTo` porte l'instantané figé du post cité (contenu, vignette, compteurs).
+
+Une position GPS survivait donc à l'échéance du message qui la portait, en clair et pour toujours,
+pendant que le TEXTE du même message était détruit — précisément la fuite au repos que cette passe
+a été écrite pour fermer.
+
+Et le second reste nommé par la tête (« les lignes de localisation, `MessageLocation` ») **n'existe
+pas** : il n'y a pas de modèle séparé, la localisation vit dans ce même champ. Les deux dettes
+étaient la même, et se ferment d'un `metadata: null`.
+
+L'effacement vient APRÈS la capture : `applyMessageRemovalEffects` lit `metadata` pour décompter
+les compteurs de conversation et travaille sur la copie prise par le `select`. Un test garde
+maintenant explicitement `select.metadata === true`.
+
+## 3. Preuves
+
+| Vérification | Résultat |
+|---|---|
+| `scheduleViewOnceBurn.test.ts` avant correctif | RED (module absent) |
+| `ExpiredMessagesCleanupService.test.ts` (2 cas ajoutés) avant correctif | RED (2 échecs sur 18) |
+| `bunx tsc --noEmit` (gateway) | 0 diagnostic |
+| `bun run test` (gateway, suite complète) | 682/682 suites, 16 886 tests |
+
+## 4. Ce que ce cycle laisse ouvert, et qu'il a lui-même créé
+
+- **Le passif en base.** `scheduleViewOnceBurn` n'est appelé que depuis la route de consommation.
+  Un message épuisé AVANT ce déploiement n'obtient son échéance que si quelqu'un rappelle
+  `consume` dessus — ce que personne ne fait sur un média déjà masqué. Une passe de rattrapage
+  unique fermerait le passif ; elle n'est pas écrite.
+- **Le transfert reste la seule sortie ouverte**, et le devient d'autant plus que les deux autres
+  sont maintenant fermées. Détail en tête du cycle 94.
+- **L'index `expiresAt_ephemeral_partial` n'est toujours pas appliqué** en production, et ce cycle
+  augmente le débit du balayage qui en dépend.
 
 ---
 

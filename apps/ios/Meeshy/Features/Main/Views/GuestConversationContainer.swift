@@ -22,7 +22,8 @@ struct GuestConversationContainer: View {
                     identifier: session.identifier,
                     type: .group
                 ),
-                anonymousSession: context
+                anonymousSession: context,
+                showsOwnConnectionBanner: true
             )
         } else {
             JoinFlowSheet(identifier: session.identifier) { joinResponse in
