@@ -6,7 +6,9 @@ import MeeshyUI
 // MARK: - Audio Post Composer
 
 struct AudioPostComposerView: View {
-    let onPublish: (URL, String, MobileTranscriptionPayload?) -> Void
+    /// Duration (ms) feeds `ReelComposition`'s 3-second qualification floor —
+    /// without it the composer couldn't tell a short clip from a long one.
+    let onPublish: (URL, String, Int, MobileTranscriptionPayload?) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -643,7 +645,7 @@ struct AudioPostComposerView: View {
     private func publish() {
         guard let url = recordedURL else { return }
         let payload = transcription.map { buildPayload($0) }
-        onPublish(url, "audio/mp4", payload)
+        onPublish(url, "audio/mp4", Int(recordedDuration * 1000), payload)
     }
 
     private func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {

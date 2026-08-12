@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import PhotosUI
 import UniformTypeIdentifiers
-import CoreLocation
 import MeeshySDK
 import MeeshyUI
 
@@ -220,6 +219,14 @@ struct CommentsSheetView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin).
+    @State private var composerIsFocused: Bool = false
+    /// Vrai si C'EST CETTE FEUILLE qui a déclaré le post actif (présentation
+    /// depuis le feed). Depuis un hôte qui l'avait déjà déclaré (viewer de
+    /// réels), la feuille ne revendique rien et ne relâche rien à sa
+    /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
+    @State private var claimedActivePost: Bool = false
     @State private var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -252,6 +259,10 @@ struct CommentsSheetView: View {
     @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12, 2026-07-29).
+    /// `SharedPlace` porte le nom ; `ComposerAttachment.location` ne le
+    /// portait pas et n'est plus le véhicule.
+    @State private var commentPendingPlace: SharedPlace? = nil
     /// "Éditer" from the recent-media strip — the editor opens before staging;
     /// the edited output is ingested, never the original.
     @State private var commentRecentImageToEdit: UIImage? = nil
@@ -499,6 +510,16 @@ struct CommentsSheetView: View {
         .modifier(TranslucentSheetBackground())
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)
+            // Les commentaires du post sont CONSOMMÉS : marque lues les
+            // notifications du post (portée serveur `context.postId`, qui
+            // couvre commentaires et réactions) et déclare le post actif —
+            // les notifications arrivant pendant la lecture naissent
+            // consommées. Cette feuille est présentée depuis le FEED et les
+            // RÉELS sans passer par PostDetailView : c'était le seul chemin
+            // où une notification de commentaire n'était jamais consommée.
+            // Idempotent quand l'hôte (réel) a déjà déclaré ce post actif.
+            claimedActivePost = NotificationToastManager.shared.activePostId != post.id
+            NotificationToastManager.shared.onPostOpened(post.id)
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
             seedLikedIds(from: comments)
@@ -509,6 +530,13 @@ struct CommentsSheetView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
+            // Ne relâcher QUE ce que la feuille a revendiqué : présentée
+            // depuis le viewer de réels (post déjà actif), elle ne doit pas
+            // effacer l'état du réel encore affiché derrière — quel que soit
+            // l'ordre onDismiss/onDisappear que SwiftUI choisit.
+            if claimedActivePost {
+                NotificationToastManager.shared.onPostClosed(post.id)
+            }
         }
         .onReceive(
             SocialSocketManager.shared.commentAdded
@@ -990,9 +1018,16 @@ struct CommentsSheetView: View {
                 }
             }
 
-            Text(post.displayContent)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(theme.textSecondary)
+            MessageTextRenderer.render(
+                post.displayContent,
+                fontSize: 15,
+                color: theme.textSecondary,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                accentColor: Color(hex: accentColor),
+                usesRelativeFont: true
+            )
+                .tint(Color(hex: accentColor))
                 .lineLimit(3)
 
             HStack(spacing: 16) {
@@ -1037,9 +1072,16 @@ struct CommentsSheetView: View {
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
-                Text(reply.displayContent)
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(
+                    reply.displayContent,
+                    fontSize: 12,
+                    color: theme.textSecondary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                    accentColor: Color(hex: reply.authorColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: reply.authorColor))
                     .lineLimit(1)
             }
 
@@ -1079,6 +1121,7 @@ struct CommentsSheetView: View {
         UniversalComposerBar(
             style: .light,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
             // Opt comments into the attachment carousel + voice (parity with
             // message-with-attachments). Pickers are wired below.
@@ -1086,13 +1129,14 @@ struct CommentsSheetView: View {
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
+            onFocusChange: { composerIsFocused = $0 },
             onSendMessage: { text, attachments, _ in
                 submitComment(text: text, attachments: attachments)
             },
             onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && commentPendingPlace == nil)
                 ? nil
                 : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
@@ -1108,7 +1152,7 @@ struct CommentsSheetView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
@@ -1137,10 +1181,8 @@ struct CommentsSheetView: View {
             handleCommentFileImport(result)
         }
         .sheet(isPresented: $showCommentLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, _ in
-                commentAttachments.append(
-                    ComposerAttachment.location(lat: coordinate.latitude, lng: coordinate.longitude)
-                )
+            LocationPickerView(accentColor: accentColor) { place in
+                commentPendingPlace = place
                 showCommentLocationPicker = false
             }
         }
@@ -1186,6 +1228,38 @@ struct CommentsSheetView: View {
     private var commentAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let place = commentPendingPlace {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.fill")
+                            .font(.caption)
+                            .foregroundColor(MeeshyColors.success)
+                        Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                commentPendingPlace = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(theme.textMuted)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        }
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(theme.inputBackground)
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                    )
+                    .foregroundColor(theme.textPrimary)
+                }
                 ForEach(commentAttachments) { attachment in
                     HStack(spacing: 6) {
                         Image(systemName: commentAttachmentIcon(attachment.type))
@@ -1313,6 +1387,26 @@ struct CommentsSheetView: View {
         }
     }
 
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
+    /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
+    /// la fin), fichiers routés vers le staging commentaire existant
+    /// (spec 2026-07-30, lot 1).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                composerText += block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
+            }
+        }
+    }
+
     private func handleCommentFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
         for url in urls {
@@ -1387,19 +1481,28 @@ struct CommentsSheetView: View {
     // MARK: - Comment Send (optimistic, with single media)
 
     /// Poste un commentaire de façon optimiste, avec optionnellement UN média
-    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média). Le texte
-    /// suit le flux reconcile/rollback existant ; le média est uploadé via TUS
-    /// (`uploadContext: "comment"` → PostMedia) puis lié via `addComment(attachmentIds:)`.
-    /// Les attachements file/location et la voix sans fichier sont ignorés (hors périmètre).
-    /// Un commentaire média-seul (sans texte) est autorisé.
+    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média) ET/OU un
+    /// lieu partagé. Le texte suit le flux reconcile/rollback existant ; le
+    /// média est uploadé via TUS (`uploadContext: "comment"` → PostMedia) puis
+    /// lié via `addComment(attachmentIds:)` ; le lieu transite par
+    /// `addComment(location:)` en ligne et par `CreateCommentPayload.location`
+    /// hors-ligne (même contrat que `PostDetailViewModel.sendComment/sendReply/
+    /// submitCommentWithMedia`). Les attachements file et la voix sans fichier
+    /// restent ignorés (hors périmètre).
+    /// Un commentaire média-seul ou lieu-seul (sans texte) est autorisé.
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
         let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
+        // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
+        // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
+        // sur le commentaire suivant, qu'il parte ou soit rejeté par le guard.
+        let place = commentPendingPlace
+        commentPendingPlace = nil
 
-        // Rien à envoyer (ni texte ni média exploitable).
-        guard !trimmed.isEmpty || media != nil else { return }
+        // Rien à envoyer (ni texte, ni média, ni lieu exploitable).
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
 
         // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
         // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste
@@ -1463,7 +1566,7 @@ struct CommentsSheetView: View {
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
-                    originalLanguage: lang
+                    originalLanguage: lang, location: place
                 )
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1511,7 +1614,8 @@ struct CommentsSheetView: View {
                         clientMutationId: cmid,
                         postId: post.id,
                         parentCommentId: parentId,
-                        content: trimmed
+                        content: trimmed,
+                        location: place
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)
@@ -1682,6 +1786,8 @@ struct CommentRowView: View, Equatable {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
     @State private var hasPlayedAppearanceEffect = false
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
@@ -1817,9 +1923,20 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHidden(true)
                 }
 
-                Text(effectiveCommentContent)
-                    .font(MeeshyFont.relative(contentFont))
-                    .foregroundColor(theme.textPrimary)
+                // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
+                // `#hashtag` soient teintés comme partout ailleurs.
+                // `usesRelativeFont` conserve le scaling Dynamic Type du
+                // `MeeshyFont.relative(contentFont)` d'origine.
+                MessageTextRenderer.render(
+                    effectiveCommentContent,
+                    fontSize: contentFont,
+                    color: theme.textPrimary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                    accentColor: Color(hex: accentColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: accentColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
                     .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
@@ -1839,11 +1956,22 @@ struct CommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: accentColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,
                         sentAt: comment.timestamp
                     )
+                    .padding(.top, 2)
+                }
+
+                // Lieu attaché au commentaire (`FeedComment.location`, hissé du
+                // gateway) — sticker cliquable → carte plein écran. Couvre la
+                // sheet ET la page détail (les deux passent par cette row).
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
                     .padding(.top, 2)
                 }
 
@@ -1983,6 +2111,18 @@ struct CommentRowView: View, Equatable {
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            // Même surface plein écran que la bulle et la card feed :
+            // carte + « Ouvrir dans Plans » / « Itinéraire ».
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: comment.author
+            )
         }
         .withStatusBubble()
     }

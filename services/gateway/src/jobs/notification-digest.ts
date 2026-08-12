@@ -10,6 +10,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService, NotificationDigestEmailData } from '../services/EmailService';
 import { MagicLinkService } from '../services/MagicLinkService';
+import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
@@ -124,9 +125,11 @@ export class NotificationDigestJob {
     try {
       logger.info('[NotificationDigestJob] Starting digest run...');
 
-      // Find distinct userIds with unread notifications
+      // Find distinct userIds with unread notifications. Une ligne expirée ne
+      // relance personne : le contenu qu'elle annonçait n'existe plus, et
+      // l'e-mail ramènerait l'utilisateur sur une inbox qui ne la montre pas.
       const unreadNotifs = await this.prisma.notification.findMany({
-        where: { isRead: false },
+        where: visibleNotificationsWhere({ unreadOnly: true }),
         select: { userId: true, delivery: true },
       });
 
@@ -198,7 +201,7 @@ export class NotificationDigestJob {
 
     // Get recent unread notifications not yet emailed
     const allUnread = await this.prisma.notification.findMany({
-      where: { userId, isRead: false },
+      where: visibleNotificationsWhere({ userId, unreadOnly: true }),
       orderBy: { createdAt: 'desc' },
       select: { id: true, context: true, createdAt: true, delivery: true },
     });

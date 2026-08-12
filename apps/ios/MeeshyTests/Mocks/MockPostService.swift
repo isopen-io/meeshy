@@ -20,6 +20,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     var getFeedResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
     var getReelsResult: Result<PaginatedAPIResponse<[APIPost]>, Error>? = nil
+    var getPostsByHashtagResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
+    var getTrendingHashtagsResult: Result<[APIHashtag], Error> = .success([])
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
     var likeResult: Result<Void, Error> = .success(())
@@ -32,11 +34,22 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var repostResult: Result<APIPost, Error> = .success(stubPost)
     var shareResult: Result<Void, Error> = .success(())
     var createStoryResult: Result<APIPost, Error> = .success(stubPost)
+    /// File de résultats pour les scénarios multi-slides (une story = un
+    /// `createStory` par slide) : consommée en priorité, une entrée par appel.
+    /// Même pattern que `getCommentsResultsQueue`.
+    var createStoryResultsQueue: [Result<APIPost, Error>] = []
+    /// Maintient `createStory` EN VOL tant qu'il est levé : indispensable pour
+    /// tester ce qui n'arrive qu'à un upload en cours (annuler la story qui
+    /// monte). L'attente honore l'annulation de tâche — `uploadTask.cancel()`
+    /// en sort par un `CancellationError`, comme un TUS interrompu.
+    var createStoryHangs = false
     var createWithTypeResult: Result<APIPost, Error> = .success(stubPost)
 
     // MARK: - Call Tracking
 
     var getFeedCallCount = 0
+    var getPostsByHashtagCallCount = 0
+    var getTrendingHashtagsCallCount = 0
     var lastGetFeedCursor: String?
     var lastGetFeedLimit: Int?
 
@@ -84,6 +97,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostTargetType: PostType?
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
+    var lastRepostVisibility: String?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -94,6 +108,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastCreateStoryContent: String?
     var lastCreateStoryRepostOfId: String?
     var lastCreateStoryOriginalLanguage: String?
+    /// Effets de la DERNIÈRE slide envoyée au serveur — sert à prouver que les
+    /// thumbHashes calculés en aval du hand-off arrivent bien avant le TUS.
+    var lastCreateStoryEffects: StoryEffects?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -106,6 +123,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastUpdateOriginalLanguage: String?
     var lastUpdateType: String?
     var lastUpdateRemoveMediaIds: [String]?
+    var lastUpdateStoryEffects: StoryEffects?
+    var lastUpdateMediaIds: [String]?
+    var lastUpdateLocation: PostLocationUpdate?
 
     var viewPostCallCount = 0
     var lastViewPostId: String?
@@ -152,8 +172,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// commentaire notifié) : consommée en priorité, une entrée par appel.
     var getCommentsResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
 
+    var recordImpressionsResult: Result<Void, Error> = .success(())
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
+    var lastRecordImpressionsSource: String?
 
     var recordImpressionCallCount = 0
     var lastRecordImpressionPostId: String?
@@ -179,6 +201,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         // Falls through to `getFeedResult` when no dedicated reels stub is set, so
         // existing tests that only stub the feed keep working unchanged.
         return try (getReelsResult ?? getFeedResult).get()
+    }
+
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getPostsByHashtagCallCount += 1
+        return try getPostsByHashtagResult.get()
+    }
+
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag] {
+        getTrendingHashtagsCallCount += 1
+        return try getTrendingHashtagsResult.get()
     }
 
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
@@ -254,12 +286,23 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost {
+    /// Defaults mirror `PostService.repost`, which defaults every parameter.
+    /// Without them a caller that omits an argument compiles against the real
+    /// service and fails against this mock — which is exactly how `visibility`
+    /// broke the test target when it was added.
+    func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType
         lastRepostContent = content
         lastRepostIsQuote = isQuote
+        lastRepostVisibility = visibility
         return try repostResult.get()
     }
 
@@ -290,6 +333,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateStoryContent = content
         lastCreateStoryRepostOfId = repostOfId
         lastCreateStoryOriginalLanguage = originalLanguage
+        lastCreateStoryEffects = storyEffects
+        while createStoryHangs {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        if !createStoryResultsQueue.isEmpty {
+            return try createStoryResultsQueue.removeFirst().get()
+        }
         return try createStoryResult.get()
     }
 
@@ -306,7 +357,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func unpinPost(postId: String) async throws {}
 
-    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost {
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost {
         updateCallCount += 1
         lastUpdatePostId = postId
         lastUpdateContent = content
@@ -315,6 +366,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateOriginalLanguage = originalLanguage
         lastUpdateType = type
         lastUpdateRemoveMediaIds = removeMediaIds
+        lastUpdateStoryEffects = storyEffects
+        lastUpdateMediaIds = mediaIds
+        lastUpdateLocation = location
         return try createResult.get()
     }
 
@@ -381,6 +435,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func recordImpressions(postIds: [String], source: String) async throws {
         recordImpressionsCallCount += 1
         lastRecordImpressionPostIds = postIds
+        lastRecordImpressionsSource = source
+        try recordImpressionsResult.get()
     }
 
     func recordImpression(postId: String, source: String) async throws {
@@ -401,6 +457,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         getFeedCallCount = 0
         lastGetFeedCursor = nil
         lastGetFeedLimit = nil
+        getPostsByHashtagResult = .success(emptyPaginatedPosts)
+        getPostsByHashtagCallCount = 0
+        getTrendingHashtagsResult = .success([])
+        getTrendingHashtagsCallCount = 0
 
         getReelsResult = nil
         getReelsCallCount = 0
@@ -457,6 +517,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = nil
         lastRepostContent = nil
         lastRepostIsQuote = nil
+        lastRepostVisibility = nil
 
         shareResult = .success(())
         shareCallCount = 0
@@ -465,10 +526,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastSharePlatform = nil
 
         createStoryResult = .success(stubPost)
+        createStoryResultsQueue = []
+        createStoryHangs = false
         createStoryCallCount = 0
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil
+        lastCreateStoryEffects = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0
@@ -479,6 +543,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateContent = nil
         lastUpdateOriginalLanguage = nil
         lastUpdateType = nil
+        lastUpdateStoryEffects = nil
+        lastUpdateMediaIds = nil
+        lastUpdateLocation = nil
         viewPostCallCount = 0
         lastViewPostId = nil
         getPostViewsCallCount = 0
@@ -512,6 +579,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastGetCommentsPostId = nil
 
         recordImpressionsCallCount = 0
+        lastRecordImpressionsSource = nil
+        recordImpressionsResult = .success(())
         lastRecordImpressionPostIds = nil
 
         recordImpressionCallCount = 0

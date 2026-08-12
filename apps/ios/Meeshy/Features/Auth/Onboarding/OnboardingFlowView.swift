@@ -131,7 +131,7 @@ struct OnboardingFlowView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.previousStep()
                     }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.backward")
@@ -148,7 +148,7 @@ struct OnboardingFlowView: View {
             } else {
                 Button(action: {
                     dismiss()
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     Image(systemName: "xmark")
                         // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 38×38 →
@@ -242,7 +242,7 @@ struct OnboardingFlowView: View {
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant !", bundle: .main)
         }
     }
 

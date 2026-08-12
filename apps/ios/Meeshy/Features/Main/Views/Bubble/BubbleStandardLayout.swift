@@ -25,6 +25,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Enveloppe `Identifiable` d'un `SharedPlace` pour `.fullScreenCover(item:)` —
+/// `SharedPlace` (SDK) n'est pas `Identifiable` et n'a pas à l'être : l'identité
+/// d'un lieu affiché est sa paire de coordonnées.
+struct BubbleFullscreenPlace: Identifiable {
+    let place: SharedPlace
+    var id: String { "\(place.latitude),\(place.longitude)" }
+}
+
 struct BubbleStandardLayout: View {
     // MARK: - Inputs (data + visual context)
 
@@ -94,6 +102,13 @@ struct BubbleStandardLayout: View {
     /// unchanged.
     let onPlayAudio: ((String) -> Void)?
     let onScrollToMessage: ((String) -> Void)?
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// tels quels jusqu'à `AudioMediaView.conversationName` /
+    /// `.audioQueueTailProvider` (single-track ET carousel), pour que le
+    /// plein écran audio ouvert SANS lecture déjà active porte la même
+    /// carte Now Playing / avance auto que le chemin `playAudio` existant.
+    let conversationName: String?
+    let audioQueueTailProvider: ((String) -> [QueuedAudio])?
 
     // MARK: - Bindings (state owned by ThemedMessageBubble wrapper)
 
@@ -128,6 +143,13 @@ struct BubbleStandardLayout: View {
     // bulle 10×/sec via le periodic time observer. Ici on s'abonne juste à
     // `$activeURL` qui ne ticke pas (change uniquement sur load/stop).
     @State private var inlineVideoActiveURL: String = ""
+
+    /// Lieu affiché en plein écran quand il vient de `message.location` (voie
+    /// serveur actuelle). Les anciennes pièces jointes `.location` du cache
+    /// local passent, elles, par `fullscreenLocationAttachment` (binding du
+    /// wrapper) — deux états distincts car les véhicules diffèrent
+    /// (`SharedPlace` vs `MessageAttachment`).
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
 
     /// Whether an inline AVPlayer is currently mounted on this bubble.
     /// Read by the extension in `ThemedMessageBubble+Media.swift` to hide
@@ -292,6 +314,9 @@ struct BubbleStandardLayout: View {
     /// branch mirrors a child of the stack, so non-empty bubbles render
     /// exactly as before.
     private var hasBubbleBodyContent: Bool {
+        // Lieu porté par `message.location` (voie serveur actuelle) — la bulle
+        // a un corps à rendre même sans texte ni pièce jointe.
+        if content.location != nil { return true }
         if !nonMediaAttachments.isEmpty { return true }
         if !(content.text?.raw.isEmpty ?? true) { return true }
         if content.text?.firstLinkURL != nil { return true }
@@ -367,6 +392,30 @@ struct BubbleStandardLayout: View {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
+    /// Mentions d'accessibilité des contenus non média : lieu + fichiers.
+    /// Pure et testable. Le lieu se déclenche sur `message.location` (voie
+    /// serveur actuelle, `hasSharedPlace`) OU sur une ancienne pièce jointe
+    /// `.location` du cache local — jamais les deux à la fois, le builder
+    /// exclut la pièce jointe quand `message.location` est présent
+    /// (cf. BubbleContentBuilder), donc la mention n'apparaît qu'une fois.
+    static func nonMediaAccessibilityParts(
+        hasSharedPlace: Bool,
+        nonMedia: [MessageAttachment]
+    ) -> [String] {
+        var parts: [String] = []
+        if hasSharedPlace {
+            parts.append(String(localized: "a11y.message.location", bundle: .main))
+        }
+        for att in nonMedia {
+            if att.type == .location {
+                parts.append(String(localized: "a11y.message.location", bundle: .main))
+            } else {
+                parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
+            }
+        }
+        return parts
+    }
+
     private var messageAccessibilityLabel: String {
         var parts: [String] = []
         if !content.isMe, let senderName = content.senderName {
@@ -393,15 +442,10 @@ struct BubbleStandardLayout: View {
         if !audioAttachments.isEmpty {
             parts.append(String(format: String(localized: "a11y.message.audios", bundle: .main), audioAttachments.count))
         }
-        if !nonMediaAttachments.isEmpty {
-            for att in nonMediaAttachments {
-                if att.type == .location {
-                    parts.append(String(localized: "a11y.message.location", bundle: .main))
-                } else {
-                    parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
-                }
-            }
-        }
+        parts.append(contentsOf: Self.nonMediaAccessibilityParts(
+            hasSharedPlace: content.location != nil,
+            nonMedia: nonMediaAttachments
+        ))
         parts.append(content.meta.timeString)
         if content.isMe {
             parts.append(deliveryStatusAccessibilityLabel)
@@ -634,6 +678,19 @@ struct BubbleStandardLayout: View {
                 )
             }
         }
+        .fullScreenCover(item: $fullscreenPlace) { item in
+            // Plein écran du lieu `message.location` — mêmes primitives que la
+            // branche par pièce jointe ci-dessus, mais avec le nom et
+            // l'adresse portés par `SharedPlace`.
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: contactColor,
+                senderName: content.senderName
+            )
+        }
     }
 
     // MARK: - Content stack (text + media + reply, with blur mask)
@@ -763,6 +820,8 @@ struct BubbleStandardLayout: View {
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
                     onPlayAudio: onPlayAudio,
+                    conversationName: conversationName,
+                    audioQueueTailProvider: audioQueueTailProvider,
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
                     onTapConsentNotice: onTapConsentNotice
@@ -905,6 +964,21 @@ struct BubbleStandardLayout: View {
 
         if hasBubbleBodyContent {
             VStack(alignment: .leading, spacing: 8) {
+                // Lieu porté par `message.location` (voie serveur actuelle).
+                // Rendu UNE seule fois : le builder exclut la pièce jointe
+                // `.location` de `content.attachments` quand le message porte
+                // les deux (cf. BubbleContentBuilder), donc cette branche et
+                // la branche par pièce jointe ci-dessous sont exclusives.
+                if let place = content.location {
+                    LocationMessageView(
+                        place: place,
+                        accentColor: contactColor,
+                        onTapFullscreen: {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
+                    )
+                }
+
                 ForEach(nonMediaAttachments) { attachment in
                     attachmentView(attachment)
                 }
@@ -1110,8 +1184,14 @@ struct BubbleStandardLayout: View {
         content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
 
+    /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
+    /// contrastait qu'à 2.98:1 sur le fond clair de l'app.
     private var mentionTint: Color {
-        MeeshyColors.indigo400 // distinct des liens URL
+        MeeshyColors.mentionColor(isDark: theme.mode.isDark)
+    }
+
+    private var hashtagTint: Color {
+        MeeshyColors.hashtagColor(isDark: theme.mode.isDark)
     }
 
     @ViewBuilder
@@ -1122,6 +1202,7 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
+            hashtagTint: hashtagTint,
             linkTint: linkTint,
             trackedLinks: content.text?.trackedLinks ?? [:]
         )
@@ -1139,6 +1220,7 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
+                hashtagTint: hashtagTint,
                 linkTint: linkTint,
                 trackedLinks: content.text?.trackedLinks ?? [:]
             )
@@ -1268,6 +1350,8 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
+                conversationName: conversationName,
+                audioQueueTailProvider: audioQueueTailProvider,
                 embedsCaptionInWidget: embedsCaption,
                 voiceConsentMissing: voiceConsentMissing,
                 onTapConsentNotice: onTapConsentNotice

@@ -8,6 +8,7 @@ public struct RepostPayload: Sendable, Codable {
     public let stickers: [StorySticker]
     public let drawingData: Data?
     public let audioPlayerObjects: [StoryAudioPlayerObject]
+    public let locationObjects: [StoryLocationObject]
     public let sourceCanvasSize: CGSize
     public let sourceSlideId: String
     public let sourceStoryItemId: String?
@@ -17,6 +18,7 @@ public struct RepostPayload: Sendable, Codable {
                 stickers: [StorySticker],
                 drawingData: Data?,
                 audioPlayerObjects: [StoryAudioPlayerObject],
+                locationObjects: [StoryLocationObject] = [],
                 sourceCanvasSize: CGSize,
                 sourceSlideId: String,
                 sourceStoryItemId: String?) {
@@ -25,6 +27,7 @@ public struct RepostPayload: Sendable, Codable {
         self.stickers = stickers
         self.drawingData = drawingData
         self.audioPlayerObjects = audioPlayerObjects
+        self.locationObjects = locationObjects
         self.sourceCanvasSize = sourceCanvasSize
         self.sourceSlideId = sourceSlideId
         self.sourceStoryItemId = sourceStoryItemId
@@ -53,6 +56,7 @@ extension StorySlide {
             stickers: effects.stickerObjects ?? [],
             drawingData: effects.drawingData,
             audioPlayerObjects: effects.audioPlayerObjects ?? [],
+            locationObjects: effects.locationObjects,
             sourceCanvasSize: repostSourceCanvasSize(for: effects.canvasAspect),
             sourceSlideId: id,
             sourceStoryItemId: sourceStoryItemId
@@ -71,6 +75,7 @@ extension StoryItem {
             stickers: storyEffects?.stickerObjects ?? [],
             drawingData: storyEffects?.drawingData,
             audioPlayerObjects: storyEffects?.audioPlayerObjects ?? [],
+            locationObjects: storyEffects?.locationObjects ?? [],
             sourceCanvasSize: repostSourceCanvasSize(for: storyEffects?.canvasAspect ?? .portrait),
             sourceSlideId: id,
             sourceStoryItemId: id

@@ -59,6 +59,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 220i — the last holdout
+
+    func test_statusComposerView_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +81,18 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - The debt is paid — this is now a regression guard
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    /// 220i migrated `StatusComposerView`, the last holdout, so the expectation
+    /// is now the empty set. From here this test has changed character: it no
+    /// longer pins tolerated debt, it forbids the container outright. Any new
+    /// `NavigationView` anywhere in the shipping targets turns it red.
+    func test_noNavigationViewRemains() throws {
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), [],
+            "NavigationView is deprecated since iOS 16 and defaults to the double-column style, " +
+            "which collapses to an empty detail pane at regular width (iPad). Use NavigationStack — " +
+            "it is available unconditionally at the iOS 16.0 deployment floor."
         )
     }
 }

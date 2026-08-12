@@ -302,7 +302,11 @@ struct OutboxDispatcher: OutboxDispatching {
             // (`messageIds == nil`) continue de poster sans corps : c'est le
             // seul comportement sûr pour un enregistrement non informé.
             let reported = payload.messageIds.map(MarkAsReadBody.cap) ?? []
-            let body = reported.isEmpty
+            // Le rattrapage voyage même quand le plafond a rogné le lot : c'est
+            // une borne de curseur, pas un identifiant à figer, et la perdre
+            // laisserait le badge plein précisément dans le cas — deux cents
+            // messages d'un coup — où il gêne le plus.
+            let body = (reported.isEmpty && payload.caughtUpToMessageId == nil)
                 ? nil
                 : try JSONEncoder().encode(
                     MarkAsReadBody(
@@ -310,7 +314,8 @@ struct OutboxDispatcher: OutboxDispatching {
                         language: payload.language,
                         messageLanguages: MarkAsReadBody.scopedLanguages(
                             payload.messageLanguages, to: reported
-                        )
+                        ),
+                        caughtUpToMessageId: payload.caughtUpToMessageId
                     )
                 )
 
@@ -488,6 +493,11 @@ struct OutboxDispatcher: OutboxDispatching {
             let audioUrl: String?
             let audioDuration: Int?
             let visibilityUserIds: [String]?
+            /// Task 17 — même clé top-level `location` que le chemin direct
+            /// (`CreatePostRequest`, `PostService.create`) : sans elle ici, la
+            /// position survivrait jusqu'au décodage de `CreatePostPayload` mais
+            /// serait tout de même jetée en silence à l'ultime saut réseau.
+            let location: SharedPlace?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -500,11 +510,12 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
                 if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
                 if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
+                if let location { try container.encode(location, forKey: .location) }
             }
 
             enum CodingKeys: String, CodingKey {
                 case content, mediaIds, visibility, originalLanguage, type
-                case moodEmoji, audioUrl, audioDuration, visibilityUserIds
+                case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location
             }
         }
         let body = CreatePostBody(
@@ -516,7 +527,8 @@ struct OutboxDispatcher: OutboxDispatching {
             moodEmoji: payload.moodEmoji,
             audioUrl: payload.audioUrl,
             audioDuration: payload.audioDuration,
-            visibilityUserIds: payload.visibilityUserIds
+            visibilityUserIds: payload.visibilityUserIds,
+            location: payload.location
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -561,18 +573,27 @@ struct OutboxDispatcher: OutboxDispatching {
         struct CreateCommentBody: Encodable {
             let content: String
             let parentId: String?
+            /// Lieu partagé — même clé `location` que le chemin direct
+            /// (`PostService.addComment`), hissée par le gateway depuis
+            /// `metadata.location`.
+            let location: SharedPlace?
+            let effectFlags: Int?
 
-            enum CodingKeys: String, CodingKey { case content, parentId }
+            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(content, forKey: .content)
                 if let parentId { try container.encode(parentId, forKey: .parentId) }
+                try container.encodeIfPresent(location, forKey: .location)
+                try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             }
         }
         let body = CreateCommentBody(
             content: payload.content,
-            parentId: payload.parentCommentId
+            parentId: payload.parentCommentId,
+            location: payload.location,
+            effectFlags: payload.effectFlags
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts/\(payload.postId)/comments",
@@ -664,10 +685,17 @@ struct OutboxDispatcher: OutboxDispatching {
         conversationId: String
     ) async {
         let persistence = await DependencyContainer.shared.messagePersistence
-        _ = try? await persistence.applyEvent(
-            localId: clientMessageId,
-            event: .serverAck(serverId: serverId, at: Date())
-        )
+        do {
+            _ = try await persistence.applyEvent(
+                localId: clientMessageId,
+                event: .serverAck(serverId: serverId, at: Date())
+            )
+        } catch {
+            // Le serveur a accepté le message mais la ligne locale n'est pas
+            // passée `.sent` : la bulle reste « en cours d'envoi » jusqu'au
+            // prochain resync.
+            logger.error("Server ACK not applied for \(clientMessageId, privacy: .public), bubble stays 'sending': \(error.localizedDescription, privacy: .public)")
+        }
         await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
             cached.filter { $0.id != clientMessageId }
         }
@@ -681,9 +709,12 @@ struct OutboxDispatcher: OutboxDispatching {
 
     private func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
-            guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else {
+            let item: OfflineQueueItem
+            do {
+                item = try decoder.decode(OfflineQueueItem.self, from: record.payload)
+            } catch {
                 // Corrupt payload — accept to let the flusher remove the row.
-                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping")
+                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
                 return
             }
 
@@ -749,7 +780,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — le canal socket porte la
+                    // même clé `location` que le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -836,7 +870,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — même clé `location` que
+                    // le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -866,7 +903,10 @@ struct OutboxDispatcher: OutboxDispatching {
                 forwardedFromId: item.forwardedFromId,
                 forwardedFromConversationId: item.forwardedFromConversationId,
                 attachmentIds: item.attachmentIds,
-                clientMessageId: item.clientMessageId
+                clientMessageId: item.clientMessageId,
+                // Lieu partagé rejoué au renvoi, comme pour un post et un
+                // commentaire : clé top-level `location`, omise quand nil.
+                location: item.location
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
@@ -898,9 +938,15 @@ struct OutboxDispatcher: OutboxDispatching {
                 let attachmentIds: [String]?
                 let clientMessageId: String?
             }
-            guard let item = try? decoder.decode(LegacyMrqPayload.self, from: record.payload),
-                  let clientMessageId = item.clientMessageId else {
-                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping")
+            let item: LegacyMrqPayload
+            do {
+                item = try decoder.decode(LegacyMrqPayload.self, from: record.payload)
+            } catch {
+                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+            guard let clientMessageId = item.clientMessageId else {
+                logger.error("Legacy mrq_* payload without clientMessageId for record \(record.id, privacy: .public), dropping")
                 return
             }
             let request = SendMessageRequest(
@@ -925,8 +971,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Edit Message
 
     private func dispatchEditMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineEditPayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineEditPayload
+        do {
+            payload = try decoder.decode(OfflineEditPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         _ = try await MessageService.shared.edit(
@@ -939,8 +988,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Delete Message
 
     private func dispatchDeleteMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineDeletePayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineDeletePayload
+        do {
+            payload = try decoder.decode(OfflineDeletePayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         try await MessageService.shared.delete(
@@ -953,8 +1005,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Send Reaction
 
     private func dispatchSendReaction(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
-            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping")
+        let payload: ReactionOutboxPayload
+        do {
+            payload = try decoder.decode(ReactionOutboxPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         do {
@@ -1042,6 +1097,11 @@ nonisolated struct MarkAsReadBody: Encodable {
     /// écartée par le plafond ferait rejeter le corps entier.
     var messageLanguages: [String: String]?
 
+    /// Le lecteur a atteint ce message, le plus récent : le curseur de non-lus
+    /// avance jusque-là et le badge tombe à zéro côté serveur. N'élargit PAS
+    /// l'ensemble des messages marqués lus — cf. `MarkAsReadPayload`.
+    var caughtUpToMessageId: String?
+
     /// Plafond accepté par le gateway.
     static let limit = 200
 
@@ -1123,6 +1183,7 @@ final class OutboxRetryScheduler {
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
+    private var mutationCancellable: AnyCancellable?
     private init() {}
 
     /// Réveille le flusher à chaque transition réseau offline→online.
@@ -1144,6 +1205,22 @@ final class OutboxRetryScheduler {
             .removeDuplicates()
             .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
             .filter { $0 }          // uniquement offline→online
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
+
+    /// outbox-04 — réveille le flusher juste après une mutation sociale
+    /// enfilée EN LIGNE (like/post/commentaire) : sans ce trigger la row
+    /// reste `.pending` jusqu'au prochain événement de cycle de vie incident
+    /// (reconnect, boot, foreground). Débounce 250 ms : une rafale (double-tap
+    /// like, commentaires d'affilée) ne déclenche qu'un seul flush groupé.
+    /// Publisher + flush injectés pour la testabilité — même pattern que
+    /// `startObservingNetworkReconnect`.
+    func startObservingMutationEnqueued(
+        mutationPublisher: AnyPublisher<Void, Never> = OfflineQueue.shared.mutationEnqueued.publisher,
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        mutationCancellable = mutationPublisher
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
             .sink { _ in Task { @MainActor in await flush() } }
     }
 

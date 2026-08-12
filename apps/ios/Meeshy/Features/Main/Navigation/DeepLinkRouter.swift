@@ -28,6 +28,7 @@ enum DeepLinkDestination {
     case userLinks
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    case hashtag(tag: String)
     case external(URL)
 }
 
@@ -163,6 +164,9 @@ enum DeepLinkParser {
         case "u", "users":
             // meeshy://u/{username} (or meeshy://users/{username}).
             if components.count >= 2 { return .userProfile(username: components[1]) }
+        case "hashtag":
+            // meeshy://hashtag/{tag}.
+            if components.count >= 2, !components[1].isEmpty { return .hashtag(tag: components[1]) }
         case "join":
             // meeshy://join/{linkId} — conversation invitation share link.
             if components.count >= 2 { return .joinLink(identifier: components[1]) }
@@ -242,6 +246,10 @@ enum DeepLinkParser {
             if userSegments.contains(head) {
                 return .userProfile(username: components[1])
             }
+            // Hashtag results — `hashtag/{tag}`.
+            if head == "hashtag", !components[1].isEmpty {
+                return .hashtag(tag: components[1])
+            }
             // Story — `story`, `stories`, `s`.
             if storySegments.contains(head) {
                 return .storyDetail(postId: components[1])
@@ -300,6 +308,7 @@ enum DeepLink: Equatable {
     case userProfile(username: String)
     case ownProfile
     case userLinks
+    case hashtag(tag: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -407,6 +416,11 @@ final class DeepLinkRouter: ObservableObject {
             // affiliate, etc.). Same surface as the in-app `Link` tap that
             // already routes to `.links` via Router.handleDeepLink.
             pendingDeepLink = .userLinks
+            return true
+
+        case "hashtag":
+            guard let tag = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .hashtag(tag: tag)
             return true
 
         case "feeds":

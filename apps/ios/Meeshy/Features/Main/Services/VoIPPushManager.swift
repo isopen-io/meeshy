@@ -287,9 +287,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // The contains-check and insert are performed in a single MainActor
         // block to prevent a check-then-act race if PushKit ever delivers two
         // pushes concurrently on different threads.
+        //
+        // Reads/writes `self.dedupRing`, not `Self.shared.dedupRing` — this is
+        // an instance delegate method and `dedupRing` is instance state
+        // (injectable for tests). Going through the singleton here would
+        // silently split dedup state across instances the day anything other
+        // than `.shared` is ever registered as the PKPushRegistryDelegate.
         let alreadyReported = MainActor.assumeIsolated {
-            let seen = Self.shared.dedupRing.contains(callId, now: Date())
-            if !seen { Self.shared.dedupRing.insert(callId, now: Date()) }
+            let seen = self.dedupRing.contains(callId, now: Date())
+            if !seen { self.dedupRing.insert(callId, now: Date()) }
             return seen
         }
         if alreadyReported {
@@ -381,7 +387,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     nonisolated static func parseIceServers(_ rawJSON: Any?) -> [IceServer]? {
         guard let str = rawJSON as? String, !str.isEmpty,
               let data = str.data(using: .utf8) else { return nil }
-        guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
+        guard let decoded = JSONDecoder().decodeOrLog([SocketIceServer].self, from: data, field: "VoIP ICE servers", logger: Logger.voipPush) else {
             return nil
         }
         // Credential length guard: TURN credentials from a malformed or hostile
@@ -533,3 +539,9 @@ extension VoIPPushManager {
     }
 }
 #endif
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let voipPush = Logger(subsystem: "me.meeshy.app", category: "voip-push")
+}

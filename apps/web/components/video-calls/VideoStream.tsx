@@ -44,7 +44,12 @@ export function VideoStream({
     }
   }, [stream]);
 
-  // Handle disconnection: show "Disconnected" for 2 seconds, then trigger removal
+  // Handle disconnection: show "Disconnected" for 2 seconds, then trigger removal.
+  // isDisconnected can flip back to false on this SAME instance — the parent
+  // keys VideoStream on the stable participantId and, on a same-session rejoin
+  // (network blip, tab reload) within the grace window, clears the disconnected
+  // flag without remounting. showDisconnected must mirror that reversal instead
+  // of latching, or the overlay/hidden video stay stuck forever after a rejoin.
   useEffect(() => {
     if (isDisconnected) {
       setShowDisconnected(true);
@@ -55,6 +60,8 @@ export function VideoStream({
           onRemove();
         }
       }, 2000);
+    } else {
+      setShowDisconnected(false);
     }
 
     return () => {

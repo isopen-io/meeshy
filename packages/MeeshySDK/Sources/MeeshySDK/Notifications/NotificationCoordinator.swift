@@ -22,6 +22,12 @@ public protocol NotificationWidgetSink: AnyObject {
 
     /// Reload widget timelines. Called whenever the coordinator broadcasts a change.
     func reloadTimelines()
+
+    /// appgroup-01 — wipe de logout : purge les clés widget ET les dossiers de
+    /// staging de l'App Group, puis recharge les timelines. Le contenu du
+    /// compte sortant ne doit ni rester affiché sur l'écran d'accueil ni être
+    /// rejoué (partages différés, blobs NSE, mark-read) sous le compte suivant.
+    func wipeAll()
 }
 
 /// Single source of truth that keeps the iOS badge, the home/lock widgets and the
@@ -75,6 +81,18 @@ public final class NotificationCoordinator: ObservableObject {
     /// `UserPreferencesManager.shared.$notification` au `start()`.
     private let badgeEnabledChanges: AnyPublisher<Bool, Never>?
 
+    /// Conversation actuellement OUVERTE à l'écran. Le gateway émet
+    /// `conversation:unread-updated` à TOUS les destinataires — y compris
+    /// celui qui est en train de lire — et la push silencieuse fait de même :
+    /// sans ce gate, le badge d'icône et le widget gonflent pour la
+    /// conversation affichée, jusqu'à un `read-status:updated` qui peut ne
+    /// jamais venir (lecture exacte scrollée dans l'historique). Miroir du
+    /// gate `ConversationSyncEngine.handleUnreadUpdated`. Injectable pour les
+    /// tests ; défaut = la conversation active du socket messages (posée par
+    /// `NotificationToastManager.onConversationOpened`, nettoyée à la
+    /// fermeture).
+    private let openConversationIdProvider: @MainActor () -> String?
+
     /// Ids of conversations the user has muted. Muted conversations still show
     /// their unread badge on their own row, but MUST NOT nag the app-icon badge
     /// or the widget unread counter — the whole point of muting is to silence
@@ -85,6 +103,15 @@ public final class NotificationCoordinator: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
 
+    /// Vrai dès qu'une donnée de compteur d'origine serveur a été appliquée
+    /// (snapshot `registerConversations` / `reconcileConversationUnreads`, ou
+    /// delta socket `applyConversationUnread`). Tant que c'est faux — réveil
+    /// background à froid : le process vient d'être relancé par une push
+    /// silencieuse et le coordinateur est TOTALEMENT VIDE — `syncNow()` ne
+    /// doit RIEN écrire : `badgeTotal == 0` écraserait l'`aps.badge` que la
+    /// push vient de poser et le miroir App Group que la NSE vient d'écrire.
+    private var hasAuthoritativeSnapshot = false
+
     // MARK: - Init
 
     public init(
@@ -92,13 +119,15 @@ public final class NotificationCoordinator: ObservableObject {
         appGroupSuiteName: String = "group.me.meeshy.apps",
         currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
-        badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil
+        badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil,
+        openConversationIdProvider: @escaping @MainActor () -> String? = { MessageSocketManager.shared.activeConversationId }
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
         self.currentUserIdProvider = currentUserIdProvider
         self.badgeEnabledProvider = badgeEnabledProvider
         self.badgeEnabledChanges = badgeEnabledChanges
+        self.openConversationIdProvider = openConversationIdProvider
     }
 
     // MARK: - Lifecycle
@@ -141,8 +170,13 @@ public final class NotificationCoordinator: ObservableObject {
         inAppNotificationUnread = 0
         let writer = badgeWriter
         Task { await writer.setBadgeCount(0) }
+        // appgroup-01 — wipe App Group complet (clés widget + dossiers de
+        // staging) au lieu du simple unread_count=0 : le contenu du compte
+        // sortant ne doit ni rester affiché sur l'écran d'accueil ni être
+        // rejoué sous le compte suivant. reset() n'est appelé en prod que sur
+        // les chemins de logout, AVANT le flip isAuthenticated.
         appGroupDefaults?.set(0, forKey: Self.unreadCountKey)
-        widgetSink?.publishUnreadCount(0)
+        widgetSink?.wipeAll()
         widgetSink?.reloadTimelines()
         isRunning = false
         logger.info("NotificationCoordinator reset")
@@ -176,6 +210,7 @@ public final class NotificationCoordinator: ObservableObject {
     /// Safe to call on every conversation list mutation: it's idempotent for
     /// known conversations and only mutates state for newly-seen ones.
     public func registerConversations(_ conversations: [MeeshyConversation]) {
+        hasAuthoritativeSnapshot = true
         var didChange = false
         for c in conversations where conversationUnreadCounts[c.id] == nil {
             conversationUnreadCounts[c.id] = c.userState.unreadCount
@@ -196,6 +231,7 @@ public final class NotificationCoordinator: ObservableObject {
     /// tracked keys. Intended for post-reconnect resync or a completed full sync
     /// where the caller has authoritative data.
     public func reconcileConversationUnreads(_ conversations: [MeeshyConversation]) {
+        hasAuthoritativeSnapshot = true
         var counts: [String: Int] = [:]
         for c in conversations {
             counts[c.id] = c.userState.unreadCount
@@ -223,9 +259,13 @@ public final class NotificationCoordinator: ObservableObject {
     }
 
     /// Apply a single conversation unread-count update (from the
-    /// `conversation:unread-updated` socket event).
+    /// `conversation:unread-updated` socket event or the silent push).
+    /// The count of the conversation currently OPEN on screen is clamped to 0:
+    /// the user is looking at it, it can never be "unread" on the app icon.
     public func applyConversationUnread(conversationId: String, unreadCount: Int) {
-        let clamped = max(unreadCount, 0)
+        hasAuthoritativeSnapshot = true
+        let isOpen = conversationId == openConversationIdProvider()
+        let clamped = isOpen ? 0 : max(unreadCount, 0)
         if conversationUnreadCounts[conversationId] == clamped { return }
         conversationUnreadCounts[conversationId] = clamped
         recomputeTotal()
@@ -347,6 +387,9 @@ public final class NotificationCoordinator: ObservableObject {
 
     /// Immediately push badge + widget updates. Exposed for tests and scene-phase callbacks.
     public func syncNow() async {
+        // Réveil background à froid : rien n'a été hydraté, ne rien écraser
+        // (préserve aps.badge et le miroir App Group posés par la push/NSE).
+        guard hasAuthoritativeSnapshot else { return }
         let count = badgeTotal
         // La pref « Badges » ne gate QUE l'icône d'app ; le widget/app-group
         // (surface distincte) conserve le vrai total.

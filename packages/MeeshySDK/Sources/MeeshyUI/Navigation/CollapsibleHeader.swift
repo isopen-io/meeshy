@@ -219,6 +219,15 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// from a readable blur at the top to fully transparent at the bottom edge, so
     /// the scroll content (list rows, etc.) passing under the lower edge stays
     /// visible instead of being clipped by an opaque bar.
+    ///
+    /// Le fondu est un fondu ALPHA du verre : la surface est donc composée hors
+    /// écran, et cette couche est recomposée de façon instable — le header
+    /// clignote entre gris opaque et transparent ~toutes les 1,5 s, sans le
+    /// moindre re-render SwiftUI (mesuré au simulateur iOS 18.2 : 3 bascules en
+    /// 5 s, amplitude 1,2 de luminance ; `.compositingGroup()` divise l'amplitude
+    /// par deux sans supprimer les bascules). Ce dégradé est CONSERVÉ tel quel
+    /// par choix produit — clignotement assumé, ne pas « corriger » en peignant
+    /// le fondu : cela alourdit le bas du header (arbitrage 2026-07-27).
     private var headerBackground: some View {
         Rectangle()
             .fill(.ultraThinMaterial)
@@ -261,7 +270,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel("Retour")
+        .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .module))
     }
 }
 

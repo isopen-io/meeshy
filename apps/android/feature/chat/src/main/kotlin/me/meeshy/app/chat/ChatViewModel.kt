@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.net.URLDecoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -39,10 +42,12 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
@@ -73,6 +78,7 @@ import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
@@ -118,6 +124,17 @@ data class ChatUiState(
     val hasMoreOlder: Boolean = true,
     val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
+    /** The first unread message's id — the "new messages" boundary, latched once
+     * from the initial unread count captured before the conversation is marked
+     * read (null = nothing unread on open). */
+    val firstUnreadMessageId: String? = null,
+    /** Flips true the moment the unread-boundary latch settles — whether it found
+     * a boundary or not. The one-shot open scroll waits for this so it never fires
+     * against an unresolved (possibly empty) window. */
+    val unreadBoundaryResolved: Boolean = false,
+    /** The conversation's encryption posture (e.g. `"e2ee"`), or `null` when the
+     * conversation is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -178,6 +195,17 @@ data class ChatUiState(
     val composerAffordances: ComposerAffordances
         get() = ComposerAttachmentPolicy.affordances(composerPermissions)
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** Whether the end-to-end-encryption notice sits at the top of the list — the
+     * conversation is encrypted, the reader has reached the start of history
+     * ([hasMoreOlder] false), and the cold-start skeleton ([showSkeleton]) is down.
+     * Pure derivation over [EncryptionDisclaimer]. */
+    val showEncryptionDisclaimer: Boolean
+        get() = EncryptionDisclaimer.shouldShow(
+            encryptionMode = encryptionMode,
+            hasOlderMessages = hasMoreOlder,
+            isLoadingInitial = showSkeleton,
+        )
 
     /** The live-location sessions to render as badges, in registry order. The badge
      * self-terminates on expiry, so the raw session list is safe to surface directly. */
@@ -257,6 +285,8 @@ class ChatViewModel @Inject constructor(
     private val mediaUploadQueue: MediaUploadQueue,
     private val mentionSearch: MentionSearch,
     private val anonymousSessionStore: AnonymousSessionStore,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val networkConditionMonitor: NetworkConditionMonitor,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -264,7 +294,20 @@ class ChatViewModel @Inject constructor(
         "ChatViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
     }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
+    /**
+     * An incoming quick-reply/deep-link draft (`meeshy://conversation/{id}?draft=...`),
+     * e.g. from a future Quick Reply widget. Seeded into [_state] below so it wins over
+     * whatever [DraftAutosave.restore] would otherwise restore from [draftStore] — that
+     * function's own idle guard (`currentDraft.isNotBlank() -> null`) already refuses to
+     * clobber a non-empty composer, so no separate precedence rule is needed here; a
+     * blank/absent arg leaves the composer empty exactly as before, letting the stored
+     * draft restore normally.
+     */
+    private val initialDraft: String? = savedStateHandle.get<String>(DRAFT_ARG)
+        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+        ?.takeIf { it.isNotBlank() }
+
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -304,8 +347,34 @@ class ChatViewModel @Inject constructor(
      */
     private val sendingForwards = mutableMapOf<String, String>()
 
+    /**
+     * The conversation's unread count captured from the cache **before** the open
+     * marks it read — the input to the [UnreadMarker] boundary. Null until the
+     * first conversation emission has been read.
+     */
+    private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
     init {
-        viewModelScope.launch { markConversationRead() }
+        // Capture the unread count from the cached conversation BEFORE marking it
+        // read (which zeroes it), then mark read. The first Room emission carries
+        // the current cached value, so this never blocks beyond it.
+        viewModelScope.launch {
+            initialUnreadCount.value =
+                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            markConversationRead()
+        }
+
+        // Latch the "new messages" boundary once, when both the initial unread
+        // count and a non-empty message window are known. A later message arrival
+        // never re-derives it (the boundary is stable for the session).
+        viewModelScope.launch {
+            val count = initialUnreadCount.filterNotNull().first()
+            val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            _state.update {
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+            }
+        }
 
         viewModelScope.launch { loadComposerPermissions() }
 
@@ -363,6 +432,7 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
+                        encryptionMode = conversation.encryptionMode,
                     )
                 }
             }
@@ -397,14 +467,27 @@ class ChatViewModel @Inject constructor(
                     Triple(inputs, hidden, starred.ids)
                 }
                 .combine(activeLanguageOverride) { triple, overrides -> triple to overrides }
-                .collect { (triple, overrides) ->
+                .combine(
+                    privacyPreferencesStore.preferences
+                        .map { it.showReadReceipts }
+                        .distinctUntilChanged(),
+                ) { pair, showReadReceipts -> pair to showReadReceipts }
+                .combine(
+                    networkConditionMonitor.condition
+                        .map { it == NetworkCondition.OFFLINE }
+                        .distinctUntilChanged(),
+                ) { data, isOffline -> data to isOffline }
+                .collect { (data, isOffline) ->
+                    val (pair, showReadReceipts) = data
+                    val (triple, overrides) = pair
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
                     latestMessagesFlow.value = latestMessages
                     _state.update { current ->
                         val next = current.applyResult(
-                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds, overrides,
+                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
+                            overrides, showReadReceipts, isOffline,
                         )
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
@@ -1722,6 +1805,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
+
+        /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
+        const val DRAFT_ARG: String = "draft"
         private const val QUICK_REACTION_COUNT = 8
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
@@ -1761,23 +1847,25 @@ private fun ChatUiState.applyResult(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
+    showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -1821,6 +1909,8 @@ private fun List<LocalMessage>.toBubbles(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
+    showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): List<BubbleContent> {
     val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
         MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
@@ -1849,6 +1939,8 @@ private fun List<LocalMessage>.toBubbles(
             showOriginal = local.message.id in showingOriginal,
             activeLanguageCode = activeLanguageOverride[local.message.id],
             mediaBaseUrl = mediaBaseUrl,
+            showReadReceipts = showReadReceipts,
+            isOffline = isOffline,
         ).copy(
             isStarred = local.message.id in starredIds,
             isFirstInGroup = position.isFirstInGroup,

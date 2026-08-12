@@ -54,6 +54,13 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
+        #if DEBUG
+        // Filet de diagnostic dev : capture la stack des SIGSEGV que
+        // ReportCrash throttle et que MetricKit tronque (stack overflows du
+        // décodeur de métadonnées — cf. ConversationFirstRenderWarmup).
+        CrashStackDumper.install()
+        #endif
+
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
         // `application(_:didFinishLaunchingWithOptions:)` returns, which
@@ -187,6 +194,11 @@ struct MeeshyApp: App {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
+                    // Miroir de l'environnement pour les extensions (NSE +
+                    // partage), qui n'ont pas accès à MeeshyConfig. À poser
+                    // APRÈS restoreEnvironment, sinon on publierait la valeur
+                    // par défaut au lieu de l'environnement restauré.
+                    WidgetDataManager.shared.publishAPIBaseURL()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
                     NotificationToastManager.shared.focusFilterProvider = {
@@ -202,7 +214,7 @@ struct MeeshyApp: App {
                     // appelle ce player à l'apparition d'un toast — l'haptique
                     // vit app-side (le SDK core n'importe pas UIKit).
                     NotificationToastManager.shared.hapticPlayer = {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        HapticFeedback.light()
                     }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
@@ -219,9 +231,12 @@ struct MeeshyApp: App {
                     // monitor would first start at the gate and still report the
                     // optimistic `online` default, defeating the offline fast-path.
                     _ = NetworkMonitor.shared
-                    // Wire StoryOfflineQueue publish handler + network-reconnect
-                    // flush. Idempotent — safe to call on every cold start.
-                    StoryOfflineQueueBootstrap.shared.start()
+                    // `StoryOfflineQueueBootstrap` a été supprimé : son
+                    // gestionnaire de publication ré-enfilait l'item dans la
+                    // MÊME file (`StoryPublishQueue`), et sa vidange sur retour
+                    // réseau doublait l'observateur de connexion que la file
+                    // possède déjà. Le seul gestionnaire légitime est posé par
+                    // `StoryPublishService.setExecutor`, depuis les racines.
                     // Wire the outbox pool so OfflineQueue can persist every
                     // outbox kind (sendMessage, sendReaction, edit/delete,
                     // and the 14 non-message mutations) to SQLite on enqueue.
@@ -236,6 +251,14 @@ struct MeeshyApp: App {
                     // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
+
+                    // Partages que l'extension n'a pas pu envoyer : ils
+                    // rejoignent l'outbox dès qu'il est capable d'enfiler,
+                    // donc juste APRÈS `configure(pool:)` — plus tôt, chaque
+                    // enfilement échouerait sur `poolNotConfigured`. Non
+                    // bloquant pour le boot ; un échec laisse le relais sur
+                    // disque pour la reprise en avant-plan.
+                    Task { await SharePendingSendConsumer.shared.consumeAll() }
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground
@@ -282,7 +305,8 @@ struct MeeshyApp: App {
                                 forwardedFromId: item.forwardedFromId,
                                 forwardedFromConversationId: item.forwardedFromConversationId,
                                 attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId
+                                clientMessageId: item.clientMessageId,
+                                location: item.location
                             )
                             let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request
@@ -397,6 +421,11 @@ struct MeeshyApp: App {
                         // backoff timer armed, so without this it waits for an
                         // incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
+                        // outbox-04 — wake the flusher immediately after any
+                        // social mutation is enqueued online (like/post/
+                        // comment), instead of leaving it `.pending` until the
+                        // next incidental lifecycle event.
+                        await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
                     }
 
                     // Engagement outbox boot: recover orphan .open sessions
@@ -525,14 +554,23 @@ struct MeeshyApp: App {
                     // GRDB on every cold start. The server remains the source of
                     // truth — purged messages can be re-fetched via pagination.
                     // Runs at background priority so it never blocks the UI.
-                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
+                    // une seconde instance relançait le write worker ET le GC
+                    // outbox exhausted à chaque boot. purgeOldMessages n'a
+                    // aucune dépendance à start().
+                    let retentionPersistence = dependencies.messagePersistence
                     Task.detached(priority: .background) {
-                        await retentionPersistence.start()
-                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                        do {
+                            let count = try await retentionPersistence.purgeOldMessages()
                             if count > 0 {
                                 Logger(subsystem: "com.meeshy.app", category: "retention")
                                     .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
                             }
+                        } catch {
+                            // grdb-02 — le try? avaleur a masqué pendant des
+                            // mois un rollback à 100 % de la rétention.
+                            Logger(subsystem: "com.meeshy.app", category: "retention")
+                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
                         }
                     }
                 }
@@ -544,6 +582,7 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
+                        Task { await AuthManager.shared.refreshCurrentUserProfile() }
                         // Only rearm the socket + backfill if we ACTUALLY backgrounded.
                         // A transient .inactive→.active (Control Center, notification
                         // banner, app-switcher peek, Face ID) never suspended the
@@ -577,20 +616,6 @@ struct MeeshyApp: App {
                         // truncated session at next boot (no network flush here —
                         // background time is too scarce, the resume/boot paths flush).
                         Task { await EngagementTracker.shared.checkpointAll() }
-                        // Compact free pages and refresh query-planner stats on
-                        // every background transition. Runs at background priority
-                        // so the system can defer or kill it under memory pressure.
-                        // Capture dbPool before crossing the actor boundary.
-                        let pool = dependencies.dbPool
-                        Task.detached(priority: .background) {
-                            do {
-                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                                try DatabaseMaintenance.runOptimize(on: pool)
-                            } catch {
-                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
-                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
                     case .inactive:
                         break
                     @unknown default:
@@ -703,6 +728,11 @@ struct MeeshyApp: App {
                         // Drop the store subscriptions so an event from user A
                         // can't mutate the store after logout.
                         ConversationStoreSocketBridge.shared.deactivate()
+                        // startup-08 — une BGTask soumise avant le logout ne
+                        // doit pas survivre pour réveiller un appareil
+                        // déconnecté (delta sync 401 en boucle, prefetch sur
+                        // cache vidé).
+                        BackgroundTaskManager.shared.cancelAllScheduled()
                     }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
@@ -968,12 +998,48 @@ enum UILanguageOverride {
 
     private static let cacheKey = "meeshy.ui.language"
     private static let appleLanguagesKey = "AppleLanguages"
+    private static let explicitKey = "meeshy.ui.language.explicit"
+
+    /// Sentinelle « suivre la langue principale » — un choix, pas une langue.
+    nonisolated static let automaticCode = "auto"
+
+    /// Langues proposées dans les Réglages, hors sentinelle. Dérivée de ce que
+    /// l'app sait réellement afficher : la liste des choix ne peut pas
+    /// s'écarter des catalogues.
+    nonisolated static var selectableCodes: [String] { supportedUICodes }
+
+    /// Langue d'affichage retenue : le choix explicite de l'auteur s'il est
+    /// posé ET livré, sinon la langue principale du compte.
+    ///
+    /// Le repli n'est pas un détail. `AppearancePreferences.interfaceLanguage`
+    /// vaut « en » par défaut pour tout le monde : faire primer cette
+    /// préférence telle quelle aurait basculé en anglais l'interface de chaque
+    /// utilisateur qui n'y a jamais touché. Le choix explicite vit donc à part,
+    /// et son absence rend la main à la langue principale.
+    nonisolated static func resolvedCode(explicit: String?, fallback: String?) -> String? {
+        if let explicit, explicit != automaticCode, let code = normalized(explicit) {
+            return code
+        }
+        return normalized(fallback)
+    }
+
+    /// Choix explicite de langue d'interface. `nil` = automatique.
+    static var explicitChoice: String? {
+        get { UserDefaults.standard.string(forKey: explicitKey) }
+        set {
+            if let newValue, newValue != automaticCode, normalized(newValue) != nil {
+                UserDefaults.standard.set(newValue, forKey: explicitKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: explicitKey)
+            }
+        }
+    }
 
     /// Normalise un code de langue vers un code UI supporté, ou `nil`.
     /// - Comparaison insensible à la casse contre `supportedUICodes`.
     /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
     /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
-    static func normalized(_ raw: String?) -> String? {
+    nonisolated static func normalized(_ raw: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         let lower = trimmed.lowercased()
@@ -995,10 +1061,12 @@ enum UILanguageOverride {
     }
 
     /// Applique l'override au tout début du lancement (à appeler depuis
-    /// `MeeshyApp.init()`). No-op si le cache est absent/non-supporté.
+    /// `MeeshyApp.init()`). No-op si rien n'est choisi ni mis en cache.
     static func applyIfNeeded() {
-        guard let cached = normalized(UserDefaults.standard.string(forKey: cacheKey)) else { return }
-        UserDefaults.standard.set([cached], forKey: appleLanguagesKey)
+        guard let code = resolvedCode(explicit: explicitChoice,
+                                      fallback: UserDefaults.standard.string(forKey: cacheKey))
+        else { return }
+        UserDefaults.standard.set([code], forKey: appleLanguagesKey)
     }
 }
 

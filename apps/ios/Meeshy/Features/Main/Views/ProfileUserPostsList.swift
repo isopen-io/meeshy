@@ -115,6 +115,8 @@ struct ProfileUserPostsList: View {
 
     @StateObject private var viewModel: ProfileUserPostsViewModel
     @State private var shareableLink: ShareableLink?
+    /// Poste (ou réel) en édition via le menu « … » — parité avec `FeedView`.
+    @State private var editingPost: FeedPost?
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
 
@@ -154,6 +156,7 @@ struct ProfileUserPostsList: View {
                     card(for: post)
                         .onAppear { viewModel.trackImpression(post.id) }
                 }
+                .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
                     // Infinite-scroll sentinel — reveals more cached cards first
@@ -177,6 +180,20 @@ struct ProfileUserPostsList: View {
             ShareSheet(activityItems: [link.url])
                 .presentationDetents([.medium, .large])
         }
+        .sheet(item: $editingPost) { post in
+            EditPostSheet(
+                originalContent: post.content,
+                originalLanguage: post.originalLanguage,
+                originalType: post.type,
+                media: post.media.map { EditablePostMedia($0) },
+                originalLocation: post.location,
+                isRepost: post.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                },
+                onDismiss: { editingPost = nil }
+            )
+        }
     }
 
     // MARK: - Card routing (reel vs post)
@@ -191,7 +208,8 @@ struct ProfileUserPostsList: View {
     }
 
     private func reelCard(_ post: FeedPost) -> some View {
-        ReelFeedCard(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCard(
             post: post,
             // No autoplay coordinator in the profile list — the card shows its
             // poster (PAUSED); tapping the media opens the immersive viewer where
@@ -214,14 +232,19 @@ struct ProfileUserPostsList: View {
             onShare: { id in Task { await share(id) } },
             // We are already inside this user's profile sheet — tapping the
             // (reposted) author is a no-op here to avoid stacking sheets.
-            onTapAuthor: { _ in }
+            onTapAuthor: { _ in },
+            onEdit: isOwnPost ? { post in editingPost = post } : nil,
+            onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
+            onReport: !isOwnPost ? { id in Task { await viewModel.report(id) } } : nil,
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
         )
         .equatable()
         .padding(.horizontal, 12)
     }
 
     private func postCard(_ post: FeedPost) -> some View {
-        FeedPostCard(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return FeedPostCard(
             post: post,
             isLiked: viewModel.isLiked(post),
             displayLikeCount: viewModel.likeCount(post),
@@ -247,9 +270,12 @@ struct ProfileUserPostsList: View {
                 // throttled to once per hour per user+post (shared with open).
                 recordView(post.id)
             },
-            onReport: { id in
+            onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
+            onReport: !isOwnPost ? { id in
                 Task { await viewModel.report(id) }
-            }
+            } : nil,
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil,
+            onEdit: isOwnPost ? { post in editingPost = post } : nil
         )
         .equatable()
     }
@@ -420,10 +446,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
 
-    // Impression batching — mirrors FeedView (dedup per session, 3s flush).
-    private var pendingImpressionIds: Set<String> = []
-    private var recordedImpressionIds: Set<String> = []
-    private var impressionTask: Task<Void, Never>?
+    /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
+    /// relance) portés par `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "profile")
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -626,6 +651,56 @@ final class ProfileUserPostsViewModel: ObservableObject {
         FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
     }
 
+    // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)
+
+    func deletePost(_ postId: String) async {
+        let snapshot = posts
+        posts.removeAll { $0.id == postId }
+        do {
+            try await postService.delete(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+        } catch {
+            posts = snapshot
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await postService.pinPost(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+        }
+    }
+
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+        guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[idx]
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
+        posts[idx] = optimistic
+        do {
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[newIdx] = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
+            }
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+        } catch {
+            if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[rollbackIdx] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+        }
+    }
+
     // MARK: - On-demand translation (mirrors FeedViewModel)
 
     /// Requests a translation for `postId` into `language`. The computed
@@ -674,31 +749,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Impressions (batched, source "profile")
 
     func trackImpression(_ postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
-        scheduleImpressionFlush()
+        impressions.record(postId)
     }
 
-    private func scheduleImpressionFlush() {
-        impressionTask?.cancel()
-        impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.flushImpressions()
-        }
-    }
-
-    private func flushImpressions() async {
-        let batch = Array(pendingImpressionIds)
-        guard !batch.isEmpty else { return }
-        pendingImpressionIds.subtract(batch)
-        do {
-            try await postService.recordImpressions(postIds: batch, source: "profile")
-            // Mark recorded ONLY on success so a failed flush leaves the ids
-            // eligible to re-enqueue when the card next appears.
-            recordedImpressionIds.formUnion(batch)
-        } catch {
-            ProfileUserPostsViewModel.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-        }
+    /// À appeler quand la liste disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 }

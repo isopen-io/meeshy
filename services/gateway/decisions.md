@@ -1,5 +1,80 @@
 # Decisions - services/gateway (Fastify API Gateway)
 
+## 2026-08-10 : Le Prisme s'applique à l'APERÇU de la liste, et c'est au serveur de le rendre possible
+
+**Statut** : Accepté
+
+**Contexte** : le principe produit dit « le prisme s'applique à TOUT le contenu — messages texte, transcriptions audio, métadonnées, **previews** ». La ligne de liste de conversations était la seule surface où il ne s'appliquait pas, et pas faute de client : le SDK iOS porte `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` avec sa batterie de douze témoins (ordre de préférence, refus explicite de retomber sur une traduction quelconque), et la facette `LastMessageFacet.translations` qui rend l'écriture des onze champs `lastMessage*` atomique.
+
+Ces deux surfaces ne recevaient **jamais** de données par le chemin REST. Le `select` du dernier message dans `GET /conversations` ne chargeait ni `Message.translations` ni `Message.originalLanguage` ; `APIConversation` n'avait aucun champ où les décoder. La documentation du champ SDK l'écrivait noir sur blanc — « when the gateway starts shipping these in `/conversations` it will be wired through the API → domain converter; until then the field stays `nil` » — et renvoyait à un contournement applicatif (`ConversationListViewModel.attachLastMessageTranslations`) qui **n'existe nulle part dans le dépôt**.
+
+Le chemin socket, lui, est câblé (`ConversationSyncEngine.previewTranslations(from:)` dérive la carte du `message:new` reçu) mais ne comble rien : les traductions arrivent **après** le message, par `message:translation`, si bien que l'`APIMessage` du `message:new` les porte rarement. Au démarrage à froid comme au rafraîchissement de liste, chaque ligne restait donc dans la langue de l'expéditeur.
+
+**Décision** :
+- **Les deux champs vivent au niveau CONVERSATION**, pas dans `lastMessage` : `lastMessageOriginalLanguage` et `lastMessageTranslations`. C'est la clé que `MeeshyConversation` décode depuis toujours pour son cache disque, et la carte compacte `{ langue: aperçu }` n'a pas la forme de `Message.translations` (un tableau de `MessageTranslation`) — deux formes sous un même nom auraient dérivé.
+- **La carte est restreinte aux langues du LECTEUR**, résolues une fois par page via `resolveUserLanguagesOrdered` (seule autorité du dépôt sur l'ordre du Prisme), depuis l'utilisateur déjà chargé et mis en cache par le middleware d'auth — **aucune requête supplémentaire** sur ce hot path. Servir les N langues de la conversation multiplierait le poids de la liste pour un champ dont le client n'affiche qu'UNE valeur.
+- **Quatre exclusions, chacune fermant un cas distinct** (`routes/conversations/utils/last-message-preview.ts`) : hors prisme du lecteur ; langue d'origine (elle EST déjà `lastMessage.content`) ; traduction **chiffrée** (`isEncrypted` — son `text` est un cryptogramme, l'afficher mettrait du base64 dans la liste) ; `text` non exploitable (la colonne est un JSON libre côté Mongo).
+- **`null`, jamais `{}`, quand il ne reste rien** : le résolveur client doit pouvoir retomber sur l'original, ce qui EST la règle #3 du Prisme.
+- **Le plafond d'aperçu s'applique aux traductions comme au contenu.** `truncateMessagePreview` et son cap déménagent dans le même module que le nouveau constructeur : la troncature de l'aperçu a désormais un propriétaire unique, et une traduction de 5 000 caractères ne peut plus contourner un plafond posé pour le seul `content`.
+- **Le schéma de réponse déclare les deux champs.** `fast-json-stringify` retire en silence tout ce qu'il ne connaît pas — le même piège a déjà coûté `customName`, `reaction` et `_count`. `lastMessageTranslations` a des clés dynamiques, donc `additionalProperties: { type: 'string' }` : sans lui, un schéma objet sans `properties` sérialise `{}`, panne plus discrète encore que le strip.
+
+**Alternatives rejetées** :
+- **Renvoyer `translations` brut dans `lastMessage` via le spread** : le blob JSON complet (une entrée par langue de la conversation, chacune avec modèle, score, champs de chiffrement) à chaque ligne de liste, pour un champ dont le client lit une chaîne. Le spread est au contraire **déstructuré** pour que ces deux colonnes ne fuient pas.
+- **Une résolution serveur qui renverrait DÉJÀ l'aperçu dans la langue du lecteur** (un seul champ `lastMessagePreview` traduit) : elle détruirait l'information « ceci est une traduction », que le client signale par un indicateur discret, et elle ferait diverger `lastMessagePreview` de `lastMessage.content` sans que rien ne le dise.
+- **Corriger côté client seul** (rejouer les traductions depuis le cache de messages) : c'est le contournement que la doc SDK annonçait et que personne n'a écrit. Il ne peut rien au démarrage à froid, où le cache est vide — c'est-à-dire dans le cas qui est cassé.
+- **Étendre le même traitement à `emitConversationPreviewUpdate` dans ce lot** : ce fanout adresse N participants dont les prismes diffèrent ; le faire correctement demande un payload par destinataire, question de conception distincte. Nommé en suite, pas bâclé ici.
+
+**Conséquences** :
+- **La liste de conversations parle enfin la langue du lecteur dès le premier chargement**, sur iOS comme sur toute surface qui consommera les deux champs.
+- **Le poids de la liste augmente de la seule carte utile** : au plus une entrée par langue du prisme du lecteur (4 au maximum), chacune plafonnée à 300 points de code.
+- **Ce que la décision n'assure PAS** : le fanout temps réel `conversation:updated` (édition/suppression) n'emporte toujours pas le prisme, donc une ligne rafraîchie par ce chemin retombe sur l'original jusqu'à la synchro suivante ; `routes/conversations/search.ts` construit son propre `lastMessage` à la main et reste hors prisme ; le web rend encore `lastMessage.content` brut (`formatLastMessage`) et devra consommer les deux nouveaux champs.
+
+**Tests** : 18 neufs — 12 sur la source (`__tests__/unit/routes/conversations/last-message-prisme.test.ts` : appariement de langue, casse, exclusion de l'original, exclusion du chiffré, plafond, paire de surrogates, `null` vs `{}`, JSON de forme inattendue), 6 sur la route (`conversation-core.test.ts`, dont la forme du `select`), 2 sur le schéma partagé (`api-schemas.test.ts`), 6 côté SDK (`ConversationListPrismeWiringTests.swift`). Le double de `@meeshy/shared/utils/conversation-helpers` garde l'implémentation RÉELLE de `resolveUserLanguagesOrdered` : la doubler aurait rendu les témoins de prisme tautologiques. Sondes de fidélité en sept temps — `select` amputé : 1 rouge (le seul témoin qui puisse le voir, les autres injectent la donnée) ; exclusion de l'original retirée : 1 ; garde `isEncrypted` retirée : 1 ; `{}` au lieu de `null` : 3 ; troncature retirée : 2 ; prisme du lecteur ignoré : **5** ; les deux champs retirés de la ligne (le défaut d'origine) : **5**.
+
+
+## 2026-08-10 : Une suppression de commentaire annonce les ids qu'elle emporte, pas sa seule cible
+
+**Statut** : Accepté
+**Contexte** : `PostCommentService.deleteComment` soft-delete le sous-arbre entier (cible + descendants, arbitrairement profond) et décompte `commentCount` d'autant — le retrait des notifications porte déjà sur cette même liste. Mais la valeur de retour ne disait que `{ success: true }` : la liste mourait dans la méthode. Son seul appelant, la route `DELETE /posts/:postId/comments/:commentId`, n'avait donc rien d'autre à mettre dans `broadcastCommentDeleted` que le `commentId` reçu en paramètre. Les réponses du commentaire supprimé restaient affichées chez tout client qui les avait dépliées — **et aucun refetch ne les enlevait** : `getComments` filtre `parentId: null`, le parent supprimé n'est plus rendu, donc `getReplies` n'est plus jamais appelé pour elles. Seul un rechargement complet nettoyait le fil. Le compteur, lui, était juste (`commentCount` voyage en ABSOLU) : l'écran affichait donc un total en désaccord visible avec ses propres lignes.
+
+**Décision** :
+- `deleteComment` rend `deletedCommentIds` — **exactement** la liste passée au soft-delete, calculée une seule fois et réutilisée par le décompte, le retrait des notifications et l'annonce. Pas de seconde dérivation : après le soft-delete, reconstruire le sous-arbre demanderait de relire des lignes que `NOT_DELETED` masque désormais.
+- `CommentDeletedEventData.deletedCommentIds` est **optionnel** (`readonly string[] | undefined`). Additif par construction : iOS et Android gardent le comportement d'avant sans changer une ligne, et pourront l'adopter à leur rythme.
+- Un lecteur du champ **doit** se replier sur `[commentId]` quand il est absent. C'est le cas du rejeu idempotent (`onDuplicate` de `withMutationLog`), qui ne rend qu'un `{ id }`.
+
+**Alternatives rejetées** :
+- **Reconstruire le sous-arbre dans la route** : impossible après coup sans requête dédiée ignorant `deletedAt`, et ce serait une seconde dérivation de la même règle — la classe de bug que `posts/ephemeralPosts.ts` a déjà coûté un cycle à refermer.
+- **Émettre un `comment:deleted` par id retiré** : N broadcasts là où un suffit, chacun portant un `commentCount` identique et absolu, donc N−1 patchs redondants sur chaque client.
+- **Se replier sur une liste vide plutôt que `[commentId]`** : ferait survivre la cible elle-même à l'écran sur le chemin de rejeu — une régression franche par rapport à l'existant.
+- **Rendre le champ obligatoire** : forcerait iOS et Android à bouger dans le même cycle pour un gain nul chez eux tant qu'ils ne le lisent pas.
+
+**Conséquences** :
+- Le payload grossit du nombre de descendants — borné par la profondeur réelle d'un fil, et seulement sur l'événement de suppression.
+- Le web purge tous ses caches de commentaires du post en une passe (liste principale ET sous-caches de réponses, que le préfixe de clé `posts.comments(postId)` couvre déjà).
+- **iOS et Android ne montraient pas ce défaut** — vérifié en lisant leur code, pas supposé. Chacun compense localement : iOS `PostDetailViewModel` fait `repliesMap[id] = nil` + `expandedThreads.remove(id)` sur chaque `comment:deleted`, Android `PostCommentsViewModel.onCommentDeleted` appelle `CommentRepliesState.removedThread(commentId)`. Deux re-dérivations indépendantes, dans deux langages, d'une liste que le serveur connaissait et taisait. Le web était le seul client sans cette compensation — d'où un défaut visible là seulement. `deletedCommentIds` rend ces traversées locales inutiles : elles pourront céder la place à un retrait autoritatif, ce qui est le vrai gain de fond de cette décision.
+
+**Tests** : +3 `PostCommentService.test.ts` (la liste rendue = la liste soft-deletée, cible seule sur une feuille, sous-arbre profond), +2 `routes/posts/comments.test.ts` (le broadcast porte la liste ; repli sur la cible au rejeu), +2 web `use-post-socket-cache-sync.test.tsx` (le sous-arbre annoncé quitte les caches de réponses ; repli sans liste). Trois sondes de fidélité, chacune isolant exactement ses témoins.
+
+## 2026-07-31 : Le curseur read/delivered ordonne par `createdAt`, plus par chaine ObjectId
+
+**Statut** : Accept
+**Contexte** : La garde de fraicheur atomique de `MessageReadStatusService._advanceCursor` (et son jumeau `isStaleCursorMessageId` du chemin mark-unread, `routes/conversations/messages.ts`) comparait deux ObjectId MongoDB par ordre **lexicographique de chaine hex** comme proxy de chronologie. Un ObjectId n'encode la date de creation qu'a la **seconde** (4 premiers octets) ; les 5 octets suivants sont un aleatoire **par process**. Deux messages crees dans la meme seconde sur des process gateway **differents** (scale horizontal) trient donc par chaine dans un ordre **sans rapport** avec la vraie recence. Consequence : la double coche de l'auteur pouvait se figer sur un message anterieur, voire **reculer** le curseur vers un message plus ancien (resurrection de non-lus) — transitoire, self-healing au prochain recu d'une seconde ulterieure, mais reel.
+
+**Decision** :
+- Deux champs `ConversationReadCursor.lastReadMessageCreatedAt` / `lastDeliveredMessageCreatedAt` (`DateTime?`) memorisent le `createdAt` du message pointe. La garde ordonne desormais par ce `createdAt` (precision milliseconde, stable inter-process) via `buildCursorFreshnessGuard` (fonction pure, exportee et testee en isolation). L'ordre ObjectId n'est conserve qu'en **repli** pour les curseurs legacy (`createdAt` null tant qu'une avance ne l'a pas renseigne) et pour un message introuvable (supprime entre l'envoi et le recu).
+- Le pair `(id, createdAt)` doit rester coherent chez **tous** les ecrivains du curseur : le chemin mark-unread (`upsert`) ecrit maintenant `lastReadMessageCreatedAt` en meme temps que `lastReadMessageId`. Un `createdAt` laisse perime aurait fausse la garde et rejete des avances de lecture legitimes.
+
+**Alternatives rejetees** :
+- **Comparer sur `lastReadAt`/`lastDeliveredAt` (temps de traitement serveur)** : ce n'est pas le temps du message ; deux recus traites a des instants proches ne refletent pas l'ordre des messages.
+- **Lire l'etat courant puis decider en memoire** : reintroduit le TOCTOU que la garde atomique dans le WHERE de l'`updateMany` ferme deja (deux appels concurrents liraient le meme curseur non avance).
+- **Ajouter un departage ObjectId a `createdAt` egal (meme milliseconde)** : rejete pour la simplicite ; une egalite stricte au milliseconde inter-process est bien plus rare que la collision a la seconde d'aujourd'hui, et se resout au recu suivant (stall transitoire, jamais un recul).
+
+**Consequences** :
+- Additif MongoDB : les curseurs existants ont `createdAt` null et empruntent le repli ObjectId jusqu'a leur premiere avance, qui renseigne le champ. Aucune migration/backfill.
+- Une lecture `message.findUnique({ select: { createdAt } })` supplementaire par avance de curseur (chemin d'ecriture d'arriere-plan, requete par `_id` — la moins couteuse). Acceptable.
+
+**Tests** : +5 `MessageReadStatusService.test.ts` (helper pur + inversion meme-seconde inter-process : ni recul ni stall), +2 `messages-routes.test.ts` (staleness mark-unread ordonnee par createdAt + ecriture coherente du pair). Suite gateway complete verte (565 suites).
+
 ## 2025-01: Framework - Fastify 5.7
 **Statut**: Accept
 **Contexte**: Gateway haute performance pour 100k+ messages/seconde
@@ -159,3 +234,587 @@ Le pattern Message/Comment etabli en Phase 1+2 (table dediee + `currentUserReact
 
 **Tests** : 9 tests route gateway (`__tests__/routes/delivery-receipt.test.ts`) — curseur avance + broadcast, 404 conversation/message, 403 non-membre, message cross-conversation, message supprime, `showReadReceipts` off (curseur sans broadcast), no-op self-sender, 400 messageId invalide. Cote iOS, l'extension NSE n'a pas de cible de tests dans le repo (comme `NSEDataSync.syncMessage` / `NSEDecryptor` pre-existants) ; verification via `./apps/ios/meeshy.sh build` (macOS requis).
 
+
+## 2026-08-08 : Les mentions d'un post editee sont RECONCILIEES, pas rejouees
+
+**Contexte** : `PUT /posts/:postId` reextrayait les `@handle` du contenu edite, resolvait les
+usernames, puis **recreait** les lignes `PostMention` et renotifiait — son commentaire l'admettait
+(`re-fires all; idempotent via P2002 swallow`). L'idempotence citee ne couvre que la persistance :
+`createPostMentions` avale les P2002, mais `createPostMentionNotificationsBatch` n'a aucune memoire
+de qui a deja ete prevenu. Deux consequences.
+
+D'une part, **chaque edition repingeait tous les mentionnes**. Le bloc ne comparait pas le contenu
+a son etat precedent : dix corrections de frappe valaient dix `user_mentioned` a quelqu'un nomme
+une seule fois, et modifier la seule VISIBILITE d'un post repingeait tout le monde. Le garde-fou de
+debit (`MAX_MENTIONS_PER_MINUTE` par paire emetteur/destinataire) ne couvre qu'une fenetre d'une
+minute et ne rattrape donc rien.
+
+D'autre part, **les partants n'etaient jamais retires**. La route creait, jamais ne supprimait :
+editer « bravo @alice » en « bravo @bob » ajoutait Bob et laissait Alice mentionnee a vie. Ces
+lignes alimentent l'affinite de recommandation des reels (`PostFeedService.getMentionsByPost`,
+`getReelSeed`) — un post recommande pour une mention qu'il ne porte plus.
+
+Meme couple de defauts que celui corrige cote messages par `replaceMessageMentions` (2026, cycle
+22) ; le domaine social n'en avait pas herite.
+
+**Decision** : nouvelle unite `services/posts/postMentions.ts`, miroir structurel de
+`services/messaging/messageMentions.ts`, avec deux points d'entree publics que les routes
+appellent a la place du bloc inline :
+- `resolvePostMentions` (creation) : court-circuit sans cout quand le contenu ne porte aucun `@`,
+  **aucune lecture de `PostMention`** (un post neuf n'a pas d'ensemble precedent), tous les
+  mentionnes sont des entrants par construction.
+- `reconcilePostMentions` (edition) : **pas** de court-circuit — un contenu qui ne nomme plus
+  personne doit effacer ses lignes ; supprime les seuls partants, cree les seuls entrants, et ne
+  notifie que `newlyMentionedUserIds`.
+
+Les deux sont best-effort et ne levent jamais (`onError` laisse l'appelant journaliser dans le
+contexte de sa requete). En panne — service absent, ensemble precedent illisible, resolution en
+echec — la reconciliation **s'abstient de tout ecrire** et rend `reconciled: false` : preserver une
+mention perimee vaut mieux que detruire une mention vivante. La notification est **detachee**
+(appelee dans la continuation, jamais attendue) : elle traverse push, socket et e-mail, et rien de
+cela n'a a retarder la reponse d'une publication.
+
+**Alternatives rejetees** :
+- **Factoriser avec `messageMentions`** : les deux domaines ne partagent ni la table (`PostMention`
+  vs `Mention`), ni la validation (un post n'a ni participants ni regle « conversation directe »),
+  ni le champ denormalise (`Message.validatedMentions` n'a pas d'equivalent sur `Post`). Seule la
+  FORME est commune ; une abstraction sur si peu de substance aurait coute plus qu'elle ne rend.
+- **Dedupliquer cote `NotificationService`** (ne pas creer un `user_mentioned` deja emis pour la
+  paire post/destinataire) : deplace la connaissance de « qui etait deja mentionne » hors de
+  l'endroit qui la detient, et ne repare pas D2 — les lignes des partants resteraient.
+- **Purger puis recreer toutes les lignes** : plus simple, mais detruit l'ensemble precedent, donc
+  rend « qui est entrant » insoluble — c'est precisement ce qui forcait a renotifier tout le monde.
+
+**Consequences** :
+- Le chemin d'edition attend desormais la reconciliation (jusqu'a trois aller-retours : lecture du
+  precedent, `deleteMany` si partants, creation des entrants) avant de repondre. Les editions de
+  post sont rares devant les creations, et l'ordre est requis par la correction.
+- La creation attend la persistance des lignes, la ou elle etait en fire-and-forget. Un seul
+  aller-retour de plus, et `createPostMentions` ne rejette pas (`Promise.allSettled` interne).
+- Les `PostMention` perimees **deja ecrites** subsistent : le correctif ne vaut que pour les
+  editions a venir. Reparable par script avec acces base, sur le patron de
+  `repair-mention-user-ids.ts`.
+- Les commentaires n'ont pas de route d'edition : rien a reconcilier cote `CommentMention`
+  aujourd'hui. Le jour ou elle apparait, elle doit naitre avec `reconcilePostMentions` pour jumeau.
+
+**Tests** : 16 tests d'unite (`__tests__/unit/services/posts/postMentions.test.ts`, ecrits en RED
+avant l'implementation) + 2 tests de regression au niveau route (`posts-core-notifications.test.ts`)
+qui verrouillent exactement les deux defauts : aucun renvoi de notification a un mentionne deja
+nomme, et `deleteMany` sur les seuls partants. Suite gateway complete verte (603 suites,
+15 655 tests).
+
+## Le fil d'un post herite de l'audience de son post — deux verdicts nommes (cycle 29)
+
+**Contexte** : `postVisibility.ts` portait depuis la decision 2026-07-08 une asymetrie ECRITE
+mais inapplicable a un objet unitaire : le filtre de LISTE (`buildPostVisibilityOrFilter`, feed +
+post unique) admet amis ∪ contacts DM, tandis que `canUserViewPost` — decrit dans le meme fichier
+comme « ce qui garde REAGIR / COMMENTER » — reste amis stricts. Aucune route de commentaire
+n'appliquait ni l'une ni l'autre : les six routes de `routes/posts/comments.ts`, le like/unlike
+REST du post et les quatre handlers de reaction socket ne consultaient jamais `Post.visibility`. Le post etait pourtant
+protege, `post:join` gardait deja la room, et `CommentReactionHandler` portait un
+`_canUserViewPost` prive **que rien n'appelait**.
+
+**Decision** : quatre primitives dans `postVisibility.ts`, pas un module de plus.
+
+| primitive | question | audience |
+|---|---|---|
+| `loadPostAcl` | quelle est la tranche ACL de ce post ? | — (`null` si absent OU supprime) |
+| `loadCommentPostAcl` | ... du post PORTANT ce commentaire ? | — (id d'URL jamais cru) |
+| `canUserConsumePost` | peut-il LIRE le fil ? | amis ∪ contacts DM (celle du feed) |
+| `canUserInteractWithPost` | peut-il ECRIRE / REAGIR ? | amis stricts |
+
+Les deux verdicts ne different que par `canUserViewPost(..., { includeDirectContacts })`. C'est le
+point : l'asymetrie devient EXECUTABLE au lieu de rester un commentaire, et un point d'entree
+choisit son verdict en le nommant plutot qu'en reglant un booleen.
+
+**Alternatives rejetees** :
+- **Un seul verdict (amis stricts) pour tout le fil** : plus simple, mais un contact DM non-ami a
+  qui le feed montre deja une story `FRIENDS` recevrait un 404 sur ses commentaires. Ce n'est pas
+  une garde, c'est une regression pour un lecteur legitime.
+- **Reutiliser `PostService.getPostById`** pour garder la lecture : ramene tout le `postInclude`
+  (medias, auteur, compteurs, reactions) la ou trois champs suffisent, sur un chemin de lecture
+  chaud.
+- **Materialiser la liste de contacts DM** (`getDirectConversationContactIds`) pour trancher un
+  seul acces : cout proportionnel au carnet d'adresses. `doUsersShareDirectConversation` est le
+  pendant **pairwise**, deux requetes bornees — exactement le rapport que `doUsersShareCommunity`
+  entretient avec `getCommunityCoMemberIds`.
+- **Faire confiance au `:postId` du chemin** (ou du payload socket) sur les routes adressant leur
+  cible par `commentId` : un appelant annoncerait le post public de son choix tout en visant le fil
+  d'un post prive. Le post est resolu DEPUIS le commentaire.
+- **Ne garder que le chemin socket** : `likePost` / `PostReactionService.addReaction` ne verifient
+  eux non plus que l'existence du post. Garder l'un sans l'autre ferait dependre l'ACL du
+  TRANSPORT — un client refuse sur `post:reaction-add` reussirait en repassant par
+  `POST /posts/:postId/like`.
+- **Repondre `403`** : distinguer « interdit » d'« inexistant » fait de la route un oracle
+  d'existence de posts prives. `404` partout, et `null` indistinct entre absent, supprime et
+  invisible — doctrine deja tenue par `recordMediaDownloads`.
+
+**Consequences** :
+- Une requete bornee de plus par appel sur le fil. Cas dominant (post `PUBLIC`) : aucune lecture de
+  graphe ensuite. `FRIENDS`/`EXCEPT` : une requete d'amitie, et le contact DM n'est consulte qu'en
+  dernier recours. `EXCEPT` court-circuite sur sa liste noire avant toute lecture de graphe.
+- **Un utilisateur qui perd l'acces a un post ne peut plus retirer une reaction qu'il y avait
+  laissee.** Contrepartie assumee : elle lui est de toute facon invisible, et une ACL qui depend du
+  sens du geste est un footgun. Seul l'auteur peut encore faire disparaitre le post.
+- Les harnais de test doivent DECLARER leur audience (15 fichiers). C'est voulu : un double qui
+  n'expose pas la tranche ACL echoue au lieu de rendre un verdict par defaut.
+- `doUsersShareCommunity` prend desormais `CommunityVisibilityPrisma` au lieu de `PrismaClient`
+  entier — la garde n'a plus a se faire passer un client complet par assertion.
+
+**Tests** : 51 tests neufs, RED observe a chaque etape (24 rouges avant implementation) —
+`__tests__/unit/services/posts/postThreadAccess.test.ts` (22), `.../routes/posts/comments-audience.test.ts`
+(17), `.../routes/posts/interactions-audience.test.ts` (8), plus 9 cas d'audience dans les deux
+suites de handlers socket. Suite gateway complete verte (608 suites, 15 740 tests), `tsc --noEmit`
+propre.
+
+## 2026-08-09 : Défauts `audioTranslationEnabled`/`ttsEnabled` alignés sur le texte (false → true)
+
+**Contexte** : `AudioPreferenceSchema`/`AUDIO_PREFERENCE_DEFAULTS` (`packages/shared/types/preferences/audio.ts`) avaient `transcriptionEnabled`/`textTranslationEnabled` par défaut `true`, mais `audioTranslationEnabled`/`ttsEnabled` par défaut `false` — une asymétrie sans équivalent côté texte. `ConsentValidationService.getConsentStatus` porte son **propre** repli codé en dur, indépendant du schema partagé (`boolPref(audioPrefs.audioTranslationEnabled, false)` / `boolPref(audioPrefs.ttsEnabled, false)`) — changer seulement le schema n'aurait donc eu aucun effet observable. Or `processAudioAttachment` (`MessageTranslationService.ts`) vide silencieusement `targetLanguages` quand `!canGenerateTranslatedAudio`, et `canGenerateTranslatedAudio = translatedAudioGenerationEnabled && canTranslateAudio` avec `canTranslateAudio = audioTranslationEnabled && canTranscribeAudio && canTranslateText`. Tant qu'aucun des deux booléens n'avait été explicitement écrit par le client (`PATCH /me/preferences/audio`), aucune langue traduite n'était jamais générée pour personne, sans que l'expéditeur ni le destinataire ne le sache — une régression silencieuse par rapport au principe Prisme (l'audio doit être traduit automatiquement, comme le texte).
+
+**Décision** : flip des deux défauts à `true`, aux DEUX endroits (le schema seul ne suffit pas puisque `ConsentValidationService` ne le dérive pas) :
+- `packages/shared/types/preferences/audio.ts` : `AudioPreferenceSchema` (`audioTranslationEnabled`/`ttsEnabled` → `z.boolean().default(true)`) et `AUDIO_PREFERENCE_DEFAULTS` (idem).
+- `services/gateway/src/services/ConsentValidationService.ts` : `boolPref(audioPrefs.audioTranslationEnabled, false)` → `boolPref(audioPrefs.audioTranslationEnabled, true)`, idem pour `ttsEnabled`.
+
+**Aucune migration nécessaire.** `boolPref` ne retombe sur le défaut QUE quand le champ JSON est absent (`typeof value === 'boolean'` faux) — jamais persisté, calculé à chaque lecture. Un utilisateur qui a explicitement désactivé (`false` écrit via `PATCH /me/preferences/audio`) garde son choix intact ; seul celui qui n'a jamais touché au réglage bascule sur le nouveau défaut, immédiatement après déploiement, sans backfill.
+
+**Le consentement voix de base reste inchangé.** `canTranscribeAudio = audioTranscriptionEnabled && hasVoiceDataConsent` — `hasVoiceDataConsent` (dérivé de `voiceDataConsentAt`, un consentement RGPD explicite) reste un gate distinct, non touché par ce flip. `audioTranslationEnabled`/`ttsEnabled` ne retirent qu'une couche d'opt-in redondante AU-DESSUS d'un consentement déjà accordé par ailleurs ; un utilisateur n'ayant jamais donné son consentement voix reste bloqué exactement comme avant.
+
+**Alternatives rejetées** :
+- **Ne changer que le schema partagé, pas `ConsentValidationService`** : aurait laissé le comportement identique en pratique — le service a son propre repli dupliqué, jamais dérivé du schema. Corrigerait un fichier sans effet observable.
+- **Ajouter un backfill/migration explicite** : inutile et risqué — écrirait `true` dans des documents où l'utilisateur avait peut-être une raison de laisser le champ absent plutôt que de le poser à `false` explicitement. La lecture en négatif (absent ⇒ nouveau défaut) suffit et ne touche jamais un choix explicite.
+
+**Tests** : `ConsentValidationService.test.ts` — le cas « préférence audio absente » est réécrit pour attendre `canTranslateAudio`/`canGenerateTranslatedAudio` à `true` (au lieu de `false`) quand le consentement voix de base est accordé ; un cas dédié verrouille qu'un `audioTranslationEnabled: false` explicite reste respecté malgré le flip du défaut ; un second cas dédié (`ttsEnabled: false` explicite, `audioTranslationEnabled` omis) prouve que `canTranslateAudio` se débloque bien et que seul `ttsEnabled` bloque `canGenerateTranslatedAudio` — pour ne pas laisser cette assertion n'être qu'un effet de bord du cascade `canTranslateAudio=false` (commits `ce98fad50`, `42734c66f`).
+
+**Implication charge/capacité** : ce flip rend la génération audio traduite opt-out plutôt qu'opt-in pour la grande majorité des utilisateurs — auparavant la plupart n'avaient jamais rien écrit sur ces deux champs et généraient donc zéro synthèse TTS. Chaque message audio d'un expéditeur consentant va désormais déclencher une synthèse Chatterbox (pipeline CPU/GPU-bound) pour chaque langue cible dérivée de la conversation, par défaut. C'est l'effet produit recherché, mais il a un impact réel sur l'infrastructure : surveiller la profondeur de file et la saturation du pool de workers du translator après déploiement en production, et être prêt à scaler ce pool si la charge TTS augmente significativement.
+
+Détail complet et rationale : `docs/superpowers/specs/2026-08-09-audio-translation-prisme-reliability-design.md` (Problème 3).
+
+## 2026-08-10 : Un DM direct créé sans message reste silencieux jusqu'au premier envoi
+
+**Contexte** : `POST /conversations` créait un DM direct et diffusait immédiatement `CONVERSATION_NEW` + une notification d'invitation à TOUS les participants, y compris quand la conversation ne contenait encore aucun message — un utilisateur ouvrant un profil et cliquant « Message » sans jamais taper un mot notifiait déjà le destinataire d'une conversation vide qu'il ne pouvait ni ouvrir ni ignorer proprement. Le Prisme (accueil sans friction) veut au contraire qu'un contact ne matérialise une conversation pour son interlocuteur qu'au moment où il y a réellement quelque chose à lire.
+
+**Décision** : nouveau champ `Conversation.firstMessageSentAt: DateTime?` (`packages/shared/prisma/schema.prisma`) sert de source de vérité unique pour la visibilité d'un DM vide, propagé à cinq points :
+1. **Schema** — `firstMessageSentAt` `null` = DM direct sans aucun message envoyé. Jamais backfillé : tout document créé avant cette migration a le champ **ABSENT**, pas `null` (voir doc dédiée dans `packages/shared/CLAUDE.md`).
+2. **`POST /conversations`** (`routes/conversations/core.ts`) — pour un `direct` fraîchement créé : (a) pose `firstMessageSentAt: null` explicitement dans le `create` (l'omettre laisserait le champ absent, indistinguable d'un document legacy) ; (b) l'auto-join de room reste universel (tous les participants rejoignent `conversation:{id}` pour ne rater aucun `message:new` futur) mais l'émission `CONVERSATION_NEW` est réduite au seul créateur (`emitParticipantIds = type === 'direct' ? [userId] : allParticipantIds`) ; (c) la notification d'invitation (`createConversationInviteNotification`) est sautée entièrement pour `type === 'direct'` — inchangé pour `group`/autres types. Sur le chemin de dédup DM existant, si le destinataire silencieux ré-initie lui-même (`POST /conversations` vers la même personne), un `updateMany` gardé (`where: { firstMessageSentAt: null }`) flippe le champ et notifie le créateur — traité comme une intention mutuelle aussi explicite qu'un message.
+3. **`GET /conversations`** — un `whereClause.OR` à 4 branches, ajouté APRÈS le bloc `withUserId` existant (qui reconstruit `.AND`/`.participants`) pour ne jamais être écrasé par lui : non-`direct` toujours visible ; `OR: [{ NOT: { firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }]` (posé-non-null OU absent-legacy) toujours visible — un `NOT: { firstMessageSentAt: null }` nu ne suffit PAS, il exclut aussi les documents absents sur le connecteur MongoDB (corrigé en revue pré-merge le 2026-08-10, voir `packages/shared/CLAUDE.md`) ; le créateur voit toujours son propre DM vide ; et si AUCUN participant n'a `role: 'creator'` (DM créés via `friends.ts`/`devices.ts`, qui ne posent jamais de créateur), on dégrade vers « visible pour tous » — le comportement actuel/legacy.
+4. **Premier message** — le bump inconditionnel `lastMessageAt` reçoit un `updateMany` gardé additionnel et SÉPARÉ (`where: { id, firstMessageSentAt: null }`), race-safe par le pattern CAS null-guard, à DEUX endroits indépendants : `services/messaging/messagePostSaveEffects.ts` (`runMessagePostSaveEffects`, le chemin nominal — PAS `MessagingService.updateConversation`, méthode qui n'existe plus, refactorée entre-temps) et `services/message-translation/MessageTranslationService.ts` (`_saveMessageToDatabase`, seul accessible via `POST /translate-blocking`, qui crée le message HORS `MessagingService.handleMessage`). Ce second flip est isolé dans son propre `try/catch` : le message et le bump `lastMessageAt` ont déjà committé à ce stade, une panne du flip ne doit jamais transformer un envoi réussi en 500.
+5. **`delete-for-me`** (`routes/conversations/delete-for-me.ts`) — quand le créateur supprime un DM `direct` encore vide, la conversation est FERMÉE (`isActive: false`) au lieu de transférer la propriété à un successeur — même s'il existe un participant actif. Les DM non-vides et les conversations non-`direct` gardent le comportement de transfert exact d'avant. « Vide » est déterminé par un `count` Prisma sur `{ type: 'direct', firstMessageSentAt: null }` (present-et-null uniquement) plutôt qu'un `select` + négation JS (`!firstMessageSentAt`) — cette dernière forme est ambiguë : le client Prisma renvoie `null` aussi bien pour present-et-null que pour ABSENT, elle aurait donc traité à tort tout DM legacy comme vide (corrigé en revue pré-merge le 2026-08-10).
+
+**Alternatives rejetées** :
+- **Champ `createdBy` dédié plutôt que réutiliser `Participant.role === 'creator'`** : le rôle `creator` existe déjà comme source de vérité (utilisé par `delete-for-me` pour la logique de transfert de propriété) ; un second champ dénormalisé aurait exigé une double écriture à synchroniser sans bénéfice — le risque de drift dépasse l'économie d'une jointure.
+- **Cacher le DM au créateur aussi, pas seulement au destinataire** : casserait l'expérience du créateur qui est en train de composer — il doit voir et retrouver sa propre conversation (multi-device, refresh) pendant qu'il tape, faute de quoi le client devrait fabriquer un brouillon local que le serveur ignore.
+- **Détecter « premier message » via une requête `COUNT` plutôt qu'un champ stocké** : un `COUNT` par conversation sur `GET /conversations` (liste paginée) aurait ajouté N requêtes ou une agrégation coûteuse à un chemin de lecture chaud, et resterait sujet à un TOCTOU entre la lecture du compte et l'envoi concurrent d'un message — un champ stocké posé par un `updateMany` gardé sur `firstMessageSentAt: null` donne un CAS atomique gratuit.
+- **Brouillon 100% côté client, aucune conversation serveur avant le premier envoi** : casserait la synchronisation multi-appareil (un second device du créateur ne verrait jamais le brouillon), la file offline (rien à persister côté cache-first), et dupliquerait côté client toute la logique de création (dédup DM existant, permissions par défaut, résolution de participants) que le serveur possède déjà.
+
+**Conséquences** :
+- Un DM déjà vide en base AVANT cette migration (aucun message historique) redevient invisible pour le participant non-créateur après déploiement, sauf s'il n'a pas de `creator` identifiable (branche `none: { role: 'creator' }` du filtre) — cas marginal, dont l'ampleur réelle doit être quantifiée par une requête de vérification pré-merge en base (opérationnelle, hors scope de cette tâche de documentation).
+- `firstMessageSentAt: null` en positif dans un `where` (les `updateMany` gardés) ne matche QUE les documents où le champ a été explicitement posé à `null` — jamais les documents legacy où il est absent (cohérent avec le piège Prisma/Mongo documenté dans `packages/shared/CLAUDE.md`). C'est voulu : seules les conversations créées après cette migration (donc avec `firstMessageSentAt: null` explicite dès la création) doivent être flippées ; les DM legacy sont déjà visibles via la branche `isSet: false` du filtre OR côté lecture et n'ont pas besoin de flip.
+- Deux points d'écriture indépendants portent le même flip (`messagePostSaveEffects.ts` et `MessageTranslationService._saveMessageToDatabase`) : un futur troisième chemin de création de message HORS `MessagingService.handleMessage` devra porter sa propre copie gardée, comme documenté dans le commentaire jumeau des deux fichiers.
+
+**Tests** : `conversation-core.test.ts` (visibilité OR 4-branches, flip sur ré-initiation par le destinataire, no-op quand l'appelant est déjà créateur), `conversations/delete-for-me.test.ts` (fermeture vs transfert selon `firstMessageSentAt`), `messagePostSaveEffects.test.ts` (flip gardé séparé du bump inconditionnel, résilience si le flip échoue), `MessageTranslationService.test.ts` (même flip gardé sur le chemin `_saveMessageToDatabase`, résilience si le flip rejette). Détail complet et alternatives : `docs/superpowers/specs/2026-08-04-notification-dismiss-and-silent-dm-visibility-design.md` (Problème 2).
+
+## 2026-08-10 : Une notification hérite de l'échéance de son message, et les lectures d'inbox la respectent
+
+**Statut** : Accepté
+
+**Contexte** : `createMessageNotification` porte une garde d'admission qui refuse de créer une notification pour un message déjà expiré. Rien ne couvrait le cas symétrique — la notification créée AVANT l'expiration. Le message éphémère disparaît quelques minutes plus tard ; la ligne `Notification` reste. Elle ne montre rien (`protectedPreview` a déjà remplacé le contenu par un libellé générique à la création — il n'y a donc aucune fuite de contenu, contrairement au cas du rappel), ne mène nulle part (`action: view_message` ouvre un message absent), et porte un badge non lu que plus aucune lecture ne peut décrémenter. `Notification.expiresAt` existait pour exactement ça, jusque dans les types partagés (`isNotificationExpired`, `isNotificationUnread`), mais aucun producteur ne l'écrivait et aucune des sept lectures serveur ne l'honorait.
+
+**Décision** :
+- **Producteur** : la notification hérite de `Message.expiresAt` — message régulier, réponse, mention. Le chemin `new_message` la prend de sa relecture VIVANTE (celle de la garde d'admission : aucune lecture ajoutée) ; réponse et mentions la reçoivent de l'éventail via `messageExpiresAt`, celui-ci la tenant déjà dans `FanOutMessage`. Les deux sources ne peuvent pas diverger : `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite.
+- **Lectures** : un prédicat unique, `visibleNotificationsWhere` (`services/notifications/visibleNotificationsWhere.ts`), appelé par les sept lectures qui répondent à la même question — liste REST et son total, compte non-lus REST, les deux compteurs de `emitCountsUpdate`, le badge embarqué dans le push, et les deux lectures du digest e-mail.
+- **Index** : `Notification[userId, isRead]` → `[userId, isRead, expiresAt]`, plus migration `scripts/migrations/mongodb/010_notification_expiry_index.js` pour les bases existantes.
+
+**Alternatives rejetées** :
+- **Un balayage périodique** : la péremption n'est pas un événement — personne ne passe à l'instant T. Un balayage laisserait toujours une fenêtre entre l'expiration et son passage, là où le filtre est exact à la milliseconde et ne coûte aucune écriture.
+- **Supprimer la ligne**, comme `retractMessageNotifications` le fait au rappel : ce geste-là est imposé par la copie de l'extrait que la ligne détient. Ici elle ne détient rien, et masquer ne demande aucun déclencheur.
+- **Que chaque créateur relise l'échéance du message qu'il désigne** (aucun paramètre nouveau, chemin d'édition fermé au passage) : coûterait une lecture PAR MENTION là où l'éventail tient déjà la valeur — le coût refusé aux cycles 44 et 47.
+- **Un index de plus** plutôt qu'un remplacement : inutile, `[userId, isRead]` est un préfixe de la nouvelle clé.
+
+**Conséquences** :
+- **Aucune réparation de données.** Les lignes déjà en base portent `expiresAt: null` et empruntent la branche `null` du filtre : visibles exactement comme avant.
+- **L'index n'est pas un confort.** Sans `expiresAt` dans la clé, le `$or` devient un filtre résiduel — un fetch de document par candidat — sur `emitCountsUpdate`, qui tourne une fois par destinataire de CHAQUE message. Déployer la migration avant le code : le filtre reste correct sans l'index, seulement plus cher.
+- **Ce que la décision n'assure PAS** : la ligne expirée reste en base (un index TTL Mongo serait le balayage naturel, hors portée de `@@index` Prisma) ; un badge déjà affiché ne se corrige qu'au prochain recalcul — cohérence à terme, pas immédiate ; les clients ne s'auto-périment pas (`isNotificationExpired` n'est appelé nulle part).
+
+**Tests** : 11 neufs, sonde en trois temps (filtre neutralisé → 5 rouges ; estampille producteur → 2 ; plomberie de l'éventail → 2). Le double Prisma ÉVALUE les `where` contre des lignes au lieu de les recopier (`__tests__/helpers/notification-where.ts`) et jette sur toute clé qu'il ne sait pas interpréter. Suite gateway complète verte (636 suites, 16176 tests).
+
+## 2026-08-10 : Une story PÉRIMÉE garde ses notifications ; une story DÉTRUITE les perd
+
+**Statut** : Accepté
+
+**Contexte** : `ExpiredStoriesCleanupService` est le SEUL chemin de hard-delete de post du gateway. Sa seconde passe supprime définitivement, 7 jours après leur expiration, les lignes `Post` des stories périmées, leurs reposts et tous leurs commentaires. Les notifications que ces posts avaient produites n'étaient pas retirées : elles survivaient indéfiniment à leur cible, avec une copie dénormalisée d'un contenu détruit (`content`, `metadata.commentPreview`, `metadata.firstAttachmentUrl` — la vignette d'un média supprimé), un `action: view_post` n'ouvrant plus qu'un 404, et un badge non lu que plus personne ne peut décrémenter. Toutes les stories expirent, donc toutes finissaient par en laisser. Le backlog du cycle 52 désignait ce trou sous le nom « les stories expirées ne retirent pas leurs notifications » — la moitié « expirées » de cet énoncé est fausse, et c'est elle qui décide de l'implémentation.
+
+**Décision** :
+- **Le retrait est ancré sur la DESTRUCTION, pas sur l'expiration.** Appel direct à `retractPostNotifications` dans la passe de hard-delete, sur `allPostIds` (stories ∪ leurs reposts) — les notifications des commentaires détruits partent avec, toute la famille du fil portant aussi `context.postId`.
+- **Il précède les suppressions et REJETTE**, exactement comme la libération des usages de sons juste à côté et pour la même raison : `context.postId` n'a ni relation ni cascade, donc détruire les posts après un retrait en échec laisserait des lignes que plus aucun chemin n'atteindrait — la passe suivante ne voit plus les posts. Le `catch` de la passe rattrape ; la passe horaire suivante rejoue tout.
+- **`retractPostNotifications` prend une liste**, comme son jumeau `retractCommentNotifications` : un `$in` au lieu d'une lecture par post. Son plafond de drainage rejette au lieu d'avertir.
+- **L'annonceur est un défaut de paramètre** sur `cleanup()`, résolu à chaque appel : le service est construit au démarrage, avant l'enregistrement du service partagé — une injection par constructeur capturerait `undefined` pour toujours.
+
+**Alternatives rejetées** :
+- **Estampiller `Notification.expiresAt` depuis `Post.expiresAt`**, par symétrie avec la décision jumelle sur le message éphémère ci-dessus. C'est la piste que l'audit a suivie en premier, et elle est FAUSSE : `context.postExpiresAt` n'est pas une échéance oubliée en route, c'est une fonctionnalité livrée sur les deux clients — le web affiche « · expirée » (`notification-helpers.ts`), iOS expose `expiryLabel` et `isLinkedContentExpired`. Le produit MONTRE délibérément la notification d'une story périmée, marquée. Masquer ces lignes côté serveur aurait supprimé cet affichage et rendu mort le code des deux clients. La différence avec le message éphémère est réelle et se lit dans la donnée : la notification de message ne porte qu'un libellé générique (`protectedPreview`) et sa cible est détruite à l'expiration ; celle de story porte un vrai extrait, un acteur et une vignette, et sa cible répond encore — `getPostById` ne filtre pas l'expiration.
+- **Passer par `applyPostRemovalEffects`** (la liste d'effets partagée par les deux routes de retrait) : elle écrirait une ligne `AdminAuditLog` pour un balayage qui n'a pas d'acteur, et re-libérerait des usages de sons que la passe libère déjà par `releasePosts`. La liste nomme les effets d'un retrait DÉCIDÉ par quelqu'un ; ceci est une fin de vie.
+- **Retirer au SOFT-delete** (6 h après l'expiration) : ce serait masquer une story que le produit montre encore, et à un moment où la cible répond toujours.
+- **Un retrait post par post** dans la boucle du balayage : autant de lectures que de posts détruits, là où un `$in` les couvre en un drainage.
+
+**Conséquences** :
+- **Aucune réparation de données.** Le correctif ne vaut que pour les destructions à venir ; les lignes déjà orphelines demandent un script, sur le patron de `repair-mention-user-ids.ts`.
+- **Une heure d'expirations peut désormais bloquer sa propre passe.** Si le drainage atteint son plafond (40 000 lignes), la passe renonce et rien n'est détruit cette heure-là. C'est le comportement voulu — la reprise converge, les lots déjà lus ayant bien été supprimés — mais cela retarde d'autant la récupération de disque.
+- **Ce que la décision n'assure PAS** : les posts de type `STATUS` expirent aussi et ne sont balayés par rien — leurs lignes vivent pour toujours, donc leurs notifications mènent toujours quelque part ; les `TrackingLink` visant une story détruite ne sont pas désactivés par cette passe (ils le sont sur le chemin de retrait décidé, via `applyPostRemovalEffects`) ; le push APNs/FCM déjà délivré n'est pas rappelé.
+
+**Tests** : 9 neufs (6 sur le câblage du balayage, 3 sur la liste et le plafond du retrait). Sondes de fidélité en cinq temps — appel retiré → 5 rouges ; retrait borné aux stories, reposts oubliés → 1 ; retrait placé après les suppressions → 2 ; plafond qui avertit au lieu de rejeter → 1 ; liste vide qui interroge quand même Mongo → 1.
+
+## 2026-08-10 : Le balayage du contenu éphémère apparie les posts VIVANTS (`isSet: false`), et il connaît les DEUX types éphémères
+
+**Statut** : Accepté
+
+**Contexte** : `ExpiredStoriesCleanupService` tourne toutes les heures depuis sa mise en service et n'avait, en deux passes, jamais détruit une story périmée. Le cycle précédent y avait branché le retrait des notifications (ADR ci-dessus) et le lot G7 la purge des médias — sur un chemin qui ne s'exécutait pas. Trois défauts d'une même famille, dans la même fonction, dont le premier masquait les deux autres.
+
+1. **La passe de soft-delete n'appariait aucun post.** Son filtre était `deletedAt: null`. Sur le connecteur MongoDB de Prisma, un filtre nul ne matche QUE les documents où le champ est présent-et-null ; or `post.create` n'écrit jamais cette colonne, donc sur un post vivant elle est ABSENTE. C'est exactement le piège qui avait vidé le feed, les reels et les stories en production (`data: []` sur une collection pleine) et qui a fait naître `NOT_DELETED` (`{ isSet: false }`) dans son propre module — cette passe en portait le dernier exemplaire du modèle `Post`, du côté ÉCRITURE cette fois. `softDeleted` valait 0 à chaque heure ; la passe de hard-delete, qui exige un `deletedAt` non nul, ne voyait donc que les stories supprimées à la main.
+2. **Le balayage ne connaissait qu'un des deux types éphémères** (`type: 'STORY'`). Un `STATUS` expire en 1 h, disparaît bien des lectures à l'échéance, et sa ligne vivait pour toujours. La cause est une liste dupliquée entre celui qui POSE l'échéance (`PostService`) et celui qui l'HONORE.
+3. **La fournée du hard-delete n'était bornée par rien** — sans conséquence tant que 1. la gardait vide.
+
+**Décision** :
+- **La vivacité se lit par `NOT_DELETED`, jamais par `deletedAt: null`.** Le filtre positif `{ not: null }` de la passe de hard-delete est correct et RESTE : la passe précédente vient d'écrire une vraie date, et l'état cherché est bien présent-et-non-null. C'est le filtre positif qui était faux, pas le négatif.
+- **Les types éphémères et leurs durées vivent dans une table unique**, `services/posts/ephemeralPosts.ts`. `PostService.createPost` et le balayage en dérivent tous les deux ; la liste des types est elle-même dérivée des clés de la table des durées. Un type éphémère ajouté là reçoit son échéance ET son balayage.
+- **La fournée du hard-delete est bornée** (500 posts, réglable par constructeur), prise du plus anciennement périmé au plus récent. Le seuil est exprimé en posts alors que ce qu'il protège se compte en notifications : le retrait rejette au-delà de 40 000 lignes, et 500 × 40 en laisse la moitié de marge. Une fournée pleine est journalisée.
+- **Le nom de la classe reste `ExpiredStoriesCleanupService`** alors qu'elle balaie aussi les statuts : des plans et analyses archivés le citent, et les réécrire fausserait des archives. La doc de classe porte la correction ; la liste des types balayés est celle de `ephemeralPosts.ts`, pas celle du nom.
+
+**Alternatives rejetées** :
+- **Balayer sur `expiresAt` seul, sans filtre de type.** Équivalent aujourd'hui (seuls les types éphémères reçoivent une échéance) et sans liste à tenir à jour, mais il avalerait silencieusement tout futur post permanent auquel on donnerait une échéance pour une autre raison. La liste explicite est greppable et refuse ce genre d'élargissement tacite.
+- **Renommer la classe en `ExpiredEphemeralPostsCleanupService`.** Le gain de justesse ne compense pas l'invalidation de six documents d'archive qui la citent nommément.
+- **Rattraper le passif par un script de migration.** La borne fait converger le rattrapage d'elle-même, passe après passe, sans accès MongoDB ni fenêtre de maintenance.
+- **Une fournée non bornée avec un plafond de retrait relevé.** Déplace le mur sans le supprimer, et fait grossir le pic de lectures concurrentes que le plafond existe justement pour borner.
+
+**Conséquences** :
+- **Le balayage devient effectif pour la première fois.** À la mise en production, il rattrape tout le passif — stories périmées jamais détruites et statuts jamais balayés — par fournées de 500 posts par heure, soit 12 000 par jour. Les effets branchés en aval (purge des médias G7, libération des usages de sons, retrait des notifications) s'exécutent enfin, sur un volume de rattrapage nettement supérieur au régime permanent.
+- **La récupération de disque est différée, jamais perdue.** Une fournée pleine signale qu'il reste du passif ; c'est le signal que le cycle précédent notait comme manquant.
+- **Ce que la décision n'assure PAS** : aucune réparation rétroactive des lignes déjà orphelines (médias au `postId` nul, usages de sons, notifications de posts détruits à la main avant ce correctif) ; les `TrackingLink` d'une story détruite ne sont toujours pas désactivés par cette passe ; la fenêtre d'archive auteur de `getStatuses` n'existe pas comme celle des stories, et le soft-delete rend désormais un statut périmé invisible à son auteur dès l'heure suivante — ce qui était déjà le cas de fait puisque `getStatuses` filtre l'expiration.
+
+**Tests** : 13 neufs (`ExpiredStoriesCleanupService.ephemeral.test.ts`), dont 3 sur la table des durées elle-même. Sondes de fidélité en cinq temps — `NOT_DELETED` → `null` : 2 rouges ; type scalaire au soft-delete : 2 ; type scalaire au hard-delete : 3 ; borne retirée : 3 ; `STATUS` retiré de la table : 3. Le double Prisma HONORE le filtre de type au lieu de rendre la même ligne quelle que soit la question — sans cela le témoin de bout en bout restait vert sur un balayage borné aux stories.
+
+## 2026-08-10 : Un lien de partage meurt avec le post que le balayage DÉTRUIT — une règle, deux chemins
+
+**Statut** : Accepté
+
+**Contexte** : les deux ADR ci-dessus se terminent, l'une et l'autre, par la même réserve — « les `TrackingLink` visant une story détruite ne sont pas désactivés par cette passe ». Le cycle précédent ayant rendu le balayage effectif pour la première fois, cette réserve a cessé d'être théorique : toute story finit par expirer, donc tout lien de partage de story finissait par pointer sur une ligne `Post` détruite.
+
+Le retrait interactif, lui, coupe ses liens depuis trois cycles : c'est le troisième effet de `applyPostRemovalEffects`, et son commentaire dit exactement pourquoi — « le soft-delete ne bascule que `deletedAt`, le `onDelete: Cascade` de Prisma ne se déclenche jamais, les `/l/<token>` qui visent ce post resteraient donc opérationnels ». Le balayage est l'AUTRE chemin qui rend un post inatteignable, et le SEUL du gateway qui détruise réellement la ligne. Il n'appliquait pas la règle.
+
+Rien ne pouvait le rattraper ensuite. `TrackingLink.targetId` n'a ni relation ni cascade vers `Post` — le champ porte indifféremment un `postId`, un `conversationId` ou un `userId`, et le schéma l'écrit. La ligne `Post` détruite, plus aucun chemin du gateway ne sait relier le lien à sa cible disparue : le lien survivait `isActive: true`, pour toujours. `/l/:token` comptait son clic, incrémentait `totalClicks`, écrivait un `TrackingLinkClick`, puis redirigeait vers une page morte ; `resolveTarget` rendait `isActive: true` avec un `targetId` que plus rien ne résout, et la page web comme le `DeepLinkRouter` iOS ouvraient un post inexistant. Le même contenu retiré à la main répondait, lui, 410 `LINK_INACTIVE`. Un objet, deux fins de vie selon le chemin de retrait — et la plus fréquente des deux était la mauvaise.
+
+**Décision** :
+- **La règle vit dans son propre module**, `services/posts/deactivatePostTrackingLinks.ts`, et les deux chemins l'appliquent sans la réécrire. C'est le geste que l'en-tête de `applyPostRemovalEffects` réclame explicitement pour les effets à deux écrivains : la liste existe pour qu'aucun effet n'ait de « second écrivain à tenir à jour de mémoire ».
+- **Désactivation, jamais suppression.** Les `TrackingLinkClick` sont une histoire d'audience qui survit à sa cible, et le tableau de bord du partageur les lit encore. C'est déjà le geste du retrait interactif ; l'extraction ne le change pas.
+- **Ancré sur la DESTRUCTION, pas sur l'expiration**, pour la raison que l'ADR du retrait des notifications a établie : tant qu'une story n'est que périmée, `getPostById` répond encore et le lien mène quelque part. C'est `deletedAt` qui ferme cette porte et le hard-delete qui la condamne.
+- **`allPostIds` et jamais `ids`.** Un repost est détruit par la cascade de son original sans avoir jamais été soft-deleté pour son propre compte — son `expiresAt` est postérieur de plusieurs heures à celui de l'original, donc la passe de soft-delete ne l'a pas encore vu quand la cascade l'emporte. Et c'est justement le repost qu'on partage.
+- **Avant toute destruction, et il REJETTE** — même contrat que ses deux voisins de bloc (`retractPostNotifications`, `releasePosts`) et pour la même raison : sans relation ni cascade, détruire les posts après une désactivation en échec laisserait des liens que plus aucun chemin n'atteindrait, la passe suivante ne voyant plus les posts. Le retrait interactif garde au contraire son régime best-effort : quand il s'exécute, `deletedAt` est déjà committé, et rien ne doit transformer une suppression réussie en 500. Le helper rejette ; c'est l'appelant qui choisit son régime.
+- **Le filtre porte sur `targetId` seul, sans `targetType`**, comme le faisait le retrait interactif : un lien créé avec un type mal renseigné mais le bon `targetId` doit mourir avec sa cible, et les ObjectId ne se confondent pas d'une collection à l'autre.
+
+**Alternatives rejetées** :
+- **Désactiver dans la passe de SOFT-delete**, à l'instant où le post devient inatteignable (`getPostById` est gardé par `NOT_DELETED`). C'est l'instant théoriquement juste, et c'est celui du retrait interactif — qui n'a pas le choix, un post non éphémère n'étant jamais hard-deleté. Écarté ici parce que la passe de soft-delete est un `updateMany` qui ne matérialise aucun id : lui en faire produire demanderait de la convertir en `findMany` + `updateMany`, donc de la BORNER (un `$in` de tout le passif n'est pas une requête à émettre), donc de réécrire les témoins que le cycle précédent a construits autour de la forme actuelle. Le gain réel est une fenêtre de liens actifs sur des posts masqués, longue d'une passe en régime permanent (les deux bornes valant sept jours depuis `expiresAt`, un post devient éligible aux deux le même instant). À reprendre le jour où la passe de soft-delete devra être bornée pour une autre raison.
+- **Supprimer les lignes `TrackingLink`** au lieu de les désactiver : emporterait les `TrackingLinkClick` qui les référencent (aucune cascade déclarée) et effacerait des statistiques d'audience que la disparition de la cible ne périme pas.
+- **Passer par `applyPostRemovalEffects`** : rejeté par l'ADR précédente pour les mêmes raisons, inchangées — elle écrirait un `AdminAuditLog` pour un balayage sans acteur et re-libérerait des usages de sons que la passe libère déjà.
+- **Déclarer une relation Prisma `TrackingLink.targetId → Post`** pour obtenir une cascade : le champ est polymorphe par conception (post, conversation, user), et le typer sur `Post` casserait les trois autres usages.
+
+**Conséquences** :
+- **Un lien de partage de story cesse de fonctionner au moment où la story est détruite**, et répond alors 410 `LINK_INACTIVE` comme n'importe quel lien retiré. C'est un changement observable pour qui a partagé une story : le lien mourait déjà — il redirigeait vers une page morte — mais il mourait en silence, sans le dire au visiteur.
+- **La désactivation gouverne la passe.** Si elle échoue, rien n'est détruit cette heure-là et la passe suivante rejoue tout. Une indisponibilité Mongo retarde donc la récupération de disque, comme le font déjà le retrait des notifications et la libération des usages.
+- **Aucune réparation rétroactive.** Les liens des posts détruits AVANT ce correctif restent `isActive: true` en base, sans cible et sans chemin pour les retrouver — leur `targetId` désigne des ObjectId qui n'existent plus. Un script de réparation devrait les détecter par absence de cible, sur le patron de `repair-mention-user-ids.ts`. Action humaine : cette routine n'a aucun accès MongoDB.
+- **Ce que la décision n'assure PAS** : la fenêtre entre le soft-delete et le hard-delete laisse les liens actifs sur un post déjà masqué (une passe en régime permanent, davantage pendant un rattrapage de passif) ; le `originalUrl` d'un lien EXTERNAL n'est pas concerné ; le push APNs/FCM déjà délivré n'est toujours pas rappelé.
+
+**Tests** : 8 neufs — 4 sur le module de règle (`deactivatePostTrackingLinks.test.ts` : l'ensemble couvert, la non-suppression, la liste vide, le rejet) et 4 sur son câblage dans le balayage (`ExpiredStoriesCleanupService.trackingLinks.test.ts` : stories ∪ reposts, l'ordre avant toute destruction, la passe qui ne détruit rien si la désactivation échoue, l'absence de requête quand rien n'a expiré). Sondes de fidélité en cinq temps — appel retiré du balayage : 3 rouges ; `ids` au lieu de `allPostIds` : 1 ; erreur avalée par un `try/catch` : 1 ; désactivation placée après les suppressions : 2 ; garde de liste vide retirée du module : 1. Le témoin « rien à détruire ⇒ aucune requête » est double-gardé et ne discrimine aucune des deux gardes prise isolément : il pinne le contrat de bout en bout, et son en-tête le dit.
+
+## 2026-08-10 : Le budget d'un message à vue unique se dépense par SPECTATEUR
+
+**Statut** : Accepté
+
+**Contexte** : `POST /conversations/:id/messages/:messageId/consume` incrémentait `Message.viewOnceCount` par un `prisma.message.update({ data: { viewOnceCount: { increment: 1 } } })` inconditionnel. Le compteur mesurait donc des OUVERTURES, alors que tous ses lecteurs le lisent comme un nombre de SPECTATEURS : `isFullyConsumed = viewOnceCount >= maxViewOnceCount`, l'annonce `message:consumed` diffusée à la room, et la disparition du média chez les clients qui en dérivent.
+
+Deux conséquences, et la seconde est celle que l'utilisateur voit. La route est une mutation nue, sans clé d'idempotence : un rejeu — file hors-ligne, double tap, retry réseau — dépense une unité de plus. Et dans un groupe où l'émetteur a posé `maxViewOnceCount: 2`, un seul destinataire qui rouvre la photo deux fois porte `isFullyConsumed` à vrai, la route l'ANNONCE à toute la conversation, et le second destinataire perd un média qu'il n'a jamais ouvert.
+
+La donnée qui rend le compte exact était écrite par ce même gestionnaire, deux instructions plus bas : `MessageStatusEntry.viewedOnceAt`, par participant. Écrite, jamais relue — la forme exacte de la leçon 89, mais dans l'autre sens : un champ dont le producteur existe et dont le consommateur manque.
+
+**Décision** :
+- **La règle vit dans son propre module**, `services/messaging/recordViewOnceConsumption.ts`, et rend `{ viewOnceCount, firstConsumption }`. `firstConsumption` ne sert pas qu'au compte : c'est lui qui décide de l'annonce.
+- **La revendication est GARDÉE côté base, jamais décidée après une lecture.** « Lire si `viewedOnceAt` est nul, puis écrire » se trompe dès que le même spectateur ouvre deux fois en parallèle : les deux lectures répondent « pas encore vu », les deux écrivent, et le défaut d'origine se déplace d'un cran. C'est l'`updateMany` FILTRÉ qui tranche — la base n'apparie qu'une fois, et seul l'appel qui a effectivement modifié la ligne dépense.
+- **Quand rien n'est apparié, c'est l'ÉCRITURE qui distingue les deux causes, pas une seconde lecture.** L'entrée absente (le message n'a jamais été marqué livré ni lu pour ce participant) → la création réussit, c'est une première consommation. L'entrée déjà estampillée → la création se heurte à `@@unique([messageId, participantId])` (P2002), rien à dépenser. Une seconde lecture rouvrirait la fenêtre que la garde vient de fermer.
+- **Toute autre panne d'écriture REMONTE.** La lire comme « déjà vu » ferait passer une base indisponible pour une consommation antérieure, et le spectateur perdrait son ouverture sans que rien ne le signale.
+- **Le prédicat apparie les DEUX états « pas encore vu »** — `OR: [{ viewedOnceAt: null }, { viewedOnceAt: { isSet: false } }]`. Une entrée créée par `MessageReadStatusService` n'écrit que `deliveredAt`/`readAt` : la colonne est ABSENTE du document, et `{ viewedOnceAt: null }` seul ne l'apparie pas sur le connecteur MongoDB de Prisma. Même piège que le `deletedAt: null` qui avait rendu inerte le balayage éphémère pendant trois cycles, et que celui qui avait vidé le feed en production avant lui.
+- **Le spectateur est résolu dans l'ordre de `canAccessConversation`** — `authContext.participantId` d'abord, `userId` en repli — et son absence REFUSE (403). Un anonyme porte un jeton de session dans `authContext.userId` : la recherche par `userId` seule ne trouvait jamais sa ligne, si bien qu'il dépensait le budget sans laisser la moindre trace de l'avoir fait, et pouvait donc le dépenser indéfiniment. Le refus est inatteignable tant que le contrôle d'accès tient — il exige lui-même une ligne de participant active — et existe pour que le budget ne soit jamais dépensé par un spectateur qu'on ne sait pas nommer.
+- **L'annonce ne part que sur un changement d'état réel.**
+
+**Alternatives rejetées** :
+- **Plafonner l'incrément à `maxViewOnceCount`** au lieu de compter les spectateurs : traite le symptôme (un compteur qui déborde) et laisse la cause (une ouverture répétée dépense le budget d'autrui) intacte jusqu'au plafond.
+- **Une clé d'idempotence portée par le client.** Couvrirait le rejeu réseau, pas le destinataire qui rouvre légitimement le média une heure plus tard — et demanderait un champ nouveau là où `viewedOnceAt` existe et dit déjà exactement cela.
+- **`upsert` à la place de `updateMany` + `create`.** Sur ce modèle, un upsert écrase `viewedOnceAt` sur la branche update et perd donc la discrimination : la garde ne peut pas vivre dans son `where` unique.
+- **Redéfinir `maxViewOnceCount` comme « une ouverture par destinataire »** (le comparer au nombre de participants plutôt qu'à un compteur) : c'est une décision de produit sur ce que l'émetteur choisit, distincte du défaut d'exactitude corrigé ici.
+
+**Conséquences** :
+- **Un média à vue unique reste disponible pour les destinataires qui ne l'ont pas ouvert**, quel que soit le nombre de fois où les autres l'ouvrent. C'est un changement observable : `viewOnceCount` progresse désormais plus lentement pour un même trafic, et `isFullyConsumed` bascule plus tard.
+- **Un anonyme ne consomme plus qu'une fois** — et son entrée de statut existe enfin, donc les lectures par participant le voient.
+- **Le rejeu est silencieux** : même corps de réponse, aucune annonce. Un client qui comptait sur l'événement pour confirmer sa propre requête doit lire la réponse HTTP, ce que font iOS et web.
+- **Ce que la décision n'assure PAS** : le serveur ne REDACTE toujours pas le contenu d'un message à vue unique épuisé — l'application de la règle reste entièrement côté client, et le compteur reste consultatif ; `onMessageConsumed` n'a toujours aucun consommateur applicatif côté web (la couche socket l'expose, aucun cache ne s'y abonne) ; rien ne rattrape les `viewOnceCount` déjà gonflés en base par l'ancien chemin.
+
+**Tests** : 13 neufs — 8 sur le module de règle (`recordViewOnceConsumption.test.ts`) et 5 sur son câblage dans la route (`conversation-message-consume.test.ts`, harnais Fastify + double Prisma qui HONORE le filtre de revendication). Sondes de fidélité en cinq temps — incrément inconditionnel : 2 rouges ; prédicat réduit à `{ viewedOnceAt: null }` : 1 ; toute panne lue comme « déjà vu » : 1 ; création retirée quand l'entrée manque : 2 ; corps de route d'origine restauré : 4 sur 5, le survivant étant le verrou du chemin nominal — vert avant ET après, c'est son rôle. Deux témoins pré-existants de `messages-routes.test.ts` mis à jour, pas affaiblis : ils épinglaient `viewParticipant = null` comme un chemin de SUCCÈS ; leur intention (« l'arithmétique de repli des colonnes nullables », « aucune entrée de statut n'est écrite ») est conservée et le second est étendu — le budget ne se dépense pas davantage.
+## 2026-08-10 : Le soft-delete des messages est une convention d'ÉCRITURE — elle prend un nom
+
+**Statut** : Accepté
+
+**Contexte** : deux modèles de ce dépôt portent une colonne de soft-delete `deletedAt DateTime?`, et ils ont résolu le même piège MongoDB par deux moitiés opposées.
+
+`Post` a choisi le côté LECTURE. Un post vivant n'a pas de colonne `deletedAt` du tout, et toutes ses requêtes apparient l'ABSENCE (`NOT_DELETED` = `{ isSet: false }`, `services/posts/softDelete.ts`). Le filtre naïf `deletedAt: null` n'apparie que le présent-et-null : appliqué à ce modèle il ne rend AUCUN post vivant, ce qui a vidé feed / reels / stories en production — le post-mortem est en tête de `services/posts/postIncludes.ts`, et le cycle 54 a retrouvé le dernier exemplaire du piège dans le balayage du contenu éphémère, où il rendait la passe entièrement inerte.
+
+`Message` a choisi le côté ÉCRITURE. Ses lectures — ~119 sites : aperçu de conversation, compte de non-lus, delta `/sync`, admission d'édition et de suppression, statistiques — filtrent toutes `deletedAt: null`, et c'est CHAQUE créateur qui rend ce filtre vrai en écrivant la colonne à `null`. Le choix est cohérent et fonctionne ; il a seulement un défaut de forme : il n'était porté par aucun nom. Sept `message.create` répartis dans six fichiers répétaient le littéral, chacun pour son compte, sans qu'aucun ne dise pourquoi.
+
+**Deux d'entre eux l'avaient perdu** : `CallService.createCallSummaryMessage` et `CallService.createLiveCallMessage`. Les lignes qu'ils écrivaient n'étaient donc appariées par aucune des lectures ci-dessus — un « Appel audio en cours » ne devenait jamais l'aperçu de sa conversation, un « Appel manqué » ne faisait monter aucun badge, et les deux étaient absents du delta `/sync` et introuvables à l'édition comme à la réaction. Aucune suite ne pouvait le voir : la sonde de fidélité de ce cycle a montré que vider l'invariant ne faisait tomber AUCUN témoin pré-existant, sur aucun des sept chemins.
+
+**Décision** :
+- **La convention prend un nom** : `LIVE_MESSAGE_MARK` (`services/messaging/liveMessage.ts`), étalé par les sept créateurs. Son en-tête écrit l'asymétrie entre les deux modèles, qui est la seule chose qu'un huitième créateur a besoin de savoir.
+- **Un témoin sur la SOURCE, pas sept sur les créateurs.** Les sept étalant la même constante, un témoin unique sur `LIVE_MESSAGE_MARK` (présent-et-null, et rien d'autre) les tient tous ; deux témoins sur `CallService` prouvent séparément que l'étalement a bien lieu là où il manquait.
+- **Aucun changement de schéma.** `deletedAt` reste `DateTime?`. Ce qui est écrit est l'état VIVANT explicite, pas une valeur par défaut que Prisma poserait — il ne le fait pas.
+
+**Alternatives rejetées** :
+- **Ajouter le littéral aux deux sites fautifs et s'arrêter là.** Corrige les symptômes et laisse intacte la cause : sept copies d'une règle sans propriétaire, dont la prochaine divergence sera aussi silencieuse que celle-ci.
+- **Basculer les lectures du modèle `Message` sur `NOT_DELETED`** pour aligner les deux modèles côté lecture. Ce serait le geste symétrique, et il est faux ici : les messages EXISTANTS portent tous un `deletedAt` présent-et-null écrit par leurs créateurs, donc `{ isSet: false }` ne les apparierait PAS. Un tel alignement demanderait une migration de données avant la première ligne de code, et rendrait tous les messages invisibles entre les deux. C'est l'erreur inverse du post-mortem de `postIncludes.ts`, avec les mêmes conséquences.
+- **Un `@default` Prisma sur la colonne.** Prisma n'écrit pas de valeur par défaut `null` pour un champ optionnel, et l'ajouter ne réparerait aucune ligne déjà écrite.
+- **Le prédicat défensif `OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }]`** sur les 119 lectures — l'idiome que ce dépôt emploie déjà pour `leftAt`, `expiresAt` et `parentId`. Il rendrait les deux modèles indifférents à la convention d'écriture, ce qui est la solution de fond. Écarté pour ce cycle : 119 sites, aucun témoin existant sur l'invariant, et une passe qui ne serait plus un correctif mais une réécriture des lectures de messages. La constante nommée en est le préalable — elle rend l'invariant greppable, donc cette passe planifiable.
+
+**Conséquences** :
+- **Les messages d'appel deviennent des messages ordinaires** pour l'aperçu, le badge de non-lus, `/sync` et la réaction. C'est un changement observable : une conversation dont le dernier événement est un appel remonte désormais dans la liste avec le bon libellé, et un appel manqué badge.
+- **Aucune réparation rétroactive.** Les messages d'appel déjà écrits sans la colonne restent invisibles de ces lectures. Ils sont réparables par un `updateMany` sur `messageSource: 'system'` + `clientMessageId` préfixé `call-summary:` dont la colonne est absente — sur le patron de `repair-mention-user-ids.ts`. Action humaine : cette routine n'a aucun accès MongoDB.
+- **Ce que la décision n'assure PAS** : les 119 lectures restent dépendantes de la discipline des créateurs ; rien n'empêche mécaniquement un huitième `message.create` d'omettre le marqueur — seul le prédicat défensif ci-dessus le ferait, et il reste à instruire.
+
+**Tests** : 4 neufs — 2 sur la source (`liveMessage.test.ts` : présent-et-null, et rien d'autre) et 2 sur les deux créateurs qui l'avaient perdu (`CallService.summary.test.ts`, `CallService.liveMessage.test.ts`). Sondes de fidélité en trois temps — marqueur retiré du résumé d'appel : 1 rouge, le témoin jumeau reste vert ; retiré du message vivant : 1 rouge, symétrique ; constante vidée (`{}`) : 2 rouges et RIEN d'autre sur 45 suites voisines, ce qui a établi que l'invariant n'était couvert nulle part et motivé le témoin de source. Gate complet : 643 suites / 16 273 tests verts, `tsc --noEmit` 0 erreur.
+
+## 2026-08-10 : « Pas encore » se lit sur DEUX états, et le prédicat prend un nom — `unsetOrNull`
+
+**Statut** : Accepté
+
+**Contexte** : le cycle précédent a nommé la convention d'ÉCRITURE du soft-delete des messages (`LIVE_MESSAGE_MARK`) et a laissé ouverte, comme « solution de fond », la moitié LECTURE : un prédicat qui apparie les deux états « pas encore » d'une colonne optionnelle, l'ABSENCE et le `null` explicite. Il l'a instruite sur le seul cas `deletedAt`, où elle coûte 119 sites. Un balayage des `where` du gateway a montré que le piège vivait ailleurs, sur des colonnes dont AUCUN créateur n'écrit la valeur — donc là où le filtre naïf n'apparie strictement rien, et où le correctif coûte une ligne.
+
+Quatre lectures étaient dans ce cas, et la première est une porte d'accès :
+
+- **`canAccessConversation` refusait tous les participants anonymes.** Aucun des neuf créateurs de `Participant` n'écrit `bannedAt` ; `{ bannedAt: null }` n'appariait donc que les rares lignes qu'un débannissement avait remises à zéro (`resolveUnbanWrite` est le seul producteur d'un `null` explicite sur cette colonne). Comme seul un contexte d'auth anonyme porte un `participantId` (`middleware/auth.ts`), cette branche était la porte de TOUT arrivant par lien de partage : 403 sur la lecture des messages, l'envoi, les fils, les statistiques et la liste des participants.
+- **`PasswordResetService.revokeExistingTokens` et son jumeau magic-link n'atteignaient aucun jeton.** `create` ne renseigne pas `usedAt` : la colonne est absente de tout jeton encore vierge, soit exactement ceux que la révocation existe pour annuler. Demander un nouveau lien laissait le précédent valide jusqu'à son expiration, et `revokedReason: 'NEW_REQUEST'` n'a jamais été écrit une seule fois.
+- **`MessageProcessor.updateTrackingLinksWithMessageId` n'écrivait aucune attribution.** La réécriture crée le lien avec un `messageId` encore indisponible, donc omis (son propre commentaire dit « sera null » — il est absent) ; le filtre du rattachement post-envoi ne retrouvait pas le lien qu'elle venait de créer.
+- **Le compteur `activeTokens` du balayage des jetons rendait toujours 0.**
+
+**Décision** :
+- **Le prédicat de lecture prend un nom générique** : `unsetOrNull(champ)` (`utils/prisma-unset.ts`), qui rend `OR: [{ champ: null }, { champ: { isSet: false } }]` en restant typé sur le nom du champ. Un nom par champ (comme `NOT_DELETED` pour les posts) ne convenait pas : les quatre sites portent quatre colonnes différentes dans quatre modules, et c'est l'INVARIANT qui est commun, pas la colonne.
+- **Il complète la discipline d'écriture, il ne la remplace pas.** Écrire la colonne (`LIVE_MESSAGE_MARK`, le `leftAt: null` explicite de `CallService.initiateCall`) rend exactes les lignes À VENIR ; ce prédicat rend exactes celles DÉJÀ en base. Aucune des deux moitiés ne rend l'autre inutile, et c'est pourquoi ce cycle n'a pas ajouté d'écriture aux neuf créateurs de `Participant` : les lignes anonymes déjà en base seraient restées dehors.
+- **La garde de bannissement est CONSERVÉE, pas retirée.** Elle paraît redondante avec `isActive: true` — un bannissement écrit `isActive: false`. Elle ne l'est pas : `routes/me/delete-account.ts` rallume `isActive` à la restauration d'un compte sans regarder `bannedAt`.
+- **Les témoins de ces clauses les jugent en les APPLIQUANT à des documents.** `__tests__/helpers/mongo-where.ts` évalue un `where` contre des objets nus, où une clé absente de l'objet est une colonne absente du document. Un double qui rend ce qu'on lui dit de rendre ne peut pas distinguer une clause qui apparie de sa jumelle qui n'apparie rien — c'est ainsi que ce piège a traversé des suites vertes, et deux des témoins réécrits ici ÉPINGLAIENT la clause fautive.
+
+**Alternatives rejetées** :
+- **Faire écrire la colonne par les neuf créateurs de `Participant`** (le geste du cycle précédent, transposé). Il laisse dehors toutes les lignes existantes — c'est-à-dire tous les participants anonymes actuels, précisément ceux dont l'accès est cassé.
+- **Retirer la garde `bannedAt` de `canAccessConversation`** puisque `isActive: true` la recouvre presque : la restauration de compte ouvre le trou décrit plus haut, et affaiblir un contrôle d'accès pour contourner un bug de prédicat est le mauvais échange.
+- **Un `unsetOrNull` appliqué d'office aux ~12 copies inline déjà correctes** (`leftAt`, `expiresAt`, `parentId`, `mutedAt`, `invalidatedAt`) : elles fonctionnent, et certaines vivent dans un `where` portant DÉJÀ un `OR` — un spread y écraserait silencieusement l'existant. Migration incrémentale, jamais mécanique.
+- **Rendre effectif `MaintenanceService.cleanupOrphanedAttachments`** (même défaut, même ligne à corriger) : cette passe SUPPRIME fichier et ligne de façon irréversible et n'a jamais rien supprimé. La réparer, c'est armer un effacement de masse sur des données dont ce conteneur ne sait rien. Reporté explicitement, avec un essai à blanc contre la base de production comme préalable.
+
+**Conséquences** :
+- **Un participant anonyme accède enfin à sa conversation par les routes REST**, sans réparation de base préalable — le prédicat apparie les lignes déjà écrites.
+- **Une nouvelle demande de lien magique ou de réinitialisation révoque bien la précédente.** C'est un changement observable et voulu : un lien reçu plus tôt cesse de fonctionner dès qu'un nouveau est demandé.
+- **`TrackingLink.messageId` est désormais renseigné sur le chemin d'envoi.** La désactivation des liens d'un message supprimé ne dépendait pas de cette colonne (`deactivateOrphanedTrackingLinks` dérive la propriété du contenu) — le gain est l'attribution, pas la sécurité.
+- **Ce que la décision n'assure PAS** : les liens de tracking et les jetons déjà en base gardent leur colonne absente pour le passé (les nouvelles lectures les apparient, mais aucune attribution rétroactive n'est écrite) ; le balayage des pièces jointes orphelines reste inerte, délibérément ; les ~119 lectures de `Message.deletedAt` restent adossées à la discipline d'écriture du cycle précédent.
+
+**Tests** : 15 neufs — 6 sur la source (`utils/__tests__/prisma-unset.test.ts`), 5 sur l'accès conversation jugé sur documents, 3 sur la révocation des jetons, 1 sur le compteur du balayage, 1 sur le rattachement des liens ; 3 témoins pré-existants qui épinglaient la clause fautive réécrits en comportement. Sondes de fidélité en sept temps — chacun des quatre sites remis à `{ champ: null }` : 1 rouge chacun (2 pour le magic-link, qui avait deux copies du témoin) ; invariant vidé en `{}` : 8 rouges, dont le refus d'un banni resté actif — un prédicat trop permissif est attrapé comme tel, pas seulement comme une forme fausse ; branche `null` retirée : 3 rouges, dont l'admission du débanni, seul cas que cette branche protège. Gate complet : 646 suites / 16 300 tests verts, `tsc --noEmit` 0 erreur.
+
+## 2026-08-11 : L'aperçu de la ligne de liste est un GROUPE, et il voyage PAR DESTINATAIRE
+
+**Statut** : Accepté
+
+**Contexte** : `GET /conversations` hydrate la ligne de liste avec trois champs solidaires —
+`lastMessagePreview` (l'original tronqué), `lastMessageTranslations` (la carte du Prisme du lecteur)
+et `lastMessageOriginalLanguage`. Les résolveurs jumeaux des deux clients
+(`MeeshyConversation.resolvedLastMessagePreview`, `formatLastMessage`) **PRÉFÈRENT la traduction**
+à l'aperçu brut : c'est le Prisme, et c'est le cas nominal du produit.
+
+Les deux émetteurs de `conversation:updated` — `emitConversationPreviewUpdate` (édition/suppression)
+et `MeeshySocketIOManager._broadcastNewMessage` (envoi) — n'envoyaient que `lastMessagePreview`.
+Une édition périme pourtant `Message.translations` **dans la même écriture** que le nouveau contenu
+(`routes/messages.ts`, atomique et délibéré). Les clients n'écrasaient donc que l'aperçu et
+gardaient la carte de l'ANCIEN texte — **c'est elle qui restait affichée**, indéfiniment, jusqu'à un
+rechargement complet de la liste.
+
+**Décision** :
+- **Les trois champs voyagent ensemble.** `conversation:updated` porte désormais la paire de Prisme
+  à parité avec `GET /conversations`. Le contrat est déclaré sur `ConversationUpdatedEventData`
+  (`packages/shared`) plutôt que laissé à l'`index signature`.
+- **`null` est une VALEUR, jamais une omission.** Après une édition la carte reconstruite est vide,
+  et c'est ce vide REÇU qui périme proprement celle du client. Le client ne peut pas le déduire :
+  une édition garde le MÊME `lastMessageId`, donc « vider quand l'id change » laisse passer
+  exactement ce cas. Côté iOS, `Optional` ne suffit pas à porter le signal — d'où le tri-état
+  `LastMessagePreviewTranslations` (`.unchanged` = clé absente / `.replaced` = clé présente),
+  décodé par la PRÉSENCE de la clé.
+- **Le payload est construit PAR DESTINATAIRE.** La carte est filtrée aux langues du lecteur ; deux
+  participants de prismes différents n'ont pas la même. La question était portée « non tranchée »
+  par le backlog depuis le cycle 60 : **elle l'est par le code existant** — la boucle par
+  participant était déjà là, elle envoyait simplement le même objet à tout le monde.
+- **Les deux émetteurs sont traités ENSEMBLE**, via l'unité partagée
+  `socketio/utils/lastMessagePreviewPrism.ts`. Traiter le seul chemin d'édition aurait rendu
+  l'aperçu dépendant du transport : traduit après une édition, brut après un envoi.
+- **La règle de dédup `userId ?? id` reste dans UN seul endroit.** `participantUserRoomTargets`
+  rend `{ room, participant }` et `participantUserRooms` en devient une projection — c'est, selon
+  le doc-comment du fichier, « la seule ligne que chaque copie de ce code a ratée ».
+
+**Alternatives rejetées** :
+- **Vider la carte côté client dès qu'un nouvel aperçu arrive** : casse le cycle 65. Le chemin
+  d'envoi émet `conversation:updated` DERRIÈRE un `message:new` qui vient d'installer la carte ; un
+  vide inconditionnel échange un défaut contre un autre.
+- **Vider seulement si `lastMessageId` diffère** : une édition garde le même message, donc le même
+  id. C'est précisément le seul cas que ce raffinement laisse passer.
+- **Un payload unique partagé par la room**, quitte à envoyer les N traductions : multiplierait le
+  poids de chaque événement par le nombre de langues de la conversation pour un champ dont le
+  client n'affiche qu'UNE valeur — l'exclusion #1 que `buildLastMessagePreviewTranslations`
+  documente déjà.
+- **Réimplémenter l'ordre du Prisme dans les émetteurs** : `resolveUserLanguagesOrdered` est la
+  seule autorité du dépôt sur cet ordre.
+
+**Conséquences** :
+- **Une requête de plus par participant sur le fanout d'aperçu** — un `include` du `user` sur une
+  requête `participant.findMany` qui existait déjà. Aucune requête supplémentaire : le `select`
+  s'élargit, la requête ne se dédouble pas.
+- **Changement observable** : après une édition, la ligne de liste affiche enfin le NOUVEAU texte,
+  et le fait dans la langue du lecteur dès que la retraduction arrive.
+- **Ce que la décision n'assure PAS** : supprimer le DERNIER message ne met toujours pas la ligne à
+  jour côté iOS — le nouveau dernier message est plus ANCIEN, donc le garde monotone le rejette, à
+  raison selon sa règle. C'est un contrat distinct (« le dernier message recule »), qu'un seul
+  timestamp ne peut pas exprimer. Par ailleurs le chemin d'envoi porte toujours
+  `lastMessagePreview` NON tronqué, là où `GET /conversations` applique `truncateMessagePreview`.
+
+**Tests** : 12 neufs côté gateway/web — 5 sur `emitConversationPreviewUpdate` (prisme du lecteur,
+payload par destinataire, carte nulle après édition, colonnes sélectionnées, participant sans
+compte), 2 sur le jumeau d'envoi dont une garde anti-régression du cycle 65 (le
+`conversation:updated` d'envoi ne contredit jamais le `message:new` qui le précède, étant construit
+depuis le MÊME message), 5 sur `normalizeConversationPatch` (web).
+RED observé avant implémentation : 5 rouges côté gateway, 3 côté web. Gate complet : **650 suites /
+16 378 tests verts** (base : 650 / 16 371 — l'écart est exactement les 7 témoins gateway, aucun
+perdu), `tsc --noEmit` 0 erreur ; web 30 suites / 750 tests verts. Côté SDK iOS, 8 témoins écrits
+(5 sur `applyConversationUpdated`, 3 sur le décodage tri-état) — non gatables dans ce conteneur
+(aucune chaîne Swift), gate = `sdk-tests.yml` en CI. Total 20 témoins.
+
+## 2026-08-11 : Une traduction qui atterrit RESSERT l'aperçu — bornée par `PreviewUpdateScope`
+
+**Contexte** : `lastMessageTranslations` est posé sur la ligne de liste par les trois chemins REST
+et par les émetteurs temps réel de `conversation:updated`. Le câblage était juste, l'INSTANT ne
+l'était pas : l'aperçu est servi à l'ENVOI, quand `Message.translations` vaut encore `null` — la
+traduction NLLB arrive une à deux secondes plus tard par ZMQ. Rien ne repassait ensuite. Un lecteur
+francophone gardait « Hello » dans sa liste indéfiniment, et le comportement dépendait du parcours :
+ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait dans la langue de
+l'expéditeur.
+
+**Décision** : `_handleTextTranslationReady` devient le QUATRIÈME émetteur de `conversation:updated`,
+en réutilisant `emitConversationPreviewUpdate` — aucune copie du fan-out, du prisme par destinataire
+ni de la recomputation du dernier message. Mais une traduction n'est pas une mutation de contenu, et
+`PreviewUpdateScope` porte cette différence :
+
+- **`onlyIfLatestIs`** — le fan-out est abandonné si le message traduit n'est plus le dernier de la
+  conversation. Son propre chemin d'envoi a déjà servi l'aperçu ; ré-émettre l'ancien ferait
+  **reculer** la ligne de liste.
+- **`onlyIfPreviewCarriesLanguage`** — n'émet qu'aux destinataires dont la carte RÉSOLUE porte la
+  langue qui vient d'atterrir. Le test porte sur la carte SORTIE, donc il hérite gratuitement des
+  quatre exclusions de `buildLastMessagePreviewTranslations`.
+
+**Alternatives rejetées** :
+- **Faire patcher la ligne par les clients depuis `message:translation`** : l'événement arrive bien
+  (tout socket rejoint TOUTES ses rooms de conversation à l'authentification), mais il porte
+  `MessageTranslation` — un tableau — là où la ligne consomme une carte compacte `{ langue: aperçu }`
+  déjà tronquée et filtrée au prisme. Reconstruire la seconde depuis le premier ferait vivre la
+  règle de troncature et les quatre exclusions dans trois clients au lieu du serveur.
+- **Un débounce par conversation** pour fusionner la rafale multi-langues en un seul fan-out :
+  aurait introduit le PREMIER timer du manager, qui n'a aucun point de fermeture (pas de `shutdown`),
+  donc un timer capable de survivre à la suite de tests. `onlyIfPreviewCarriesLanguage` obtient le
+  même effet sans état — chaque langue ne touche que ses lecteurs.
+- **Émettre inconditionnellement à tous les participants** : une conversation à N langues paierait N
+  fan-outs complets par message, sur le chemin le plus chaud du service, dont N−1 strictement
+  identiques à l'octet près pour chaque lecteur.
+
+**Conséquences** :
+- **Deux requêtes Prisma par traduction du dernier message** (participants + dernier message), en
+  parallèle. Quand `onlyIfLatestIs` échoue elles sont toutes deux perdues. Sérialiser les
+  économiserait sur ce chemin mais ralentirait l'appelant DOMINANT (l'édition, où les deux sont
+  toujours nécessaires) : arbitrage assumé en faveur du chemin dominant.
+- **`updatedBy` porte l'auteur du message traduit.** Une traduction n'a pas d'acteur humain et le
+  champ est obligatoire ; c'est déjà le repli du chemin d'envoi (`senderUserId ?? message.senderId`),
+  et les deux clients ignorent le champ.
+- **Changement observable** : la ligne de liste se traduit toute seule, quelques secondes après
+  l'arrivée du message, sans que le lecteur ait à ouvrir la conversation.
+- **Ce que la décision n'assure PAS** : Android ne décode ni `lastMessageTranslations` ni
+  `lastMessageOriginalLanguage` — sa ligne de liste reste dans la langue d'origine, avant comme
+  après ce correctif. Le chemin AUDIO n'est pas touché non plus (l'aperçu d'un vocal est un libellé
+  de type, pas un texte).
+
+**Tests** : 10 neufs — 6 sur `emitConversationPreviewUpdate` (portée), 4 sur le manager (câblage).
+RED prouvé par mutation : gardes retirées ⇒ 3 témoins de portée rouges ; appel neutralisé ⇒ le
+témoin de câblage rouge. Deux témoins de portée sont non-discriminants seuls et le disent — ils
+verrouillent ce qui ne doit PAS changer.
+
+---
+
+## 2026-08-11 : Un enrichissement asynchrone doit TROIS audiences, pas la seule room de conversation
+
+**Contexte** : `message:attachment-updated` — le delta émis quand Whisper finit une transcription,
+puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — était diffusé dans la seule room
+`conversation:<id>`. Deux audiences le perdaient. (1) Le lecteur resté sur la liste : iOS n'émet
+`conversation:join` qu'à l'OUVERTURE du fil, donc au lancement de l'app un lecteur sur la liste n'est
+dans AUCUNE room de conversation. (2) Le lecteur hors ligne : le `message:new` mis en file à l'ENVOI
+porte la pièce jointe sans transcription ni audio traduit — ils n'existent pas encore — donc la copie
+rejouée à la reconnexion reste définitivement la non enrichie.
+
+**Décision** : l'émission chaîne la room de conversation ET les rooms personnelles de tous les
+participants (`emitToConversationParticipants` : une seule copie par socket), et l'enrichissement
+obtient sa PROPRE entrée de file sous `eventType: 'attachment-updated'`, rejouée en
+`message:attachment-updated` au drain. La clé de dédup est l'id de la PIÈCE JOINTE, pas celui du
+message : l'identité par défaut `(messageId, eventType)` ferait superséder l'enrichissement de la
+première pièce jointe par celui de la seconde sur un message à deux audios, alors que par pièce
+jointe la règle « le dernier payload gagne » est exactement la bonne (le payload porte l'état
+COMPLET).
+
+**Alternatives rejetées** :
+- **Laisser les clients rattraper au refetch d'ouverture** : c'est le comportement d'avant, et il
+  rend le Prisme fonction de la ROUTE du lecteur (avoir le fil ouvert quand Whisper a fini) plutôt
+  que de ses préférences de langue. Même défaut que l'aperçu de liste qui ne se retraduisait jamais.
+- **Filtrer le payload par langue du destinataire**, comme `message:new`
+  (`filterMessagePayloadForLanguages`) : les clients REMPLACENT la carte de traductions de la pièce
+  jointe (iOS `handleAttachmentUpdated`, web `use-socket-cache-sync`), donc un sous-ensemble par
+  lecteur EFFACERAIT les langues qu'un fetch REST antérieur avait mises en cache. Le filtrage
+  suppose d'abord un contrat de FUSION côté client.
+- **Émettre aux rooms personnelles seulement** (sans la room de conversation) : suffisant en théorie
+  — tout socket authentifié joint sa room personnelle — mais retirer une audience déjà servie n'était
+  pas nécessaire au correctif.
+
+**Conséquences** :
+- Une requête participants par delta d'enrichissement (réutilisée par la mise en file, jamais deux
+  fois). Une panne de cette requête dégrade vers la room de conversation seule, jamais vers le
+  silence.
+- Plus de sockets reçoivent chaque delta, non filtré par langue : une conversation à N langues paie
+  N diffusions complètes de la pièce jointe. Assumé jusqu'au contrat de fusion client.
+- Au plus UNE entrée de file par pièce jointe et par destinataire hors ligne, quel que soit le nombre
+  d'étapes d'enrichissement (supersede en place).
+
+## 2026-08-11 : Une page filtrée par curseur se trie PAR ce curseur — sinon sa troncature est une perte
+
+**Contexte** : `GET /conversations?updatedSince=` plafonne à 100 lignes et triait par `lastMessageAt`
+décroissant — l'ordre hérité de l'écran de liste, sans rapport avec le filtre. Les lignes coupées
+n'étaient donc pas « les moins récemment mises à jour », alors que les deux clients avancent leur
+watermark au max des `updatedAt` REÇUS : elles étaient enjambées jusqu'à la réconciliation complète
+(1×/24 h sur iOS), la liste affichant entre-temps des compteurs et des aperçus périmés sans signal.
+
+**Décision** : une page DELTA est triée par `updatedAt` croissant, `id` en départage. Les lignes
+coupées sont alors exactement celles d'`updatedAt` supérieur à la dernière rendue : le watermark
+pointe dessus et l'appel suivant les rend. La troncature devient une pagination, sans aucun
+changement client. Une page ordinaire garde `lastMessageAt` décroissant, et le curseur `before`
+(qui borne sur `lastMessageAt`) garde la main sur l'ordre.
+
+**Alternatives rejetées** :
+- **Câbler la détection côté client** (page pleine ⇒ relecture complète, ce que le web fait déjà) :
+  traite le symptôme, doit être réécrit sur chaque plateforme, et fait payer une relecture complète
+  là où l'ordre serveur rend la page suivante suffisante.
+- **Relever le plafond à 500** (ce que le client iOS demande déjà sans l'obtenir) : déplace le seuil
+  sans supprimer le cas, et alourdit une route déjà lourde.
+
+**Conséquences** :
+- Un client delta reçoit ses conversations de la moins récemment modifiée à la plus récente. Les deux
+  consommateurs fusionnent par id, aucun ne dépend de l'ordre.
+- Résidu assumé : plus de 100 conversations portant la MÊME milliseconde d'`updatedAt` débordent
+  d'une page que la borne stricte `gt` ne peut pas reprendre. La détection de page pleine reste donc
+  utile côté client — le web la garde, iOS ne l'a pas encore.

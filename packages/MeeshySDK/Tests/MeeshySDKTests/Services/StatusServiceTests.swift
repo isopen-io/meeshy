@@ -102,6 +102,29 @@ final class StatusServiceTests: XCTestCase {
         XCTAssertEqual(result.moodEmoji, "smile")
     }
 
+    func testCreateForwardsOriginalLanguageToTheBody() async throws {
+        // Prisme Linguistique : sans langue source, le gateway ne peut pas
+        // router la traduction NLLB du texte du mood. L'app envoie « fr »
+        // par défaut (public cible France, directive 2026-07-30).
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(moodEmoji: "smile", content: "Bonjour", originalLanguage: "fr")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["originalLanguage"] as? String, "fr")
+    }
+
+    func testCreateWithoutOriginalLanguageOmitsTheKey() async throws {
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(moodEmoji: "smile", content: "Hello")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["originalLanguage"])
+    }
+
     func testCreateWithVisibilityAndUserIds() async throws {
         let post = makeAPIPost()
         let response = APIResponse<APIPost>(success: true, data: post, error: nil)

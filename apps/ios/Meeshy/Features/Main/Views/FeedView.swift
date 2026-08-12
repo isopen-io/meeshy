@@ -1,6 +1,5 @@
 import SwiftUI
 import PhotosUI
-import CoreLocation
 import Combine
 import os
 import MeeshySDK
@@ -62,8 +61,11 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    /// Media posts default to a REEL; the author can force a plain POST via the
-    /// composer's Réel⇄Post toggle, keeping it out of the reels surface.
+    /// A QUALIFYING composition (video || audio || >= 2 images —
+    /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
+    /// force a plain POST via the composer's Réel⇄Post toggle. A non-qualifying
+    /// composition (single image, documents) is ALWAYS a POST — the toggle
+    /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
@@ -99,13 +101,17 @@ struct FeedView: View {
     @State private var postShareInFlightIds: Set<String> = []
     @State private var postShareDelta: [String: Int] = [:]
 
-    // Impression tracking
-    @State private var pendingImpressionIds = Set<String>()
-    @State private var recordedImpressionIds = Set<String>()
-    @State private var impressionFlushTask: Task<Void, Never>?
+    // Impression tracking — une impression par APPARITION à l'écran. Le
+    // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
+    // relance) sont portés par `ImpressionBatcher`.
+    @StateObject private var impressions = ImpressionBatcher(source: "feed")
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    @State var pendingPlace: SharedPlace? = nil
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
@@ -134,7 +140,10 @@ struct FeedView: View {
     @State private var quoteTargetPost: FeedPost?
 
     var composerHasContent: Bool {
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
+        // position seule et publishPostWithAttachments() (dont le garde autorise
+        // deja ce cas) ne devient jamais atteignable (Task 13, 2026-07-29).
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
     // MARK: - Post Heart Seeding (Prisme Linguistique — reaction state)
@@ -367,9 +376,9 @@ struct FeedView: View {
             if success {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
-                    FeedbackToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main))
                 } else {
-                    FeedbackToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
                 }
             } else {
                 // Rollback both the UI flip and the cache pre-population.
@@ -383,7 +392,7 @@ struct FeedView: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
             }
         }
     }
@@ -503,6 +512,10 @@ struct FeedView: View {
     }
 
     var body: some View {
+        postActionPresentations(feedBody)
+    }
+
+    private var feedBody: some View {
         ZStack {
             // Themed background
             theme.backgroundGradient.ignoresSafeArea()
@@ -563,22 +576,11 @@ struct FeedView: View {
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
         HStack(spacing: 12) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-
-                Text("M")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
-            }
+            MeeshyAvatar(
+                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                context: .custom(40),
+                avatarURL: AuthManager.shared.currentUser?.avatar
+            )
             .accessibilityHidden(true)
 
             // Text input placeholder
@@ -742,7 +744,8 @@ struct FeedView: View {
     private func reelFeedCardView(for post: FeedPost) -> some View {
         // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
         // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
-        ReelFeedCardContainer(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
             coordinator: reelAutoplay,
             post: post,
             isDark: isDark,
@@ -788,7 +791,19 @@ struct FeedView: View {
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": authorId, "username": post.authorUsername ?? post.author]
                 )
-            }
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
         )
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
@@ -943,7 +958,19 @@ struct FeedView: View {
                     // and the iPhone feed so stories load identically here. Le tap
                     // ouvre le viewer via StoryViewerCoordinator (chemin unique),
                     // exactement comme la liste de conversations.
-                    StoryTrayView(viewModel: storyViewModel)
+                    //
+                    // Absent sur iPad : les deux colonnes sont visibles EN MÊME
+                    // TEMPS et la liste de conversations porte déjà ce même tray.
+                    // L'afficher ici le montrait DEUX FOIS côte à côte, avec les
+                    // mêmes avatars — la seconde occurrence n'apprend rien et
+                    // repousse le fil vers le bas. `sizeClass == .regular` est le
+                    // discriminant qui monte `iPadRootView` (cf. AdaptiveRootView),
+                    // donc le tray de la colonne droite est là par construction.
+                    // Les stories restent chargées : les anneaux d'auteur des
+                    // cartes en dépendent.
+                    if sizeClass != .regular {
+                        StoryTrayView(viewModel: storyViewModel)
+                    }
 
                     // Composer placeholder
                     composerPlaceholder
@@ -1061,8 +1088,11 @@ struct FeedView: View {
             if viewModel.feedStore == nil {
                 let deps = DependencyContainer.shared
                 let store = FeedStore(persistence: deps.feedPersistence)
-                let socketHandler = FeedSocketHandler(persistence: deps.feedPersistence)
-                viewModel.setupPersistence(store: store, socketHandler: socketHandler, persistence: deps.feedPersistence)
+                viewModel.setupPersistence(
+                    store: store,
+                    socketHandler: deps.feedSocketHandler,
+                    persistence: deps.feedPersistence
+                )
                 store.startObserving(dbPool: deps.dbPool)
                 await store.loadInitial()
             }
@@ -1179,14 +1209,15 @@ struct FeedView: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
-            impressionFlushTask?.cancel()
-            impressionFlushTask = nil
+            // Flush, PAS cancel : annuler ici jetait le lot en cours de
+            // groupement à chaque sortie du feed.
+            Task { await impressions.flushNow() }
         }
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, transcription in
+            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
+                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
         }
@@ -1313,9 +1344,18 @@ struct FeedView: View {
                         }
                     }
 
-                    // Réel ⇄ Post toggle — media posts default to a reel; the
-                    // author can force a plain post to keep it out of reels.
-                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                    // Réel ⇄ Post toggle — shown ONLY when the current
+                    // composition qualifies as a reel (video >=3s || audio
+                    // >=3s || >= 2 images). Removing an image (2→1) de-
+                    // qualifies: the toggle disappears and
+                    // `ReelComposition.defaultType` publishes a POST
+                    // regardless of this flag — no 1-image REEL possible, nor
+                    // a video/audio under 3 seconds.
+                    if ReelComposition.qualifiesAsReel(
+                        mimeTypes: pendingAttachments.map(\.mimeType)
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: pendingAttachments.map(\.duration)
+                    ) {
                         Button {
                             composerForcePlainPost.toggle()
                             HapticFeedback.light()
@@ -1366,7 +1406,7 @@ struct FeedView: View {
                 }
 
                 // Pending attachments preview
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
                     feedPendingAttachmentsRow
                 }
 
@@ -1429,25 +1469,22 @@ struct FeedView: View {
                         showComposerLanguagePicker = true
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "globe")
-                                .font(.footnote)
-                            Text(composerLanguageDisplayName)
-                                .font(.footnote.weight(.semibold))
-                        }
-                        .foregroundColor(MeeshyColors.indigo500)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
-                                )
-                        )
+                        Text(ComposerLanguageFlag.label(for: composerLanguage))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
                     }
                     .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
@@ -1458,6 +1495,15 @@ struct FeedView: View {
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
+            // Cible de dépôt de la recette commune (Lot 1). Cette surface POST
+            // n'instancie pas `UniversalComposerBar` : le point de câblage est
+            // donc le modificateur partagé, appliqué à toute la carte du
+            // composer (champ, tiroir de pièces jointes, barre d'outils) —
+            // même affordance et même résolution que la barre.
+            .modifier(ComposerDropTargetModifier(
+                accentColor: MeeshyColors.brandPrimaryHex,
+                onIngest: { handleFeedComposerIngest($0) }
+            ))
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
             .shadow(color: MeeshyColors.indigo300.opacity(0.2), radius: 30, y: 20)
@@ -1480,8 +1526,8 @@ struct FeedView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
-                handleFeedLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                handleFeedLocationSelection(place)
             }
         }
         .sheet(isPresented: $showEmojiPicker) {
@@ -1492,77 +1538,63 @@ struct FeedView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(item: $shareableLink) { link in
-            // System share sheet — paste/AirDrop/Messages/etc. all receive the
-            // `meeshy.me/l/<token>` URL so every external touchpoint funnels
-            // through the user's TrackingLink for attribution.
-            ShareSheet(activityItems: [link.url])
-        }
-        .sheet(item: $reelCommentsPost) { post in
-            // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
-            // ouverte directement depuis le bouton commentaire d'un réel du feed.
-            CommentsSheetView(post: post, accentColor: post.authorColor)
-        }
-        .sheet(item: $editingPost) { post in
-            EditPostSheet(
-                originalContent: post.content,
-                originalLanguage: post.originalLanguage,
-                originalType: post.type,
-                canBeReel: post.hasMedia,
-                media: post.media.map { EditablePostMedia($0) },
-                isRepost: post.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
-                },
-                onDismiss: { editingPost = nil }
-            )
-        }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
         }
-        .fullScreenCover(item: $quoteTargetPost) { quoted in
-            FeedComposerSheet(
-                viewModel: viewModel,
-                initialText: "",
-                pendingAttachmentType: nil,
-                quotePost: quoted,
-                onDismiss: {
-                    quoteTargetPost = nil
-                }
-            )
-        }
+    }
+
+    // MARK: - Post Action Presentations
+    //
+    // Partage, commentaires de réel, édition et citation sont déclenchés depuis
+    // les CARTES du feed — jamais depuis le composer. Ces présentations vivaient
+    // pourtant sur `composerOverlay`, monté sous `if showComposer` : composer
+    // fermé, la vue portant le `.sheet` n'existait pas, donc « Partager » et
+    // « Citer » ne produisaient rien. Pire, l'item restait armé et bloquait les
+    // présentations suivantes du feed jusqu'au redémarrage. Elles sont désormais
+    // ancrées au `body`, monté en permanence.
+    private func postActionPresentations(_ content: some View) -> some View {
+        content
+            .sheet(item: $shareableLink) { link in
+                // System share sheet — paste/AirDrop/Messages/etc. all receive the
+                // `meeshy.me/l/<token>` URL so every external touchpoint funnels
+                // through the user's TrackingLink for attribution.
+                ShareSheet(activityItems: [link.url])
+            }
+            .sheet(item: $reelCommentsPost) { post in
+                // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
+                // ouverte directement depuis le bouton commentaire d'un réel du feed.
+                CommentsSheetView(post: post, accentColor: post.authorColor)
+            }
+            .sheet(item: $editingPost) { post in
+                EditPostSheet(
+                    originalContent: post.content,
+                    originalLanguage: post.originalLanguage,
+                    originalType: post.type,
+                    media: post.media.map { EditablePostMedia($0) },
+                    originalLocation: post.location,
+                    isRepost: post.repost != nil,
+                    onSave: { draft in
+                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    },
+                    onDismiss: { editingPost = nil }
+                )
+            }
+            .fullScreenCover(item: $quoteTargetPost) { quoted in
+                FeedComposerSheet(
+                    viewModel: viewModel,
+                    initialText: "",
+                    pendingAttachmentType: nil,
+                    quotePost: quoted,
+                    onDismiss: {
+                        quoteTargetPost = nil
+                    }
+                )
+            }
     }
     // MARK: - Impression Tracking
 
     private func trackImpression(postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
-        scheduleImpressionFlush()
-    }
-
-    private func scheduleImpressionFlush() {
-        // Debounce via a cancellable Task, NOT Timer.scheduledTimer: a default-mode
-        // run-loop timer does not fire while the feed ScrollView is in tracking
-        // mode, and it was re-armed on every card `onAppear` — so feed-appearance
-        // impressions never flushed (impressionCount only ever moved on Detail
-        // opens, tracking postOpenCount 1:1). Task.sleep fires regardless of
-        // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
-        impressionFlushTask?.cancel()
-        impressionFlushTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            let batch = Array(pendingImpressionIds)
-            guard !batch.isEmpty else { return }
-            pendingImpressionIds.subtract(batch)
-            do {
-                try await PostService.shared.recordImpressions(postIds: batch)
-                // Mark recorded ONLY on success so a failed flush leaves the ids
-                // eligible to re-enqueue when the card next appears.
-                recordedImpressionIds.formUnion(batch)
-            } catch {
-                FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-            }
-        }
+        impressions.record(postId)
     }
 }
 

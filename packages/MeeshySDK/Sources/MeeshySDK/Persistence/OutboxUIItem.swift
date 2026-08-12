@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// UI-facing snapshot of an outbox row. Used by `SyncPill` to display
 /// queued items without leaking GRDB row internals or domain payload
@@ -179,7 +180,9 @@ extension OutboxUIItem {
     }
 
     private static func mapEditMessage(record: OutboxRecord) -> OutboxUIItem {
-        let payload = try? JSONDecoder().decode(OfflineEditPayload.self, from: record.payload)
+        let payload = JSONDecoder().decodeOrLog(OfflineEditPayload.self, from: record.payload,
+                                                field: "edit payload (sync pill)", id: record.id,
+                                                logger: Logger.ui)
         let preview = payload.map { truncatePreview($0.content) }
         return OutboxUIItem(
             id: record.id,
@@ -297,7 +300,9 @@ extension OutboxUIItem {
     /// and to derive an accurate media icon + content preview. Falls back to a
     /// plain post on decode failure.
     private static func mapCreatePost(record: OutboxRecord) -> OutboxUIItem {
-        let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
+        let payload = JSONDecoder().decodeOrLog(CreatePostPayload.self, from: record.payload,
+                                                field: "create-post payload (sync pill)", id: record.id,
+                                                logger: Logger.ui)
         let type = (payload?.type ?? "POST").uppercased()
         let mediaPaths = payload?.localMediaPaths ?? []
 
@@ -359,7 +364,8 @@ extension OutboxUIItem {
     private static func decodeOfflineQueueItem(_ data: Data) -> OfflineQueueItem? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(OfflineQueueItem.self, from: data)
+        return decoder.decodeOrLog(OfflineQueueItem.self, from: data,
+                                   field: "queue item (sync pill)", logger: Logger.ui)
     }
 
     private static func extractStoryId(from payload: Data) -> String? {

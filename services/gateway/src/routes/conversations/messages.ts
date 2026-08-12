@@ -3,12 +3,15 @@ import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { MessagingService } from '../../services/messaging/MessagingService';
+import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import {
   buildPostReplyTo,
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -21,7 +24,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { resolveReadAt } from '../../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
@@ -29,7 +32,7 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
 import { isBlockedBetween } from '../../utils/blocking';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
@@ -42,27 +45,34 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFo
 import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
-// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
-// hex strings sort chronologically). Duplicated rather than imported: several
-// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
-// with a factory that only exports `MessageReadStatusService`, so a named
-// import of this helper resolves to `undefined` under those mocks.
+// Mirrors the cursor-advance freshness guard in MessageReadStatusService. It
+// orders by the message's `createdAt` (millisecond precision, stable across
+// gateway processes); ObjectId hex order is only second-accurate and its next 5
+// bytes are per-process random, so it can invert real recency for same-second
+// messages from different nodes. The ObjectId comparison is kept only as a
+// fallback for legacy cursors written before `lastReadMessageCreatedAt` existed.
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-function isStaleCursorMessageId(
-  candidateMessageId: string,
-  currentCursorMessageId: string | null | undefined
-): boolean {
-  if (!currentCursorMessageId) return false;
-  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+function isStaleCursorMessageId(params: {
+  candidateMessageId: string;
+  candidateCreatedAt: Date;
+  cursorMessageId: string | null | undefined;
+  cursorMessageCreatedAt: Date | null | undefined;
+}): boolean {
+  const { candidateMessageId, candidateCreatedAt, cursorMessageId, cursorMessageCreatedAt } = params;
+  if (!cursorMessageId) return false;
+  if (cursorMessageCreatedAt) {
+    return candidateCreatedAt < cursorMessageCreatedAt;
+  }
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(cursorMessageId)) {
     return false;
   }
-  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+  return candidateMessageId.toLowerCase() < cursorMessageId.toLowerCase();
 }
 
 /**
@@ -126,6 +136,10 @@ export const SendMessageBodySchema = z.object({
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte déléguée à
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
 }).refine(
   (data) =>
     (data.content?.trim().length ?? 0) > 0 ||
@@ -134,7 +148,7 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 );
-import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
@@ -293,6 +307,26 @@ export function registerMessagesRoutes(
   optionalAuth: any,
   requiredAuth: any
 ) {
+  // Authentification des routes de LECTURE (mark-read / read / mark-unread).
+  //
+  // `requiredAuth` porte `allowAnonymous: false` et sert tout le reste de ce
+  // fichier ; le suivi de lecture est la seule famille qui ne peut pas
+  // l'accepter. Un invité de lien partagé lit la conversation (`optionalAuth`
+  // sur le GET), y envoie des messages (`optionalAuth` sur le POST) et y réagit
+  // (`routes/reactions.ts`), mais se voyait refuser la seule opération qui
+  // REMET SON BADGE À ZÉRO — et le serveur lui pousse pourtant ce badge
+  // (`emitUnreadCountsToRecipients`, `ROOMS.user(userId ?? id)`). Son compteur
+  // ne pouvait donc que monter.
+  //
+  // `requireAuth: true` reste : c'est « authentifié, avec ou sans compte », pas
+  // `optionalAuth` (`requireAuth: false`), qui laisserait passer un appelant
+  // sans jeton du tout. Le curseur de lecture est indexé sur `Participant.id`
+  // depuis toujours : rien en aval ne suppose un `User`.
+  const participantAuth = createUnifiedAuthMiddleware(prisma, {
+    requireAuth: true,
+    allowAnonymous: true
+  });
+
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = fastify.socketIOHandler;
@@ -330,21 +364,54 @@ export function registerMessagesRoutes(
       if (!socketIOManager) return;
       const io = socketIOManager.getIO();
 
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      // Read frontier + remaining unread of the ACTOR, resolved once and used
+      // twice: they ride the read-status broadcast below (multi-device read
+      // sync) AND drive the badge reset. Both travel ONLY on a 'read' — the
+      // sole action that advances a read cursor; a 'received' never moves
+      // `lastReadAt`. Mirrors `broadcastReadStatus` in message-read-status.ts,
+      // the twin route: `ReadStatusUpdatedEventData` declares the two as a pair
+      // and consumers apply them together or not at all, so a broadcast missing
+      // them is silently dropped rather than partially applied. iOS posts every
+      // read to THIS route, so omitting them here kept its multi-device read
+      // sync from ever starting.
+      const actorReadSync = type === 'read'
+        ? await Promise.all([
+            prisma.conversationReadCursor.findUnique({
+              where: {
+                conversation_participant_cursor: { participantId, conversationId }
+              },
+              select: { lastReadAt: true }
+            }),
+            readStatusService.getUnreadCount(participantId, conversationId)
+          ]).then(([cursor, unreadCount]) => ({
+            lastReadAt: cursor?.lastReadAt ?? null,
+            unreadCount
+          }))
+        : undefined;
+
+      // Badge reset is internal multi-device sync, not a peer disclosure — it
+      // fires on BOTH privacy branches. Emit the REAL post-mark remaining
+      // unread (mirrors message-read-status.ts:560-565), never a hardcoded 0:
+      // an exact/partial read advances the cursor only over the contiguous
+      // read prefix, so messages can legitimately remain unread. A hardcoded 0
+      // would wrongly clear the reader's badge across ALL their devices.
+      const emitUnreadUpdate = () => {
+        if (!actorReadSync) return;
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount: actorReadSync.unreadCount,
+        });
+      };
+
       const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
 
       if (!shouldBroadcast) {
-        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
-        if (type === 'read') {
-          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-            conversationId,
-            unreadCount: 0,
-          });
-        }
+        emitUnreadUpdate();
         return;
       }
-
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-      const readStatusService = new MessageReadStatusService(prisma);
 
       // Fetch the summary and the list of active participants' userIds in parallel.
       // We emit to BOTH the conversation room AND each registered participant's
@@ -356,36 +423,29 @@ export function registerMessagesRoutes(
         readStatusService.getLatestMessageSummary(conversationId),
         prisma.participant.findMany({
           where: { conversationId, isActive: true },
-          select: { userId: true }
+          select: { id: true, userId: true }
         })
       ]);
 
-      const payload = {
+      const payload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId,
         userId,
         type,
         updatedAt: new Date(),
-        summary
+        summary,
+        ...(actorReadSync ?? {})
       };
 
-      const convRoom = ROOMS.conversation(conversationId);
-      let emitter: any = io.to(convRoom);
-      const seenRooms = new Set<string>([convRoom]);
-      for (const p of activeParticipants) {
-        if (!p.userId) continue;
-        const userRoom = ROOMS.user(p.userId);
-        if (seenRooms.has(userRoom)) continue;
-        seenRooms.add(userRoom);
-        emitter = emitter.to(userRoom);
-      }
-      emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-      emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
-
-      io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+      emitToConversationParticipants({
+        io,
         conversationId,
-        unreadCount: 0,
+        participants: activeParticipants,
+        events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+        payload
       });
+
+      emitUnreadUpdate();
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }
@@ -807,6 +867,10 @@ export function registerMessagesRoutes(
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
+            // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
+            // le message qui cite.
+            metadata: true,
             sender: {
               select: {
                 id: true,
@@ -1212,7 +1276,10 @@ export function registerMessagesRoutes(
         }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;
-          mappedMessage.replyTo = {
+          // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
+          // — sans lui, une citation d'un message géolocalisé n'affiche
+          // jamais sa position, même si la liste principale la restitue.
+          mappedMessage.replyTo = hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             sender: replySender ? {
@@ -1221,7 +1288,7 @@ export function registerMessagesRoutes(
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          };
+          });
         }
 
         return mappedMessage;
@@ -1246,6 +1313,10 @@ export function registerMessagesRoutes(
             conversationId: true,
             messageType: true,
             createdAt: true,
+            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+            // sans `metadata`, un message géolocalisé transféré n'affiche
+            // jamais sa position dans l'aperçu de transfert.
+            metadata: true,
             sender: {
               select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
@@ -1275,6 +1346,10 @@ export function registerMessagesRoutes(
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {
+              // Lot 2 : la position du message TRANSFÉRÉ (l'objet imbriqué),
+              // pas celle de `msg` lui-même — sans elle, un message transféré
+              // géolocalisé n'affiche jamais sa position dans l'aperçu.
+              const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -1286,7 +1361,8 @@ export function registerMessagesRoutes(
                   displayName: resolveParticipantDisplayName(original.sender as any),
                   avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
-                attachments: original.attachments
+                attachments: original.attachments,
+                ...(forwardedPlace ? { location: forwardedPlace } : {}),
               };
             }
           }
@@ -1336,6 +1412,14 @@ export function registerMessagesRoutes(
           if (!post) continue; // post supprimé sans snapshot → citation absente
           m.postReplyTo = buildPostReplyTo(post);
         }
+      }
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo` ci-dessus, mais sur TOUT message
+      // (contrairement à postReplyTo, indépendant de `storyReplyToId`).
+      for (const m of mappedMessages) {
+        const place = sharedPlaceFromMetadata(m.metadata);
+        if (place) m.location = place;
       }
 
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
@@ -1489,7 +1573,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1509,10 +1593,7 @@ export function registerMessagesRoutes(
       }
 
       // Resolve participant ID for this user
-      const currentParticipant = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
+      const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
         return sendForbidden(reply, 'Not a participant');
@@ -1523,6 +1604,7 @@ export function registerMessagesRoutes(
       let reportedMessageIds: readonly string[] | undefined;
       let reportedLanguage: string | undefined;
       let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
+      let caughtUpToMessageId: string | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
@@ -1531,6 +1613,7 @@ export function registerMessagesRoutes(
         reportedMessageIds = bodyResult.data.messageIds;
         reportedLanguage = bodyResult.data.language;
         reportedMessageLanguages = bodyResult.data.messageLanguages;
+        caughtUpToMessageId = bodyResult.data.caughtUpToMessageId;
       }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1540,7 +1623,13 @@ export function registerMessagesRoutes(
       // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
       // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
       // le client vient d'afficher des messages situés après ce trou.
-      if (unreadCount === 0 && !reportedMessageIds) {
+      if (unreadCount === 0 && !reportedMessageIds && !caughtUpToMessageId) {
+        // Le raccourci ne doit pas sauter la cascade notifications : une
+        // réaction/mention arrivée sur un message déjà lu a créé une
+        // notification alors que le compteur de messages est resté à 0.
+        Promise.resolve(
+          fastify.notificationService?.markConversationNotificationsAsRead?.(userId, conversationId)
+        ).catch(() => {});
         return sendSuccess(reply, { markedCount: 0 });
       }
 
@@ -1551,11 +1640,12 @@ export function registerMessagesRoutes(
         currentParticipant.id,
         conversationId,
         undefined,
-        reportedMessageIds || reportedLanguage || reportedMessageLanguages
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages || caughtUpToMessageId
           ? {
               messageIds: reportedMessageIds,
               language: reportedLanguage,
-              messageLanguages: reportedMessageLanguages
+              messageLanguages: reportedMessageLanguages,
+              caughtUpToMessageId
             }
           : undefined
       );
@@ -1607,7 +1697,12 @@ export function registerMessagesRoutes(
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
           effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
-          mentionedUserIds: { type: 'array', items: { type: 'string' } }
+          mentionedUserIds: { type: 'array', items: { type: 'string' } },
+          location: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+          }
         }
       },
       response: {
@@ -1661,7 +1756,8 @@ export function registerMessagesRoutes(
         expiresAt,
         isViewOnce,
         maxViewOnceCount,
-        mentionedUserIds
+        mentionedUserIds,
+        location
       } = bodyResult.data as SendMessageBody;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
@@ -1754,6 +1850,9 @@ export function registerMessagesRoutes(
         effectFlags,
         isViewOnce,
         maxViewOnceCount,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,
@@ -1831,7 +1930,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1844,11 +1943,8 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // Résoudre userId → participantId (curseur = participantId)
-      const membership = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
+      // Résoudre l'appelant → participantId (curseur = participantId)
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Not a participant in this conversation');
@@ -1904,7 +2000,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1924,10 +2020,7 @@ export function registerMessagesRoutes(
       }
 
       // Resolve participant ID for this user
-      const currentParticipant = await prisma.participant.findFirst({
-        where: { userId, conversationId, isActive: true },
-        select: { id: true }
-      });
+      const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
         return sendForbidden(reply, 'Participant not found in this conversation');
@@ -1961,18 +2054,13 @@ export function registerMessagesRoutes(
           createdAt: { lt: latestMessage.createdAt }
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true }
+        select: { id: true, createdAt: true }
       });
 
-      // Update the cursor: set lastReadAt before the latest message
-      const participantForCursor = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
-
-      if (!participantForCursor) {
-        return sendForbidden(reply, 'Not a participant');
-      }
+      // Le participant a déjà été résolu en tête de ce handler — la seconde
+      // requête ne faisait que reposer la même question à la même base, avec la
+      // copie de la règle d'identité qui oubliait les invités de lien partagé.
+      const participantForCursor = currentParticipant;
 
       // Guard against a race with a concurrent, fresher read: another device
       // may have read a message newer than `latestMessage` between our read
@@ -1984,10 +2072,15 @@ export function registerMessagesRoutes(
         where: {
           conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
         },
-        select: { lastReadMessageId: true }
+        select: { lastReadMessageId: true, lastReadMessageCreatedAt: true }
       });
 
-      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+      if (isStaleCursorMessageId({
+        candidateMessageId: latestMessage.id,
+        candidateCreatedAt: latestMessage.createdAt,
+        cursorMessageId: currentCursor?.lastReadMessageId,
+        cursorMessageCreatedAt: currentCursor?.lastReadMessageCreatedAt
+      })) {
         logger.info(
           `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
         );
@@ -2002,12 +2095,18 @@ export function registerMessagesRoutes(
           participantId: participantForCursor.id,
           conversationId,
           lastReadMessageId: previousMessage?.id || null,
+          // Keep the (id, createdAt) pair consistent so the cursor-advance
+          // freshness guard in MessageReadStatusService stays correct — a stale
+          // createdAt left pointing at a newer message would wrongly reject
+          // later legitimate read advances.
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: 0
         },
         update: {
           lastReadMessageId: previousMessage?.id || null,
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: { increment: 1 }
@@ -2168,6 +2267,23 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
+      // Localiser le message DANS la conversation, comme le fait déjà le jumeau
+      // qui épingle — et comme le font `consume`, l'édition et la suppression.
+      // Cette entrée était la seule du fichier à écrire par id seul : être
+      // membre actif de N'IMPORTE QUELLE conversation suffisait alors à
+      // dépingler le message de N'IMPORTE QUELLE autre, pour qui en connaît
+      // l'id — ce que tout ancien membre garde en cache local. La diffusion
+      // partait vers la conversation de la ROUTE, jamais vers celle du message :
+      // les clients réellement concernés gardaient l'épingle affichée jusqu'au
+      // prochain chargement complet, sans qu'aucun événement ne les détrompe.
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId },
+        select: { id: true }
+      });
+      if (!message) {
+        return sendNotFound(reply, 'Message not found');
+      }
+
       await prisma.message.update({
         where: { id: messageId },
         data: { pinnedAt: null, pinnedBy: null }
@@ -2290,6 +2406,10 @@ export function registerMessagesRoutes(
           translations: true,
           createdAt: true,
           updatedAt: true,
+          // Lot 1 : un message épinglé est une bulle complète — sans
+          // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
+          // position alors que la liste complète la restitue déjà.
+          metadata: true,
           sender: {
             select: {
               id: true,
@@ -2331,6 +2451,7 @@ export function registerMessagesRoutes(
 
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
+        const place = sharedPlaceFromMetadata(message.metadata);
         return {
           id: message.id,
           conversationId: message.conversationId,
@@ -2350,7 +2471,17 @@ export function registerMessagesRoutes(
           isBlurred: message.isBlurred,
           expiresAt: message.expiresAt,
           effectFlags: message.effectFlags,
-          translations: message.translations,
+          // `Message.translations` est une CARTE Mongo, jamais un tableau — et
+          // le schéma de cette réponse déclare `translations: { type: 'array' }`
+          // (`messageSchema`). `fast-json-stringify` ne coerce pas : la carte
+          // faisait échouer la sérialisation, donc répondre 500 sur la route
+          // ENTIÈRE dès qu'une épingle portait une traduction, c'est-à-dire dès
+          // que le Prisme avait tourné. Même sérialiseur que toutes les autres
+          // routes de messages — source unique de vérité.
+          translations: transformTranslationsToArray(
+            message.id,
+            message.translations as Record<string, MessageTranslationJSON> | null
+          ),
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
           sender: sender ? {
@@ -2368,7 +2499,10 @@ export function registerMessagesRoutes(
           } : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
-          replyCount: message._count?.replies ?? 0
+          replyCount: message._count?.replies ?? 0,
+          // Lot 1 : hisser metadata.location en champ top-level `location`,
+          // même miroir que la liste complète des messages.
+          ...(place ? { location: place } : {})
         };
       });
 
@@ -2453,32 +2587,48 @@ export function registerMessagesRoutes(
 
       const now = new Date();
 
-      const updated = await prisma.message.update({
-        where: { id: messageId },
-        data: { viewOnceCount: { increment: 1 } }
-      });
+      // Le spectateur, et non l'appelant. Un anonyme porte un jeton de session
+      // dans `authContext.userId` : le chercher par `userId` ne trouvait
+      // jamais sa ligne, si bien qu'il dépensait le budget sans laisser la
+      // moindre trace de l'avoir fait. Même ordre de résolution que
+      // `canAccessConversation`, dont le succès garantit qu'une de ces deux
+      // lectures aboutit.
+      const viewParticipant = authRequest.authContext.participantId
+        ? await prisma.participant.findFirst({
+            where: { id: authRequest.authContext.participantId, conversationId: message.conversationId, isActive: true },
+            select: { id: true }
+          })
+        : await prisma.participant.findFirst({
+            where: { conversationId: message.conversationId, userId, isActive: true },
+            select: { id: true }
+          });
 
-      const maxViewOnceCount = (message as any).maxViewOnceCount ?? 1;
-      const newViewOnceCount = updated.viewOnceCount ?? 1;
-      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
-
-      // Update status entry for this user
-      const viewParticipant = await prisma.participant.findFirst({
-        where: { conversationId: message.conversationId, userId, isActive: true },
-        select: { id: true }
-      });
-      if (viewParticipant) {
-        await prisma.messageStatusEntry.updateMany({
-          where: { messageId, participantId: viewParticipant.id },
-          data: { viewedOnceAt: now, revealedAt: now }
-        });
+      if (!viewParticipant) {
+        return sendForbidden(reply, 'Not a participant');
       }
+
+      // Une unité par SPECTATEUR, pas par ouverture. Le compteur était
+      // incrémenté à chaque appel : un rejeu de la requête, ou un destinataire
+      // qui rouvre la photo, épuisait le budget des autres membres du groupe.
+      const { viewOnceCount: newViewOnceCount, firstConsumption } = await recordViewOnceConsumption(prisma, {
+        messageId,
+        conversationId: message.conversationId,
+        participantId: viewParticipant.id,
+        currentViewOnceCount: message.viewOnceCount ?? 0,
+        at: now
+      });
+
+      const maxViewOnceCount = message.maxViewOnceCount ?? 1;
+      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
 
       logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
 
-      // Broadcast consume event via Socket.IO
-      if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:consumed', {
+      // Annoncé seulement quand l'état a CHANGÉ. Rediffuser un compte identique
+      // à toute la room n'apprend rien à personne et, sur un rejeu, ferait
+      // clignoter chez les pairs un événement qui ne correspond à aucune
+      // ouverture nouvelle.
+      if (socketIOHandler && firstConsumption) {
+        fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
           messageId,
           conversationId,
           userId,
@@ -2590,6 +2740,10 @@ export function registerMessagesRoutes(
         translations: true,
         createdAt: true,
         senderId: true,
+        // Lot 1 : un résultat de recherche est une bulle complète elle
+        // aussi — sans `metadata`, un message géolocalisé trouvé par
+        // recherche n'affiche jamais sa position.
+        metadata: true,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -2667,7 +2821,9 @@ export function registerMessagesRoutes(
       // `user` relation) so the userMinimalSchema serializer keeps them.
       const mappedResults = results.map((msg: any) => {
         const sender = msg.sender;
-        return {
+        // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
+        // top-level — un résultat de recherche géolocalisé le perdait sinon.
+        return hoistLocationOnto({
           ...msg,
           sender: sender ? {
             id: sender.id,
@@ -2682,7 +2838,7 @@ export function registerMessagesRoutes(
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined
-        };
+        });
       });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`

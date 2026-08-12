@@ -19,13 +19,33 @@ public enum StoryExportOutro {
     /// Durée de la carte de fin — calée sur la signature sonore de fermeture (2 s).
     public static var duration: TimeInterval { MeeshyBrandJingle.outroDuration }
 
-    /// Cadence de rendu des frames animées.
-    static let fps: Double = 30
+    /// Cadence de rendu des frames animées — celle du pipeline entier.
+    static let fps: Double = StoryExportFrameRate.fps
 
     /// Le logo est ENTIÈREMENT tracé à cet instant : le trace du watermark dure
     /// 3 s, trop long pour une carte de 2 s — on l'accélère pour qu'il se forme
     /// tôt puis respire le reste du temps.
     static let traceDuration: TimeInterval = 1.1
+
+    // MARK: - Carte de fin d'AUTEUR (Part D — 2026-07-26)
+
+    /// Fermeture en 2 temps quand une identité d'auteur est fournie (directive
+    /// user 2026-07-26) :
+    ///   1. le logo animé apparaît pour TERMINER la vidéo — muet (le jingle est
+    ///      décalé), pendant `logoPhase`. Il chevauche exactement le crossfade
+    ///      d'entrée (`overlap`) : le logo est plein pile quand la story s'éteint.
+    ///   2. PUIS l'interlude d'auteur (comme l'intro : avatar + nom + @username +
+    ///      mood) mais le fond bannière est remplacé par le logo animé DIMMÉ en
+    ///      filigrane, pendant `identityPhase` — et c'est CETTE carte qui porte le
+    ///      jingle de fermeture.
+    static let logoPhase: TimeInterval = 1.5
+    static let identityPhase: TimeInterval = 2.0
+    /// L'identité entre en fondu sur cette fenêtre au début de la 2ᵉ phase.
+    static let identityFadeIn: TimeInterval = 0.4
+    /// Durée du clip outro quand une identité est peinte : logo PUIS identité.
+    static var authorClipDuration: TimeInterval { logoPhase + identityPhase }
+    /// Opacité du logo réduit en filigrane derrière l'identité (2ᵉ phase).
+    private static let watermarkOpacity: CGFloat = 0.22
 
     // MARK: - Géométrie du logo (miroir de `StoryExportWatermark.dashes`)
 
@@ -57,6 +77,39 @@ public enum StoryExportOutro {
         }.cgImage
     }
 
+    /// Rend UNE frame de la carte de fin d'AUTEUR à l'instant `t`
+    /// (0…`authorClipDuration`). Opaque. Deux phases (Part D) :
+    ///  - `t < logoPhase` : le logo animé se forme, plein — comme la carte logo.
+    ///  - `t ≥ logoPhase` : le logo passe en filigrane dimmé (il REMPLACE la
+    ///    bannière), un voile de lisibilité s'applique, et l'identité de l'auteur
+    ///    (avatar + nom + @username + mood) entre en fondu — réutilise EXACTEMENT
+    ///    le rendu d'identité de `StoryExportIntro`.
+    public static func renderFrame(at t: TimeInterval, size: CGSize,
+                                   content: StoryExportIntroContent) -> CGImage? {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            drawBackground(in: cg, size: size)
+            if t < logoPhase {
+                drawLogo(in: cg, size: size, t: t)
+                drawWordmark(in: size)
+            } else {
+                // Fond = le logo animé DIMMÉ en filigrane (remplace la bannière).
+                drawLogo(in: cg, size: size, t: t, opacityScale: watermarkOpacity)
+                StoryExportIntro.drawScrim(in: cg, size: size)
+                // Identité en fondu d'entrée sur `identityFadeIn`.
+                let localT = t - logoPhase
+                let alpha = CGFloat(max(0, min(1, localT / identityFadeIn)))
+                cg.saveGState()
+                cg.setAlpha(alpha)
+                StoryExportIntro.drawIdentity(content, in: cg, size: size)
+                cg.restoreGState()
+            }
+        }.cgImage
+    }
+
     /// Fond de marque plein : indigo profond → noir (traitement logo « dark mode »).
     private static func drawBackground(in cg: CGContext, size: CGSize) {
         let rect = CGRect(origin: .zero, size: size)
@@ -75,8 +128,10 @@ public enum StoryExportOutro {
     }
 
     /// Draw-on accéléré (easeOut) + respiration douce — miroir de la logique du
-    /// watermark, mais calé sur `traceDuration`.
-    private static func drawLogo(in cg: CGContext, size: CGSize, t: TimeInterval) {
+    /// watermark, mais calé sur `traceDuration`. `opacityScale < 1` réduit le logo
+    /// en filigrane derrière l'identité (2ᵉ phase de la carte de fin d'auteur).
+    private static func drawLogo(in cg: CGContext, size: CGSize, t: TimeInterval,
+                                 opacityScale: CGFloat = 1) {
         let side = size.width * 0.44
         let rect = CGRect(x: (size.width - side) / 2,
                           y: size.height * 0.40 - side / 2,
@@ -105,7 +160,7 @@ public enum StoryExportOutro {
         for (index, dash) in dashes.enumerated() {
             let progress = traceProgress(t: t, barIndex: index)
             guard progress > 0.001 else { continue }
-            cg.setStrokeColor(logoColor.withAlphaComponent(opacities[index]).cgColor)
+            cg.setStrokeColor(logoColor.withAlphaComponent(opacities[index] * opacityScale).cgColor)
             let xEnd = dash.from.x + (dash.to.x - dash.from.x) * progress
             cg.move(to: dash.from)
             cg.addLine(to: CGPoint(x: xEnd, y: dash.from.y))
@@ -139,9 +194,14 @@ public enum StoryExportOutro {
 
     // MARK: - Encodage (multi-frames — la carte s'anime sur les 2 s)
 
-    /// Encode la carte de fin animée en un clip MP4 muet de `duration`. La
-    /// signature sonore de fermeture est mixée par la composition, pas ici.
-    public static func makeClip(size: CGSize) async throws -> URL {
+    /// Encode la carte de fin animée en un clip MP4 muet. La signature sonore de
+    /// fermeture est mixée par la composition, pas ici. Sans `content`, c'est la
+    /// carte logo-seule de `duration` (comportement historique — chemins sans
+    /// identité). Avec `content`, c'est la carte d'AUTEUR en 2 temps (Part D), de
+    /// `authorClipDuration`.
+    public static func makeClip(size: CGSize,
+                                content: StoryExportIntroContent? = nil) async throws -> URL {
+        let clipDuration = content != nil ? authorClipDuration : duration
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-outro-\(UUID().uuidString).mp4")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
@@ -165,11 +225,13 @@ public enum StoryExportOutro {
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
 
-        let frameCount = max(1, Int(duration * fps))
+        let frameCount = max(1, Int(clipDuration * fps))
         let timescale: CMTimeScale = 600
         for index in 0..<frameCount {
             let t = Double(index) / fps
-            guard let image = renderFrame(at: t, size: size),
+            let frame = content.map { renderFrame(at: t, size: size, content: $0) }
+                ?? renderFrame(at: t, size: size)
+            guard let image = frame,
                   let buffer = pixelBuffer(from: image, size: size) else {
                 writer.cancelWriting()
                 throw OutroError.pixelBufferCreationFailed
@@ -180,7 +242,7 @@ public enum StoryExportOutro {
             adaptor.append(buffer, withPresentationTime: CMTime(seconds: t, preferredTimescale: timescale))
         }
         input.markAsFinished()
-        writer.endSession(atSourceTime: CMTime(seconds: duration, preferredTimescale: timescale))
+        writer.endSession(atSourceTime: CMTime(seconds: clipDuration, preferredTimescale: timescale))
         await writer.finishWriting()
         guard writer.status == .completed else {
             throw OutroError.encodingFailed(writer.error)
@@ -199,7 +261,15 @@ public enum StoryExportOutro {
     /// Crossfade SYMÉTRIQUE (sortant 1→0 + entrant 0→1) — même approche que
     /// `VideoCompositor`, dont le résultat aux deux bornes ne dépend pas de l'ordre
     /// des couches.
-    public static func append(to storyURL: URL, renderSize: CGSize) async throws -> URL {
+    ///
+    /// Sans `content` : carte logo-seule + jingle mixé dès le crossfade (chemins
+    /// SANS identité résolue — parité `TimelineExportFlow`, comportement inchangé,
+    /// vidéo allongée de 0,5 s). Avec `content` (Part D) : fermeture en 2 temps —
+    /// le logo TERMINE la vidéo pendant le crossfade (muet, `logoPhase`), PUIS la
+    /// carte d'auteur (identité sur fond-logo dimmé) porte le jingle décalé à sa
+    /// 2ᵉ phase ; la vidéo est alors allongée de `identityPhase - overlap` (+0,5 s).
+    public static func append(to storyURL: URL, renderSize: CGSize,
+                              content: StoryExportIntroContent? = nil) async throws -> URL {
         let base = AVURLAsset(url: storyURL)
         let baseDuration = try await base.load(.duration)
         let overlap = CMTime(seconds: 1.5, preferredTimescale: 600)
@@ -209,8 +279,13 @@ public enum StoryExportOutro {
         let outroStart = CMTimeGetSeconds(rawStart) < 0 ? .zero : rawStart
         let fadeRange = CMTimeRange(start: outroStart,
                                     duration: CMTimeSubtract(baseDuration, outroStart))
+        // Le jingle démarre avec le logo (carte logo-seule) OU à la 2ᵉ phase quand
+        // une identité est peinte — le logo TERMINE alors la vidéo en silence.
+        let jingleStart = content != nil
+            ? CMTimeAdd(outroStart, CMTime(seconds: logoPhase, preferredTimescale: 600))
+            : outroStart
 
-        let outroURL = try await makeClip(size: renderSize)
+        let outroURL = try await makeClip(size: renderSize, content: content)
         let jingleURL = try MeeshyBrandJingle.renderOutroToTemporaryFile()
         defer {
             try? FileManager.default.removeItem(at: outroURL)
@@ -239,10 +314,10 @@ public enum StoryExportOutro {
         let jingleAsset = AVURLAsset(url: jingleURL)
         let jingleDur = try await jingleAsset.load(.duration)
         if let ja = try await jingleAsset.loadTracks(withMediaType: .audio).first {
-            try jingleAudio.insertTimeRange(CMTimeRange(start: .zero, duration: jingleDur), of: ja, at: outroStart)
+            try jingleAudio.insertTimeRange(CMTimeRange(start: .zero, duration: jingleDur), of: ja, at: jingleStart)
         }
 
-        let totalDuration = CMTimeAdd(outroStart, outroDur)      // (D − 1,5) + 2,0 = D + 0,5
+        let totalDuration = CMTimeAdd(outroStart, outroDur)      // logo-seule : D+0,5 · auteur : D+2,0
 
         // Composition vidéo — crossfade symétrique sur `fadeRange`, l'outro reste
         // ensuite opaque (dernière opacité tenue) le temps de la queue de 0,5 s.
@@ -256,7 +331,7 @@ public enum StoryExportOutro {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
         // Audio — la story s'estompe pendant que la signature de fermeture entre.

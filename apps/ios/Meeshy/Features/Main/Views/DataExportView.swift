@@ -5,6 +5,13 @@ import MeeshyUI
 
 struct DataExportView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -68,7 +75,7 @@ struct DataExportView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.backward")
@@ -123,11 +130,11 @@ struct DataExportView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos donnees, votre controle", bundle: .main))
+                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos données, votre contrôle", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
 
-                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.", bundle: .main))
+                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
             }
@@ -281,7 +288,7 @@ struct DataExportView: View {
         .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
         .accessibilityHint(isExporting
             ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
-            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos donnees", bundle: .main))
+            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos données", bundle: .main))
     }
 
     private func sectionHeader(title: String, icon: String, color: Color) -> some View {

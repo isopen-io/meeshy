@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import MeeshySDK
+import os
 
 @MainActor
 final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
@@ -45,7 +46,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         DispatchQueue.global(qos: .utility).async {
             guard let recorder = handle.recorder else { return }
             recorder.stop()
-            try? FileManager.default.removeItem(at: recorder.url)
+            FileManager.default.removeItemLogging(at: recorder.url, context: "aborted recording cleanup", logger: Logger.audioRecorder)
             MediaSessionCoordinator.shared.deactivatePlaybackSync()
         }
     }
@@ -55,12 +56,12 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         self.onMaxDurationReached = onMaxDurationReached
     }
 
-    /// `AudioRecordingProviding` requires `configure(with:)` (commit 2a9188974,
-    /// security/maxDuration caps). On garde la surface étendue
-    /// `configure(settings:onMaxDurationReached:)` pour les callers app qui
-    /// branchent un callback ; cette méthode-shim sert simplement la conformité
-    /// au protocole côté SDK (callers SDK qui veulent juste configurer les
-    /// paramètres d'enregistrement sans observer la duration max).
+    /// Shim de conformité à `AudioRecordingProviding`.
+    ///
+    /// La surface étendue `configure(settings:onMaxDurationReached:)` survit
+    /// pour les appelants app qui branchent encore un callback, mais celui-ci
+    /// n'est plus jamais déclenché : l'enregistrement n'a plus de plafond de
+    /// durée (directive produit 2026-07-26).
     func configure(with settings: AudioRecordingSettings) {
         configure(settings: settings, onMaxDurationReached: nil)
     }
@@ -155,7 +156,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // Only deactivate when no VoIP call is active — we never want to
         // tear down a session owned by the WebRTC stack.
         guard !CallManager.shared.callState.isActive else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        deactivateSharedAudioSession()
     }
 
     @discardableResult
@@ -168,7 +169,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // Call-aware (L3) : même garde que `cancelRecording` — un stop
         // mid-appel VoIP démontait sinon la session possédée par WebRTC.
         if !CallManager.shared.callState.isActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSharedAudioSession()
         }
 
         let url = recordedFileURL
@@ -183,7 +184,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         isRecording = false
 
         if let url = recordedFileURL {
-            try? FileManager.default.removeItem(at: url)
+            FileManager.default.removeItemLogging(at: url, context: "cancelled recording cleanup", logger: Logger.audioRecorder)
         }
         recordedFileURL = nil
         recorder = nil
@@ -194,13 +195,31 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // turns off. Without this, cancelling a voice message left the
         // session active indefinitely (drained battery + kept mic icon on).
         if !CallManager.shared.callState.isActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSharedAudioSession()
+        }
+    }
+
+    /// Deactivates the shared audio session so the system mic indicator turns
+    /// off. A failure here leaves the indicator lit and the session owning the
+    /// mic — a user-visible, battery-draining state that must not be silent.
+    private func deactivateSharedAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            Logger.audioRecorder.error("Audio session not deactivated, mic indicator may stay on: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     func result() -> AudioRecordingResult? {
         guard let url = recordedFileURL, duration >= settings.minimumDuration else { return nil }
-        let data = try? Data(contentsOf: url)
+        let data: Data?
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // L'URL reste exploitable par l'appelant ; seul le blob en mémoire manque.
+            Logger.audioRecorder.error("Recorded audio unreadable, sending by URL only: \(error.localizedDescription, privacy: .public)")
+            data = nil
+        }
         return AudioRecordingResult(url: url, duration: duration, data: data)
     }
 
@@ -209,17 +228,6 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
 
         duration = recorder.currentTime
         recorder.updateMeters()
-
-        if let maxDuration = settings.maxDuration, duration >= maxDuration {
-            // Sans callback, personne ne stoppe l'enregistrement au cap —
-            // aligné sur `DefaultSDKAudioRecorder` qui se stoppe lui-même.
-            if let onMaxDurationReached {
-                onMaxDurationReached()
-            } else {
-                stopRecording()
-            }
-            return
-        }
 
         let power = recorder.averagePower(forChannel: 0)
         let normalized = normalizeLevel(power)
@@ -238,4 +246,10 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         let normalized = (clamped - minDb) / (0 - minDb)
         return CGFloat(normalized)
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let audioRecorder = Logger(subsystem: "me.meeshy.app", category: "audio-recorder")
 }

@@ -34,7 +34,6 @@ public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String
-    public let upToMessageId: String
 
     /// Identifiants SERVEUR des messages réellement affichés.
     ///
@@ -60,20 +59,35 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     /// mentirait là où l'auteur a précisément besoin de savoir.
     public let messageLanguages: [String: String]?
 
+    /// Le lecteur a ATTEINT ce message, le plus récent de la conversation :
+    /// il n'a plus de retard. Fait avancer le curseur de non-lus jusque-là,
+    /// donc vide le badge côté serveur.
+    ///
+    /// Distinct de `messageIds`, et volontairement : « quels messages ai-je
+    /// affichés » (accusés de lecture, coches bleues — exact, jamais gonflé) et
+    /// « ai-je rattrapé mon retard » (badge) sont deux questions différentes.
+    /// Descendre au dernier message d'une conversation à deux cents non-lus ne
+    /// rend pas les cent quatre-vingt-dix intermédiaires lus ; ça rend bien la
+    /// conversation rattrapée. Les gonfler ensemble mentirait à l'expéditeur.
+    ///
+    /// `nil` = l'appelant ne se prononce pas ; le curseur avance alors sur le
+    /// seul préfixe contigu réellement lu.
+    public let caughtUpToMessageId: String?
+
     public init(
         clientMutationId: String,
         conversationId: String,
-        upToMessageId: String,
         messageIds: [String]? = nil,
         language: String? = nil,
-        messageLanguages: [String: String]? = nil
+        messageLanguages: [String: String]? = nil,
+        caughtUpToMessageId: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
-        self.upToMessageId = upToMessageId
         self.messageIds = messageIds
         self.language = language
         self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages
+        self.caughtUpToMessageId = caughtUpToMessageId
     }
 }
 
@@ -293,6 +307,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// Explicit recipient ids for `EXCEPT` / `ONLY` visibility (and audience
     /// scoping for statuses). `nil` for the public/friends default.
     public let visibilityUserIds: [String]?
+    /// Task 17 — lieu partagé en attente d'envoi. `nil` pour l'immense
+    /// majorité des posts — porté ici pour que le chemin durable (outbox)
+    /// transporte la position exactement comme le chemin direct
+    /// (`PostService.create`), au lieu de la perdre au flush après un envoi
+    /// hors-ligne. Optionnel : un enregistrement persisté avant Task 17
+    /// décode toujours sans cette clé.
+    public let location: SharedPlace?
 
     public init(
         clientMutationId: String,
@@ -305,7 +326,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         moodEmoji: String? = nil,
         audioUrl: String? = nil,
         audioDuration: Int? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        location: SharedPlace? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -318,6 +340,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.audioUrl = audioUrl
         self.audioDuration = audioDuration
         self.visibilityUserIds = visibilityUserIds
+        self.location = location
     }
 }
 
@@ -340,17 +363,28 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let postId: String
     public let parentCommentId: String?
     public let content: String
+    /// Lieu partagé en attente d'envoi. `nil` pour l'immense majorité des
+    /// commentaires — porté ici pour que le chemin durable (offline queue)
+    /// transporte la position exactement comme le chemin direct.
+    public let location: SharedPlace?
+    /// Effets visuels du commentaire (bitmask) — porté par le chemin durable
+    /// pour ne pas être perdu à l'enfilement, comme le chemin direct le porte.
+    public let effectFlags: Int?
 
     public init(
         clientMutationId: String,
         postId: String,
         parentCommentId: String?,
-        content: String
+        content: String,
+        location: SharedPlace? = nil,
+        effectFlags: Int? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.parentCommentId = parentCommentId
         self.content = content
+        self.location = location
+        self.effectFlags = effectFlags
     }
 }
 

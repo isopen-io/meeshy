@@ -29,6 +29,10 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
     /// Les enregistrements d'outbox déjà en base ont été sérialisés SANS ce
     /// champ. Le rendre non-optionnel casserait leur décodage après mise à
     /// jour de l'app : les lectures en attente seraient perdues en silence.
+    ///
+    /// La fixture porte aussi `upToMessageId`, clé RETIRÉE du payload : une row
+    /// persistée par une version antérieure doit continuer de se décoder, la
+    /// clé devenue inconnue étant simplement ignorée.
     func test_markAsReadPayload_decodesLegacyRecordWithoutMessageIds() throws {
         let legacy = """
         {"clientMutationId":"cm-1","conversationId":"conv-1","upToMessageId":"m-1"}
@@ -44,7 +48,6 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
         let payload = MarkAsReadPayload(
             clientMutationId: "cm-1",
             conversationId: "conv-1",
-            upToMessageId: idB,
             messageIds: [idA, idB]
         )
 
@@ -70,7 +73,6 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
 
         XCTAssertFalse(json.contains("conversationId"))
         XCTAssertFalse(json.contains("clientMutationId"))
-        XCTAssertFalse(json.contains("upToMessageId"))
     }
 
     // MARK: - Prisme linguistique
@@ -93,7 +95,6 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
         let payload = MarkAsReadPayload(
             clientMutationId: "cm-1",
             conversationId: "conv-1",
-            upToMessageId: idB,
             messageIds: [idA, idB],
             language: "en",
             messageLanguages: [idB: "fr"]
@@ -111,7 +112,6 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
         let payload = MarkAsReadPayload(
             clientMutationId: "cm-1",
             conversationId: "conv-1",
-            upToMessageId: idB,
             messageIds: [idA],
             language: "en",
             messageLanguages: [:]

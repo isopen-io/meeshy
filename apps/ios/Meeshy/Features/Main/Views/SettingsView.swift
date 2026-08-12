@@ -13,6 +13,10 @@ struct SettingsView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
+    /// Choix explicite de langue d'interface — `nil` = suit la langue
+    /// principale du compte. Lu une fois au montage depuis `UILanguageOverride`.
+    @State private var interfaceLanguageChoice: String? = UILanguageOverride.explicitChoice
+    @State private var showInterfaceLanguageRestartHint = false
     /// Q6 (P1) — driver d'overlay pendant `await authManager.logout()`.
     /// L'alert iOS native ne permet pas un spinner inline sur son bouton,
     /// donc on affiche un overlay sobre tant que la quiesce-then-purge
@@ -54,6 +58,19 @@ struct SettingsView: View {
         .sheet(isPresented: $showStats) { UserStatsView() }
         .sheet(isPresented: $showAffiliate) { AffiliateView() }
         .sheet(isPresented: $showDataExport) { DataExportView() }
+        // iOS ne relit `AppleLanguages` qu'au démarrage : l'écran courant reste
+        // dans l'ancienne langue, et le taire ferait passer un réglage qui
+        // marche pour un réglage mort — c'est précisément le reproche qui avait
+        // fait retirer ce contrôle.
+        .alert(String(localized: "settings.interface_language.restart.title",
+                      defaultValue: "Langue enregistrée", bundle: .main),
+               isPresented: $showInterfaceLanguageRestartHint) {
+            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { }
+        } message: {
+            Text(String(localized: "settings.interface_language.restart.message",
+                        defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
+                        bundle: .main))
+        }
         .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
             Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive) {
@@ -282,17 +299,16 @@ struct SettingsView: View {
                             VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: pref.icon)
                                     .font(MeeshyFont.relative(14))
-                                Text(pref.label)
+                                Text(themeLabel(for: pref))
                                     .font(MeeshyFont.relative(9, weight: .medium))
-                                    // Un seul segment = une seule ligne : sous
-                                    // grande taille Dynamic Type le libellé
-                                    // débordait et repassait à la ligne
-                                    // (« Aut o », « So mbr e »). On le garde sur
-                                    // une ligne, on l'amincit légèrement, puis on
-                                    // tronque avec « … » si vraiment trop long.
+                                    // Un seul segment = une seule ligne, à sa
+                                    // largeur idéale : sans `fixedSize`, le
+                                    // HStack compressait d'abord ces libellés
+                                    // (« Au… », « So… ») alors que la place ne
+                                    // manquait pas — le Spacer de la row doit
+                                    // céder avant le texte.
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                    .truncationMode(.tail)
+                                    .fixedSize(horizontal: true, vertical: false)
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
                             .padding(.horizontal, MeeshySpacing.sm + 2)
@@ -302,22 +318,96 @@ struct SettingsView: View {
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
-                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(pref.label)")
+                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
                         .accessibilityValue(theme.preference == pref ? String(localized: "common.selected", bundle: .main) : "")
                         .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
                 }
             }
-            // Le picker "Langue de l'interface" a été retiré (P1, placebo
-            // audit 2026-07-20) : `application.interfaceLanguage` était
-            // écrit ici mais jamais lu — aucun `.environment(\.locale)`
-            // n'existe dans l'app, donc changer la sélection n'avait AUCUN
-            // effet visible. Appliquer réellement exigerait de poser
-            // `.environment(\.locale, …)` à la racine de l'arbre de vues
-            // (`MeeshyApp.swift`), fichier exclusif de la lane Auth & session
-            // — hors-scope ici. Cf. tasks/audit-backlog-2026-07-20.md LANE
-            // Réglages, item P1.
+            // Le picker avait été retiré le 2026-07-20 : il écrivait
+            // `application.interfaceLanguage`, que personne ne relisait. Il
+            // revient branché sur `UILanguageOverride`, qui applique
+            // réellement la langue au lancement depuis le 2026-07-25 — c'était
+            // le fil manquant, pas le contrôle qui était en trop.
+            interfaceLanguageRow
         }
+    }
+
+    /// Libellés localisés des segments de thème — `ThemePreference.label`
+    /// (SDK) renvoie du français en dur, qui fuyait tel quel dans les six
+    /// autres langues de l'interface.
+    private func themeLabel(for pref: ThemePreference) -> String {
+        switch pref {
+        case .system:
+            return String(localized: "settings.theme.auto", defaultValue: "Auto", bundle: .main)
+        case .light:
+            return String(localized: "settings.theme.light", defaultValue: "Clair", bundle: .main)
+        case .dark:
+            return String(localized: "settings.theme.dark", defaultValue: "Sombre", bundle: .main)
+        }
+    }
+
+    /// Langue de l'interface — choix propre à l'affichage, sans effet sur les
+    /// langues de traduction du profil. « Automatique » suit la langue
+    /// principale du compte, ce que faisait l'app jusqu'ici.
+    private var interfaceLanguageRow: some View {
+        settingsRow(icon: "globe",
+                    title: String(localized: "settings.interface_language",
+                                  defaultValue: "Langue de l'interface", bundle: .main),
+                    color: MeeshyColors.indigo600Hex) {
+            Menu {
+                Button {
+                    selectInterfaceLanguage(nil)
+                } label: {
+                    Label(automaticLanguageLabel,
+                          systemImage: interfaceLanguageChoice == nil ? "checkmark" : "")
+                }
+                ForEach(UILanguageOverride.selectableCodes, id: \.self) { code in
+                    Button {
+                        selectInterfaceLanguage(code)
+                    } label: {
+                        Label(Self.interfaceLanguageLabel(code),
+                              systemImage: interfaceLanguageChoice == code ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Text(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
+                         ?? automaticLanguageLabel)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.interface_language",
+                                       defaultValue: "Langue de l'interface", bundle: .main))
+            .accessibilityValue(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
+                                ?? automaticLanguageLabel)
+        }
+    }
+
+    private var automaticLanguageLabel: String {
+        String(localized: "settings.interface_language.automatic",
+               defaultValue: "Automatique", bundle: .main)
+    }
+
+    /// Nom de la langue DANS cette langue — un utilisateur qui cherche l'arabe
+    /// reconnaît « العربية », pas « Arabe ».
+    private static func interfaceLanguageLabel(_ code: String) -> String {
+        let locale = Locale(identifier: code)
+        return locale.localizedString(forIdentifier: code)?.capitalized ?? code
+    }
+
+    /// Enregistre le choix et prévient : `AppleLanguages` n'est relu qu'au
+    /// démarrage, donc l'écran courant reste dans l'ancienne langue.
+    private func selectInterfaceLanguage(_ code: String?) {
+        HapticFeedback.light()
+        UILanguageOverride.explicitChoice = code
+        UILanguageOverride.applyIfNeeded()
+        interfaceLanguageChoice = code
+        showInterfaceLanguageRestartHint = true
     }
 
     // MARK: - Notifications Section
@@ -493,6 +583,19 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.tools.starred", bundle: .main))
             .accessibilityHint(String(localized: "settings.tools.starred.hint", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
+                router.push(.bookmarks)
+            } label: {
+                settingsRow(icon: "bookmark.fill", title: String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main), color: MeeshyColors.indigo400Hex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.bookmarks.hint", defaultValue: "Voir les posts et les réels que vous avez enregistrés", bundle: .main))
 
             Button {
                 HapticFeedback.light()

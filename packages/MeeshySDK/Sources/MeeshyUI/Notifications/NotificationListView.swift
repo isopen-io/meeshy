@@ -420,6 +420,23 @@ final class NotificationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        manager.postNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] postId in
+                self?.handlePostReadEvent(postId)
+            }
+            .store(in: &cancellables)
+
+        manager.typeNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] types in
+                guard let self else { return }
+                self.notifications = NotificationCachePatch.markingRead(
+                    self.notifications, scope: .types(types)
+                )
+            }
+            .store(in: &cancellables)
+
         manager.notificationWasDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
@@ -448,10 +465,18 @@ final class NotificationListViewModel: ObservableObject {
     /// (ouverture de la conversation → contenu consommé). Mise à jour optimiste :
     /// le compteur autoritatif est ensuite recalé par `notification:counts`.
     private func handleConversationReadEvent(_ conversationId: String) {
-        for idx in notifications.indices
-        where notifications[idx].context?.conversationId == conversationId && !notifications[idx].isRead {
-            notifications[idx] = notifications[idx].withReadState(true)
-        }
+        notifications = NotificationCachePatch.markingRead(
+            notifications, scope: .conversation(id: conversationId)
+        )
+    }
+
+    /// Pendant du précédent pour un contenu social consommé (story ouverte,
+    /// détail de post). Même transformation pure que celle appliquée au cache
+    /// durable — une seule règle, deux surfaces.
+    private func handlePostReadEvent(_ postId: String) {
+        notifications = NotificationCachePatch.markingRead(
+            notifications, scope: .post(id: postId)
+        )
     }
 
     // MARK: - Loading
@@ -508,29 +533,25 @@ final class NotificationListViewModel: ObservableObject {
         isLoading = false
     }
 
+    /// Passe par le manager : lui seul écrit le cache durable ET publie vers les
+    /// autres surfaces. L'appel direct au service ne mutait que cette copie
+    /// mémoire — le store GRDB gardait `isRead:false` et la ligne repartait non
+    /// lue à la réouverture de la cloche (`loadInitial` lit le cache d'abord).
     func markRead(_ notification: APINotification) async {
         guard !notification.isRead else { return }
-        do {
-            try await NotificationService.shared.markAsRead(notificationId: notification.id)
-            handleReadEvent(notification.id)
-        } catch {
-            Logger.notifications.error("Failed to mark notification as read: \(error.localizedDescription)")
-        }
+        await NotificationToastManager.shared.markRead(notificationId: notification.id)
     }
 
     func markAllRead() async {
         await NotificationToastManager.shared.markAllAsRead()
-        await loadInitial()
+        notifications = NotificationCachePatch.markingRead(notifications, scope: .all)
     }
 
     func deleteNotification(_ notification: APINotification) async {
-        do {
-            try await NotificationService.shared.delete(notificationId: notification.id)
-            notifications.removeAll { $0.id == notification.id }
-            await NotificationToastManager.shared.refreshUnreadCount()
-        } catch {
-            Logger.notifications.error("Failed to delete notification: \(error.localizedDescription)")
-        }
+        // Le manager retire la ligne du cache durable puis publie
+        // `notificationWasDeleted`, que cette vue écoute déjà — pas de retrait
+        // local en double ici.
+        await NotificationToastManager.shared.delete(notificationId: notification.id)
     }
 }
 

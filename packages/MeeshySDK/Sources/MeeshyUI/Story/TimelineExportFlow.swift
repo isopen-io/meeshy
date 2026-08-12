@@ -88,46 +88,43 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             progressTrampoline = nil
         }
 
+        // Emballage de marque composé DANS le bake — même atome
+        // (`StoryExportBranding`) que `StoryVideoExportService.prepareExport`,
+        // sans quoi la même story se terminerait sur le logo Meeshy depuis
+        // « Mes stories » et sur sa dernière frame depuis le composer timeline.
+        //
+        // La carte de fin est due INDÉPENDAMMENT de l'interlude (revue finale,
+        // items 1 et 2) : elle ne dépend d'aucune identité, donc l'absence de
+        // session — ou une résolution trop lente — ne doit pas la faire
+        // disparaître. `makePlan` porte cet invariant.
+        //
+        // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
+        // c'est ce que ce chemin produisait déjà. Divergence volontaire avec le
+        // partage / Photos, préservée telle quelle.
+        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+
         try await StoryExporter.export(
             slide,
             to: outputURL,
             watermark: watermark,
+            // Volontairement `nil` : composer la marque dans le bake est
+            // fonctionnellement équivalent mais mesuré 5 à 20× plus lent —
+            // voir `tasks/todo-story-export-single-pass.md`.
+            branding: nil,
             audioResolver: audioResolver,
             progress: progressTrampoline
         )
 
-        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
-        var current = outputURL
-
-        // Interlude d'identité — seulement quand une identité a été résolue.
-        if let intro {
-            do {
-                let branded = try await StoryExportIntro.prepend(
-                    to: current,
-                    content: intro,
-                    renderSize: renderSize
-                )
-                removeTemporaryFile(at: current, reason: "pré-interlude")
-                current = branded
-            } catch {
-                timelineExportLogger.warning("interlude de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        // Carte de fin de marque — appliquée INDÉPENDAMMENT de l'interlude
-        // (revue finale, item 1 + item 2) : elle ne dépend d'aucune identité,
-        // donc l'absence de session (ou une résolution d'identité trop lente)
-        // ne doit pas la faire disparaître. Même enchaînement, même atome
-        // (`StoryExportOutro`) que `StoryVideoExportService.prepareExport` —
-        // sans quoi la même story se terminait sur le logo Meeshy depuis
-        // « Mes stories » et sur sa dernière frame depuis le composer timeline.
+        // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
+        // divergence volontaire avec partage / Photos, préservée telle quelle.
         do {
-            let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
-            removeTemporaryFile(at: current, reason: "pré-carte-de-fin")
+            let finalURL = try await StoryExportBranding.wrap(
+                storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
+            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
             return finalURL
         } catch {
-            timelineExportLogger.warning("carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            return current
+            timelineExportLogger.warning("emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            return outputURL
         }
     }
 
@@ -163,6 +160,16 @@ final class TimelineExportController: ObservableObject {
 
     private var exportTask: Task<Void, Never>?
     private let exporter: TimelineStoryExporting
+    /// La timeline jouait-elle quand `start()` l'a mise en pause pour lancer
+    /// le bake — capturé AVANT la pause, jamais relu depuis le ViewModel une
+    /// fois l'export en cours. Sans ce flag, aucune sortie (fin, échec,
+    /// annulation) ne pouvait distinguer « il faut relancer » de « la
+    /// timeline était déjà à l'arrêt ».
+    private var wasPlayingBeforeExport = false
+    /// Référence FAIBLE vers la timeline mise en pause — sert uniquement à
+    /// la reprise en sortie d'export, jamais retenue au-delà (le composer en
+    /// reste seul propriétaire).
+    private weak var pausedTimelineViewModel: TimelineViewModel?
     /// Pseudo gravé dans le filigrane. Injectable — revue round 2 (Finding 2) :
     /// lire `AuthManager.shared` directement au site d'appel rendait cette
     /// valeur INcontrôlable en test, contrairement à `introProvider`. Par
@@ -202,9 +209,12 @@ final class TimelineExportController: ObservableObject {
 
     func start(composer: StoryComposerViewModel) {
         guard !isExporting else { return }
-        if composer.timelineViewModel.isPlaying {
-            composer.timelineViewModel.togglePlayback()
+        let timelineViewModel = composer.timelineViewModel
+        wasPlayingBeforeExport = timelineViewModel.isPlaying
+        if wasPlayingBeforeExport {
+            timelineViewModel.togglePlayback()
         }
+        pausedTimelineViewModel = timelineViewModel
         let slide = composer.exportableCurrentSlide()
         let mediaURLs = composer.collectMediaURLs(for: slide)
         // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
@@ -253,9 +263,11 @@ final class TimelineExportController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 self?.phase = .finished(ExportedFile(url: finalURL))
+                self?.resumePlaybackIfNeeded()
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.phase = .failed(error.localizedDescription)
+                self?.resumePlaybackIfNeeded()
             }
         }
     }
@@ -266,6 +278,21 @@ final class TimelineExportController: ObservableObject {
         exportTask?.cancel()
         exportTask = nil
         phase = .idle
+        resumePlaybackIfNeeded()
+    }
+
+    /// Relance la lecture coupée par `start()`, si (et seulement si) elle
+    /// jouait avant la pause — via la MÊME bascule (`togglePlayback()`) que
+    /// celle qui l'a arrêtée, jamais un `play()` direct qui court-circuiterait
+    /// l'état publié (`isPlaying`) du ViewModel. Appelée sur les TROIS sorties
+    /// possibles de l'export (fin, échec, annulation) : avant ce fix, aucune
+    /// ne relançait la lecture, laissant la timeline muette derrière l'aperçu
+    /// plein écran ou après un « Annuler ».
+    private func resumePlaybackIfNeeded() {
+        guard wasPlayingBeforeExport, let timelineViewModel = pausedTimelineViewModel else { return }
+        wasPlayingBeforeExport = false
+        pausedTimelineViewModel = nil
+        timelineViewModel.togglePlayback()
     }
 
     /// Ferme l'aperçu : le MP4 temporaire est supprimé (il a été partagé ou

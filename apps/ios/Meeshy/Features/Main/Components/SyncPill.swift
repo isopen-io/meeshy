@@ -79,6 +79,9 @@ struct SyncPill: View {
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
+    // The status dot pulses with `.repeatForever` in the app's persistent
+    // chrome — motion the user cannot dismiss. Reduce Motion must reach it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dotPhase: Int = 0
     // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
     // on every reconstruction of this View value (every unrelated re-render
@@ -110,7 +113,10 @@ struct SyncPill: View {
 
     /// Pulsing alpha on the leading status dot. Matches the legacy chrome
     /// (0.5 s tick, 50 % duty cycle).
-    private var pulseOpacity: Double { dotPhase % 2 == 0 ? 1.0 : 0.4 }
+    /// Full strength when motion is reduced: the pulse's low phase (0.4) would
+    /// freeze the dot into something that reads as inactive, and the dot is the
+    /// only thing carrying "syncing" at a glance.
+    private var pulseOpacity: Double { reduceMotion ? 1.0 : (dotPhase % 2 == 0 ? 1.0 : 0.4) }
 
     private var animatedDots: String {
         String(repeating: ".", count: (dotPhase % 3) + 1)
@@ -183,12 +189,12 @@ struct SyncPill: View {
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundStyle(dotForeground)
                 .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
         } else {
             dotShape
                 .frame(width: 6, height: 6)
                 .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
         }
     }
 

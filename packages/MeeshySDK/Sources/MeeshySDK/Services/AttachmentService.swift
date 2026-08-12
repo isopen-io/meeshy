@@ -1,6 +1,19 @@
 import Foundation
 
-public final class AttachmentService: @unchecked Sendable {
+/// Narrow slice of `AttachmentService` covering only on-demand attachment
+/// translation — the one call ConversationViewModel needs to mock. The rest
+/// of `AttachmentService`'s surface (delete, transcription, status) is still
+/// called directly via `.shared` throughout the app.
+public protocol AttachmentTranslationProviding: Sendable {
+    func translate(
+        attachmentId: String,
+        targetLanguages: [String],
+        sourceLanguage: String?,
+        generateVoiceClone: Bool?
+    ) async throws -> AttachmentTranslateResponse
+}
+
+public final class AttachmentService: AttachmentTranslationProviding, @unchecked Sendable {
     public static let shared = AttachmentService()
     private let api: APIClientProviding
 

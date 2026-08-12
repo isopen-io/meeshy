@@ -143,4 +143,134 @@ final class StoryInlineTextEditorTests: XCTestCase {
         XCTAssertLessThan(r + g + b, 1.0, "tint doit être proche du noir")
         XCTAssertGreaterThan(a, 0.4)
     }
+
+    // MARK: - Rendu live des curseurs du panneau Police
+
+    /// Le champ d'édition en place peint les glyphes pendant la frappe : c'est
+    /// LUI qui doit refléter taille et graisse, pas seulement le calque en
+    /// dessous. Rien dans le système de types ne garantit cette propriété.
+    func test_theInlineEditorReflectsAWeightChangeWithoutRetyping() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+
+        text.fontWeight = StoryTextWeight.thin.rawValue
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let thin = editor.font
+
+        text.fontWeight = StoryTextWeight.bold.rawValue
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertNotEqual(editor.font, thin, "le champ doit re-résoudre sa police")
+    }
+
+    func test_theInlineEditorReflectsASizeChangeWithoutRetyping() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+
+        text.fontSize = 40
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let small = editor.font?.pointSize ?? 0
+
+        text.fontSize = 120
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertGreaterThan(editor.font?.pointSize ?? 0, small)
+    }
+
+    /// Le curseur de taille écrit `fontSize` ET remet `scale` à 1 : le champ
+    /// lit le PRODUIT des deux, donc un `scale` résiduel gonflerait le rendu
+    /// au-delà de la valeur affichée par le curseur.
+    func test_theInlineEditorReadsTheProductOfSizeAndScale() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.fontSize = 50
+        text.scale = 2
+
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let doubled = editor.font?.pointSize ?? 0
+
+        TextEditToolOptions.applyingSliderValue(50, to: &text)
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertEqual(text.scale, 1)
+        XCTAssertLessThan(editor.font?.pointSize ?? 0, doubled)
+    }
+
+    // MARK: - Hauteur bornée et défilement (spec 2026-08-01)
+
+    /// Un texte plus haut que la zone d'édition n'en sort plus par le haut : il
+    /// est borné et défile, sinon ses premières lignes deviennent illisibles et
+    /// inatteignables.
+    func test_sizeToFitTextContent_shortText_doesNotScroll() {
+        let editor = makeEditor(text: "abc")
+        editor.sizeToFitTextContent(maxWidth: 350, maxHeight: 400)
+
+        XCTAssertFalse(editor.isScrollEnabled,
+                       "Un texte qui tient dans la zone n'a aucune raison de défiler")
+        XCTAssertLessThan(editor.bounds.height, 400)
+    }
+
+    func test_sizeToFitTextContent_longText_clampsAndScrolls() {
+        let editor = makeEditor(text: longText)
+        editor.sizeToFitTextContent(maxWidth: 350, maxHeight: 200)
+
+        XCTAssertEqual(editor.bounds.height, 200, accuracy: 0.5,
+                       "La hauteur est exactement celle de la zone")
+        XCTAssertTrue(editor.isScrollEnabled,
+                      "Le défilement rend le début du texte à nouveau atteignable")
+    }
+
+    func test_sizeToFitTextContent_shrinkingBackUnderTheZone_stopsScrolling() {
+        let editor = makeEditor(text: longText)
+        editor.sizeToFitTextContent(maxWidth: 350, maxHeight: 200)
+        XCTAssertTrue(editor.isScrollEnabled)
+
+        editor.text = "abc"
+        editor.sizeToFitTextContent(maxWidth: 350, maxHeight: 200)
+
+        XCTAssertFalse(editor.isScrollEnabled,
+                       "Effacer le texte doit rendre la hauteur naturelle")
+        XCTAssertLessThan(editor.bounds.height, 200)
+    }
+
+    /// `sizeThatFits` d'un `UITextView` défilant renvoie sa FRAME, pas son
+    /// contenu : mesurer sans neutraliser le défilement fige la hauteur au
+    /// premier clamp et le champ ne redescend jamais.
+    func test_sizeToFitTextContent_measurementIsIndependentOfScrollState() {
+        let a = makeEditor(text: "deux\nlignes")
+        a.sizeToFitTextContent(maxWidth: 350, maxHeight: 400)
+        let naturalHeight = a.bounds.height
+
+        let b = makeEditor(text: "deux\nlignes")
+        b.isScrollEnabled = true
+        b.bounds.size = CGSize(width: 350, height: 40)
+        b.sizeToFitTextContent(maxWidth: 350, maxHeight: 400)
+
+        XCTAssertEqual(b.bounds.height, naturalHeight, accuracy: 0.5,
+                       "La mesure ne dépend pas de l'état de défilement d'entrée")
+    }
+
+    func test_sizeToFitTextContent_withoutMaxHeight_keepsHistoricGrowth() {
+        let editor = makeEditor(text: longText)
+        editor.sizeToFitTextContent(maxWidth: 350)
+
+        XCTAssertFalse(editor.isScrollEnabled,
+                       "Sans zone mesurée, aucune borne — croissance libre d'origine")
+        XCTAssertGreaterThan(editor.bounds.height, 200)
+    }
+
+    // MARK: - Harnais
+
+    private var longText: String {
+        Array(repeating: "Une ligne de texte assez longue", count: 40)
+            .joined(separator: "\n")
+    }
+
+    private func makeEditor(text: String) -> StoryInlineTextEditor {
+        let editor = StoryInlineTextEditor()
+        let object = StoryTextObject(id: "t1", text: text, fontSize: 48)
+        editor.apply(textObject: object, geometry: geometry, setText: true)
+        editor.bounds = .zero
+        return editor
+    }
 }

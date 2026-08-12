@@ -3,7 +3,7 @@ import XCTest
 
 /// Source-analysis guards pour l'unification de la carte de transition
 /// inter-groupes : un SEUL rendu d'identité, `StoryAuthorIdentityCard`, partagé
-/// par l'interstitiel (`StoryGroupIntroOverlay`, durée fixe 2,6 s) et par la
+/// par l'interstitiel (`StoryGroupIntroOverlay`, durée nominale fixe 2,2 s) et par la
 /// face entrante du cube (`NeighborGroupCubeFace`, qui révèle l'interlude AU
 /// DOIGT depuis le 2026-07-25 — cf. le commentaire détaillé du test
 /// correspondant pour le renversement de la règle du 2026-07-14).
@@ -44,13 +44,18 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
         return String(source[declRange.upperBound..<closeRange.lowerBound])
     }
 
-    // MARK: - Durée fixe 2,6 s
+    // MARK: - Durée fixe 2,2 s
 
-    func test_groupIntroDuration_is2Point6Seconds() throws {
+    /// Resserré de 2,6 à 2,2 s le 2026-07-26 (directive user). La garde porte
+    /// sur la constante NOMINALE uniquement : le voile met un peu plus longtemps
+    /// à disparaître pour de vrai (ses courbes de sortie sont préservées par
+    /// choix utilisateur, cf. la doc de `groupIntroDuration`), et aucun test ne
+    /// doit prétendre le contraire.
+    func test_groupIntroDuration_is2Point2Seconds() throws {
         let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
         XCTAssertTrue(
-            viewerSource.contains("static let groupIntroDuration: TimeInterval = 2.6"),
-            "groupIntroDuration doit être fixé à 2,6 s (directive user 2026-07-14)."
+            viewerSource.contains("static let groupIntroDuration: TimeInterval = 2.2"),
+            "groupIntroDuration doit être fixé à 2,2 s (directive user 2026-07-26)."
         )
     }
 
@@ -150,6 +155,55 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
                       "Le double-tap (n'importe où → premier slide) doit être câblé.")
         XCTAssertTrue(block.contains("exclusively(before:"),
                       "Le double-tap doit être prioritaire sur le tap simple (sinon il ne fire jamais).")
+    }
+
+    /// Depuis le 2026-07-26, le drag du lecteur (`unifiedDragGesture`) est monté
+    /// en `.simultaneousGesture` sur un ANCÊTRE de cet overlay : les swipes
+    /// restent donc actifs PENDANT l'interlude. Or un `SpatialTapGesture` se
+    /// valide au relâchement quel que soit le déplacement parcouru — sans garde,
+    /// un swipe de changement de groupe tirerait AUSSI le tap et l'utilisateur
+    /// sauterait l'interlude en même temps qu'il change d'auteur.
+    ///
+    /// La garde est ancrée sur le COMPORTEMENT, pas sur le nom du drapeau ni sur
+    /// la forme du `guard` : chaque branche de tap doit sortir tôt (`else
+    /// { return }`) AVANT d'appeler quoi que ce soit, et l'overlay doit mesurer
+    /// le déplacement lui-même (`SpatialTapGesture.Value` n'expose que
+    /// `location`, jamais la distance parcourue — il faut un mouchard
+    /// `DragGesture`).
+    func test_storyGroupIntroOverlay_tapsAreGatedOnFingerMovement() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let overlay = try body(
+            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+        )
+
+        XCTAssertTrue(
+            overlay.contains("DragGesture(minimumDistance: 0"),
+            "L'overlay doit mesurer lui-même le déplacement du doigt : un SpatialTapGesture " +
+            "ne connaît que sa position, jamais la distance parcourue."
+        )
+
+        guard let tapChain = overlay.range(of: "SpatialTapGesture(count: 2)") else {
+            return XCTFail("chaîne de taps de l'interlude introuvable")
+        }
+        let handlers = overlay[tapChain.lowerBound...]
+            .components(separatedBy: ".onEnded {")
+            .dropFirst()
+        XCTAssertEqual(handlers.count, 2, "L'interlude doit avoir exactement deux branches de tap (double, simple).")
+
+        for handler in handlers {
+            // Première action déclenchée par la branche, quelle qu'elle soit.
+            let firstAction = [handler.range(of: "onSkip()"), handler.range(of: "onBack()")]
+                .compactMap { $0?.lowerBound }
+                .min()
+            guard let firstAction else {
+                return XCTFail("une branche de tap n'appelle aucune action")
+            }
+            XCTAssertTrue(
+                String(handler[..<firstAction]).contains("else { return }"),
+                "Chaque branche de tap doit rendre au drag parent un toucher QUI A BOUGÉ, " +
+                "avant d'agir — sinon un swipe change de groupe ET saute l'interlude."
+            )
+        }
     }
 
     // MARK: - Badge de présence : règle 1/3/5, offline = AUCUN badge

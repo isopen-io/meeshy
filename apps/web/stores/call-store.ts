@@ -15,7 +15,6 @@ import type {
   CallParticipant,
   CallControls,
   CallState,
-  CallEndReason,
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
@@ -45,15 +44,21 @@ export interface PendingCallRetry {
   type: 'audio' | 'video';
 }
 
+/**
+ * Keyed by `conversationId` so a transient failure on one conversation can
+ * never clobber a still-unconsumed offer for another (only one
+ * `useCallRetryToast` instance is mounted at a time, scoped to the currently
+ * selected conversation — an offer for a conversation the user isn't
+ * currently viewing must survive until they navigate back to it).
+ */
+export type PendingCallRetryMap = Record<string, PendingCallRetry>;
+
 interface CallStoreState extends CallState {
   // Extended state
-  callEndReason: CallEndReason | null;
-  reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
-  isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
-  /** A retry affordance owed after a transient call failure (see PendingCallRetry). */
-  pendingRetry: PendingCallRetry | null;
+  /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
+  pendingRetry: PendingCallRetryMap;
 
   // Server-provided ICE servers (STUN + time-limited TURN credentials).
   // Supplied by the gateway via the initiate/join acks and the
@@ -96,14 +101,8 @@ interface CallStoreState extends CallState {
   startHeartbeat: (callId: string) => void;
   stopHeartbeat: () => void;
 
-  // Actions: Reconnection
-  setReconnecting: (attempt: number) => void;
-
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
-
-  // Actions: End reason
-  setCallEndReason: (reason: CallEndReason) => void;
 
   // Actions: Join an ongoing call from its live message bubble
   requestJoin: (request: JoinCallRequest) => void;
@@ -111,7 +110,8 @@ interface CallStoreState extends CallState {
 
   // Actions: Retry a transiently-failed call
   offerCallRetry: (retry: PendingCallRetry) => void;
-  clearCallRetry: () => void;
+  /** Omit `conversationId` to clear every pending offer (used by test teardown). */
+  clearCallRetry: (conversationId?: string) => void;
 
   // Actions: Cleanup
   reset: () => void;
@@ -170,13 +170,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  callEndReason: null,
-  reconnectAttempt: 0,
   connectionQuality: null,
-  isReconnecting: false,
   iceServers: null,
   joinRequest: null,
-  pendingRetry: null,
+  pendingRetry: {},
 
   // ===== CALL MANAGEMENT =====
 
@@ -294,6 +291,15 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
+
+    // Stop the previous stream's tracks if this participant's stream is being
+    // replaced (renegotiation / ICE restart / mid-call A/V switch re-fires
+    // ontrack with a new MediaStream) — mirrors setLocalStream's guard above.
+    const previousStream = remoteStreams.get(participantId);
+    if (previousStream && previousStream !== stream) {
+      previousStream.getTracks().forEach((track) => track.stop());
+    }
+
     const newStreams = new Map(remoteStreams);
     newStreams.set(participantId, stream);
     set({ remoteStreams: newStreams });
@@ -470,25 +476,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  // ===== RECONNECTION =====
-
-  setReconnecting: (attempt) => {
-    set({
-      isReconnecting: attempt > 0,
-      reconnectAttempt: attempt,
-    });
-  },
-
   // ===== CONNECTION QUALITY =====
 
   setConnectionQuality: (quality) => {
     set({ connectionQuality: quality });
-  },
-
-  // ===== END REASON =====
-
-  setCallEndReason: (reason) => {
-    set({ callEndReason: reason });
   },
 
   // ===== JOIN FROM LIVE CALL BUBBLE =====
@@ -504,8 +495,16 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   clearJoinRequest: () => set({ joinRequest: null }),
 
-  offerCallRetry: (retry) => set({ pendingRetry: retry }),
-  clearCallRetry: () => set({ pendingRetry: null }),
+  offerCallRetry: (retry) =>
+    set((state) => ({ pendingRetry: { ...state.pendingRetry, [retry.conversationId]: retry } })),
+  clearCallRetry: (conversationId) =>
+    set((state) => {
+      if (!conversationId) return { pendingRetry: {} };
+      if (!(conversationId in state.pendingRetry)) return state;
+      const rest = { ...state.pendingRetry };
+      delete rest[conversationId];
+      return { pendingRetry: rest };
+    }),
 
   // ===== CLEANUP =====
 
@@ -551,10 +550,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      callEndReason: null,
-      reconnectAttempt: 0,
       connectionQuality: null,
-      isReconnecting: false,
       iceServers: null,
       joinRequest: null,
       pendingRetry: survivingRetry,

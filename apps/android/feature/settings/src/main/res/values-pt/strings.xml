@@ -70,6 +70,7 @@
     <string name="settings_notif_type_member_left">Saída de membro</string>
     <string name="settings_notif_type_system">Alertas do sistema</string>
     <string name="settings_two_factor">Autenticação de dois fatores</string>
+    <string name="settings_account_contact">E-mail e telefone</string>
     <string name="settings_active_sessions">Sessões ativas</string>
     <string name="settings_blocked_users">Usuários bloqueados</string>
     <string name="settings_export_data">Exportar meus dados</string>
@@ -80,6 +81,35 @@
     <string name="settings_privacy_policy">Política de Privacidade</string>
     <string name="settings_log_out">Sair</string>
     <string name="settings_delete_account">Excluir conta</string>
+    <!-- Two-factor authentication (§L) -->
+    <string name="twofactor_title">Autenticação de dois fatores</string>
+    <string name="twofactor_status_enabled">Ativada</string>
+    <string name="twofactor_status_disabled">Desativada</string>
+    <string name="twofactor_backup_codes_remaining">%1$d códigos de backup restantes</string>
+    <string name="twofactor_enable_button">Configurar a autenticação de dois fatores</string>
+    <string name="twofactor_disable_button">Desativar a autenticação de dois fatores</string>
+    <string name="twofactor_regenerate_button">Gerar novos códigos de backup</string>
+    <string name="twofactor_setup_title">Escaneie o código QR</string>
+    <string name="twofactor_setup_instructions">Escaneie este código QR com seu aplicativo autenticador, ou digite o código manualmente.</string>
+    <string name="twofactor_setup_secret_label">Código de entrada manual</string>
+    <string name="twofactor_setup_code_label">Código de 6 dígitos</string>
+    <string name="twofactor_setup_confirm">Ativar</string>
+    <string name="twofactor_backup_codes_title">Códigos de backup</string>
+    <string name="twofactor_backup_codes_warning">Guarde estes códigos em um local seguro. Cada código só pode ser usado uma vez.</string>
+    <string name="twofactor_backup_codes_done">Salvei meus códigos</string>
+    <string name="twofactor_disable_title">Desativar a autenticação de dois fatores</string>
+    <string name="twofactor_disable_password_label">Senha</string>
+    <string name="twofactor_disable_code_label">Código de verificação</string>
+    <string name="twofactor_disable_confirm">Desativar</string>
+    <string name="twofactor_regenerate_title">Gerar novos códigos de backup</string>
+    <string name="twofactor_regenerate_code_label">Código de 6 dígitos</string>
+    <string name="twofactor_regenerate_confirm">Gerar novos</string>
+    <string name="twofactor_cancel">Cancelar</string>
+    <string name="twofactor_error_status">Não foi possível carregar o status do 2FA</string>
+    <string name="twofactor_error_setup">Não foi possível iniciar a configuração do 2FA</string>
+    <string name="twofactor_error_invalid_code">Código inválido. Verifique e tente novamente.</string>
+    <string name="twofactor_error_disable">Não foi possível desativar o 2FA</string>
+    <string name="twofactor_error_backup_codes">Não foi possível gerar novos códigos de backup</string>
     <!-- Change password (§L) -->
     <string name="settings_change_password">Alterar senha</string>
     <string name="change_password_title">Senha</string>
@@ -101,6 +131,33 @@
     <string name="change_password_strength_3">Boa</string>
     <string name="change_password_strength_4">Forte</string>
     <string name="change_password_strength_5">Excelente</string>
+    <!-- Alteração de email / telefone (§K) -->
+    <string name="account_contact_title">E-mail e telefone</string>
+    <string name="account_contact_email_section">E-mail</string>
+    <string name="account_contact_email_current_label">E-mail atual</string>
+    <string name="account_contact_email_new_label">Novo e-mail</string>
+    <string name="account_contact_not_set">Não definido</string>
+    <string name="account_contact_verified">Verificado</string>
+    <string name="account_contact_not_verified">Não verificado</string>
+    <string name="account_contact_edit">Editar</string>
+    <string name="account_contact_verify">Verificar</string>
+    <string name="account_contact_cancel">Cancelar</string>
+    <string name="account_contact_send">Enviar</string>
+    <string name="account_contact_email_sent">E-mail de verificação enviado</string>
+    <string name="account_contact_email_resend">Reenviar e-mail</string>
+    <string name="account_contact_email_resend_cooldown">Reenviar (%1$ds)</string>
+    <string name="account_contact_error_email_change">Não foi possível enviar o e-mail de verificação. Verifique o endereço e tente novamente.</string>
+    <string name="account_contact_error_email_resend">Não foi possível reenviar o e-mail de verificação.</string>
+    <string name="account_contact_phone_section">Telefone</string>
+    <string name="account_contact_phone_current_label">Telefone atual</string>
+    <string name="account_contact_phone_new_label">Novo telefone</string>
+    <string name="account_contact_phone_send_code">Enviar código</string>
+    <string name="account_contact_phone_code_sent">Código enviado por SMS</string>
+    <string name="account_contact_phone_code_label">Código de 6 dígitos</string>
+    <string name="account_contact_phone_verify">Verificar</string>
+    <string name="account_contact_error_phone_change">Não foi possível enviar o código de verificação. Verifique o número e tente novamente.</string>
+    <string name="account_contact_error_phone_verify_invalid">Código incorreto ou expirado</string>
+    <string name="account_contact_error_phone_verify_generic">Algo deu errado. Tente novamente.</string>
     <string name="settings_media_download">Download automático</string>
     <string name="media_download_title">Download automático</string>
     <string name="media_download_info">Escolha quando cada tipo de mídia é baixado automaticamente conforme sua conexão.</string>
@@ -250,4 +307,10 @@
     <string name="support_info_version">Versão</string>
     <string name="support_info_build">Compilação</string>
     <string name="support_info_platform">Plataforma</string>
+
+    <!-- Active sessions -->
+    <string name="sessions_current">Este dispositivo</string>
+    <string name="sessions_revoke">Desconectar</string>
+    <string name="sessions_revoke_others">Desconectar todos os outros dispositivos</string>
+    <string name="sessions_retry">Tentar novamente</string>
 </resources>

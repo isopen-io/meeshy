@@ -149,7 +149,7 @@ struct LoginView: View {
                 }
 
                 // Signature de marque partagée avec le splash (BrandSignature) :
-                // version + « Fait avec ❤️ par Services CEO » + logo.
+                // « Meeshy <version> · <build> » + « Par Services CEO » + logo.
                 BrandSignature()
                     .padding(.top, MeeshySpacing.md)
                     .opacity(showFields ? 1 : 0)

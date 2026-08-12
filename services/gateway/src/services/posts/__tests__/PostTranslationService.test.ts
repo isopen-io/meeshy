@@ -274,6 +274,105 @@ describe('PostTranslationService', () => {
       expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
     });
 
+    // ─── Retraduire ────────────────────────────────────────────────────────
+    //
+    // La feuille des langues du lecteur affiche un bouton « Retraduire » à côté
+    // de chaque langue DÉJÀ traduite. Il appelait la même route que « Traduire »,
+    // qui sortait aussitôt sur « translation already cached » côté légende et
+    // sautait chaque overlay déjà couvert : le bouton ne faisait donc
+    // strictement rien, sans le moindre signal à l'utilisateur.
+
+    it('refait la traduction des overlays déjà couverts quand on force', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: {
+            textObjects: [
+              { text: 'Good morning', sourceLanguage: 'en', translations: { fr: 'Bonjour' } },
+              { text: 'See you soon', sourceLanguage: 'en', translations: { fr: 'À bientôt' } },
+            ],
+          },
+        }),
+      });
+
+      await service.translateOnDemand('post-1', 'fr', { force: true });
+
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+    });
+
+    it('refait la traduction de la légende déjà en cache quand on force', async () => {
+      const { service, zmqClient } = makeService({
+        post: {
+          content: 'Hello world',
+          originalLanguage: 'en',
+          translations: { fr: { text: 'Bonjour le monde' } },
+          storyEffects: null,
+        },
+      });
+
+      await service.translateOnDemand('post-1', 'fr', { force: true });
+
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+    });
+
+    it('sans force, la légende déjà en cache reste intouchée', async () => {
+      const { service, zmqClient } = makeService({
+        post: {
+          content: 'Hello world',
+          originalLanguage: 'en',
+          translations: { fr: { text: 'Bonjour le monde' } },
+          storyEffects: null,
+        },
+      });
+
+      await service.translateOnDemand('post-1', 'fr');
+
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
+    it('forcer ne réveille pas le pipeline de l\'index dérivé', async () => {
+      // Même sous `force`, l'index reste un dérivé : le refaire traduire pour
+      // lui-même recréerait la seconde source qu'on vient de supprimer.
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({ content: 'Good morning See you soon' }),
+      });
+
+      await service.translateOnDemand('post-1', 'fr', { force: true });
+
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+    });
+
+    it('forcer respecte encore la langue source d\'un overlay', async () => {
+      // Retraduire du français VERS le français n'a pas de sens : le forçage
+      // rejoue ce qui peut l'être, il ne fabrique pas de travail absurde.
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: { textObjects: [{ text: 'Bonjour', sourceLanguage: 'fr' }] },
+        }),
+      });
+
+      await service.translateOnDemand('post-1', 'fr', { force: true });
+
+      expect(zmqClient.translateTextObject).not.toHaveBeenCalled();
+    });
+
+    it('n\'envoie PAS le content à traduire quand il n\'est que l\'index des overlays', async () => {
+      // `PostService.createPost` remplit `content` avec la concaténation des
+      // overlays quand la story n'a pas de légende. Le renvoyer au traducteur
+      // en faisait une seconde source, traduite indépendamment des overlays :
+      // les deux divergeaient dès qu'un pipeline bronchait (six langues sur le
+      // content, zéro sur les overlays — production, 2026-07-27). L'index se
+      // recompose maintenant depuis les traductions des overlays.
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({ content: 'Good morning See you soon' }),
+      });
+
+      await service.translateOnDemand('post-1', 'fr');
+
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+    });
+
     it('skips a text object already translated into the target language', async () => {
       const { service, zmqClient } = makeService({
         post: storyWithCanvasText({

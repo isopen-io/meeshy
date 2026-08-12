@@ -220,6 +220,14 @@ final class StoryPausedTouchDownTests: XCTestCase {
 @MainActor
 final class StoryLongPressToggleGuardTests: XCTestCase {
 
+    /// La garde ne peut PAS s'ancrer sur l'indentation littérale du bloc : elle
+    /// épinglait `"holdActive = false\n" + 40 espaces + "isLongPressPaused = false"`,
+    /// c'est-à-dire la profondeur exacte des closures qui l'entourent. Tout
+    /// remaniement du point d'attache gestuel (il y en a eu un le 2026-07-26)
+    /// la faisait tomber en accusant un comportement pourtant intact. On isole
+    /// donc le bloc d'armement, on retire les commentaires — l'un d'eux décrit
+    /// le toggle mot pour mot — et on normalise les blancs : ce qui est
+    /// verrouillé est la BASCULE, pas sa mise en page.
     func test_longPressArming_togglesInsteadOfAlwaysPausing() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
@@ -231,10 +239,28 @@ final class StoryLongPressToggleGuardTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(source.contains("if isLongPressPaused {"),
+        guard let armStart = source.range(of: "holdArmingTask = Task { @MainActor in"),
+              let armEnd = source.range(of: "// ===== DRAG IN PROGRESS =====",
+                                        range: armStart.upperBound..<source.endIndex) else {
+            return XCTFail("bloc d'armement du long-press introuvable")
+        }
+        let armingCode = String(source[armStart.upperBound..<armEnd.lowerBound])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: " ")
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+
+        XCTAssertTrue(armingCode.contains("if isLongPressPaused {"),
                       "le long-press doit tester l'état de pause pour basculer")
-        XCTAssertTrue(source.contains("holdActive = false\n                                        isLongPressPaused = false"),
-                      "un second long-press doit rendre la lecture")
+        XCTAssertTrue(
+            armingCode.contains("if isLongPressPaused { holdActive = false isLongPressPaused = false"),
+            "un second long-press doit rendre la lecture"
+        )
+        XCTAssertTrue(
+            armingCode.contains("} else { holdActive = true isLongPressPaused = true"),
+            "le premier long-press doit poser la pause"
+        )
     }
 }
 

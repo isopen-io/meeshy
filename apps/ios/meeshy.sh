@@ -19,6 +19,9 @@ DERIVED_DATA="Build"
 # Mirrors fastlane's source of truth (Appfile/Matchfile default + Fastfile
 # xcargs DEVELOPMENT_TEAM=D72UK7R5RE) and honours the same FASTLANE_TEAM_ID
 # override. Simulator builds don't sign, so this is only consumed by `device`.
+# Pinned to D72UK7R5RE since 2026-07-28 — the header block in
+# fastlane/Appfile lists every site carrying this value.
+# `:-` (not `-`) so an empty FASTLANE_TEAM_ID falls back instead of signing blank.
 DEVELOPMENT_TEAM="${FASTLANE_TEAM_ID:-D72UK7R5RE}"
 
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
@@ -67,6 +70,9 @@ CLEAN=false
 EXPORT_METHOD="app-store"
 UI_TESTS=false
 COVERAGE=false
+# Phase 0 du gate `test` : suite du package MeeshySDK. Exécutée par défaut —
+# `--skip-sdk` ne la saute que pour une itération rapide sur du code app.
+SKIP_SDK_TESTS=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
@@ -241,6 +247,94 @@ restore_entitlements() {
     ok "Entitlements restored"
 }
 
+# ─── Build number ────────────────────────────────────────────────────────────
+#
+# `CFBundleVersion` vaut `$(CURRENT_PROJECT_VERSION)` dans les 4 Info.plist, et
+# cette variable vit à DEUX endroits qui doivent rester d'accord :
+#   • project.yml                      → source de vérité XcodeGen
+#   • Meeshy.xcodeproj/project.pbxproj → ce que meeshy.sh compile réellement
+#     (ce script ne lance JAMAIS `xcodegen`, cf. apps/ios/CLAUDE.md)
+#
+# Le 2026-07-25 un `xcodegen generate` a réécrit le pbxproj depuis le
+# placeholder `"1"` de project.yml, et ce reset est parti dans un commit de
+# feature (85bb7e8d6, 1255 → 1). Depuis, toute app posée par `device` portait le
+# build **1**. La chaîne de publication ne l'a jamais vu : `ios-release.yml`
+# calcule son numéro avec `andp build-number --strategy max-build` et le passe
+# en build setting, et les lanes fastlane prennent `max(dépôt, TestFlight) + 1`
+# — le dépôt n'est jamais lu comme vérité. D'où une dérive muette de ~260.
+#
+# Le remède est un MÉCANISME, pas une valeur figée : on va chercher la vérité
+# chez Apple quand c'est possible. `andp build-number --strategy max-build
+# --json` renvoie `source.latest_asc`, le dernier build réellement présent sur
+# App Store Connect — exactement ce que le dépôt doit porter pour que la
+# prochaine publication soit un +1. Sans `andp`, sans credentials ou hors ligne,
+# on n'échoue JAMAIS le build : on garde la valeur committée et on le dit.
+
+# Numéro actuellement gravé dans le projet compilé.
+current_build_number() {
+    grep -m1 -o 'CURRENT_PROJECT_VERSION = [0-9][0-9]*' "$PROJECT/project.pbxproj" 2>/dev/null \
+        | grep -o '[0-9][0-9]*$' || true
+}
+
+# Dernier build présent sur App Store Connect, ou échec (code 1) si la vérité
+# n'est pas joignable. Aucune sortie sur stderr : l'appelant décide du message.
+fetch_latest_asc_build() {
+    command -v andp >/dev/null 2>&1 || return 1
+    local out
+    out=$(andp build-number "$BUNDLE_ID" --strategy max-build --json 2>/dev/null) || return 1
+    # Enveloppe ANDP : {"ok":true,…,"source":{"floor":0,"latest_asc":1263,…}}
+    # `build_number` est le PROCHAIN (latest+1) ; c'est `latest_asc` qu'on veut.
+    printf '%s' "$out" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || return 1
+    local latest
+    latest=$(printf '%s' "$out" \
+        | grep -o '"latest_asc"[[:space:]]*:[[:space:]]*[0-9][0-9]*' \
+        | grep -o '[0-9][0-9]*$' | head -n 1)
+    [ -n "$latest" ] || return 1
+    [ "$latest" -gt 0 ] 2>/dev/null || return 1
+    printf '%s' "$latest"
+}
+
+# Écrit le numéro dans les DEUX fichiers. Omettre project.yml rendrait le
+# correctif éphémère : le prochain `xcodegen generate` réécraserait le pbxproj
+# depuis le placeholder — c'est très exactement la panne d'origine.
+write_build_number() {
+    local value="$1"
+    sed -i '' -E "s/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*).*$/\1\"$value\"/" project.yml
+    sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*;/CURRENT_PROJECT_VERSION = $value;/g" \
+        "$PROJECT/project.pbxproj"
+}
+
+# Aligne le dépôt sur App Store Connect. Best-effort : ne fait jamais échouer
+# l'appelant.
+sync_build_number() {
+    local committed latest
+    committed=$(current_build_number)
+
+    if ! latest=$(fetch_latest_asc_build); then
+        if command -v andp >/dev/null 2>&1; then
+            warn "Build number : App Store Connect injoignable (credentials .andp/secrets.yml ou réseau) — build ${BOLD}${committed:-?}${NC} conservé"
+        else
+            warn "Build number : ${BOLD}andp${NC} introuvable — build ${BOLD}${committed:-?}${NC} conservé"
+        fi
+        # Le placeholder XcodeGen mérite un cri : c'est la panne de 2026-07-25,
+        # et sans réseau on ne peut pas la réparer tout seul.
+        if [ "${committed:-1}" = "1" ]; then
+            err "Build number = ${BOLD}1${NC} — c'est le placeholder XcodeGen, pas un vrai build."
+            err "  Corrigez : ./meeshy.sh build-number   (ou éditez CURRENT_PROJECT_VERSION dans project.yml ET le pbxproj)"
+        fi
+        return 0
+    fi
+
+    if [ "$committed" = "$latest" ]; then
+        ok "Build number ${BOLD}$latest${NC} — aligné sur le dernier build App Store Connect"
+        return 0
+    fi
+
+    write_build_number "$latest"
+    ok "Build number ${BOLD}${committed:-?}${NC} → ${BOLD}$latest${NC} (dernier build App Store Connect ; la prochaine publication sera $((latest + 1)))"
+    log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
+}
+
 do_device_deploy() {
     detect_physical_device
     do_device_deploy_only
@@ -256,8 +350,8 @@ do_device_deploy_only() {
     # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
     # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
     # "Meeshy.app" for both Debug and Release. The legacy "Meeshy Dev" name came
-    # from Configuration/Debug.xcconfig, which is NOT wired into the generated
-    # project (no configFiles: key) and therefore has no effect.
+    # from Configuration/Debug.xcconfig — never wired into the generated project
+    # (no configFiles: key), so it had no effect; deleted 2026-07-28.
     local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
@@ -423,7 +517,7 @@ app_path() {
     # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration, so
     # both Debug and Release produce "Meeshy.app". The old "Meeshy Dev.app"
     # name lived in Configuration/Debug.xcconfig, which the generated project
-    # never references — see do_device_deploy_only for the same rationale.
+    # never referenced — file deleted 2026-07-28; see do_device_deploy_only.
     if [ "$PLATFORM" = "mac" ]; then
         # "Designed for iPad" (the only valid macOS slice — SUPPORTS_MACCATALYST=0
         # by design) builds an iOS bundle under Debug-iphoneos, NOT a Mac Catalyst
@@ -997,7 +1091,19 @@ do_release_andp() {
         return 1
     fi
 
-    # Write ANDP secrets file
+    # Write ANDP secrets file.
+    # MUST be .andp/secrets.yml. ANDP resolve la cascade
+    # $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ (andp/paths.py::_candidates) et
+    # `misplaced_secrets()` ERREUR EXPRÈS quand un secrets.yml traîne à la
+    # racine — pour qu'un fichier au mauvais endroit ne fasse pas basculer un
+    # run en DRY-RUN silencieux.
+    # Historique 2026-07-28 : l'inverse était vrai le matin (ANDP ne lisait que
+    # ./secrets.yml) ; la mise à jour d'ANDP du soir a retourné la règle. Un
+    # ./secrets.yml résiduel fait désormais échouer le run avec
+    # `config_misplaced` — d'où le rm ci-dessous.
+    # .andp/ porte aussi les fichiers d'état de release (artefact andp-state).
+    # Les deux chemins sont gitignorés — ce fichier embarque la clé privée .p8.
+    rm -f secrets.yml
     mkdir -p .andp
     {
         echo "accounts:"
@@ -1041,6 +1147,53 @@ do_release_andp() {
     return "$rc"
 }
 
+# ─── Signature des frameworks embarqués (ITMS-90035) ─────────────────────────
+# À l'action `archive`, la signature automatique signe les XCFrameworks binaires
+# embarqués (FirebaseAnalytics, GoogleAppMeasurement, GoogleAdsOnDeviceConversion,
+# GoogleAppMeasurementIdentitySupport, WebRTC) avec l'identité de DÉVELOPPEMENT.
+# `-exportArchive` les re-signe ensuite en Distribution, mais ce « replacing
+# existing signature » laisse des métadonnées résiduelles que l'analyseur d'App
+# Store Connect rejette : ITMS-90035 « Invalid Signature — Code failed to satisfy
+# specified code requirement(s) ».
+#
+# Le strip DOIT donc courir entre l'archive et l'export, sur TOUS les chemins.
+# `meeshy.sh` ne l'appelait sur aucun des deux siens : `archive` et `distribute`
+# produisaient des IPA rejetés à l'upload, alors que le build lui-même passait.
+strip_embedded_signatures() {
+    local archive_path="$1"
+    local strip_script="./ci_scripts/ci_post_xcodebuild.sh"
+
+    if [ ! -x "$strip_script" ]; then
+        err "Strip script introuvable ou non exécutable: $strip_script"
+        err "Sans lui, l'IPA sera rejeté par App Store Connect (ITMS-90035)."
+        exit 1
+    fi
+
+    log "Stripping embedded framework signatures (ITMS-90035 guard)..."
+    CI_XCODEBUILD_ACTION=archive CI_ARCHIVE_PATH="$archive_path" "$strip_script"
+    ok "Embedded framework signatures stripped"
+}
+
+# Vérifie l'IPA/app EXPORTÉ : chaque framework embarqué doit porter une signature
+# de distribution valide. C'est le seul contrôle qui juge le produit livré plutôt
+# que le câblage du pipeline — un strip oublié y devient rouge localement au lieu
+# de revenir par courriel d'Apple deux jours plus tard.
+verify_embedded_signatures() {
+    local bundle_path="$1"
+    local verify_script="./ci_scripts/verify_embedded_signatures.sh"
+
+    if [ ! -x "$verify_script" ]; then
+        err "Verification script introuvable ou non exécutable: $verify_script"
+        exit 1
+    fi
+
+    log "Verifying embedded framework signatures..."
+    if ! "$verify_script" "$bundle_path"; then
+        err "Signature verification FAILED — ne pas uploader cet IPA."
+        exit 1
+    fi
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1076,6 +1229,8 @@ do_archive() {
     fi
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # Export IPA
     log "Exporting IPA (method: $EXPORT_METHOD)..."
     local export_opts="$DERIVED_DATA/$archive_config/ExportOptions.plist"
@@ -1107,6 +1262,8 @@ EOXML
         err "IPA export failed"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1235,6 +1392,8 @@ do_distribute() {
     rm -f "$archive_log"
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # ── Export IPA ──
     log "Exporting IPA (method: $dist_method)..."
     local export_opts="$DERIVED_DATA/Distribution/ExportOptions.plist"
@@ -1277,6 +1436,8 @@ EOXML
         err "IPA file not found after export"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1336,6 +1497,50 @@ discover_test_classes() {
         | sort -u
 }
 
+# `discover_test_classes` lit les SOURCES, jamais le produit du build. Le projet
+# énumère ses fichiers explicitement (aucun PBXFileSystemSynchronizedRootGroup) :
+# un test créé sans être enregistré dans project.pbxproj entre quand même dans le
+# manifeste `-only-testing` alors qu'il n'est PAS compilé. xcodebuild ne dit rien
+# d'une classe sélectionnée qui n'existe pas, et le gate reste VERT avec des
+# tests morts (2026-08-11 : MessageMoreJumpsToViewsGuardTests, deux commits,
+# 0 symbole dans le bundle, 3 gardes promises jamais exécutées).
+#
+# Seule la présence du SYMBOLE dans MeeshyTests.xctest fait foi — on la vérifie
+# ici, après le build, et un orphelin rend le gate ROUGE. Remède côté dépôt :
+# `(cd apps/ios && xcodegen generate)`, puis committer les 4 lignes ajoutées au
+# pbxproj (référence légitime d'un fichier neuf, pas du churn).
+verify_test_classes_are_compiled() {
+    local binary="$DERIVED_DATA/Products/Debug-iphonesimulator/$APP_NAME.app/PlugIns/MeeshyTests.xctest/MeeshyTests"
+    if [ ! -f "$binary" ]; then
+        warn "Bundle de tests introuvable ($binary) — garde d'orphelins sautée"
+        return 0
+    fi
+
+    local declared_file compiled_file orphans
+    declared_file=$(mktemp) && compiled_file=$(mktemp)
+    discover_test_classes > "$declared_file"
+    if [ ! -s "$declared_file" ]; then
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    nm -a "$binary" 2>/dev/null | grep -oF -f "$declared_file" | sort -u > "$compiled_file" || true
+    if [ ! -s "$compiled_file" ]; then
+        warn "Aucun symbole de classe de test lisible dans $binary — garde d'orphelins sautée"
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    orphans=$(grep -vxF -f "$compiled_file" "$declared_file" || true)
+    rm -f "$declared_file" "$compiled_file"
+    [ -z "$orphans" ] && return 0
+
+    err "Classes de test ABSENTES du bundle compilé (non enregistrées dans $PROJECT) :"
+    printf '  • %s\n' $orphans
+    err "Leurs tests ne s'exécutent jamais. Corriger : (cd apps/ios && xcodegen generate) puis committer l'ajout de référence."
+    return 1
+}
+
 xcpretty_or_cat() {
     if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
 }
@@ -1355,14 +1560,41 @@ do_test() {
     )
 
     mkdir -p "$TEST_OUTPUT_DIR"
-    rm -rf "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
+    rm -rf "$TEST_OUTPUT_DIR"/phase0-sdk.xcresult \
+           "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
            "$TEST_OUTPUT_DIR"/phase2-content.xcresult \
            "$TEST_OUTPUT_DIR"/phase3-connected.xcresult \
            "$TEST_OUTPUT_DIR"/unit-tests.xcresult
 
+    # Phase 0 — suite du package MeeshySDK (MeeshySDKTests + MeeshyUITests du
+    # package, scheme MeeshySDK-Package). Sans elle, le gate n'exerçait QUE le
+    # bundle de l'app : un test rouge sous packages/MeeshySDK/Tests restait
+    # invisible en local et n'apparaissait qu'au push, dans sdk-tests.yml.
+    # Hôte xctest distinct de Meeshy.app : aucun effet sur l'état de session, donc
+    # elle tourne AVANT les trois phases de l'app. `--skip-sdk` la saute pour une
+    # itération rapide sur du code purement app.
+    local p0=0
+    if [ "$SKIP_SDK_TESTS" = true ]; then
+        warn "Phase 0 (package MeeshySDK) sautée (--skip-sdk)"
+    else
+        log "Phase 0 — suite du package MeeshySDK (scheme MeeshySDK-Package)..."
+        ( cd ../../packages/MeeshySDK && xcodebuild test \
+            -scheme MeeshySDK-Package \
+            -destination "$destination" \
+            -resultBundlePath "../../apps/ios/$TEST_OUTPUT_DIR/phase0-sdk.xcresult" \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
+            2>&1 | xcpretty_or_cat ) || p0=$?
+    fi
+
     log "Building for testing..."
     xcodebuild build-for-testing "${common_flags[@]}" \
         2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Le manifeste des phases 1/2 sort des sources : on le confronte au bundle
+    # compilé AVANT de lui faire confiance (cf. verify_test_classes_are_compiled).
+    local porphan=0
+    verify_test_classes_are_compiled || porphan=$?
 
     # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
     local phase1_skip=() phase2_only=() cls
@@ -1415,6 +1647,8 @@ do_test() {
         -only-testing:MeeshyTests/$END_STATE_SUITE \
         2>&1 | xcpretty_or_cat || p3=$?
 
+    [ "$porphan" -eq 0 ] && ok "Garde d'orphelins : toutes les classes de test sont dans le bundle compilé" || err "Garde d'orphelins : des classes de test ne sont PAS compilées (détail ci-dessus)"
+    [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
     [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
@@ -1448,7 +1682,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1555,9 +1789,10 @@ usage() {
     echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
     echo -e "    ${GREEN}release${NC}      Upload to TestFlight ${DIM}(--fastlane or --andp; fastlane default)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
-    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
+    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
+    echo -e "    ${GREEN}build-number${NC} Align CURRENT_PROJECT_VERSION on the latest App Store Connect build ${DIM}(via andp)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Platform:${NC}"
@@ -1576,6 +1811,7 @@ usage() {
     echo -e "    ${YELLOW}--appstore${NC}               Submit to App Store"
     echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
+    echo -e "    ${YELLOW}--skip-sdk${NC}               Skip phase 0 (MeeshySDK package suite)"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
@@ -1607,7 +1843,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|build-number|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1635,6 +1871,7 @@ while [[ $# -gt 0 ]]; do
         -c|--configuration) CONFIGURATION="$2"; shift 2 ;;
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
+        --skip-sdk)       SKIP_SDK_TESTS=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;
@@ -1780,10 +2017,21 @@ case "$COMMAND" in
         do_screenshot "$1"
         ;;
 
+    build-number)
+        echo ""
+        echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+        echo ""
+        sync_build_number
+        echo ""
+        ;;
+
     device)
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
+        # Avant de compiler : l'app posée sur un appareil réel doit porter le
+        # numéro de build du dernier TestFlight, pas le placeholder XcodeGen.
+        sync_build_number
         pick_device
 
         if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then

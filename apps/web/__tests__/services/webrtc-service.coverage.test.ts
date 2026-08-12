@@ -107,12 +107,26 @@ class FakeRTCPeerConnection {
 // Track / stream factories
 // ---------------------------------------------------------------------------
 
-const makeTrack = (kind: 'audio' | 'video') => ({
-  kind,
-  enabled: true,
-  contentHint: '',
-  stop: jest.fn(),
-});
+let trackIdCounter = 0;
+
+const makeTrack = (kind: 'audio' | 'video'): {
+  kind: 'audio' | 'video';
+  id: string;
+  enabled: boolean;
+  contentHint: string;
+  stop: jest.Mock;
+  clone: jest.Mock;
+} => {
+  const track = {
+    kind,
+    id: `track-${++trackIdCounter}`,
+    enabled: true,
+    contentHint: '',
+    stop: jest.fn(),
+    clone: jest.fn((): ReturnType<typeof makeTrack> => makeTrack(kind)),
+  };
+  return track;
+};
 
 const makeStream = (opts: { audio?: boolean; video?: boolean }) => {
   const tracks: ReturnType<typeof makeTrack>[] = [];
@@ -1188,6 +1202,125 @@ describe('disableVideoSend — autoNegotiate=false', () => {
 });
 
 // ===========================================================================
+// switchVideoSendTrack — Vague 95
+//
+// handleSwitchCamera (VideoCallInterface.tsx) used to replace every peer
+// connection's video sender with a SINGLE shared track object, then stop and
+// remove only `localStream.getVideoTracks()[0]` — an assumption that breaks
+// the moment enableVideo() has handed a *different* per-peer clone to a
+// non-first peer in a group call (its established "one real track + N
+// clones" ownership model, exercised above by the `enableVideoSend` describe
+// blocks). This method gives camera-switch the same per-peer, bookkeeping-
+// aware replace that enableVideoSend/disableVideoSend already have.
+// ===========================================================================
+
+describe('switchVideoSendTrack', () => {
+  it('throws when no videoTransceiver initialized', async () => {
+    const service = new WebRTCService();
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await expect(service.switchVideoSendTrack(newTrack)).rejects.toThrow(
+      'Video transceiver not initialized'
+    );
+  });
+
+  it('replaces the sender track, updates localStream, and stops the previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const previousTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).toHaveBeenCalledWith(previousTrack);
+    expect(previousTrack.stop).toHaveBeenCalled();
+  });
+
+  it('does not stop/remove anything when the sender had no previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true });
+    // sendVideo: false → video transceiver reserved recvonly, sender.track is null
+    service.addLocalMedia(stream, { sendVideo: false });
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    const videoTx = pc._transceivers.find((t) => t.direction === 'recvonly')!;
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).not.toHaveBeenCalled();
+  });
+
+  it('does not renegotiate — replaceTrack alone is sufficient once already sendrecv', async () => {
+    const { service, onLocalDescription } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+    onLocalDescription.mockClear();
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(onLocalDescription).not.toHaveBeenCalled();
+  });
+
+  it("keeps a group call's independent per-peer track exclusive (mirrors enableVideoSend ownership)", async () => {
+    const { service: serviceA } = setup();
+    const serviceB = new WebRTCService();
+    serviceB.createPeerConnection('peer-2');
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    const newBaseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.switchVideoSendTrack(newBaseTrack);
+
+    // Only A's own previous track (baseTrack) is stopped/removed — B's clone,
+    // still live and attached to B's own sender, is left completely alone.
+    expect((baseTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    expect((cloneTrack as unknown as { stop: jest.Mock }).stop).not.toHaveBeenCalled();
+    expect(sharedStream.removeTrack).not.toHaveBeenCalledWith(cloneTrack);
+  });
+
+  it('close({ stopLocalTracks: false }) releases the NEW track after a switch, not the stale one', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const originalTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    service.close({ stopLocalTracks: false });
+
+    expect((newTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(stream.removeTrack).toHaveBeenCalledWith(newTrack);
+    // The original track was already stopped/removed by switchVideoSendTrack
+    // itself, above — close() must not double-touch it via a stale ref.
+    expect(originalTrack.stop).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===========================================================================
 // applyVideoEncoding — additional tiers + edge cases
 // ===========================================================================
 
@@ -1775,6 +1908,42 @@ describe('close', () => {
     // serviceB's connection (and the shared stream) is unaffected.
     expect(pcB.close).not.toHaveBeenCalled();
     expect(serviceB.getCurrentStream()).toBe(sharedStream);
+  });
+
+  // enableVideoSend() attaches a track that is NEVER shared with another
+  // peer's sender in a group call — use-webrtc-p2p.ts's enableVideo() gives
+  // the first peer the literal camera track and every other peer a
+  // `.clone()` specifically so each sender owns an exclusive track object.
+  // close({ stopLocalTracks: false }) must still release THIS instance's own
+  // video track (stop it + remove it from the shared local preview stream)
+  // even though it must not touch the genuinely shared tracks — otherwise a
+  // departed group-call participant's clone (or the original, if peer index
+  // 0 leaves) is orphaned on the shared MediaStream forever.
+  it('close({ stopLocalTracks: false }) still releases the exclusive video track set by enableVideoSend', async () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(baseTrack.stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    // The genuinely shared track (audio) is untouched by a non-full teardown.
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+
+    // Peer B's own, independent clone track is unaffected.
+    expect(cloneTrack.stop).not.toHaveBeenCalled();
+    expect(pcB.close).not.toHaveBeenCalled();
   });
 
   it('close() with no options still stops local tracks (full-teardown default unchanged)', () => {

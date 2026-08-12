@@ -36,6 +36,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let visibility: String
         let originalLanguage: String?
         let type: String?
+        let location: SharedPlace?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -50,7 +51,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         content: String?,
         visibility: String,
         originalLanguage: String?,
-        type: String?
+        type: String?,
+        location: SharedPlace?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -58,7 +60,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             content: content,
             visibility: visibility,
             originalLanguage: originalLanguage,
-            type: type
+            type: type,
+            location: location
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(
@@ -107,17 +110,6 @@ final class MockProfileCacheWriter: ProfileCacheWriting, @unchecked Sendable {
     func saveProfile(_ user: MeeshyUser, for userId: String) async throws {
         saveProfileCalls.append((user, userId))
         try saveProfileResult.get()
-    }
-}
-
-// MARK: - TestSleeper
-
-final class TestSleeper: Sleeping, @unchecked Sendable {
-    var sleepCalls: [UInt64] = []
-
-    func sleep(milliseconds: UInt64) async {
-        sleepCalls.append(milliseconds)
-        // intentional no-op for test speed
     }
 }
 

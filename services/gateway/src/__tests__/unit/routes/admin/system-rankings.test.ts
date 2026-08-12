@@ -484,16 +484,20 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(JSON.parse(res.body).data.rankings).toHaveLength(0);
     });
 
-    it('mentions_received — resolves mentionedParticipant→user', async () => {
+    // `Mention` compte déjà par utilisateur : contrairement à `Message.senderId`
+    // ou `Reaction.participantId`, sa colonne ne référence pas un participant.
+    // Le repli participant→utilisateur n'a donc rien à y faire — il coûtait une
+    // requête par classement pour ne jamais rien résoudre.
+    it('mentions_received — counts by mentioned user, without folding through participants', async () => {
       mockPrisma.mention.groupBy.mockResolvedValue([
-        { mentionedParticipantId: PART_ID, _count: { id: 6 } },
+        { mentionedUserId: USER_ID, _count: { id: 6 } },
       ]);
-      mockPrisma.participant.findMany.mockResolvedValue([mockParticipant]);
       mockPrisma.user.findMany.mockResolvedValue([mockUser]);
 
       const res = await inject(app, { entityType: 'users', criterion: 'mentions_received' });
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body).data.rankings[0].count).toBe(6);
+      expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
     });
 
     it('mentions_sent — counts mentions by message sender, skips null senderId', async () => {
@@ -1352,7 +1356,7 @@ describe('systemRankingsRoutes — GET /ranking', () => {
 
     it('mentions_received filter — removes entry when mapped id is falsy', async () => {
       mockPrisma.mention.groupBy.mockResolvedValue([
-        { mentionedParticipantId: '', _count: { id: 3 } },
+        { mentionedUserId: '', _count: { id: 3 } },
       ]);
       mockPrisma.participant.findMany.mockResolvedValue([]);
 

@@ -242,6 +242,7 @@ public enum StoryTextBackgroundStyle: Codable, Sendable, Equatable {
 /// horizontal padding is always ≥ the width of one "o" glyph (see
 /// `StoryTextLayer`). `nil` on the object means `.rounded` (legacy default).
 public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
+    case none        // aucune boîte, quels que soient le fond et le liseré
     case rounded     // cornerRadius ≈ 15% of height (default)
     case pill        // full capsule (cornerRadius = 50% of height)
     case rectangle   // near-square corners
@@ -255,7 +256,7 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     /// choisir le pipeline.
     public var usesCustomPath: Bool {
         switch self {
-        case .rounded, .pill, .rectangle: return false
+        case .none, .rounded, .pill, .rectangle: return false
         case .diamond, .cloud, .speech: return true
         }
     }
@@ -301,6 +302,20 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// background is active. `nil` ⇒ `.rounded` (legacy default).
     public var frameShape: String?
 
+    /// Multiplicateur de la marge du cadre — l'espace entre les glyphes et le
+    /// bord de la boîte. `nil` ⇒ 1.0, la marge historique. Un multiplicateur
+    /// et non des points : la marge automatique vaut « au moins la chasse d'un
+    /// *o* », elle dépend donc de la police ET de la taille — une valeur
+    /// absolue deviendrait fausse au premier changement de l'une des deux.
+    public var framePaddingScale: Double?
+
+    /// Liseré tracé sur le bord de la boîte de cadre, en design-pixels.
+    /// `nil` ou `0` ⇒ aucun liseré. À ne pas confondre avec `borderWidth`,
+    /// qui contoure les GLYPHES et non la boîte.
+    public var frameBorderWidth: Double?
+    /// Couleur du liseré de la boîte. `nil` ⇒ blanc dès que la largeur > 0.
+    public var frameBorderColor: String?
+
     /// Outline / contour du texte. `borderColor == nil` ⇒ pas de bord
     /// (pas de booléen séparé). Hex "RRGGBB" ou "RRGGBBAA".
     public var borderColor: String?
@@ -329,6 +344,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case fontSize, fontFamily
         case textStyle, textColor, textAlign, textBg, backgroundStyle
         case fontWeight, frameShape
+        case framePaddingScale, frameBorderWidth, frameBorderColor
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
@@ -352,6 +368,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 backgroundStyle: StoryTextBackgroundStyle? = nil,
                 fontWeight: String? = nil,
                 frameShape: String? = nil,
+                framePaddingScale: Double? = nil,
+                frameBorderWidth: Double? = nil,
+                frameBorderColor: String? = nil,
                 borderColor: String? = nil,
                 borderWidth: Double? = nil,
                 translations: [String: String]? = nil,
@@ -373,6 +392,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textAlign = textAlign; self.textBg = textBg
         self.backgroundStyle = backgroundStyle
         self.fontWeight = fontWeight; self.frameShape = frameShape
+        self.framePaddingScale = framePaddingScale
+        self.frameBorderWidth = frameBorderWidth
+        self.frameBorderColor = frameBorderColor
         self.borderColor = borderColor; self.borderWidth = borderWidth
         self.translations = translations
         self.sourceLanguage = sourceLanguage
@@ -423,6 +445,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
         fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight)
         frameShape = try c.decodeIfPresent(String.self, forKey: .frameShape)
+        framePaddingScale = try c.decodeIfPresent(Double.self, forKey: .framePaddingScale)
+        frameBorderWidth = try c.decodeIfPresent(Double.self, forKey: .frameBorderWidth)
+        frameBorderColor = try c.decodeIfPresent(String.self, forKey: .frameBorderColor)
         borderColor = try c.decodeIfPresent(String.self, forKey: .borderColor)
         borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
@@ -462,6 +487,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
         try c.encodeIfPresent(fontWeight, forKey: .fontWeight)
         try c.encodeIfPresent(frameShape, forKey: .frameShape)
+        try c.encodeIfPresent(framePaddingScale, forKey: .framePaddingScale)
+        try c.encodeIfPresent(frameBorderWidth, forKey: .frameBorderWidth)
+        try c.encodeIfPresent(frameBorderColor, forKey: .frameBorderColor)
         try c.encodeIfPresent(borderColor, forKey: .borderColor)
         try c.encodeIfPresent(borderWidth, forKey: .borderWidth)
         try c.encodeIfPresent(translations, forKey: .translations)
@@ -494,6 +522,27 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var parsedFrameShape: StoryTextFrameShape {
         guard let raw = frameShape, let shape = StoryTextFrameShape(rawValue: raw) else { return .rounded }
         return shape
+    }
+
+    /// Marge du cadre effectivement appliquée, bornée à 0…3. Le bornage vit
+    /// ici et non dans la vue : un JSON hostile ou un curseur futur ne doivent
+    /// pas pouvoir faire exploser les bounds du calque.
+    public var resolvedFramePaddingScale: Double {
+        min(3, max(0, framePaddingScale ?? 1))
+    }
+
+    /// Le texte porte-t-il une boîte de cadre ? Source de vérité unique,
+    /// partagée par le calque, les tests et les panneaux d'outils.
+    ///
+    /// La boîte existe dès qu'une forme est choisie ET qu'il y a quelque chose
+    /// à voir — un fond, un liseré, ou les deux. C'est ce qui détache le cadre
+    /// du fond : avant, sans fond il n'y avait pas de boîte, donc choisir une
+    /// forme forçait un fond noir et repeignait le texte sans qu'on l'ait
+    /// demandé.
+    public var hasFrameBox: Bool {
+        guard parsedFrameShape != StoryTextFrameShape.none else { return false }
+        if resolvedBackgroundStyle != StoryTextBackgroundStyle.none { return true }
+        return (frameBorderWidth ?? 0) > 0
     }
 
     /// Legacy helper — returns design-pixel fontSize.
@@ -569,6 +618,13 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var scale: Double
     public var rotation: Double
     public var volume: Float               // 0.0–1.0
+    /// Niveau mémorisé au moment du mute un-bouton (`toggleMute()`), pour que
+    /// l'unmute RESTAURE le réglage de l'auteur au lieu de forcer 1.0.
+    /// Auteur-local : persiste dans les drafts (Codable) mais n'est jamais
+    /// publié (`StoryEffects.toJSON()` liste ses clés explicitement).
+    /// `nil` dès que `volume > 0` — l'invariant est maintenu par
+    /// `setVolumePreservingMuteMemento(_:)`.
+    public var mutedVolumeMemento: Float?
 
     // NEW — Phase 1 Canvas Fidelity fields
     public var aspectRatio: Double         // figé à la composition (REQUIRED, fallback 1.0 on legacy decode)
@@ -595,6 +651,14 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var name: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// Coupe l'atténuation automatique de CE clip quand un audio de fond joue
+    /// sur la même slide (cf. `StoryVolume.duckingFactor`).
+    ///
+    /// Optionnel à dessein : aucune story déjà publiée ne porte ce champ, et
+    /// son absence doit se lire « atténuation active », le comportement par
+    /// défaut. Un dialogue filmé est le cas qui justifie de la couper : la
+    /// musique doit alors passer sous la voix, pas l'inverse.
+    public var isDuckingDisabled: Bool?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
     /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
     /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
@@ -619,11 +683,12 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
-        case x, y, scale, rotation, volume
+        case x, y, scale, rotation, volume, mutedVolumeMemento
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
         case sourceLanguage, keyframes, thumbHash, name
+        case isDuckingDisabled
     }
 
     public init(id: String = UUID().uuidString,
@@ -647,7 +712,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                isDuckingDisabled: Bool? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -668,6 +734,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.keyframes = keyframes
         self.thumbHash = thumbHash
         self.name = name
+        self.isDuckingDisabled = isDuckingDisabled
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -683,6 +750,9 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
         rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
         volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 1.0
+        // Rétro-compat : les drafts antérieurs au mute un-bouton n'ont pas la
+        // clé — l'absence se lit « aucun niveau mémorisé ».
+        mutedVolumeMemento = try c.decodeIfPresent(Float.self, forKey: .mutedVolumeMemento)
         // aspectRatio: REQUIRED but falls back to 1.0 for legacy drafts that predate this field
         aspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio) ?? 1.0
         if let anchorContainer = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
@@ -708,6 +778,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
         name = try c.decodeIfPresent(String.self, forKey: .name)
+        isDuckingDisabled = try c.decodeIfPresent(Bool.self, forKey: .isDuckingDisabled)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -720,6 +791,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(volume, forKey: .volume)
+        try c.encodeIfPresent(mutedVolumeMemento, forKey: .mutedVolumeMemento)
         try c.encode(aspectRatio, forKey: .aspectRatio)
         var anchorContainer = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
         try anchorContainer.encode(Double(anchor.x), forKey: .x)
@@ -736,6 +808,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
         try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(isDuckingDisabled, forKey: .isDuckingDisabled)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -768,7 +841,8 @@ extension StoryMediaObject {
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                isDuckingDisabled: Bool? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -788,7 +862,8 @@ extension StoryMediaObject {
                   sourceLanguage: sourceLanguage,
                   keyframes: keyframes,
                   thumbHash: thumbHash,
-                  name: name)
+                  name: name,
+                  isDuckingDisabled: isDuckingDisabled)
     }
 }
 
@@ -797,10 +872,25 @@ extension StoryMediaObject {
 public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
+    /// URL de l'asset — miroir de `StoryMediaObject.mediaURL`.
+    ///
+    /// `postMediaId` seul n'est adressable que par un consommateur qui possède
+    /// l'index `postMediaId → URL` (le reader via `postMediaURLResolver`, le
+    /// composer via ses caches de session). L'exporteur, lui, ne reçoit qu'un
+    /// `StorySlide` : sans cette URL, les chemins « Partager » et « Enregistrer
+    /// dans Photos » ne pouvaient pas retrouver le son et bakaient un MP4 muet.
+    /// Hydratée depuis `FeedMedia` par `StoryItem.toRenderableSlide` quand elle
+    /// n'a pas été persistée.
+    public var mediaURL: String?
     public var placement: String        // kept for backward compat; no longer drives rendering
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
     public var volume: Float           // 0.0–1.0
+    /// Niveau mémorisé au moment du mute un-bouton — miroir de
+    /// `StoryMediaObject.mutedVolumeMemento` (mêmes invariants, cf. le
+    /// protocole `StoryVolumeCarrying`). Jamais publié : `toJSON()` liste
+    /// ses clés explicitement.
+    public var mutedVolumeMemento: Float?
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
     /// Quand true, ce player audio joue en fond (boucle infinie, pas de UI pill draggable,
     /// ducking automatique quand un audio foreground joue). Un seul audio peut être en
@@ -821,11 +911,39 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
     public var name: String?
+    /// Automation par keyframes, parité avec `StoryMediaObject.keyframes`.
+    /// Seul le canal `volume` a un sens pour un son : sa position `x`/`y`
+    /// existe dans le modèle mais ne pilote aucun rendu.
+    public var keyframes: [StoryKeyframe]?
+    /// Son EMPRUNTÉ à la bibliothèque, quand la piste ne vient pas d'un média
+    /// téléversé dans ce post.
+    ///
+    /// Le serveur s'en sert pour enregistrer un `SoundUsage` **sans** capturer
+    /// de nouveau son ni recréditer qui que ce soit : c'est ce qui distingue
+    /// « j'utilise le son d'un autre » de « je publie mon son ».
+    ///
+    /// `postMediaId` reste vide dans ce cas — la résolution de l'URL passe par
+    /// `mediaURL`, hydratée depuis le DTO du son.
+    public var soundId: String?
+    /// @pseudo de l'uploadeur du son EMPRUNTÉ, gravé au moment du choix dans
+    /// la bibliothèque : le reader et l'export lisent un `StorySlide`
+    /// hors-ligne et ne peuvent pas re-résoudre le crédit à l'affichage.
+    /// `nil` pour une piste propre (soundId nil) et pour les stories publiées
+    /// avant ce champ.
+    public var soundAuthorUsername: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, postMediaId, placement, x, y, volume, waveformSamples
+        case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
+        case mutedVolumeMemento
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
+        case keyframes
+        // ⚠ Le `CodingKeys` de ce type est EXPLICITE : ajouter une propriété
+        // sans ajouter son `case` compile sans le moindre avertissement, et le
+        // champ n'est alors ni encodé ni décodé — le son emprunté serait perdu
+        // à la publication, en silence.
+        case soundId
+        case soundAuthorUsername
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -837,8 +955,15 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                keyframes: [StoryKeyframe]? = nil,
+                mediaURL: String? = nil,
+                soundId: String? = nil,
+                soundAuthorUsername: String? = nil) {
+        self.soundId = soundId
+        self.soundAuthorUsername = soundAuthorUsername
         self.id = id; self.postMediaId = postMediaId
+        self.mediaURL = mediaURL
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
         self.isBackground = isBackground
@@ -847,6 +972,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.name = name
+        self.keyframes = keyframes
     }
 }
 
@@ -868,6 +994,54 @@ extension StoryAudioPlayerObject {
         return postMediaId
     }
 }
+
+// MARK: - Mute d'auteur un-bouton (piste vidéo / audio)
+
+/// Piste dont le volume d'auteur est PERSISTÉ dans le modèle et peut être
+/// coupée d'un seul bouton.
+///
+/// Convention unique sur toute la chaîne (composer, timeline, previewer,
+/// reader, export) : **`volume == 0` EST l'état muet persistant** — aucun
+/// booléen séparé (règle CLAUDE.md « no redundant boolean »). Le mémento ne
+/// sert qu'à restaurer le niveau précédent à l'unmute ; son invariant est
+/// `mutedVolumeMemento != nil ⟹ volume == 0`.
+public protocol StoryVolumeCarrying {
+    var volume: Float { get set }
+    var mutedVolumeMemento: Float? { get set }
+}
+
+extension StoryVolumeCarrying {
+    /// `true` quand l'AUTEUR a coupé la piste (volume nul persistant).
+    public var isMuted: Bool { volume <= 0 }
+
+    /// Écrit `volume` en maintenant l'invariant du mémento : passer à 0 depuis
+    /// un niveau audible mémorise ce niveau ; tout niveau audible efface le
+    /// mémento (le réglage manuel prime sur l'historique de mute).
+    public mutating func setVolumePreservingMuteMemento(_ newVolume: Float) {
+        let clamped = max(0, newVolume)
+        if clamped <= 0 {
+            if volume > 0 { mutedVolumeMemento = volume }
+        } else {
+            mutedVolumeMemento = nil
+        }
+        volume = clamped
+    }
+
+    /// Toggle un-bouton : mute → `volume = 0` (niveau mémorisé) ; unmute →
+    /// restaure le mémento, `1.0` en dernier recours (piste créée muette ou
+    /// draft antérieur au mémento).
+    public mutating func toggleMute() {
+        if isMuted {
+            let restored = mutedVolumeMemento ?? 1.0
+            setVolumePreservingMuteMemento(restored > 0 ? restored : 1.0)
+        } else {
+            setVolumePreservingMuteMemento(0)
+        }
+    }
+}
+
+extension StoryMediaObject: StoryVolumeCarrying {}
+extension StoryAudioPlayerObject: StoryVolumeCarrying {}
 
 // MARK: - Story Audio Variant (TTS auto-généré par langue)
 
@@ -985,6 +1159,75 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     private enum AnchorKeys: String, CodingKey { case x, y }
 }
 
+// MARK: - Story Location Object (pastille de lieu posée sur une slide)
+
+/// Pastille de lieu posée sur une slide. Mêmes transforms qu'un
+/// `StoryTextObject` — la pastille est hors timeline : toujours visible sur sa
+/// slide, sans `startTime` ni `duration`. `TimelineClipKind` n'est donc pas
+/// étendu.
+public struct StoryLocationObject: Codable, Identifiable, Sendable {
+    public var id: String
+    public var place: SharedPlace
+    public var x: Double
+    public var y: Double
+    public var scale: Double
+    public var rotation: Double
+    /// Z-order persistent (non-optional; defaults to 0), même convention que
+    /// `StoryTextObject.zIndex` / `StorySticker.zIndex`.
+    public var zIndex: Int
+    /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
+    public var anchor: CGPoint
+
+    enum CodingKeys: String, CodingKey {
+        case id, place, x, y, scale, rotation, zIndex, anchor
+    }
+
+    public init(id: String = UUID().uuidString, place: SharedPlace,
+                x: Double = 0.5, y: Double = 0.8, scale: Double = 1.0,
+                rotation: Double = 0, zIndex: Int = 0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
+        self.id = id; self.place = place
+        self.x = x; self.y = y; self.scale = scale
+        self.rotation = rotation; self.zIndex = zIndex; self.anchor = anchor
+    }
+
+    // Custom Codable: anchor uses the nested {x,y} container patron shared
+    // with StoryTextObject/StorySticker — NOT CGPoint's own synthesized
+    // Codable (which would encode as an unkeyed [x,y] array and break the
+    // wire format the composer/reader already agree on).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        place = try c.decode(SharedPlace.self, forKey: .place)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.8
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        if let nested = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
+            let ax = try nested.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+            let ay = try nested.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+            anchor = CGPoint(x: ax, y: ay)
+        } else {
+            anchor = CGPoint(x: 0.5, y: 0.5)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(place, forKey: .place)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+        try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
+        try c.encode(zIndex, forKey: .zIndex)
+        var anchorC = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
+        try anchorC.encode(Double(anchor.x), forKey: .x)
+        try anchorC.encode(Double(anchor.y), forKey: .y)
+    }
+
+    private enum AnchorKeys: String, CodingKey { case x, y }
+}
+
 // MARK: - Story Slide
 
 public struct StorySlide: Identifiable, Codable, Sendable {
@@ -995,6 +1238,22 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     public var effects: StoryEffects
     public var duration: TimeInterval
     public var order: Int
+
+    /// Pastilles de lieu posées sur cette slide. Hors timeline (pas de
+    /// `startTime`/`duration`) : toujours visibles tant que la slide l'est.
+    ///
+    /// Simple accès ergonomique : le STOCKAGE est `effects.locationObjects`,
+    /// parce que `StoryEffects` est la seule unité que le dépôt persiste
+    /// (`StoryDraftStore` n'écrit que `effects_json`) et envoie au serveur
+    /// (`PostService.createStory(content:storyEffects:)`). Un champ propre au
+    /// `StorySlide` disparaissait à chaque enregistrement de brouillon, à la
+    /// publication, et dans les cinq sites qui reconstruisent un slide depuis
+    /// ses seuls `storyEffects` (édition, repost, `StoryItem.asSlide`, chargement
+    /// de brouillon, cover receveur).
+    public var locationObjects: [StoryLocationObject] {
+        get { effects.locationObjects }
+        set { effects.locationObjects = newValue }
+    }
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
@@ -1156,14 +1415,25 @@ extension StorySlide {
 
 // MARK: - Story Transition Effects
 
+/// Les constantes de rendu ne vivent PAS ici : elles sont sur `StoryRenderer`
+/// (`slideTransitionDuration`, `zoomTransitionScale`, `slideTransitionTravelFraction`),
+/// lues à l'identique par l'aperçu du composer, le lecteur et l'export.
+///
+/// Les commentaires de ce bloc ont porté pendant un temps des valeurs propres —
+/// 0,3 s / scale 0,92 / décalage Y+30 — héritées de la ré-implémentation SwiftUI
+/// du lecteur. Elles CONTREDISAIENT le SDK dans le sens même de l'effet (0,92
+/// zoome, quand le SDK dézoome depuis 1,08 ; Y+30 glisse verticalement, quand le
+/// SDK glisse horizontalement d'une fraction de la largeur). C'est exactement la
+/// divergence que `StoryOpeningParityTests` verrouille. Décrire ici un COMPORTEMENT
+/// et non des nombres est ce qui empêche la contradiction de revenir par la doc.
 public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
-    /// Fondu : opacité 0 → 1 (0.3s easeOut) à l'entrée
+    /// Fondu : l'opacité monte de 0 à 1 à l'entrée, et redescend à la sortie.
     case fade
-    /// Zoom doux : scale 0.92 + opacité 0 → 1 (spring) à l'entrée
+    /// Zoom : DÉzoome à l'entrée (part au-dessus de 1 et retombe), rezoome à la sortie.
     case zoom
-    /// Glissement vertical : décalage Y+30 + opacité 0 → position normale (spring) à l'entrée
+    /// Glissement HORIZONTAL : entre depuis le bord d'attaque, sort par le bord opposé.
     case slide
-    /// Révélation circulaire : clipShape cercle qui s'élargit (0.4s easeOut) à l'entrée
+    /// Révélation circulaire : un masque circulaire s'élargit à l'entrée, se resserre à la sortie.
     case reveal
 
     public var iconName: String {
@@ -1305,6 +1575,11 @@ public struct StoryEffects: Codable, Sendable {
 
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
+    /// Pastilles de lieu posées sur la slide (hors timeline). Portées par les
+    /// EFFETS — la seule unité que `StoryDraftStore` persiste (`effects_json`)
+    /// et que `PostService.createStory` envoie au serveur. Non-optionnel comme
+    /// `textObjects` : `[]` quand la clef est absente (stories antérieures).
+    public var locationObjects: [StoryLocationObject]
     public var mediaObjects: [StoryMediaObject]?
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
@@ -1355,6 +1630,7 @@ public struct StoryEffects: Codable, Sendable {
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
                 opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil,
                 textObjects: [StoryTextObject] = [],
+                locationObjects: [StoryLocationObject] = [],
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
@@ -1378,6 +1654,7 @@ public struct StoryEffects: Codable, Sendable {
         self.opening = opening
         self.closing = closing
         self.textObjects = textObjects
+        self.locationObjects = locationObjects
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.backgroundAudioVariants = backgroundAudioVariants
@@ -1397,7 +1674,7 @@ public struct StoryEffects: Codable, Sendable {
         case backgroundAudioId, backgroundAudioVolume, backgroundAudioStart, backgroundAudioEnd
         case voiceAttachmentId, voiceTranscriptions
         case opening, closing
-        case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
+        case textObjects, locationObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
         case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case canvasAspectRatio
         case musicTrackId, musicStartTime, musicEndTime
@@ -1441,6 +1718,7 @@ public struct StoryEffects: Codable, Sendable {
         // is skipped rather than dropping the whole collection (or, via the
         // APIPost do/catch above, the whole story's effects).
         textObjects = c.decodeLossyArrayIfPresent([StoryTextObject].self, forKey: .textObjects) ?? []
+        locationObjects = c.decodeLossyArrayIfPresent([StoryLocationObject].self, forKey: .locationObjects) ?? []
         mediaObjects = c.decodeLossyArrayIfPresent([StoryMediaObject].self, forKey: .mediaObjects)
         audioPlayerObjects = c.decodeLossyArrayIfPresent([StoryAudioPlayerObject].self, forKey: .audioPlayerObjects)
         backgroundAudioVariants = try c.decodeIfPresent([StoryAudioVariant].self, forKey: .backgroundAudioVariants)
@@ -1478,6 +1756,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(opening, forKey: .opening)
         try c.encodeIfPresent(closing, forKey: .closing)
         try c.encode(textObjects, forKey: .textObjects)
+        try c.encode(locationObjects, forKey: .locationObjects)
         try c.encodeIfPresent(mediaObjects, forKey: .mediaObjects)
         try c.encodeIfPresent(audioPlayerObjects, forKey: .audioPlayerObjects)
         try c.encodeIfPresent(backgroundAudioVariants, forKey: .backgroundAudioVariants)
@@ -1635,6 +1914,16 @@ public struct StoryEffects: Codable, Sendable {
                  "x": p.x, "y": p.y, "volume": p.volume,
                  "waveformSamples": p.waveformSamples]
                 if let bg = p.isBackground { d["isBackground"] = bg }
+                // Automation de volume : sans cette sérialisation, les points
+                // posés par l'auteur seraient perdus à la publication.
+                if let frames = p.keyframes, !frames.isEmpty {
+                    d["keyframes"] = frames.map { kf -> [String: Any] in
+                        var f: [String: Any] = ["id": kf.id, "time": kf.time]
+                        if let v = kf.volume { f["volume"] = v }
+                        if let e = kf.easing { f["easing"] = e.rawValue }
+                        return f
+                    }
+                }
                 if let variants = p.backgroundAudioVariants, !variants.isEmpty {
                     d["backgroundAudioVariants"] = variants.map { v in
                         ["postMediaId": v.postMediaId, "language": v.language,
@@ -1745,6 +2034,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// douce (rows GRDB et payloads antérieurs à ce champ décodent en nil,
     /// qui désactive simplement le delta au profit du full historique).
     public var updatedAt: Date?
+    /// Horodatage serveur de la dernière édition de CONTENU (texte /
+    /// storyEffects / médias) — distinct d'`updatedAt`, qui bouge sur CHAQUE
+    /// écriture (compteurs de vues inclus). C'est le SEUL horodatage fiable
+    /// pour faire céder la garde « viewed monotone » : une story éditée
+    /// APRÈS ma vue locale redevient non-vue (reset d'engagement,
+    /// directive 2026-07-29). Optionnel → rétro-compatible cache/payloads.
+    public var contentEditedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
     public var reactionCount: Int
@@ -1824,7 +2120,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 repostAuthorUsername: String? = nil,
                 visibility: String? = nil, visibilityUserIds: [String]? = nil, audioUrl: String? = nil,
-                isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, contentEditedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
@@ -1835,6 +2131,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.repostAuthorUsername = repostAuthorUsername
         self.visibility = visibility; self.visibilityUserIds = visibilityUserIds; self.audioUrl = audioUrl
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
+        self.contentEditedAt = contentEditedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.impressionCount = impressionCount; self.repostCount = repostCount
@@ -1865,6 +2162,37 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             return explicit <= now
         }
         return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
+    }
+
+    /// Prisme realtime : traduction du CONTENU de la story (sa légende), que le
+    /// gateway diffuse via `post:translation-updated`.
+    ///
+    /// Distinct de `mergingTextObjectTranslations`, qui ne touche QUE les textes
+    /// posés sur le canvas. Sans ce chemin, une traduction demandée depuis la
+    /// feuille « Langues » arrivait bien en base mais n'atteignait jamais la
+    /// story du lecteur : l'anneau de chargement tournait sans fin sur une
+    /// langue pourtant traduite (constaté au simulateur le 2026-07-27).
+    ///
+    /// La langue est normalisée en minuscules — la feuille compare sur cette
+    /// forme. Une langue déjà présente est remplacée, sinon ajoutée.
+    public func mergingContentTranslation(language: String, content: String) -> StoryItem {
+        let code = language.lowercased()
+        guard !code.isEmpty, !content.isEmpty else { return self }
+        var merged = (translations ?? []).filter { $0.language.lowercased() != code }
+        merged.append(StoryTranslation(language: code, content: content))
+        return StoryItem(
+            id: id, content: self.content, media: media, storyEffects: storyEffects,
+            createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
+            originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            repostAuthorUsername: repostAuthorUsername,
+            visibility: visibility, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, isViewed: isViewed,
+            viewedAt: viewedAt, updatedAt: updatedAt,
+            translations: merged,
+            backgroundAudio: backgroundAudio,
+            reactionCount: reactionCount, commentCount: commentCount,
+            shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
+            currentUserReactions: currentUserReactions
+        )
     }
 
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
@@ -2068,6 +2396,7 @@ extension Array where Element == APIPost {
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  updatedAt: post.updatedAt,
+                                 contentEditedAt: post.contentEditedAt,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
                                  shareCount: post.shareCount,
@@ -2302,10 +2631,18 @@ extension StoryItem {
             effects.mediaObjects = medias
         }
         if var audios = effects.audioPlayerObjects, !audios.isEmpty {
-            for i in audios.indices where audios[i].duration == nil {
-                if let feed = self.media.first(where: { $0.id == audios[i].postMediaId }),
-                   let dur = feed.duration, dur > 0 {
+            for i in audios.indices {
+                let feed = self.media.first(where: { $0.id == audios[i].postMediaId })
+                if audios[i].duration == nil, let dur = feed?.duration, dur > 0 {
                     audios[i].duration = Float(dur)
+                }
+                // Adresse de l'asset : `postMediaId` n'est résolvable que par un
+                // consommateur qui porte l'index des médias. L'exporteur ne reçoit
+                // qu'un slide — sans cette URL, « Partager » et « Enregistrer dans
+                // Photos » bakaient un MP4 muet. Une URL déjà persistée par le
+                // composer gagne : elle est plus fraîche que le repli.
+                if audios[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
+                    audios[i].mediaURL = url
                 }
             }
             effects.audioPlayerObjects = audios
@@ -2958,6 +3295,42 @@ public struct RemoveTransitionCommand: EditCommand {
     }
 }
 
+/// Allonge (ou raccourcit) la timeline elle-même — ce que pose « +10 s ».
+///
+/// La commande porte AUSSI la durée d'auteur d'avant : c'est le champ qui
+/// distingue une longueur voulue d'un simple calcul du contenu, et sans lui
+/// l'annulation aurait rendu la durée au projet pour se la faire aussitôt
+/// reprendre par le premier recalcul venu.
+public struct SetSlideDurationCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let oldDuration: Float
+    public let newDuration: Float
+    /// Durée d'auteur d'avant la commande — `nil` quand la longueur dérivait
+    /// encore du contenu seul.
+    public let oldAuthoredDuration: Float?
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                oldDuration: Float,
+                newDuration: Float,
+                oldAuthoredDuration: Float?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.oldDuration = oldDuration
+        self.newDuration = newDuration
+        self.oldAuthoredDuration = oldAuthoredDuration
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        project.slideDuration = newDuration
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        project.slideDuration = oldDuration
+    }
+}
+
 public struct ChangeTransitionCommand: EditCommand {
     public let id: String
     public let timestamp: Date
@@ -3019,7 +3392,15 @@ private extension TimelineProject {
             try block(&arr)
             textObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .audio:
-            throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+            // Les clips audio portent désormais des keyframes — le canal
+            // `volume` y pilote l'automation sonore. Refuser ici rendait toute
+            // automation impossible sur un son, alors que le média l'avait.
+            guard let idx = audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = audioPlayerObjects[idx].keyframes ?? []
+            try block(&arr)
+            audioPlayerObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .sticker:
             throw EditCommandError.invalidState(reason: "sticker clips do not support keyframes")
         }
@@ -3246,14 +3627,24 @@ public struct SetClipPropertyCommand: EditCommand {
         case loop(old: Bool?, new: Bool?)
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
+        /// Coupe l'atténuation automatique du clip. Vidéo uniquement : c'est la
+        /// piste des vidéos que le ducking atténue.
+        case isDuckingDisabled(old: Bool?, new: Bool?)
         case name(old: String?, new: String?)
+        /// Place de la piste dans le PLAN — position, taille, rotation, rang de
+        /// superposition. Un seul cas plutôt que cinq : régler un champ produit
+        /// une transformation COMPLÈTE, donc une seule entrée d'annulation par
+        /// réglage, et l'encodage reste à deux clés.
+        case transform(old: ClipTransform, new: ClipTransform)
 
         private enum CodingKeys: String, CodingKey {
             case type, oldFloat, newFloat, oldBool, newBool, oldString, newString
+            case oldTransform, newTransform
         }
 
         private enum Tag: String, Codable {
-            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name, transform
+            case isDuckingDisabled
         }
 
         public init(from decoder: Decoder) throws {
@@ -3284,10 +3675,18 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
                 let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
                 self = .isLocked(old: old, new: new)
+            case .isDuckingDisabled:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isDuckingDisabled(old: old, new: new)
             case .name:
                 let old = try c.decodeIfPresent(String.self, forKey: .oldString)
                 let new = try c.decodeIfPresent(String.self, forKey: .newString)
                 self = .name(old: old, new: new)
+            case .transform:
+                let old = try c.decode(ClipTransform.self, forKey: .oldTransform)
+                let new = try c.decode(ClipTransform.self, forKey: .newTransform)
+                self = .transform(old: old, new: new)
             }
         }
 
@@ -3318,10 +3717,18 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encode(Tag.isLocked, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldBool)
                 try c.encodeIfPresent(new, forKey: .newBool)
+            case .isDuckingDisabled(let old, let new):
+                try c.encode(Tag.isDuckingDisabled, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
             case .name(let old, let new):
                 try c.encode(Tag.name, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldString)
                 try c.encodeIfPresent(new, forKey: .newString)
+            case .transform(let old, let new):
+                try c.encode(Tag.transform, forKey: .type)
+                try c.encode(old, forKey: .oldTransform)
+                try c.encode(new, forKey: .newTransform)
             }
         }
     }
@@ -3379,7 +3786,11 @@ public struct SetClipPropertyCommand: EditCommand {
                        useNew: Bool) {
         switch property {
         case .volume(let old, let new):
-            media.volume = useNew ? new : old
+            // Via le mémento : muter depuis la timeline (new == 0) mémorise le
+            // niveau courant, et l'undo/redo garde l'invariant
+            // `memento != nil ⟹ volume == 0` — sans quoi un unmute post-undo
+            // restaurerait un niveau périmé.
+            media.setVolumePreservingMuteMemento(useNew ? new : old)
         case .fadeIn(let old, let new):
             media.fadeIn = useNew ? new : old
         case .fadeOut(let old, let new):
@@ -3390,8 +3801,15 @@ public struct SetClipPropertyCommand: EditCommand {
             media.isBackground = (useNew ? new : old) ?? false
         case .isLocked:
             break
+        case .isDuckingDisabled(let old, let new):
+            media.isDuckingDisabled = useNew ? new : old
         case .name(let old, let new):
             media.name = useNew ? new : old
+        case .transform(let old, let new):
+            let t = useNew ? new : old
+            media.x = t.x; media.y = t.y
+            media.scale = t.scale; media.rotation = t.rotation
+            media.zIndex = t.zIndex
         }
     }
 
@@ -3400,7 +3818,8 @@ public struct SetClipPropertyCommand: EditCommand {
                        useNew: Bool) {
         switch property {
         case .volume(let old, let new):
-            audio.volume = useNew ? new : old
+            // Même invariant de mémento que la branche média — cf. ci-dessus.
+            audio.setVolumePreservingMuteMemento(useNew ? new : old)
         case .fadeIn(let old, let new):
             let val: Double? = useNew ? new : old
             audio.fadeIn = val.map { Float($0) }
@@ -3413,8 +3832,16 @@ public struct SetClipPropertyCommand: EditCommand {
             audio.isBackground = useNew ? new : old
         case .isLocked:
             break
+        case .isDuckingDisabled:
+            // Le ducking atténue la piste des VIDÉOS pour dégager la musique :
+            // le couper sur un audio n'aurait rien à atténuer.
+            break
         case .name(let old, let new):
             audio.name = useNew ? new : old
+        case .transform:
+            // Un audio ne se voit pas : ses x/y existent dans le modèle mais ne
+            // pilotent aucun rendu. La fiche ne propose pas la section.
+            break
         }
     }
 
@@ -3432,7 +3859,12 @@ public struct SetClipPropertyCommand: EditCommand {
             text.fadeOut = val
         case .name(let old, let new):
             text.name = useNew ? new : old
-        case .volume, .loop, .isBackground:
+        case .transform(let old, let new):
+            let tr = useNew ? new : old
+            text.x = tr.x; text.y = tr.y
+            text.scale = tr.scale; text.rotation = tr.rotation
+            text.zIndex = tr.zIndex
+        case .volume, .loop, .isBackground, .isDuckingDisabled:
             break
         }
     }
@@ -3516,6 +3948,12 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
     public var y: CGFloat?
     public var scale: CGFloat?
     public var opacity: CGFloat?
+    /// Volume du clip à cet instant, dans `0...StoryVolume.maxGain`.
+    ///
+    /// 5ᵉ canal optionnel : un point « volume seul » laisse les quatre autres
+    /// à `nil` et l'interpolation les ignore alors, exactement comme un point
+    /// de position ignore le volume.
+    public var volume: Float?
     public var easing: StoryEasing?
 
     public init(id: String = UUID().uuidString,
@@ -3524,6 +3962,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
                 y: CGFloat? = nil,
                 scale: CGFloat? = nil,
                 opacity: CGFloat? = nil,
+                volume: Float? = nil,
                 easing: StoryEasing? = nil) {
         self.id = id
         self.time = time
@@ -3531,6 +3970,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
         self.y = y
         self.scale = scale
         self.opacity = opacity
+        self.volume = volume
         self.easing = easing
     }
 }
@@ -3553,6 +3993,7 @@ public enum AnyEditCommand: Codable, Sendable {
     case moveKeyframe(MoveKeyframeCommand)
     case deleteKeyframe(DeleteKeyframeCommand)
     case setClipProperty(SetClipPropertyCommand)
+    case setSlideDuration(SetSlideDurationCommand)
 
     public var underlying: any EditCommand {
         switch self {
@@ -3568,6 +4009,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe(let c):      return c
         case .deleteKeyframe(let c):    return c
         case .setClipProperty(let c):   return c
+        case .setSlideDuration(let c):  return c
         }
     }
 
@@ -3593,6 +4035,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe:      return "moveKeyframe"
         case .deleteKeyframe:    return "deleteKeyframe"
         case .setClipProperty:   return "setClipProperty"
+        case .setSlideDuration:  return "setSlideDuration"
         }
     }
 
@@ -3628,6 +4071,8 @@ public enum AnyEditCommand: Codable, Sendable {
             self = .deleteKeyframe(try c.decode(DeleteKeyframeCommand.self, forKey: .payload))
         case "setClipProperty":
             self = .setClipProperty(try c.decode(SetClipPropertyCommand.self, forKey: .payload))
+        case "setSlideDuration":
+            self = .setSlideDuration(try c.decode(SetSlideDurationCommand.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c,
@@ -3652,6 +4097,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe(let v):      try c.encode(v, forKey: .payload)
         case .deleteKeyframe(let v):    try c.encode(v, forKey: .payload)
         case .setClipProperty(let v):   try c.encode(v, forKey: .payload)
+        case .setSlideDuration(let v):  try c.encode(v, forKey: .payload)
         }
     }
 }

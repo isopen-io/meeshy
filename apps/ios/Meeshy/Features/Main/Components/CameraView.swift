@@ -665,7 +665,7 @@ struct CameraPreviewLayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             context.coordinator.previewLayer?.frame = uiView.bounds
         }
     }
@@ -674,5 +674,31 @@ struct CameraPreviewLayer: UIViewRepresentable {
 
     class Coordinator {
         var previewLayer: AVCaptureVideoPreviewLayer?
+    }
+}
+
+// MARK: - Injection dans le composer de story (SDK)
+
+extension View {
+    /// Fournit au composer de story (`StoryComposerView`, côté SDK) la fabrique
+    /// de CET écran de capture. Même doctrine que `storyLocationPickerProvided`
+    /// : `CameraView` pilote une `AVCaptureSession`, gère les permissions et son
+    /// écran de refus — de l'orchestration UX produit, donc app-side (SDK
+    /// purity). Sans cet appel, l'amorce « Caméra » de la page blanche n'est pas
+    /// rendue (une amorce qui ouvre le vide est pire que pas d'amorce).
+    ///
+    /// La fermeture a DEUX écrivains légitimes : le binding du SDK (posé avant
+    /// l'insertion du média) et le `dismiss()` que `CameraView` exécute après
+    /// chaque capture. Aucun des deux n'est de trop — le SDK remet aussi le
+    /// drapeau à plat dans `resetLocalState()`.
+    func storyCameraCaptureProvided() -> some View {
+        environment(\.storyCameraCapture, StoryCameraCaptureProvider { onCapture in
+            AnyView(CameraView { result in
+                switch result {
+                case .photo(let image): onCapture(.photo(image))
+                case .video(let url):   onCapture(.video(url))
+                }
+            })
+        })
     }
 }

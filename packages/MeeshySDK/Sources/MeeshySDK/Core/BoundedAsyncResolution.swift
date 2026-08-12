@@ -40,6 +40,19 @@ public enum BoundedAsyncResolution {
     /// pendant une minute.
     public static let defaultTimeout: Duration = .seconds(4)
 
+    /// Borne de l'extraction d'une frame vidéo destinée à un thumbHash
+    /// (`StoryThumbHashEnricher`). Elle vit ICI, à côté de sa sœur, pour la
+    /// même raison : une borne de temps sans domicile commun se duplique en
+    /// littéral chez chaque appelant puis diverge — le commentaire de
+    /// `defaultTimeout` documente l'incident qui a coûté un troisième chemin
+    /// non borné.
+    ///
+    /// 5 s (et non 4) : contrairement à la résolution d'identité de marque, ce
+    /// travail court APRÈS le retour au feed — personne n'attend devant un
+    /// écran. Le budget peut donc être plus large ; passé ce délai le média
+    /// part sans thumbHash (le lecteur affiche le fond au lieu du flou).
+    public static let storyThumbHashTimeout: Duration = .seconds(5)
+
     /// - Parameters:
     ///   - operation: résolution asynchrone à borner. `@MainActor` : les deux
     ///     appelants actuels (`StoryPhotoSaveService.intro`,

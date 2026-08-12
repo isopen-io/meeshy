@@ -97,13 +97,16 @@ jobs:
           set -euo pipefail
           printf '%s' "$ASC_KEY_CONTENT" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced).
+          mkdir -p apps/ios/.andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ANDP_KEY_ID\""
             echo "      issuer_id: \"$ANDP_ISSUER_ID\""
             echo "      key_content: |"
             sed 's/^/        /' "$RUNNER_TEMP/AuthKey.p8"
-          } > apps/ios/secrets.yml
+          } > apps/ios/.andp/secrets.yml
 
       # Signing WITHOUT fastlane and WITHOUT cloning the cert repo: the
       # match-encrypted Apple Distribution cert + App Store profiles are provided
@@ -175,6 +178,8 @@ jobs:
           # build settings here — future-proof, no agvtool, no file mutation.
           VERSION_ARGS=("CURRENT_PROJECT_VERSION=$ANDP_BUILD_NUMBER")
           [ -n "${RELEASE_VERSION}" ] && VERSION_ARGS+=("MARKETING_VERSION=$RELEASE_VERSION")
+          # DEVELOPMENT_TEAM pinned to D72UK7R5RE since 2026-07-28 — see the
+          # header block in apps/ios/fastlane/Appfile for every site carrying it.
           xcodebuild archive \
             -project Meeshy.xcodeproj -scheme Meeshy -configuration Release \
             -archivePath build/Meeshy.xcarchive \
@@ -183,7 +188,7 @@ jobs:
             -authenticationKeyID "$ANDP_KEY_ID" \
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic \
             "${VERSION_ARGS[@]}"
 
       # The same standalone script Xcode Cloud / the local scheme use — strips
@@ -208,6 +213,15 @@ jobs:
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates
 
+      # Gate sur le PRODUIT. Le strip ci-dessus n'a aucun signal propre : s'il
+      # est retiré ou s'il échoue à couvrir un nouveau framework embarqué, tout
+      # le workflow reste vert et le rejet ITMS-90035 n'arrive qu'après l'upload.
+      - name: Verify embedded framework signatures (ITMS-90035)
+        run: |
+          set -euo pipefail
+          cd apps/ios
+          ./ci_scripts/verify_embedded_signatures.sh build/Meeshy.ipa
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v7
         with:
@@ -229,7 +243,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: meeshy-ipa
           path: ipa
@@ -243,13 +257,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
       - name: Verify then release to TestFlight
         env:
           GROUP: ${{ inputs.group }}
@@ -279,7 +297,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: meeshy-ipa
           path: ipa
@@ -293,13 +311,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
           # Declare export compliance (standard/exempt encryption). allow_submit
           # is left false on purpose: the release advances to the approval gate
           # and WAITS — it never auto-submits.
@@ -363,7 +385,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: andp-state
           path: .andp
@@ -377,13 +399,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
           printf 'compliance:\n  uses_non_exempt_encryption: false\n' > andp.yml
       - name: Approve and submit for review
         env:

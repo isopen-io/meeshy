@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -19,6 +20,7 @@ struct MessageMoreSheet: View {
     var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
     var onThread: (() -> Void)? = nil
+    var onSaveMedia: (() -> Void)? = nil
     var onDeleteMedia: (() -> Void)? = nil
     var onPin: (() -> Void)? = nil
     var onToggleStar: (() -> Void)? = nil
@@ -33,6 +35,13 @@ struct MessageMoreSheet: View {
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onReport: ((String, String?) -> Void)? = nil
+    /// See `MessageLanguageDetailView` — ViewModel-owned in-flight state so
+    /// the "Traduire" loader survives this sheet being dismissed/reopened.
+    var translatingTextLanguages: Set<String> = []
+    var translatingAudioLanguages: Set<String> = []
+    var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
+    var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
+    var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -92,17 +101,25 @@ struct MessageMoreSheet: View {
             }
         }
         .confirmationDialog(
-            String(localized: "message-more.delete_media.confirm.title", defaultValue: "Supprimer ce média ?", bundle: .main),
+            String(localized: "message-more.media.title", defaultValue: "Ce média", bundle: .main),
             isPresented: $showDeleteMediaConfirm,
             titleVisibility: .visible
         ) {
+            if message.attachments.filter({ $0.type != .location }).count == 1 {
+                Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
+                    onSaveMedia?()
+                    dismiss()
+                }
+            }
+            Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
+                onForward?()
+                dismiss()
+            }
             Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
                 onDeleteMedia?()
                 dismiss()
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
-        } message: {
-            Text(String(localized: "message-more.delete_media.confirm.message", defaultValue: "Cette action est irréversible.", bundle: .main))
         }
     }
 
@@ -226,7 +243,7 @@ struct MessageMoreSheet: View {
     // MARK: - Pellet Button
 
     /// Action commune d'un item (grille OU bande horizontale) : explorable →
-    /// bascule le contenu inline ; deleteMedia → confirmation ; sinon → exécute
+    /// bascule le contenu inline ; média → confirmation ; sinon → exécute
     /// le callback + ferme la feuille.
     private func handleMoreItemTap(_ item: MoreItem) {
         if isExploration(item) {
@@ -234,8 +251,9 @@ struct MessageMoreSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedItem = (selectedItem == item) ? nil : item
             }
-        } else if item == .deleteMedia {
-            // Destructif → confirmation obligatoire (jamais de suppression directe).
+        } else if item == .media {
+            // Ouvre le sous-menu média (enregistrer / transférer / supprimer) —
+            // jamais de suppression directe (feedback device 2026-07-14).
             HapticFeedback.medium()
             showDeleteMediaConfirm = true
         } else {
@@ -321,7 +339,7 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -331,7 +349,7 @@ struct MessageMoreSheet: View {
         case .reply: return MeeshyColors.indigo400
         case .forward: return MeeshyColors.indigo500
         case .thread: return MeeshyColors.warning
-        case .deleteMedia: return MeeshyColors.error
+        case .media: return theme.textSecondary
         case .pin, .unpin: return MeeshyColors.indigo400
         case .star, .unstar: return MeeshyColors.warning
         case .delete: return MeeshyColors.error
@@ -399,7 +417,10 @@ struct MessageMoreSheet: View {
         case .language:
             MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
-                onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage)
+                onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage,
+                translatingTextLanguages: translatingTextLanguages, translatingAudioLanguages: translatingAudioLanguages,
+                translationRequestFailedPublisher: translationRequestFailedPublisher,
+                onRequestTextTranslation: onRequestTextTranslation, onRequestAudioTranslation: onRequestAudioTranslation)
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
@@ -413,7 +434,7 @@ struct MessageMoreSheet: View {
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
             EmptyView()
         }
     }
@@ -423,7 +444,7 @@ struct MessageMoreSheet: View {
         case .reply: return "arrowshape.turn.up.left"
         case .forward: return "arrowshape.turn.up.right"
         case .thread: return "bubble.left.and.bubble.right"
-        case .deleteMedia: return "paperclip.badge.ellipsis"
+        case .media: return "paperclip.badge.ellipsis"
         case .pin: return "pin"
         case .unpin: return "pin.slash"
         case .star: return "star"
@@ -447,7 +468,7 @@ struct MessageMoreSheet: View {
         case .reply: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
         case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)
         case .thread: return String(localized: "action.thread", defaultValue: "Discussion", bundle: .main)
-        case .deleteMedia: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
+        case .media: return String(localized: "action.media", defaultValue: "Média", bundle: .main)
         case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
         case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
         case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)

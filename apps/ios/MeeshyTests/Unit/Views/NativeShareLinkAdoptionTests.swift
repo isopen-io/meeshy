@@ -134,11 +134,13 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
 
     // MARK: - Single-source-of-truth lock
 
-    /// Neither file may reintroduce a manual activity-sheet presentation. Together
-    /// with `NativeSharePresentationTests` (215i) this pins the whole share surface:
-    /// the only remaining imperative site in the app is
-    /// `StoryViewerView+Content.shareStory()`, deliberately left for a later
-    /// iteration, so this assertion must NOT be widened to a repo-wide sweep yet.
+    /// Neither file may reintroduce a manual activity-sheet presentation.
+    ///
+    /// Scoped to these two files on purpose: the repo-wide sweep lives in
+    /// `StoryExportShareSheetPaletteTests`, which since 217i asserts an
+    /// *equality* — `ShareSheet` is the only bridge left, the last imperative
+    /// site (`StoryViewerView+Content.shareStory()`, dead code) having been
+    /// deleted. Duplicating that sweep here would give it two owners.
     func test_convergedFiles_containNoManualActivityPresentation() throws {
         for path in [Self.affiliateView, Self.shareLinkDetailView] {
             let source = try code(path)

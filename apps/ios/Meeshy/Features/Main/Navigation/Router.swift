@@ -25,10 +25,10 @@ enum Route: Hashable {
     case communityLinks
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
+    case hashtagResults(tag: String)
     case bookmarks
     case starredMessages
     case friendRequests
-    case editProfile
     /// Phase G — destination for story-related notifications. The screen
     /// resolves the underlying story (cache-first, network-revalidate) and
     /// dispatches to the active-story bridge or the expired empty state.
@@ -96,14 +96,14 @@ extension Route {
             return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
         case .postDetail(_, let post, _, _, _):
             return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
+        case .hashtagResults(let tag):
+            return "#\(tag)"
         case .bookmarks:
             return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
         case .starredMessages:
             return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
         case .friendRequests:
             return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
-        case .editProfile:
-            return String(localized: "route.title.edit_profile", defaultValue: "Edit profile", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
         }
@@ -319,6 +319,9 @@ final class Router: ObservableObject {
                 // post including stories. The viewer-preferred path stays
                 // reserved for cold launch / push notification dispatch.
                 push(.postDetail(postId))
+
+            case .hashtag(let tag):
+                push(.hashtagResults(tag: tag))
 
             case .external:
                 break

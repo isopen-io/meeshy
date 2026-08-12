@@ -573,6 +573,27 @@ struct AudioMediaView: View, Equatable {
     /// re-evaluation on every refresh.
     var onPlayAudio: ((String) -> Void)? = nil
 
+    /// Nom de la conversation — cold-open (F1) : porté par le cover plein
+    /// écran comme `AudioFullscreenSource.nowPlayingContextName` pour que la
+    /// carte Now Playing affiche la CONVERSATION, pas l'auteur seul. `nil`
+    /// pour les surfaces sans conversation (feed/commentaire/post/réel), qui
+    /// gardent le repli existant sur le nom de l'auteur. Wired par
+    /// `BubbleStandardLayout` -> `ThemedMessageBubble` ->
+    /// `MessageListViewController` depuis `ConversationViewModel.currentConversationName`.
+    /// **Excluded from Equatable** : n'affecte jamais le rendu de la bulle,
+    /// seulement une valeur consommée par une feuille présentée plus tard
+    /// (même traitement que `allAudioItems`).
+    var conversationName: String? = nil
+    /// Fournit, pour un `attachmentId` donné, les vocaux non écoutés qui le
+    /// suivent dans la conversation — cold-open (F1) : porté par le cover
+    /// plein écran comme `AudioFullscreenSource.queueTailProvider` pour que
+    /// l'avance auto fonctionne dès l'ouverture directe (sans lecture déjà
+    /// active). `nil` pour les surfaces sans conversation. Reçoit
+    /// `ConversationViewModel.audioQueueTail(after:)` verbatim (jamais
+    /// redéfini ici). **Excluded from Equatable** pour la même raison que
+    /// `onPlayAudio`.
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
+
     /// Caption pattern (MIMI-compatible, SOTA WhatsApp/Telegram) : quand le
     /// message contient à la fois un audio attachment et du texte content,
     /// le texte est rendu DANS le playerBackground d'AudioBubbleRouter
@@ -670,9 +691,12 @@ struct AudioMediaView: View, Equatable {
     /// (→ show original, `nil`) or has a matching translated-audio transcript
     /// (→ that language code). `nil` when nothing matches — the strip then
     /// defaults to the original, per the Prisme rule (never falls back to
-    /// `.first`). This ONLY seeds which transcription TEXT is shown; it never
-    /// changes which audio track plays — playback stays the original by
-    /// default (`AudioPlayerView`'s own play/pause selection is untouched).
+    /// `.first`). Prisme audio-follow (2026-08-09) — this value now ALSO
+    /// seeds which audio track plays, not just which transcription TEXT is
+    /// shown: it flows into `AudioPlayerView`'s `initialTranscriptionLanguage`
+    /// parameter, whose doc comment (`Sources/MeeshyUI/Media/AudioPlayerView.swift`,
+    /// search "Prisme audio-follow (2026-08-09)") carries the full playback
+    /// contract — see that doc rather than assuming playback is unaffected.
     /// Internal (not `private`) so `@testable import` can observe the
     /// resolution from MeeshyTests without exposing it publicly.
     internal var resolvedPreferredTranscriptionLanguage: String? {
@@ -687,6 +711,31 @@ struct AudioMediaView: View, Equatable {
             }
         }
         return nil
+    }
+
+    /// Cold-open (F1) : mappe un `AudioItem` vers l'`AudioFullscreenSource`
+    /// consommée par le `.fullScreenCover`, en portant `nowPlayingContextName`
+    /// / `queueTailProvider` — sans quoi un tap direct sur un vocal (aucune
+    /// lecture déjà active) perdrait le contexte conversation : la carte Now
+    /// Playing retomberait sur l'auteur seul et l'avance auto vers les
+    /// vocaux non écoutés suivants ne se déclencherait jamais.
+    /// `conversationName` vide (VM pas encore hydraté) est traité comme
+    /// absent — laisse `AudioFullscreenSource` retomber sur l'auteur plutôt
+    /// que d'afficher un titre vide. `queueTailProvider` capture
+    /// `item.attachment.id` PAR ITEM (pas l'attachment actif à l'ouverture) :
+    /// chaque page du pager doit résoudre SA PROPRE file "à suivre".
+    /// Internal (pas `private`) pour que `@testable import` teste le mapping
+    /// sans exposer publiquement le point de câblage.
+    internal func fullscreenSource(for item: ConversationViewModel.AudioItem) -> AudioFullscreenSource {
+        let contextName = (conversationName?.isEmpty ?? true) ? nil : conversationName
+        let attachmentId = item.attachment.id
+        return AudioFullscreenSource(
+            from: item,
+            nowPlayingContextName: contextName,
+            queueTailProvider: audioQueueTailProvider.map { provider in
+                { provider(attachmentId) }
+            }
+        )
     }
 
     /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
@@ -729,7 +778,8 @@ struct AudioMediaView: View, Equatable {
                     message.content,
                     fontSize: 13,
                     color: isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4),
-                    mentionColor: MeeshyColors.indigo400,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: contactColor),
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
@@ -751,7 +801,13 @@ struct AudioMediaView: View, Equatable {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                allAudioItems: allAudioItems.map(AudioFullscreenSource.init(from:)),
+                // Cold-open (F1) : `fullscreenSource(for:)` câble
+                // conversationName / audioQueueTailProvider (nowPlayingContextName
+                // / queueTailProvider) sur CHAQUE item — un simple
+                // `AudioFullscreenSource(from:)` les laissait à leurs défauts
+                // (auteur seul, pas d'avance auto) même quand cette conversation
+                // les avait déjà résolus.
+                allAudioItems: allAudioItems.map(fullscreenSource(for:)),
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
                 mentionDisplayNames: mentionDisplayNames,
@@ -997,7 +1053,8 @@ struct AudioMediaView: View, Equatable {
                 message.content,
                 fontSize: 14,
                 color: isDark ? Color.white.opacity(0.92) : MeeshyColors.indigo950.opacity(0.92),
-                mentionColor: MeeshyColors.indigo400,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                 accentColor: Color(hex: contactColor),
                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
             )

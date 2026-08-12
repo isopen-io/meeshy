@@ -133,8 +133,15 @@ public actor SettingsActionQueue {
             return incoming
         }
         let merged = previousObject.merging(incomingObject) { _, new in new }
-        guard let data = try? JSONSerialization.data(withJSONObject: merged) else { return incoming }
-        return data
+        do {
+            return try JSONSerialization.data(withJSONObject: merged)
+        } catch {
+            // Le merge est perdu : la mutation précédente est écrasée par la
+            // nouvelle au lieu d'être fusionnée.
+            Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                .error("Merged settings payload could not be serialized, previous mutation dropped: \(error.localizedDescription, privacy: .public)")
+            return incoming
+        }
     }
 
     public var count: Int { items.count }
@@ -192,10 +199,23 @@ public actor SettingsActionQueue {
 
     // MARK: - Connection Observer
 
+    /// Vide la file à chaque fois qu'on est en ligne — Y COMPRIS à
+    /// l'abonnement.
+    ///
+    /// Il y avait un `.dropFirst()` ici, qui écartait la valeur COURANTE pour
+    /// ne garder que les fronts hors-ligne → en-ligne. Or cette file persiste
+    /// sur disque justement pour survivre à un kill : au relancement, ses
+    /// éléments étaient rechargés, l'observateur s'abonnait alors que l'appareil
+    /// était DÉJÀ en ligne, la valeur courante était jetée… et plus aucun front
+    /// ne venait. Les modifications de profil enregistrées hors ligne restaient
+    /// sur le disque indéfiniment. `flushIfPossible` est un no-op sur file vide,
+    /// donc écouter la valeur courante ne coûte rien dans le cas normal.
+    ///
+    /// Règle générale, verrouillée par `QueueDrainReachabilityGuardTests` : une
+    /// file qui survit à un kill ne peut pas dépendre d'un FRONT pour repartir.
     private func observeConnection() {
         NetworkMonitor.shared.$isOffline
             .removeDuplicates()
-            .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { [weak self] _ in
@@ -214,7 +234,12 @@ public actor SettingsActionQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }

@@ -30,7 +30,11 @@ import { Prisma } from '@meeshy/shared/prisma/client';
  * Soft-deleted posts always carry a real `deletedAt` date (`isSet:true`) and so
  * remain excluded.
  */
-export const NOT_DELETED = { isSet: false };
+import { NOT_DELETED } from './softDelete';
+
+// Ré-exporté ici : la plupart des appelants tiennent déjà `postIncludes` pour
+// leurs formes de `select`/`include` et lisent le prédicat au même endroit.
+export { NOT_DELETED };
 
 export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -137,6 +141,12 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // Rappel projet : tout champ lu par un resolver doit figurer dans son
+    // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
+    // (`metadata.location`) l'affiche dans la liste complète des commentaires
+    // mais pas dans cet aperçu embarqué sur le post — la position semble
+    // disparaître selon la surface consultée par le client.
+    metadata: true,
     author: { select: authorSelect },
     // A comment's single media (image/video/audio + Prisme transcription/TTS).
     // Without this the feed/reels comments sheet — which reads top-level
@@ -174,6 +184,20 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     createdAt: true,
     likeCount: true,
     commentCount: true,
+    // `metadata.location` du post SOURCE — sans ce select, `hoistLocationDeep`
+    // n'a rien à hisser sur `repostOf` et un repost perd la position de
+    // l'original (même porte que `commentsPreviewInclude.metadata`).
+    metadata: true,
+    // Compteurs de portée de l'ORIGINAL (chantier reposts cohérents & watermark,
+    // tâche 1) — sans eux, un repost affiché ne peut jamais montrer combien de
+    // fois l'original a été vu, reposté, partagé ou mis en favori. `PostService`
+    // crédite désormais ces mêmes compteurs à travers la chaîne de reposts
+    // (voir `recordView` / routes d'impression), ce select les rend visibles.
+    viewCount: true,
+    repostCount: true,
+    shareCount: true,
+    bookmarkCount: true,
+    impressionCount: true,
   },
 });
 
@@ -195,6 +219,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
   visibility: true,
   createdAt: true,
   updatedAt: true,
+  contentEditedAt: true,
   expiresAt: true,
   originalRepostOfId: true,
   viewCount: true,

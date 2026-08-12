@@ -249,10 +249,21 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// Durée du MP4 factice produit par `RealMP4StubExporter`.
     private static let stubStoryDuration: TimeInterval = 2.0
 
-    /// Allongement net apporté par la carte de fin : 2 s de carte dont 1,5 s en
-    /// crossfade par-dessus la fin de la story (cf.
+    /// Allongement net apporté par la carte de fin **logo-seule** (aucune
+    /// identité d'auteur) : 2 s de carte dont 1,5 s en crossfade par-dessus la
+    /// fin de la story (cf.
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net de la carte de fin **d'auteur**, en 2 temps depuis la
+    /// « carte de fin d'auteur » (Part D, 2026-07-26) : `StoryExportOutro`
+    /// insère `logoPhase` (1,5 s) + `identityPhase` (2 s) à `fin − overlap`, et
+    /// `overlap` vaut exactement `logoPhase` — la phase logo se superpose donc
+    /// entièrement au crossfade et seule la phase d'identité rallonge la vidéo.
+    ///
+    /// Miroir local de `StoryExportOutro.identityPhase`, `internal` à MeeshyUI
+    /// donc invisible ici — même parti pris que `outroTail` juste au-dessus.
+    private static let outroAuthorTail: TimeInterval = 2.0
 
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
@@ -320,7 +331,10 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        // Une identité d'auteur est fournie ci-dessus, donc la fermeture est
+        // celle en 2 temps : c'est `outroAuthorTail` qui s'applique, pas le
+        // `outroTail` de la carte logo-seule.
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroAuthorTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
                        "l'export doit porter l'interlude ET la carte de fin")
     }
@@ -345,11 +359,16 @@ final class RealMP4StubExporter: StoryExporting, @unchecked Sendable {
         self.size = size
     }
 
+    /// `branding` est volontairement ignoré : ce double produit la piste
+    /// vidéo BRUTE, et c'est `StoryVideoExportService` qui pose ensuite
+    /// l'emballage de marque. Le consommer ici masquerait le fait que
+    /// l'emballage est bien appliqué EN AVAL de l'exporteur.
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         let image = UIGraphicsImageRenderer(size: size, format: {
@@ -400,6 +419,10 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
     private var _exportCallCount = 0
     private var _lastOutputURL: URL?
     private var _lastLanguages: [String] = []
+    /// Plan d'emballage de marque reçu au dernier appel. Enregistré plutôt
+    /// qu'ignoré : sans lui, un test ne pourrait pas distinguer « le plan est
+    /// transmis à l'exporteur » de « le plan est perdu en route ».
+    private var _lastBranding: StoryExportBranding.Plan?
     let behavior: Behavior
 
     init(behavior: Behavior) {
@@ -421,17 +444,24 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         return _lastLanguages
     }
 
+    var lastBranding: StoryExportBranding.Plan? {
+        lock.lock(); defer { lock.unlock() }
+        return _lastBranding
+    }
+
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         lock.withLock {
             _exportCallCount += 1
             _lastOutputURL = outputURL
             _lastLanguages = languages
+            _lastBranding = branding
         }
 
         switch behavior {

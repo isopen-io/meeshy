@@ -360,6 +360,26 @@ nonisolated enum CallReliabilityPolicy {
         secondsInAttempt >= budgetSeconds ? .retry : .waiting
     }
 
+    /// Exponential backoff before the next ICE-restart reconnect attempt,
+    /// jittered around the deterministic base. A shared network event (a cell
+    /// tower handoff, a regional TURN outage) puts every affected call through
+    /// this same formula on the same schedule — without jitter they'd all
+    /// re-hit the TURN allocation endpoint in lockstep, the exact thundering
+    /// herd jitter exists to prevent. `unitRandom` must be in `[0, 1)`; callers
+    /// pass `Double.random(in: 0..<1)` in production and a fixed value in
+    /// tests so the result stays deterministic and testable.
+    static func reconnectBackoffSeconds(
+        attempt: Int,
+        unitRandom: Double,
+        cap: TimeInterval = 4.0,
+        jitterFraction: Double = 0.15
+    ) -> TimeInterval {
+        guard attempt > 1 else { return 0.0 }
+        let base = min(pow(2.0, Double(attempt - 1)), cap)
+        let jitter = base * jitterFraction * (unitRandom * 2 - 1)
+        return max(0.0, base + jitter)
+    }
+
     /// Reconnection-trigger arbitration. Reconnection is requested from several
     /// independent sources: NWPathMonitor edges (path lost / restored / interface
     /// handoff), the PC-state delegate, the watchdogs, and the ICE-restart
@@ -847,6 +867,17 @@ protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data)
+    /// C3 — la session de capture caméra locale a été interrompue par le système
+    /// (ou l'interruption a pris fin). C'est le SEUL fait qui prouve que la
+    /// caméra ne délivre plus : passer en arrière-plan ne l'éteint pas quand un
+    /// `AVPictureInPictureController` est actif et que la session porte
+    /// `isMultitaskingCameraAccessEnabled`.
+    func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool)
+}
+
+extension WebRTCClientDelegate {
+    // Optionnelle : seul `WebRTCService` relaie l'interruption de capture.
+    func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool) {}
 }
 
 // MARK: - Call End Reason
@@ -901,6 +932,17 @@ enum CallDisplayMode: Sendable {
 /// Bord horizontal d'ancrage de la bulle d'appel repliée (`CallBubbleView`),
 /// mis à jour au relâchement du drag de repositionnement.
 enum BubbleHorizontalEdge: Sendable { case leading, trailing }
+
+/// Palier de taille du PiP quand la bulle est repliée (`.bubble` displayMode)
+/// — cercle par défaut, agrandi par pincement jusqu'à `.large`. Ordre des
+/// cas = ordre d'agrandissement, `rawValue` sert directement d'axe de
+/// progression continue dans `CallBubbleGestureResolver`.
+enum CallBubbleSizeTier: Int, Sendable, CaseIterable {
+    case circle = 0
+    case small = 1
+    case medium = 2
+    case large = 3
+}
 
 // MARK: - Quality Thresholds
 

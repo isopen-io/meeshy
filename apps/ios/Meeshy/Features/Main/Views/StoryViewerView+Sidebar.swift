@@ -114,6 +114,13 @@ struct StoryActionSidebarView: View {
     let currentStory: StoryItem?
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
+    /// Impulsion dédiée à la réconciliation d'OUVERTURE de slide — voir
+    /// `StoryViewerView.storyCommentCountReconciledPulse`. Distincte de
+    /// `storyCommentCount` : celui-ci bouge aussi en temps réel (activité live,
+    /// propre composer), cette impulsion NE bouge QUE quand
+    /// `loadStoryCommentCount()` (+Content.swift) confirme un compteur plus
+    /// exact que le payload d'entrée.
+    let storyCommentCountReconciledPulse: Int
     /// Forward / external-share count for the Envoyer button label (user spec
     /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
     let storyShareCount: Int
@@ -147,16 +154,19 @@ struct StoryActionSidebarView: View {
     @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var isPresented: Bool
 
-    let triggerStoryReaction: (String) -> Void
+    /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
+    /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
+    let triggerStoryReaction: (String, CGRect?) -> Void
+    /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
+    /// neutralise la navigation du canvas).
+    let onScrubStateChanged: (Bool) -> Void
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
-    /// Source de vérité des exports story → photothèque, PARTAGÉE avec la
-    /// ligne « Mes stories » (`MyStoryRow`) : un export lancé depuis l'une des
-    /// deux surfaces progresse sur les deux (Task 7). `@ObservedObject` — pas
+    /// Source de vérité des exports story → photothèque
+    /// (`StoryPhotoSaveService.shared`, Task 7). `@ObservedObject` — pas
     /// une simple lecture de `StoryPhotoSaveService.shared.progress(for:)`
     /// dans `body` — est nécessaire pour que cette vue se redessine quand la
     /// progression change ; `@Published` seul ne déclenche rien sans
@@ -166,30 +176,46 @@ struct StoryActionSidebarView: View {
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
 
+    @State private var scrubHoveredReactionIndex: Int?
+    @State private var scrubHoveredLanguageIndex: Int?
+    @State private var reactionTileFrames: [Int: CGRect] = [:]
+    @State private var languageTileFrames: [Int: CGRect] = [:]
+    @State private var isScrubbingReactions = false
+    @State private var isScrubbingLanguages = false
+
     /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
     /// Re-résolu UNIQUEMENT au changement de story — jamais sur une mise à
     /// jour de compteur mid-slide, donc aucun bouton n'apparaît/disparaît
     /// pendant la lecture.
     @State private var frozenRailPlan: StoryActionRailPlan?
 
-    /// Résolution depuis les entrées courantes (payload déjà seedé de manière
-    /// synchrone par `startTimer()` avant le rendu du slide).
+    /// Résolution depuis les entrées courantes. La MEMBERSHIP
+    /// (`showsComments`) lit `currentStory?.commentCount` — le payload déjà
+    /// en paramètre de la vue — plutôt que le miroir `@State
+    /// storyCommentCount`, pour ne JAMAIS dépendre de l'ordre réel des
+    /// `.onAppear` SwiftUI : `StoryActionSidebarView` est un descendant
+    /// profond du viewer (Layer 8), et rien ne garantit structurellement que
+    /// le `.onAppear` ancêtre qui seed `storyCommentCount` (via
+    /// `startTimer()`) s'exécute avant celui-ci. Lire le payload élimine ce
+    /// risque par construction. Le LABEL affiché, lui, reste sur
+    /// `storyCommentCount` (compteur vivant, mis à jour en temps réel par
+    /// les réconciliations post-gel) — voir `sidebarContent` plus bas.
     private var liveRailPlan: StoryActionRailPlan {
         StoryActionRailPlan.resolve(
             isOwnStory: isOwnStory,
             canReply: onReplyToStory != nil,
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
-            commentCount: storyCommentCount,
+            commentCount: currentStory?.commentCount ?? 0,
             hasTranslatableContent: storyHasTranslatableContent
         )
     }
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
 
-    /// Quick pop on the heart button that confirms the user just sent a
-    /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
-    /// own multi-phase animation.
+    /// Quick pop on the heart button that confirms the reaction landed —
+    /// ticked at the ARRIVAL of the reaction flight (`StoryReactionFlightView.onArrived`),
+    /// not at send time.
     private func bounceHeart() {
         withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
             heartScale = 1.35
@@ -199,6 +225,124 @@ struct StoryActionSidebarView: View {
                 heartScale = 1.0
             }
         }
+    }
+
+    /// Longpress (0.25 s) → la barre surgit → drag continu SANS lever le doigt :
+    /// survol des tuiles (×1.35 rebond via highlightedIndex), sélection au
+    /// relâchement. Posé en `.highPriorityGesture` sur le bouton : un tap court
+    /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
+    /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
+    /// le swipe de navigation est donc structurellement neutralisé.
+    /// Ouvre la barre de réactions au moment où le longpress est ACQUIS.
+    /// Appelé des cas `.first(true)` ET `.second(true, _)` : en pratique
+    /// SwiftUI ne livre souvent JAMAIS `.first(true)` — la séquence saute
+    /// directement à `.second(true, nil)` quand le longpress aboutit
+    /// (prouvé au log HID 2026-08-11 : premier onChanged = `second(true,
+    /// nil)`). Ne traiter que `.first(true)` laissait la barre fermée à
+    /// jamais.
+    private func beginReactionScrubIfNeeded() {
+        guard !isScrubbingReactions else { return }
+        isScrubbingReactions = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showEmojiStrip = true
+        }
+    }
+
+    private var reactionScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginReactionScrubIfNeeded()
+                case .second(true, let drag):
+                    beginReactionScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: reactionTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredReactionIndex { HapticFeedback.light() }
+                    scrubHoveredReactionIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredReactionIndex
+                isScrubbingReactions = false
+                onScrubStateChanged(false)
+                scrubHoveredReactionIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: quickEmojis.count) {
+                case .select(let index):
+                    triggerStoryReaction(quickEmojis[index], reactionTileFrames[index])
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showEmojiStrip = false
+                        showFullEmojiPicker = true
+                    }
+                case .keepOpen:
+                    break // la barre reste ouverte en mode posé (tap possible)
+                }
+            }
+    }
+
+    /// Même mécanique pour la barre de langues (relâchement = sélection de la
+    /// langue ; « + » = liste complète ; hors barre = barre posée).
+    /// Même contrat que `beginReactionScrubIfNeeded` — cf. son commentaire :
+    /// le longpress est acquis à l'entrée en `.second`, pas en `.first(true)`.
+    private func beginLanguageScrubIfNeeded() {
+        guard !isScrubbingLanguages else { return }
+        isScrubbingLanguages = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showLanguageOptions = true
+        }
+    }
+
+    private var languageScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginLanguageScrubIfNeeded()
+                case .second(true, let drag):
+                    beginLanguageScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: languageTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredLanguageIndex { HapticFeedback.light() }
+                    scrubHoveredLanguageIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredLanguageIndex
+                isScrubbingLanguages = false
+                onScrubStateChanged(false)
+                scrubHoveredLanguageIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: availableTranslationLanguages.count) {
+                case .select(let index):
+                    onSelectLanguageOverride(availableTranslationLanguages[index].id)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                    }
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                        showFullLanguagePicker = true
+                    }
+                case .keepOpen:
+                    break
+                }
+            }
     }
 
     var body: some View {
@@ -242,6 +386,41 @@ struct StoryActionSidebarView: View {
             guard !wasAudible, isAudible else { return }
             frozenRailPlan = liveRailPlan
         }
+        // Réconciliation du compteur de commentaires — MÊME contrat que le
+        // probe audio juste au-dessus, pour le MÊME symptôme : un thread de
+        // commentaires bien réel restait invisible pour toute la lecture
+        // d'un slide ouvert NORMALEMENT (tray, profil, feed…), car
+        // `liveRailPlan` fige la membership sur `currentStory?.commentCount`
+        // — le payload du tray, potentiellement périmé jusqu'à 72 h (cache
+        // stories). Le chemin notification est déjà couvert en amont
+        // (`StoryViewModel.refreshFromCachedPostIfAvailable` +
+        // `StoryViewerContainer.isGroupReadyToPresent`, qui rafraîchissent le
+        // payload AVANT le premier montage) ; celui-ci couvre tous les
+        // autres points d'entrée, où aucun postId de notification n'est
+        // connu et où ce verrou ne s'applique jamais.
+        //
+        // `storyCommentCountReconciledPulse` ne tique QUE sur la
+        // réconciliation d'ouverture de `loadStoryCommentCount()`
+        // (+Content.swift : cache commentaires local, puis — si toujours à
+        // 0 — une requête réseau bornée ~400 ms) : ni `sendComment` (propre
+        // composer), ni le socket `comment:added` reçu pendant la lecture
+        // (`applyStoryCommentAdded` +Content.swift,
+        // `StoryViewModel.applyStoryCommentCountDelta`) ne l'incrémentent —
+        // ces derniers restent volontairement hors du gel (directive
+        // 2026-07-10 : jamais de bouton qui surgit en cours de lecture).
+        // Transition à sens unique comme le probe audio : ne fait
+        // qu'apparaître, jamais disparaître.
+        .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
+            guard !railPlan.showsComments else { return }
+            frozenRailPlan = StoryActionRailPlan.resolve(
+                isOwnStory: isOwnStory,
+                canReply: onReplyToStory != nil,
+                isPublicStory: currentStory?.isPublic == true,
+                hasAudibleSound: storyHasAudibleSound,
+                commentCount: storyCommentCount,
+                hasTranslatableContent: storyHasTranslatableContent
+            )
+        }
     }
 
     @ViewBuilder
@@ -256,16 +435,27 @@ struct StoryActionSidebarView: View {
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
                     accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55"),
+                    handlesTapViaGesture: true
                 ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showEmojiStrip.toggle()
-                    }
+                    // Tap court = ❤️ immédiat (pattern Instagram/WhatsApp) —
+                    // la barre s'ouvre désormais au LONGPRESS (scrub).
+                    triggerStoryReaction("❤️", nil)
                 }
+                .highPriorityGesture(reactionScrubGesture)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: StoryHeartFrameKey.self,
+                            value: proxy.frame(in: .named(StoryScrubSpace.name))
+                        )
+                    }
+                )
                 .scaleEffect(heartScale)
-                // Bounce on every reaction sent — via the quick strip below
-                // OR the full-screen picker — since heartBouncePulse ticks
-                // inside triggerStoryReaction, the single reaction-sent seam.
+                // Bounce on every reaction that LANDS — via the quick strip,
+                // the scrub, or the full-screen picker — since heartBouncePulse
+                // ticks at the flight's arrival (+Canvas.swift Layer 9), the
+                // single impact seam regardless of origin.
                 .adaptiveOnChange(of: heartBouncePulse) { _, _ in
                     bounceHeart()
                 }
@@ -275,7 +465,8 @@ struct StoryActionSidebarView: View {
                             quickEmojis: quickEmojis,
                             style: .dark,
                             onReact: { emoji in
-                                triggerStoryReaction(emoji)
+                                let index = quickEmojis.firstIndex(of: emoji)
+                                triggerStoryReaction(emoji, index.flatMap { reactionTileFrames[$0] })
                             },
                             onDismiss: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -287,7 +478,10 @@ struct StoryActionSidebarView: View {
                                     showEmojiStrip = false
                                     showFullEmojiPicker = true
                                 }
-                            }
+                            },
+                            highlightedIndex: scrubHoveredReactionIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { reactionTileFrames = $0 }
                         )
                         .fixedSize()
                         .transition(.asymmetric(
@@ -574,13 +768,15 @@ struct StoryActionSidebarView: View {
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions || showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
-                    activeGlow: MeeshyColors.indigo400
+                    activeGlow: MeeshyColors.indigo400,
+                    handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showLanguageOptions.toggle()
                     }
                 }
+                .highPriorityGesture(languageScrubGesture)
                 .overlay(alignment: .topLeading) {
                     if let code = displayedLanguageCode, !code.isEmpty {
                         Text(code.uppercased())
@@ -616,7 +812,10 @@ struct StoryActionSidebarView: View {
                                     showLanguageOptions = false
                                     showFullLanguagePicker = true
                                 }
-                            }
+                            },
+                            highlightedIndex: scrubHoveredLanguageIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { languageTileFrames = $0 }
                         )
                         // Présentée comme la barre de réaction (L292) : `.fixedSize()`
                         // pour que la pilule ÉPOUSE son contenu, jamais une largeur
@@ -665,6 +864,10 @@ struct StoryHeaderView: View {
     /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
     /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
     let hasBackgroundAudio: Bool
+    /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
+    /// (piste propre), plus la fenêtre du fond qui arme le compteur de temps
+    /// restant. Résolu par le parent — même règle Equatable/primitives.
+    let headerAudioDisplay: AudioChipHeaderModel
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -712,7 +915,6 @@ struct StoryHeaderView: View {
     }
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
@@ -818,7 +1020,13 @@ struct StoryHeaderView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 5) {
-                                Text(group.username)
+                                // Nom borné à 16 caractères comme dans les bulles de
+                                // conversation (directive user 2026-07-30) : au-delà,
+                                // un pseudo long poussait l'attribution de repost et
+                                // la méta hors du header. `lineLimit(1)` reste, mais
+                                // en dernier recours seulement — la borne est posée
+                                // à la source.
+                                Text(DisplayName.truncated(group.username))
                                     .font(MeeshyFont.relative(15, weight: .bold))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
@@ -842,6 +1050,18 @@ struct StoryHeaderView: View {
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
+                                    // Horloge accolée à l'HEURE DE PUBLICATION —
+                                    // elle qualifie la date affichée, elle ne parle
+                                    // plus d'expiration. Le compte à rebours
+                                    // « Expire dans Xh » a été retiré du header
+                                    // (directive user 2026-07-30) : la durée de vie
+                                    // d'une story est une constante produit, pas une
+                                    // information à relire à chaque slide.
+                                    Image(systemName: "clock")
+                                        .font(MeeshyFont.relative(9, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .accessibilityHidden(true)
+
                                     Text(story.timeAgo)
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
@@ -850,22 +1070,46 @@ struct StoryHeaderView: View {
                                     // PRÉSENCE d'un audio de fond sur la story — pas
                                     // son état de lecture (ni mute, ni timing de la
                                     // timeline). Directive user 2026-07-13.
+                                    // L'onde qui la suit, elle, dit que ça joue
+                                    // (directive user 2026-07-30).
                                     if hasBackgroundAudio {
                                         Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.7))
                                             .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
-                                    }
 
-                                    if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
-                                        Text("\u{00B7}")
-                                            .foregroundColor(.white.opacity(0.4))
-                                        Image(systemName: "clock")
-                                            .font(MeeshyFont.relative(9, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.5))
-                                        Text(storyTimeRemaining(expiresAt))
-                                            .font(MeeshyFont.relative(12, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.55))
+                                        // Le header est reconstruit à chaque tick de
+                                        // la barre de progression : l'animation vit
+                                        // dans un `TimelineView` interne à l'atome,
+                                        // donc elle ne redéclenche jamais le rendu de
+                                        // ce header. Pas de câblage de la pause :
+                                        // l'appui long qui met la story en pause
+                                        // masque déjà tout le chrome, header compris.
+                                        //
+                                        // Son de BIBLIOTHÈQUE → crédit défilant
+                                        // « titre · @pseudo · M:SS » à la place de
+                                        // l'onde — le temps restant du fond défile
+                                        // AVEC le texte ; piste propre → onde, comme
+                                        // toujours (directive user 2026-08-02).
+                                        // Hauteur/police passées à l'atome (14/11) au
+                                        // lieu d'écraser son ancien 18 interne ; le
+                                        // compteur observe le playhead DANS l'atome,
+                                        // jamais ici (doctrine du commentaire
+                                        // ci-dessus). Pas de `paused` : le long-press
+                                        // qui met en pause masque tout le chrome, et
+                                        // le temps gèle déjà via le playhead.
+                                        switch headerAudioDisplay.display {
+                                        case .marquee(let text):
+                                            AudioChipMarquee(text: text,
+                                                             window: headerAudioDisplay.window,
+                                                             height: 14,
+                                                             fontSize: 11)
+                                                .frame(width: 124)
+                                                .opacity(0.85)
+                                        case .waveform:
+                                            StoryHeaderAudioWaveform()
+                                                .opacity(0.8)
+                                        }
                                     }
                                 }
                             }

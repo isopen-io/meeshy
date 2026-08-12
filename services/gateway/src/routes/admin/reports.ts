@@ -13,7 +13,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Schemas de validation Zod
 const createReportSchema = z.object({
-  reportedType: z.enum(['message', 'user', 'conversation', 'community']),
+  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound']),
   reportedEntityId: z.string().min(1, 'ID de l\'entite requis'),
   reporterId: z.string().optional(),
   reporterName: z.string().optional(),

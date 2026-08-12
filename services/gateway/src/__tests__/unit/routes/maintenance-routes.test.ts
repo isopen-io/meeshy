@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // ─── Mock services before importing the route ─────────────────────────────────
 
@@ -64,6 +64,35 @@ async function buildApp(): Promise<FastifyInstance> {
     ajv: { customOptions: { strict: false } },
   });
   app.decorate('prisma', {} as unknown);
+  // Ces routes sont réservées aux administrateurs. Le serveur de test doit
+  // donc fournir `authenticate` et poser une identité admin, sinon chaque
+  // requête est rejetée avant d'atteindre le gestionnaire.
+  // `requireAdmin` lit `authContext.registeredUser.role` — pas `request.user`.
+  // Un mock qui ne pose que `user` produit un 403 trompeur.
+  app.decorate('authenticate', async (request: FastifyRequest) => {
+    (request as unknown as { authContext?: unknown }).authContext = {
+      isAuthenticated: true,
+      isAnonymous: false,
+      type: 'user',
+      userId: 'admin_1',
+      registeredUser: { id: 'admin_1', username: 'admin', role: 'ADMIN' },
+    };
+  });
+  await app.register(maintenanceRoutes, { prefix: '/maintenance' });
+  await app.ready();
+  return app;
+}
+
+/** Serveur identique, mais sans identité : sert à prouver le refus. */
+async function buildUnauthenticatedApp(): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: false,
+    ajv: { customOptions: { strict: false } },
+  });
+  app.decorate('prisma', {} as unknown);
+  app.decorate('authenticate', async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.code(401).send({ success: false, error: 'UNAUTHORIZED' });
+  });
   await app.register(maintenanceRoutes, { prefix: '/maintenance' });
   await app.ready();
   return app;
@@ -257,6 +286,55 @@ describe('Maintenance Routes', () => {
       const res = await app.inject({ method: 'POST', url: '/maintenance/status-metrics/reset' });
 
       expect(res.statusCode).toBe(500);
+    });
+  });
+
+  // ── Authentification exigée ───────────────────────────────────────────────
+  //
+  // Ces cinq routes ont vécu sans aucune garde : `server.ts` les enregistre
+  // sans enveloppe et aucune ne portait de `preHandler`. Un appelant anonyme
+  // pouvait basculer le statut de n'importe quel utilisateur — l'identifiant
+  // cible étant lu dans le corps de la requête — déclencher un nettoyage, ou
+  // remettre les métriques à zéro, le gateway étant joignable depuis
+  // l'Internet public. Ces cas prouvent le refus, et échoueront si la garde
+  // disparaît d'une des routes.
+
+  describe('sans authentification', () => {
+    let anonApp: FastifyInstance;
+
+    beforeAll(async () => { anonApp = await buildUnauthenticatedApp(); });
+    afterAll(() => anonApp.close());
+
+    const routes: Array<{ method: 'GET' | 'POST'; url: string }> = [
+      { method: 'GET', url: '/maintenance/stats' },
+      { method: 'POST', url: '/maintenance/cleanup' },
+      { method: 'POST', url: '/maintenance/user-status' },
+      { method: 'GET', url: '/maintenance/status-metrics' },
+      { method: 'POST', url: '/maintenance/status-metrics/reset' },
+    ];
+
+    for (const { method, url } of routes) {
+      it(`refuse ${method} ${url}`, async () => {
+        const res = await anonApp.inject({
+          method,
+          url,
+          payload: method === 'POST' ? { userId: 'victime', isOnline: false } : undefined,
+        });
+
+        expect(res.statusCode).toBe(401);
+      });
+    }
+
+    it('ne touche jamais au statut de la cible quand l\'appelant est anonyme', async () => {
+      mockUpdateUserOnlineStatus.mockClear();
+
+      await anonApp.inject({
+        method: 'POST',
+        url: '/maintenance/user-status',
+        payload: { userId: 'victime', isOnline: false },
+      });
+
+      expect(mockUpdateUserOnlineStatus).not.toHaveBeenCalled();
     });
   });
 });

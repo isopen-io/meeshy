@@ -110,3 +110,29 @@ chaînes hors Xcode, puis la CI `iOS Tests` sert de portail (compile Xcode
    `navigationTitle` : candidat à `.navigationTitle(...)` +
    `.navigationBarTitleDisplayMode(.inline)` (change le visuel → itération
    dédiée, pas un glissement de celle-ci).
+
+---
+
+## ✅ Clôture (220i, 2026-07-26)
+
+Le point n° 1 du « Reste à faire » est **soldé** :
+`StatusComposerView.swift` — dernier `NavigationView` des cibles de
+l'application — est passé à `NavigationStack` en **220i** (#2275, qui le
+détenait, ayant été mergée). L'attendu de `NavigationContainerMigrationTests`
+est **réduit à l'ensemble vide** : le balayage n'est plus un *pin* de dette mais
+un **invariant** (toute réintroduction du conteneur déprécié échoue au test).
+
+**Ne plus re-flagger** : `EmojiPickerSheet`, `VoiceProfileManageView`,
+`MeeshyShareExtension/ShareViewController` (214i) et `StatusComposerView` (220i)
+pour leur conteneur de navigation — la migration de l'application est terminée.
+
+Le point n° 3 (catalogue de chaînes de `MeeshyShareExtension`) est **soldé en
+221i** : la cible a désormais son `Localizable.xcstrings` (8 clés × 7 locales) et
+son `InfoPlist.xcstrings`, les 3 littéraux crus sont localisés et
+`CFBundleLocalizations` est aligné sur les 7 locales de l'app.
+
+Restent ouverts, inchangés : le n° 2 (5 `NavigationView` dans
+`packages/MeeshySDK/Sources/MeeshyUI/` — **hors périmètre** de la routine iOS
+app) et le n° 4 (`navigationTitle` de `VoiceProfileManageView.addSamplesSheet`).
+
+Détail : `docs/analyses/uiux/2026-07-26-iteration-220i-statuscomposer-navigationstack.md`

@@ -1,5 +1,13 @@
 # Decisions - packages/MeeshySDK (Swift SDK)
 
+## 2026-08-10: Prisme de l'aperçu — deux chemins, une seule convention de clés
+**Statut**: Accepté
+**Contexte**: `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` et ses douze témoins existent depuis longtemps ; le champ qu'ils lisent (`lastMessageTranslations`) valait `nil` par le chemin REST, faute de champ dans `APIConversation` et de production côté gateway. La doc du champ annonçait le câblage au futur et renvoyait à un contournement applicatif (`ConversationListViewModel.attachLastMessageTranslations`) qui n'existe nulle part. Le gateway expédie désormais `lastMessageTranslations` et `lastMessageOriginalLanguage`.
+**Decision**: `APIConversation` décode les deux clés au niveau CONVERSATION (pas dans `lastMessage`) et `toConversation(currentUserId:)` les pose sur le domaine, **clés minuscules** — même normalisation que `ConversationSyncEngine.previewTranslations(from:)` sur le chemin socket. Une carte vide reste `nil` : le résolveur distingue « aucune traduction utile » de « carte présente », et `{}` sérialiserait inutilement dans le cache disque. `lastMessageOriginalLanguage` est ce qui permet de séparer « pas de traduction vers ma langue » de « le message EST déjà dans ma langue » (règle #3 du Prisme).
+**Alternatives rejetées**: porter la carte dans `APIConversationLastMessage` (elle n'a pas la forme de `Message.translations`, un `[APITextTranslation]` — deux formes sous un même nom auraient dérivé, et `MeeshyConversation` décode déjà la clé plate pour son cache) ; élargir l'init memberwise de `MeeshyConversation` (il aurait fallu toucher chacun de ses appelants pour deux champs optionnels) ; laisser le seul chemin socket alimenter le champ (les traductions arrivent APRÈS le `message:new`, et le démarrage à froid n'en voit aucune).
+**Cons**: la ligne de liste applique le Prisme dès le premier chargement REST ; une gateway antérieure qui n'envoie pas les clés reste décodable et retombe sur `lastMessagePreview` brut ; le fanout `conversation:updated` ne porte pas encore la carte, donc une ligne rafraîchie par édition/suppression revient temporairement à l'original.
+
+
 ## 2025-02: Architecture - Dual-Target (MeeshySDK + MeeshyUI)
 **Statut**: Accept
 **Contexte**: Sparation logique mtier et UI pour rutilisabilit
@@ -168,3 +176,68 @@ Conséquence : sur tout backdrop image de story (et tout `ProgressiveCachedImage
 - `Tests/MeeshySDKTests/Utils/ThumbHashTests.swift` : remplacement de `test_fromThumbHash_validBase64_createsImage` par un test de roundtrip + ajout `test_fromThumbHash_truncatedFiveByteHeader_returnsNil` ; remplacement de `test_thumbHashToRGBA_validHash_returnsNonEmptyPixels` par un roundtrip + ajout `test_thumbHashToRGBA_truncatedAfterHeader_returnsEmpty`.
 - `Tests/MeeshySDKTests/Utils/ThumbHashPipelineTests.swift` (nouveau) : roundtrip simple, roundtrip avec alpha, landscape preserve aspect, négatifs (invalid/empty/truncated), simulation gateway 100×100, préservation couleur dominante.
 - `Tests/MeeshyUITests/Story/Canvas/ThumbHashDecoderIntegrationTests.swift` (nouveau) : seam `ThumbHashDecoder` (empty/invalid/valid) ; `StoryBackgroundLayer.configure(kind: .image(...))` assigne ou non `CALayer.contents` selon la validité du hash.
+
+## 2026-08-09 : AudioPlayerView — l'audio suit la langue Prisme automatiquement (renversement du « B9 fix »)
+
+**Statut** : Accepté
+
+**Contexte** : `AudioPlayerView` séparait deux notions qui auraient dû être unifiées : la langue affichée dans le bandeau de transcription et la langue réellement JOUÉE. `selectedAudioLanguage` était bien seedé dès l'`init` avec la langue Prisme déjà résolue en amont par l'app (`resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)`), mais `hasUserSelectedAudioLanguage` démarrait inconditionnellement à `false` et ne passait à `true` que dans `switchToLanguage` — le seul point atteint par un tap explicite sur un pill de langue ou un changement du binding `externalLanguage`. `resolvePlaybackUrl` (fonction pure statique testable) ne basculait sur une traduction que si `isUserSelected == true` ; sinon, retour systématique à `originalUrl`. Conséquence : la langue Prisme résolue servait uniquement à préremplir le texte du bandeau de transcription, jamais à choisir la piste audio jouée — documenté explicitement dans le code comme une décision délibérée (« B9 fix »), pas un oubli, et verrouillé par une régression (`AudioPlayerViewPlaybackLanguageTests.swift`).
+
+**Décision** : renversement assumé de cette politique — l'audio doit suivre la langue préférée automatiquement, comme le texte, sur demande explicite du propriétaire produit. `hasUserSelectedAudioLanguage` est renommé `hasExplicitAudioLanguage` (le nom `hasUserSelected...` devenait trompeur : le flag représente désormais « la lecture doit suivre `selectedAudioLanguage` », que ce soit par seed Prisme automatique ou par tap explicite, pas seulement par action utilisateur). Il est seedé dans l'`init`, juste après `_selectedAudioLanguage` :
+```swift
+self._hasExplicitAudioLanguage = State(
+    initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage) != "orig"
+)
+```
+`switchToLanguage` continue de poser le flag à `true` sur tap explicite (déjà `true` si Prisme avait résolu une langue — no-op idempotent). `resolvePlaybackUrl` garde exactement la même signature/logique, seul son paramètre `isUserSelected` est renommé `hasExplicitLanguage` : le vrai changement est uniquement la valeur initiale du flag côté appelant. Ceci respecte automatiquement la règle Prisme #1 (pas de traduction disponible dans la langue préférée ⇒ afficher l'original, jamais `translations.first`) car `resolveInitialTranscriptionLanguage` la respecte déjà en amont : si aucune traduction ne matche, la valeur résolue est `"orig"`, donc le flag reste `false` et la lecture reste sur l'original — comportement inchangé dans ce cas précis.
+
+**Alternatives rejetées** :
+- **Supprimer entièrement `hasExplicitAudioLanguage` et faire dépendre `resolvePlaybackUrl` uniquement de `selectedLanguage != "orig"`** : fonctionnellement équivalent dans tous les cas actuels (le flag devient redondant s'il ne fait que suivre la même valeur), mais supprime un point d'extension déjà nommé et documenté qui pourrait servir plus tard (télémétrie « choix explicite vs Prisme », persistance différenciée). Écarté pour rester au diff minimal et ne pas changer la signature de `resolvePlaybackUrl` sans raison.
+- **Ne rien changer côté iOS, ne corriger que le bug web équivalent** : rejeté explicitement par le propriétaire produit — iOS est le frontend de référence sur lequel les autres (web) se calquent, il devait être corrigé en premier/ensemble.
+
+**Conséquences** :
+- Un audio dont Prisme a résolu une traduction (`initialTranscriptionLanguage` non-nil et ≠ `"orig"`) joue désormais automatiquement cette traduction dès l'ouverture du lecteur, sans tap utilisateur — parité avec le comportement texte.
+- Le test `test_init_neverMarksLanguageAsUserSelected` (qui verrouillait l'ancien comportement) est inversé en `test_init_marksLanguageAsExplicitWhenPrismeResolvesATranslation` ; un cas de non-régression est ajouté pour `initialTranscriptionLanguage = nil`/`"orig"` (le flag reste `false`, lecture sur l'original).
+- Les 4 tests purs existants sur `resolvePlaybackUrl` gardent leurs assertions telles quelles — seul le nom du paramètre à l'appel change.
+
+**Fichiers concernés** :
+- `Sources/MeeshyUI/Media/AudioPlayerView.swift` (commits `b9a9e0c90`, `b9a1a4f7e`) : renommage `hasUserSelectedAudioLanguage` → `hasExplicitAudioLanguage`, seed dans `init`, renommage du paramètre `isUserSelected` → `hasExplicitLanguage` sur `resolvePlaybackUrl`, mise à jour de la doc de `initialTranscriptionLanguage`.
+
+**Limite connue** : `hasExplicitAudioLanguage` et `selectedAudioLanguage` sont des `@State`, seedés une seule fois dans `AudioPlayerView.init()`. Si la vue est déjà montée (bulle visible dans la conversation) et qu'une traduction arrive ENSUITE via une mise à jour temps réel, rien ne re-seed cet état aujourd'hui — contrairement à l'implémentation web (Tâche 2 de ce même plan, `apps/web/hooks/use-audio-translation.ts`) qui re-dérive réactivement la langue à chaque nouvelle traduction reçue. Concrètement : l'auto-follow Prisme ne s'applique qu'à la construction de `AudioPlayerView` (cold open, scroll-back, réutilisation de cellule) — pas à une traduction qui arrive pendant que la bulle est déjà affichée à l'écran ; l'utilisateur doit alors encore taper un pill de langue pour l'entendre. Assumé comme limitation connue plutôt que corrigé dans cette vague — un re-seed réactif en SwiftUI est un changement d'état non trivial et non testé qui mérite son propre cycle de tâche/revue. Candidat de suivi, pas une lacune que ce plan prétend avoir résolue.
+
+Détail complet et rationale : `docs/superpowers/specs/2026-08-09-audio-translation-prisme-reliability-design.md` (Problème 1).
+
+## 2026-08-12: Delta de liste — le curseur n'avance que sur une page dont le serveur atteste la complétude
+**Statut**: Accepté
+
+**Contexte**: `ConversationSyncEngine.deltaSyncCore` avançait `lastSyncTimestamp` (persisté dans
+`UserDefaults`) au max des `updatedAt` reçus, quelle que soit la page. `GET /conversations`
+plafonne à 100 lignes ; le tri par `updatedAt` croissant (cycle 77) rend la troncature rattrapable
+dans le cas général, mais pas quand plus de 100 conversations partagent la même milliseconde — la
+borne serveur est stricte (`gt`), donc le débordement était enjambé jusqu'à la réconciliation
+complète, bornée à 1× par 24 h.
+
+**Decision**: `deltaSyncCore` rend un `DeltaOutcome { succeeded, mayHaveMore }` au lieu d'un `Bool`.
+`mayHaveMore` est lu sur `pagination.hasMore`, **autoritaire ici** : une page delta part toujours
+d'`offset=0`, ce qui fait compter au serveur toutes les lignes de la même clause `updatedAt > since`
+(`routes/conversations/core.ts`). Quand il vaut `true` : le curseur NE BOUGE PAS
+(`SyncWatermark.advancedAfterDeltaPage`), puis `syncSinceLastCheckpoint` enchaîne `fullSync()`.
+L'ordre est le contenu de la décision — c'est parce que le curseur est resté en arrière qu'une
+escalade échouée laisse la fenêtre entière rejouable au lieu d'un trou permanent. La fusion de la
+page reçue est conservée dans tous les cas. `limit` passe de `500` (jamais honoré) à
+`deltaPageLimit = 100`, ce qui rend utilisable le repli `count >= limit` quand une réponse omet sa
+pagination.
+
+**Alternatives rejetées**: paginer le delta (`offset += 100` jusqu'à `hasMore == false`) — le
+curseur est persisté, une boucle interrompue en son milieu laisserait un état intermédiaire à
+persister ou à jeter, là où `fullSync` est déjà écrit, testé et idempotent ; détecter la troncature
+par `count >= limit` comme le web le faisait — l'heuristique escalade sur une fenêtre de très
+exactement 100 conversations, qui est pourtant complète (le web a été aligné sur `hasMore` dans le
+même lot) ; avancer le curseur puis escalader — une escalade échouée (offline, panne) rendrait la
+perte irréversible.
+
+**Cons**: divergence ASSUMÉE avec le web sur le curseur, notée en tête de
+`syncSinceLastCheckpoint` : le web le RECALCULE depuis son cache, donc fusionner la page l'avance
+mécaniquement ; seul un curseur persisté peut « ne pas avancer ». Le résidu même-milliseconde n'est
+pas fermé mais rendu convergent — le fermer demanderait un curseur composite `(updatedAt, id)` côté
+route. `deltaPageLimit` reste une constante jumelle tenue à la main, comme `fullReconcileInterval`.

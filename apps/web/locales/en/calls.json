@@ -93,7 +93,15 @@
       "videoResumed": "Connection recovered — video back on",
       "connectTimeout": "Could not establish the connection — call ended",
       "callFailed": "Call connection failed",
-      "retry": "Retry"
+      "retry": "Retry",
+      "selectConversation": "Please select a conversation first",
+      "directOnly": "Calls are only available for direct conversations",
+      "startFailed": "Failed to start call. Please try again.",
+      "startingCall": "Starting call...",
+      "micPermissionDenied": "Camera/microphone permission denied.",
+      "micNotFound": "No camera or microphone found.",
+      "micAccessFailed": "Failed to access camera/microphone: {message}",
+      "micAccessFailedGeneric": "Failed to access camera/microphone"
     },
     "permissions": {
       "title": {

@@ -279,6 +279,11 @@ struct ThemedConversationRow: View {
         case .standard:
             if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), preview))
+            } else if let place = conversation.lastMessageLocation {
+                // Parité avec le visuel : VoiceOver annonce la position que la
+                // ligne affiche, nom du lieu compris quand il existe.
+                parts.append(place.name
+                    ?? String(localized: "conversation.summary.location", defaultValue: "Position", bundle: .main))
             }
         }
         parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
@@ -371,8 +376,8 @@ struct ThemedConversationRow: View {
     // MARK: - Unread Badge
     private var unreadBadge: some View {
         let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
-        return Text("\(min(conversation.userState.unreadCount, 99))")
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+        return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
@@ -415,6 +420,12 @@ struct ThemedConversationRow: View {
 
     private struct TypingDotsView: View {
         let accentColor: String
+        // These dots pulse with `.repeatForever` — an animation that never ends
+        // on its own — right in the conversation list. Sustained motion of that
+        // kind is what Reduce Motion exists to stop (vestibular disorders), so
+        // the setting has to reach here. `@Environment` and not an observed
+        // singleton: this is a leaf view rendered once per row.
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var isAnimating = false
 
         var body: some View {
@@ -423,12 +434,17 @@ struct ThemedConversationRow: View {
                     Circle()
                         .fill(Color(hex: accentColor))
                         .frame(width: 5, height: 5)
-                        .scaleEffect(isAnimating ? 1.0 : 0.5)
-                        .opacity(isAnimating ? 1.0 : 0.4)
+                        // Motion off rests at the animation's HIGH phase, never
+                        // its low one: frozen at 0.5 scale / 0.4 opacity the
+                        // dots would read as disabled rather than as "typing".
+                        .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
+                        .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
                         .animation(
-                            .easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.18),
+                            reduceMotion
+                                ? nil
+                                : Animation.easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.18),
                             value: isAnimating
                         )
                 }
@@ -559,6 +575,20 @@ struct ThemedConversationRow: View {
                 let attachments = conversation.lastMessageAttachments
                 if hasText || !attachments.isEmpty {
                     standardMessageContent(showEphemeralIcon: false)
+                } else if let place = conversation.lastMessageLocation {
+                    // Message position-seule : `content` vide par construction
+                    // (le serveur ne fabrique aucun texte de repli) — la ligne
+                    // compose son libellé depuis la position hissée.
+                    HStack(spacing: 4) {
+                        senderLabel
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(accent)
+                        Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(textSecondary)
+                            .lineLimit(1)
+                    }
                 } else {
                     Text("")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))

@@ -119,9 +119,7 @@ struct ReelRepostEmbedCell: View {
 
             // Reel caption — drives the card height, like a cited post.
             if !repost.content.isEmpty {
-                Text(repost.content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(repost.content, fontSize: 13, color: theme.textSecondary)
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)

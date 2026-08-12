@@ -189,6 +189,80 @@ public struct UserPreferencesReorderedSocketEvent: Decodable, Sendable {
     public let updates: [Update]
 }
 
+/// `user:updated` — un CONTACT (quelqu'un avec qui on partage au moins une
+/// conversation) a changé son profil public. Delta léger : seules les clés
+/// modifiées sont présentes.
+///
+/// **Les quatre composants du nom voyagent en GROUPE** (contrat gateway,
+/// `UserUpdatedEventData` dans `packages/shared/types/socketio-events.ts`) :
+/// dès que l'un change, les quatre sont émis. C'est nécessaire parce qu'un
+/// client ne stocke que le nom DÉJÀ composé — recomposer depuis un delta
+/// partiel est impossible. `hasNameGroup` matérialise ce contrat : `avatar` et
+/// `banner` changent seuls, le nom jamais, donc la présence de `username`
+/// suffit à reconnaître le groupe.
+///
+/// `avatar`/`banner` sont tri-états et c'est délibéré : clé absente = « pas
+/// concerné », clé à `null` = « photo RETIRÉE ». Les confondre laisserait
+/// l'ancienne image après une suppression.
+public struct UserUpdatedEvent: Decodable, Sendable {
+    public let userId: String
+    public let displayName: String?
+    public let firstName: String?
+    public let lastName: String?
+    public let username: String?
+    /// `true` quand le payload porte le groupe du nom (cf. ci-dessus).
+    public let hasNameGroup: Bool
+    public let avatar: OptionalMediaChange
+    public let banner: OptionalMediaChange
+
+    /// Clé absente vs clé à `null` — même distinction que
+    /// `LastMessagePreviewTranslations`, pour la même raison.
+    public enum OptionalMediaChange: Sendable, Hashable {
+        case unchanged
+        case replaced(String?)
+    }
+
+    /// Nom à afficher, recomposé avec la règle du chemin REST
+    /// (`APIConversationUser.name` : `displayName` puis `username`) pour que la
+    /// ligne de liste dise la même chose quel que soit le transport qui l'a
+    /// hydratée. `nil` quand le payload ne porte pas le groupe du nom.
+    public var resolvedDisplayName: String? {
+        guard hasNameGroup else { return nil }
+        return [displayName, username].compactMap { $0 }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId, changes
+    }
+
+    private enum ChangeKeys: String, CodingKey {
+        case displayName, firstName, lastName, username, avatar, banner
+    }
+
+    public init(from decoder: Decoder) throws {
+        let root = try decoder.container(keyedBy: CodingKeys.self)
+        self.userId = try root.decode(String.self, forKey: .userId)
+        let changes = try root.nestedContainer(keyedBy: ChangeKeys.self, forKey: .changes)
+        self.displayName = try changes.decodeIfPresent(String.self, forKey: .displayName)
+        self.firstName = try changes.decodeIfPresent(String.self, forKey: .firstName)
+        self.lastName = try changes.decodeIfPresent(String.self, forKey: .lastName)
+        self.username = try changes.decodeIfPresent(String.self, forKey: .username)
+        self.hasNameGroup = changes.contains(.username)
+        // `if` plutôt qu'un ternaire : Swift refuse un `try` à droite d'un
+        // opérateur non-affectation.
+        if changes.contains(.avatar) {
+            self.avatar = .replaced(try changes.decodeIfPresent(String.self, forKey: .avatar))
+        } else {
+            self.avatar = .unchanged
+        }
+        if changes.contains(.banner) {
+            self.banner = .replaced(try changes.decodeIfPresent(String.self, forKey: .banner))
+        } else {
+            self.banner = .unchanged
+        }
+    }
+}
+
 /// `category:created` / `category:updated` — full category snapshot. The
 /// nested `category` object decodes straight into `ConversationCategory`
 /// (extra gateway keys userId/createdAt/updatedAt are ignored).
@@ -393,6 +467,12 @@ public struct ReadStatusSummary: Decodable, Sendable {
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let participantId: String
+    /// `User.id` of the actor, or `nil` when the actor is an ANONYMOUS
+    /// participant — they have no `User` row, so `participantId` is their only
+    /// identity. Expected on the automatic delivery receipt of a share-link
+    /// conversation, where anonymous participants are the dominant population.
+    /// Consumers comparing this against the current user (multi-device read
+    /// cursor sync) need no change: `nil` matches nobody, which is correct.
     public let userId: String?
     public let type: String
     public let updatedAt: Date
@@ -438,6 +518,9 @@ public struct AttachmentStatusUpdatedEvent: Decodable, Sendable {
     public let userId: String
     public let action: String
     public let updatedAt: Date?
+    public let playPositionMs: Int?
+    public let durationMs: Int?
+    public let percentage: Int?
 }
 
 // MARK: - Attachment Updated Event Data (`message:attachment-updated`)
@@ -494,6 +577,28 @@ public struct SocketEventUser: Decodable, Sendable {
     public let id: String
 }
 
+/// Tri-état du Prisme Linguistique de la ligne de liste, porté par
+/// `conversation:updated`.
+///
+/// `Optional` ne suffit pas : il confond « la clé était ABSENTE du payload »
+/// (une mise à jour de métadonnées — renommage, avatar — qui ne parle pas du
+/// dernier message) et « la clé valait `null` » (le serveur DIT que la carte
+/// est périmée). Les deux demandent des actions opposées.
+///
+/// C'est exactement ce qu'une ÉDITION produit : le gateway remet
+/// `Message.translations` à null dans la même écriture que le nouveau contenu,
+/// tout en gardant le MÊME `lastMessageId`. Aucune heuristique client ne peut
+/// trancher ce cas — « vider quand l'id change » le laisse passer, et vider
+/// inconditionnellement effacerait la carte que `message:new` vient
+/// d'installer sur le chemin d'envoi. Seul ce `null` REÇU le peut.
+public enum LastMessagePreviewTranslations: Sendable, Hashable {
+    /// Clé absente : la carte du cache n'est pas concernée par cet événement.
+    case unchanged
+    /// Clé présente : la carte du cache est REMPLACÉE par celle-ci — vide
+    /// comprise, et c'est tout l'intérêt.
+    case replaced([String: String])
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -516,6 +621,17 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// preview without a separate fetch.
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
+    /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
+    /// résolveur PRÉFÈRE la traduction hydratée par `GET /conversations` à
+    /// `lastMessagePreview`, et rien sur le fil ne disait qu'elle était périmée.
+    public let lastMessageTranslations: LastMessagePreviewTranslations
+    public let lastMessageOriginalLanguage: String?
+    /// Position du dernier message, hissée par le chemin message-driven
+    /// (`MessageHandler.ts`) et par `emitConversationPreviewUpdate`. Un message
+    /// position-seule a un `lastMessagePreview` vide — c'est ce champ qui
+    /// permet à la ligne d'aperçu de composer son libellé.
+    public let location: SharedPlace?
     public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
@@ -532,6 +648,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
+        case location
+        case lastMessageTranslations, lastMessageOriginalLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -548,6 +666,18 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
         lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
+        // distingue « cet événement ne parle pas d'aperçu » de « la carte est
+        // périmée ». `decodeIfPresent` rend `nil` dans les deux cas et perdrait
+        // précisément le signal que le serveur envoie.
+        if container.contains(.lastMessageTranslations) {
+            let map = try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
+            lastMessageTranslations = .replaced(map ?? [:])
+        } else {
+            lastMessageTranslations = .unchanged
+        }
+        lastMessageOriginalLanguage = try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
+        location = try container.decodeIfPresent(SharedPlace.self, forKey: .location)
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
@@ -566,6 +696,9 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
+        lastMessageOriginalLanguage: String? = nil,
+        location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
         updatedAt: String
@@ -582,10 +715,27 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageTranslations = lastMessageTranslations
+        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.location = location
         self.senderId = senderId
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
     }
+}
+
+/// `conversation:participant-joined` — quelqu'un a été AJOUTÉ à la conversation.
+///
+/// Symétrique de `ParticipantLeftEvent`, et le seul événement qui porte ce fait
+/// sans ambiguïté : `conversation:joined` sert le MÊME payload pour l'ack
+/// self-only qu'un socket reçoit en rejoignant la room, que produit chaque
+/// ouverture de fil et qui ne change aucune appartenance. Compter dessus
+/// gonflerait l'effectif à chaque ouverture.
+public struct ParticipantJoinedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let displayName: String
+    public let joinedAt: String
 }
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
@@ -600,11 +750,31 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
     public let userId: String
     public let bannedBy: SocketEventUser
     public let bannedAt: String
+    /// `false` quand la cible avait DÉJÀ quitté la conversation : bannir un
+    /// ancien membre reste possible — c'est ce qui l'empêche de revenir par un
+    /// lien de partage — mais ce bannissement-là ne retire aucune appartenance.
+    ///
+    /// Absent des serveurs antérieurs à ce contrat, où bannir retirait toujours :
+    /// `nil` se lit donc comme `true`, cf. `didEndMembership`.
+    public let membershipEnded: Bool?
+
+    /// La lecture à faire d'un champ optionnel dont l'absence signifie l'ancien
+    /// comportement — jamais `event.membershipEnded == true`, qui traiterait un
+    /// serveur plus ancien comme un bannissement sans effet.
+    public var didEndMembership: Bool { membershipEnded ?? true }
 }
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
+    /// Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
+    /// que si le bannissement l'avait prise. `false` quand la personne était
+    /// partie d'elle-même AVANT d'être bannie.
+    ///
+    /// Même lecture que `membershipEnded` : absent ⇒ `true`.
+    public let membershipRestored: Bool?
+
+    public var didRestoreMembership: Bool { membershipRestored ?? true }
 }
 
 public struct ConversationClosedEvent: Decodable, Sendable {
@@ -891,7 +1061,6 @@ public struct MentionCreatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let senderId: String?
     public let mentionedUserId: String?
-    public let mentionedParticipantId: String?
     public let content: String?
     public let timestamp: String?
 }
@@ -1105,10 +1274,21 @@ public protocol MessageSocketProviding: Sendable {
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
+    /// `user:updated` — profil public d'un CONTACT. Dans le protocole parce que
+    /// `ConversationSyncEngine` ne détient qu'un `MessageSocketProviding`.
+    var userUpdated: PassthroughSubject<UserUpdatedEvent, Never> { get }
+    /// `conversation:participant-joined` — l'adhésion d'un tiers, distincte de
+    /// `conversationJoined` (ack de room, cf. `ParticipantJoinedEvent`).
+    var participantJoined: PassthroughSubject<ParticipantJoinedEvent, Never> { get }
     var participantSelfLeft: PassthroughSubject<ParticipantLeftEvent, Never> { get }
     var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
+    /// `conversation:deleted` — the conversation is gone server-side. Exposed on
+    /// the protocol (not just the concrete manager) so the disk-cache writer can
+    /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
+    /// received while offline came back from the dead on the next cold start.
+    var conversationDeleted: PassthroughSubject<ConversationDeletedSocketEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     /// Conversation-scope variant of `user:preferences-updated` (versioned).
     /// Routed separately from `userPreferencesUpdated` (category scope) so the
@@ -1116,7 +1296,6 @@ public protocol MessageSocketProviding: Sendable {
     var userPreferencesConversationUpdated: PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
-    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
     var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
     var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
@@ -1177,12 +1356,15 @@ public protocol MessageSocketProviding: Sendable {
     func emitTypingStart(conversationId: String)
     func emitTypingStop(conversationId: String)
     func requestTranslation(messageId: String, targetLanguage: String)
-    func emitLocationShare(payload: LocationSharePayload)
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
+    /// `location` fait partie de l'exigence : une valeur par défaut sur
+    /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
+    /// Swift. Le shim de compatibilité source (sans `location`) vit dans
+    /// l'extension « Protocol Default-Arg Convenience » ci-dessous.
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -1272,6 +1454,32 @@ public extension MessageSocketProviding {
             clientMessageId: nil
         )
     }
+
+    /// Shim de compatibilité source pour les appelants antérieurs au lieu
+    /// partagé : même signature qu'avant l'ajout de `location` à l'exigence
+    /// de protocole, délègue avec `location: nil`.
+    func sendViaSocketFallback(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String
+    ) async -> MessageSocketManager.SendMessageAck? {
+        await sendViaSocketFallback(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId,
+            location: nil
+        )
+    }
 }
 
 // MARK: - Message Socket Manager
@@ -1319,6 +1527,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — conversation & participant lifecycle
     public let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    public let participantJoined = PassthroughSubject<ParticipantJoinedEvent, Never>()
     public let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     public let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     public let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
@@ -1329,6 +1538,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
     public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+
+    // Combine publishers — profil public d'un CONTACT
+    public let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
 
     // Combine publishers — user conversation categories
     public let categoryCreated = PassthroughSubject<CategorySocketEvent, Never>()
@@ -1343,7 +1555,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
     // Combine publishers — location sharing
-    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -1495,6 +1706,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
+        // Fail-safe : un JWT illisible est traité comme expiré (déclenche un
+        // refresh) plutôt que présumé valide.
         guard let data = Data(base64Encoded: base64),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exp = json["exp"] as? TimeInterval else { return true }
@@ -1862,22 +2075,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Location Emission
 
-    public func emitLocationShare(payload: LocationSharePayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:share", dict)
+    /// Emits `payload` as a Socket.IO dictionary.
+    ///
+    /// A failed conversion used to abort the emission silently: the user shared
+    /// a location and nothing ever left the device, with no error anywhere.
+    private func emitEncodable<P: Encodable>(_ payload: P, event: String) {
+        do {
+            let data = try JSONEncoder().encode(payload)
+            guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                Logger.socket.error("\(event, privacy: .public) not emitted — payload is not a JSON object")
+                return
+            }
+            socket?.emit(event, dict)
+        } catch {
+            Logger.socket.error("\(event, privacy: .public) not emitted — payload encode failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:live-start", dict)
+        emitEncodable(payload, event: "location:live-start")
     }
 
     public func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:live-update", dict)
+        emitEncodable(payload, event: "location:live-update")
     }
 
     public func emitLiveLocationStop(conversationId: String) {
@@ -1919,7 +2139,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func buildAttachmentPayload(
         conversationId: String, content: String?, attachmentIds: [String],
         replyToId: String?, storyReplyToId: String? = nil, originalLanguage: String?, isEncrypted: Bool,
-        clientMessageId: String
+        clientMessageId: String, location: SharedPlace? = nil
     ) -> [String: Any] {
         var payload: [String: Any] = [
             "conversationId": conversationId,
@@ -1931,7 +2151,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let replyToId { payload["replyToId"] = replyToId }
         if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
         if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
         return payload
+    }
+
+    /// Sérialise un `SharedPlace` dans la forme dictionnaire que le gateway
+    /// valide (`parseSharedPlace` — coordonnées obligatoires, textes
+    /// optionnels). Les champs nil sont omis plutôt qu'envoyés en `NSNull`.
+    static func locationSocketPayload(_ place: SharedPlace) -> [String: Any] {
+        var dict: [String: Any] = [
+            "latitude": place.latitude,
+            "longitude": place.longitude
+        ]
+        if let name = place.name { dict["name"] = name }
+        if let address = place.address { dict["address"] = address }
+        if let category = place.category { dict["category"] = category }
+        return dict
     }
 
     public func sendWithAttachments(
@@ -1967,14 +2202,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
         isEncrypted: Bool = false,
-        clientMessageId: String? = nil
+        clientMessageId: String? = nil,
+        location: SharedPlace? = nil
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
         let cid = clientMessageId ?? ClientMessageId.generate()
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
             replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
-            clientMessageId: cid
+            clientMessageId: cid, location: location
         )
         return await withCheckedContinuation { continuation in
             // 10s (was 30s): the gateway acks as soon as the message row is
@@ -2033,6 +2269,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         isViewOnce: Bool? = nil,
         maxViewOnceCount: Int? = nil,
         clientMessageId: String? = nil,
+        location: SharedPlace? = nil,
         timeoutSeconds: Double = 10
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
@@ -2053,6 +2290,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
         if let isViewOnce { payload["isViewOnce"] = isViewOnce }
         if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
+        // Lieu partagé — même clé `location` que le corps REST ; le handler
+        // socket la valide via `parseSharedPlace` (MessageHandler.ts).
+        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
         return await withCheckedContinuation { continuation in
             socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
                 if let response = items.first as? [String: Any],
@@ -2089,7 +2329,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         storyReplyToId: String?,
         originalLanguage: String?,
         isEncrypted: Bool,
-        clientMessageId: String
+        clientMessageId: String,
+        location: SharedPlace? = nil
     ) async -> SendMessageAck? {
         if attachmentIds.isEmpty {
             if isEncrypted { return nil }
@@ -2099,7 +2340,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 originalLanguage: originalLanguage,
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
-                clientMessageId: clientMessageId
+                clientMessageId: clientMessageId,
+                location: location
             )
         }
         return await sendWithAttachmentsAsync(
@@ -2110,7 +2352,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             storyReplyToId: storyReplyToId,
             originalLanguage: originalLanguage,
             isEncrypted: isEncrypted,
-            clientMessageId: clientMessageId
+            clientMessageId: clientMessageId,
+            location: location
         )
     }
 
@@ -2187,8 +2430,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 let mode = data["mode"] as? String
                 let rawServers = data["iceServers"] as? [[String: Any]] ?? []
 
-                guard let serversData = try? JSONSerialization.data(withJSONObject: rawServers),
-                      let servers = try? JSONDecoder().decode([SocketIceServer].self, from: serversData) else {
+                let servers: [SocketIceServer]
+                do {
+                    let serversData = try JSONSerialization.data(withJSONObject: rawServers)
+                    servers = try JSONDecoder().decode([SocketIceServer].self, from: serversData)
+                } catch {
+                    // Sans serveurs ICE, l'appel ne peut pas s'établir : la
+                    // cause exacte doit être exploitable.
+                    Logger.socket.error("call ICE servers undecodable, call cannot be established: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(throwing: CallInitiateError.malformedResponse)
                     return
                 }
@@ -2354,6 +2603,31 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// `emitEnd(callId, reason)` / web `handleRejectCall`.
     public func emitCallReject(callId: String) {
         socket?.emit("call:end", ["callId": callId, "reason": "rejected"])
+    }
+
+    /// Variante avec ACK du refus (parité `emitCallEndWithAck`, 2026-08-11) :
+    /// émet `call:end {reason:"rejected"}` et attend confirmation du gateway
+    /// (max 3s). Sans elle, un socket vu « connecté » au moment du refus
+    /// pouvait perdre l'emit en vol — un blip qui s'auto-répare avant que
+    /// `connectionState` n'observe la coupure — laissant l'appelant sonner
+    /// jusqu'au timeout serveur pendant que le gateway résout `missed` au
+    /// lieu de `rejected` (le mislabel que l'arc reject 2026-07-12 fermait
+    /// déjà sur tous les autres chemins de refus).
+    public func emitCallRejectWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:end", ["callId": callId, "reason": "rejected"]).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool {
+                    continuation.resume(returning: success)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 
     /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
@@ -2836,6 +3110,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("conversation:participant-joined") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantJoinedEvent.self, from: data) { [weak self] event in
+                self?.participantJoined.send(event)
+            }
+        }
+
         socket.on("conversation:participant-left") { [weak self] data, _ in
             guard let self else { return }
             self.decode(ParticipantLeftEvent.self, from: data) { [weak self] event in
@@ -2880,6 +3161,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
                     self?.userPreferencesUpdated.send(event)
                 }
+            }
+        }
+
+        socket.on("user:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(UserUpdatedEvent.self, from: data) { [weak self] event in
+                self?.userUpdated.send(event)
             }
         }
 
@@ -2933,13 +3221,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         // --- Location events ---
-
-        socket.on("location:shared") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(LocationSharedEvent.self, from: data) { [weak self] event in
-                self?.locationShared.send(event)
-            }
-        }
 
         socket.on("location:live-started") { [weak self] data, _ in
             guard let self else { return }
@@ -3215,11 +3496,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // arrival order; the handler still lands on main.
         let jsonData: Data
         if let dict = first as? [String: Any] {
-            guard let serialized = try? JSONSerialization.data(withJSONObject: dict) else {
-                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed")
+            do {
+                jsonData = try JSONSerialization.data(withJSONObject: dict)
+            } catch {
+                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed: \(error.localizedDescription, privacy: .public)")
                 return
             }
-            jsonData = serialized
         } else if let str = first as? String {
             jsonData = Data(str.utf8)
         } else {

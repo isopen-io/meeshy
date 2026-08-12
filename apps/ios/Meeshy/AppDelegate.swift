@@ -168,9 +168,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
-        let unreadTotal = userInfo["unreadCount"] as? Int
+        // Le gateway sérialise `unreadCount` en STRING dans `data` — le cast
+        // `as? Int` échouait toujours et le compteur de la cloche n'était
+        // jamais appliqué au réveil silencieux.
+        let unreadTotal = (userInfo["unreadCount"] as? Int)
+            ?? (userInfo["unreadCount"] as? String).flatMap(Int.init)
         let convId = userInfo["conversationId"] as? String
-        let convUnread = userInfo["conversationUnread"] as? Int
+        let convUnread = (userInfo["conversationUnread"] as? Int)
+            ?? (userInfo["conversationUnread"] as? String).flatMap(Int.init)
         let messageId = userInfo["messageId"] as? String
         // Phase A real-time instrumentation — log the silent-push arrival
         // so we can correlate `perf:push.sendViaAPNS` (gateway side) with
@@ -414,10 +419,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ diagnostics: DatabaseInitDiagnostics,
         reporter: CrashReporting
     ) {
-        guard diagnostics.recoveryAttempted || diagnostics.fellBackToInMemory else { return }
-        let summary = diagnostics.fellBackToInMemory
-            ? "DB init fell back to in-memory pool"
-            : "DB recovered from corruption"
+        guard diagnostics.recoveryAttempted
+            || diagnostics.fellBackToSecondaryPath
+            || diagnostics.fellBackToEphemeralStorage else { return }
+        let summary: String
+        if diagnostics.fellBackToEphemeralStorage {
+            summary = "DB init fell back to an ephemeral temp-file pool"
+        } else if diagnostics.fellBackToSecondaryPath {
+            summary = "DB init fell back to the Application Support path (app-group container unusable)"
+        } else {
+            summary = "DB recovered from corruption"
+        }
         reporter.log("[db-init] \(summary) — first-attempt-error=\(diagnostics.firstAttemptError ?? "nil") quarantined=\(diagnostics.quarantinedFilePath ?? "nil")")
     }
 

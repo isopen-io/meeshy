@@ -15,9 +15,19 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.SessionTeardown
 import org.junit.Test
 
 class AuthRepositoryTest {
+
+    private class RecordingSessionTeardown : SessionTeardown {
+        var wipeCallCount = 0
+            private set
+
+        override suspend fun wipe() {
+            wipeCallCount += 1
+        }
+    }
 
     private class FakeAuthApi(
         var response: ApiResponse<AuthSession>,
@@ -28,10 +38,32 @@ class AuthRepositoryTest {
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
+        override suspend fun listSessions() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+        override suspend fun revokeSession(sessionId: String) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun revokeOtherSessions() =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.AuthSession>(success = false)
         override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?): ApiResponse<AvailabilityResult> {
             availabilityCalls += Triple(username, email, phoneNumber)
             return availabilityResponse
         }
+        override suspend fun getTwoFactorStatus() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorStatusInfo>(success = false)
+        override suspend fun beginTwoFactorSetup() =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorSetupInfo>(success = false)
+        override suspend fun enableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+        override suspend fun disableTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorDisableRequest) =
+            me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
+        override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
     }
 
     private fun session() = AuthSession(
@@ -43,9 +75,10 @@ class AuthRepositoryTest {
     private fun repository(
         api: AuthApi,
         store: TokenStore,
+        teardown: SessionTeardown = RecordingSessionTeardown(),
     ): Pair<AuthRepository, SessionRepository> {
         val session = SessionRepository(api, store)
-        return AuthRepository(api, store, session) to session
+        return AuthRepository(api, store, session, teardown) to session
     }
 
     @Test
@@ -116,7 +149,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun logout_clearsTokensAndSession() {
+    fun logout_clearsTokensAndSession() = runTest {
         val store = InMemoryTokenStore(jwt = "j", sessionToken = "s")
         val (repo, session) = repository(FakeAuthApi(ApiResponse(success = false)), store)
         session.adopt(MeeshyUser(id = "u1", username = "atabeth"))
@@ -125,5 +158,16 @@ class AuthRepositoryTest {
 
         assertThat(store.isAuthenticated).isFalse()
         assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
+    fun logout_wipesEveryPerAccountCache() = runTest {
+        val store = InMemoryTokenStore(jwt = "j", sessionToken = "s")
+        val teardown = RecordingSessionTeardown()
+        val (repo, _) = repository(FakeAuthApi(ApiResponse(success = false)), store, teardown)
+
+        repo.logout()
+
+        assertThat(teardown.wipeCallCount).isEqualTo(1)
     }
 }

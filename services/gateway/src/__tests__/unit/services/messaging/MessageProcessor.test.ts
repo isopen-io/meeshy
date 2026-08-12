@@ -25,11 +25,20 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
+// L'algorithme `[[url]]` / `<url>` vit dans `TrackingLinkService` et n'est
+// testé QUE là (`TrackingLinkService.test.ts`). MessageProcessor en portait un
+// second exemplaire complet ; il n'en garde que la délégation, donc c'est la
+// délégation — pas l'algorithme — que ces tests décrivent. Identité par
+// défaut : un test qui ne parle pas de liens voit son contenu ressortir intact.
+const mockProcessExplicitLinksInContent = jest.fn(
+  async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+) as jest.Mock<any>;
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: (...a: any[]) => mockFindExistingTrackingLink(...a),
     createTrackingLink: (...a: any[]) => mockCreateTrackingLink(...a),
     collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
+    processExplicitLinksInContent: (...a: any[]) => mockProcessExplicitLinksInContent(...a),
   })),
 }));
 
@@ -95,6 +104,7 @@ jest.mock('../../../../services/messaging/postReplySnapshot', () => ({
 // ── Import after all mocks ─────────────────────────────────────────────────
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 // ── Prisma helpers ─────────────────────────────────────────────────────────
 
@@ -224,71 +234,131 @@ describe('MessageProcessor.processLinksInContent', () => {
   beforeEach(() => {
     mockFindExistingTrackingLink.mockReset();
     mockCreateTrackingLink.mockReset();
+    mockProcessExplicitLinksInContent.mockReset();
+    mockProcessExplicitLinksInContent.mockImplementation(
+      async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+    );
     processor = makeProcessor();
   });
 
-  it('returns content unchanged when no special patterns', async () => {
-    const result = await processor.processLinksInContent('Plain text with no URL', CONV_ID);
-    expect(result).toBe('Plain text with no URL');
-  });
+  // L'algorithme lui-même (protection markdown, `[[url]]`, `<url>`, réutilisation
+  // de token, séquences `$`) est décrit UNE fois, dans `TrackingLinkService.test.ts`.
+  // Le décrire ici aussi, c'était le prix du second exemplaire qui vivait dans
+  // ce fichier — et deux descriptions d'un même algorithme ne restent pas
+  // d'accord plus longtemps que les deux implémentations qu'elles gardaient.
+  it('délègue au traitement de liens de TrackingLinkService et rend son résultat', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+abc123', trackingLinks: [] });
 
-  it('protects markdown links — not converted to tracking (Rule 1)', async () => {
-    const content = 'See [docs](https://example.com) here';
-    const result = await processor.processLinksInContent(content, CONV_ID);
-    expect(result).toContain('[docs](https://example.com)');
-    expect(mockCreateTrackingLink).not.toHaveBeenCalled();
-  });
+    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID, 'u-author', MSG_ID);
 
-  it('converts [[url]] to m+token via createTrackingLink (Rule 3)', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'abc123' });
-    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID, SENDER_ID);
     expect(result).toBe('m+abc123');
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith({
+      content: '[[https://example.com/page]]',
+      conversationId: CONV_ID,
+      messageId: MSG_ID,
+      createdBy: 'u-author',
+    });
   });
 
-  it('reuses existing tracking link for [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue({ token: 'existing-tok' });
-    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID);
-    expect(result).toBe('m+existing-tok');
-    expect(mockCreateTrackingLink).not.toHaveBeenCalled();
+  it('ne touche PAS au service quand le texte ne porte aucune syntaxe traçable', async () => {
+    const result = await processor.processLinksInContent('Plain text with no URL', CONV_ID);
+
+    expect(result).toBe('Plain text with no URL');
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
   });
 
-  it('reuses token for duplicate [[url]] in the same message', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'tok-1' });
-    const result = await processor.processLinksInContent('[[https://example.com]] and [[https://example.com]]', CONV_ID);
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
-    expect(result).toBe('m+tok-1 and m+tok-1');
-  });
+  // Un lien perdu ne doit pas transformer un envoi réussi en échec : le contenu
+  // ORIGINAL est rendu et le message part.
+  it('rend le contenu original quand le traitement lève', async () => {
+    mockProcessExplicitLinksInContent.mockRejectedValue(new Error('DB error'));
 
-  it('converts <url> to m+token (Rule 4)', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'angle-tok' });
-    const result = await processor.processLinksInContent('<https://example.com/angle>', CONV_ID);
-    expect(result).toBe('m+angle-tok');
-  });
-
-  it('reuses token for duplicate <url> that also appeared as [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'shared-tok' });
-    const result = await processor.processLinksInContent('[[https://same.com]] and <https://same.com>', CONV_ID);
-    expect(mockCreateTrackingLink).toHaveBeenCalledTimes(1);
-    expect(result).toBe('m+shared-tok and m+shared-tok');
-  });
-
-  it('falls back to raw URL when createTrackingLink throws for [[url]]', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
     const result = await processor.processLinksInContent('[[https://example.com/err]]', CONV_ID);
-    expect(result).toBe('https://example.com/err');
+
+    expect(result).toBe('[[https://example.com/err]]');
+  });
+});
+
+// ── saveMessage — à qui appartient le lien de suivi ─────────────────────────
+
+/**
+ * `TrackingLink.createdBy` est un **`User.id`** : c'est contre lui que
+ * `/tracking-links` filtre « mes liens », calcule les stats et VÉRIFIE LA
+ * PROPRIÉTÉ (`trackingLink.createdBy !== userId` ⇒ 403). Le chemin d'ENVOI y
+ * écrivait `data.senderId`, qui est un `Participant.id` — un espace d'ids
+ * disjoint. Un lien créé en tapant `[[url]]` dans un message n'apparaissait
+ * donc jamais dans la liste de son auteur, ne comptait dans aucune de ses
+ * stats, et son auteur se voyait REFUSER l'accès à son propre lien.
+ * Les deux chemins d'ÉDITION, eux, passent bien un `User.id` : le même lien
+ * changeait d'espace d'ids selon qu'on l'ait tapé à l'envoi ou à l'édition.
+ */
+describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', () => {
+  let processor: MessageProcessor;
+
+  beforeEach(() => {
+    resetPrisma();
+    mockProcessExplicitLinksInContent.mockReset();
+    mockProcessExplicitLinksInContent.mockImplementation(
+      async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+    );
+    mockCollectContentTrackingLinks.mockReset();
+    mockCollectContentTrackingLinks.mockResolvedValue([]);
+    processor = makeProcessor();
   });
 
-  it('falls back to raw URL when createTrackingLink throws for <url>', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
-    const result = await processor.processLinksInContent('<https://example.com/err>', CONV_ID);
-    expect(result).toBe('https://example.com/err');
+  it('crée le lien au nom du User derrière le participant expéditeur, pas du participant', async () => {
+    partFindUnique.mockResolvedValue({ userId: 'u-author' });
+
+    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+
+    expect(partFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SENDER_ID } })
+    );
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBy: 'u-author' })
+    );
+  });
+
+  // Le mapping `metadata.trackingLinks` des URLs BRUTES écrivait le même
+  // `createdBy` depuis le même mauvais espace.
+  it('collecte les liens d’URL brute au nom du même User', async () => {
+    partFindUnique.mockResolvedValue({ userId: 'u-author' });
+
+    await processor.saveMessage({ ...baseData, content: 'voir https://example.com' });
+
+    expect(mockCollectContentTrackingLinks).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBy: 'u-author' })
+    );
+  });
+
+  // Un participant anonyme n'a AUCUN `User.id` : le schéma prévoit `null`
+  // (« null si anonyme »). Y laisser le `Participant.id` attribuait le lien à
+  // un id qui ne désigne aucun utilisateur.
+  it('laisse le lien sans propriétaire pour un expéditeur anonyme', async () => {
+    partFindUnique.mockResolvedValue({ userId: null });
+
+    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBy: undefined })
+    );
+  });
+
+  it('ne résout rien quand le message ne porte aucune URL', async () => {
+    await processor.saveMessage({ ...baseData, content: 'Plain message' });
+
+    expect(partFindUnique).not.toHaveBeenCalled();
+  });
+
+  // La résolution est best-effort : elle ne doit pas faire échouer l'envoi.
+  it('envoie quand même, sans propriétaire, si la résolution échoue', async () => {
+    partFindUnique.mockRejectedValue(new Error('DB down'));
+
+    const result = await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+
+    expect(result).toBeDefined();
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBy: undefined })
+    );
   });
 });
 
@@ -583,10 +653,33 @@ describe('MessageProcessor.saveMessage', () => {
   });
 
   it('updates tracking link messageIds when [[url]] was processed', async () => {
-    mockFindExistingTrackingLink.mockResolvedValue(null);
-    mockCreateTrackingLink.mockResolvedValue({ token: 'tok-abc' });
+    // La réécriture est le SIGNAL : `saveMessage` rattache les liens au message
+    // seulement quand le contenu traité diffère de celui qu'on lui a donné.
+    mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
     await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
     expect(tlUpdateMany).toHaveBeenCalled();
+  });
+
+  /**
+   * Le rattachement, jugé sur le DOCUMENT du lien qu'il doit atteindre.
+   *
+   * `createTrackingLink` reçoit `messageId: undefined` au moment de la réécriture
+   * (« pas encore disponible ») : Prisma n'écrit alors pas la colonne, elle est
+   * ABSENTE. Un filtre `messageId: null` n'appariait donc pas le lien que ce
+   * chemin vient tout juste de créer, et l'attribution du lien à son message
+   * n'était jamais écrite. « `tlUpdateMany` a été appelé » ne peut pas voir ça.
+   */
+  it('rattache un lien dont la colonne messageId est ABSENTE, sans voler celui d\'un autre message', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
+    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
+
+    const { where } = tlUpdateMany.mock.calls[0][0] as any;
+    const fresh = { token: 'tok-abc', conversationId: baseData.conversationId };
+
+    expect(matchesMongoWhere(fresh, where)).toBe(true);
+    expect(matchesMongoWhere({ ...fresh, messageId: null }, where)).toBe(true);
+    expect(matchesMongoWhere({ ...fresh, messageId: 'other-message' }, where)).toBe(false);
+    expect(matchesMongoWhere({ ...fresh, conversationId: 'another-conversation' }, where)).toBe(false);
   });
 
   it('skips tracking link update when content unchanged (no special links)', async () => {

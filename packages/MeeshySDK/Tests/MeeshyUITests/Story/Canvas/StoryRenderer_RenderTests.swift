@@ -145,6 +145,54 @@ final class StoryRenderer_RenderTests: XCTestCase {
                        "Explicit contentsScale: 1.0 must land on root layer")
     }
 
+    /// L'échelle demandée doit atteindre les calques d'ITEMS, pas seulement la
+    /// racine. Chaque calque posait `UIScreen.main.scale` en dur : sur un écran
+    /// 3×, chaque texte et chaque sticker était rasterisé à 3× la densité — 9×
+    /// la surface — À CHAQUE FRAME d'export, alors que le buffer de sortie est
+    /// déjà en pixels de design. C'est ce qui rendait l'export d'une story
+    /// longue interminable.
+    func test_render_explicitScale1_reachesItemLayers() {
+        var effects = StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "Légende")])
+        effects.stickerObjects = [StorySticker(id: "s1", emoji: "🎧")]
+        let slide = StorySlide(id: "scale-slide", effects: effects)
+
+        let root = StoryRenderer.render(slide: slide,
+                                        into: makeGeometry(),
+                                        at: .zero,
+                                        mode: .play,
+                                        contentsScale: 1.0)
+
+        let items = (root.sublayers ?? []).filter { $0.zPosition != 9999 }
+        XCTAssertFalse(items.isEmpty, "Le slide doit produire des calques d'items")
+        for layer in items {
+            XCTAssertEqual(layer.contentsScale, 1.0, accuracy: 0.001,
+                           "Un calque d'item ignore l'échelle d'export : \(type(of: layer))")
+            if layer.shouldRasterize {
+                XCTAssertEqual(layer.rasterizationScale, 1.0, accuracy: 0.001,
+                               "rasterizationScale doit suivre l'échelle de rendu")
+            }
+        }
+    }
+
+    /// Le canvas live garde la densité de l'appareil — la propagation ne doit
+    /// pas dégrader l'affichage à l'écran.
+    func test_render_defaultScale_itemLayersKeepScreenScale() {
+        var effects = StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "Légende")])
+        effects.stickerObjects = [StorySticker(id: "s1", emoji: "🎧")]
+        let slide = StorySlide(id: "scale-slide", effects: effects)
+
+        let root = StoryRenderer.render(slide: slide,
+                                        into: makeGeometry(),
+                                        at: .zero,
+                                        mode: .edit)
+
+        let items = (root.sublayers ?? []).filter { $0.zPosition != 9999 }
+        for layer in items {
+            XCTAssertEqual(layer.contentsScale, UIScreen.main.scale, accuracy: 0.001,
+                           "Le canvas live doit rester à la densité de l'écran")
+        }
+    }
+
     /// Drawing-overlay path: when `slide.effects.drawingData` is set, the
     /// `PKDrawing.image(scale:)` call inside `render` MUST receive the same
     /// `contentsScale` the caller passed. We assert via the overlay layer's

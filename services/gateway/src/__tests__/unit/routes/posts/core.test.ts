@@ -47,6 +47,18 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
+const mockExtractHashtags = jest.fn<any>().mockReturnValue([]);
+const mockCreatePostHashtags = jest.fn<any>().mockResolvedValue(undefined);
+const mockReconcileRemovedHashtags = jest.fn<any>().mockResolvedValue(undefined);
+
+jest.mock('../../../../services/HashtagService', () => ({
+  HashtagService: jest.fn().mockImplementation(() => ({
+    extractHashtags: (...args: any[]) => mockExtractHashtags(...args),
+    createPostHashtags: (...args: any[]) => mockCreatePostHashtags(...args),
+    reconcileRemovedHashtags: (...args: any[]) => mockReconcileRemovedHashtags(...args),
+  })),
+}));
+
 // GW1 — the routes consume the DECORATED fastify.notificationService (wired
 // instance), not a locally constructed NotificationService: mocks are injected
 // via app.decorate in buildApp below.
@@ -183,6 +195,47 @@ describe('GET /posts/:postId — success', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('GET /posts/:postId — repostOf carries the original\'s reach counters through serialization', () => {
+  it('returns repostOf.viewCount unfiltered — no Fastify response schema on this route truncates it (piège a)', async () => {
+    // Chantier reposts cohérents & watermark, tâche 1, piège (a) : les schémas
+    // de réponse Fastify tronquent silencieusement tout champ non listé. Cette
+    // route (`GET /posts/:postId`) et son voisin `GET /posts/feed` n'en
+    // déclarent AUCUN (`schema.response` absent de core.ts/feed.ts/
+    // interactions.ts) — `sendSuccess` sérialise le payload de PostService
+    // tel quel. Ce test PROUVE le bout-en-bout HTTP : `repostOf.viewCount`
+    // (ajouté au `select` de `repostOfInclude`, postIncludes.ts) atteint bien
+    // le JSON envoyé au client, pas seulement l'objet Prisma en mémoire.
+    mockGetPostById.mockResolvedValueOnce({
+      id: POST_ID,
+      type: 'POST',
+      content: 'Reposted!',
+      repostOfId: 'original-post-id',
+      repostOf: {
+        id: 'original-post-id',
+        type: 'POST',
+        content: 'Original content',
+        viewCount: 42,
+        repostCount: 3,
+        shareCount: 7,
+        bookmarkCount: 5,
+        impressionCount: 120,
+        likeCount: 10,
+        commentCount: 2,
+      },
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
+    expect(res.statusCode).toBe(200);
+    const { repostOf } = res.json().data;
+    expect(repostOf.viewCount).toBe(42);
+    expect(repostOf.repostCount).toBe(3);
+    expect(repostOf.shareCount).toBe(7);
+    expect(repostOf.bookmarkCount).toBe(5);
+    expect(repostOf.impressionCount).toBe(120);
     await app.close();
   });
 });
@@ -430,6 +483,100 @@ describe('POST /posts — invalid body (EXCEPT visibility without userIds)', () 
   });
 });
 
+describe('POST /posts — geo discoverability', () => {
+  it('forwards a valid discoverabilityPrecision to PostService.createPost alongside location', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello from Paris',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'CITY',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ discoverabilityPrecision: 'CITY' }),
+      USER_ID,
+    );
+    await app.close();
+  });
+
+  it('returns 400 VALIDATION_ERROR when discoverabilityPrecision is not one of the known tiers', async () => {
+    // Delta, jamais absolu : ce fichier ne réinitialise pas les mocks entre
+    // tests (pas de beforeEach clearAllMocks), donc mockCreatePost porte déjà
+    // les appels des tests précédents.
+    const callsBefore = mockCreatePost.mock.calls.length;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'BOGUS',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(mockCreatePost.mock.calls.length).toBe(callsBefore);
+    await app.close();
+  });
+});
+
+describe('POST /posts — hashtags', () => {
+  it('extracts hashtags from the created post content and persists them via HashtagService', async () => {
+    mockExtractHashtags.mockReturnValueOnce([
+      { tag: 'paris', display: '#paris' },
+      { tag: 'été', display: '#été' },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'POST', content: 'Belle journée #paris #été' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePostHashtags).toHaveBeenCalledWith(
+      'post-001',
+      [{ tag: 'paris', display: '#paris' }, { tag: 'été', display: '#été' }],
+    );
+    await app.close();
+  });
+
+  it('does not call createPostHashtags when extraction finds no hashtags', async () => {
+    mockExtractHashtags.mockReturnValueOnce([]);
+    mockCreatePostHashtags.mockClear();
+    const app = await buildApp();
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', content: 'Rien ici' } });
+    expect(mockCreatePostHashtags).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('PUT /posts/:postId — hashtags', () => {
+  it('persists new hashtags and reconciles removed ones on edit', async () => {
+    mockExtractHashtags.mockReturnValueOnce([{ tag: 'lyon', display: '#lyon' }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { content: '#lyon uniquement maintenant' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockCreatePostHashtags).toHaveBeenCalledWith(POST_ID, [{ tag: 'lyon', display: '#lyon' }]);
+    expect(mockReconcileRemovedHashtags).toHaveBeenCalledWith(POST_ID, ['lyon']);
+    await app.close();
+  });
+
+  it('reconciles with an empty kept-list when the edited content has no hashtags', async () => {
+    mockExtractHashtags.mockReturnValueOnce([]);
+    const app = await buildApp();
+    await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { content: 'Plus de hashtag' } });
+    expect(mockReconcileRemovedHashtags).toHaveBeenCalledWith(POST_ID, []);
+    await app.close();
+  });
+});
+
 describe('PUT /posts/:postId — 422 business rule violation', () => {
   it('returns 400 with INVALID_POST_UPDATE code when updatePost throws 422', async () => {
     mockUpdatePost.mockRejectedValueOnce(Object.assign(new Error('Cannot change type'), { statusCode: 422 }));
@@ -453,6 +600,42 @@ describe('PUT /posts/:postId — STORY type broadcasts story updated', () => {
       payload: { content: 'Updated story content' },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // Directive 2026-07-29 : une édition de CONTENU (content / storyEffects /
+  // mediaIds) remet l'engagement à zéro côté service — le broadcast doit le
+  // dire aux clients (engagementReset: true) pour qu'ils repassent la story
+  // en « non vue ». Une mise à jour de visibilité seule ne le fait PAS.
+  it('flags engagementReset: true on a content edit broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, content: 'Updated story', type: 'STORY' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { content: 'Updated story content' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: true },
+    );
+    await app.close();
+  });
+
+  it('flags engagementReset: false on a visibility-only update broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', visibility: 'FRIENDS' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { visibility: 'FRIENDS' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: false },
+    );
     await app.close();
   });
 });

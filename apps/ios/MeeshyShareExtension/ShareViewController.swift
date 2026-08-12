@@ -1,548 +1,395 @@
 import UIKit
-import Social
-import MobileCoreServices
 import UniformTypeIdentifiers
-import ImageIO
 import SwiftUI
 
-/// Share Extension View Controller
-/// Allows sharing content from other apps directly to Meeshy
-/// Supports: Text, URLs, Images, Videos, Files, Location
+/// Feuille « Partager vers Meeshy ».
+///
+/// L'extension est AUTONOME : elle lit la session et les conversations dans
+/// l'App Group, poste elle-même au gateway, et n'ouvre jamais l'app. En cas
+/// d'échec, elle dépose un relais durable que `SharePendingSendConsumer`
+/// reprendra (cf. `ShareSender.send`).
+///
+/// Portée du lot 1 : texte et URL. L'`Info.plist` n'annonce que ces deux types
+/// — s'annoncer pour une image qu'on ne sait pas envoyer ferait apparaître
+/// Meeshy dans la feuille de partage de Photos pour y échouer.
 class ShareViewController: UIViewController {
 
     private var hostingController: UIHostingController<ShareContentView>?
-    private var sharedItems: [SharedItem] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
         view.backgroundColor = .systemBackground
 
-        // Extract shared items
-        extractSharedItems { [weak self] items in
-            guard let self = self else { return }
-            self.sharedItems = items
-            self.setupSwiftUIView()
+        extractContent { [weak self] content in
+            self?.installInterface(content: content)
         }
     }
 
-    private func setupSwiftUIView() {
-        let shareView = ShareContentView(
-            sharedItems: sharedItems,
-            onSend: { [weak self] contactId in
-                self?.sendToContact(contactId)
-            },
-            onCancel: { [weak self] in
-                self?.cancelShare()
-            }
+    // MARK: - Composition de l'écran
+
+    private func installInterface(content: String?) {
+        let session = ShareSession.resolveLive()
+        let state = ShareScreenState.resolve(
+            session: session,
+            targets: ShareConversationStore.liveTargets()
         )
 
-        let hostingController = UIHostingController(rootView: shareView)
-        addChild(hostingController)
-        view.addSubview(hostingController.view)
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        let root = ShareContentView(
+            content: content,
+            state: state,
+            // Aucune capture : la session et le contenu arrivent par le
+            // chemin d'envoi lui-même, qui ne peut être emprunté que depuis
+            // l'état `.ready` — lequel porte déjà la session.
+            onSend: { session, target, content in
+                await ShareSender.send(content: content, to: target.id, session: session)
+            },
+            onFinish: { [weak self] in self?.complete() }
+        )
+
+        let controller = UIHostingController(rootView: root)
+        addChild(controller)
+        view.addSubview(controller.view)
+        controller.view.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
-            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            controller.view.topAnchor.constraint(equalTo: view.topAnchor),
+            controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        hostingController.didMove(toParent: self)
-        self.hostingController = hostingController
+        controller.didMove(toParent: self)
+        hostingController = controller
     }
 
-    // MARK: - Extract Shared Content
-    private func extractSharedItems(completion: @escaping ([SharedItem]) -> Void) {
-        guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            completion([])
+    private func complete() {
+        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    // MARK: - Extraction
+
+    /// Accumulateur protégé par verrou : `loadItem` rappelle sur une file
+    /// arbitraire, et plusieurs pièces jointes peuvent répondre en parallèle.
+    private final class ExtractionBox: @unchecked Sendable {
+        private let lock = NSLock()
+        // `nonisolated(unsafe)` : mutated only under `lock`, from `offer`/
+        // `snapshot` below — the lock IS the synchronization the compiler
+        // can't see across actor isolation.
+        nonisolated(unsafe) private var text: String?
+        nonisolated(unsafe) private var url: URL?
+
+        // `nonisolated` : called from `loadItem`'s completion, which runs on
+        // an arbitrary queue (same rationale as `asURL`/`asText` below). The
+        // `NSLock` is this type's own synchronization — it doesn't need (and
+        // must not wait for) the main actor.
+        nonisolated func offer(text value: String?) {
+            guard let value, !value.isEmpty else { return }
+            lock.lock(); defer { lock.unlock() }
+            if text == nil { text = value }
+        }
+
+        nonisolated func offer(url value: URL?) {
+            guard let value else { return }
+            lock.lock(); defer { lock.unlock() }
+            if url == nil { url = value }
+        }
+
+        nonisolated var snapshot: (text: String?, url: URL?) {
+            lock.lock(); defer { lock.unlock() }
+            return (text, url)
+        }
+    }
+
+    private func extractContent(completion: @escaping (String?) -> Void) {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
+            completion(nil)
             return
         }
 
-        var items: [SharedItem] = []
-        let dispatchGroup = DispatchGroup()
+        let box = ExtractionBox()
+        let group = DispatchGroup()
 
-        for extensionItem in extensionItems {
-            guard let attachments = extensionItem.attachments else { continue }
-
-            for attachment in attachments {
-                dispatchGroup.enter()
-
-                // Check for different types
-                if attachment.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                    extractText(from: attachment) { text in
-                        if let text = text {
-                            items.append(SharedItem(type: .text, content: text))
-                        }
-                        dispatchGroup.leave()
+        for item in items {
+            for attachment in item.attachments ?? [] {
+                if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                    group.enter()
+                    attachment.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
+                        box.offer(url: Self.asURL(data))
+                        group.leave()
                     }
-                } else if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    extractURL(from: attachment) { url in
-                        if let url = url {
-                            items.append(SharedItem(type: .url, content: url.absoluteString))
-                        }
-                        dispatchGroup.leave()
+                } else if attachment.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+                    group.enter()
+                    attachment.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { data, _ in
+                        box.offer(text: Self.asText(data))
+                        group.leave()
                     }
-                } else if attachment.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                    extractImage(from: attachment) { image in
-                        if let image = image {
-                            items.append(SharedItem(type: .image, content: image))
-                        }
-                        dispatchGroup.leave()
-                    }
-                } else if attachment.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                    extractVideo(from: attachment) { url in
-                        if let url = url {
-                            items.append(SharedItem(type: .video, content: url))
-                        }
-                        dispatchGroup.leave()
-                    }
-                } else {
-                    dispatchGroup.leave()
                 }
             }
         }
 
-        dispatchGroup.notify(queue: .main) {
-            completion(items)
+        group.notify(queue: .main) {
+            let (text, url) = box.snapshot
+            completion(ShareSender.composeContent(text: text, url: url))
         }
     }
 
-    private func extractText(from attachment: NSItemProvider, completion: @escaping (String?) -> Void) {
-        attachment.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { data, error in
-            if let text = data as? String {
-                completion(text)
-            } else if let data = data as? Data, let text = String(data: data, encoding: .utf8) {
-                completion(text)
-            } else {
-                completion(nil)
-            }
+    /// `nonisolated` : appelées depuis la complétion de `loadItem`, qui
+    /// s'exécute sur une file arbitraire. Sans l'annotation, elles héritent du
+    /// MainActor de `UIViewController` et le compilateur refuse de leur « faire
+    /// traverser » une valeur non-Sendable.
+    nonisolated private static func asURL(_ data: (any NSSecureCoding)?) -> URL? {
+        if let url = data as? URL { return url }
+        if let raw = data as? Data, let string = String(data: raw, encoding: .utf8) {
+            return URL(string: string)
         }
+        if let string = data as? String { return URL(string: string) }
+        return nil
     }
 
-    private func extractURL(from attachment: NSItemProvider, completion: @escaping (URL?) -> Void) {
-        attachment.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, error in
-            if let url = data as? URL {
-                completion(url)
-            } else if let data = data as? Data, let urlString = String(data: data, encoding: .utf8), let url = URL(string: urlString) {
-                completion(url)
-            } else {
-                completion(nil)
-            }
-        }
-    }
-
-    private func extractImage(from attachment: NSItemProvider, completion: @escaping (UIImage?) -> Void) {
-        attachment.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { data, error in
-            // Downsample on load. A share extension has a ~120 MB memory ceiling,
-            // and decoding a full-resolution photo (e.g. a 50 MP camera shot) as a
-            // bitmap can blow past it and crash the share. ImageIO decodes a
-            // bounded thumbnail directly, never the full bitmap — quality is ample
-            // for a shared image and the main app re-compresses on send anyway.
-            if let url = data as? URL {
-                completion(Self.downsampledImage(at: url) ?? UIImage(contentsOfFile: url.path))
-            } else if let data = data as? Data {
-                completion(Self.downsampledImage(from: data) ?? UIImage(data: data))
-            } else if let image = data as? UIImage {
-                completion(image)
-            } else {
-                completion(nil)
-            }
-        }
-    }
-
-    private static func downsampledImage(at url: URL, maxPixelSize: CGFloat = 2048) -> UIImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return downsampledImage(from: source, maxPixelSize: maxPixelSize)
-    }
-
-    private static func downsampledImage(from data: Data, maxPixelSize: CGFloat = 2048) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return downsampledImage(from: source, maxPixelSize: maxPixelSize)
-    }
-
-    private static func downsampledImage(from source: CGImageSource, maxPixelSize: CGFloat) -> UIImage? {
-        let options: [CFString: Any] = [
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: cg)
-    }
-
-    private func extractVideo(from attachment: NSItemProvider, completion: @escaping (URL?) -> Void) {
-        attachment.loadItem(forTypeIdentifier: UTType.movie.identifier, options: nil) { data, error in
-            if let url = data as? URL {
-                // Copy to shared container
-                completion(url)
-            } else {
-                completion(nil)
-            }
-        }
-    }
-
-    // MARK: - Actions
-    private func sendToContact(_ contactId: String) {
-        // Save to shared container for main app to process
-        saveSharedContent(contactId: contactId)
-
-        // Open main app
-        var responder: UIResponder? = self
-        while responder != nil {
-            if let application = responder as? UIApplication {
-                let url = URL(string: "meeshy://share?contactId=\(contactId)")!
-                application.open(url, options: [:], completionHandler: nil)
-                break
-            }
-            responder = responder?.next
-        }
-
-        // Complete extension
-        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-    }
-
-    private func saveSharedContent(contactId: String) {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.apps") else {
-            return
-        }
-
-        let sharedData = SharedContentData(
-            contactId: contactId,
-            items: sharedItems.map { item in
-                SharedItemData(
-                    type: item.type.rawValue,
-                    content: itemContentAsString(item)
-                )
-            },
-            timestamp: Date()
-        )
-
-        if let encoded = try? JSONEncoder().encode(sharedData) {
-            sharedDefaults.set(encoded, forKey: "pending_shared_content")
-        }
-    }
-
-    private func itemContentAsString(_ item: SharedItem) -> String {
-        if let text = item.content as? String {
-            return text
-        } else if let image = item.content as? UIImage {
-            // Save image to shared container and return path
-            return saveImageToSharedContainer(image) ?? ""
-        } else if let url = item.content as? URL {
-            return url.absoluteString
-        }
-        return ""
-    }
-
-    private func saveImageToSharedContainer(_ image: UIImage) -> String? {
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"),
-              let imageData = image.jpegData(compressionQuality: 0.8) else {
-            return nil
-        }
-
-        let filename = UUID().uuidString + ".jpg"
-        let fileURL = containerURL.appendingPathComponent(filename)
-
-        do {
-            try imageData.write(to: fileURL)
-            return fileURL.absoluteString
-        } catch {
-            return nil
-        }
-    }
-
-    private func cancelShare() {
-        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    nonisolated private static func asText(_ data: (any NSSecureCoding)?) -> String? {
+        if let string = data as? String { return string }
+        if let raw = data as? Data { return String(data: raw, encoding: .utf8) }
+        return nil
     }
 }
 
-// MARK: - Data Models
-struct SharedItem: Identifiable {
-    let id = UUID()
-    let type: SharedItemType
-    let content: Any
+// MARK: - Interface
 
-    enum SharedItemType: String, Codable {
-        case text
-        case url
-        case image
-        case video
-        case file
-        case location
-    }
-}
-
-struct SharedContentData: Codable {
-    let contactId: String
-    let items: [SharedItemData]
-    let timestamp: Date
-}
-
-struct SharedItemData: Codable {
-    let type: String
-    let content: String
-}
-
-// MARK: - SwiftUI View
 struct ShareContentView: View {
-    let sharedItems: [SharedItem]
-    let onSend: (String) -> Void
-    let onCancel: () -> Void
+    let content: String?
+    let state: ShareScreenState
+    let onSend: (ShareSession, ShareTarget, String) async -> ShareOutcome
+    let onFinish: () -> Void
 
-    @State private var selectedContactId: String?
-    @State private var searchText = ""
-    @State private var recentContacts: [ContactPreview] = []
+    @State private var selectedId: String?
+    @State private var isSending = false
+    @State private var resultMessage: String?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Shared content preview
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(sharedItems) { item in
-                            SharedItemPreview(item: item)
-                        }
-                    }
-                    .padding()
-                }
-                .background(Color.secondary.opacity(0.1))
-
-                Divider()
-
-                // Contact selection
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(String(localized: "share.sendTo", defaultValue: "Send to"))
-                        .font(.headline)
-                        .padding(.horizontal)
-                        .padding(.top)
-
-                    // Search
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField(String(localized: "share.searchContacts", defaultValue: "Search contacts"), text: $searchText)
-                    }
-                    .padding()
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-
-                    // Recent/Favorite contacts
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredContacts) { contact in
-                                ContactRow(contact: contact, isSelected: selectedContactId == contact.id)
-                                    .onTapGesture {
-                                        selectedContactId = contact.id
-                                    }
-                            }
-                        }
-                    }
+                if let content {
+                    contentPreview(content)
+                    Divider()
                 }
 
-                Spacer()
-
-                // Action buttons
-                HStack(spacing: 16) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.secondary.opacity(0.2))
-                    .foregroundColor(.primary)
-                    .cornerRadius(12)
-
-                    Button("Send") {
-                        if let contactId = selectedContactId {
-                            onSend(contactId)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(selectedContactId != nil ? Color.blue : Color.secondary.opacity(0.2))
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                    .disabled(selectedContactId == nil)
+                switch state {
+                case .signedOut:
+                    message(
+                        systemImage: "person.crop.circle.badge.exclamationmark",
+                        text: String(
+                            localized: "share.signedOut",
+                            defaultValue: "Connectez-vous à Meeshy pour partager"
+                        )
+                    )
+                case .noConversations:
+                    message(
+                        systemImage: "bubble.left.and.bubble.right",
+                        text: String(
+                            localized: "share.empty",
+                            defaultValue: "Ouvrez Meeshy une fois pour retrouver vos conversations ici"
+                        )
+                    )
+                case .ready(_, let targets):
+                    conversationList(targets)
                 }
-                .padding()
+
+                Spacer(minLength: 0)
+                actionBar
             }
-            .navigationTitle("Share to Meeshy")
+            .navigationTitle(String(localized: "share.title", defaultValue: "Share to Meeshy"))
             .navigationBarTitleDisplayMode(.inline)
         }
-        .onAppear {
-            loadRecentContacts()
-        }
     }
 
-    var filteredContacts: [ContactPreview] {
-        if searchText.isEmpty {
-            return recentContacts
+    // MARK: Sous-vues
+
+    private func contentPreview(_ content: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isLink(content) ? "link" : "doc.text.fill")
+                .font(.title2)
+                .foregroundStyle(.tint)
+            Text(content)
+                .font(.callout)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        return recentContacts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        .padding()
+        .background(Color.secondary.opacity(0.1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isLink(content)
+            ? String(localized: "share.type.url", defaultValue: "Link")
+            : String(localized: "share.type.text", defaultValue: "Text"))
+        .accessibilityValue(content)
     }
 
-    private func loadRecentContacts() {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.apps"),
-              let data = sharedDefaults.data(forKey: "recent_contacts"),
-              let contacts = try? JSONDecoder().decode([ContactPreview].self, from: data) else {
-            // Fallback sample data
-            recentContacts = ContactPreview.sampleContacts
-            return
-        }
-        recentContacts = contacts
+    private func isLink(_ content: String) -> Bool {
+        content.hasPrefix("http://") || content.hasPrefix("https://")
     }
-}
 
-struct SharedItemPreview: View {
-    let item: SharedItem
+    private func message(systemImage: String, text: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.callout)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 48)
+    }
 
-    var body: some View {
-        VStack(spacing: 8) {
-            switch item.type {
-            case .text:
-                VStack {
-                    Image(systemName: "doc.text.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.blue)
-                    if let text = item.content as? String {
-                        Text(text)
-                            .font(.caption)
-                            .lineLimit(2)
-                            .frame(width: 100)
+    private func conversationList(_ targets: [ShareTarget]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(localized: "share.sendTo", defaultValue: "Send to"))
+                .font(.headline)
+                .padding(.horizontal)
+                .padding(.top)
+                .accessibilityAddTraits(.isHeader)
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(targets) { target in
+                        Button {
+                            selectedId = target.id
+                        } label: {
+                            ShareTargetRow(target: target, isSelected: selectedId == target.id)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSending)
                     }
-                }
-
-            case .url:
-                VStack {
-                    Image(systemName: "link")
-                        .font(.largeTitle)
-                        .foregroundColor(.blue)
-                    if let url = item.content as? String {
-                        Text(url)
-                            .font(.caption)
-                            .lineLimit(2)
-                            .frame(width: 100)
-                    }
-                }
-
-            case .image:
-                if let image = item.content as? UIImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-            case .video:
-                VStack {
-                    Image(systemName: "video.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.blue)
-                    Text(String(localized: "share.type.video", defaultValue: "Video"))
-                        .font(.caption)
-                }
-
-            case .file:
-                VStack {
-                    Image(systemName: "doc.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text(String(localized: "share.type.file", defaultValue: "File"))
-                        .font(.caption)
-                }
-
-            case .location:
-                VStack {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.red)
-                    Text(String(localized: "share.type.location", defaultValue: "Location"))
-                        .font(.caption)
                 }
             }
         }
-        .frame(width: 120, height: 120)
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
+    }
+
+    /// `.frame`/`.padding` sont À L'INTÉRIEUR du label : la zone tactile d'un
+    /// `Button` épouse la forme de son contenu, les poser à l'extérieur
+    /// dessinerait une pilule pleine largeur dont seul le texte réagirait.
+    private var actionBar: some View {
+        VStack(spacing: 12) {
+            if let resultMessage {
+                Text(resultMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+
+            HStack(spacing: 16) {
+                Button {
+                    onFinish()
+                } label: {
+                    Text(String(localized: "share.cancel", defaultValue: "Cancel"))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .background(Color.secondary.opacity(0.2))
+                .foregroundStyle(.primary)
+                .cornerRadius(12)
+
+                if case .ready = state {
+                    Button {
+                        send()
+                    } label: {
+                        Group {
+                            if isSending {
+                                ProgressView()
+                            } else {
+                                Text(String(localized: "share.send", defaultValue: "Send"))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                    }
+                    .background(canSend ? Color.accentColor : Color.secondary.opacity(0.2))
+                    // Suit l'état actif : un blanc figé sur le fond gris désactivé
+                    // tombe à ~1,2:1 et le bouton paraît vide.
+                    .foregroundStyle(canSend ? Color.white : Color.secondary)
+                    .cornerRadius(12)
+                    .disabled(!canSend)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private var canSend: Bool {
+        selectedId != nil && !isSending && content?.isEmpty == false
+    }
+
+    private func send() {
+        guard case .ready(let session, let targets) = state,
+              let target = targets.first(where: { $0.id == selectedId }),
+              let content, !content.isEmpty else { return }
+
+        isSending = true
+        Task {
+            let outcome = await onSend(session, target, content)
+            isSending = false
+            resultMessage = outcome == .sent
+                ? String(localized: "share.status.sent", defaultValue: "Envoyé")
+                : String(localized: "share.status.deferred", defaultValue: "Sera envoyé à la reconnexion")
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            onFinish()
+        }
     }
 }
 
-struct ContactRow: View {
-    let contact: ContactPreview
+// MARK: - Ligne de conversation
+
+struct ShareTargetRow: View {
+    let target: ShareTarget
     let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
             ZStack {
                 Circle()
-                    .fill(LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(width: 50, height: 50)
-
-                if let avatar = contact.avatar {
-                    AsyncImage(url: URL(string: avatar)) { image in
-                        image.resizable()
-                    } placeholder: {
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                } else {
-                    Text(contact.initials)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(contact.name)
+                    .fill(Color(hexString: target.accentColorHex) ?? .gray)
+                    .frame(width: 44, height: 44)
+                Text(target.initials)
                     .font(.headline)
-                if let status = contact.status {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                    .foregroundStyle(.white)
             }
+
+            Text(target.displayName)
+                .font(.body)
+                .lineLimit(1)
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.blue)
+                    .foregroundStyle(.tint)
                     .font(.title3)
             }
         }
-        .padding()
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(target.displayName)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
     }
 }
 
-struct ContactPreview: Identifiable, Codable {
-    let id: String
-    let name: String
-    let avatar: String?
-    let status: String?
+// MARK: - Couleur
 
-    var initials: String {
-        let components = name.components(separatedBy: " ")
-        let firstInitial = components.first?.prefix(1) ?? ""
-        let lastInitial = components.count > 1 ? components.last?.prefix(1) ?? "" : ""
-        return "\(firstInitial)\(lastInitial)".uppercased()
+extension Color {
+    /// L'extension ne lie pas MeeshyUI : ce décodeur hexadécimal minimal évite
+    /// d'embarquer tout le target UI pour une pastille d'avatar.
+    init?(hexString: String) {
+        var hex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
     }
-
-    static let sampleContacts = [
-        ContactPreview(id: "1", name: "John Doe", avatar: nil, status: "Online"),
-        ContactPreview(id: "2", name: "Jane Smith", avatar: nil, status: "Away"),
-        ContactPreview(id: "3", name: "Bob Johnson", avatar: nil, status: "Online")
-    ]
 }

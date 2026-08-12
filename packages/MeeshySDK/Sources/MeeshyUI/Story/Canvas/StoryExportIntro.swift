@@ -137,7 +137,12 @@ public enum StoryExportIntro {
     /// Readability scrim — a 3-stop vertical gradient matching
     /// `StoryAuthorIdentityCard` (top 0.62, mid 0.28, bottom 0.72) so the name
     /// stays legible over any banner.
-    private static func drawScrim(in cg: CGContext, size: CGSize) {
+    ///
+    /// Package-internal (pas `private`) : `StoryExportOutro` réutilise le MÊME
+    /// voile + la MÊME carte d'identité pour la carte de fin d'auteur (Part D
+    /// 2026-07-26), garantissant qu'ouverture et fermeture montrent une identité
+    /// peinte à l'identique.
+    static func drawScrim(in cg: CGContext, size: CGSize) {
         let rect = CGRect(origin: .zero, size: size)
         drawLinearGradient(
             in: cg, rect: rect,
@@ -149,7 +154,11 @@ public enum StoryExportIntro {
             end: CGPoint(x: rect.midX, y: rect.maxY))
     }
 
-    private static func drawIdentity(_ content: StoryExportIntroContent,
+    /// Package-internal (pas `private`) : réutilisée par `StoryExportOutro` pour
+    /// la carte de fin d'auteur (Part D). Peint avatar + nom + @username + mood
+    /// dans le contexte courant — l'appelant pose le fond (bannière OU logo de
+    /// marque) et l'alpha (fondu d'entrée) avant d'appeler.
+    static func drawIdentity(_ content: StoryExportIntroContent,
                                      in cg: CGContext,
                                      size: CGSize) {
         let avatarSide = size.width * 0.28
@@ -468,7 +477,7 @@ public enum StoryExportIntro {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
         // Audio — la signature sonore s'estompe sur le fondu (pas de bascule

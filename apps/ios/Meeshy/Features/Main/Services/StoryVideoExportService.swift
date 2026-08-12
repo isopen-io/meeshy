@@ -181,6 +181,26 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
             progressTrampoline = nil
         }
 
+        // Emballage de marque composé DANS le bake : interlude d'identité en
+        // tête (quand elle a pu être résolue) et carte de fin en queue, en UNE
+        // seule passe d'encodage. Les deux passes historiques (`prepend` puis
+        // `append`, puis leur fusion `wrap`) ré-encodaient la story entière pour
+        // n'ajouter que ~3 s de marque — ~2,5 s mesurées sur une story de 10 s.
+        //
+        // Un plan qu'on ne sait pas construire ne doit pas coûter l'export : on
+        // livre alors la story nue plutôt que rien.
+        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+
+        // Chronométrage des DEUX étages. Le coût d'un export est linéaire en
+        // frames : sans le nombre de frames à côté des secondes, un temps brut
+        // ne dit pas si le pipeline est lent ou si la story est simplement
+        // longue. Les mesures simulateur ne transposent pas à l'appareil (ni le
+        // throttling thermique, ni les limites du cache de rasterisation) — ces
+        // traces sont le seul moyen de chiffrer un export réel.
+        // Lecture : `./apps/ios/meeshy.sh logs` ou Console.app, filtre « export-cost ».
+        let frames = slide.computedTotalDuration() * StoryExportFrameRate.fps
+        let startedAt = Date()
+
         do {
             // `StoryExporter` itself throttles `progress` at ~10Hz.
             try await exporter.export(
@@ -188,51 +208,39 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 to: outputURL,
                 languages: languages,
                 watermark: watermark,
+                branding: nil,
                 progress: progressTrampoline
             )
-            logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
+            let bake = Date().timeIntervalSince(startedAt)
+            logger.info("export-cost : bake \(String(format: "%.1f", bake), privacy: .public) s pour \(Int(frames), privacy: .public) frames — \(String(format: "%.0f", bake / max(frames, 1) * 1000), privacy: .public) ms/frame (slide \(slide.id, privacy: .public))")
 
-            let renderSize = StoryExportIntroSizing.renderSize(for: slide)
-            var current = outputURL
-
-            // Préambule de marque : l'interlude d'identité et la signature
-            // sonore Meeshy, puis la story. Un échec ici ne perd PAS l'export —
-            // on livre la story seule plutôt que rien.
-            if let intro {
-                do {
-                    let branded = try await StoryExportIntro.prepend(
-                        to: current,
-                        content: intro,
-                        renderSize: renderSize
-                    )
-                    cleanupExport(at: current)
-                    current = branded
-                } catch {
-                    logger.warning("StoryVideoExportService : intro de marque ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-                }
-            }
-
-            // Carte de fin de marque : le logo Meeshy plein écran entre en
-            // fondu par-dessus la fin de la story et tient sur sa signature
-            // sonore de fermeture. Échec non fatal — on livre au moins ce qui
-            // a déjà été composé.
+            // Emballage de marque en une passe dédiée.
             //
-            // Revue finale (item 2) : cet appel était IMBRIQUÉ dans le
-            // `guard let intro`. Tant que `intro == nil` signifiait « pas de
-            // session » (cas de bord), la conséquence restait théorique ;
-            // depuis que ce lot a posé `introTimeout = .seconds(4)`,
-            // `intro == nil` est devenu un résultat de COURSE routinier
-            // (première installation, réseau lent) — et l'export sortait alors
-            // sans interlude ET sans carte de fin, donc au branding non
-            // déterministe d'un export à l'autre. La carte de fin ne dépend
-            // d'aucune identité : elle est désormais appliquée séparément.
+            // `StoryExporter.export(branding:)` sait composer la marque DANS le
+            // bake — c'est fonctionnellement équivalent (cf.
+            // `StoryExportSinglePassTests`) et ça supprimerait cet encodage.
+            // Ce chemin est pourtant DÉLIBÉRÉMENT inutilisé ici : mesuré, il est
+            // 5 à 20× PLUS LENT. Faire composer trois pistes au compositor
+            // custom coûte bien plus cher que le ré-encodage qu'il économise.
+            // Voir `tasks/todo-story-export-single-pass.md` — à ne pas rebrancher
+            // sans mesure préalable.
+            //
+            // Échec non fatal : on livre la story nue plutôt que rien.
             do {
-                let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
-                cleanupExport(at: current)
+                let wrapStart = Date()
+                let finalURL = try await StoryExportBranding.wrap(
+                    storyURL: outputURL,
+                    intro: intro,
+                    outro: intro,
+                    renderSize: renderSize
+                )
+                let wrap = Date().timeIntervalSince(wrapStart)
+                logger.info("export-cost : emballage \(String(format: "%.1f", wrap), privacy: .public) s — TOTAL \(String(format: "%.1f", Date().timeIntervalSince(startedAt)), privacy: .public) s (slide \(slide.id, privacy: .public))")
+                cleanupExport(at: outputURL)
                 return finalURL
             } catch {
-                logger.warning("StoryVideoExportService : carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-                return current
+                logger.warning("StoryVideoExportService : emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                return outputURL
             }
         } catch {
             logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
@@ -292,6 +300,7 @@ protocol StoryExporting: Sendable {
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws
 }
@@ -306,9 +315,11 @@ struct SystemStoryExporter: StoryExporting {
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         try await StoryExporter.export(slide, to: outputURL, languages: languages,
-                                       watermark: watermark, progress: progress)
+                                       watermark: watermark, branding: branding,
+                                       progress: progress)
     }
 }

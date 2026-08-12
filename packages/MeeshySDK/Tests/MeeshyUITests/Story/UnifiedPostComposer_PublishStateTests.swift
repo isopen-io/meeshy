@@ -20,6 +20,17 @@ import SwiftUI
 /// `Task { try await handler(...) }` invocation. We assert via the captured
 /// closure that the handler ran, and via the returned `Bool` that the
 /// async path observed success/throw correctly.
+///
+/// S6 — the generic (non-repost) inits were removed as dead code (zero
+/// production call sites; the app's sole `UnifiedPostComposer(` site is
+/// `StoryViewerView.swift`'s `repostingStory:` cover). The 4 tests below that
+/// only used the generic init as a construction VEHICLE to exercise
+/// `isPublishing`/rollback now build via `repostingStory:` instead —
+/// `triggerPublishForTestsAwaiting` branches symmetrically on
+/// `repostSourceForTests`/`repostPublishHandler` vs. `publishHandler`, so the
+/// behaviour under test (rollback on throw, retry after failure) is identical
+/// either way. `test_legacy_sync_onPublish_init_still_compiles_and_runs` — whose
+/// entire purpose was to pin the now-removed sync init — was deleted outright.
 @MainActor
 final class UnifiedPostComposer_PublishStateTests: XCTestCase {
 
@@ -52,9 +63,11 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
     func test_isPublishing_resetAfterSuccessfulPublish() async {
         var handlerInvocations = 0
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in
                 handlerInvocations += 1
-            } as (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
+            } as (String, StoryItem, String) async throws -> Void,
             onDismiss: {}
         )
 
@@ -73,10 +86,12 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
     func test_isPublishing_resetAfterFailedPublish() async {
         var handlerInvocations = 0
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in
                 handlerInvocations += 1
                 throw StubError(tag: "network")
-            } as (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
+            } as (String, StoryItem, String) async throws -> Void,
             onDismiss: {}
         )
 
@@ -101,11 +116,13 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
         let progress = HandlerProgress()
         let pauseGate = AsyncGate()
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in
                 await progress.recordStarted()
                 await pauseGate.wait()
                 await progress.recordFinished()
-            } as (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
+            } as (String, StoryItem, String) async throws -> Void,
             onDismiss: {}
         )
 
@@ -143,10 +160,12 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
         // permanent disabled state after the first failure.
         var attempts = 0
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in
                 attempts += 1
                 if attempts == 1 { throw StubError(tag: "first-attempt") }
-            } as (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
+            } as (String, StoryItem, String) async throws -> Void,
             onDismiss: {}
         )
 
@@ -192,26 +211,6 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
                        "Repost handler must be re-invocable after failure (proves rollback)")
     }
 
-    // MARK: - test_legacy_sync_onPublish_init_still_compiles_and_runs
-
-    /// Regression guard for the back-compat path: the original `init(onPublish:onDismiss:)`
-    /// with a synchronous closure must keep working without the caller having to
-    /// migrate to `async throws`. Sync callers cannot signal failure, so the
-    /// "report success" semantic always holds for them.
-    func test_legacy_sync_onPublish_init_still_compiles_and_runs() async {
-        var handlerInvocations = 0
-        let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in
-                handlerInvocations += 1
-            },
-            onDismiss: {}
-        )
-
-        let succeeded = await composer.triggerPublishForTestsAwaiting(content: "Hello")
-
-        XCTAssertTrue(succeeded, "Sync closure can't throw → publish always reports success")
-        XCTAssertEqual(handlerInvocations, 1, "Sync handler must run exactly once")
-    }
 }
 
 // MARK: - AsyncGate

@@ -99,6 +99,15 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
     post: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
+      findFirst: jest.fn().mockResolvedValue({
+        authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      }),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1) — par
+      // défaut aucun repost dans le batch. L'unitaire replie sa résolution
+      // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;
   app.decorate('prisma', prisma);
@@ -171,6 +180,26 @@ describe('POST /posts/:postId/impression (authenticated)', () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  // Le viewer de story iOS envoie `source: "story"` à chaque slide révélé.
+  // L'enum de validation l'ignorait → 400 systématique, `impressionCount`
+  // resté à 0 sur toutes les stories malgré des vues réelles.
+  it('accepts source=story (story viewer slide reveal)', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/impression`,
+      payload: { source: 'story' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(true);
+  });
+
+  it('rejects an unknown source', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/impression`,
+      payload: { source: 'not-a-surface' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 // ─── POST /posts/impressions/batch ────────────────────────────────────────────
@@ -210,6 +239,76 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(2);
+  });
+
+  it('accepts source=story', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID], source: 'story' },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('accepts source=status', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID], source: 'status' },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  /**
+   * `createMany` insère une ligne par occurrence, mais `updateMany` avec
+   * `id: { in: [...] }` n'incrémente chaque post QU'UNE fois — la table et le
+   * compteur dénormalisé divergeaient dès qu'un id se répétait. Avec la
+   * sémantique « une impression par apparition à l'écran », les répétitions
+   * sont le cas NOMINAL, pas un cas limite.
+   */
+  it('increments impressionCount once per occurrence, not once per distinct post', async () => {
+    const OTHER = '507f1f77bcf86cd799439033';
+    const prisma = (app as any).prisma;
+    prisma.post.updateMany.mockClear();
+    prisma.postImpression.createMany.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID, POST_ID, OTHER] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(3);
+
+    // Une ligne PostImpression par occurrence.
+    const created = (prisma.postImpression.createMany.mock.calls[0][0] as any).data;
+    expect(created).toHaveLength(3);
+
+    // Somme des incréments par post, quelle que soit la façon de grouper les
+    // updates. Le `in` est DÉDUPLIQUÉ avant de sommer : `updateMany` avec
+    // `id: { in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
+    // doublon ici ferait passer le test sur le code bogué.
+    const increments: Record<string, number> = {};
+    for (const [args] of prisma.post.updateMany.mock.calls as any[]) {
+      const step = args.data.impressionCount.increment as number;
+      for (const id of new Set(args.where.id.in as string[])) {
+        increments[id] = (increments[id] ?? 0) + step;
+      }
+    }
+    expect(increments[POST_ID]).toBe(2);
+    expect(increments[OTHER]).toBe(1);
+  });
+
+  it('caps at 50 occurrences', async () => {
+    const prisma = (app as any).prisma;
+    prisma.postImpression.createMany.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: Array(60).fill(POST_ID) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(50);
+    expect((prisma.postImpression.createMany.mock.calls[0][0] as any).data).toHaveLength(50);
   });
 });
 

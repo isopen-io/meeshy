@@ -473,7 +473,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
         ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
-        try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        nseCreateDirectory(dbDir, context: "NSE database directory")
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 

@@ -3,7 +3,7 @@ import XCTest
 @testable import MeeshyUI
 @testable import Meeshy
 
-/// Integration tests for the 4 composer-based-story-repost flows (Phase D.1).
+/// Integration tests for the 3 composer-based-story-repost flows (Phase D.1).
 ///
 /// Pragmatic in-process integration: each flow is exercised through its
 /// public/internal contract surface using `MockPostService` for backend
@@ -11,15 +11,22 @@ import XCTest
 /// would otherwise be opaque.
 ///
 /// Flows under test:
-///  1. Share button → `StoryComposerView` in repost mode → publishes a STORY
-///     (verified via `StoryComposerViewModel(reposting:authorHandle:)` state).
-///  2. Kebab "Republier en post" → `PostService.repost(postId:targetType:.post)`
+///  1. Kebab "Republier en post" → `PostService.repost(postId:targetType:.post)`
 ///     direct call (verified via `MockPostService` call tracking).
-///  3. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
+///  2. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
 ///     publish callback (verified via internal `triggerPublishForTests`).
-///  4. Feed cell receives a POST whose `repost.type == "STORY"` → renders
+///  3. Feed cell receives a POST whose `repost.type == "STORY"` → renders
 ///     `StoryRepostEmbedCell` (verified via `Mirror` + the documented
 ///     `isStoryRepost` predicate semantics).
+///
+/// A 4th flow — share button → `StoryComposerView` in repost mode — was
+/// removed S6 (`test_flux1_shareButton_opensComposerStory_publishesAsStory`,
+/// dead code cleanup): the share button never opened that composer in
+/// production (`repostStoryComposerSource` was never assigned outside its
+/// own `nil` resets), it calls `PostService.repost` directly instead — see
+/// `StoryViewerView+Sidebar.swift`. The composer-VM contract it exercised
+/// (`StoryComposerViewModel(reposting:authorHandle:)` clone/flatten/badge)
+/// remains covered independently by `StoryComposerViewModelRepostTests`.
 @MainActor
 final class StoryRepostFlowTests: XCTestCase {
 
@@ -63,7 +70,7 @@ final class StoryRepostFlowTests: XCTestCase {
                 id: rid, type: repostType, content: nil, originalLanguage: nil, translations: nil,
                 storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: nil, createdAt: Date(), likeCount: nil,
-                commentCount: nil, isQuote: nil
+                commentCount: nil, isQuote: nil, location: nil
             )
         }
         return APIPost(
@@ -108,46 +115,6 @@ final class StoryRepostFlowTests: XCTestCase {
         )
     }
 
-    // MARK: - Flow 1: Share button → StoryComposerView (story repost)
-
-    /// The share button in `StoryViewerView` opens `StoryComposerView` with a
-    /// `StoryComposerViewModel(reposting:authorHandle:)`. The VM must clone the
-    /// active slide, propagate the chain IDs (root-flatten) and inject the
-    /// locked attribution badge — these are the contract guarantees the UI
-    /// layer relies on for a story-as-story repost.
-    func test_flux1_shareButton_opensComposerStory_publishesAsStory() {
-        let story = makeStoryItem(
-            id: "story-1",
-            content: "Original",
-            repostOfId: nil,
-            originalRepostOfId: nil
-        )
-
-        let vm = StoryComposerViewModel(reposting: story, authorHandle: "alice")
-
-        // 1.a — Repost chain IDs are correctly flattened to the root.
-        XCTAssertEqual(vm.repostOfId, "story-1",
-                       "repostOfId points to the immediate parent (the story being shared)")
-        XCTAssertEqual(vm.originalRepostOfId, "story-1",
-                       "originalRepostOfId walks up the chain — root case = source itself")
-
-        // 1.b — Active slide is cloned (single slide, fresh ID, content preserved).
-        XCTAssertEqual(vm.slides.count, 1, "Repost mode clones the active slide only")
-        XCTAssertEqual(vm.slides.first?.content, "Original")
-        XCTAssertNotEqual(vm.slides.first?.id, "story-1",
-                          "Cloned slide has a fresh UUID, never reuses the source id")
-
-        // 1.c — Locked attribution badge is injected at bottom-center (y = 0.92).
-        let texts = vm.currentEffects.textObjects
-        let lockedBadges = texts.filter { $0.isLocked == true }
-        XCTAssertEqual(lockedBadges.count, 1,
-                       "Exactly one locked badge is added — repost attribution cannot be stripped")
-        XCTAssertTrue(lockedBadges.first?.text.contains("@alice") == true,
-                      "Badge mentions the original author handle")
-        XCTAssertEqual(lockedBadges.first?.y ?? 0, 0.92, accuracy: 0.001,
-                       "Badge sits at bottom-center (y = 0.92)")
-    }
-
     // MARK: - Flow 2: Kebab "Republier en post" → direct PostService.repost
 
     /// The kebab item "Republier en post" calls `PostService.repost` directly
@@ -161,7 +128,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: "story-1",
             targetType: .post,
             content: nil,
-            isQuote: false
+            isQuote: false,
+            visibility: nil
         )
 
         XCTAssertEqual(mockService.repostCallCount, 1)
@@ -172,6 +140,9 @@ final class StoryRepostFlowTests: XCTestCase {
                      "Direct repost has no commentary — content must be nil")
         XCTAssertEqual(mockService.lastRepostIsQuote, false,
                        "Without commentary the repost is a plain re-share, not a quote")
+        XCTAssertNil(mockService.lastRepostVisibility,
+                     "The kebab path offers no audience picker, so it passes no visibility — " +
+                     "the gateway then inherits the original's, per PostService.repost's default")
     }
 
     // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
@@ -192,13 +163,15 @@ final class StoryRepostFlowTests: XCTestCase {
         // Capture args delivered to the publish callback.
         var capturedContent: String?
         var capturedSourceId: String?
+        var capturedVisibility: String?
 
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { content, sourceStory in
+            onPublishRepost: { content, sourceStory, visibility in
                 capturedContent = content
                 capturedSourceId = sourceStory.id
+                capturedVisibility = visibility
             },
             onDismiss: {}
         )
@@ -219,6 +192,9 @@ final class StoryRepostFlowTests: XCTestCase {
                        "onPublishRepost receives the typed commentary verbatim")
         XCTAssertEqual(capturedSourceId, "story-1",
                        "onPublishRepost receives the original source story (not the clone)")
+        XCTAssertEqual(capturedVisibility, "PUBLIC",
+                       "onPublishRepost receives the composer's audience selection; PUBLIC is " +
+                       "its initial state, so an untouched picker still reports a value")
 
         // 3.c — Replay the production-side callback contract: the caller
         // (StoryViewerView.swift:297-316) forwards captured args to
@@ -228,7 +204,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: capturedSourceId ?? "",
             targetType: .post,
             content: content.isEmpty ? nil : content,
-            isQuote: !content.isEmpty
+            isQuote: !content.isEmpty,
+            visibility: capturedVisibility
         )
 
         XCTAssertEqual(mockService.lastRepostPostId, "story-1")
@@ -238,6 +215,10 @@ final class StoryRepostFlowTests: XCTestCase {
                        "Non-empty commentary is forwarded as-is")
         XCTAssertEqual(mockService.lastRepostIsQuote, true,
                        "Non-empty commentary makes the repost a quote")
+        XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
+                       "The audience picked in the composer reaches the service call — this is " +
+                       "the whole point of the repost-visibility path; dropping it here would " +
+                       "publish a repost the author meant to restrict")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

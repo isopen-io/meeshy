@@ -22,7 +22,13 @@ const mockCreatePost = jest.fn<any>().mockResolvedValue({
 });
 const mockGetPostById = jest.fn<any>().mockResolvedValue({ id: 'post-001', content: 'Hello', type: 'POST' });
 const mockUpdatePost = jest.fn<any>().mockResolvedValue({ id: 'post-001', content: 'Updated', type: 'POST' });
-const mockDeletePost = jest.fn<any>().mockResolvedValue({ type: 'POST', visibility: 'PUBLIC' });
+// `deletePost` rend le document Prisma soft-deleté ENTIER — `id` et `authorId`
+// compris, dont la route se sert pour annoncer le retrait et déplier son
+// audience. Ici l'acteur EST l'auteur (`USER_ID`/`POST_ID`, déclarés plus bas :
+// littéraux obligatoires à cette hauteur de fichier).
+const mockDeletePost = jest.fn<any>().mockResolvedValue({
+  id: '507f1f77bcf86cd799439022', authorId: '507f1f77bcf86cd799439011', type: 'POST', visibility: 'PUBLIC',
+});
 
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
@@ -58,6 +64,9 @@ jest.mock('../../../../services/MentionService', () => ({
     createPostMentions: (...args: any[]) => mockCreatePostMentions(...args),
   })),
 }));
+
+const mockPostMentionFindMany = jest.fn<any>().mockResolvedValue([]);
+const mockPostMentionDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 });
 
 // GW1 — the routes consume the DECORATED fastify.notificationService (wired
 // instance), not a locally constructed NotificationService: mocks are injected
@@ -122,7 +131,15 @@ async function buildApp(opts: {
   socialEvents?: ReturnType<typeof makeSocialEvents>;
 } = {}): Promise<{ app: FastifyInstance; socialEvents?: ReturnType<typeof makeSocialEvents> }> {
   const app = Fastify({ logger: false });
-  const prisma = {} as any;
+  // `postMention` est lu par la réconciliation d'édition
+  // (services/posts/postMentions.ts) : sans délégué, elle s'abstient de tout
+  // écrire — ce qui est le comportement voulu, mais pas ce que ces cas testent.
+  const prisma = {
+    postMention: {
+      findMany: (...args: any[]) => mockPostMentionFindMany(...args),
+      deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),
+    },
+  } as any;
   const requiredAuth = makeAuth(true);
 
   const se = opts.withSocialEvents ? (opts.socialEvents ?? makeSocialEvents()) : undefined;
@@ -294,11 +311,19 @@ describe('POST /posts — with @mentions in content', () => {
   beforeAll(async () => {
     mockExtractMentions.mockReturnValue(['bob', 'carol']);
     mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }], ['carol', { id: 'user-carol' }]]));
+    // Le contenu PERSISTÉ est celui que la résolution lit — un post rendu sans
+    // `@` court-circuite désormais, sans requête ni extraction.
+    mockCreatePost.mockResolvedValue({
+      id: 'post-001', content: 'Hello @bob and @carol', type: 'POST', visibility: 'PUBLIC', createdAt: new Date(),
+    });
     ({ app } = await buildApp());
   });
   afterAll(async () => {
     mockExtractMentions.mockReturnValue([]);
     mockResolveUsernames.mockResolvedValue(new Map());
+    mockCreatePost.mockResolvedValue({
+      id: 'post-001', content: 'Hello', type: 'POST', visibility: 'PUBLIC', createdAt: new Date(),
+    });
     await app.close();
   });
 
@@ -347,7 +372,7 @@ describe('GET /posts/:postId — with embedded comments', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
     expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       expect.arrayContaining(['Post content', '@alice check this', 'No mentions here'])
     );
   });
@@ -387,7 +412,7 @@ describe('PUT /posts/:postId — updated post with comments', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       expect.arrayContaining(['Updated @alice content', '@bob replied'])
     );
   });
@@ -519,7 +544,7 @@ describe('DELETE /posts/:postId — POST type with socialEvents', () => {
   afterAll(async () => { await app.close(); });
 
   it('calls broadcastPostDeleted for POST type', async () => {
-    mockDeletePost.mockResolvedValueOnce({ type: 'POST', visibility: 'PUBLIC' });
+    mockDeletePost.mockResolvedValueOnce({ id: POST_ID, authorId: USER_ID, type: 'POST', visibility: 'PUBLIC' });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
     expect(se.broadcastPostDeleted).toHaveBeenCalledWith(POST_ID, USER_ID);
@@ -539,6 +564,32 @@ describe('POST /posts/:postId/translate — invalid body', () => {
       payload: {},
     });
     expect([400, 500]).toContain(res.statusCode);
+  });
+});
+
+// ─── POST /posts/:postId/translate — audience du demandeur ───────────────────
+
+describe('POST /posts/:postId/translate — audience du demandeur', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { ({ app } = await buildApp()); });
+  afterAll(async () => { await app.close(); });
+
+  // Sans le viewer, `getPostById` retombe sur le filtre anonyme
+  // (`visibility: PUBLIC`) et ne trouve RIEN d'autre qu'une publication
+  // publique. Or une story Meeshy est réservée aux contacts par défaut : la
+  // route répondait « Post not found » à un lecteur pourtant légitime, et la
+  // feuille « Traductions » du lecteur restait sur un anneau qui tourne sans
+  // fin (constaté au simulateur le 2026-07-27 sur une story FRIENDS).
+  it('transmet l’identité du demandeur au lookup', async () => {
+    mockGetPostById.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/translate`,
+      payload: { targetLanguage: 'es' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
   });
 });
 

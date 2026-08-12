@@ -28,6 +28,73 @@ struct RevealCircleShape: Shape {
     }
 }
 
+// MARK: - Grammaire d'apparition d'une story
+
+/// État de DÉPART des quatre pilotes d'apparition d'une story, dérivé de la
+/// transition d'OUVERTURE choisie par l'auteur.
+///
+/// Pourquoi extraire ça d'un `switch` inline : la même story peut apparaître par
+/// DEUX chemins — le cross-fade intra-groupe (`crossFadeStory`) et le retrait de
+/// l'interlude d'identité inter-groupes (`dismissGroupIntro(revealing:)`). Le
+/// second ne l'animait pas du tout avant le 2026-07-26 : passer d'un groupe à
+/// l'autre posait le slide d'un bloc, alors qu'avancer dans un groupe respectait
+/// le zoom / slide / reveal configuré. Une seule table de valeurs garantit
+/// désormais qu'un zoom reste un zoom, qu'il arrive après un slide ou après le
+/// voile d'identité.
+///
+/// « Armé » = ce qu'on pose HORS animation juste avant la transaction qui ramène
+/// tout au repos (`contentOpacity` 1, `openingScale` 1, `textSlideOffset` 0,
+/// `isRevealActive` vrai pour `.reveal` uniquement).
+///
+/// `nonisolated` porté par le TYPE et non méthode par méthode : `apps/ios`
+/// compile avec `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, et l'annotation au
+/// niveau des membres ne couvre ni la conformance `Equatable` synthétisée ni les
+/// key paths — un helper purement calculatoire doit être neutre en entier.
+nonisolated struct StoryOpeningEntrance: Equatable {
+    /// Toujours 0 : quelle que soit la grammaire, la story entrante part
+    /// invisible et c'est l'animation qui la fait exister.
+    let contentOpacity: Double
+    let openingScale: CGFloat
+    /// Décalage HORIZONTAL en fraction de la largeur du canvas, aligné sur le
+    /// SDK (`StoryRenderer.slideTransitionTravelFraction`). Distinct de
+    /// `textSlideOffset`, qui est un décalage vertical en points.
+    let openingSlideFraction: CGFloat
+    let textSlideOffset: CGFloat
+    let isRevealActive: Bool
+
+    static func armed(for opening: StoryTransitionEffect?) -> StoryOpeningEntrance {
+        switch opening {
+        case .zoom:
+            // `1.08 → 1.0` : le SDK DÉZOOME. Partir de 0.88 zoomait, donc le
+            // même effet nommé jouait à l'envers selon qu'on regardait
+            // l'aperçu du composer (chemin SDK) ou le lecteur.
+            return StoryOpeningEntrance(contentOpacity: 0,
+                                        openingScale: StoryRenderer.zoomTransitionScale,
+                                        openingSlideFraction: 0,
+                                        textSlideOffset: 0, isRevealActive: false)
+        case .slide:
+            // Le SDK glisse HORIZONTALEMENT de 8 % de la largeur du canvas ;
+            // un décalage vertical de 30 pt ne correspondait ni à l'aperçu ni
+            // à l'export.
+            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
+                                        openingSlideFraction: StoryRenderer.slideTransitionTravelFraction,
+                                        textSlideOffset: 0, isRevealActive: false)
+        case .reveal:
+            // Rien à armer géométriquement : c'est `RevealCircleShape` qui joue,
+            // piloté par `isRevealActive` qui bascule à vrai DANS l'animation.
+            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
+                                        openingSlideFraction: 0,
+                                        textSlideOffset: 0, isRevealActive: false)
+        case .fade, .none:
+            // Fondu + micro-décalage (14 pt) : le fondu seul se lit comme un
+            // saut de luminosité, le décalage lui donne une direction.
+            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
+                                        openingSlideFraction: 0,
+                                        textSlideOffset: 14, isRevealActive: false)
+        }
+    }
+}
+
 // MARK: - Extracted from StoryViewerView.swift
 
 extension StoryViewerView {
@@ -194,10 +261,41 @@ extension StoryViewerView {
 
     // MARK: - Unified Drag Gesture (horizontal = groups, vertical = dismiss)
 
+    // (clé de préférence + décision de zone de départ : voir en bas de fichier,
+    // `StoryReaderScrollableSurfaceTopKey` et `StoryReaderDragStartZone`.)
+
     var unifiedDragGesture: some Gesture {
         DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .onChanged { value in
                 guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
+                // GARDE DE POINT DE DÉPART — ce drag est monté sur un ANCÊTRE de
+                // tout le contenu du lecteur, donc aussi des `ScrollView` que
+                // portent certaines surfaces (liste de commentaires, sélecteurs
+                // plein écran). Deux dégâts, par ordre de gravité :
+                //  (b) si l'`UIScrollView` emporte la séquence, SwiftUI ne délivre
+                //      JAMAIS notre `onEnded` : `gestureAxis` resterait à 2 et la
+                //      story serait gelée jusqu'à la fin de la session ;
+                //  (a) scroller la liste translatait la carte (`dragOffset`) et
+                //      pouvait committer un `.dismissActiveFeature` involontaire.
+                // La surface publie désormais son bord SUPÉRIEUR réel en
+                // coordonnées `.global` (`StoryReaderScrollableSurfaceTopKey`,
+                // posée sur le conteneur PARENT de son `ScrollView` — donc un
+                // cadre de layout, pas une position de défilement). On n'abandonne
+                // donc plus le geste que quand il NAÎT DANS la surface : ce
+                // geste-là appartient au scroll et à rien d'autre. Né dans la
+                // story encore visible AU-DESSUS, il reste au drag parent, qui
+                // peut de nouveau refermer la surface d'un glissement bas.
+                //
+                // FAIL-SAFE : bord inconnu (mesure pas encore arrivée, ou surface
+                // dont le panneau n'est pas mesurable ici — cf.
+                // `effectiveScrollableSurfaceTopY`) ⇒ on retombe sur la sortie
+                // anticipée intégrale. Un swipe inerte pendant une frame est un
+                // moindre mal devant (b).
+                guard !StoryReaderDragStartZone.yieldsToScrollableSurface(
+                    hasScrollableSurface: hasScrollableReaderSurface,
+                    surfaceTopY: effectiveScrollableSurfaceTopY,
+                    dragStartY: value.startLocation.y
+                ) else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
 
@@ -205,13 +303,23 @@ extension StoryViewerView {
                 // L'axe vertical accepte désormais les DEUX sens : le swipe
                 // haut active le plein écran (spec 2026-07-25), il ne peut
                 // donc plus être filtré par `dy > 0`.
+                //
+                // AUCUN `pauseTimer()` ici : la pause du drag est ÉTAT-DIRIGÉE
+                // (`shouldPauseTimer` contient `gestureAxis != 0`). Un
+                // `pauseTimer()` événementiel exigeait un `resumeTimer()`
+                // symétrique — jamais appelé quand SwiftUI saute le `onEnded`,
+                // d'où une story gelée sans retour. Adossée à `gestureAxis`, la
+                // reprise redevient automatique dès que l'axe retombe à 0.
                 if gestureAxis == 0 {
                     if abs(dx) > abs(dy) + 8 {
                         gestureAxis = 1 // horizontal
-                        pauseTimer()
                     } else if abs(dy) > abs(dx) + 8 {
                         gestureAxis = 2 // vertical
-                        pauseTimer()
+                        // Photographie de l'état des surfaces AU DÉBUT du geste :
+                        // l'overlay gestuel enfant referme la surface dès le
+                        // touch-down, donc au relâchement l'information est perdue
+                        // (cf. doc de `hadActiveFeatureAtDragStart`).
+                        hadActiveFeatureAtDragStart = hasActiveReaderFeature
                     }
                 }
 
@@ -235,6 +343,21 @@ extension StoryViewerView {
             .onEnded { value in
                 let axis = gestureAxis
                 gestureAxis = 0
+                // Consommées ici et nulle part ailleurs : les deux photographies
+                // ne valent que pour LE geste qui vient de se terminer.
+                //
+                // DEUX SOURCES, PAS UNE. `hadActiveFeatureAtDragStart` est prise à
+                // la décision d'axe, donc après 15 pt de déplacement ; quand le
+                // doigt part d'une zone hit-testée par l'overlay gestuel enfant
+                // (tout le canvas hors la bande basse), celui-ci a DÉJÀ refermé la
+                // surface au touch-down et cette photographie vaut `false`. Un
+                // glissement bas de plus de 120 pt concluait alors `.dismissViewer`
+                // et l'utilisateur PERDAIT la story en croyant refermer son strip.
+                // `readerFeatureConsumedByTouch`, posé par l'enfant à l'instant où
+                // il consomme la surface, couvre exactement ce trou.
+                let hadActiveFeature = hadActiveFeatureAtDragStart || readerFeatureConsumedByTouch
+                hadActiveFeatureAtDragStart = false
+                readerFeatureConsumedByTouch = false
 
                 guard !isDismissing && !isTransitioning && !isComposerEngaged else {
                     snapBackAll()
@@ -291,11 +414,17 @@ extension StoryViewerView {
                         predictedY: value.predictedEndTranslation.height,
                         isFullscreen: isFullscreenStorySession,
                         threshold: 120,
-                        hasActiveFeature: hasActiveReaderFeature
+                        // Valeur FIGÉE au début du geste, jamais relue ici : cf.
+                        // `hadActiveFeatureAtDragStart` / `readerFeatureConsumedByTouch`.
+                        hasActiveFeature: hadActiveFeature
                     ) {
                     case .dismissActiveFeature:
                         // La surface ouverte se referme, et RIEN d'autre : ni
-                        // dismiss, ni bascule plein écran.
+                        // dismiss, ni bascule plein écran. Si l'enfant l'avait déjà
+                        // refermée au touch-down, l'appel est un no-op idempotent
+                        // et il ne reste que le snap-back + la reprise de lecture —
+                        // c'est exactement le `.cancel` attendu, et surtout PAS une
+                        // sortie du lecteur.
                         dismissActiveReaderFeature()
                         snapDragOffsetBack()
                     case .dismissViewer:
@@ -337,7 +466,43 @@ extension StoryViewerView {
         resumeTimer()
     }
 
+    /// FILET ANTI-ÉTAT-COLLANT du système gestuel du lecteur.
+    ///
+    /// CE QUE LA FONCTION FAIT, exactement :
+    /// 1. remet `gestureAxis` à 0 — sans quoi la décision d'axe du geste suivant
+    ///    est sautée (`if gestureAxis == 0`) et ce geste hérite d'un axe faux ;
+    ///    comme `shouldPauseTimer` contient `gestureAxis != 0`, c'est AUSSI ce
+    ///    qui rend la lecture (la pause du drag est état-dirigée, pas
+    ///    événementielle — aucun `pauseTimer()` n'est posé par le drag) ;
+    /// 2. purge les photographies `hadActiveFeatureAtDragStart` et
+    ///    `readerFeatureConsumedByTouch`, qui ne valent que pour le geste
+    ///    interrompu — sans quoi la seconde neutraliserait le geste SUIVANT
+    ///    (glissement bas qui ne fermerait plus le lecteur) ;
+    /// 3. incrémente `gestureResetToken`, seul canal vers l'état de toucher
+    ///    PRIVÉ de `StoryGestureOverlayView` (`touchStartTime`, `didExceedSlop`,
+    ///    `holdActive`, `isResumingTap`).
+    ///
+    /// POURQUOI : SwiftUI n'appelle pas `onEnded` quand un recognizer concurrent
+    /// emporte la séquence de touches, et depuis que `unifiedDragGesture` et le
+    /// `DragGesture(minimumDistance: 0)` de l'overlay sont reconnus EN PARALLÈLE,
+    /// ce cas est atteignable en usage normal.
+    ///
+    /// QUI L'APPELLE : `snapBackAll()` (donc le `onEnded` du drag sur ses chemins
+    /// préemptés / d'axe indécis), `groupTransition(forward:)` au début de chaque
+    /// transition de groupe, et le `onDisappear` du lecteur (sortie en plein
+    /// drag). Elle n'est PAS un rattrapage universel : les
+    /// chemins où `onEnded` n'arrive jamais ne sont réparés que par le point 1,
+    /// au geste suivant — c'est précisément pour cela que la pause du drag est
+    /// état-dirigée plutôt que confiée à un `resumeTimer()` symétrique.
+    func resetGestureTracking() {
+        gestureAxis = 0
+        hadActiveFeatureAtDragStart = false
+        readerFeatureConsumedByTouch = false
+        gestureResetToken &+= 1
+    }
+
     private func snapBackAll() {
+        resetGestureTracking()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             horizontalDrag = 0
             dragOffset = 0
@@ -427,37 +592,36 @@ extension StoryViewerView {
 
         let incomingEffect = currentStory?.storyEffects?.opening
 
-        switch incomingEffect {
-        case .zoom:
-            openingScale = 0.88
-            textSlideOffset = 0
-            isRevealActive = false
-        case .slide:
-            textSlideOffset = 30
-            openingScale = 1.0
-            isRevealActive = false
-        case .reveal:
-            openingScale = 1.0
-            textSlideOffset = 0
-            isRevealActive = false
-        default:
-            textSlideOffset = 14
-            openingScale = 1.0
-            isRevealActive = false
-        }
+        // Table d'armement PARTAGÉE avec le retrait de l'interlude inter-groupes
+        // (`dismissGroupIntro(revealing:)`) : une seule grammaire d'apparition,
+        // deux chemins d'entrée. `contentOpacity` n'est PAS réappliqué ici — il
+        // a été mis à 0 avant `update()` plus haut, précisément pour que le swap
+        // de story soit invisible ; le réécrire après coup n'ajouterait rien et
+        // brouillerait cette intention.
+        let entrance = StoryOpeningEntrance.armed(for: incomingEffect)
+        openingScale = entrance.openingScale
+        openingSlideFraction = entrance.openingSlideFraction
+        textSlideOffset = entrance.textSlideOffset
+        isRevealActive = entrance.isRevealActive
 
         let animDuration: Double
         let animation: Animation
         switch incomingEffect {
+        // Les trois effets NOMMÉS partagent la durée du SDK
+        // (`slideTransitionDuration`). L'app en avait trois différentes —
+        // 0,4 / 0,38 / 0,4 — désalignées de la seule valeur que l'aperçu du
+        // composer et l'export respectent.
         case .zoom:
-            animDuration = 0.4
-            animation = .spring(response: 0.4, dampingFraction: 0.75)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .spring(response: StoryRenderer.slideTransitionDuration,
+                                dampingFraction: 0.75)
         case .slide:
-            animDuration = 0.38
-            animation = .spring(response: 0.38, dampingFraction: 0.82)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .spring(response: StoryRenderer.slideTransitionDuration,
+                                dampingFraction: 0.82)
         case .reveal:
-            animDuration = 0.4
-            animation = .easeOut(duration: 0.4)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .easeOut(duration: StoryRenderer.slideTransitionDuration)
         default:
             animDuration = 0.35
             animation = .easeOut(duration: 0.35)
@@ -469,8 +633,9 @@ extension StoryViewerView {
             contentOpacity = 1
             openingScale = 1.0
             textSlideOffset = 0
+            openingSlideFraction = 0
             if incomingEffect == .reveal { isRevealActive = true }
-            if closingEffect == .zoom { closingScale = 1.08 }
+            if closingEffect == .zoom { closingScale = StoryRenderer.zoomTransitionScale }
         }
 
         restartTimer()
@@ -494,6 +659,11 @@ extension StoryViewerView {
     func groupTransition(forward: Bool, update: @escaping () -> Void) {
         guard !isTransitioning else { return }
         isTransitioning = true
+        // Le groupe change : quel que soit le chemin d'entrée (drag commité, tap
+        // en bord, auto-advance, tap gauche de l'interlude), l'état de toucher
+        // hérité n'a plus de sens sur le nouveau groupe. Purge explicite — un
+        // drag préempté n'a pas eu son `onEnded` et laisserait l'axe collé.
+        resetGestureTracking()
         // Tap-en-bord / auto-advance arrivent ici sans drag : poser la
         // direction pour que la face entrante participe au commit.
         neighborPreviewDirection = forward ? 1 : -1
@@ -582,6 +752,10 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
+        // de l'animation (spec scrub 2026-08-11).
+        || isScrubbingRail
+        || reactionFlight != nil
         // L'overlay commentaires ouvert met la story en pause : lire / répondre à
         // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
         // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
@@ -591,8 +765,17 @@ extension StoryViewerView {
         || isTransitioning
         || isDismissing
         // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
-        // audio) attend la fin des ~1,2 s (ou le tap skip) — reprise sans saut.
+        // audio) attend la fin des ~2,2 s (ou le tap skip) — reprise sans saut.
         || showGroupIntro
+        // Drag du lecteur en cours (axe décidé). ÉTAT-DIRIGÉ et non
+        // événementiel : le drag ne pose plus de `pauseTimer()` à la décision
+        // d'axe, car son `resumeTimer()` symétrique n'arrive jamais quand un
+        // recognizer concurrent (un `UIScrollView` de surface, typiquement)
+        // emporte la séquence et que SwiftUI saute le `onEnded` — la story
+        // restait alors gelée pour de bon. Adossée à `gestureAxis`, la reprise
+        // est automatique dès que l'axe retombe à 0 : le cas dégénéré se
+        // rattrape tout seul au geste suivant.
+        || gestureAxis != 0
     }
 
     func startTimer() {
@@ -609,6 +792,11 @@ extension StoryViewerView {
         showFullLanguagePicker = false
         showEmojiStrip = false
         showFullEmojiPicker = false
+        // Reset seam for a scrub whose .onEnded never fires (competing
+        // recognizer / system interruption drops it, same hazard documented
+        // for gestureAxis above): without this, isScrubbingRail could stay
+        // stuck true and shouldPauseTimer would freeze the story forever.
+        isScrubbingRail = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []
@@ -649,6 +837,17 @@ extension StoryViewerView {
     private func restartTimer() {
         isPaused = false
         isLongPressPaused = false
+        // Filet de récupération de l'axe de geste. Depuis que la pause du drag
+        // est ÉTAT-DIRIGÉE (`gestureAxis != 0` dans `shouldPauseTimer`), un axe
+        // resté collé gèle la lecture — et SwiftUI ne délivre PAS `onEnded`
+        // quand un recognizer concurrent (ScrollView du rail en repli
+        // `ViewThatFits`, liste de commentaires) emporte la séquence. Avant ce
+        // passage à l'état, la pause était portée par `isPaused`, que cette
+        // fonction remettait déjà à false : le changement de slide était la
+        // voie de récupération naturelle. La rétablir ici la préserve — sinon
+        // taper pour avancer changeait bien de slide, mais la lecture restait
+        // figée jusqu'à un changement de GROUPE ou la sortie du lecteur.
+        gestureAxis = 0
         startTimer()
     }
 
@@ -750,7 +949,7 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil, location: SharedPlace? = nil) {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
@@ -771,7 +970,8 @@ extension StoryViewerView {
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage,
-            media: pendingMedia.map { [$0.optimistic] } ?? []
+            media: pendingMedia.map { [$0.optimistic] } ?? [],
+            location: location
         )
 
         if let parentId {
@@ -818,7 +1018,8 @@ extension StoryViewerView {
                     effectFlags: effectFlags,
                     parentId: parentId,
                     attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription
+                    mobileTranscription: pendingMedia?.mobileTranscription,
+                    location: location
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -841,7 +1042,8 @@ extension StoryViewerView {
                             clientMutationId: cmid,
                             postId: story.id,
                             parentCommentId: parentId,
-                            content: text
+                            content: text,
+                            location: location
                         ),
                         conversationId: story.id
                     )
@@ -959,33 +1161,11 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    func shareStory() {
-        guard let story = currentStory else { return }
-        let shareURL = "https://meeshy.me/story/\(story.id)"
-        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            activityVC.popoverPresentationController?.sourceView = topVC.view
-            topVC.present(activityVC, animated: true)
-        }
-    }
-
-    // MARK: - Story Time Remaining
-
-    func storyTimeRemaining(_ expiresAt: Date) -> String {
-        let seconds = Int(expiresAt.timeIntervalSinceNow)
-        if seconds <= 0 {
-            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
-        }
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        if hours > 0 {
-            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
-        }
-        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
-    }
+    // Le compte à rebours d'expiration a quitté le header du reader (directive
+    // user 2026-07-30) : il n'existe plus de surface qui l'affiche, donc plus
+    // de formateur. `story.expiresAt` reste la source de vérité côté logique
+    // (`isExpired(at:)` pilote la sélection de slide et le bandeau « Story
+    // expirée ») — c'est seulement la relecture permanente du chrono qui part.
 
     // MARK: - Delete Story
 
@@ -1049,6 +1229,11 @@ extension StoryViewerView {
             // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE
             // post-slide, en plus de la vue unique. Chaque changement de slide en émet une.
             viewModel.recordStoryImpression(storyId: story.id)
+            // Contenu consommé → ses notifications ne doivent plus être non lues,
+            // ET toute notification qui arrive PENDANT la lecture naît consommée
+            // (`activePostId`). Idempotent : le manager ignore une story déjà
+            // déclarée active et coalesce les appels serveur.
+            NotificationToastManager.shared.onPostOpened(story.id)
         }
     }
 
@@ -1544,8 +1729,12 @@ struct StoryCommentsOverlayView: View {
     /// When the keyboard rises the list can grow into the space the keyboard
     /// uncovered.
     private var listMaxHeight: CGFloat {
-        let screen = UIScreen.main.bounds.height
-        return keyboard.isVisible ? screen * 0.62 : screen * 0.42
+        // `DeviceLayout.windowSize`, pas `UIScreen.main.bounds` : en Split View
+        // la fraction était prise sur le DISPLAY, donc plus haute que la fenêtre
+        // entière — le plafond ne plafonnait plus rien et la liste recouvrait la
+        // story qu'elle est censée laisser visible.
+        let window = DeviceLayout.windowSize.height
+        return keyboard.isVisible ? window * 0.62 : window * 0.42
     }
 
     /// Instagram-style overlay: comments float above the composer with a top
@@ -1585,6 +1774,26 @@ struct StoryCommentsOverlayView: View {
             }
             commentsList
                 .frame(maxHeight: listMaxHeight)
+                // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
+                // c'est lui qui sépare « geste né dans la liste » (au scroll) de
+                // « geste né dans la story encore visible au-dessus » (au drag
+                // parent, qui referme alors l'overlay). Publié ICI, sur le
+                // conteneur PARENT du `ScrollView` — le mettre à l'intérieur du
+                // contenu défilant asservirait la clé au scroll, et sous iOS 18+
+                // `onPreferenceChange` ne re-tirerait plus.
+                //
+                // Mesuré AVANT le `.mask` : le dégradé de fondu efface les
+                // premières rows à l'œil mais la zone reste défilante, donc
+                // interdite au drag parent. Et avant le `.padding(.bottom:)`, qui
+                // ne déplace pas ce bord.
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: StoryReaderScrollableSurfaceTopKey.self,
+                            value: proxy.frame(in: .global).minY
+                        )
+                    }
+                )
                 .mask(listFadeMask)
                 // Réserve l'espace occupé par le composer principal rendu
                 // dans la canvas « Bottom area » (cf. `StoryComposerBarView`
@@ -1886,7 +2095,8 @@ extension StoryViewerView {
                 parentId: parentId,
                 originalLanguage: c.originalLanguage, translatedContent: translated,
                 currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
+                media: (c.media ?? []).map { $0.toFeedMedia() },
+                location: c.location
             )
         }
     }
@@ -1984,7 +2194,8 @@ extension StoryViewerView {
             originalLanguage: data.comment.originalLanguage,
             translatedContent: translatedContent,
             currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
         )
 
         let result = Self.applyingStoryCommentAdded(
@@ -2200,7 +2411,8 @@ extension StoryViewerView {
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             storyComments = comments
@@ -2250,7 +2462,8 @@ extension StoryViewerView {
                         translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
                     ),
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             let existing = Set(storyComments.map(\.id))
@@ -2284,6 +2497,15 @@ extension StoryViewerView {
     /// after the cache check, a single debounced network reconciliation confirms
     /// the real count. The 400ms dwell + stale-id guard keep this O(1) per
     /// *watched* story (never the O(N)-on-swipe fetch removed in 2026-05-28).
+    ///
+    /// Every time a reconciliation branch actually MOVES `storyCommentCount`
+    /// (cache hit or network stale-0 fix), it also bumps
+    /// `storyCommentCountReconciledPulse` — the dedicated, one-way signal
+    /// `StoryActionSidebarView` watches to re-open its already-frozen rail
+    /// membership for the comments button. This is what makes the reveal
+    /// happen on a NORMAL open (tray/profile/feed — no notification postId),
+    /// not just on the notification path already covered upstream by
+    /// `StoryViewModel.refreshFromCachedPostIfAvailable`.
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -2301,7 +2523,16 @@ extension StoryViewerView {
             case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
-                if total != storyCommentCount { storyCommentCount = total }
+                // Le bump ne s'exécute que sur un changement RÉEL de valeur —
+                // `storyCommentCountReconciledPulse` doit rester silencieux
+                // quand le cache confirme simplement le seed du payload.
+                // Voir StoryActionSidebarView pour le consommateur : SEUL ce
+                // canal peut faire réapparaître le bouton commentaires après
+                // le gel, jamais une activité temps réel.
+                if total != storyCommentCount {
+                    storyCommentCount = total
+                    storyCommentCountReconciledPulse += 1
+                }
                 return
             case .expired, .empty:
                 break
@@ -2329,7 +2560,10 @@ extension StoryViewerView {
             // replies. A genuinely empty thread stays 0 → button stays hidden.
             let top = response.data.filter { $0.parentId == nil }
             let total = top.count + top.reduce(0) { $0 + ($1.replyCount ?? 0) }
-            if total != storyCommentCount { storyCommentCount = total }
+            if total != storyCommentCount {
+                storyCommentCount = total
+                storyCommentCountReconciledPulse += 1
+            }
         }
     }
 }
@@ -2349,6 +2583,8 @@ struct StoryCommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -2363,6 +2599,10 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Posé par le viewer sur l'overlay (`readerChromeScheme`, cf.
+    /// `StoryViewerView+Canvas.swift`) — suit la luminance du FOND de la story,
+    /// pas le thème de l'app. Pilote `legibleOverlayColor` ci-dessous.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -2403,11 +2643,20 @@ struct StoryCommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: comment.authorColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,
                         sentAt: comment.timestamp
                     )
+                    .padding(.top, 2)
+                }
+                // Lieu attaché au commentaire — sticker cliquable, même surface
+                // plein écran que les autres rows de commentaires.
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
                     .padding(.top, 2)
                 }
                 actionRow
@@ -2417,6 +2666,16 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.vertical, 8)
         .padding(.trailing, 12)
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: comment.authorColor,
+                senderName: comment.author
+            )
+        }
     }
 
     @ViewBuilder
@@ -2449,25 +2708,26 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 6) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 6) {
             Text(comment.author)
                 .font(MeeshyFont.relative(12.5, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(MeeshyFont.relative(10))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(overlayColor.opacity(0.75))
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
         // sur n'importe quel fond de story, clair comme foncé. Pas de box.
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 
     private var languageSwitcher: some View {
@@ -2521,21 +2781,35 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var contentText: some View {
-        Text(displayContent)
-            .font(MeeshyFont.relative(13.5))
-            .foregroundColor(.white)
+        // La couleur suit `readerChromeScheme` (posé par le viewer sur
+        // l'overlay) : blanc sur fond sombre, quasi-noir sur fond clair — un
+        // blanc fixe restait illisible sur une story à dominante claire/blanche
+        // (bug user 2026-08-11), le halo seul ne suffisant pas à cette extrémité.
+        let textColor = Self.legibleOverlayColor(for: colorScheme)
+        return MessageTextRenderer.render(
+            displayContent,
+            fontSize: 13.5,
+            color: textColor,
+            mentionColor: MeeshyColors.mentionColor(isDark: colorScheme == .dark),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: colorScheme == .dark),
+            accentColor: textColor,
+            usesRelativeFont: true
+        )
+            .tint(textColor)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
             .messageEffects(comment.effects, hasPlayedAppearance: true)
             // Halo renforcé sur le corps du commentaire — c'est le texte le plus
-            // long, donc le plus exposé à un fond clair/chargé. Blanc plein +
-            // double ombre = lisible partout sans cartouche.
-            .storyOverlayLegible(strong: true)
+            // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
+            // suit `colorScheme` : noir pour détacher un texte clair d'un fond
+            // clair, blanc pour détacher un texte sombre d'un fond sombre/chargé.
+            .storyOverlayLegible(strong: true, isLightText: colorScheme == .dark)
     }
 
     private var actionRow: some View {
-        HStack(spacing: 16) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 16) {
             Button {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                     onToggleLike()
@@ -2544,12 +2818,12 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.92))
+                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
                         .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.85))
+                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.85))
                     }
                 }
                 .contentShape(Rectangle())
@@ -2565,7 +2839,7 @@ struct StoryCommentRowView: View, Equatable {
                     Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.88))
+                .foregroundColor(overlayColor.opacity(0.88))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2575,22 +2849,30 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.top, 2)
         // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 }
 
 // MARK: - Story Overlay Legibility
 
 extension View {
-    /// Halo sombre pour le texte/les icônes qui flottent directement au-dessus
-    /// d'une story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
+    /// Halo pour le texte/les icônes qui flottent directement au-dessus d'une
+    /// story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
     /// traitement approuvé de la sidebar (`StoryActionButton`, 2026-06-03) : une
     /// ombre serrée pour des glyphes nets + une ombre plus diffuse pour détacher
     /// le contenu d'un fond clair ou chargé. `strong` pour les longs paragraphes.
-    func storyOverlayLegible(strong: Bool = false) -> some View {
-        self
-            .shadow(color: .black.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
-            .shadow(color: .black.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
+    ///
+    /// `isLightText` choisit le SENS du halo : un halo NOIR détache un texte
+    /// clair (blanc) d'un fond CLAIR — comportement historique, toujours le
+    /// défaut. Un texte SOMBRE (`StoryCommentRowView.legibleOverlayColor` sur
+    /// fond de story clair) a besoin de l'inverse : un halo BLANC pour se
+    /// détacher d'un fond sombre/chargé, sinon le halo se fond dans le texte
+    /// lui-même et redevient invisible (bug user 2026-08-11).
+    func storyOverlayLegible(strong: Bool = false, isLightText: Bool = true) -> some View {
+        let haloColor: Color = isLightText ? .black : .white
+        return self
+            .shadow(color: haloColor.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
+            .shadow(color: haloColor.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
     }
 }
 
@@ -2612,6 +2894,16 @@ extension StoryCommentRowView {
             blue: Double(b + (1 - b) * f)
         )
     }
+
+    /// Couleur du texte/icônes du corps du commentaire (contenu, séparateurs,
+    /// actions) — dérivée du SCHÉMA DE COULEUR du canvas de la story
+    /// (`readerChromeScheme`, posé sur l'overlay par le viewer), jamais d'un
+    /// blanc fixe. Bug user 2026-08-11 : un fond de story clair/blanc rendait
+    /// le texte blanc totalement illisible, le halo seul ne suffisant pas à
+    /// cette extrémité. Pure + testable.
+    static func legibleOverlayColor(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white : MeeshyColors.indigo950
+    }
 }
 
 // MARK: - Story Action Button
@@ -2632,12 +2924,37 @@ struct StoryActionButton: View {
     /// (non-nil) sélectionne la couleur du contour (cf. `body`).
     var accentOutline: String? = nil
     var accentOutlineColor: Color = .clear
+    /// Sites porteurs d'un geste séquencé longpress→drag (scrub) : le tap
+    /// interne d'un `Button` consomme le touch et la séquence posée en
+    /// `.highPriorityGesture` ne s'active JAMAIS — un maintien de 0,9 s
+    /// partait en ❤️ direct au relâchement au lieu d'ouvrir le strip
+    /// (reproduit au stream HID simulateur, 2026-08-11). `true` = vue plate
+    /// + `TapGesture` : le tap court reste servi (la séquence échoue sous
+    /// 0,25 s), le maintien laisse la séquence de l'appelant gagner.
+    /// VoiceOver est servi par une `accessibilityAction` explicite — VO ne
+    /// synthétise pas de TapGesture (leçon du bouton Sound, +Sidebar).
+    var handlesTapViaGesture: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button {
-            action()
-        } label: {
+        Group {
+            if handlesTapViaGesture {
+                buttonLabel
+                    .onTapGesture { action() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { action() }
+            } else {
+                Button(action: action) { buttonLabel }
+                    .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var buttonLabel: some View {
+        Group {
             // Densité resserrée 2026-07-10 : spacing glyph→label 4→2 et padding
             // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
             // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
@@ -2712,10 +3029,6 @@ struct StoryActionButton: View {
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
 
@@ -2774,5 +3087,62 @@ struct StoryProgressBarsView: View {
         } else {
             return 0
         }
+    }
+}
+
+// MARK: - Zone de départ du drag parent vs surfaces scrollables
+
+/// Bord SUPÉRIEUR, en coordonnées `.global`, de la surface scrollable ouverte
+/// par-dessus la story (liste de commentaires, sélecteurs plein écran).
+///
+/// À PUBLIER DEPUIS LE CONTENEUR PARENT DU `ScrollView`, jamais depuis
+/// l'intérieur du contenu défilant : sous iOS 18+, `onPreferenceChange` ne
+/// re-tire plus pour une valeur pilotée par le défilement, et la mise à jour
+/// n'arriverait jamais. Ce qu'on publie ici est un cadre de LAYOUT — il ne bouge
+/// qu'au (re)positionnement de la surface (ouverture, montée du clavier,
+/// rotation), pas au scroll.
+///
+/// iOS 16 compatible : `GeometryReader` + `PreferenceKey`, aucune API scroll
+/// iOS 17/18 (`onGeometryChange` est interdit sur cette cible).
+struct StoryReaderScrollableSurfaceTopKey: PreferenceKey {
+    static var defaultValue: CGFloat? { nil }
+    /// Plusieurs surfaces peuvent être montées simultanément : on garde la plus
+    /// HAUTE (minY le plus petit), c'est-à-dire la zone interdite la plus large.
+    /// Céder trop est sans danger (le drag parent ne fait rien) ; céder trop peu
+    /// laisse un geste naître dans un `ScrollView`, et là `onEnded` n'arrive
+    /// jamais.
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        guard let next = nextValue() else { return }
+        value = value.map { Swift.min($0, next) } ?? next
+    }
+}
+
+/// Décide si le drag parent doit rendre la main à la surface scrollable ouverte,
+/// en fonction du POINT DE DÉPART du geste. Pur et testable — `unifiedDragGesture`
+/// est un `some Gesture` piloté par des `@State`, injouable en XCTest.
+enum StoryReaderDragStartZone {
+
+    /// - Parameters:
+    ///   - hasScrollableSurface: une surface embarquant son propre `ScrollView`
+    ///     est ouverte.
+    ///   - surfaceTopY: bord supérieur mesuré de cette surface (`.global`), ou
+    ///     `nil` si inconnu.
+    ///   - dragStartY: `value.startLocation.y` du drag parent (`.global`).
+    /// - Returns: `true` si le geste appartient à la surface (le drag parent doit
+    ///   sortir immédiatement).
+    ///
+    /// RÈGLE : aucune surface ouverte ⇒ le drag parent s'exécute INTÉGRALEMENT
+    /// (cas nominal, la très grande majorité des gestes du lecteur). Surface
+    /// ouverte et bord connu ⇒ seuls les gestes nés à l'intérieur lui reviennent ;
+    /// ceux nés dans la story encore visible au-dessus restent au drag parent, qui
+    /// peut ainsi refermer la surface d'un glissement. Bord INCONNU ⇒ tout lui
+    /// revient (fail-safe : un swipe inerte vaut mieux qu'un `onEnded` jamais
+    /// délivré, qui laisse `gestureAxis` collé et la lecture gelée).
+    static func yieldsToScrollableSurface(hasScrollableSurface: Bool,
+                                          surfaceTopY: CGFloat?,
+                                          dragStartY: CGFloat) -> Bool {
+        guard hasScrollableSurface else { return false }
+        guard let top = surfaceTopY else { return true }
+        return dragStartY >= top
     }
 }

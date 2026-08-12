@@ -137,9 +137,6 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
-    @State private var showStatusBubble = false
-    @State private var selectedStatusEntry: StatusEntry?
-    @State private var moodBadgeAnchor: CGPoint = .zero
 
     // Search and Filters
     @FocusState var isSearching: Bool
@@ -190,9 +187,6 @@ struct ConversationListView: View {
 
     // Invite sheet
     @State var inviteSheetConversation: Conversation? = nil
-
-    // Status republication
-    @State private var republishStatusEntry: StatusEntry? = nil
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
@@ -429,13 +423,20 @@ struct ConversationListView: View {
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
         // rowWidth derives from the actual containing column width (iPad
-        // left column is much narrower than `UIScreen.main.bounds.width`)
-        // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
-        // On iPad the column ratio is roughly 0.38 of the screen, so we
+        // left column is much narrower than the window) minus
+        // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
+        // On iPad the column ratio is roughly 0.38 of the window, so we
         // clamp to that floor explicitly to avoid text overflow.
+        //
+        // Measured against the window, not `UIScreen.main.bounds`: the ratio
+        // is meant to approximate a *column of the app*, and taken against the
+        // display it described a column of space the app does not own in Split
+        // View — the row then budgeted more width than it had and the text it
+        // was sized to protect overflowed anyway.
+        let windowWidth = DeviceLayout.windowSize.width
         let baseWidth = horizontalSizeClass == .regular
-            ? min(UIScreen.main.bounds.width * 0.42, 520)
-            : UIScreen.main.bounds.width - 32
+            ? min(windowWidth * 0.42, 520)
+            : windowWidth - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
@@ -751,21 +752,10 @@ struct ConversationListView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-        .withStatusBubble()
-        .sheet(item: $republishStatusEntry) { entry in
-            StatusComposerView(
-                viewModel: statusViewModel,
-                initialEmoji: entry.moodEmoji,
-                initialText: entry.content,
-                viaUsername: entry.username,
-                repostOfId: entry.id,
-                repostAudioUrl: entry.audioUrl
-            )
-            .presentationDetents([.medium])
-        }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -802,14 +792,6 @@ struct ConversationListView: View {
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
-                }
-            }
-            .overlay {
-                if showStatusBubble, let status = selectedStatusEntry {
-                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble, onRepublish: { entry in
-                        republishStatusEntry = entry
-                    })
-                        .zIndex(200)
                 }
             }
             .overlay { conversationContextMenuOverlay }

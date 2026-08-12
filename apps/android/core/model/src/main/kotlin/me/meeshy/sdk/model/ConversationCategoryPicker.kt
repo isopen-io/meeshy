@@ -1,12 +1,19 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * A conversation category as the picker's decision core needs to reason about it.
  * Only the fields the pure logic reads live here — `color` and other render-only
  * attributes stay out so this stays framework-free.
  *
+ * `@Serializable` so the hydration cache can persist a catalogue snapshot verbatim
+ * (see `CategorySnapshotStore`) — it is the currency the section splitter consumes,
+ * so caching it directly avoids re-mapping the render-only DTO on every cold read.
+ *
  * @property order the display rank; `null` sorts as `0` (iOS `order ?? 0`).
  */
+@Serializable
 data class CategoryOption(
     val id: String,
     val name: String,

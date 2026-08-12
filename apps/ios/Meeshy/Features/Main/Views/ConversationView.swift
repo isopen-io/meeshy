@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import os
 import PhotosUI
-import CoreLocation
 import AVFoundation
 import Contacts
 import MeeshySDK
@@ -72,6 +71,11 @@ struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
     var scrollToBottomTrigger: Int = 0
+    /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
+    /// « dernier message », départ en arrière-plan. Le pont `MessageListView`
+    /// compare l'ancien et le nouveau pour vider l'accumulateur de lecture sans
+    /// attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     var scrollToMessageId: String? = nil
     /// Counter incremented each time a scroll-to-message is requested via the
     /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
@@ -151,6 +155,10 @@ struct ConversationComposerState {
     var isUploading = false
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    var pendingPlace: SharedPlace? = nil
     
     // Language (source language for outgoing messages).
     // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
@@ -256,13 +264,13 @@ struct ConversationView: View {
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
     @StateObject var audioRecorder = AudioRecorderManager()
-    @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
+    @State var scrollButtonAudioIsPlaying = false
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action
     /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
     /// sheet de destinations se présente sans conflit).
     @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
-    
+
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
 
@@ -277,6 +285,15 @@ struct ConversationView: View {
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameTracker()
+
+    /// Publisher stable (référence identique à chaque body eval) : l'inline
+    /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à
+    /// chaque frappe. Le mapping vers le bool dérivé se fait dans la closure
+    /// onReceive (l'id d'attachment non-lu change avec les messages entrants).
+    let scrollButtonAudioStatePublisher = ConversationAudioCoordinator.sharedForTesting
+        .$activeContext
+        .combineLatest(ConversationAudioCoordinator.sharedForTesting.$isPlaying)
+        .eraseToAnyPublisher()
 
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
@@ -330,15 +347,35 @@ struct ConversationView: View {
         persistDraft(text: composerText.text, attachmentRefs: refs)
     }
 
+    /// Hauteur cible du composer, ou `nil` quand il ne faut PAS toucher à
+    /// `composerHeight`.
+    ///
+    /// La safe area n'est ajoutée que si le clavier est absent : quand le clavier
+    /// est visible la safe area bottom passe à 0 et le `GeometryReader` fire à
+    /// chaque frame d'animation, ce qui bouclerait la hauteur sur elle-même.
+    ///
+    /// `static` + inset injecté : la règle est vérifiable sans instancier la View
+    /// ni une fenêtre (doctrine `StoryViewerView.entryStory(of:now:)`).
+    static func resolvedComposerHeight(
+        contentHeight: CGFloat,
+        keyboardHeight: CGFloat,
+        safeAreaBottom: CGFloat
+    ) -> CGFloat? {
+        guard keyboardHeight == 0 else { return nil }
+        return contentHeight + safeAreaBottom
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
-        // N'ajoute la safe area que si le clavier est absent — quand le clavier est visible
-        // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
-        // ce qui provoquerait des mises à jour en boucle de composerHeight.
-        guard keyboardHeight == 0 else { return }
-        let safeBottom = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
-        composerHeight = contentHeight + safeBottom
+        // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
+        // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
+        // scène d'arrière-plan. En Split View / Stage Manager le composer était
+        // alors dimensionné contre l'inset d'une AUTRE fenêtre.
+        guard let height = Self.resolvedComposerHeight(
+            contentHeight: contentHeight,
+            keyboardHeight: keyboardHeight,
+            safeAreaBottom: DeviceLayout.safeAreaBottom
+        ) else { return }
+        composerHeight = height
     }
 
     // MARK: - Computed Properties
@@ -438,7 +475,7 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var encryptionDisclaimer: some View {
-        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.isLoadingInitial {
+        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.paginationPhase.isBlockingSpinnerNeeded {
             VStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "lock.fill")
                     .font(MeeshyFont.relative(14, weight: .bold))
@@ -660,7 +697,6 @@ struct ConversationView: View {
                         .environmentObject(statusViewModel)
                 }
             }
-            .withStatusBubble()
     }
 
     private var bodyWithCovers: some View {
@@ -715,6 +751,16 @@ struct ConversationView: View {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
                     },
+                    onSaveMedia: {
+                        guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                        HapticFeedback.light()
+                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                            kind: attachment.kind,
+                            remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                        ))
+                    },
                     onDeleteMedia: {
                         if let attId = msg.attachments.first?.id {
                             Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
@@ -743,6 +789,25 @@ struct ConversationView: View {
                             let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
                             if success { HapticFeedback.success() }
                             else { HapticFeedback.error() }
+                        }
+                    },
+                    translatingTextLanguages: viewModel.translatingTextLanguages[msg.id] ?? [],
+                    translatingAudioLanguages: viewModel.translatingAudioLanguages[msg.id] ?? [],
+                    translationRequestFailedPublisher: viewModel.translationRequestFailed.eraseToAnyPublisher(),
+                    onRequestTextTranslation: { targetLang, sourceLang in
+                        Task {
+                            await viewModel.requestTextTranslation(
+                                messageId: msg.id, content: msg.content,
+                                sourceLanguage: sourceLang, targetLanguage: targetLang
+                            )
+                        }
+                    },
+                    onRequestAudioTranslation: { targetLang, attachmentId in
+                        Task {
+                            await viewModel.requestAudioTranslation(
+                                messageId: msg.id, attachmentId: attachmentId,
+                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang
+                            )
                         }
                     }
                 )
@@ -815,6 +880,11 @@ struct ConversationView: View {
                 viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
+                // Ouvrir une conversation, c'est en regarder le bas. Le signal
+                // near-bottom ne se déclenche pas ici (l'état naît déjà « au
+                // bas », donc sans transition) — d'où cette demande explicite,
+                // reprise au réveil suivant si les cellules n'ont pas encore paru.
+                scrollState.flushSeenTrigger += 1
                 MessageSocketManager.shared.connect()
 
                 await consumePendingHighlightMessage()
@@ -963,6 +1033,10 @@ struct ConversationView: View {
                 // par iOS) — miroir du D1 story. Rebuild complet : la vérité
                 // est l'état courant du tray.
                 if phase == .background {
+                    // Ce qui était à l'écran a bien été lu : le signaler AVANT
+                    // que l'app ne s'endorme, sinon l'accusé attend le retour
+                    // en avant-plan — ou le démontage de la vue.
+                    scrollState.flushSeenTrigger += 1
                     persistDraftAttachmentsForBackground()
                 }
             }
@@ -1002,11 +1076,10 @@ struct ConversationView: View {
                 // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
                 // possible pendant qu'elle est couverte.
                 composerText.onPersistNeeded = nil
-                // Arrêt déterministe des deux players locaux (scroll-button +
-                // preview d'audio en attente) : sans lui, l'audio continuait
-                // jusqu'au dealloc du @StateObject et la session restait
-                // acquise (refcount) le temps de la libération. Idempotent.
-                scrollButtonAudioPlayer.stop()
+                // Arrêt déterministe du player local (preview d'audio en attente) :
+                // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
+                // la session restait acquise (refcount) le temps de la libération.
+                // Idempotent.
                 pendingAudioPlayer.stop()
                 if audioRecorder.isRecording {
                     audioRecorder.cancelRecording()
@@ -1046,7 +1119,7 @@ struct ConversationView: View {
             // in flight AND no cached messages exist yet. Renders above
             // the (empty) MessageListView so the layout stays stable
             // when the first batch lands and the placeholder fades out.
-            if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+            if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
                 messageSkeletonOverlay
                     .transition(.opacity)
                     .zIndex(1)
@@ -1063,6 +1136,7 @@ struct ConversationView: View {
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
+                flushSeenTrigger: scrollState.flushSeenTrigger,
                 isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
@@ -1290,7 +1364,7 @@ struct ConversationView: View {
             // Connection status banner
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner()
+                ConnectionBanner(activeConversationId: { viewModel.conversationId })
                 Spacer()
             }
             .zIndex(98)
@@ -1452,34 +1526,25 @@ struct ConversationView: View {
     private var isAnonymous: Bool { anonymousSession != nil }
 
     @ViewBuilder
+    // Enfants en AnyView : le type structurel du tuple (branches anonymous /
+    // typing / bande + searchBar) gonflait le mangled name de
+    // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
+    // décodage récursif au 1er rendu SUR DEVICE débordait la pile du main
+    // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
+    // closure du VStack). Même famille que expandedHeaderMidContent — couper
+    // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {
-                anonymousHeaderBar
+                AnyView(anonymousHeaderBar)
             } else if isTyping {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-                    Spacer()
-                    ThemedAvatarButton(
-                        name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, storyState: headerStoryRingState,
-                        avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                        presenceState: headerPresenceState,
-                        moodEmoji: headerMoodEmoji
-                    ) {
-                        isTyping = false
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.sm)
-                .transition(.opacity)
+                AnyView(typingHeaderBar)
             } else {
                 expandedHeaderBand
             }
 
             if headerState.showSearch {
-                searchBar.transition(.move(edge: .top).combined(with: .opacity))
+                AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity)))
             }
 
             Spacer()
@@ -1488,6 +1553,26 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+    }
+
+    private var typingHeaderBar: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
+            Spacer()
+            ThemedAvatarButton(
+                name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                isExpanded: false, storyState: headerStoryRingState,
+                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                presenceState: headerPresenceState,
+                moodEmoji: headerMoodEmoji
+            ) {
+                isTyping = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+        .transition(.opacity)
     }
 
     @ViewBuilder
@@ -1637,21 +1722,23 @@ struct ConversationView: View {
         }
     }
 
-    private var expandedHeaderSearchButton: some View {
-        Button {
+    // AnyView + label extrait en struct NOMINALE : casse la récursion de type
+    // du bouton lui-même (crash stack-overflow du décodeur de métadonnées Swift
+    // au 1er rendu SUR DEVICE, .ips du 2026-07-30 dans
+    // `expandedHeaderSearchButton.getter`). Leçon 5cdde93c4 : couper au niveau
+    // du type qui est décodé — le type structurel (opaques
+    // `adaptiveGlass`/`meeshyTapTarget`, 2 branches #available chacun) reste
+    // scopé au body de `HeaderSearchGlyph`, le Button devient trivial.
+    private var expandedHeaderSearchButton: AnyView {
+        AnyView(Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
             isSearchFocused = true
         } label: {
-            Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 28, height: 28)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
-                .meeshyTapTarget()
+            HeaderSearchGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
         .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
-        .accessibilityIdentifier("conversation.header.search")
+        .accessibilityIdentifier("conversation.header.search"))
     }
 
     private var expandedHeaderBackground: AnyView {
@@ -1747,7 +1834,8 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                 },
                 onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
+                    overlayState.moreSheetInitialItem =
+                        UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                     overlayState.detailSheetMessage = msg
                 },
                 onExpandFullPicker: {
@@ -1917,7 +2005,8 @@ struct ConversationView: View {
             }
         case .more:
             Button {
-                overlayState.moreSheetInitialItem = nil
+                overlayState.moreSheetInitialItem =
+                    UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                 overlayState.detailSheetMessage = msg
             } label: {
                 Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")
@@ -1929,5 +2018,26 @@ struct ConversationView: View {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
         }
+    }
+}
+
+// MARK: - Header Search Glyph (extracted struct to keep the Button's type trivial)
+
+/// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
+/// `meeshyTapTarget`, chacun portant ses 2 branches #available) reste scopé à
+/// ce body au lieu de gonfler le mangled name du Button parent — dont le
+/// décodage récursif débordait la pile du main thread au 1er rendu SUR DEVICE
+/// (.ips 2026-07-30, `expandedHeaderSearchButton.getter`).
+private struct HeaderSearchGlyph: View {
+    let accentColor: String
+    let secondaryColor: String
+
+    var body: some View {
+        Image(systemName: "magnifyingglass")
+            .font(MeeshyFont.relative(13, weight: .semibold))
+            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 28, height: 28)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .meeshyTapTarget()
     }
 }

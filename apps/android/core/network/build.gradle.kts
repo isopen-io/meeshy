@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.core.network"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
@@ -53,6 +53,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)

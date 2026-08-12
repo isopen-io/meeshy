@@ -1,6 +1,7 @@
 import Foundation
 import MeeshySDK
 import UserNotifications
+import os
 
 /// Applique les préférences de notification au moment de la LIVRAISON (app
 /// tuée ou backgroundée) — la NSE tourne dans son propre process et lit le
@@ -24,7 +25,20 @@ enum NSEPreferencesGate {
         guard let data = defaults?.data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey) else {
             return nil
         }
-        return try? JSONDecoder().decode(UserNotificationPreferences.self, from: data)
+        // Sans préférences lisibles, la gate laisse passer la notification
+        // (comportement par défaut) : mieux vaut une notif de trop qu'une notif
+        // manquée, mais l'incident doit être traçable.
+        //
+        // Le `do`/`catch` est inline plutôt que factorisé : ce fichier est aussi
+        // compilé dans le bundle de tests (cf. project.yml), qui n'embarque pas
+        // les helpers de `NSEDataSync`.
+        do {
+            return try JSONDecoder().decode(UserNotificationPreferences.self, from: data)
+        } catch {
+            Logger(subsystem: "me.meeshy.app", category: "nse-prefs-gate")
+                .error("Notification preferences unreadable, delivering with defaults: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     nonisolated static func apply(

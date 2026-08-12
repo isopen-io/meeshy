@@ -175,7 +175,15 @@ public class AudioPlayerManager: ObservableObject {
 
         // Cache audio data in background for next time
         loadTask = Task {
-            _ = try? await CacheCoordinator.shared.audio.data(for: cacheKey)
+            do {
+                _ = try await CacheCoordinator.shared.audio.data(for: cacheKey)
+            } catch is CancellationError {
+                // Piste changée avant la fin du préchargement — nominal.
+            } catch {
+                // Pur préchargement : la lecture en cours n'est pas affectée,
+                // seule la prochaine ouverture repartira du réseau.
+                Logger.cache.error("Audio cache warm-up failed, next playback will re-download: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

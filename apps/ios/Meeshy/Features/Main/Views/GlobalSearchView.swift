@@ -170,11 +170,11 @@ struct GlobalSearchView: View {
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .overlay(alignment: .topTrailing) {
                             if count > 0 {
-                                Text(count > 99 ? "99+" : "\(count)")
+                                Text(NotificationBadge.displayed(count))
                                     // Fixed: micro count-badge positioned via absolute
                                     // .offset/.fixedSize — must not scale with Dynamic Type
                                     // or it clips out of its overlay anchor.
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)

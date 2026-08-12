@@ -101,7 +101,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 )
             }
         }
-        .onChange(of: recorder.isRecording) { isRecording in
+        .adaptiveOnChange(of: recorder.isRecording) { _, isRecording in
             if !isRecording {
                 if recordedURL == nil, let url = recorder.recordedFileURL, recorder.duration >= settings.minimumDuration {
                     recordedURL = url
@@ -177,12 +177,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 durationDisplay
             } else {
                 idlePrompt
-            }
-
-            if let maxDur = settings.maxDuration {
-                Text("\(Int(maxDur))s max")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
             }
         }
     }

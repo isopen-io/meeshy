@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 // MARK: - Presence Refresh Signal
 
@@ -256,7 +257,7 @@ final class PresenceManager: ObservableObject {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            FileManager.default.createDirectoryLogging(at: cacheDir, context: "presence cache dir", logger: Logger.presence)
         }
         return cacheDir.appendingPathComponent(persistFileName)
     }
@@ -264,17 +265,27 @@ final class PresenceManager: ObservableObject {
     private nonisolated static func writeToDisk(_ map: [String: UserPresence]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(map) else { return }
-        try? data.write(to: persistURL, options: .atomic)
+        guard let data = encoder.encodeOrLog(map, field: "presence map", logger: Logger.presence) else { return }
+        do {
+            try data.write(to: persistURL, options: .atomic)
+        } catch {
+            Logger.presence.error("Presence snapshot not persisted, dots restart empty next launch: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private nonisolated static func loadFromDisk() -> [String: UserPresence] {
         let url = persistURL
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url) else { return [:] }
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            Logger.presence.error("Presence snapshot present but unreadable: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let map = try? decoder.decode([String: UserPresence].self, from: data) else { return [:] }
+        guard let map = decoder.decodeOrLog([String: UserPresence].self, from: data, field: "presence map", logger: Logger.presence) else { return [:] }
         // Drop entries older than 24h — claiming someone is online based on
         // day-old data would be actively wrong, but a 15-min gap is fine and
         // still avoids the "all offline on cold start" flash.
@@ -283,4 +294,10 @@ final class PresenceManager: ObservableObject {
             (presence.lastActiveAt ?? .distantPast) >= cutoff
         }
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let presence = Logger(subsystem: "me.meeshy.app", category: "presence")
 }

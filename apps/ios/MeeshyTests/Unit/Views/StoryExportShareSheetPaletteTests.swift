@@ -26,14 +26,14 @@ import MeeshyUI
 final class StoryExportShareSheetPaletteTests: XCTestCase {
 
     /// Seuil WCAG 2.1 AA pour du texte de taille normale.
-    private let aaThreshold: Double = 4.5
+    private var aaThreshold: Double { WCAGContrast.aaThreshold }
 
     /// Fond système d'une feuille en mode sombre (`systemBackground`, dark) —
     /// le substrat sur lequel le voile puis le sélecteur sont composés.
-    private let darkSheetBase = Color(red: 28.0 / 255, green: 28.0 / 255, blue: 30.0 / 255)
+    private var darkSheetBase: Color { WCAGContrast.darkSheetBase }
 
     /// Idem en mode clair.
-    private let lightSheetBase = Color.white
+    private var lightSheetBase: Color { WCAGContrast.lightSheetBase }
 
     // MARK: - Le défaut
 
@@ -152,14 +152,16 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// portait sa propre copie (`ActivityView`), `MediaSaveFlowHost` la sienne
     /// (`MediaShareSheet`) : trois wrappers pour un seul comportement.
     ///
-    /// Les deux fichiers convergés ici sont vérifiés **positivement** ; le
-    /// balayage du reste de l'arbre est une inclusion, pas une égalité, pour
-    /// une raison précise : `TrackingLinkDetailView` est détenu par une PR en
-    /// vol qui le converge, et `StoryViewerView+Content.shareStory()` est du
-    /// code mort sans site d'appel dont la suppression est un nettoyage à part.
-    /// Une égalité virerait au rouge le jour où l'un des deux disparaît —
-    /// c'est-à-dire au moment même où la dette est payée. L'inclusion attrape
-    /// ce qui compte : l'apparition d'un NOUVEAU pont dupliqué.
+    /// Les deux fichiers convergés ici sont vérifiés **positivement**, et le
+    /// balayage du reste de l'arbre est désormais une **égalité**.
+    ///
+    /// Il fut une inclusion tant que deux sites restaient dus :
+    /// `TrackingLinkDetailView` (convergé sur `ShareLink` depuis) et
+    /// `StoryViewerView+Content.shareStory()` (code mort supprimé en 217i).
+    /// Les deux ayant disparu, l'inclusion n'attrapait plus que l'apparition
+    /// d'un nouveau pont ; l'égalité attrape en plus la disparition du pont
+    /// légitime — c'est-à-dire une convergence défaite sans mise à jour de ce
+    /// garde-fou.
     func test_shareSheetIsTheSoleBridgeToUIActivityViewController() throws {
         for converged in ["Features/Main/Views/StoryExportShareSheet.swift",
                           "Features/Main/Components/MediaSaveFlowHost.swift"] {
@@ -172,10 +174,8 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
             )
         }
 
-        let knownRemaining: Set<String> = [
-            "ConversationMediaViews.swift",   // définit ShareSheet — le pont légitime
-            "TrackingLinkDetailView.swift",   // convergence détenue par une PR en vol
-            "StoryViewerView+Content.swift"   // shareStory() : code mort, 0 site d'appel
+        let expectedBridges: Set<String> = [
+            "ConversationMediaViews.swift"   // définit ShareSheet — LE pont légitime
         ]
 
         var offenders: Set<String> = []
@@ -191,10 +191,12 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(
-            offenders.isSubset(of: knownRemaining),
-            "Nouveau pont UIKit vers UIActivityViewController : \(offenders.subtracting(knownRemaining).sorted()). " +
-            "Utiliser ShareSheet dans une .sheet plutôt que d'en dupliquer un."
+        XCTAssertEqual(
+            offenders, expectedBridges,
+            "Le jeu des ponts UIKit vers UIActivityViewController a changé. En trop : " +
+            "\(offenders.subtracting(expectedBridges).sorted()) — utiliser ShareSheet dans une " +
+            ".sheet plutôt que d'en dupliquer un. Manquant : " +
+            "\(expectedBridges.subtracting(offenders).sorted())."
         )
     }
 
@@ -240,66 +242,40 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    // La mesure WCAG elle-même (composition alpha, linéarisation sRGB,
+    // luminance relative, rapport de contraste) vit dans
+    // `MeeshyTests/Helpers/WCAGContrast.swift` — 220i l'y a extraite quand une
+    // deuxième suite de palette en a eu besoin. Ces membres restent comme
+    // façade pour que les sites d'appel de cette suite lisent comme avant.
+
     private func rgba(_ color: Color) -> (r: Double, g: Double, b: Double, a: Double) {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        _ = UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (Double(r), Double(g), Double(b), Double(a))
+        WCAGContrast.rgba(color)
     }
 
-    /// Composition alpha « source over » — ce que fait réellement le compositeur
-    /// quand un `fill` translucide est posé sur un fond opaque.
     private func composite(_ top: Color, over bottom: Color) -> Color {
-        let t = rgba(top)
-        let b = rgba(bottom)
-        return Color(
-            red: t.r * t.a + b.r * (1 - t.a),
-            green: t.g * t.a + b.g * (1 - t.a),
-            blue: t.b * t.a + b.b * (1 - t.a)
-        )
+        WCAGContrast.composite(top, over: bottom)
     }
 
-    /// Luminance relative WCAG 2.1.
     private func luminance(_ color: Color) -> Double {
-        let c = rgba(color)
-        func linear(_ channel: Double) -> Double {
-            channel <= 0.03928 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
+        WCAGContrast.luminance(color)
     }
 
     private func contrastRatio(_ a: Color, _ b: Color) -> Double {
-        let la = luminance(a)
-        let lb = luminance(b)
-        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+        WCAGContrast.ratio(a, b)
     }
 
     private func fmt(_ value: Double) -> String {
-        String(format: "%.2f", value)
+        WCAGContrast.fmt(value)
     }
 
-    /// Deux `Color` rendent-elles la même chose, à un pas de quantification
-    /// 8 bits près ? Comparer les `Color` directement testerait l'égalité
-    /// structurelle de SwiftUI, pas le pixel produit.
     private func rendersIdentically(_ lhs: Color, _ rhs: Color) -> Bool {
-        let l = rgba(lhs)
-        let r = rgba(rhs)
-        let tolerance = 1.0 / 255
-        return abs(l.r - r.r) < tolerance
-            && abs(l.g - r.g) < tolerance
-            && abs(l.b - r.b) < tolerance
-            && abs(l.a - r.a) < tolerance
+        WCAGContrast.rendersIdentically(lhs, rhs)
     }
 
     private func assertSameRendering(
         _ produced: Color, _ expected: Color, _ label: String,
         file: StaticString = #filePath, line: UInt = #line
     ) {
-        let p = rgba(produced)
-        let e = rgba(expected)
-        let tolerance = 1.0 / 255
-        XCTAssertEqual(p.r, e.r, accuracy: tolerance, "\(label) — rouge", file: file, line: line)
-        XCTAssertEqual(p.g, e.g, accuracy: tolerance, "\(label) — vert", file: file, line: line)
-        XCTAssertEqual(p.b, e.b, accuracy: tolerance, "\(label) — bleu", file: file, line: line)
-        XCTAssertEqual(p.a, e.a, accuracy: tolerance, "\(label) — alpha", file: file, line: line)
+        WCAGContrast.assertSameRendering(produced, expected, label, file: file, line: line)
     }
 }

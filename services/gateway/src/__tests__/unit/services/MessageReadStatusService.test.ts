@@ -12,7 +12,7 @@
  * @jest-environment node
  */
 
-import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { MessageReadStatusService, buildCursorFreshnessGuard } from '../../../services/MessageReadStatusService';
 
 // Mock the NotificationService import (used dynamically in markMessagesAsRead)
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -315,6 +315,44 @@ describe('MessageReadStatusService', () => {
       expect(count).toBe(0);
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
+
+    // Régression Prisme lecture-exacte. En mode exact le curseur s'arrête au
+    // préfixe contigu : `lastReadMessageId` pointe le dernier message RÉELLEMENT
+    // lu, alors que `lastReadAt` vaut `now` (l'horloge murale de l'ouverture,
+    // postérieure à TOUS les messages déjà en base). Plancher le compteur sur
+    // `lastReadAt` compterait `createdAt > now` = 0 non-lu — « ouvrir marque tout
+    // lu », exactement le bug que le lot lecture-exacte élimine. Le plancher DOIT
+    // être la position CHRONOLOGIQUE du curseur (`lastReadMessageCreatedAt`) pour
+    // que « le badge reste haut » (design lecture-exacte §3).
+    it('floors the count on the cursor position (lastReadMessageCreatedAt), not the wall-clock lastReadAt', async () => {
+      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z'); // position : dernier message lu
+      const lastReadAt = new Date('2026-05-21T18:00:00Z');               // horloge de l'ouverture
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-exact',
+        participantId: testParticipantId,
+        conversationId: testConversationId,
+        unreadCount: 0,
+        lastReadAt,
+        lastReadMessageCreatedAt,
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId,
+        joinedAt: new Date('2026-04-01T00:00:00Z'),
+      });
+      mockPrisma.message.count.mockResolvedValue(197);
+
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
+
+      expect(count).toBe(197);
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: lastReadMessageCreatedAt },
+        },
+      });
+    });
   });
 
   // ==============================================
@@ -356,6 +394,35 @@ describe('MessageReadStatusService', () => {
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
       expect(result.get(conversationIds[2])).toBe(0);
+    });
+
+    // Même régression que getUnreadCount, sur le chemin batch de la liste de
+    // conversations : le plancher est la position chronologique du curseur, pas
+    // l'horloge murale `lastReadAt`. Sinon le badge de chaque conversation
+    // ouverte en préfixe partiel tombe à 0.
+    it('floors the batch count on the cursor position (lastReadMessageCreatedAt), not lastReadAt', async () => {
+      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z');
+      const lastReadAt = new Date('2026-05-21T18:00:00Z');
+      const joinedAt = new Date('2026-04-01');
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
+        { participantId: testParticipantId, lastReadAt, lastReadMessageCreatedAt },
+      ]);
+      mockPrisma.message.count.mockResolvedValueOnce(4);
+
+      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
+
+      expect(result.get(conversationIds[0])).toBe(4);
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: conversationIds[0],
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: lastReadMessageCreatedAt },
+        },
+      });
     });
 
     it('should return map of zeros on database error', async () => {
@@ -534,6 +601,140 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
 
       expect(row?.lastDeliveredMessageId).toBe(testMessageId2);
+    });
+  });
+
+  describe('buildCursorFreshnessGuard (pure)', () => {
+    const objectIdA = '507f1f77bcf86cd799439010';
+    const createdAt = new Date('2025-01-01T00:00:00.500Z');
+
+    it('orders by createdAt with an ObjectId legacy fallback when a createdAt is known', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastDeliveredMessageId',
+          createdAtField: 'lastDeliveredMessageCreatedAt',
+          messageId: objectIdA,
+          messageCreatedAt: createdAt,
+        })
+      ).toEqual({
+        OR: [
+          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: null },
+          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: { lt: objectIdA } },
+          { lastDeliveredMessageCreatedAt: { lt: createdAt } },
+        ],
+      });
+    });
+
+    it('falls back to the ObjectId-order guard when createdAt is unresolved', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastReadMessageId',
+          createdAtField: 'lastReadMessageCreatedAt',
+          messageId: objectIdA,
+          messageCreatedAt: null,
+        })
+      ).toEqual({
+        OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: objectIdA } }],
+      });
+    });
+
+    it('returns null (no guard) for non-ObjectId ids', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastReadMessageId',
+          createdAtField: 'lastReadMessageCreatedAt',
+          messageId: 'not-an-object-id',
+          messageCreatedAt: createdAt,
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('markMessagesAsReceived — cursor freshness is ordered by message createdAt, not ObjectId string', () => {
+    // A MongoDB ObjectId only encodes creation time to the SECOND; its next 5
+    // bytes are per-process random. Two messages created in the same second on
+    // different gateway processes therefore sort by hex string in an order
+    // unrelated to real recency. The delivered/read cursor must never roll back
+    // to a genuinely OLDER message just because its ObjectId string happens to
+    // sort higher than the message the cursor already records.
+    //
+    // Scenario: `idNewer` was created LATER (createdAt 500ms) but its ObjectId
+    // string sorts BELOW `idOlder` (created earlier, 100ms). Under the old
+    // string-`lt` guard, a late delivery receipt for the older message wins the
+    // comparison `idNewer < idOlder` and rolls the cursor backward. Ordering by
+    // createdAt removes the inversion.
+    const idNewer = '507f1f77bcf86cd799439010';
+    const idOlder = '507f1f77bcf86cd799439999';
+    const tNewer = new Date('2025-01-01T00:00:00.500Z');
+    const tOlder = new Date('2025-01-01T00:00:00.100Z');
+    const createdAtById: Record<string, Date> = { [idNewer]: tNewer, [idOlder]: tOlder };
+
+    const evalClause = (clause: Record<string, any>, row: Record<string, any>): boolean =>
+      Object.entries(clause).every(([field, cond]) => {
+        const current = row[field] ?? null;
+        if (cond === null) return current === null;
+        if (cond && typeof cond === 'object' && 'lt' in cond) {
+          return current !== null && current < cond.lt;
+        }
+        return current === cond;
+      });
+
+    it('does not roll the delivered cursor back to an older same-second message with a higher ObjectId string', async () => {
+      let row: Record<string, any> | null = null;
+
+      mockPrisma.message.findUnique.mockImplementation(async ({ where }: any) => {
+        const createdAt = createdAtById[where.id];
+        return createdAt ? { createdAt } : null;
+      });
+      mockPrisma.conversationReadCursor.findUnique.mockImplementation(async () => row);
+
+      mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
+        if (!row) return { count: 0 };
+        const passes = where.OR ? where.OR.some((clause: any) => evalClause(clause, row!)) : true;
+        if (!passes) return { count: 0 };
+        row = { ...row, ...data };
+        return { count: 1 };
+      });
+      mockPrisma.conversationReadCursor.create.mockImplementation(async ({ data }: any) => {
+        row = { ...data };
+        return row;
+      });
+
+      // The newer message is delivered first (cursor advances to it), then a
+      // late receipt for the older message arrives second.
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idNewer);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idOlder);
+
+      expect(row?.lastDeliveredMessageId).toBe(idNewer);
+    });
+
+    it('still advances the delivered cursor for a genuinely newer same-second message with a lower ObjectId string', async () => {
+      let row: Record<string, any> | null = null;
+
+      mockPrisma.message.findUnique.mockImplementation(async ({ where }: any) => {
+        const createdAt = createdAtById[where.id];
+        return createdAt ? { createdAt } : null;
+      });
+      mockPrisma.conversationReadCursor.findUnique.mockImplementation(async () => row);
+
+      mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
+        if (!row) return { count: 0 };
+        const passes = where.OR ? where.OR.some((clause: any) => evalClause(clause, row!)) : true;
+        if (!passes) return { count: 0 };
+        row = { ...row, ...data };
+        return { count: 1 };
+      });
+      mockPrisma.conversationReadCursor.create.mockImplementation(async ({ data }: any) => {
+        row = { ...data };
+        return row;
+      });
+
+      // The older message is delivered first, then the genuinely newer message
+      // (lower ObjectId string) — the cursor MUST advance to it.
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idOlder);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idNewer);
+
+      expect(row?.lastDeliveredMessageId).toBe(idNewer);
     });
   });
 
@@ -919,6 +1120,52 @@ describe('MessageReadStatusService', () => {
           senderId: { not: testParticipantId }
         })
       );
+    });
+
+    // Rattrapage — « je suis arrivé au dernier message ». Le badge tombe, les
+    // accusés de lecture ne bougent pas d'un pouce.
+    it('rattrapage : fait sauter le curseur au dernier message et remet le compteur à zéro', async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      const msgNewest = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgNewest, {
+        messageIds: [msgSeen],
+        caughtUpToMessageId: msgNewest
+      });
+
+      const cursorWrites = mockPrisma.conversationReadCursor.updateMany.mock.calls
+        .map((c: any[]) => c[0].data)
+        .filter((d: any) => d.lastReadMessageId !== undefined);
+      expect(cursorWrites).toContainEqual(
+        expect.objectContaining({ lastReadMessageId: msgNewest, unreadCount: 0 })
+      );
+    });
+
+    // Le badge et les coches bleues répondent à deux questions différentes.
+    // Vider le premier ne doit RIEN ajouter aux secondes, sinon l'expéditeur
+    // voit « lu » sur des messages que personne n'a affichés.
+    it('rattrapage : ne fige aucun readAt au-delà des messages réellement affichés', async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      const msgNewest = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgNewest, {
+        messageIds: [msgSeen],
+        caughtUpToMessageId: msgNewest
+      });
+
+      const readFreezeWhere = mockPrisma.message.findMany.mock.calls[0][0].where;
+      expect(readFreezeWhere).toEqual(expect.objectContaining({ id: { in: [msgSeen] } }));
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ messageId: msgSeen, readAt: expect.any(Date) })]
+      });
     });
 
     it('exact mode: the delivered freeze stays window-based (delivered = fetched)', async () => {
@@ -3722,6 +3969,33 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
 
+    // Régression Prisme lecture-exacte sur le chemin le plus chaud
+    // (`_updateUnreadCounts` à CHAQUE `message:new`). Le curseur exact s'arrête au
+    // préfixe contigu — position 10:00 — mais `lastReadAt` vaut 18:00 (ouverture).
+    // Deux messages d'autrui existent à 11:00 et 12:00, tous deux ANTÉRIEURS à
+    // `lastReadAt`. Plancher sur `lastReadAt` → 0 (badge effacé à tort) ; plancher
+    // sur la position chronologique → 2 (le badge reste haut).
+    it('floors each participant on the cursor position (lastReadMessageCreatedAt), not the wall-clock lastReadAt', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          lastReadAt: new Date('2024-01-01T18:00:00Z'),
+          lastReadMessageCreatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+      ]);
+      mockCandidates([
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [{ id: 'p1', joinedAt: new Date('2024-01-01T00:00:00Z') }],
+        testConversationId
+      );
+
+      expect(result.get('p1')).toBe(2);
+    });
+
     it("excludes each participant's OWN messages, counting everyone else's (incl. the message sender)", async () => {
       // Two messages above floor: one Alice sent, one p1 sent themselves.
       // For p1: only Alice's counts (own message excluded). For p2: both count.
@@ -3866,6 +4140,41 @@ describe('MessageReadStatusService', () => {
       expect(result.get('p1')).toBe(3);
       // p2 authored every candidate → zero unread, whatever order the rows arrived in.
       expect(result.get('p2')).toBe(0);
+    });
+
+    it('computes the min counting floor without an argument-spread overflow at 100k+ scale (regression)', async () => {
+      // This fires on the hottest path (`_updateUnreadCounts` on EVERY `message:new`).
+      // `floors` carries one entry per participant, so a public/global conversation at the
+      // platform's 100k+ scale would blow `Math.min(...floors)` past V8's argument-spread
+      // ceiling (~131k) → `RangeError: Maximum call stack size exceeded` → swallowed by the
+      // service's catch → an all-ZERO unread map for the whole conversation. A reduce-based
+      // min holds for any group size, so the real counts survive.
+      const PARTICIPANT_COUNT = 200_000; // safely above the spread ceiling in Node 22
+      const baseFloor = Date.parse('2024-01-01T10:00:00Z');
+      // Distinct per-participant floors so the min is a genuine reduction, not a constant.
+      // The OLDEST floor belongs to the last participant (baseFloor − PARTICIPANT_COUNT ms).
+      const participants = Array.from({ length: PARTICIPANT_COUNT }, (_, i) => ({
+        id: `p${i}`,
+        joinedAt: new Date(baseFloor - i),
+      }));
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // One candidate strictly after every floor (so every participant has exactly 1 unread),
+      // sent by someone none of them are, so no own-message cut applies.
+      mockCandidates([{ at: '2024-01-01T12:00:00Z', from: 'someone-else' }]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        participants, testConversationId
+      );
+
+      // The fetch is bounded by the OLDEST floor — proof the min reduction ran, not the
+      // unbounded (undefined) branch and not the swallowed-error zero map.
+      expect(mockPrisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({
+        gt: new Date(baseFloor - (PARTICIPANT_COUNT - 1)),
+      });
+      // Real counts survived (the RangeError path would have made every entry 0).
+      expect(result.size).toBe(PARTICIPANT_COUNT);
+      expect(result.get('p0')).toBe(1);
+      expect(result.get(`p${PARTICIPANT_COUNT - 1}`)).toBe(1);
     });
   });
 
