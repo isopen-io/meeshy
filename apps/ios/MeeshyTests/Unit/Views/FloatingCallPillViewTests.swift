@@ -237,10 +237,13 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    // 2026-08-12 — retour user : le décor de la bannière doit se terminer en
-    // fondu vers le transparent en bas (6 % transparent + zone de dégradé
-    // 20–30 %), jamais en arête nette d'indigo complet.
-    func test_banner_backgroundFadesOutAtBottom() throws {
+    // 2026-08-12 — retour user (second passage, remplace le fondu demandé le
+    // matin même) : la bannière est PLEINEMENT indigo. Pas de voile noir
+    // (l'ancien scrim 40 % la faisait lire comme une « barre noire » sur la
+    // status bar), pas de fondu transparent en bas — un aplat indigo net dont
+    // les arrêts (CallBannerContrast.bannerTop/bannerBottom) portent seuls le
+    // contraste WCAG (CallBannerContrastTests).
+    func test_banner_isFullIndigo_noScrimNoFade() throws {
         let source = try pillSource()
         guard let backgroundRange = source.range(of: ".background("),
               let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
@@ -248,22 +251,30 @@ final class FloatingCallPillViewTests: XCTestCase {
             return
         }
         let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
-        XCTAssertTrue(
-            backgroundBlock.contains(".mask(TopBarBottomFade.gradient)"),
-            "The banner decor (brandGradient + scrim) must be masked by " +
-            "TopBarBottomFade so the bar ends in a transparent fade at its " +
-            "bottom edge instead of a hard indigo line (user feedback 2026-08-12)."
+        XCTAssertFalse(
+            backgroundBlock.contains("TopBarBottomFade"),
+            "No bottom fade on the call banner — the bar must end in a clean " +
+            "indigo edge (user feedback 2026-08-12, superseding the morning's " +
+            "fade request)."
         )
-        guard let maskRange = backgroundBlock.range(of: ".mask(TopBarBottomFade.gradient)"),
-              let safeAreaRange = backgroundBlock.range(of: ".ignoresSafeArea(.container, edges: .top)") else {
-            XCTFail("expected both the fade mask and the safe-area bleed on the banner decor")
-            return
-        }
-        XCTAssertLessThan(
-            maskRange.lowerBound, safeAreaRange.lowerBound,
-            "The fade mask must wrap the decor BEFORE the safe-area bleed so the " +
-            "alpha gradient spans the full decor height (status-bar bleed included) " +
-            "— masking a sub-region would shift the 6%/24% fade bands."
+        XCTAssertFalse(
+            backgroundBlock.contains("Color.black.opacity"),
+            "No black scrim over the banner — the status-bar strip must read " +
+            "as plain indigo, never as a dark band (user feedback 2026-08-12). " +
+            "Contrast comes from the gradient stops, calibrated in " +
+            "CallBannerContrastTests."
+        )
+        XCTAssertTrue(
+            backgroundBlock.contains("CallBannerContrast.bannerTop") &&
+            backgroundBlock.contains("CallBannerContrast.bannerBottom"),
+            "The banner decor must use the calibrated CallBannerContrast " +
+            "stops so the WCAG tests and the shipped gradient can never drift " +
+            "apart."
+        )
+        XCTAssertTrue(
+            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
+            "The indigo decor must keep bleeding under the status bar / " +
+            "Dynamic Island — the call details sit right below the island."
         )
     }
 
@@ -475,42 +486,6 @@ final class FloatingCallPillViewTests: XCTestCase {
             "pillContent must not force an exact height on the pill — that clips " +
             "userInfoSection's text at large accessibility text sizes."
         )
-    }
-}
-
-// MARK: - TopBarBottomFade Value Tests
-
-// 2026-08-12 — retour user : « un dégradé transparent en bas avant d'atteindre
-// l'indigo complet — 6 % en bas de transparent, 20-30 % de dégradé ». Les
-// bandes du fondu sont des valeurs calibrées (masque du décor indigo de la
-// bannière d'appel) — gardées ici contre toute dérive.
-@MainActor
-final class TopBarBottomFadeTests: XCTestCase {
-
-    func test_transparentBottomBand_is6PercentOfHeight() {
-        XCTAssertEqual(TopBarBottomFade.transparentFraction, 0.06, accuracy: 0.0001,
-                       "le bas de la barre doit être totalement transparent sur 6 % de la hauteur")
-    }
-
-    func test_gradientBand_isWithinRequested20To30PercentRange() {
-        XCTAssertGreaterThanOrEqual(TopBarBottomFade.gradientFraction, 0.20,
-                                    "la zone de dégradé doit couvrir au moins 20 % de la hauteur")
-        XCTAssertLessThanOrEqual(TopBarBottomFade.gradientFraction, 0.30,
-                                 "la zone de dégradé ne doit pas dépasser 30 % de la hauteur")
-    }
-
-    func test_maskLocations_areOrderedWithinUnitRange() {
-        XCTAssertGreaterThan(TopBarBottomFade.fadeStartLocation, 0)
-        XCTAssertLessThan(TopBarBottomFade.fadeStartLocation,
-                          TopBarBottomFade.fullyTransparentLocation)
-        XCTAssertLessThan(TopBarBottomFade.fullyTransparentLocation, 1)
-    }
-
-    func test_majorityOfBar_staysFullyOpaque() {
-        // Le fondu ne ronge que le bord bas : plus de la moitié de la hauteur
-        // reste à pleine opacité — le fond indigo de la bannière d'appel,
-        // contre lequel CallBannerContrastTests calibre le scrim.
-        XCTAssertGreaterThanOrEqual(TopBarBottomFade.fadeStartLocation, 0.5)
     }
 }
 

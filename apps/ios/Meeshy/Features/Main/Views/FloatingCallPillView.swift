@@ -44,13 +44,15 @@ enum CallPillStatus: Equatable {
     }
 
     /// Code couleur de l'état : ambre = en attente (sonnerie/connexion),
-    /// rouge = rupture réseau en cours de récupération.
+    /// rouge = rupture réseau en cours de récupération. Le rouge est
+    /// `errorSoft` et non `error` : sur l'aplat indigo de la bannière,
+    /// #F87171 ne tient pas le 3:1 WCAG (CallBannerContrastTests).
     var glyphColor: Color? {
         switch self {
         case .connected:    return nil
         case .ringing:      return MeeshyColors.warning
         case .connecting:   return MeeshyColors.warning
-        case .reconnecting: return MeeshyColors.error
+        case .reconnecting: return CallBannerContrast.errorStateTint
         }
     }
 
@@ -145,26 +147,24 @@ struct FloatingCallPillView: View {
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
         .background(
-            ZStack {
-                MeeshyColors.brandGradient
-                // Scrim calibré par test (CallBannerContrastTests) pour que
-                // tout le contenu (nom, durée, glyphes d'état, boutons)
-                // passe son seuil WCAG contre les deux arrêts du dégradé.
-                Color.black.opacity(CallBannerContrast.scrimOpacity)
-            }
-            // Fondu bas (retour user 2026-08-12) : le décor se termine en
-            // dégradé vers le transparent au lieu d'une arête nette — 6 % du
-            // bas transparent, ~24 % de zone de dégradé, indigo complet
-            // au-dessus (bandes TopBarBottomFade). Posé AVANT
-            // ignoresSafeArea pour que le masque couvre aussi le débord sous
-            // la status bar.
-            .mask(TopBarBottomFade.gradient)
+            // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo.
+            // Plus de voile noir (l'ancien scrim 40 % faisait lire la zone
+            // status bar comme une « barre noire ») ni de fondu transparent
+            // en bas — un aplat indigo net, arrêts 600→800 calibrés WCAG
+            // sans scrim (CallBannerContrastTests : blanc ≥ 6.3:1, glyphes
+            // d'état ≥ 3:1 aux deux arrêts).
+            LinearGradient(
+                colors: [CallBannerContrast.bannerTop, CallBannerContrast.bannerBottom],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             // Immersif façon WhatsApp : la bannière est posée en tête du
             // VStack de compression (CallPresentationLayer), donc SOUS la
             // status bar — seul son décor déborde jusqu'au bord haut du
-            // viewport, sinon la bande status bar laisse voir le contenu
-            // scrollé derrière la barre. Le layout du contenu (contrôles,
-            // avatar) reste dans la safe area.
+            // viewport : l'indigo recouvre la bande status bar / Dynamic
+            // Island, et les détails d'appel (signal, durée) s'affichent
+            // juste sous l'îlot. Le layout du contenu (contrôles, avatar)
+            // reste dans la safe area.
             .ignoresSafeArea(.container, edges: .top)
         )
         .offset(x: pillDragOffset)
@@ -205,10 +205,14 @@ struct FloatingCallPillView: View {
     private var statusLine: some View {
         HStack(spacing: 5) {
             if pillStatus.isConnected {
-                TransientCallSignalGlyph(strength: signalStrength)
+                TransientCallSignalGlyph(strength: signalStrength, errorTint: CallBannerContrast.errorStateTint)
+                // Blanc, pas success : #34D399 ne tient que 3.3:1 contre
+                // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
+                // texte courant (CallBannerContrastTests). L'état « établi »
+                // reste porté par le glyphe signal.
                 Text(formattedDuration)
                     .font(.caption.weight(.medium).monospacedDigit())
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundColor(.white)
             } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
                 Image(systemName: glyph)
                     .font(.caption.weight(.semibold))
@@ -259,11 +263,13 @@ struct FloatingCallPillView: View {
         } label: {
             Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
+                // errorSoft, pas error : #F87171 ne tient pas le 3:1 WCAG
+                // contre l'aplat indigo de la bannière (CallBannerContrastTests).
+                .foregroundColor(callManager.isMuted ? CallBannerContrast.errorStateTint : .white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(callManager.isMuted ? MeeshyColors.error.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(callManager.isMuted ? CallBannerContrast.errorStateTint.opacity(0.2) : Color.white.opacity(0.1))
                 )
         }
         .pressable()
@@ -281,11 +287,13 @@ struct FloatingCallPillView: View {
         } label: {
             Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
+                // indigo200, pas indigo400 : ce dernier ne tient que 2.1:1
+                // contre l'aplat indigo de la bannière (CallBannerContrastTests).
+                .foregroundColor(callManager.isSpeaker ? CallBannerContrast.speakerActiveTint : .white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(callManager.isSpeaker ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
                 )
         }
         .pressable()

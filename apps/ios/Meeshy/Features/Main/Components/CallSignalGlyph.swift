@@ -96,6 +96,15 @@ enum CallSignalStrength: Equatable {
         case .excellent, .good, .connecting: return false
         }
     }
+
+    /// États critiques (rouge) — ceux dont la teinte est surchargée par
+    /// surface via `CallSignalGlyph.errorTint`.
+    var isCritical: Bool {
+        switch self {
+        case .poor, .lost: return true
+        case .excellent, .good, .fair, .connecting: return false
+        }
+    }
 }
 
 // MARK: - Call Signal Glyph
@@ -106,6 +115,11 @@ enum CallSignalStrength: Equatable {
 /// `TransientCallSignalGlyph`.
 struct CallSignalGlyph: View {
     let strength: CallSignalStrength
+    /// Teinte des états critiques (`.poor`/`.lost`) — surchargée par surface :
+    /// `MeeshyColors.error` (#F87171) tient le 3:1 WCAG sur les fonds sombres
+    /// de CallView, mais pas sur l'aplat indigo de la bannière réduite, qui
+    /// passe `CallBannerContrast.errorStateTint` (#FCA5A5).
+    var errorTint: Color = MeeshyColors.error
 
     // Audit P2-iOS-9 — see CallView/IncomingCallView: skip animating
     // repeated bar-strength changes for motion-sensitive users.
@@ -114,7 +128,7 @@ struct CallSignalGlyph: View {
     var body: some View {
         Image(systemName: "cellularbars", variableValue: strength.barsFraction)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(strength.color)
+            .foregroundStyle(strength.isCritical ? errorTint : strength.color)
             .accessibilityLabel(strength.accessibilityLabel)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: strength)
     }
@@ -130,6 +144,8 @@ struct CallSignalGlyph: View {
 /// retirer.
 struct TransientCallSignalGlyph: View {
     let strength: CallSignalStrength
+    /// Voir `CallSignalGlyph.errorTint` — transmis tel quel.
+    var errorTint: Color = MeeshyColors.error
 
     /// Fenêtre de persistance du glyphe VERT après récupération, avant retrait.
     static let recoveryLingerSeconds: UInt64 = 30
@@ -143,7 +159,7 @@ struct TransientCallSignalGlyph: View {
     var body: some View {
         Group {
             if isVisible {
-                CallSignalGlyph(strength: strength)
+                CallSignalGlyph(strength: strength, errorTint: errorTint)
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
             }
         }
