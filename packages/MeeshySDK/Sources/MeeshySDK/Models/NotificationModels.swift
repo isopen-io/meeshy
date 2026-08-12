@@ -868,6 +868,7 @@ extension APINotification {
         )
         return APINotification(
             id: id, userId: userId, type: type, priority: priority,
+            title: title, subtitle: subtitle,
             content: content, actor: actor, context: context,
             metadata: metadata, state: newState, delivery: delivery
         )

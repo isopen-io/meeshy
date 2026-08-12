@@ -1052,6 +1052,114 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
     }
 
+    // MARK: - attachmentStatusUpdated — media consumption tracking
+
+    func test_attachmentStatusUpdated_withPositionFields_recordsMediaConsumptionFraction() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":2500,
+            "durationMs":10000,
+            "percentage":25
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.fraction(for: attachmentId), 0.25)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_completedPlayback_recordsCompleteConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"watched",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":10000,
+            "durationMs":10000,
+            "percentage":100
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.consumption(for: attachmentId)?.complete, true)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_withoutPositionFields_doesNotRecordConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"downloaded",
+            "updatedAt":"2099-12-31T23:59:59.000Z"
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
+    }
+
+    func test_attachmentStatusUpdated_fromOtherParticipant_doesNotRecordMediaConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":8000,
+            "durationMs":10000,
+            "percentage":80
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(
+            MediaConsumptionStore.shared.fraction(for: attachmentId),
+            "Another participant's playback progress must never tint the local user's own view of this attachment"
+        )
+    }
+
     // MARK: - messageReceived clears typing indicator for sender
 
     func test_messageReceived_clearsTypingForSender() async throws {

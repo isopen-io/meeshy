@@ -1,7 +1,7 @@
 import XCTest
 @testable import Meeshy
 
-/// The mood composer is presented as a detented sheet from three separate entry
+/// The mood composer is presented as a detented sheet from four separate entry
 /// points. Two properties have to hold at every one of them, and neither is
 /// expressible from inside the composer itself:
 ///
@@ -97,7 +97,14 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// a bounded look-ahead captures them without parsing Swift. The window is
     /// generous enough to clear the widest call site (six labelled arguments).
     private func presentationSites() throws -> [PresentationSite] {
+        // `RootView` et `iPadRootView` présentent le composer pré-rempli
+        // (republication depuis la bulle de mood) : cet état, mort dans
+        // `ConversationListView`, a remonté aux racines de fenêtre avec l'hôte
+        // unique de la bulle (2026-07-30). Sans ces deux fichiers ici, deux
+        // présentations sur quatre n'étaient plus couvertes du tout.
         let files = [
+            "Meeshy/Features/Main/Views/RootView.swift",
+            "Meeshy/Features/Main/Views/iPadRootView.swift",
             "Meeshy/Features/Main/Views/RootViewComponents.swift",
             "Meeshy/Features/Main/Views/ConversationListView.swift",
         ]
@@ -112,14 +119,15 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         return sites
     }
 
-    func test_allThreeEntryPointsAreDiscovered() throws {
+    func test_allFourEntryPointsAreDiscovered() throws {
         // Guards the look-ahead itself: if a call site is renamed or added and this
         // count is not revisited, the two assertions below would silently stop
         // covering it.
         XCTAssertEqual(
-            try presentationSites().count, 3,
-            "Expected exactly three StatusComposerView presentations (one in RootViewComponents, " +
-            "two in ConversationListView). Update this suite when an entry point is added."
+            try presentationSites().count, 4,
+            "Expected exactly four StatusComposerView presentations (one in RootView, one in " +
+            "iPadRootView, one in RootViewComponents, one in ConversationListView). Update this " +
+            "suite when an entry point is added."
         )
     }
 

@@ -118,6 +118,11 @@ public struct AudioForegroundChip: View {
     /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
     /// piste. Le composer persiste via le `volume` du modèle (0 = muet).
     public let onToggleMute: () -> Void
+    /// Durée de la slide, fournie par le READER (l'overlay la possède) —
+    /// arme le compte à rebours « · M:SS » du crédit défilant. Le composer
+    /// n'en passe pas : son canvas `.edit` n'alimente pas le playhead, un
+    /// compteur y serait un chiffre mort.
+    public let slideDuration: TimeInterval?
 
     @GestureState private var dragOffset: CGSize = .zero
     @Environment(\.colorScheme) private var colorScheme
@@ -127,6 +132,7 @@ public struct AudioForegroundChip: View {
                 mode: Mode = .composer,
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
+                slideDuration: TimeInterval? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {},
                 onToggleMute: @escaping () -> Void = {}) {
@@ -135,6 +141,7 @@ public struct AudioForegroundChip: View {
         self.mode = mode
         self.isSelected = isSelected
         self.isUserMuted = isUserMuted
+        self.slideDuration = slideDuration
         self.onDragEnd = onDragEnd
         self.onTap = onTap
         self.onToggleMute = onToggleMute
@@ -171,9 +178,26 @@ public struct AudioForegroundChip: View {
         HStack(spacing: 8) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
-            AudioForegroundSineWave(paused: isUserMuted)
-                .frame(width: 54, height: 18)
-                .opacity(isUserMuted ? 0.35 : 1.0)
+            // Son de bibliothèque → crédit défilant « titre · @pseudo · M:SS » ;
+            // piste propre (première publication) → sinusoïde, comme toujours.
+            // Le compteur ne s'arme qu'au reader (slideDuration fourni) — le
+            // frame s'élargit alors juste assez pour loger « · M:SS ».
+            switch AudioChipDisplay.resolve(
+                soundId: audioObject.soundId,
+                title: audioObject.name,
+                authorUsername: audioObject.soundAuthorUsername
+            ) {
+            case .marquee(let text):
+                AudioChipMarquee(text: text,
+                                 paused: isUserMuted,
+                                 window: readerPlaybackWindow)
+                    .frame(width: readerPlaybackWindow == nil ? 92 : 124, height: 18)
+                    .opacity(isUserMuted ? 0.55 : 1.0)
+            case .waveform:
+                AudioForegroundSineWave(paused: isUserMuted)
+                    .frame(width: 54, height: 18)
+                    .opacity(isUserMuted ? 0.35 : 1.0)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -220,6 +244,19 @@ public struct AudioForegroundChip: View {
         isUserMuted ? "waveform.slash" : "waveform"
     }
 
+    /// Fenêtre du secteur pour le compteur du marquee — mêmes primitives et
+    /// même fin de fenêtre que `AudioForegroundReaderOverlay.visibleAudios`
+    /// (le compteur atteint 0:00 exactement quand la chip disparaît).
+    /// `nil` hors reader : pas de compteur.
+    private var readerPlaybackWindow: AudioChipPlaybackWindow? {
+        guard let slideDuration else { return nil }
+        return AudioChipPlaybackWindow(
+            startTime: audioObject.startTime.map(TimeInterval.init),
+            duration: audioObject.duration.map(TimeInterval.init),
+            isBackground: audioObject.isBackground == true,
+            slideDuration: slideDuration)
+    }
+
     private var strokeColor: Color {
         isSelected
             ? MeeshyColors.indigo400
@@ -262,6 +299,57 @@ public struct AudioForegroundChip: View {
     }
 }
 
+/// Mini-waveform de badge : barres statiques dessinées depuis les samples
+/// réels de la piste (~80 extraits à la composition), sinusoïde animée en
+/// repli quand la piste n'en porte pas (payloads antérieurs). Atome pur —
+/// paramètres opaques, aucune décision produit.
+@MainActor
+public struct StoryWaveformBadgeView: View {
+    public let samples: [Float]
+    public let paused: Bool
+
+    public init(samples: [Float], paused: Bool = false) {
+        self.samples = samples
+        self.paused = paused
+    }
+
+    public var body: some View {
+        if samples.isEmpty {
+            AudioForegroundSineWave(paused: paused)
+        } else {
+            Canvas { ctx, size in
+                let bars = Self.downsample(samples, to: 24)
+                let barWidth = size.width / CGFloat(bars.count)
+                let centerY = size.height / 2
+                for (index, sample) in bars.enumerated() {
+                    let x = CGFloat(index) * barWidth + barWidth / 2
+                    let height = max(2, CGFloat(sample) * size.height * 0.9)
+                    ctx.fill(
+                        Path(roundedRect: CGRect(x: x - barWidth * 0.3,
+                                                 y: centerY - height / 2,
+                                                 width: barWidth * 0.6,
+                                                 height: height),
+                             cornerRadius: barWidth * 0.3),
+                        with: .color(.white.opacity(0.9))
+                    )
+                }
+            }
+        }
+    }
+
+    /// Downsample par MAX de bucket — le max préserve les pics visuels que la
+    /// moyenne écraserait. Pur + testable.
+    nonisolated public static func downsample(_ samples: [Float], to buckets: Int) -> [Float] {
+        guard buckets > 0, samples.count > buckets else { return samples }
+        let bucketSize = Double(samples.count) / Double(buckets)
+        return (0..<buckets).map { bucket in
+            let start = Int(Double(bucket) * bucketSize)
+            let end = min(samples.count, Int(Double(bucket + 1) * bucketSize))
+            return samples[start..<max(start + 1, end)].max() ?? 0
+        }
+    }
+}
+
 /// Onde sinusoïdale animée — TimelineView pour ne pas re-render le parent à
 /// chaque frame (sinon toutes les vues observant le ViewModel scintillent).
 @MainActor
@@ -296,6 +384,46 @@ struct AudioForegroundSineWave: View {
                            style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
             }
         }
+    }
+}
+
+/// Onde animée COMPACTE du header du reader : posée à la suite de la note
+/// musicale, elle signale qu'un audio de fond accompagne la story — la note
+/// dit la présence, l'onde dit que ça joue.
+///
+/// Taille imposée par construction : le `Canvas` sous-jacent s'étirerait à
+/// tout l'espace disponible dans un `HStack` sans cadre explicite.
+///
+/// Décorative pour VoiceOver : la note musicale voisine porte déjà le label
+/// « Audio de fond », une seconde annonce serait redondante.
+///
+/// Reduce Motion (système OU override in-app) fige l'onde sur sa silhouette
+/// courante plutôt que d'animer en boucle — même doctrine que
+/// `ReelAudioBackdrop`.
+@MainActor
+public struct StoryHeaderAudioWaveform: View {
+
+    public let width: CGFloat
+    public let height: CGFloat
+    /// Gel demandé par l'appelant (lecture en pause côté reader).
+    public let paused: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    public init(width: CGFloat = 26, height: CGFloat = 10, paused: Bool = false) {
+        self.width = width
+        self.height = height
+        self.paused = paused
+    }
+
+    public var body: some View {
+        AudioForegroundSineWave(
+            paused: paused || MeeshyMotion.shouldReduce(system: systemReduceMotion,
+                                                        userForced: userForcedReduceMotion)
+        )
+        .frame(width: width, height: height)
+        .accessibilityHidden(true)
     }
 }
 
@@ -339,7 +467,10 @@ public struct AudioForegroundReaderOverlay: View {
                     canvasSize: geo.size,
                     mode: .reader,
                     isSelected: false,
-                    isUserMuted: muteRegistry.isMuted(audio.id),
+                    isUserMuted: Self.chipShowsMuted(
+                        viewerMuted: muteRegistry.isMuted(audio.id),
+                        audio: audio),
+                    slideDuration: slideDuration,
                     onTap: {
                         HapticFeedback.light()
                         StoryReaderAudioMuteRegistry.shared.toggle(audio.id)
@@ -367,6 +498,19 @@ public struct AudioForegroundReaderOverlay: View {
         Self.visibleAudios(in: foregroundAudios,
                            elapsed: elapsedTime,
                            slideDuration: slideDuration)
+    }
+
+    /// État muet AFFICHÉ par le chip reader — pur, extrait pour tests.
+    ///
+    /// Deux sources de silence coexistent et l'icône doit refléter l'OU des
+    /// deux : le mute du VIEWER (tap sur le chip, per-session, registry) et le
+    /// mute de l'AUTEUR (`volume == 0` persisté au modèle — le mixer tient
+    /// alors la piste à zéro quoi qu'il arrive). Sans la seconde, une piste
+    /// coupée par l'auteur affichait une onde animée « audible » que rien ne
+    /// faisait sonner.
+    public static func chipShowsMuted(viewerMuted: Bool,
+                                      audio: StoryAudioPlayerObject) -> Bool {
+        viewerMuted || audio.isMuted
     }
 
     /// Filtre pur (extrait pour tests).

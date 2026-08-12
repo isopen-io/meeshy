@@ -91,13 +91,26 @@ struct StoryGestureOverlayView: View {
 
     /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
-    private let holdThresholdSeconds: TimeInterval = 0.2
+    ///
+    /// 0,45 s — proche du seuil d'un long-press iOS (0,5 s). À 0,2 s, valeur
+    /// posée le 2026-05-21, la navigation par tap devenait inatteignable : un
+    /// tap humain POSÉ (par opposition à un flick sec) dure couramment 150 à
+    /// 300 ms, donc franchissait le seuil et armait le hold. L'utilisateur
+    /// visait la story suivante et obtenait une pause avec le chrome masqué
+    /// (report user 2026-07-27 : « le tap sur la partie gauche et droite ne
+    /// permet plus d'aller vers l'arrière ni vers la story suivante »).
+    private let holdThresholdSeconds: TimeInterval = 0.45
     /// Fenêtre pendant laquelle deux taps centrés comptent pour un double tap.
     private let doubleTapWindowSeconds: TimeInterval = 0.3
     /// Marge horizontale/verticale autorisée avant qu'un drag soit considéré
     /// comme un swipe (et donc ignoré par cet overlay — laissé au drag
     /// gesture parent qui gère le dismiss).
-    private let dragSlopPixels: CGFloat = 14
+    ///
+    /// 24 px ≈ 8 pt, l'ordre de grandeur de la tolérance d'un tap iOS. À 14 px
+    /// (moins de 5 pt), le tremblement naturel du doigt suffisait à requalifier
+    /// un tap en drag : le geste était rendu au parent et la navigation
+    /// annulée sans que rien ne le signale.
+    private let dragSlopPixels: CGFloat = 24
 
     @State private var touchStartTime: Date? = nil
     @State private var touchStartLocation: CGPoint = .zero
@@ -659,25 +672,34 @@ struct StoryComposerBarView: View {
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
     /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    /// `place` non-nil = un lieu a été choisi via le picker et voyage jusqu'à
+    /// l'envoi, exactement comme n'importe quel autre message/commentaire.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
 
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
+    @State private var pendingPlace: SharedPlace? = nil
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin via `emojiToInject`).
+    @State private var composerIsFocused: Bool = false
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: replyingToStoryComment?.authorColor ?? accentColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { focused in
+                composerIsFocused = focused
                 if focused {
                     isComposerEngaged = true
                     // Keyboard opening → dismiss emoji panel
@@ -694,6 +716,7 @@ struct StoryComposerBarView: View {
                 }
             },
             onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -743,11 +766,11 @@ struct StoryComposerBarView: View {
                     )
                 )
             },
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
                 ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
             onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
             onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
@@ -755,7 +778,7 @@ struct StoryComposerBarView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onShowAttachments: {
@@ -821,6 +844,12 @@ struct StoryComposerBarView: View {
                 commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
             }
         }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
+            }
+        }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             Task {
                 commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
@@ -829,13 +858,43 @@ struct StoryComposerBarView: View {
         }
     }
 
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
+    /// est une interaction utilisateur : il engage le composer
+    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
+    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
+    /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
+    /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
+    /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
+    /// fichiers routés vers le staging commentaire existant (spec 2026-07-30).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        isComposerEngaged = true
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                emojiToInject = block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
+            }
+        }
+    }
+
     /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
     /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
+    /// Une réponse à une story part comme un message : elle porte donc le lieu
+    /// choisi exactement comme n'importe quel autre message (une story est un
+    /// post de type STORY côté gateway — même route `/posts/:id/comments`).
     private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
+        let place = pendingPlace
+        pendingPlace = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || media != nil else { return }
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -848,7 +907,7 @@ struct StoryComposerBarView: View {
         // à l'ouverture de la réponse (cf. makeStoryCommentRow).
         let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
         replyingToStoryComment = nil
-        sendComment(trimmed, effectFlags, parentId, media)
+        sendComment(trimmed, effectFlags, parentId, media, place)
     }
 
     @discardableResult
@@ -934,14 +993,25 @@ struct StoryCardView: View {
     /// `StoryRenderer.slideTransitionTravelFraction`.
     let openingSlideFraction: CGFloat
     let isRevealActive: Bool
-    let bigReactionEmoji: String?
-    let bigReactionPhase: Int
-    let heartBouncePulse: Int
+    /// Réaction en vol tuile → cœur (remplace la big reaction 100 pt) — écrit
+    /// par cette vue (Layer 9 : arrivée, fin de vol) et lu (préférence du
+    /// cœur → `heartFrame`), d'où le `@Binding`.
+    @Binding var reactionFlight: StoryReactionFlight?
+    /// Cadre du bouton cœur dans `StoryScrubSpace`, publié par le Sidebar via
+    /// `StoryHeartFrameKey` et capté ici (`.onPreferenceChange`) — cible du vol.
+    @Binding var heartFrame: CGRect
+    /// Tique à l'arrivée du vol (Layer 9 `onArrived`) — d'où le `@Binding`
+    /// (avant : simple `let`, jamais muté depuis cette vue).
+    @Binding var heartBouncePulse: Int
 
     // Sidebar inputs
     let storyReactionCount: Int
     let storyCurrentUserHasReacted: Bool
     let storyCommentCount: Int
+    /// Voir `StoryViewerView.storyCommentCountReconciledPulse` — forwarded
+    /// verbatim, ne tique QUE sur la réconciliation d'ouverture, jamais sur
+    /// une activité temps réel.
+    let storyCommentCountReconciledPulse: Int
     let storyShareCount: Int
     let storyViewCount: Int
     let storyRepostCount: Int
@@ -953,6 +1023,10 @@ struct StoryCardView: View {
     /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
     /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
     let storyHasBackgroundAudio: Bool
+    /// Contenu à droite de la note (crédit défilant d'un son de bibliothèque
+    /// ou onde d'une piste propre) + fenêtre du fond qui arme le compteur de
+    /// temps restant — même règle de descente en primitive Equatable.
+    let headerBackgroundAudioDisplay: AudioChipHeaderModel
     /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
     /// du menu « … ». Même règle de descente en primitive que ci-dessus.
     let storyHasAudioTranscript: Bool
@@ -996,8 +1070,9 @@ struct StoryCardView: View {
     @Binding var isComposerEngaged: Bool
     @Binding var hasComposerContent: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu ouvert plein écran au tap d'une pastille de position (Layer 6.6).
+    @Binding var readerFullscreenPlace: StoryReaderPlaceWrapper?
     @Binding var isPresented: Bool
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var showReportSheet: Bool
@@ -1071,7 +1146,12 @@ struct StoryCardView: View {
     @State private var stallIndicatorGraceTask: Task<Void, Never>?
 
     // Closures — actions on the parent view
-    let triggerStoryReaction: (String) -> Void
+    /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
+    /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
+    let triggerStoryReaction: (String, CGRect?) -> Void
+    /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
+    /// neutralise la navigation du canvas).
+    let onScrubStateChanged: (Bool) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
     /// Unified-timeline gate : the canvas reports whether its PRIMARY video is
@@ -1083,11 +1163,10 @@ struct StoryCardView: View {
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
     let goToNext: () -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
@@ -1471,6 +1550,17 @@ struct StoryCardView: View {
             }
 
             // === Background audio badge ===
+            //
+            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
+            // FOND (directive user 2026-07-30) : depuis que le header affiche la
+            // note musicale suivie de l'onde animée, ce chip répétait la même
+            // information au milieu de l'image. Les chips du canvas restent
+            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
+            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
+            //
+            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
+            // morceau et crédite son auteur — une attribution que le header, qui
+            // ne dit que la présence, ne porte pas.
             if let audio = currentStory?.backgroundAudio {
                 VStack {
                     Spacer()
@@ -1580,6 +1670,29 @@ struct StoryCardView: View {
                 .allowsHitTesting(!isComposerEngaged)
             }
 
+            // === Layer 6.6: Location badge tap targets ===
+            // Au-dessus du gesture overlay (même règle que les chips audio) :
+            // le tap d'une pastille de lieu ouvre la carte au lieu de
+            // naviguer. Réplique le cadrage EXACT du canvas visible (frame
+            // `canvasFitSize` + scale/offset carte, même ressort) pour que
+            // les cibles tombent sur les badges dessinés par
+            // `StoryLocationLayer` — la zone vient de `badgeFrame`, la mesure
+            // partagée avec le rendu.
+            if let story = currentStory,
+               let locations = story.storyEffects?.locationObjects,
+               !locations.isEmpty {
+                StoryLocationReaderTapOverlay(locations: locations, onTap: { place in
+                    HapticFeedback.light()
+                    pauseTimer()
+                    readerFullscreenPlace = StoryReaderPlaceWrapper(place: place)
+                })
+                .frame(width: canvasFitSize.width, height: canvasFitSize.height)
+                .scaleEffect(readerCanvasFraming.scale)
+                .offset(y: readerCanvasFraming.offset.height)
+                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
+                .allowsHitTesting(!isComposerEngaged)
+            }
+
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
@@ -1596,13 +1709,13 @@ struct StoryCardView: View {
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
                     hasBackgroundAudio: storyHasBackgroundAudio,
+                    headerAudioDisplay: headerBackgroundAudioDisplay,
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
-                    storyTimeRemaining: storyTimeRemaining,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
@@ -1634,7 +1747,7 @@ struct StoryCardView: View {
             .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 7.5: Floating comments overlay (Instagram-style) ===
-            // Rendered BEFORE the sidebar / composer / bigReaction blocks so
+            // Rendered BEFORE the sidebar / composer / reaction flight blocks so
             // SwiftUI ZStack z-orders it BENEATH the story controls — user
             // can still tap React / Reply / mute / settings while comments
             // are visible. Background story stays interactable (tap to pause,
@@ -1652,6 +1765,12 @@ struct StoryCardView: View {
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
                     .clipped()
                     .transition(.opacity)
+                    // Même scheme que le header/sidebar (Layer 7/8) : sans lui
+                    // le texte des réponses restait blanc fixe, illisible sur un
+                    // fond de story clair/blanc — seul un halo protégeait
+                    // jusqu'ici, insuffisant sur un fond proche du blanc pur
+                    // (capture user 2026-08-11).
+                    .environment(\.colorScheme, readerChromeScheme)
             }
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
@@ -1676,6 +1795,7 @@ struct StoryCardView: View {
                     currentStory: currentStory,
                     currentGroup: currentGroup,
                     storyCommentCount: storyCommentCount,
+                    storyCommentCountReconciledPulse: storyCommentCountReconciledPulse,
                     storyShareCount: storyShareCount,
                     storyViewCount: storyViewCount,
                     storyRepostCount: storyRepostCount,
@@ -1696,9 +1816,9 @@ struct StoryCardView: View {
                     showExportShareSheet: $showExportShareSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
-                    repostStoryComposerSource: $repostStoryComposerSource,
                     isPresented: $isPresented,
                     triggerStoryReaction: triggerStoryReaction,
+                    onScrubStateChanged: onScrubStateChanged,
                     pauseTimer: pauseTimer,
                     loadStoryComments: loadStoryComments
                 )
@@ -1735,19 +1855,28 @@ struct StoryCardView: View {
             .allowsHitTesting(chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
 
-            // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
-            if let emoji = bigReactionEmoji {
-                Text(emoji)
-                    // Doctrine 84i : emoji de réaction hero décoratif (100pt) animé en burst
-                    // (scaleEffect/offset) → taille figée ; déjà accessibilityHidden ci-dessous.
-                    .font(.system(size: 100))
-                    .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
-                    .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
-                    .offset(y: bigReactionPhase == 2 ? -280 : 0)
-                    .rotationEffect(.degrees(bigReactionPhase == 1 ? -6 : (bigReactionPhase == 2 ? 12 : 0)))
-                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+            // === Layer 9: Reaction flight (tuile agrandie → cœur, ≤ 1 s) ===
+            if let flight = reactionFlight {
+                StoryReactionFlightView(
+                    flight: flight,
+                    target: heartFrame,
+                    onArrived: { heartBouncePulse += 1 },
+                    onFinished: { reactionFlight = nil }
+                )
+                // Identité PAR VOL : sans elle, une deuxième réaction envoyée
+                // dans les 750ms de la première ne fait que muter la vue déjà
+                // montée (structural identity) — `@State progress` reste à 1,
+                // `onAppear` ne re-tique jamais (aucun mouvement, aucun
+                // rebond), et l'`asyncAfter` du premier vol efface l'overlay
+                // en avance (revue fix round 1, 2026-08-11).
+                .id(flight.id)
+                // Même garde que les autres calques flottants (header, rail,
+                // composer, pickers plein écran) : le canvas gonfle le ZStack
+                // parent au-delà du viewport, un calque non borné s'y étale
+                // avant de se faire rogner par le `.clipped()` final
+                // (StoryOverlayWidthPinGuardTests).
+                .frame(maxWidth: geometry.size.width)
+                .zIndex(50)
             }
 
             // NOTE: Live comments overlay (Instagram-style) is rendered by
@@ -1862,7 +1991,7 @@ struct StoryCardView: View {
                 EmojiFullPickerSheet(
                     style: .dark,
                     onReact: { emoji in
-                        triggerStoryReaction(emoji)
+                        triggerStoryReaction(emoji, nil)
                     },
                     onDismiss: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -1870,6 +1999,13 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Borné au viewport RÉEL, jamais `.infinity` : le canvas gonfle
+                // la largeur intrinsèque du ZStack parent au-delà de l'écran
+                // (~480 pt vs 402 pt sur iPhone 16 Pro), et un calque non borné
+                // s'y étale avant de se faire rogner aux deux bords par le
+                // `.clipped()` final. Même pin que le header, le rail et le
+                // composer.
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(100)
             }
@@ -1890,11 +2026,12 @@ struct StoryCardView: View {
                         // le reader se re-rend dès l'arrivée de la traduction.
                         onSelectLanguageOverride(code)
                     },
-                    onTranslate: { code in
+                    onTranslate: { code, force in
                         Task {
                             await StoryInteractionService().requestTranslation(
                                 storyId: story.id,
-                                targetLanguage: code
+                                targetLanguage: code,
+                                force: force
                             )
                         }
                     },
@@ -1904,6 +2041,11 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Idem : sans ce pin, la feuille remplissait les ~480 pt du
+                // ZStack gonflé par le canvas et perdait ~39 pt de chaque côté
+                // sous le `.clipped()` — titre amputé à gauche, boutons
+                // « Traduire » coupés à droite (bug user 2026-07-27).
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
@@ -1915,13 +2057,24 @@ struct StoryCardView: View {
         // sidebar + composer) to EXACTLY the viewport size we were handed
         // in `geometry`. Without this, any child with an intrinsic size
         // bigger than the proposed size — a long translated text line, a
-        // foreground media at natural pixel size, a 100pt big-reaction
-        // emoji during animation — silently grows the enclosing ZStack
+        // foreground media at natural pixel size, a reaction flight emoji
+        // during its tuile→cœur animation — silently grows the enclosing ZStack
         // and pushes the right-side action sidebar (and bottom composer)
         // off-screen, making them untappable. `.clipped()` discards
         // anything that still tries to draw past the bounds rather than
         // letting it leak into adjacent UI.
         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+        // Espace de coordonnées commun du système scrub (cœur + tuiles des
+        // barres réaction/langues), posé APRÈS le pin de taille ci-dessus —
+        // pas avant : le ZStack racine peut gonfler à ~480pt (canvas
+        // UIViewRepresentable) avant d'être ramené aux 402pt du viewport, et
+        // un `.coordinateSpace` posé sur le ZStack non-pinné aurait une
+        // origine décalée d'environ (480-402)/2 ≈ 44pt vers la gauche par
+        // rapport à Layer 9 (rendu, lui, à l'intérieur du `.frame` pinné) —
+        // tuiles, position du doigt et cible du vol partageraient alors des
+        // repères désalignés (revue fix round 1, 2026-08-11).
+        .coordinateSpace(name: StoryScrubSpace.name)
+        .onPreferenceChange(StoryHeartFrameKey.self) { heartFrame = $0 }
         .clipped()
         // Délai de grâce du spinner+% : on n'arme `showProgressOverlay` qu'au
         // bout de 200 ms si la slide est sous 20 % de progression. La backdrop
@@ -2116,6 +2269,12 @@ struct StoryCardView: View {
                 .overlay(Capsule().fill(Color.black.opacity(0.35)))
         )
     }
+
+    // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
+    // retiré du canvas (directive user 2026-07-30) : le header du reader porte
+    // désormais ce même signal — note musicale puis onde animée — juste après
+    // l'heure de publication. Une piste de fond sans entrée bibliothèque n'a
+    // donc plus rien à afficher au milieu de l'image.
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
     // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.

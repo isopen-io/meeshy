@@ -38,10 +38,23 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     user: { findUnique: jest.fn() },
     conversation: { findUnique: jest.fn() },
     message: { findUnique: jest.fn() },
+    // Audience du post declaree PUBLIC : les notifications a destinataire unique du
+    // fil (reponse, like, reaction sur commentaire) verifient desormais que le
+    // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
+    // la langue et le payload push — pas sur le droit de voir.
+    post: { findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
     userPreferences: { findUnique: jest.fn() },
     userConversationPreferences: { findMany: jest.fn().mockResolvedValue([]) },
   };
-  return { PrismaClient: jest.fn(() => mockPrisma) };
+  return {
+    PrismaClient: jest.fn(() => mockPrisma),
+    // Le module d'ACL compare `post.visibility` a l'enum Prisma : le double doit
+    // l'exposer, sinon toute comparaison vaut `undefined` et la garde refuse.
+    PostVisibility: {
+      PUBLIC: 'PUBLIC', PRIVATE: 'PRIVATE', FRIENDS: 'FRIENDS',
+      ONLY: 'ONLY', EXCEPT: 'EXCEPT', COMMUNITY: 'COMMUNITY',
+    },
+  };
 });
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';

@@ -820,3 +820,13 @@ code ne traitait ce cas comme intentionnel, juste « non creusé ».
 - **Reste ouvert (inchangé + additions)** : tout ce qui précède ; parité iOS/Android déjà
   CLÔTURÉE (retry-on-failure, vérifié à jour sur ce tip — rien à refaire) ; device-test 2
   appareils réels (hors périmètre sandbox) ; PR d'autres sessions à suivre séparément.
+
+> **Note de réconciliation (merge 2026-08-12)** : ce fix Vague 41 (branche
+> `claude/modest-cori-bosv4t`, champ `reason?: CallEndReason`) a été implémenté
+> indépendamment sur main sous le nom `endReasonHint?: CallEndReason` (Vague 42,
+> voir `tasks/calls-fonctionnel-todo.md` ~l.3040), puis étendu au chemin anonyme
+> (`AuthHandler.handleDisconnection`, Vague 43+). Le code et les tests de main
+> (`callService-leaveCall.test.ts` — describe `endReasonHint`, 4 cas ;
+> `CallEventsHandler-disconnect.test.ts` — transmission du hint) subsument
+> intégralement le diff de cette branche ; la résolution du merge a retenu la
+> version main. Cette section reste comme trace d'audit de la découverte.

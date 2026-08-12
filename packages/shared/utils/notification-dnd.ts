@@ -26,6 +26,25 @@ export type DndPreferences = {
 const DAY_MAP: readonly DndDay[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 /**
+ * Zero-pad an `H:MM` / `HH:MM` wall-clock string so the lexicographic overnight
+ * detection and membership comparisons below stay correct.
+ *
+ * The write boundaries (`NotificationPreferenceSchemas.update`, the gateway's
+ * `notification-schemas`, `isValidDndTime`) all enforce the canonical
+ * `HH:MM` form, but documents persisted through the historically-lax shared
+ * update schema (single-digit hour, e.g. `"9:00"`) may still exist. Without
+ * padding, `"9:00" > "17:00"` is `true` (char `'9'` > `'1'`), flipping a plain
+ * daytime window into a spurious overnight block. Padding is local, pure and
+ * idempotent on already-canonical values; a shape it cannot parse is returned
+ * verbatim, preserving the prior behavior for genuinely malformed input.
+ */
+function padWallClock(value: string): string {
+  const [hours, minutes] = value.split(':');
+  if (hours === undefined || minutes === undefined) return value;
+  return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+}
+
+/**
  * True when `nowUtc` falls inside the user's DND window, evaluated in the
  * user's local wall-clock. The `dndDays` filter is tested against the local
  * day the window STARTED: the morning tail (00:00 → end) of an overnight
@@ -38,8 +57,8 @@ export function isWithinDnd(prefs: DndPreferences, nowUtc: Date = new Date()): b
   const local = new Date(nowUtc.getTime() + offsetMinutes * 60_000);
   const currentTime = `${local.getUTCHours().toString().padStart(2, '0')}:${local.getUTCMinutes().toString().padStart(2, '0')}`;
 
-  const start = prefs.dndStartTime;
-  const end = prefs.dndEndTime;
+  const start = padWallClock(prefs.dndStartTime);
+  const end = padWallClock(prefs.dndEndTime);
   const overnight = start > end;
   const inWindow = overnight
     ? currentTime >= start || currentTime < end

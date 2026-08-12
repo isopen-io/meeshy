@@ -61,6 +61,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.compatibility.versionCodeCompat
 
 /**
  * About screen (feature-parity §L) — the Android port of the iOS `AboutView`. Pure Compose glue over
@@ -74,9 +75,7 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val presentation = remember {
         val pkg: PackageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        val versionCode =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pkg.longVersionCode
-            else @Suppress("DEPRECATION") pkg.versionCode.toLong()
+        val versionCode = pkg.versionCodeCompat()
         AboutPresentationBuilder.build(
             AboutParams(
                 versionName = pkg.versionName.orEmpty(),

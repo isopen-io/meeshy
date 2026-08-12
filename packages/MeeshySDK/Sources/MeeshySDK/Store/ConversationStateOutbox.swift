@@ -266,6 +266,22 @@ public actor ConversationStateOutbox {
         Array(pending.values).sorted { $0.createdAt < $1.createdAt }
     }
 
+    /// outbox-03 — purge de logout (miroir de `EngagementOutbox.purgeAll`).
+    /// Sans elle, les rows réhydratées au boot suivant sont flushées
+    /// `force: true` sous le token du compte suivant — y compris les
+    /// mutations destructives `.leave`/`.deleteForUser`.
+    public func purgeAll() {
+        pending.removeAll()
+        indexByCoalescingKey.removeAll()
+        do {
+            try db.write { db in
+                try db.execute(sql: "DELETE FROM conversation_outbox_tasks")
+            }
+        } catch {
+            convStateOutboxLog.error("purgeAll failed, conversation outbox rows retained: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     public func markCompleted(_ id: UUID) {
         guard let task = pending.removeValue(forKey: id) else { return }
         indexByCoalescingKey.removeValue(forKey: CoalescingKey(convId: task.convId, key: task.coalescingKey))

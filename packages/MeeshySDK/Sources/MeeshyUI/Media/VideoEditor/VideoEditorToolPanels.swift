@@ -336,7 +336,7 @@ struct TrimController: View {
             }
 
             if !viewModel.mode.isPro {
-                Text("Astuce : poignées disponibles sur la timeline principale.")
+                Text(String(localized: "videoEditor.trim.handles_hint", defaultValue: "Astuce : poignées disponibles sur la timeline principale.", bundle: .module))
                     .font(.system(size: 10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -443,7 +443,7 @@ struct SplitController: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "scissors")
-                    Text("Diviser au point de lecture")
+                    Text(String(localized: "videoEditor.split.at_playhead", defaultValue: "Diviser au point de lecture", bundle: .module))
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
@@ -465,7 +465,7 @@ struct SplitController: View {
                     }
                 }
             } else {
-                Text("Placez la tête de lecture puis divisez la vidéo en segments.")
+                Text(String(localized: "videoEditor.split.instructions", defaultValue: "Placez la tête de lecture puis divisez la vidéo en segments.", bundle: .module))
                     .font(.system(size: 11))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity)
@@ -478,7 +478,7 @@ struct SplitController: View {
         let isSelected = viewModel.selectedSegmentID == segment.id
         let count = viewModel.document.segments.count
         return VStack(spacing: 5) {
-            Text("Segment \(index + 1)")
+            Text(String(localized: "videoEditor.split.segment", defaultValue: "Segment \(index + 1)", bundle: .module))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
@@ -617,7 +617,7 @@ struct CropController: View {
                 .padding(.vertical, 2)
             }
             if let recommended = viewModel.context.preferredCropRatio {
-                Text("Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)")
+                Text(String(localized: "videoEditor.captions.recommended", defaultValue: "Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)", bundle: .module))
                     .font(.system(size: 10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -664,7 +664,7 @@ struct RotateController: View {
                 Text("\(viewModel.document.rotationQuarterTurns * 90)°")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
-                Text("Rotation")
+                Text(String(localized: "videoEditor.rotation", defaultValue: "Rotation", bundle: .module))
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
             }
@@ -855,7 +855,7 @@ struct AudioController: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Son")
+                Text(String(localized: "videoEditor.audio.sound", defaultValue: "Son", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()

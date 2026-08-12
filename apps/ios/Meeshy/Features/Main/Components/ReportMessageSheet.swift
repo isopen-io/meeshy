@@ -98,6 +98,12 @@ struct ReportMessageSheet: View {
                                 .fontWeight(.semibold)
                         }
                     }
+                    // Same defect as the detail-sheet submit button: while
+                    // submitting, the label collapses to a bare `ProgressView`,
+                    // leaving a *toolbar* control with no accessible name — the
+                    // hardest kind to identify by touch exploration. Reuses the
+                    // visible key, so voice and screen stay identical.
+                    .accessibilityLabel(String(localized: "report.message.send", defaultValue: "Send", bundle: .main))
                     .disabled(selectedType == nil || isSubmitting)
                 }
             }

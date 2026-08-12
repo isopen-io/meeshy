@@ -25,6 +25,31 @@ extension iPadRootView {
         }
     }
 
+    // MARK: - Sync Pill
+
+    /// Ouvre la cible d'une entrée de la pastille de synchronisation. Miroir
+    /// iPad de `RootView.handleSyncPillTap` : sans lui, `ConnectionBanner` était
+    /// construit sans `onItemTap` et taper « Envoi dans <conversation> » ne
+    /// menait nulle part (la pastille se contentait d'avancer d'un cran).
+    func handleSyncPillTap(_ source: OutboxUIItem.Source) {
+        switch source {
+        case .conversation(let id):
+            guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
+                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
+                return
+            }
+            openConversation(conv)
+        case .post(let id):
+            rightPanelRoute = .postDetail(id, nil, showComments: false)
+        case .story:
+            // Parité RootView : ouvrir une story exige un StoryIntent + un
+            // StoryNotificationContext que la pastille ne transporte pas.
+            Logger.messages.info("syncPill tap: story open not yet supported")
+        case .unknown:
+            break
+        }
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ deepLink: DeepLink?) {
@@ -77,6 +102,8 @@ extension iPadRootView {
             rightPanelRoute = .profile
         case .userLinks:
             rightPanelRoute = .links
+        case .hashtag(let tag):
+            rightPanelRoute = .hashtagResults(tag: tag)
         case .magicLink:
             break
         }

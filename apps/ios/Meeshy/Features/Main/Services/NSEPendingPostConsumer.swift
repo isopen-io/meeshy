@@ -16,9 +16,17 @@ import os
 final class NSEPendingPostConsumer {
     static let shared = NSEPendingPostConsumer()
 
-    private static let appGroupId = "group.me.meeshy.apps"
-    private static let pendingDirName = "nse_pending_posts"
+    private nonisolated static let appGroupId = "group.me.meeshy.apps"
+    private nonisolated static let pendingDirName = "nse_pending_posts"
     private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-post-consumer")
+
+    /// Dossier de staging App Group — exposé pour le wipe de logout
+    /// (appgroup-01), miroir de `SharePendingSendConsumer.directoryURL()`.
+    nonisolated static func directoryURL() -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+            .appendingPathComponent(pendingDirName, isDirectory: true)
+    }
 
     private init() {}
 

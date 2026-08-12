@@ -26,6 +26,15 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// so the displayed count survives an app restart instead of reverting to the
     /// last REST snapshot. Decoded lazily via the `reactionSummary` accessor.
     public var reactionSummaryJson: Data?
+    /// Lieu partagé (JSON `SharedPlace`), hissé depuis `APIPostComment.location`.
+    /// Stocké en texte comme sur `MessageRecord.locationJson` (Task 15) —
+    /// même mécanique, même colonne texte plutôt que blob.
+    public var locationJson: String?
+    /// Médias du commentaire (JSON `[APIPostMedia]`), miroir de
+    /// `PostRecord.mediaJson`. Réécrit par `comment:media-updated` quand le
+    /// pipeline audio a produit la transcription et les variantes TTS : sans
+    /// cette colonne l'enrichissement ne survivait pas au redémarrage.
+    public var mediaJson: Data?
 
     public init(
         id: String, postId: String, parentId: String?,
@@ -35,7 +44,9 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         translatedContent: String?,
         likeCount: Int, replyCount: Int, effectFlags: Int,
         createdAt: Date, changeVersion: Int64,
-        reactionSummaryJson: Data? = nil
+        reactionSummaryJson: Data? = nil,
+        locationJson: String? = nil,
+        mediaJson: Data? = nil
     ) {
         self.id = id
         self.postId = postId
@@ -53,6 +64,8 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.createdAt = createdAt
         self.changeVersion = changeVersion
         self.reactionSummaryJson = reactionSummaryJson
+        self.locationJson = locationJson
+        self.mediaJson = mediaJson
     }
 }
 
@@ -66,6 +79,24 @@ public extension CommentRecord {
                                                       field: "comment reactionSummaryJson", id: id)
         else { return [:] }
         return decoded
+    }
+
+    /// Médias décodés depuis `mediaJson`, vide quand le commentaire n'en porte
+    /// pas. Décodage paresseux, symétrique de `reactionSummary` et miroir de
+    /// la lecture de `PostRecord.mediaJson`.
+    var media: [APIPostMedia] {
+        guard let mediaJson,
+              let decoded = JSONDecoder().decodeOrLog([APIPostMedia].self, from: mediaJson,
+                                                      field: "comment mediaJson", id: id)
+        else { return [] }
+        return decoded
+    }
+
+    /// Position décodée depuis `locationJson`, `nil` quand le commentaire n'en
+    /// porte pas. Décodage paresseux, symétrique de `reactionSummary`.
+    var location: SharedPlace? {
+        guard let locationJson, let data = locationJson.data(using: .utf8) else { return nil }
+        return JSONDecoder().decodeOrLog(SharedPlace.self, from: data, field: "comment locationJson", id: id)
     }
 }
 

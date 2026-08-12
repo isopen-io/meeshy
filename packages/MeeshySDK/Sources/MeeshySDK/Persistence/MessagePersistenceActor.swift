@@ -66,6 +66,7 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
         && a.forwardedFromJson == b.forwardedFromJson
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
         && a.callSummaryJson == b.callSummaryJson && a.effectFlags == b.effectFlags
+        && a.locationJson == b.locationJson
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras
 }
@@ -176,6 +177,20 @@ public actor MessagePersistenceActor {
             try db.execute(sql: "DELETE FROM pending_ids")
             try db.execute(sql: "DELETE FROM messages")
             try db.execute(sql: "DELETE FROM outbox")
+            try db.execute(sql: "DELETE FROM send_attempts")
+        }
+    }
+
+    /// startup-03 — compte des lignes outbox encore éligibles à l'envoi
+    /// (.pending/.inflight). Lu par `DependencyContainer.wireOutboxLogoutHook`
+    /// AVANT `clearAllMessagesForLogout()` pour signaler à l'utilisateur la
+    /// perte de travail quand la purge suit une invalidation de session
+    /// serveur (jamais sur un logout volontaire).
+    public func pendingOutboxCount() async throws -> Int {
+        try await dbWriter.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue].contains(Column("status")))
+                .fetchCount(db)
         }
     }
 
@@ -436,7 +451,12 @@ public actor MessagePersistenceActor {
             let updated = try MessageRecord
                 .filter(exhaustedLocalIds.contains(Column("localId")))
                 .filter(stuckStates.contains(Column("state")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    // grdb-04 — invariant : toute écriture visible bump
+                    // changeVersion, sinon le diff O(1) du MessageStore
+                    // (Equatable localId+changeVersion) l'avale.
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
             }
         } catch {
@@ -494,7 +514,9 @@ public actor MessagePersistenceActor {
             guard !orphanIds.isEmpty else { return false }
             let updated = try MessageRecord
                 .filter(orphanIds.contains(Column("localId")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
             }
         } catch {
@@ -710,16 +732,39 @@ public actor MessagePersistenceActor {
 
     // MARK: - Translation / Transcription writes
 
+    /// grdb-06 — deux schémas d'id coexistent pour la même (message, langue) :
+    /// le fallback socket horodaté (`m1_en_1700…`) et l'id serveur stable
+    /// (`m1-en`). Un save par PK sur un id différent viole l'index UNIQUE
+    /// `idx_trans_msg_lang` ; l'upsert cible cet index pour REMPLACER la row,
+    /// quel que soit l'id sous lequel elle était arrivée.
+    nonisolated private static func upsertTranslationRecord(_ record: TranslationRecord, in db: Database) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO message_translations
+                (id, messageLocalId, messageServerId, targetLanguage,
+                 translatedContent, translationModel, confidenceScore,
+                 sourceLanguage, receivedAt)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(messageLocalId, targetLanguage) DO UPDATE SET
+                id = excluded.id,
+                messageServerId = excluded.messageServerId,
+                translatedContent = excluded.translatedContent,
+                translationModel = excluded.translationModel,
+                confidenceScore = excluded.confidenceScore,
+                sourceLanguage = excluded.sourceLanguage,
+                receivedAt = excluded.receivedAt
+            """,
+            arguments: [
+                record.id, record.messageLocalId, record.messageServerId,
+                record.targetLanguage, record.translatedContent,
+                record.translationModel, record.confidenceScore,
+                record.sourceLanguage, record.receivedAt
+            ]
+        )
+    }
+
     public func saveTranslation(_ translation: TranslationRecord) throws {
-        try dbWriter.write { db in try translation.save(db) }
-    }
-
-    public func saveTranscription(_ transcription: TranscriptionRecord) throws {
-        try dbWriter.write { db in try transcription.save(db) }
-    }
-
-    public func saveAudioTranslation(_ audio: AudioTranslationRecord) throws {
-        try dbWriter.write { db in try audio.save(db) }
+        try dbWriter.write { db in try Self.upsertTranslationRecord(translation, in: db) }
     }
 
     // MARK: - Edit / Delete / Reactions / ViewOnce
@@ -1331,11 +1376,11 @@ public actor MessagePersistenceActor {
     public func updateLayout(localId: String, width: Double, height: Double,
                               lastLineWidth: Double, lineCount: Int, timestampInline: Bool,
                               epoch: Int, maxWidth: Double) throws {
-        var affectedConversationId: String?
+        // grdb-04 — pas de bump changeVersion, pas de refresh : le cache de
+        // layout est relu au prochain fetch et un refresh ici était un no-op
+        // prouvé (MessageRecord == ne compare que localId+changeVersion) qui
+        // coûtait fetch+compare à chaque écriture de layout.
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
-                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET cachedBubbleWidth = ?, cachedBubbleHeight = ?,
@@ -1345,9 +1390,6 @@ public actor MessagePersistenceActor {
                 arguments: [width, height, lastLineWidth, lineCount, timestampInline,
                            epoch, maxWidth, localId]
             )
-        }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
@@ -1609,6 +1651,16 @@ public actor MessagePersistenceActor {
                 // persisted so the rich call bubble survives a cache reload.
                 let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
 
+                // Lieu partagé — même mécanique que callSummaryJson : le
+                // pipeline ne stocke pas l'`APIMessage` brut, seulement des
+                // colonnes dérivées, donc une position affichée en ligne mais
+                // jamais hissée ici disparaîtrait au prochain chargement du
+                // cache (relaunch, pull-to-refresh).
+                let locationJson: String? = api.location.flatMap { place in
+                    encoder.encodeOrLog(place, field: "locationJson", id: api.id)
+                        .flatMap { String(data: $0, encoding: .utf8) }
+                }
+
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
                     var flags = MessageEffectFlags()
@@ -1821,6 +1873,11 @@ public actor MessagePersistenceActor {
                     existing.callSummaryJson = staleLiveCallSnapshot
                         ? existing.callSummaryJson
                         : (callSummaryJson ?? existing.callSummaryJson)
+                    // Coalesce like attachmentsJson/replyToJson above: a
+                    // refresh that omits `location` (older gateway payload,
+                    // partial socket event) must not erase a position already
+                    // persisted from an earlier, richer snapshot.
+                    existing.locationJson = locationJson ?? existing.locationJson
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
@@ -1912,7 +1969,8 @@ public actor MessagePersistenceActor {
                         cachedTimeString: timeString,
                         changeVersion: 0,
                         callSummaryJson: callSummaryJson,
-                        recipientCount: api.recipientCount ?? 0
+                        recipientCount: api.recipientCount ?? 0,
+                        locationJson: locationJson
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)
@@ -1942,7 +2000,7 @@ public actor MessagePersistenceActor {
                             sourceLanguage: t.sourceLanguage,
                             receivedAt: now
                         )
-                        try record.save(db)
+                        try Self.upsertTranslationRecord(record, in: db)
                     }
                 }
             }
@@ -1954,8 +2012,38 @@ public actor MessagePersistenceActor {
     }
 
     /// Delete all message records for a conversation (called on 403/access revoked).
+    /// grdb-09 — cascade aux tables enfants scopées sur les messages de la
+    /// conversation : une conversation révoquée ne laisse aucun orphelin.
     public func deleteAll(conversationId: String) async throws {
         try await dbWriter.write { db in
+            let ids = try String.fetchAll(
+                db,
+                sql: "SELECT localId FROM messages WHERE conversationId = ?",
+                arguments: [conversationId]
+            )
+            if !ids.isEmpty {
+                let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+            }
             _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
@@ -2040,8 +2128,12 @@ public actor MessagePersistenceActor {
     public static let defaultRetentionMonths: Int = 6
 
     /// Deletes all message records whose `createdAt` is older than
-    /// `retentionMonths` months from now. Also removes associated rows in
-    /// `message_translations` and `translation_cache` to avoid orphans.
+    /// `retentionMonths` months from now. Also cascades to the child rows
+    /// keyed on those messages — `message_translations`,
+    /// `message_transcriptions`, `message_audio_translations`, `pending_ids`,
+    /// `send_attempts` (grdb-02/grdb-09). `translation_cache` lives in the
+    /// OTHER SQLite file (AppDatabase/meeshy.sqlite, GC au boot par
+    /// `loadTranslationCaches`) and is out of scope here.
     ///
     /// Returns the number of message rows deleted so callers can log it.
     ///
@@ -2068,20 +2160,29 @@ public actor MessagePersistenceActor {
             """, arguments: [cutoff])
 
             if !expiredIds.isEmpty {
-                // Delete associated translation cache entries
+                // grdb-02 — cascade sur la clé RÉELLE (messageLocalId, pas
+                // messageId) et uniquement sur les tables de CETTE base.
                 let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
                 try db.execute(
-                    sql: "DELETE FROM translation_cache WHERE messageId IN (\(placeholders))",
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
                     arguments: StatementArguments(expiredIds)
                 )
-
-                // Delete message_translations if the table exists
-                if try db.tableExists("message_translations") {
-                    try db.execute(
-                        sql: "DELETE FROM message_translations WHERE messageId IN (\(placeholders))",
-                        arguments: StatementArguments(expiredIds)
-                    )
-                }
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
             }
 
             // Delete the messages themselves

@@ -74,8 +74,8 @@ struct CallsTab: View {
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
                 icon: "phone.arrow.up.right",
-                title: String(localized: "calls.empty.title", defaultValue: "Aucun appel recent", bundle: .main),
-                subtitle: String(localized: "calls.empty.subtitle", defaultValue: "Vos appels recus, manques, annules et emis apparaitront ici.", bundle: .main)
+                title: String(localized: "calls.empty.title", defaultValue: "Aucun appel récent", bundle: .main),
+                subtitle: String(localized: "calls.empty.subtitle", defaultValue: "Vos appels reçus, manqués, annulés et émis apparaîtront ici.", bundle: .main)
             )
         } else {
             list
@@ -209,7 +209,7 @@ private struct CallJournalRow: View, Equatable {
             : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
         var parts = [name, accessibilityDirection, type, record.startedAt.relativeTimeString]
         if !record.durationLabel.isEmpty {
-            let durationWord = String(localized: "calls.detail.duration", defaultValue: "Duree", bundle: .main)
+            let durationWord = String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main)
             parts.append("\(durationWord) \(record.durationLabel)")
         }
         return parts.joined(separator: ", ")

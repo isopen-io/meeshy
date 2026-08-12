@@ -50,6 +50,11 @@ const makePrismaMock = () => ({
   conversation: {
     findUnique: jest.fn(),
   },
+  // Audience du post declaree PUBLIC : les notifications a destinataire unique du
+  // fil (reponse, like, reaction sur commentaire) verifient desormais que le
+  // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
+  // la langue et le payload push — pas sur le droit de voir.
+  post: { findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
   userPreferences: {
     findUnique: jest.fn().mockResolvedValue(null),
   },
@@ -143,6 +148,7 @@ describe('Push data — clés de navigation commentId / friendRequestId', () => 
       commenterId: ACTOR_ID,
       commentExcerpt: 'Magnifique coucher de soleil',
       postType: 'STORY',
+      visibility: 'PUBLIC',
     });
 
     const byType = {

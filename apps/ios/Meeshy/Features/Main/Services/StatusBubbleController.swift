@@ -89,7 +89,7 @@ final class StatusBubbleController: ObservableObject {
 
 // MARK: - View Modifier
 
-private struct StatusBubbleOverlayModifier: ViewModifier {
+struct StatusBubbleOverlayModifier: ViewModifier {
     // `StatusBubbleController` is a `.shared` singleton, so reference it
     // directly instead of via `@EnvironmentObject`. The environment-object
     // form is fatal ("No ObservableObject of type … found") whenever
@@ -100,10 +100,41 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
     // FeedCommentsSheet, …) without re-injecting, which crashed on present.
     @StateObject private var controller = StatusBubbleController.shared
 
+    /// Présentation dans laquelle un hôte ancêtre rend déjà la bulle, `nil`
+    /// si aucun. Cf. `shouldRenderOverlay`.
+    @Environment(\.statusBubbleHostPresentation) private var hostPresentation
+    @Environment(\.isPresented) private var isPresented
+
+    /// Un SEUL overlay doit être rendu par présentation.
+    ///
+    /// Ce mécanisme ne déduplique qu'entre ANCÊTRE et DESCENDANT (l'environment
+    /// ne se propage qu'aux enfants) — il est AVEUGLE aux hôtes FRÈRES. D'où la
+    /// règle de placement (gardée par `StatusBubbleHostPlacementTests`) : un
+    /// hôte non modal UNIQUE par fenêtre (`RootView`, `iPadRootView`) ; seules
+    /// les présentations modales (sheet / fullScreenCover) posent le leur.
+    /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
+    /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
+    /// bug 2026-07-30).
+    ///
+    /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
+    /// `.sheet` a son propre `PresentationHostingController` et l'overlay du
+    /// présentateur y est invisible — elle doit donc rendre le sien. Les
+    /// `EnvironmentValues` traversent les feuilles (contrairement aux
+    /// `EnvironmentObject`), d'où la comparaison avec `isPresented` plutôt
+    /// qu'un simple drapeau booléen, qui aurait privé les feuilles de bulle.
+    nonisolated static func shouldRenderOverlay(hostPresentation: Bool?, isPresented: Bool) -> Bool {
+        hostPresentation != isPresented
+    }
+
     func body(content: Content) -> some View {
-        ZStack {
+        let rendersOverlay = Self.shouldRenderOverlay(
+            hostPresentation: hostPresentation, isPresented: isPresented
+        )
+        return ZStack {
             content
-            if let entry = controller.currentEntry {
+                .environment(\.statusBubbleHostPresentation, rendersOverlay ? isPresented : hostPresentation)
+            if rendersOverlay, let entry = controller.currentEntry {
                 StatusBubbleOverlay(
                     status: entry,
                     anchorPoint: controller.anchor,
@@ -121,9 +152,9 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
             // overlay ZStack — et NON via `.confirmationDialog` système — parce que
             // `.withStatusBubble()` est appliqué sur ~15 écrans potentiellement
             // co-présents : une présentation modale UIKit partagée déclencherait des
-            // conflits « already presenting ». Comme la bulle, seule l'instance au
-            // sommet est visible ; les copies couvertes restent invisibles.
-            if let entry = controller.replyConfirmationEntry {
+            // conflits « already presenting ». Comme la bulle, il n'y en a qu'un
+            // seul par présentation — cf. `shouldRenderOverlay`.
+            if rendersOverlay, let entry = controller.replyConfirmationEntry {
                 MoodReplyConfirmationOverlay(
                     entry: entry,
                     onReply: {
@@ -225,7 +256,25 @@ private struct MoodReplyConfirmationOverlay: View {
     }
 }
 
+// MARK: - Portée de l'hôte de bulle
+
+/// Présentation dans laquelle un hôte `.withStatusBubble()` rend déjà la bulle.
+/// `nil` = aucun hôte au-dessus dans cette présentation.
+private struct StatusBubbleHostPresentationKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+extension EnvironmentValues {
+    var statusBubbleHostPresentation: Bool? {
+        get { self[StatusBubbleHostPresentationKey.self] }
+        set { self[StatusBubbleHostPresentationKey.self] = newValue }
+    }
+}
+
 extension View {
+    /// Idempotent : appliqué plusieurs fois dans une même présentation, seul
+    /// l'hôte le plus EXTERNE rend l'overlay. Poser ce modificateur sur une vue
+    /// déjà couverte est donc sans effet plutôt que source d'un doublon.
     func withStatusBubble() -> some View {
         modifier(StatusBubbleOverlayModifier())
     }

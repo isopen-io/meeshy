@@ -15,18 +15,27 @@ import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PresenceSnapshotEvent
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserCategoryCatalog
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.theme.otherParticipantUserId
 import javax.inject.Inject
 
 data class ConversationListUiState(
@@ -37,6 +46,13 @@ data class ConversationListUiState(
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
     val currentUserId: String? = null,
+    /**
+     * The signed-in identity, kept alongside [currentUserId] so the preview
+     * card can resolve the Prisme Linguistique ([me.meeshy.sdk.model.MeeshyUser]
+     * implements [me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences])
+     * without a second session read at render time.
+     */
+    val currentUser: MeeshyUser? = null,
     val selectedFilter: ConversationFilter = ConversationFilter.ALL,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
@@ -48,11 +64,41 @@ data class ConversationListUiState(
      * catalogue keeps the list on the pinned/all split, so this is a safe default.
      */
     val categories: List<CategoryOption> = emptyList(),
+    /**
+     * The hard-press preview card's most-recent messages, keyed by conversation
+     * id — populated once on demand ([ConversationListViewModel.loadPreviewMessages])
+     * rather than eagerly for every row. Absent key = not loaded yet (or in
+     * flight); present-but-empty = loaded, genuinely no cached messages.
+     */
+    val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
+    /**
+     * Live `user:status`/`presence:snapshot` frames, keyed by userId — see
+     * [ConversationListViewModel.observePresence]. A userId absent here has no
+     * live presence data yet (a genuinely cold cache, not an error): `ApiConversation
+     * .participants` carries no `isOnline`/`lastActiveAt` fields at all, so there is
+     * no REST-fetched fallback to fall back to, unlike the Contacts roster.
+     */
+    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
     /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
     fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
+
+    /** The preview card's cached messages for [conversationId], or `null` while not yet loaded. */
+    fun previewFor(conversationId: String): List<LocalMessage>? = previewMessages[conversationId]
+
+    /**
+     * The live presence state for [conversation]'s other participant, or `null` for a
+     * group/community/channel/bot conversation, or when nothing has arrived for them yet.
+     * UI wiring (the actual dot on the row/header) is a deliberately deferred follow-up —
+     * see `NOTES.md`/`PROGRESS.md` for this slice.
+     */
+    fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
+        val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
+        val event = presenceByUserId[otherId] ?: return null
+        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
+    }
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -63,11 +109,12 @@ data class ConversationListUiState(
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
+    private val messageRepository: MessageRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
-    categoryRepository: CategoryRepository,
+    private val categoryRepository: CategoryRepository,
     categorySocketManager: CategorySocketManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
@@ -111,7 +158,9 @@ class ConversationListViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(currentUserId = user?.id).withVisible(rawConversations) }
+                _state.update {
+                    it.copy(currentUserId = user?.id, currentUser = user).withVisible(rawConversations)
+                }
             }
         }
 
@@ -146,17 +195,17 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             launch {
                 messageSocketManager.unreadUpdated.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
                 messageSocketManager.messageReceived.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
                 messageSocketManager.conversationUpdated.collect {
-                    repository.refresh()
+                    refreshSilently()
                 }
             }
             launch {
@@ -167,6 +216,32 @@ class ConversationListViewModel @Inject constructor(
             launch {
                 messageSocketManager.participantLeft.collect { event ->
                     ConversationPurge.onParticipantLeft(event, _state.value.currentUserId)?.let(::purge)
+                }
+            }
+        }
+
+        observePresence()
+    }
+
+    /**
+     * Overlays live `user:status`/`presence:snapshot` frames into
+     * [ConversationListUiState.presenceByUserId] — started eagerly here (not lazily
+     * on first row render): [MessageSocketManager]'s flows are hot `SharedFlow`s with
+     * no replay, so a late subscriber genuinely misses events (mirrors the identical
+     * `ContactsListViewModel.observePresence` precedent, `presence-live-contacts-
+     * overlay` slice). UI wiring (the actual dot on the row/header) is a deliberately
+     * deferred follow-up — this slice is the data plumbing only.
+     */
+    private fun observePresence() {
+        viewModelScope.launch {
+            messageSocketManager.userStatus.collect { event ->
+                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
+            }
+        }
+        viewModelScope.launch {
+            messageSocketManager.presenceSnapshot.collect { snapshot ->
+                _state.update {
+                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
                 }
             }
         }
@@ -239,6 +314,51 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.markReadOptimistic(id) }
     }
 
+    /** Marks a conversation unread from the list (context menu, offered only on a read row). */
+    fun markUnread(id: String) {
+        runPrefMutation { repository.markUnreadOptimistic(id) }
+    }
+
+    /**
+     * Reassigns a conversation to the user category [targetCategoryId] (context-menu
+     * "move to category" / drag-to-category, parity iOS `setCategory`). The pure
+     * [ConversationCategoryReassignment] SSOT gates the write: a drop onto the
+     * category the row already sits in is inert (no optimistic write, no outbox row,
+     * no flush), every other target reassigns optimistically and enqueues a snapshot.
+     */
+    fun reassignCategory(id: String, targetCategoryId: String) {
+        when (val outcome =
+            ConversationCategoryReassignment.resolve(prefsOf(id)?.categoryId, targetCategoryId)) {
+            CategoryReassignment.Unchanged -> Unit
+            is CategoryReassignment.AssignTo ->
+                runPrefMutation { repository.setCategoryOptimistic(id, outcome.categoryId) }
+        }
+    }
+
+    /**
+     * Creates a new user category named [name] and assigns [id]'s conversation to
+     * it — the picker field's "create" affordance
+     * ([me.meeshy.sdk.model.CategorySubmit.Create]) driven end-to-end. A blank
+     * [name] is inert (mirrors [ConversationCategoryPicker]'s `canCreate` guard,
+     * which never offers the create row for a blank query, so this only defends
+     * against a stray caller). The new category surfaces reactively through
+     * [categoryRepository]'s stream once created; the assignment reuses
+     * [reassignCategory]'s idempotency guard so it can never no-op here (a
+     * freshly created category can never already be the conversation's current
+     * one). A create failure surfaces [ConversationListUiState.errorMessage]
+     * without touching the conversation's category.
+     */
+    fun createCategoryAndAssign(id: String, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            when (val result = categoryRepository.create(name)) {
+                is NetworkResult.Success -> reassignCategory(id, result.data.id)
+                is NetworkResult.Failure ->
+                    _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
     /**
      * Discards a conversation's unsent draft (context-menu action, offered only on
      * a draft-bearing row). Optimistically drops the draft from state so the row
@@ -258,6 +378,29 @@ class ConversationListViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(drafts = snapshot, errorMessage = e.message).withVisible(rawConversations) }
+            }
+        }
+    }
+
+    /** Conversation ids with an in-flight [loadPreviewMessages] call — guards a double-load. */
+    private val previewLoadingIds = mutableSetOf<String>()
+
+    /**
+     * Loads (once, cache-only) the most recent messages for [conversationId] into
+     * [ConversationListUiState.previewMessages], for the hard-press preview card.
+     * A no-op when the preview is already loaded or already in flight, so
+     * re-opening the same row's menu never re-queries Room. Deliberately never
+     * triggers a network refresh — see [MessageRepository.recentMessages].
+     */
+    fun loadPreviewMessages(conversationId: String) {
+        if (_state.value.previewMessages.containsKey(conversationId)) return
+        if (!previewLoadingIds.add(conversationId)) return
+        viewModelScope.launch {
+            try {
+                val recent = messageRepository.recentMessages(conversationId)
+                _state.update { it.copy(previewMessages = it.previewMessages + (conversationId to recent)) }
+            } finally {
+                previewLoadingIds -= conversationId
             }
         }
     }
@@ -287,6 +430,24 @@ class ConversationListViewModel @Inject constructor(
 
     /** Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]). */
+    /**
+     * Revalidation declenchee par un evenement socket : silencieuse par
+     * construction. Un echec ici (session en cours de teardown — logout, bascule
+     * magic link —, reseau coupe) laisse la liste en cache intacte ; avant cette
+     * garde, un `conversation:updated` recu pendant un logout faisait remonter
+     * ConversationSyncException jusqu'au main thread et TUAIT le process.
+     */
+    private suspend fun refreshSilently() {
+        try {
+            repository.refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Silencieux : la prochaine emission du cache ou le pull-to-refresh
+            // resynchronisera.
+        }
+    }
+
     fun refresh() {
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {

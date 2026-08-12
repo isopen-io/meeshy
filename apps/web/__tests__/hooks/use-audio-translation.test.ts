@@ -215,6 +215,114 @@ describe('useAudioTranslation', () => {
     });
   });
 
+  describe('reactive auto-selection when a translation arrives after mount', () => {
+    it('updates selectedLanguage automatically when a preferred-language translation arrives via socket', () => {
+      let progressiveListener: ((data: any) => void) | undefined;
+      mockOnAudioTranslationsProgressive.mockImplementation((listener) => {
+        progressiveListener = listener;
+        return jest.fn();
+      });
+
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranscription: makeTranscription({ language: 'de' }),
+            userLanguages: ['fr', 'en'],
+            // Pas de initialTranslations : aucune traduction au montage.
+          })
+        )
+      );
+
+      expect(result.current.selectedLanguage).toBe('original');
+
+      act(() => {
+        progressiveListener?.(makeTranslationEventData({ language: 'fr' }));
+      });
+
+      expect(result.current.selectedLanguage).toBe('fr');
+    });
+
+    it('does not override an explicit user selection when a later translation arrives', () => {
+      let progressiveListener: ((data: any) => void) | undefined;
+      mockOnAudioTranslationsProgressive.mockImplementation((listener) => {
+        progressiveListener = listener;
+        return jest.fn();
+      });
+
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranscription: makeTranscription({ language: 'de' }),
+            userLanguages: ['fr', 'en'],
+          })
+        )
+      );
+
+      act(() => {
+        result.current.setSelectedLanguage('original');
+      });
+
+      act(() => {
+        progressiveListener?.(makeTranslationEventData({ language: 'fr' }));
+      });
+
+      expect(result.current.selectedLanguage).toBe('original');
+    });
+
+    it('uses the live transcription language (not a stale/absent mount-time prop) to guard the Prisme "already preferred" rule', () => {
+      let transcriptionListener: ((data: any) => void) | undefined;
+      mockOnTranscription.mockImplementation((listener) => {
+        transcriptionListener = listener;
+        return jest.fn();
+      });
+
+      let progressiveListener: ((data: any) => void) | undefined;
+      mockOnAudioTranslationsProgressive.mockImplementation((listener) => {
+        progressiveListener = listener;
+        return jest.fn();
+      });
+
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            // Pas de initialTranscription : le caller ne l'avait pas encore
+            // au montage (cas courant d'un audio fraîchement envoyé/reçu).
+            userLanguages: ['fr', 'en'],
+          })
+        )
+      );
+
+      // La transcription arrive en DIRECT via le socket : langue originale
+      // 'fr', déjà dans les langues préférées de l'utilisateur.
+      act(() => {
+        transcriptionListener?.({
+          attachmentId: 'attach-1',
+          transcription: {
+            text: 'Bonjour',
+            language: 'fr',
+            confidence: 0.95,
+            segments: [],
+            speakerCount: 1,
+            primarySpeakerId: 'sp-1',
+            senderVoiceIdentified: false,
+            senderSpeakerId: null,
+            speakerAnalysis: null,
+          },
+        });
+      });
+
+      // Puis une traduction anglaise progressive arrive.
+      act(() => {
+        progressiveListener?.(makeTranslationEventData({ language: 'en' }));
+      });
+
+      // Règle Prisme #1 : la langue originale (fr) est déjà préférée -> rester
+      // sur l'original. Doit tenir compte de la transcription LIVE (state),
+      // pas seulement du prop `initialTranscription` (absent ici au montage).
+      expect(result.current.selectedLanguage).toBe('original');
+    });
+  });
+
   describe('currentAudioUrl', () => {
     it('returns attachmentFileUrl for original language', () => {
       const { result } = renderHook(() =>

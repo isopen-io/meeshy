@@ -2274,43 +2274,6 @@ describe('CallEventsHandler', () => {
       jest.useRealTimers();
     });
 
-    // Vague 41 — a grace-expiry auto-leave is a genuine involuntary network
-    // cutoff (the participant's socket died and they never came back), not a
-    // deliberate hangup. leaveCall() must be told so via `reason:
-    // connectionLost` — otherwise it defaults the post-answer leave to
-    // endReason=completed, indistinguishable from a normal "End Call" tap.
-    // That starves retry-on-failure (isRetryableCallFailure only offers
-    // retry on failed/connectionLost) and the callFailureRate KPI of the
-    // one signal that would let them treat a dropped call as a failure.
-    it('tags the grace-expiry auto-leave with reason=connectionLost, not a plain hangup', async () => {
-      jest.useFakeTimers();
-      const leftSession = makeCallSession({ status: 'active' });
-      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
-
-      const activeParticipation = {
-        id: PARTICIPANT_ID,
-        callSessionId: CALL_ID,
-        participantId: PARTICIPANT_ID,
-        callSession: { status: 'active', mode: 'p2p', conversationId: CONV_ID },
-      };
-
-      const { socket, io } = setupWithSocket({
-        callParticipant: {
-          findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
-          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
-        },
-      });
-      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
-
-      await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
-
-      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(
-        expect.objectContaining({ callId: CALL_ID, reason: 'connectionLost' })
-      );
-      jest.useRealTimers();
-    });
-
     it('broadcasts call:ended on grace expiry when status becomes ended', async () => {
       jest.useFakeTimers();
       const leftSession = makeCallSession({ status: 'ended', duration: 45 });
@@ -2475,6 +2438,60 @@ describe('CallEventsHandler', () => {
         callType: 'video',
         callerId: USER_ID,
       }));
+    });
+
+    it('does not create duplicate notifications when called twice for the same call (double-fire race)', async () => {
+      // Simulates two independent terminal paths racing for the same callId —
+      // e.g. the ringing-timeout handler winning the atomic status transition
+      // and calling handleMissedCall, followed moments later by call:leave
+      // observing the already-committed 'missed' status and firing again.
+      const callSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        initiatorId: USER_ID,
+        metadata: { type: 'audio' },
+        initiator: { id: USER_ID, username: 'test', displayName: 'Test', avatar: null },
+        conversation: { id: CONV_ID, identifier: 'c1' },
+      };
+      const { handler } = buildHandler({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(callSession), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      mockCallServiceGetUnrespondedParticipants.mockResolvedValue(['user-a']);
+      const ns = { createMissedCallNotification: jest.fn<any>().mockResolvedValue(undefined) };
+      handler.setNotificationService(ns as any);
+
+      await handler.createMissedCallNotifications(CALL_ID);
+      await handler.createMissedCallNotifications(CALL_ID);
+
+      expect(ns.createMissedCallNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('still notifies a DIFFERENT call after another call was already deduped (isolation)', async () => {
+      const OTHER_CALL_ID = '507f191e810c19729de860ed';
+      const makeSession = (id: string) => ({
+        id,
+        conversationId: CONV_ID,
+        initiatorId: USER_ID,
+        metadata: { type: 'audio' },
+        initiator: { id: USER_ID, username: 'test', displayName: 'Test', avatar: null },
+        conversation: { id: CONV_ID, identifier: 'c1' },
+      });
+      const findUnique = jest.fn<any>()
+        .mockResolvedValueOnce(makeSession(CALL_ID))
+        .mockResolvedValueOnce(makeSession(CALL_ID))
+        .mockResolvedValueOnce(makeSession(OTHER_CALL_ID));
+      const { handler } = buildHandler({
+        callSession: { findUnique, findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      mockCallServiceGetUnrespondedParticipants.mockResolvedValue(['user-a']);
+      const ns = { createMissedCallNotification: jest.fn<any>().mockResolvedValue(undefined) };
+      handler.setNotificationService(ns as any);
+
+      await handler.createMissedCallNotifications(CALL_ID);
+      await handler.createMissedCallNotifications(CALL_ID); // deduped, same callId
+      await handler.createMissedCallNotifications(OTHER_CALL_ID); // distinct callId, not deduped
+
+      expect(ns.createMissedCallNotification).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -4363,11 +4380,18 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).not.toHaveBeenCalled();
     });
 
-    it('returns early when validation fails', async () => {
+    it('emits CALL_EVENTS.ERROR with VALIDATION_ERROR when validation fails', async () => {
       const { socket } = setupWithSocket();
-      mockValidateSocketEvent.mockReturnValue({ success: false });
+      mockValidateSocketEvent.mockReturnValue({ success: false, error: 'Invalid analytics payload' });
       await socket._trigger('call:analytics', { callId: 'bad' });
-      expect(socket.emit).not.toHaveBeenCalled();
+      // Continuous-improvement audit fix — this handler used to silently drop
+      // malformed payloads (`if (!validation.success) return;`), unlike every
+      // other call handler. It must now emit the same VALIDATION_ERROR shape
+      // as call:initiate/join/signal/end/toggle-audio/toggle-video.
+      expect(socket.emit).toHaveBeenCalledWith(
+        'call:error',
+        expect.objectContaining({ code: 'VALIDATION_ERROR', callId: 'bad' })
+      );
     });
 
     it('does not emit any socket event on success (fire-and-forget)', async () => {

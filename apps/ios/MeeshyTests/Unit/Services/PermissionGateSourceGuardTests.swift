@@ -1,4 +1,6 @@
 import XCTest
+import Combine
+import CoreLocation
 @testable import Meeshy
 
 /// Gardes d'analyse de source pour la campagne « demander au bon moment »
@@ -198,6 +200,178 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Un refus doit être expliqué dans l'UI, pas seulement journalisé.")
     }
 
+    /// Une classe `@MainActor` sans `deinit` écrite reçoit une deinit ISOLÉE
+    /// (SE-0466) dont le shim de rétro-déploiement double-libère le scope
+    /// task-local et tue le processus au démontage. Le picker étant une sheet,
+    /// ce chemin est exercé à chaque fermeture. Même signature que le crash
+    /// `ScrollOffsetRelay`.
+    func test_locationPickerModel_isTypeLevelNonisolated() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+
+        XCTAssertTrue(src.contains("nonisolated final class LocationPickerModel"),
+                      "Le `nonisolated` doit vivre sur le TYPE : c'est la seule annotation qui désisole la deinit.")
+        XCTAssertTrue(src.contains("@unchecked Sendable"),
+                      "Un type nonisolated capturé dans des fermetures de delegate doit être Sendable.")
+        XCTAssertFalse(src.contains("@Published var selectedCoordinate"),
+                       "`nonisolated` est refusé sur une propriété enveloppée : les @Published doivent être dépliés.")
+        XCTAssertTrue(src.contains("willSet { objectWillChange.send() }"),
+                      "Le dépliage doit publier sur willSet, exactement comme @Published.")
+    }
+
+    /// CoreLocation délivre un callback d'autorisation dès l'assignation du
+    /// delegate — asynchroniquement sur la runloop, pas pendant `init()`. Le
+    /// recevoir avant que SwiftUI ait installé le `@StateObject` publie une
+    /// modification en plein cycle de rendu.
+    func test_locationPickerModel_doesNotWireCoreLocationFromInit() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let initBody = try body(from: "override init() {", to: "func requestPermission()", in: src)
+        XCTAssertFalse(initBody.contains("manager.delegate = self"),
+                       "Assigner le delegate depuis init() declenche un callback d'autorisation avant que le @StateObject soit installe.")
+        let request = try body(from: "func requestPermission() {", to: "func updateSelectedLocation", in: src)
+        XCTAssertTrue(request.contains("manager.delegate = self"),
+                      "Le cablage doit se faire au premier usage, de maniere idempotente.")
+    }
+
+    /// À l'ouverture d'un picker déjà autorisé, `requestPermission()` et le
+    /// callback d'autorisation initial tirent chacun un `requestLocation()` :
+    /// CoreLocation annule alors la première requête et répond
+    /// `kCLErrorLocationUnknown`, laissant l'UI attendre un relevé qui
+    /// n'arrivera pas.
+    func test_locationPicker_guardsAgainstConcurrentFixRequests() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        XCTAssertTrue(src.contains("isAwaitingFix"),
+                      "Deux requestLocation() concurrents font annuler la premiere par CoreLocation, qui repond kCLErrorLocationUnknown.")
+        let fail = try body(from: "func locationManager(_ manager: CLLocationManager, didFailWithError",
+                            to: "func locationManagerDidChangeAuthorization", in: src)
+        XCTAssertTrue(fail.contains("isAwaitingFix = false"),
+                      "Un echec doit rearmer la garde, sinon plus aucun releve ne peut partir.")
+    }
+
+    /// Le crash est corrigé sans trace. Ces breadcrumbs sont ce qui rendra un
+    /// éventuel re-crash diagnosticable au lieu d'imposer une seconde correction
+    /// à l'aveugle.
+    func test_locationPicker_leavesBreadcrumbsOnEveryAuthorizationStep() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        for step in ["breadcrumb.request", "breadcrumb.authorization", "breadcrumb.fix",
+                     "breadcrumb.failure", "breadcrumb.selection"] {
+            XCTAssertTrue(src.contains(step),
+                          "Etape \(step) non tracee : un re-crash resterait indiagnosticable.")
+        }
+    }
+
+    // MARK: - Partage de position (Task 11/12, 2026-07-29)
+
+    /// Le picker rendait des coordonnées nues et jetait le nom du lieu :
+    /// l'ancienne signature `(CLLocationCoordinate2D, String?) -> Void` est ce
+    /// qui faisait jeter le nom aux quatre call sites, dont un littéral
+    /// `{ coordinate, _ in }`. Personne ne l'avait vu parce que rien
+    /// n'arrivait jamais à destination.
+    func test_locationPicker_emitsAFullPlace_notBareCoordinates() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        XCTAssertTrue(src.contains("let onSelect: (SharedPlace) -> Void"),
+                      "Le picker doit emettre un lieu complet : la signature (coordonnees, String?) est ce qui faisait jeter le nom.")
+        XCTAssertTrue(src.contains("pointOfInterestCategory"),
+                      "La categorie POI de MapKit est disponible et doit etre conservee.")
+    }
+
+    /// Les quatre call sites (message, feed inline, feed sheet, commentaire)
+    /// jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
+    /// `{ coordinate, _ in }`.
+    func test_noCallSiteDiscardsThePlace() throws {
+        for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
+                     "Meeshy/Features/Main/Views/FeedView.swift",
+                     "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                     "Meeshy/Features/Main/Views/FeedCommentsSheet.swift"] {
+            let src = try source(path)
+            XCTAssertFalse(src.contains("LocationPickerView(accentColor: accentColor) { coordinate, _ in"),
+                           "\(path) jette encore le lieu.")
+            XCTAssertFalse(src.contains("coordinate: CLLocationCoordinate2D, address: String?"),
+                           "\(path) porte encore la signature qui separait le point de son nom.")
+        }
+    }
+
+    // MARK: - Partage de position (Task 13, 2026-07-29)
+
+    /// `publishPost()` **et** `publishPostWithAttachments()` sortaient tous deux
+    /// par `createPost(content:)` seul quand il n'y avait pas de fichier : une
+    /// position seule, sans texte ni piece jointe, n'envoyait rien. Corriger un
+    /// seul des deux chemins laisse la moitie du bug.
+    func test_bothPublishPathsCarryTheLocation() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+        let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
+        XCTAssertTrue(publish.contains("location: pendingPlace"),
+                      "publishPost perd la position dans sa branche sans fichier.")
+
+        let withAttachments = try body(from: "func publishPostWithAttachments", to: "private func publishPost()", in: src)
+        XCTAssertTrue(withAttachments.contains("location: pendingPlace"),
+                      "publishPostWithAttachments a le meme defaut : corriger un seul chemin laisse la moitie du bug.")
+
+        XCTAssertTrue(publish.contains("pendingPlace != nil"),
+                      "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
+    }
+
+    // MARK: - Partage de position (Task 14, 2026-07-29)
+
+    /// `CommentsSheetView` (le commentaire depuis le FEED, distinct de
+    /// `PostDetailView`) capturait le lieu choisi dans `commentPendingPlace`
+    /// mais ne l'envoyait jamais : ni au chemin direct, ni au chemin
+    /// hors-ligne. Choisir un lieu dans un commentaire du feed ne produisait
+    /// donc aucun effet réseau — le symétrique exact du bug déjà corrigé
+    /// côté détail de post (`PostDetailView.submitComment`, qui capture
+    /// `place` avant la garde et l'inclut dans la condition de départ).
+    func test_feedCommentsSheet_submitComment_capturesPlaceBeforeTheEmptyGuard() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "private func submitComment(text: String, attachments: [ComposerAttachment]) {",
+                          to: "// Réponse plate à 2 niveaux", in: src)
+
+        XCTAssertTrue(fn.contains("let place = commentPendingPlace"),
+                      "Le lieu en attente doit être capturé au début de submitComment, avant tout early-return.")
+        XCTAssertTrue(fn.contains("commentPendingPlace = nil"),
+                      "La chip doit être effacée après capture — sinon elle réapparaît sur le commentaire suivant.")
+        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || media != nil || place != nil else { return }"),
+                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — l'ancienne garde à 2 conditions l'aurait avorté silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+    }
+
+    /// Le chemin direct (réseau disponible) doit transmettre le lieu à
+    /// `PostService.addComment` — sinon `POST /posts/:postId/comments` part
+    /// sans `location` et le serveur (qui persiste pourtant `metadata.location`)
+    /// ne reçoit jamais rien à persister.
+    func test_feedCommentsSheet_submitComment_sendsLocationOnTheDirectPath() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "let apiComment = try await PostService.shared.addComment(",
+                          to: "let feedComment = FeedComment(", in: src)
+
+        XCTAssertTrue(fn.contains("location: place"),
+                      "submitComment doit transmettre le lieu capturé à addComment — sinon il ne part jamais sur le réseau.")
+    }
+
+    /// Le chemin hors-ligne (durable, `OfflineQueue`) doit transporter le
+    /// MÊME lieu — `OutboxDispatcher.dispatchCreateComment` sait déjà relayer
+    /// `CreateCommentPayload.location`, mais seulement si l'appelant le
+    /// remplit. Sans ce fil, une position choisie hors réseau disparaît
+    /// silencieusement au lieu de survivre au replay.
+    func test_feedCommentsSheet_submitComment_sendsLocationOnTheOfflinePath() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "let payload = CreateCommentPayload(",
+                          to: "try await OfflineQueue.shared.enqueue", in: src)
+
+        XCTAssertTrue(fn.contains("location: place"),
+                      "Le repli hors-ligne doit transporter le lieu — sinon une position choisie sans réseau disparaît.")
+    }
+
+    /// `hasContent` (qui gate l'activation du bouton d'envoi dans
+    /// `UniversalComposerBar`) ignorait `commentPendingPlace` : même une fois
+    /// le transport câblé, un commentaire « lieu seul » resterait injouable
+    /// si le bouton d'envoi ne s'active jamais. Miroir exact de
+    /// `PostDetailView`'s `externalHasContent: ... || pendingPlace != nil`.
+    func test_feedCommentsSheet_locationOnlyComment_countsAsContent() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        XCTAssertTrue(
+            src.contains("externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,"),
+            "Sans commentPendingPlace dans la jauge de contenu, le bouton d'envoi reste désactivé pour un commentaire « lieu seul »."
+        )
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
@@ -218,5 +392,72 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         let src = try source("Meeshy/Meeshy.entitlements")
         XCTAssertTrue(src.contains("webcredentials:meeshy.me"),
                       "L'entitlement webcredentials est requis pour la sauvegarde/relecture trousseau.")
+    }
+}
+
+// MARK: - Idempotence de updateSelectedLocation (gel du picker de lieu, 2026-07-30)
+
+/// `LocationPickerModel.updateSelectedLocation` republiait la MÊME
+/// coordonnée à chaque callback caméra (`onMapCameraChange`), tirant
+/// `objectWillChange` sans écrire de valeur nouvelle. Combiné à une
+/// position de carte initiale non idempotente (`AdaptiveMapInitialRegion`,
+/// côté SDK), ce re-render en boucle ré-entrait MapKit et gelait le main
+/// thread — preuve par double `sample` du process montrant deux occurrences
+/// imbriquées de `-[MKMapView _performActionAsIfGoingToDefaultLocation:]`
+/// sur la même pile.
+///
+/// Comportement pur, testable par instanciation directe : pas de garde de
+/// source ici, `LocationPickerModel` n'a pas besoin de matériel ni de
+/// décision TCC pour exercer cette méthode.
+final class LocationPickerModelUpdateSelectedLocationTests: XCTestCase {
+
+    private func makeSUT() -> LocationPickerModel {
+        LocationPickerModel()
+    }
+
+    func test_updateSelectedLocation_calledTwiceWithTheSameCoordinate_notifiesOnlyOnce() {
+        let sut = makeSUT()
+        let coordinate = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(coordinate)
+        sut.updateSelectedLocation(coordinate)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 1,
+                       "Une coordonnée déjà sélectionnée ne doit tirer objectWillChange qu'une fois — " +
+                       "republier l'identique ré-entre MapKit via le re-render de la carte.")
+    }
+
+    func test_updateSelectedLocation_calledWithADriftedButEquivalentCoordinate_treatsItAsTheSamePoint() {
+        let sut = makeSUT()
+        let coordinate = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        let drifted = CLLocationCoordinate2D(latitude: 48.8566 + 5e-8, longitude: 2.3522 - 5e-8)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(coordinate)
+        sut.updateSelectedLocation(drifted)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 1,
+                       "La dérive flottante de MapKit (~1e-9°) ne doit jamais republier — le seuil de tolérance l'absorbe.")
+    }
+
+    func test_updateSelectedLocation_calledWithAGenuinelyDifferentCoordinate_notifiesAndUpdates() {
+        let sut = makeSUT()
+        let first = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        let second = CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(first)
+        sut.updateSelectedLocation(second)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 2, "Deux points réellement distincts doivent chacun notifier.")
+        XCTAssertEqual(sut.selectedCoordinate?.latitude ?? .nan, second.latitude, accuracy: 0.0001)
+        XCTAssertEqual(sut.selectedCoordinate?.longitude ?? .nan, second.longitude, accuracy: 0.0001)
     }
 }

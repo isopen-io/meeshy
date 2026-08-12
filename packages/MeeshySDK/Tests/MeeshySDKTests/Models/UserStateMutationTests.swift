@@ -16,7 +16,7 @@ final class UserStateMutationTests: XCTestCase {
         return d
     }()
 
-    private func roundtrip(_ mutation: UserStateMutation, file: StaticString = #file, line: UInt = #line) throws {
+    private func roundtrip(_ mutation: UserStateMutation, file: StaticString = #filePath, line: UInt = #line) throws {
         let data = try encoder.encode(mutation)
         let decoded = try decoder.decode(UserStateMutation.self, from: data)
         XCTAssertEqual(decoded, mutation, file: file, line: line)

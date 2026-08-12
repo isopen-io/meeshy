@@ -91,6 +91,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallEndReason } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -317,14 +318,15 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
 
-      // Vague 41 — the grace-expiry leave is tagged reason: connectionLost
-      // (a genuine involuntary disconnect, not a deliberate hangup) so
-      // retry-on-failure and callFailureRate see it as a real failure.
+      // Grace expiry with no re-join is a genuine involuntary disconnect, never
+      // a deliberate call:leave/call:end — endReasonHint distinguishes it so
+      // the resulting endReason is `connectionLost`, not `completed` (the web
+      // retry-on-failure toast only fires for failed/connectionLost).
       expect(mockLeaveCall).toHaveBeenCalledWith({
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
-        reason: 'connectionLost',
+        endReasonHint: CallEndReason.connectionLost,
       });
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
       expect(ended).toHaveLength(1);
@@ -531,14 +533,11 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(PRE_ANSWER_GRACE_MS + 100);
 
-      // Vague 41 — leaveParticipationAndBroadcast always passes reason:
-      // connectionLost now; leaveCall() itself ignores it for a pre-answer
-      // leave and still resolves missed (asserted at the CallService level).
       expect(mockLeaveCall).toHaveBeenCalledWith({
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
-        reason: 'connectionLost',
+        endReasonHint: CallEndReason.connectionLost,
       });
     });
 

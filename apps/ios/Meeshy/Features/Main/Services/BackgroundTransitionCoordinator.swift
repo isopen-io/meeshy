@@ -91,6 +91,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("notifications.syncNow") {
             await NotificationCoordinator.shared.syncNow()
         }
+        // grdb-05 — dernier step, le plus sacrifiable si l'OS expire le
+        // budget. DOIT rester sous CETTE garde beginBackgroundTask :
+        // incremental_vacuum tient un verrou d'écriture sur le fichier SQLite
+        // App Group partagé avec la NSE — un verrou encore tenu à la
+        // suspension est le motif documenté du kill 0xdead10cc.
+        await withBudget("db.maintenance") {
+            let pool = DependencyContainer.shared.dbPool
+            do {
+                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                try DatabaseMaintenance.runOptimize(on: pool)
+            } catch {
+                logger.error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         endBackgroundTask()
     }
@@ -104,6 +118,14 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         }
         await withBudget("nse.consumePendingPosts") {
             await NSEPendingPostConsumer.shared.consumeAll()
+        }
+        // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
+        // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
+        // l'environnement au passage garde l'extension alignée si l'utilisateur
+        // a changé de gateway pendant la session.
+        await withBudget("share.consumePendingSends") {
+            WidgetDataManager.shared.publishAPIBaseURL()
+            await SharePendingSendConsumer.shared.consumeAll()
         }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
@@ -234,13 +256,39 @@ final class MediaLifecycleBridge {
     private init() {}
 
     func prepareForBackground() async {
-        if ConversationAudioCoordinator.sharedForTesting.isPlaying
-            || PlaybackCoordinator.shared.isAnyPlaying {
-            // Audio Meeshy en cours -> on ne coupe rien. UIBackgroundModes "audio"
-            // autorise l'OS a continuer la lecture en background. On considere
-            // TOUTE lecture active (coordinator conversation OU lecteur plein
-            // ecran via son propre AudioPlaybackManager, OU video), pas seulement
-            // celle pilotee par le coordinator de conversation.
+        let video = SharedAVPlayerManager.shared
+        // L'auto-PiP système démarre PENDANT la transition — ce garde court
+        // contre son animation. Quand une surface a opté pour le PiP
+        // (`isPipConfigured`, jamais vrai sur simulateur), on lui laisse une
+        // fenêtre bornée pour s'engager avant de trancher, sinon un `pause()`
+        // prématuré avorterait la fenêtre que le système ouvrait.
+        var pipEngaged = video.isPipEngaged
+        if video.isPlaying, !pipEngaged, video.isPipConfigured {
+            pipEngaged = await video.waitForPipEngagement(timeout: 0.4)
+        }
+        let decision = MediaBackgroundPolicy.decide(
+            audioQueuePlaying: ConversationAudioCoordinator.sharedForTesting.isPlaying,
+            audioQueueActive: ConversationAudioCoordinator.sharedForTesting.activeContext != nil,
+            anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
+            videoPlaying: video.isPlaying,
+            pipEngaged: pipEngaged
+        )
+        // Une vidéo (réel) hors PiP ne survit jamais à l'arrière-plan : le
+        // mode background "audio" couvre les messages vocaux et posts audio,
+        // pas la bande-son d'un réel. `pause()` (pas `stop()`) : ne touche pas
+        // à la session AVAudioSession qu'une file audio en pause peut encore
+        // tenir, et le retour en avant-plan retrouve la frame figée. Si
+        // l'auto-PiP a engagé la fenêtre pendant la transition, la vidéo lui
+        // appartient et continue.
+        if decision.pausesVideo {
+            video.pause()
+        }
+        if decision.keepsSessionAlive {
+            // Audio en lecture OU file en pause OU PiP -> on ne coupe rien.
+            // UIBackgroundModes "audio" couvre la lecture ; une file en PAUSE
+            // garde sa session active pour rester l'app Now Playing : la carte
+            // lock screen survit et son bouton play réveille l'app (parité
+            // WhatsApp).
             return
         }
         #if DEBUG

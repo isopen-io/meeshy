@@ -283,6 +283,69 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Audit gateway (2026-07-28) — the ack's `error` field must be the
+  // documented `{code, message}` object (packages/shared/types/video-call.ts
+  // `CallInitiateAck`), never a bare string reached via `as unknown as`.
+  // -------------------------------------------------------------------------
+
+  describe('ack.error is always a {code, message} object, never a bare string', () => {
+    it('acks {code: NOT_AUTHENTICATED, message} when userId is undefined', async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => undefined);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        success: false,
+        error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' }
+      });
+    });
+
+    it('acks {code: NOT_A_PARTICIPANT, message} when resolveParticipantId returns null', async () => {
+      const prisma = {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+      } as unknown as PrismaClient;
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        success: false,
+        error: { code: 'NOT_A_PARTICIPANT', message: 'You are not a participant in this conversation' }
+      });
+    });
+
+    it('acks {code: CALL_ALREADY_ACTIVE, message} preserving the CODE:message split from a thrown Error', async () => {
+      mockInitiateCall.mockRejectedValue(new Error('CALL_ALREADY_ACTIVE: A call is already active'));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'CALL_ALREADY_ACTIVE', message: 'A call is already active' }
+        })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // call:initiate happy path — covers callerName and offline push branches
   // -------------------------------------------------------------------------
 

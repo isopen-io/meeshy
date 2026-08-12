@@ -240,20 +240,15 @@ final class TimelineInspectorHostClipKindTests: XCTestCase {
 
     func test_visibleSections_dropTheTogglesRow_whenNoToggleActs() {
         for kind in [ClipInspector.ClipSnapshot.Kind.sticker, .text] {
-            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false,
-                                                        isDetailsExpanded: false,
-                                                        isAnimationExpanded: false)
+            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false)
             XCTAssertFalse(sections.contains(.toggles), "\(kind) n'a aucun interrupteur qui agisse")
-            XCTAssertTrue(sections.contains(.timing), "\(kind) garde son début/durée")
             XCTAssertTrue(sections.contains(.actions), "\(kind) garde l'accès à l'animation")
         }
     }
 
     func test_visibleSections_keepTheTogglesRow_forMediaAndAudio() {
         for kind in [ClipInspector.ClipSnapshot.Kind.video, .audio, .image] {
-            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false,
-                                                        isDetailsExpanded: false,
-                                                        isAnimationExpanded: false)
+            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false)
             XCTAssertTrue(sections.contains(.toggles), "\(kind)")
         }
     }

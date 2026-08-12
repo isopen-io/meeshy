@@ -80,6 +80,8 @@
     <string name="chat_cancel_edit">Cancelar edição</string>
     <string name="chat_react_with">Reagir com %1$s</string>
     <string name="chat_message_actions">Ações da mensagem</string>
+    <string name="chat_unread_separator">Mensagens não lidas</string>
+    <string name="chat_encryption_notice">As mensagens desta conversa são criptografadas de ponta a ponta. Ninguém, nem mesmo o Meeshy, pode lê-las.</string>
     <string name="chat_date_today">Hoje</string>
     <string name="chat_date_yesterday">Ontem</string>
     <string name="chat_date_day_before_yesterday">Anteontem</string>

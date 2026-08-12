@@ -151,12 +151,40 @@ public actor OutboxFlusher {
     /// l'idempotence cmid côté gateway.
     public static let staleInflightReclaimSeconds: TimeInterval = 30 * 60
 
+    /// Délai de re-tentative quand le flush est court-circuité par le gate
+    /// réseau. Assez long pour ne pas réveiller la radio en boucle en mode
+    /// avion, assez court pour qu'un moniteur qui se trompe coûte une minute
+    /// d'attente et non la session entière.
+    public static let offlineRetrySeconds: TimeInterval = 60
+
     @discardableResult
     public func flush() async -> Date? {
-        // BW1 — bandwidth gate. Re-arm later via the same earliestDeferred
-        // path; the OutboxRetryScheduler also re-fires on NWPath transitions
-        // so the round-trip is bounded.
-        guard await isNetworkReachable() else { return nil }
+        // BW1 — gate de bande passante : en mode avion / 1G saturé, dispatcher
+        // brûlerait les `maxAttempts` en timeouts URLSession de 60 s chacun.
+        //
+        // Rendre `nil` ici était un piège : `nil` signifie « rien n'est
+        // différé », et `OutboxRetryScheduler.schedule(at: nil)` ANNULE le
+        // timer. La file ne comptait donc plus que sur le front montant
+        // hors-ligne → en-ligne. Si ce front ne vient jamais — moniteur figé
+        // sur une valeur fausse, ou front déjà passé avant l'abonnement — plus
+        // rien ne réveille la file de toute la session. C'est ce qui laissait
+        // « Synchronisation des vues story » tourner indéfiniment.
+        //
+        // On rend désormais une échéance : le front montant reste le chemin
+        // RAPIDE, cette échéance est le filet. Un moniteur menteur coûte un
+        // retard, plus un blocage.
+        guard await isNetworkReachable() else {
+            // Uniquement s'il y a réellement quelque chose à reprendre : armer
+            // un réveil chaque minute sur une file VIDE ne ferait que réveiller
+            // l'app pour rien, ce que le gate cherchait précisément à éviter.
+            let hasWork = (try? await pool.read { db in
+                try OutboxRecord
+                    .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                        .contains(Column("status")))
+                    .fetchCount(db)
+            }) ?? 0
+            return hasWork > 0 ? Date().addingTimeInterval(Self.offlineRetrySeconds) : nil
+        }
 
         let now = Date()
         let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
@@ -177,24 +205,35 @@ public actor OutboxFlusher {
             // envoi) n'est plus jamais rejouée : le message ne part pas.
             outboxFlusherLog.error("Stale-inflight reclaim failed, rows may stay stuck: \(error.localizedDescription, privacy: .public)")
         }
-        let pending: [OutboxRecord]
-        do {
-            pending = try await pool.read { db in
-                try OutboxRecord
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .filter(Column("nextAttemptAt") <= now)
-                    .order(Column("createdAt").asc)
-                    .limit(50)
-                    .fetchAll(db)
+        // outbox-06 — paginer jusqu'à épuisement du backlog échu : une seule
+        // page de 50 laissait les rows 51+ `.pending` échues, invisibles
+        // d'`earliestDeferred` (qui ne regarde que le futur) → timer annulé,
+        // backlog gelé jusqu'au prochain front réseau. `now` reste FIGÉ sur
+        // toute la passe (pas d'aspiration de rows devenues éligibles en
+        // cours de route) ; la borne de 20 passes (1000 rows) est une garde
+        // anti-pathologie, pas une garantie zéro-stall à toute échelle.
+        var pending: [OutboxRecord] = []
+        var pass = 0
+        repeat {
+            do {
+                pending = try await pool.read { db in
+                    try OutboxRecord
+                        .filter(Column("status") == OutboxStatus.pending.rawValue)
+                        .filter(Column("nextAttemptAt") <= now)
+                        .order(Column("createdAt").asc)
+                        .limit(50)
+                        .fetchAll(db)
+                }
+            } catch {
+                outboxFlusherLog.error("Pending batch read failed — outbox not drained this pass: \(error.localizedDescription, privacy: .public)")
+                pending = []
             }
-        } catch {
-            outboxFlusherLog.error("Pending batch read failed — outbox not drained this pass: \(error.localizedDescription, privacy: .public)")
-            pending = []
-        }
 
-        for record in pending {
-            await processRecord(record)
-        }
+            for record in pending {
+                await processRecord(record)
+            }
+            pass += 1
+        } while pending.count == 50 && pass < 20
 
         let earliestDeferred: OutboxRecord?
         do {

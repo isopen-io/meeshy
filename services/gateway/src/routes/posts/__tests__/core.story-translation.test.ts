@@ -232,6 +232,37 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     await app.close();
   });
 
+  // Le feed de production est composé quasi exclusivement de REEL portant du
+  // texte substantiel. Tant que le déclenchement était conditionné à
+  // `type === 'POST'`, aucun d'eux n'était traduit : vérifié le 2026-07-27 sur
+  // gate.meeshy.me, 40 REEL consécutifs sans une seule traduction, alors qu'un
+  // POST publié dans la même minute en recevait quatre en moins de dix
+  // secondes. Le Prisme ne s'appliquait donc pas au gros du feed.
+  it.each(['REEL', 'STATUS'])(
+    'should trigger PostTranslationService.translatePost when type=%s',
+    async (type) => {
+      const createdPost = buildCreatedPost({ type, content: 'Une phrase à traduire' });
+      const app = await buildApp(buildMockPostService(createdPost));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/posts',
+        payload: { type, content: 'Une phrase à traduire' },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(translatePostMock).toHaveBeenCalledTimes(1);
+      expect(translatePostMock).toHaveBeenCalledWith(
+        'post-id-123',
+        'Une phrase à traduire',
+        null,
+        'user-id-abc',
+      );
+
+      await app.close();
+    },
+  );
+
   it('should not double-translate: the route triggers NEITHER story pipeline (G2)', async () => {
     // G2 : la route ne déclenche AUCUN des deux services pour une STORY —
     // le `content` appartient à `PostService.triggerStoryTextTranslation`

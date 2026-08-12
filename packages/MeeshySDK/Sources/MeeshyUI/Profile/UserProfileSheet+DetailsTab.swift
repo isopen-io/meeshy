@@ -13,49 +13,15 @@ extension UserProfileSheet {
 
     @ViewBuilder
     var detailsTab: some View {
-        VStack(spacing: 16) {
-            if let bio = displayUser.bio, !bio.isEmpty {
-                bioCard(bio)
-                    .padding(.horizontal, 20)
-            }
-
-            languagePills
-                .padding(.horizontal, 20)
-
-            if let completionRate = displayUser.profileCompletionRate {
-                ProfileCompletionRing(progress: Double(completionRate) / 100.0)
-                    .padding(.vertical, 8)
-            }
-
-            if displayUser.timezone != nil || displayUser.registrationCountry != nil {
-                HStack(spacing: 8) {
-                    if let tz = displayUser.timezone {
-                        infoChip(icon: "clock.fill", text: tz)
-                    }
-                    if let country = displayUser.registrationCountry {
-                        let countryName = CountryFlag.name(for: country) ?? country
-                        let flag = CountryFlag.emoji(for: country)
-                        infoChip(icon: flag, text: countryName)
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-
-            if displayUser.hasE2EE {
-                e2eeBadge
-                    .padding(.horizontal, 20)
-            }
-
-            voiceCard
-                .padding(.horizontal, 20)
-
-            if !isCurrentUser {
-                actionButtons
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-            }
-
-            compactStatsBand
+        // Même trame que les écrans de réglages : en-tête de section teinté,
+        // contenu groupé, respiration constante entre les blocs. Ici la teinte
+        // n'est pas fixe — c'est `resolvedAccent`, la couleur déterministe du
+        // profil, donc chaque fiche porte sa propre identité chromatique.
+        VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
+            aboutSection
+            voiceSection
+            if !isCurrentUser { actionsSection }
+            statsSection
         }
         .confirmationDialog(
             String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
@@ -68,6 +34,102 @@ extension UserProfileSheet {
                 }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+        }
+    }
+
+    /// En-tête + contenu, marges d'écran comprises — l'exact pendant du
+    /// `section(...)` de `PrivacySettingsView`.
+    @ViewBuilder
+    private func profileSection<Content: View>(
+        title: String,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            SettingsSectionHeader(title: title, icon: icon, color: resolvedAccent)
+            content()
+        }
+        .padding(.horizontal, MeeshySpacing.xl)
+    }
+
+    // MARK: - À propos
+
+    @ViewBuilder
+    private var aboutSection: some View {
+        let hasChips = displayUser.timezone != nil || displayUser.registrationCountry != nil
+        let hasBio = !(displayUser.bio ?? "").isEmpty
+
+        if hasBio || hasChips || displayUser.hasE2EE || displayUser.profileCompletionRate != nil {
+            profileSection(
+                title: String(localized: "profile.section.about", defaultValue: "À propos", bundle: .module),
+                icon: "person.text.rectangle.fill"
+            ) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                    if let bio = displayUser.bio, !bio.isEmpty {
+                        bioCard(bio)
+                    }
+
+                    languagePills
+
+                    if hasChips {
+                        HStack(spacing: MeeshySpacing.sm) {
+                            if let tz = displayUser.timezone {
+                                infoChip(icon: "clock.fill", text: tz)
+                            }
+                            if let country = displayUser.registrationCountry {
+                                let countryName = CountryFlag.name(for: country) ?? country
+                                infoChip(icon: CountryFlag.emoji(for: country), text: countryName)
+                            }
+                        }
+                    }
+
+                    if displayUser.hasE2EE {
+                        e2eeBadge
+                    }
+
+                    if let completionRate = displayUser.profileCompletionRate {
+                        ProfileCompletionRing(progress: Double(completionRate) / 100.0)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, MeeshySpacing.xs)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Voix
+
+    @ViewBuilder
+    private var voiceSection: some View {
+        if displayUser.voicePublic == true, !(displayUser.voiceSampleUrl ?? "").isEmpty {
+            profileSection(
+                title: String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module),
+                icon: "waveform"
+            ) {
+                voiceCard
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private var actionsSection: some View {
+        profileSection(
+            title: String(localized: "profile.section.actions", defaultValue: "Actions", bundle: .module),
+            icon: "hand.tap.fill"
+        ) {
+            actionButtons
+        }
+    }
+
+    // MARK: - Statistiques
+
+    private var statsSection: some View {
+        profileSection(
+            title: String(localized: "profile.section.stats", defaultValue: "Statistiques", bundle: .module),
+            icon: "chart.bar.fill"
+        ) {
+            compactStatsBand
         }
     }
 
@@ -283,9 +345,9 @@ extension UserProfileSheet {
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(MeeshySpacing.lg)
             .background(theme.surfaceGradient(tint: resolvedAccent))
-            .glassCard(cornerRadius: 16)
+            .glassCard(cornerRadius: MeeshyRadius.xxl)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
         }
@@ -308,14 +370,16 @@ extension UserProfileSheet {
     /// grid is dropped here for compactness.
     @ViewBuilder
     var compactStatsBand: some View {
-        VStack(spacing: 10) {
+        // Aucune marge horizontale ici : `profileSection` porte déjà celles de
+        // l'écran. En reposer donnerait un double retrait, visible comme un
+        // décrochement par rapport aux autres sections.
+        VStack(spacing: MeeshySpacing.md) {
             if let createdAt = displayUser.createdAt {
                 statCard(
                     icon: "calendar",
                     label: String(localized: "profile.stats.memberSince", defaultValue: "Membre depuis", bundle: .module),
                     value: formatRegistrationDate(createdAt)
                 )
-                .padding(.horizontal, 20)
             }
 
             if let stats = effectiveUserStats {
@@ -329,7 +393,6 @@ extension UserProfileSheet {
                     miniStatChip(icon: "calendar.badge.checkmark", value: stats.memberDays,
                                  label: String(localized: "profile.stats.daysShort", defaultValue: "Jours", bundle: .module))
                 }
-                .padding(.horizontal, 20)
             } else if effectiveIsLoadingStats {
                 HStack(spacing: 8) {
                     ForEach(0..<4, id: \.self) { _ in
@@ -339,7 +402,6 @@ extension UserProfileSheet {
                             .shimmer()
                     }
                 }
-                .padding(.horizontal, 20)
             } else {
                 Color.clear
                     .frame(height: 1)
@@ -348,7 +410,6 @@ extension UserProfileSheet {
                     }
             }
         }
-        .padding(.top, 4)
     }
 
     private func miniStatChip(icon: String, value: Int, label: String) -> some View {
@@ -368,7 +429,7 @@ extension UserProfileSheet {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: 12)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String("\(value) \(label)"))
     }
@@ -376,26 +437,18 @@ extension UserProfileSheet {
     // MARK: - Stat card (member-since)
 
     func statCard(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Color(hex: resolvedAccent))
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-
+        // Icône teintée, libellé, valeur à droite : c'est exactement une ligne
+        // de réglage. Elle emprunte la trame partagée au lieu d'en redessiner
+        // une cinquième, et hérite au passage de la cible tactile de 44 pt et
+        // de l'étiquette VoiceOver « libellé, valeur ».
+        SettingsCard(tint: resolvedAccent) {
+            SettingsRow(icon: icon, title: label, color: resolvedAccent) {
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
-
-            Spacer()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(SettingsRowMetrics.accessibilityLabel(title: label, value: value))
         }
-        .padding(14)
-        .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: 12)
     }
 }

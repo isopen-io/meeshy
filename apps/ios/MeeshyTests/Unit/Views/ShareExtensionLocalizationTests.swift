@@ -107,6 +107,47 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - The bundle Apple ingests
+
+    /// App Store Connect refuses the whole archive — silently, hours after an
+    /// "upload succeeded" — when a share extension declares its activation rule
+    /// directly under `NSExtension`:
+    ///
+    ///   Missing Info.plist value. A value for the key 'NSExtensionAttributes'
+    ///   in bundle Meeshy.app/PlugIns/MeeshyShareExtension.appex is required.
+    ///
+    /// The rule belongs under `NSExtensionAttributes`. Build 1257 shipped it one
+    /// level too high and never appeared in ASC; nothing in the build or the test
+    /// suite caught it, because the extension only reaches Apple once it is
+    /// embedded in the app. This guard is the only thing standing between a
+    /// misplaced key and another blind three-hour wait.
+    func test_shareExtensionDeclaresItsActivationRuleUnderNSExtensionAttributes() throws {
+        let data = try Data(
+            contentsOf: iosRoot.appendingPathComponent("MeeshyShareExtension/Info.plist"))
+        let info = try PropertyListSerialization.propertyList(
+            from: data, options: [], format: nil
+        ) as? [String: Any]
+        let nsExtension = info?["NSExtension"] as? [String: Any]
+
+        XCTAssertNil(
+            nsExtension?["NSExtensionActivationRule"],
+            "NSExtensionActivationRule must not sit directly under NSExtension — App Store "
+            + "Connect rejects the archive with STATE_ERROR.VALIDATION_ERROR."
+        )
+
+        let attributes = nsExtension?["NSExtensionAttributes"] as? [String: Any]
+        XCTAssertNotNil(
+            attributes,
+            "NSExtension must carry an NSExtensionAttributes dictionary — Apple requires it "
+            + "for com.apple.share-services."
+        )
+        XCTAssertNotNil(
+            attributes?["NSExtensionActivationRule"],
+            "The activation rule must live inside NSExtensionAttributes, or the share sheet "
+            + "never offers Meeshy for any content type."
+        )
+    }
+
     // MARK: - No user-facing literal is left unkeyed
 
     func test_actionButtonsAndTitleAreLocalized() throws {
@@ -122,22 +163,47 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
     }
 
-    // MARK: - Contact rows are reachable by VoiceOver
+    // MARK: - Conversation rows are reachable by VoiceOver
 
-    func test_contactRow_exposesButtonAndSelectionTraits() throws {
-        // The row is picked with an .onTapGesture, so without an explicit element it
-        // reaches VoiceOver as loose text with no way to activate it, and its selected
-        // state is carried by a checkmark glyph and a tint alone.
+    func test_conversationRow_exposesButtonAndSelectionTraits() throws {
+        // Sans élément explicite, la rangée atteint VoiceOver comme du texte
+        // épars, et son état sélectionné ne tient qu'à une coche et une teinte.
         let source = try extensionSource()
         XCTAssertTrue(
             source.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
             "The contact row must expose both the button trait (it is tappable) and the selected " +
             "trait (its state must not be conveyed by colour alone)."
         )
+        // Deux mécanismes SwiftUI replient la rangée en un seul élément, et la
+        // garde doit accepter les deux — sinon elle fige une implémentation au
+        // lieu de protéger un comportement.
+        //
+        // `.combine` concatène automatiquement les fragments enfants : nom,
+        // statut ET coche décorative partent dans une seule chaîne.
+        // `.ignore` + `.accessibilityLabel`/`.accessibilityValue` explicites
+        // donnent un couple nom/valeur propre — VoiceOver annonce « Alice »
+        // puis « en ligne » au lieu d'une bouillie. C'est la forme retenue par
+        // 214i+215i, strictement supérieure.
+        //
+        // Cette garde exigeait `.combine` seul et son commentaire décrivait une
+        // sélection par `.onTapGesture` — révolue depuis que la rangée est un
+        // vrai Button. Elle contredisait frontalement
+        // `ShareExtensionAccessibilityTests`, qui exige `.ignore` : les deux
+        // itérations ont atterri sur `main` et se sont mutuellement bloquées.
+        //
+        // 2026-07-29 : la rangée liste désormais des CONVERSATIONS réelles
+        // (`ShareTargetRow`, nom `target.displayName`) et non plus des contacts
+        // fabriqués — l'ancien `contact.name` n'existe plus. La garantie, elle,
+        // est identique.
+        let collapsesIntoOneElement =
+            source.contains(".accessibilityElement(children: .combine)")
+            || (source.contains(".accessibilityElement(children: .ignore)")
+                && source.contains(".accessibilityLabel(target.displayName)"))
         XCTAssertTrue(
-            source.contains(".accessibilityElement(children: .combine)"),
-            "The contact row must be a single accessibility element so its name, status and state " +
-            "are announced together rather than as separate stops."
+            collapsesIntoOneElement,
+            "The conversation row must be a single accessibility element so its name and state " +
+            "are announced together rather than as separate stops — either via .combine, or via " +
+            ".ignore paired with an explicit .accessibilityLabel(target.displayName)."
         )
     }
 }

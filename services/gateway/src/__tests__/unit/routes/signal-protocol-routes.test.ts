@@ -385,18 +385,18 @@ describe('POST /signal/session/establish', () => {
     await app.close();
   });
 
-  it('returns 200 and consumes preKey when bundle.preKeyId is set', async () => {
+  it('returns 200 and leaves preKey intact when bundle.preKeyId is set', async () => {
     const prisma = makeSessionPrisma({ bundle: BUNDLE_RECORD });
     const app = await buildSessionApp(prisma);
     const res = await app.inject({ method: 'POST', url: '/signal/session/establish', headers: AUTH, payload: SESSION_BODY });
     expect(res.statusCode).toBe(200);
-    expect(prisma.signalPreKeyBundle.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { preKeyId: null, preKeyPublic: null } })
-    );
+    // This route returns no key material, so nulling the recipient's one-time
+    // pre-key here destroys it for every peer without handing it to anyone.
+    expect(prisma.signalPreKeyBundle.update).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('skips preKey update when bundle.preKeyId is null', async () => {
+  it('does not touch the bundle when bundle.preKeyId is null', async () => {
     const bundleNoPreKey = { ...BUNDLE_RECORD, preKeyId: null, preKeyPublic: null };
     const prisma = makeSessionPrisma({ bundle: bundleNoPreKey });
     const app = await buildSessionApp(prisma);

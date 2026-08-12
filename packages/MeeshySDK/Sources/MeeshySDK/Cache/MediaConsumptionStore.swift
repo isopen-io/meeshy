@@ -148,6 +148,14 @@ public final class MediaConsumptionStore {
         persist()
     }
 
+    /// media-08 — purge de logout : fractions de lecture non namespacées par
+    /// userId, le compte suivant héritait des waveforms teintées du sortant.
+    /// Reset RAM + UserDefaults (singleton process-lifetime).
+    public func purgeAll() {
+        consumptions = MediaConsumptions()
+        userDefaults.removeObject(forKey: key)
+    }
+
     // MARK: - Persistence
 
     private static func load(from userDefaults: UserDefaults, key: String) -> MediaConsumptions {

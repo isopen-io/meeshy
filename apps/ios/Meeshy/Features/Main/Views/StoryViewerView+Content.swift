@@ -752,6 +752,10 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
+        // de l'animation (spec scrub 2026-08-11).
+        || isScrubbingRail
+        || reactionFlight != nil
         // L'overlay commentaires ouvert met la story en pause : lire / répondre à
         // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
         // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
@@ -788,6 +792,11 @@ extension StoryViewerView {
         showFullLanguagePicker = false
         showEmojiStrip = false
         showFullEmojiPicker = false
+        // Reset seam for a scrub whose .onEnded never fires (competing
+        // recognizer / system interruption drops it, same hazard documented
+        // for gestureAxis above): without this, isScrubbingRail could stay
+        // stuck true and shouldPauseTimer would freeze the story forever.
+        isScrubbingRail = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []
@@ -940,7 +949,7 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil, location: SharedPlace? = nil) {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
@@ -961,7 +970,8 @@ extension StoryViewerView {
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage,
-            media: pendingMedia.map { [$0.optimistic] } ?? []
+            media: pendingMedia.map { [$0.optimistic] } ?? [],
+            location: location
         )
 
         if let parentId {
@@ -1008,7 +1018,8 @@ extension StoryViewerView {
                     effectFlags: effectFlags,
                     parentId: parentId,
                     attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription
+                    mobileTranscription: pendingMedia?.mobileTranscription,
+                    location: location
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -1031,7 +1042,8 @@ extension StoryViewerView {
                             clientMutationId: cmid,
                             postId: story.id,
                             parentCommentId: parentId,
-                            content: text
+                            content: text,
+                            location: location
                         ),
                         conversationId: story.id
                     )
@@ -1149,20 +1161,11 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    // MARK: - Story Time Remaining
-
-    func storyTimeRemaining(_ expiresAt: Date) -> String {
-        let seconds = Int(expiresAt.timeIntervalSinceNow)
-        if seconds <= 0 {
-            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
-        }
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        if hours > 0 {
-            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
-        }
-        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
-    }
+    // Le compte à rebours d'expiration a quitté le header du reader (directive
+    // user 2026-07-30) : il n'existe plus de surface qui l'affiche, donc plus
+    // de formateur. `story.expiresAt` reste la source de vérité côté logique
+    // (`isExpired(at:)` pilote la sélection de slide et le bandeau « Story
+    // expirée ») — c'est seulement la relecture permanente du chrono qui part.
 
     // MARK: - Delete Story
 
@@ -1226,6 +1229,11 @@ extension StoryViewerView {
             // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE
             // post-slide, en plus de la vue unique. Chaque changement de slide en émet une.
             viewModel.recordStoryImpression(storyId: story.id)
+            // Contenu consommé → ses notifications ne doivent plus être non lues,
+            // ET toute notification qui arrive PENDANT la lecture naît consommée
+            // (`activePostId`). Idempotent : le manager ignore une story déjà
+            // déclarée active et coalesce les appels serveur.
+            NotificationToastManager.shared.onPostOpened(story.id)
         }
     }
 
@@ -2087,7 +2095,8 @@ extension StoryViewerView {
                 parentId: parentId,
                 originalLanguage: c.originalLanguage, translatedContent: translated,
                 currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
+                media: (c.media ?? []).map { $0.toFeedMedia() },
+                location: c.location
             )
         }
     }
@@ -2185,7 +2194,8 @@ extension StoryViewerView {
             originalLanguage: data.comment.originalLanguage,
             translatedContent: translatedContent,
             currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
         )
 
         let result = Self.applyingStoryCommentAdded(
@@ -2401,7 +2411,8 @@ extension StoryViewerView {
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             storyComments = comments
@@ -2451,7 +2462,8 @@ extension StoryViewerView {
                         translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
                     ),
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             let existing = Set(storyComments.map(\.id))
@@ -2485,6 +2497,15 @@ extension StoryViewerView {
     /// after the cache check, a single debounced network reconciliation confirms
     /// the real count. The 400ms dwell + stale-id guard keep this O(1) per
     /// *watched* story (never the O(N)-on-swipe fetch removed in 2026-05-28).
+    ///
+    /// Every time a reconciliation branch actually MOVES `storyCommentCount`
+    /// (cache hit or network stale-0 fix), it also bumps
+    /// `storyCommentCountReconciledPulse` — the dedicated, one-way signal
+    /// `StoryActionSidebarView` watches to re-open its already-frozen rail
+    /// membership for the comments button. This is what makes the reveal
+    /// happen on a NORMAL open (tray/profile/feed — no notification postId),
+    /// not just on the notification path already covered upstream by
+    /// `StoryViewModel.refreshFromCachedPostIfAvailable`.
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -2502,7 +2523,16 @@ extension StoryViewerView {
             case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
-                if total != storyCommentCount { storyCommentCount = total }
+                // Le bump ne s'exécute que sur un changement RÉEL de valeur —
+                // `storyCommentCountReconciledPulse` doit rester silencieux
+                // quand le cache confirme simplement le seed du payload.
+                // Voir StoryActionSidebarView pour le consommateur : SEUL ce
+                // canal peut faire réapparaître le bouton commentaires après
+                // le gel, jamais une activité temps réel.
+                if total != storyCommentCount {
+                    storyCommentCount = total
+                    storyCommentCountReconciledPulse += 1
+                }
                 return
             case .expired, .empty:
                 break
@@ -2530,7 +2560,10 @@ extension StoryViewerView {
             // replies. A genuinely empty thread stays 0 → button stays hidden.
             let top = response.data.filter { $0.parentId == nil }
             let total = top.count + top.reduce(0) { $0 + ($1.replyCount ?? 0) }
-            if total != storyCommentCount { storyCommentCount = total }
+            if total != storyCommentCount {
+                storyCommentCount = total
+                storyCommentCountReconciledPulse += 1
+            }
         }
     }
 }
@@ -2550,6 +2583,8 @@ struct StoryCommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -2564,6 +2599,10 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Posé par le viewer sur l'overlay (`readerChromeScheme`, cf.
+    /// `StoryViewerView+Canvas.swift`) — suit la luminance du FOND de la story,
+    /// pas le thème de l'app. Pilote `legibleOverlayColor` ci-dessous.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -2604,11 +2643,20 @@ struct StoryCommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: comment.authorColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,
                         sentAt: comment.timestamp
                     )
+                    .padding(.top, 2)
+                }
+                // Lieu attaché au commentaire — sticker cliquable, même surface
+                // plein écran que les autres rows de commentaires.
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
                     .padding(.top, 2)
                 }
                 actionRow
@@ -2618,6 +2666,16 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.vertical, 8)
         .padding(.trailing, 12)
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: comment.authorColor,
+                senderName: comment.author
+            )
+        }
     }
 
     @ViewBuilder
@@ -2650,25 +2708,26 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 6) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 6) {
             Text(comment.author)
                 .font(MeeshyFont.relative(12.5, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
+            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(MeeshyFont.relative(10))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(overlayColor.opacity(0.75))
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
         // sur n'importe quel fond de story, clair comme foncé. Pas de box.
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 
     private var languageSwitcher: some View {
@@ -2722,21 +2781,35 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var contentText: some View {
-        Text(displayContent)
-            .font(MeeshyFont.relative(13.5))
-            .foregroundColor(.white)
+        // La couleur suit `readerChromeScheme` (posé par le viewer sur
+        // l'overlay) : blanc sur fond sombre, quasi-noir sur fond clair — un
+        // blanc fixe restait illisible sur une story à dominante claire/blanche
+        // (bug user 2026-08-11), le halo seul ne suffisant pas à cette extrémité.
+        let textColor = Self.legibleOverlayColor(for: colorScheme)
+        return MessageTextRenderer.render(
+            displayContent,
+            fontSize: 13.5,
+            color: textColor,
+            mentionColor: MeeshyColors.mentionColor(isDark: colorScheme == .dark),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: colorScheme == .dark),
+            accentColor: textColor,
+            usesRelativeFont: true
+        )
+            .tint(textColor)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
             .messageEffects(comment.effects, hasPlayedAppearance: true)
             // Halo renforcé sur le corps du commentaire — c'est le texte le plus
-            // long, donc le plus exposé à un fond clair/chargé. Blanc plein +
-            // double ombre = lisible partout sans cartouche.
-            .storyOverlayLegible(strong: true)
+            // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
+            // suit `colorScheme` : noir pour détacher un texte clair d'un fond
+            // clair, blanc pour détacher un texte sombre d'un fond sombre/chargé.
+            .storyOverlayLegible(strong: true, isLightText: colorScheme == .dark)
     }
 
     private var actionRow: some View {
-        HStack(spacing: 16) {
+        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
+        return HStack(spacing: 16) {
             Button {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                     onToggleLike()
@@ -2745,12 +2818,12 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.92))
+                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
                         .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.85))
+                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.85))
                     }
                 }
                 .contentShape(Rectangle())
@@ -2766,7 +2839,7 @@ struct StoryCommentRowView: View, Equatable {
                     Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.88))
+                .foregroundColor(overlayColor.opacity(0.88))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2776,22 +2849,30 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.top, 2)
         // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
-        .storyOverlayLegible()
+        .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
 }
 
 // MARK: - Story Overlay Legibility
 
 extension View {
-    /// Halo sombre pour le texte/les icônes qui flottent directement au-dessus
-    /// d'une story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
+    /// Halo pour le texte/les icônes qui flottent directement au-dessus d'une
+    /// story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
     /// traitement approuvé de la sidebar (`StoryActionButton`, 2026-06-03) : une
     /// ombre serrée pour des glyphes nets + une ombre plus diffuse pour détacher
     /// le contenu d'un fond clair ou chargé. `strong` pour les longs paragraphes.
-    func storyOverlayLegible(strong: Bool = false) -> some View {
-        self
-            .shadow(color: .black.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
-            .shadow(color: .black.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
+    ///
+    /// `isLightText` choisit le SENS du halo : un halo NOIR détache un texte
+    /// clair (blanc) d'un fond CLAIR — comportement historique, toujours le
+    /// défaut. Un texte SOMBRE (`StoryCommentRowView.legibleOverlayColor` sur
+    /// fond de story clair) a besoin de l'inverse : un halo BLANC pour se
+    /// détacher d'un fond sombre/chargé, sinon le halo se fond dans le texte
+    /// lui-même et redevient invisible (bug user 2026-08-11).
+    func storyOverlayLegible(strong: Bool = false, isLightText: Bool = true) -> some View {
+        let haloColor: Color = isLightText ? .black : .white
+        return self
+            .shadow(color: haloColor.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
+            .shadow(color: haloColor.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
     }
 }
 
@@ -2813,6 +2894,16 @@ extension StoryCommentRowView {
             blue: Double(b + (1 - b) * f)
         )
     }
+
+    /// Couleur du texte/icônes du corps du commentaire (contenu, séparateurs,
+    /// actions) — dérivée du SCHÉMA DE COULEUR du canvas de la story
+    /// (`readerChromeScheme`, posé sur l'overlay par le viewer), jamais d'un
+    /// blanc fixe. Bug user 2026-08-11 : un fond de story clair/blanc rendait
+    /// le texte blanc totalement illisible, le halo seul ne suffisant pas à
+    /// cette extrémité. Pure + testable.
+    static func legibleOverlayColor(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white : MeeshyColors.indigo950
+    }
 }
 
 // MARK: - Story Action Button
@@ -2833,12 +2924,37 @@ struct StoryActionButton: View {
     /// (non-nil) sélectionne la couleur du contour (cf. `body`).
     var accentOutline: String? = nil
     var accentOutlineColor: Color = .clear
+    /// Sites porteurs d'un geste séquencé longpress→drag (scrub) : le tap
+    /// interne d'un `Button` consomme le touch et la séquence posée en
+    /// `.highPriorityGesture` ne s'active JAMAIS — un maintien de 0,9 s
+    /// partait en ❤️ direct au relâchement au lieu d'ouvrir le strip
+    /// (reproduit au stream HID simulateur, 2026-08-11). `true` = vue plate
+    /// + `TapGesture` : le tap court reste servi (la séquence échoue sous
+    /// 0,25 s), le maintien laisse la séquence de l'appelant gagner.
+    /// VoiceOver est servi par une `accessibilityAction` explicite — VO ne
+    /// synthétise pas de TapGesture (leçon du bouton Sound, +Sidebar).
+    var handlesTapViaGesture: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button {
-            action()
-        } label: {
+        Group {
+            if handlesTapViaGesture {
+                buttonLabel
+                    .onTapGesture { action() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { action() }
+            } else {
+                Button(action: action) { buttonLabel }
+                    .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var buttonLabel: some View {
+        Group {
             // Densité resserrée 2026-07-10 : spacing glyph→label 4→2 et padding
             // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
             // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
@@ -2913,10 +3029,6 @@ struct StoryActionButton: View {
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
 

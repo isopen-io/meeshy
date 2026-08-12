@@ -1,12 +1,17 @@
 import XCTest
-@testable import Meeshy
 
-/// Source-introspection guards for the Share Extension's send sheet.
+/// Gardes d'accessibilité sur la feuille d'envoi de l'extension de partage.
 ///
-/// `MeeshyShareExtension` is a separate `app-extension` target, so its types are
-/// not linkable from `MeeshyTests`. These tests therefore assert on the source
-/// text — the same idiom used by `ConversationInfoSheetAccessibilityTests` and
-/// `CallViewAccessibilityTests`.
+/// `MeeshyShareExtension` est une cible `app-extension` : ses types ne sont pas
+/// liables depuis ce bundle, les assertions lisent donc le source — même idiome
+/// que `ConversationInfoSheetAccessibilityTests` et `CallViewAccessibilityTests`.
+///
+/// **Réancrées le 2026-07-29** sur la feuille autonome (`ShareTargetRow`,
+/// aperçu texte/URL). Les GARANTIES sont inchangées — un seul élément par
+/// rangée, sélection annoncée autrement que par la couleur, pilules tactiles sur
+/// toute leur surface — seuls les noms ont suivi la réécriture. Les assertions
+/// portant sur les tuiles image/vidéo/fichier/localisation ont disparu avec
+/// elles : le lot 1 n'accepte que le texte et les URL.
 @MainActor
 final class ShareExtensionAccessibilityTests: XCTestCase {
 
@@ -20,26 +25,35 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// The vicinity following a source anchor, so an assertion targets the
-    /// construct next to that anchor rather than any same-token occurrence
-    /// elsewhere in the file.
-    private func vicinity(after anchor: String, in source: String, span: Int = 400) throws -> String {
-        guard let range = source.range(of: anchor) else {
-            XCTFail("ShareViewController must contain \(anchor)")
-            return ""
-        }
-        let end = source.index(range.upperBound, offsetBy: span, limitedBy: source.endIndex) ?? source.endIndex
-        return String(source[range.upperBound ..< end])
+    /// Réduit toute suite d'espaces à un seul, pour que les assertions portent
+    /// sur la FORME du code et non sur son indentation — l'ancienne version de
+    /// ce fichier matchait un retrait exact et se serait cassée au premier
+    /// reformatage sans qu'aucune garantie ne soit perdue.
+    private func condensed(_ source: String) -> String {
+        source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// A whole top-level type declaration, bounded by the next one. Preferred over
-    /// `vicinity(after:span:)` when the region is a type body: a fixed span silently
-    /// stops covering the tail as the type grows, and can bleed into its neighbour —
-    /// both of which would make an assertion pass or fail for the wrong reason.
+    /// Corps d'un membre, borné par le membre suivant. Nécessaire pour compter
+    /// des occurrences : la feuille contient TROIS `Button` (les deux boutons
+    /// d'action et la rangée de conversation), donc un décompte sur le fichier
+    /// entier mesurerait autre chose que ce qu'il prétend.
+    private func member(_ signature: String, in source: String) throws -> String {
+        guard let range = source.range(of: signature) else {
+            XCTFail("ShareViewController doit déclarer \(signature)")
+            return ""
+        }
+        let rest = source[range.upperBound...]
+        let end = rest.range(of: "\n    private ")?.lowerBound ?? source.endIndex
+        return String(rest[..<end])
+    }
+
+    /// Corps d'une déclaration de type, borné par la suivante. Préféré à une
+    /// fenêtre de N caractères : un span figé cesse silencieusement de couvrir
+    /// la fin du type à mesure qu'il grossit, et peut déborder sur son voisin.
     private func declaration(of typeName: String, in source: String) throws -> String {
         let anchor = "struct \(typeName): View"
         guard let range = source.range(of: anchor) else {
-            XCTFail("ShareViewController must declare \(typeName)")
+            XCTFail("ShareViewController doit déclarer \(typeName)")
             return ""
         }
         let rest = source[range.upperBound...]
@@ -47,171 +61,162 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         return String(rest[..<end])
     }
 
-    // MARK: - Contact row
+    // MARK: - Rangée de conversation
 
-    func test_contactRow_exposesSingleAccessibilityElementNamedAfterTheContact() throws {
-        // The row is built from an avatar, a name, a status and a checkmark.
-        // Without an explicit element VoiceOver stops on each fragment and never
-        // conveys that the row as a whole is the thing you activate.
-        let source = try shareSource()
-        let nearRow = try declaration(of: "ContactRow", in: source)
+    func test_conversationRow_exposesSingleAccessibilityElementNamedAfterTheConversation() throws {
+        // La rangée est faite d'une pastille d'initiales, d'un nom et d'une
+        // coche. Sans élément explicite, VoiceOver s'arrête sur chaque fragment
+        // et ne dit jamais que c'est la rangée entière qu'on active.
+        let row = condensed(try declaration(of: "ShareTargetRow", in: try shareSource()))
+
         XCTAssertTrue(
-            nearRow.contains(".accessibilityElement(children: .ignore)"),
-            "ContactRow must collapse its avatar/name/status/checkmark fragments into one " +
-            "accessibility element so VoiceOver offers a single actionable stop."
+            row.contains(".accessibilityElement(children: .ignore)"),
+            "ShareTargetRow doit replier pastille/nom/coche en un seul élément."
         )
         XCTAssertTrue(
-            nearRow.contains(".accessibilityLabel(contact.name)"),
-            "ContactRow's accessible name must be the contact's name."
-        )
-        XCTAssertTrue(
-            nearRow.contains(".accessibilityValue(contact.status ?? \"\")"),
-            "The contact's presence status must be exposed as the element's value, not lost " +
-            "when the fragments are collapsed."
+            row.contains(".accessibilityLabel(target.displayName)"),
+            "Le nom accessible de la rangée doit être celui de la conversation."
         )
     }
 
-    func test_contactRow_announcesSelectionBeyondColour() throws {
-        // Selection was signalled by a blue tint plus a checkmark glyph only —
-        // colour/shape alone (WCAG 1.4.1). The `.isSelected` trait lets iOS
-        // announce the state in the user's own language, with no new i18n key.
-        let source = try shareSource()
-        let nearRow = try declaration(of: "ContactRow", in: source)
+    func test_conversationRow_announcesSelectionBeyondColour() throws {
+        // La sélection ne tenait qu'à une teinte et une coche — couleur et forme
+        // seules (WCAG 1.4.1). Le trait `.isSelected` laisse iOS annoncer l'état
+        // dans la langue de l'utilisateur, sans nouvelle clé i18n.
+        let row = condensed(try declaration(of: "ShareTargetRow", in: try shareSource()))
+
         XCTAssertTrue(
-            nearRow.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
-            "The selected contact must carry the .isSelected trait so VoiceOver announces the " +
-            "current choice instead of leaving it to the blue tint and checkmark."
+            row.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
+            "La conversation sélectionnée doit porter le trait .isSelected."
         )
     }
 
-    func test_contactRow_isActivatedByARealButton() throws {
-        // `.onTapGesture` on a plain container gives no `.isButton` trait, no
-        // press feedback and no Full Keyboard Access focus. A real Button does.
+    func test_conversationRow_isActivatedByARealButton() throws {
+        // `.onTapGesture` sur un conteneur nu ne donne ni trait .isButton, ni
+        // retour d'appui, ni focus Full Keyboard Access. Un vrai Button, si.
         let source = try shareSource()
+
         XCTAssertFalse(
             source.contains(".onTapGesture"),
-            "Contact selection must go through a Button, not a bare .onTapGesture container."
+            "La sélection doit passer par un Button, pas par un .onTapGesture nu."
         )
-        let nearList = try vicinity(after: "ForEach(filteredContacts)", in: source, span: 400)
+
+        let list = condensed(source)
         XCTAssertTrue(
-            nearList.contains("selectedContactId = contact.id") && nearList.contains(".buttonStyle(.plain)"),
-            "The contact row must be wrapped in a Button with .buttonStyle(.plain) so the native " +
-            "control behaviour is gained without altering the row's appearance."
+            list.contains("selectedId = target.id") && list.contains(".buttonStyle(.plain)"),
+            "La rangée doit être enveloppée dans un Button en .buttonStyle(.plain), "
+            + "pour gagner le comportement natif sans changer son apparence."
         )
     }
 
-    // MARK: - Action buttons
+    // MARK: - Aperçu du contenu partagé
+
+    func test_contentPreview_exposesOneNamedElementCarryingTheSharedText() throws {
+        // L'aperçu est un symbole SF décoratif plus le contenu. Non replié,
+        // VoiceOver annonce le glyphe (« Doc Text Fill ») comme du contenu.
+        let view = condensed(try declaration(of: "ShareContentView", in: try shareSource()))
+
+        XCTAssertTrue(
+            view.contains(".accessibilityElement(children: .ignore)"),
+            "L'aperçu doit replier glyphe et texte en un seul élément."
+        )
+        XCTAssertTrue(
+            view.contains(".accessibilityLabel(isLink(content)"),
+            "L'aperçu doit être nommé d'après le TYPE partagé (lien ou texte)."
+        )
+        XCTAssertTrue(
+            view.contains(".accessibilityValue(content)"),
+            "Replier l'aperçu ne doit pas escamoter le contenu partagé : il va dans la valeur."
+        )
+    }
+
+    /// Le lot 1 n'accepte que deux natures de contenu ; les deux doivent être
+    /// nommées, sinon un aperçu resterait muet.
+    func test_contentPreview_namesBothShippedContentKinds() throws {
+        let source = try shareSource()
+
+        for key in ["share.type.text", "share.type.url"] {
+            XCTAssertTrue(
+                source.contains("\"\(key)\""),
+                "\(key) doit nommer l'aperçu correspondant."
+            )
+        }
+    }
+
+    /// Corollaire de la portée annoncée : aucune clé de type non expédié ne doit
+    /// subsister dans le code, sinon l'écran prétendrait savoir traiter un
+    /// contenu que l'`Info.plist` n'accepte plus.
+    func test_contentPreview_doesNotNameUnshippedContentKinds() throws {
+        let source = try shareSource()
+
+        for key in ["share.type.image", "share.type.video", "share.type.file", "share.type.location"] {
+            XCTAssertFalse(
+                source.contains("\"\(key)\""),
+                "\(key) désigne un type que le lot 1 n'accepte pas — l'Info.plist ne l'annonce plus."
+            )
+        }
+    }
+
+    // MARK: - Titre de section
+
+    func test_sendToHeading_isExposedToTheRotor() throws {
+        let view = condensed(try declaration(of: "ShareContentView", in: try shareSource()))
+
+        guard let headingRange = view.range(of: "share.sendTo") else {
+            return XCTFail("La feuille doit porter un titre de section « Envoyer à »")
+        }
+        let after = view[headingRange.upperBound...].prefix(300)
+
+        XCTAssertTrue(
+            after.contains(".accessibilityAddTraits(.isHeader)"),
+            "Le titre « Envoyer à » doit porter .isHeader pour que le rotor Titres y saute."
+        )
+    }
+
+    // MARK: - Boutons d'action
 
     func test_actionButtons_areLocalized() throws {
-        // "Cancel" / "Send" / the navigation title were raw literals while the
-        // rest of the file already used the String(localized:defaultValue:) form.
         let source = try shareSource()
+
         XCTAssertFalse(
             source.contains("Button(\"Cancel\")") || source.contains("Button(\"Send\")"),
-            "The sheet's action buttons must not carry raw string literals."
+            "Les boutons d'action ne doivent pas porter de littéral brut."
         )
         for key in ["share.cancel", "share.send", "share.title"] {
             XCTAssertTrue(
                 source.contains("String(localized: \"\(key)\""),
-                "\(key) must be declared with String(localized:defaultValue:), matching the " +
-                "share.* convention already used by this file."
+                "\(key) doit être déclarée en String(localized:defaultValue:)."
             )
         }
     }
-
-    // MARK: - Shared-item preview tiles
-
-    func test_sharedItemPreview_exposesOneNamedElementPerTile() throws {
-        // Each tile is a decorative SF Symbol plus an optional caption. Un-collapsed,
-        // VoiceOver read the glyph ("Doc Text Fill") as content; the .image case
-        // carried no text at all and was announced as a bare, nameless image.
-        let source = try shareSource()
-        let nearPreview = try declaration(of: "SharedItemPreview", in: source)
-        XCTAssertTrue(
-            nearPreview.contains(".accessibilityElement(children: .ignore)"),
-            "SharedItemPreview must collapse its glyph and caption into a single element so the " +
-            "decorative SF Symbol stops being announced as content."
-        )
-        XCTAssertTrue(
-            nearPreview.contains(".accessibilityLabel(typeName)"),
-            "Every tile — including the .image case, which prints no caption — must be named " +
-            "after the kind of content being shared."
-        )
-        XCTAssertTrue(
-            nearPreview.contains(".accessibilityValue(spokenContent)"),
-            "Collapsing the tile must not drop the shared text/URL preview; it belongs in the value."
-        )
-    }
-
-    func test_sharedItemPreview_namesEveryContentKind() throws {
-        // typeName must be total over SharedItemType: a missing case would leave a
-        // tile unnamed, which is precisely the .image defect this fixes.
-        let source = try shareSource()
-        let nearTypeName = try vicinity(after: "private var typeName: String", in: source, span: 800)
-        for key in [
-            "share.type.text", "share.type.url", "share.type.image",
-            "share.type.video", "share.type.file", "share.type.location"
-        ] {
-            XCTAssertTrue(
-                nearTypeName.contains("\"\(key)\""),
-                "\(key) must be part of the spoken tile name so no SharedItemType is left unnamed."
-            )
-        }
-        // The three kinds that already print a caption must speak that same caption's
-        // key, so the collapsed element cannot drift from what is on screen.
-        for reusedKey in ["share.type.video", "share.type.file", "share.type.location"] {
-            XCTAssertEqual(
-                source.components(separatedBy: "\"\(reusedKey)\"").count - 1, 2,
-                "\(reusedKey) must appear exactly twice — once as the visible caption, once as the " +
-                "spoken name — rather than being duplicated under a new a11y-only key."
-            )
-        }
-    }
-
-    // MARK: - Section heading
-
-    func test_sendToHeading_isExposedToTheRotor() throws {
-        let source = try shareSource()
-        let nearHeading = try vicinity(after: "share.sendTo", in: source, span: 300)
-        XCTAssertTrue(
-            nearHeading.contains(".accessibilityAddTraits(.isHeader)"),
-            "The 'Send to' section title must carry .isHeader so VoiceOver's Headings rotor can " +
-            "jump straight to the contact list."
-        )
-    }
-
-    // MARK: - Action buttons
 
     func test_sendButton_labelStaysLegibleWhileDisabled() throws {
-        // The label was hard-coded to .white over a Color.secondary.opacity(0.2)
-        // fill while no contact was picked — white on near-white, ~1.2:1.
-        let source = try shareSource()
+        // Le label était figé à .white par-dessus un fond Color.secondary
+        // opacité 0,2 tant qu'aucune conversation n'était choisie — blanc sur
+        // quasi-blanc, ~1,2:1, le bouton paraissait vide.
+        let source = condensed(try shareSource())
+
         XCTAssertTrue(
-            source.contains(".foregroundColor(selectedContactId != nil ? .white : .secondary)"),
-            "The Send button's label colour must follow its enabled state; .white over the " +
-            "disabled grey fill fails WCAG 1.4.3 and reads as a blank button."
+            source.contains(".foregroundStyle(canSend ? Color.white : Color.secondary)"),
+            "La couleur du label d'envoi doit suivre son état actif ; .white sur le fond "
+            + "gris désactivé échoue à WCAG 1.4.3."
         )
     }
 
     func test_actionButtons_areTappableAcrossTheirWholePill() throws {
-        // `.frame(maxWidth:).padding()` applied *outside* a Button styles the
-        // pill but leaves the hit region on the text glyph alone. Moving both
-        // inside the label makes the whole 44pt-tall pill the touch target.
-        let source = try shareSource()
-        let nearActions = try vicinity(after: "// Action buttons", in: source, span: 1200)
+        // `.frame(maxWidth:).padding()` appliqués À L'EXTÉRIEUR d'un Button
+        // dessinent la pilule mais laissent la zone tactile sur le seul glyphe.
+        // À l'intérieur du label, c'est toute la pilule de 44 pt qui répond.
+        let bar = condensed(try member("private var actionBar: some View", in: try shareSource()))
+
         XCTAssertEqual(
-            nearActions.components(separatedBy: "} label: {").count - 1, 2,
-            "Both action buttons must use the trailing-label form so their styling can live inside the label."
+            bar.components(separatedBy: "} label: {").count - 1, 2,
+            "Les deux boutons d'action doivent utiliser la forme à label fermant."
         )
-        // Text -> .frame(maxWidth: .infinity) -> .padding(), i.e. the sizing sits on the
-        // label's own content, which is what defines a Button's hit region.
-        let sizedLabels = nearActions.components(
-            separatedBy: ".frame(maxWidth: .infinity)\n                            .padding()"
-        ).count - 1
         XCTAssertEqual(
-            sizedLabels, 2,
-            "Both action buttons must carry .frame(maxWidth: .infinity) and .padding() inside their " +
-            "label so the entire pill is tappable, not just the text glyph."
+            bar.components(separatedBy: ".frame(maxWidth: .infinity) .padding()").count - 1, 2,
+            "Les deux boutons doivent porter .frame(maxWidth: .infinity) et .padding() DANS "
+            + "leur label, pour que toute la pilule soit tactile et pas seulement le texte."
         )
     }
 }

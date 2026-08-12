@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Mail, Phone, KeyRound, Shield } from 'lucide-react';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 interface ExistingAccountInfo {
   type: 'email' | 'phone';
@@ -67,7 +68,7 @@ export function RecoveryChoiceStep({
         >
           <div className="flex items-center gap-4">
             {existingAccount.avatar ? (
-              <img src={existingAccount.avatar} alt="" className="w-14 h-14 rounded-full ring-2 ring-violet-500" />
+              <img src={buildAttachmentUrl(existingAccount.avatar) ?? undefined} alt="" className="w-14 h-14 rounded-full ring-2 ring-violet-500" />
             ) : (
               <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
                 {existingAccount.maskedDisplayName?.[0] || '?'}

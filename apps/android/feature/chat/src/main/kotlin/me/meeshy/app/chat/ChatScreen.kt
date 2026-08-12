@@ -1,10 +1,15 @@
 package me.meeshy.app.chat
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
@@ -123,6 +128,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -159,6 +165,11 @@ import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
+import me.meeshy.sdk.model.waveform.VoiceRecordingFile
+import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
+import me.meeshy.sdk.model.waveform.VoiceRecordingSession
+import java.io.File
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -188,6 +199,7 @@ import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette
@@ -228,12 +240,40 @@ fun ChatScreen(
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
-    val listItems = remember(state.messages) {
-        buildChatListItems(state.messages, ZoneId.systemDefault())
+    // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
+    // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
+    // so newest content stays pinned to the bottom edge without any scroll-
+    // compensation code — the §C inverted-list rewrite's sub-slice 2 (see
+    // `PROGRESS.md`). `listItems` stays oldest-first (the natural,
+    // chronological SSOT `buildChatListItems` produces); `renderedItems` is
+    // the cheap `asReversed()` VIEW actually fed to the `LazyColumn` and to
+    // every pure function below that scrolls/indexes into rendered rows.
+    val orientation = ChatListOrientation.BottomUp
+    val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer) {
+        buildChatListItems(
+            state.messages,
+            ZoneId.systemDefault(),
+            state.firstUnreadMessageId,
+            showEncryptionNotice = state.showEncryptionDisclaimer,
+        )
     }
+    val renderedItems = remember(listItems) { listItems.asReversed() }
 
     val replyThreads = remember(state.messages) {
         ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
+    }
+
+    // One-shot open scroll: the first time the list is populated and the unread
+    // boundary has resolved, land on the "new messages" separator if there is
+    // one, otherwise on the newest message (bottom). Waiting for the resolution
+    // flag keeps the jump from firing against an empty/unsettled window; the
+    // latch guarantees the boundary is stable, so this fires exactly once.
+    var didOpenScroll by remember { mutableStateOf(false) }
+    LaunchedEffect(state.unreadBoundaryResolved, renderedItems) {
+        if (didOpenScroll || !state.unreadBoundaryResolved) return@LaunchedEffect
+        val target = InitialScrollTarget.of(renderedItems, orientation) ?: return@LaunchedEffect
+        listState.scrollToItem(target)
+        didOpenScroll = true
     }
 
     // Auto-scroll on a new message only when the user is already at the
@@ -242,22 +282,33 @@ fun ChatScreen(
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
         if (listItems.isEmpty()) return@LaunchedEffect
         val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
-        if (isOwnMessage || listState.isNearBottom(listItems.lastIndex)) {
-            listState.animateScrollToItem(listItems.lastIndex)
+        val nearBottom = ChatScrollGeometry.isNearBottom(
+            edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            ),
+            lastIndex = listItems.lastIndex,
+            orientation = orientation,
+        )
+        if (isOwnMessage || nearBottom) {
+            listState.animateScrollToItem(
+                ChatScrollGeometry.bottomIndex(listItems.lastIndex, orientation),
+            )
         }
     }
 
     // Jump to the focused search hit whenever it changes (new query, next/prev).
     LaunchedEffect(state.search.activeMessageId) {
         val target = state.search.activeMessageId ?: return@LaunchedEffect
-        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        val index = renderedItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
         if (index >= 0) listState.animateScrollToItem(index)
     }
 
     // Jump to the quoted original when a reply-preview tap requests it, then consume.
     LaunchedEffect(state.scrollToMessageId) {
         val target = state.scrollToMessageId ?: return@LaunchedEffect
-        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        val index = renderedItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
         if (index >= 0) listState.animateScrollToItem(index)
         viewModel.onScrollHandled()
     }
@@ -266,7 +317,27 @@ fun ChatScreen(
         state.messages.map { it.toAffordanceMessage() }
     }
     val isNearBottom by remember(listItems) {
-        derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+        derivedStateOf {
+            ChatScrollGeometry.isNearBottom(
+                edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
+                    firstVisibleIndex = listState.firstVisibleItemIndex,
+                    lastVisibleIndex = listState.lastVisibleItemIndex(),
+                    orientation = orientation,
+                ),
+                lastIndex = listItems.lastIndex,
+                orientation = orientation,
+            )
+        }
+    }
+    val pinnedDayMillis by remember(renderedItems) {
+        derivedStateOf {
+            val topIndex = ChatScrollGeometry.topEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            )
+            PinnedDayHeader.governingDayMillis(renderedItems, topIndex, orientation)
+        }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
@@ -280,12 +351,24 @@ fun ChatScreen(
     }
 
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
+        snapshotFlow {
+            ChatScrollGeometry.topEdgeIndex(
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                lastVisibleIndex = listState.lastVisibleItemIndex(),
+                orientation = orientation,
+            )
+        }
             .distinctUntilChanged()
             .collect { index ->
-                if (index <= LOAD_OLDER_THRESHOLD) viewModel.loadOlder()
+                val nearOldEnd = ChatScrollGeometry.isNearOldEnd(
+                    edgeIndex = index,
+                    lastIndex = listItems.lastIndex,
+                    orientation = orientation,
+                )
+                if (nearOldEnd) viewModel.loadOlder()
             }
     }
+
 
     val accentColor = state.accentColorHex
         ?.let { hexColor(it) }
@@ -464,28 +547,19 @@ fun ChatScreen(
                     Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
+                        reverseLayout = true,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
                     ) {
-                        if (state.isLoadingOlder) {
-                            item(key = "loading-older") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = MeeshySpacing.sm),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = accentColor,
-                                    )
-                                }
-                            }
-                        }
-                        items(listItems, key = { it.key }) { item ->
+                        // Under `reverseLayout`, the HIGHEST Compose item index renders
+                        // at the visual TOP — so the "loading older history" spinner
+                        // goes AFTER `items(renderedItems)` (not before, as it did
+                        // pre-flip) to land above the oldest currently-loaded message.
+                        items(renderedItems, key = { it.key }) { item ->
                             when (item) {
                                 is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
+                                is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
+                                is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
                                 is ChatListItem.Message -> {
                                     val bubble = item.bubble
                                     SwipeToReplyContainer(
@@ -576,6 +650,30 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        if (state.isLoadingOlder) {
+                            item(key = "loading-older") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = MeeshySpacing.sm),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = accentColor,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    pinnedDayMillis?.let { millis ->
+                        PinnedDayHeaderPill(
+                            dayMillis = millis,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = MeeshySpacing.sm),
+                        )
                     }
                     ScrollToBottomControl(
                         affordance = scrollAffordance,
@@ -589,7 +687,9 @@ fun ChatScreen(
                             )
                             scope.launch {
                                 if (listItems.isNotEmpty()) {
-                                    listState.animateScrollToItem(listItems.lastIndex)
+                                    listState.animateScrollToItem(
+                                        ChatScrollGeometry.bottomIndex(listItems.lastIndex, orientation),
+                                    )
                                 }
                             }
                         },
@@ -923,9 +1023,6 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
     }
 }
 
-private const val LOAD_OLDER_THRESHOLD = 2
-private const val BOTTOM_TOLERANCE_ITEMS = 2
-
 /**
  * Seconds of the release velocity to project past the current translation when
  * resolving the overlay drag — the Compose analogue of UIKit's
@@ -933,11 +1030,18 @@ private const val BOTTOM_TOLERANCE_ITEMS = 2
  */
 private const val OVERLAY_DRAG_VELOCITY_PROJECTION_SECONDS = 0.1f
 
-private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
-    if (lastIndex <= 0) return true
-    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-    return lastVisible >= lastIndex - BOTTOM_TOLERANCE_ITEMS
-}
+/**
+ * The highest visible row index, or `0` when nothing has laid out yet.
+ * Combined with `LazyListState.firstVisibleItemIndex` (the lowest visible
+ * index), this is the raw Compose-native pair [ChatScrollGeometry.bottomEdgeIndex]
+ * / [ChatScrollGeometry.topEdgeIndex] translate into the chat's semantic
+ * bottom/old-end edges — which raw index means which edge flips with
+ * `reverseLayout`, so callers never read this directly for that purpose.
+ * Thin Compose glue over [LazyListState]'s layout info; the actual edge
+ * arithmetic is the pure, tested [ChatScrollGeometry].
+ */
+private fun LazyListState.lastVisibleItemIndex(): Int =
+    layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
 /**
  * Wraps a message bubble with the swipe-to-reply gesture. The bubble tracks the
@@ -1037,6 +1141,99 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(MeeshyRadius.pill))
                 .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.7f))
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        )
+    }
+}
+
+/**
+ * The floating "sticky" day pill (WhatsApp-style) that hovers at the top of the
+ * message list, naming the day of the topmost visible content. Which day it shows
+ * is decided by [PinnedDayHeader.governingDayMillis]; this only draws it. It reuses
+ * the same label + pill treatment as [DaySeparator] with a soft shadow so it reads
+ * as floating above the scrolling content.
+ */
+@Composable
+private fun PinnedDayHeaderPill(dayMillis: Long, modifier: Modifier = Modifier) {
+    val label = MessageDayLabel.label(
+        dayMillis = dayMillis,
+        nowMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        today = stringResource(R.string.chat_date_today),
+        yesterday = stringResource(R.string.chat_date_yesterday),
+        dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
+    )
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = modifier
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(MeeshyRadius.pill))
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.95f))
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+    )
+}
+
+/**
+ * The "new messages" boundary drawn directly above the first unread message
+ * (port of iOS's unread separator). Accent-coherent: a thin accent rule on each
+ * side of a centered accent-tinted "Nouveaux messages" pill.
+ */
+@Composable
+private fun UnreadSeparatorRow(accentColor: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+        Text(
+            text = stringResource(R.string.chat_unread_separator),
+            style = MaterialTheme.typography.labelMedium,
+            color = accentColor,
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(accentColor.copy(alpha = 0.12f))
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+    }
+}
+
+/**
+ * The end-to-end-encryption notice pinned at the top of an encrypted conversation's
+ * history — the faithful port of iOS `ConversationView.encryptionDisclaimer` (lock
+ * glyph in an accent-tinted disc + centered reassurance copy). Accent-coherent per
+ * the conversation-context colour rule; "when to show it" is the pure
+ * [EncryptionDisclaimer] decision surfaced by [ChatUiState.showEncryptionDisclaimer].
+ */
+@Composable
+private fun EncryptionNoticeRow(accentColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.xxl, vertical = MeeshySpacing.lg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(accentColor.copy(alpha = 0.15f))
+                .padding(MeeshySpacing.sm)
+                .size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.chat_encryption_notice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -2321,6 +2518,86 @@ private fun ChatComposer(
         val picked = uri?.let { readPickedAttachment(context, it) } ?: return@rememberLauncherForActivityResult
         onPickFile(picked.bytes, picked.fileName, picked.mimeType)
     }
+    var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
+    var activeVoiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var activeVoiceRecordingFile by remember { mutableStateOf<File?>(null) }
+
+    // Stops+releases the real MediaRecorder session (Android hardware), distinct from
+    // VoiceRecordingSession.stop() (the pure UI state machine) below — the two "stop"s
+    // are independent concerns. Returns the recorded file, if any, for the caller to
+    // decide what to do with (send it, or discard it on cancel).
+    fun releaseVoiceRecorder(): File? {
+        activeVoiceRecorder?.let { recorder ->
+            // stop() throws IllegalStateException if called too soon after start() with
+            // no data captured yet (e.g. a cancel within the same frame as the tap) —
+            // never worth crashing the composer over a take too short to matter.
+            runCatching { recorder.stop() }
+            recorder.release()
+        }
+        activeVoiceRecorder = null
+        val file = activeVoiceRecordingFile
+        activeVoiceRecordingFile = null
+        return file
+    }
+
+    fun startVoiceRecording() {
+        val dir = File(context.cacheDir, "voice").apply { mkdirs() }
+        val file = File(dir, VoiceRecordingFile.next(System.currentTimeMillis()))
+        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }
+        try {
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setOutputFile(file.absolutePath)
+            recorder.prepare()
+            recorder.start()
+            activeVoiceRecorder = recorder
+            activeVoiceRecordingFile = file
+            recording = recording.start()
+        } catch (e: Exception) {
+            recorder.release()
+            file.delete()
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) startVoiceRecording() }
+
+    fun requestVoiceRecording() {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) startVoiceRecording() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    fun cancelVoiceRecording() {
+        releaseVoiceRecorder()?.delete()
+        recording = recording.cancel()
+    }
+
+    // Both the pill's Stop and Send controls finalise the take the same way — there is
+    // no staging tray in this composer (every other attachment kind, file/clipboard, is
+    // delivered immediately on pick too), so "stop and add to attachments" reads as
+    // "deliver it now", identically to "send". A take below the minimum sendable
+    // duration (canSend == false) never reaches here — the pill disables both buttons.
+    fun finishVoiceRecording() {
+        val file = releaseVoiceRecorder()
+        val stop = recording.stop()
+        recording = stop.session
+        val completedFile = file.takeIf { stop.outcome is VoiceRecordingOutcome.Completed }
+        val bytes = completedFile?.let { runCatching { it.readBytes() }.getOrNull() }
+        file?.delete()
+        if (completedFile != null && bytes != null && bytes.isNotEmpty()) {
+            onPickFile(bytes, completedFile.name, "audio/mp4")
+        }
+    }
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
@@ -2400,20 +2677,23 @@ private fun ChatComposer(
                     modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
                 )
             }
-            var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
             LaunchedEffect(recording.isRecording) {
                 while (recording.isRecording) {
                     delay(100)
                     recording = recording.tick(0.1)
+                    val amplitude = activeVoiceRecorder?.let { runCatching { it.maxAmplitude }.getOrNull() }
+                    if (amplitude != null) {
+                        recording = recording.meter(MicAmplitudeDecibels.toDecibels(amplitude))
+                    }
                 }
             }
             if (recording.isRecording) {
                 VoiceRecordingPill(
                     session = recording,
                     accentColor = accentColor,
-                    onCancel = { recording = recording.cancel() },
-                    onStop = { recording = recording.stop().session },
-                    onSend = { recording = recording.stop().session },
+                    onCancel = ::cancelVoiceRecording,
+                    onStop = ::finishVoiceRecording,
+                    onSend = ::finishVoiceRecording,
                     modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                 )
             } else if (affordances.isReadOnly) {
@@ -2465,7 +2745,7 @@ private fun ChatComposer(
                     if (!isEditing && draft.isBlank() && clipboardContent == null &&
                         affordances.canSendAudios
                     ) {
-                        IconButton(onClick = { recording = recording.start() }) {
+                        IconButton(onClick = ::requestVoiceRecording) {
                             Icon(
                                 imageVector = Icons.Filled.Mic,
                                 contentDescription = stringResource(R.string.chat_record_voice),

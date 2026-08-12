@@ -65,6 +65,16 @@ class CategorySnapshotStoreTest {
         assertThat(store.lastSyncedAt().first()).isEqualTo(55L)
     }
 
+    @Test
+    fun inMemory_clearAll_resetsToAColdCache() = runBlocking {
+        val store = InMemoryCategorySnapshotStore(initial = listOf(cat("a", "A")), initialSyncedAt = 7L)
+
+        store.clearAll()
+
+        assertThat(store.observe().first()).isNull()
+        assertThat(store.lastSyncedAt().first()).isNull()
+    }
+
     // ── DataStoreCategorySnapshotStore ───────────────────────────────────────
 
     @Test
@@ -105,6 +115,22 @@ class CategorySnapshotStoreTest {
 
             assertThat(withTimeout(5_000) { store.observe().first() }).isEqualTo(emptyList<CategoryOption>())
             assertThat(store.lastSyncedAt().first()).isEqualTo(12L)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun dataStore_clearAll_resetsToAColdCache() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val store = DataStoreCategorySnapshotStore(newDataStore(scope, tmp.newFile("clear.preferences_pb")), json)
+            store.save(listOf(cat("work", "Work")), syncedAtMillis = 999L)
+
+            store.clearAll()
+
+            assertThat(withTimeout(5_000) { store.observe().first() }).isNull()
+            assertThat(store.lastSyncedAt().first()).isNull()
         } finally {
             scope.cancel()
         }

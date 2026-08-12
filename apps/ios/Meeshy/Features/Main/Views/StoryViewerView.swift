@@ -12,25 +12,26 @@ struct SharedContentWrapper: Identifiable {
 }
 
 /// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-story composer launched from the bottom-bar Partager button (C.1).
-/// Carrying both the source `StoryItem` and the original author's handle keeps
-/// the cover identifiable + supplies what `StoryComposerViewModel(reposting:authorHandle:)`
-/// needs without leaking optionals through the binding.
-struct RepostStorySourceWrapper: Identifiable {
+/// repost-as-post composer launched from the kebab menu's "Editer et republier
+/// en post" action (C.2). Feeds the
+/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+/// init introduced in B.7 — the sole surviving repost-as-story wrapper (the
+/// share-button-based `RepostStorySourceWrapper` cover was dead code, removed
+/// S6: the share button reposts directly via `PostService.repost`, see
+/// `StoryViewerView+Sidebar.swift`).
+struct RepostPostSourceWrapper: Identifiable {
     let id = UUID()
     let story: StoryItem
     let authorHandle: String
 }
 
-/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-post composer launched from the kebab menu's "Editer et republier
-/// en post" action (C.2). Mirrors `RepostStorySourceWrapper` but feeds the
-/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-/// init introduced in B.7.
-struct RepostPostSourceWrapper: Identifiable {
-    let id = UUID()
-    let story: StoryItem
-    let authorHandle: String
+/// Enveloppe `Identifiable` d'un `SharedPlace` pour le
+/// `.fullScreenCover(item:)` du reader — ouverte au tap d'une pastille de
+/// lieu de la story (Layer 6.6). Même identité que `BubbleFullscreenPlace`
+/// côté bulle : la paire de coordonnées.
+struct StoryReaderPlaceWrapper: Identifiable {
+    let place: SharedPlace
+    var id: String { "\(place.latitude),\(place.longitude)" }
 }
 
 /// Draft state for a single story's composer
@@ -357,6 +358,18 @@ struct StoryViewerView: View {
     @State var storyCommentsHasMore = false
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
+    /// Impulsion (mirroir `heartBouncePulse`) incrémentée UNIQUEMENT par la
+    /// réconciliation d'ouverture de `loadStoryCommentCount()` (+Content.swift :
+    /// cache commentaires local puis, si toujours à 0, une requête réseau
+    /// bornée ~400 ms) — jamais par une activité TEMPS RÉEL (`sendComment`,
+    /// le socket `comment:added` via `applyStoryCommentAdded` +Content.swift,
+    /// ou `StoryViewModel.applyStoryCommentCountDelta` qui tient
+    /// `currentStory?.commentCount` lui-même live). Ces trois derniers canaux
+    /// DOIVENT rester hors du gel du rail (directive 2026-07-10 : jamais de
+    /// bouton qui surgit en cours de lecture) ; seule cette impulsion dédiée
+    /// permet à `StoryActionSidebarView` de distinguer « le payload d'entrée
+    /// était périmé » de « quelqu'un vient de commenter pendant que je lis ».
+    @State var storyCommentCountReconciledPulse: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
@@ -585,6 +598,10 @@ struct StoryViewerView: View {
             PlaybackCoordinator.shared.stopAll()
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
+                // Relâche la déclaration de contenu actif — conditionnelle à
+                // l'identité pour rester correcte si un autre écran a déjà
+                // déclaré le sien entre-temps.
+                NotificationToastManager.shared.onPostClosed(story.id)
             }
             Task { await EngagementTracker.shared.end(surface: .storyViewer) }
         }
@@ -827,27 +844,18 @@ struct StoryViewerView: View {
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
-        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryComposerView(
-                viewModel: StoryComposerViewModel(
-                    reposting: wrapper.story,
-                    authorHandle: wrapper.authorHandle
-                ),
-                onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
-                    viewModel.publishStoryInBackground(
-                        slides: slides,
-                        slideImages: slideImages,
-                        loadedImages: loadedImages,
-                        loadedVideoURLs: loadedVideoURLs,
-                        loadedAudioURLs: loadedAudioURLs,
-                        originalLanguage: originalLanguage,
-                        visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
-                    )
-                    repostStoryComposerSource = nil
-                },
-                onDismiss: { repostStoryComposerSource = nil }
+        .fullScreenCover(item: $readerFullscreenPlace, onDismiss: { resumeTimer() }) { wrapper in
+            // Tap d'une pastille de lieu (Layer 6.6) : la story est déjà en
+            // pause (`pauseTimer()` au tap), la carte plein écran offre
+            // « Ouvrir dans Plans » / « Itinéraire » — même surface que la
+            // bulle de message (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: wrapper.place.latitude,
+                longitude: wrapper.place.longitude,
+                placeName: wrapper.place.name,
+                address: wrapper.place.address,
+                accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
+                senderName: currentGroup?.username
             )
         }
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
@@ -872,11 +880,14 @@ struct StoryViewerView: View {
                 },
                 onStoryImported: { result in
                     Logger.stories.info(
-                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
+                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) locations=\(result.locations.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
                     )
                 },
                 onDismiss: { editAndRepostAsPostSource = nil }
             )
+            .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
     }
 
@@ -1273,14 +1284,21 @@ struct StoryViewerView: View {
     }
 
     @State var showEmojiStrip = false // internal for cross-file extension access
-    @State private var bigReactionEmoji: String?
-    @State private var bigReactionPhase: Int = 0
-    /// Ticks on every reaction sent, through any path (quick strip or the
-    /// full-screen picker). Drives the heart-button bounce in the sidebar.
+    /// Réaction en vol vers le cœur (remplace la big reaction 100 pt).
+    @State var reactionFlight: StoryReactionFlight?
+    /// Cadre du bouton cœur dans StoryScrubSpace (cible du vol).
+    @State var heartFrame: CGRect = .zero
+    /// Scrub longpress→drag en cours sur le rail (pause le timer).
+    @State var isScrubbingRail = false
+    /// Ticks at the flight's ARRIVAL, not when the reaction is sent — the
+    /// impact is what bounces the heart, regardless of origin (quick strip,
+    /// scrub, or full-screen picker). Drives the heart-button bounce in the
+    /// sidebar.
     @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
-    @State private var repostStoryComposerSource: RepostStorySourceWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
+    @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -1356,12 +1374,13 @@ struct StoryViewerView: View {
             openingScale: openingScale,
             openingSlideFraction: openingSlideFraction,
             isRevealActive: isRevealActive,
-            bigReactionEmoji: bigReactionEmoji,
-            bigReactionPhase: bigReactionPhase,
-            heartBouncePulse: heartBouncePulse,
+            reactionFlight: $reactionFlight,
+            heartFrame: $heartFrame,
+            heartBouncePulse: $heartBouncePulse,
             storyReactionCount: storyReactionCount,
             storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
+            storyCommentCountReconciledPulse: storyCommentCountReconciledPulse,
             storyShareCount: currentStory?.shareCount ?? 0,
             storyViewCount: currentStory?.viewCount ?? 0,
             storyRepostCount: currentStory?.repostCount ?? 0,
@@ -1369,6 +1388,7 @@ struct StoryViewerView: View {
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             storyHasBackgroundAudio: storyHasBackgroundAudio,
+            headerBackgroundAudioDisplay: headerBackgroundAudioDisplay,
             storyHasAudioTranscript: storyHasAudioTranscript,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -1400,8 +1420,8 @@ struct StoryViewerView: View {
             isComposerEngaged: $isComposerEngaged,
             hasComposerContent: $hasComposerContent,
             sharedContentWrapper: $sharedContentWrapper,
-            repostStoryComposerSource: $repostStoryComposerSource,
             editAndRepostAsPostSource: $editAndRepostAsPostSource,
+            readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,
             selectedProfileUser: $selectedProfileUser,
             showReportSheet: $showReportSheet,
@@ -1419,7 +1439,10 @@ struct StoryViewerView: View {
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             keyboard: keyboard,
-            triggerStoryReaction: { triggerStoryReaction($0) },
+            triggerStoryReaction: { emoji, frame in
+                triggerStoryReaction(emoji, from: frame)
+            },
+            onScrubStateChanged: { isScrubbingRail = $0 },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
             onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
@@ -1427,15 +1450,14 @@ struct StoryViewerView: View {
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId, pendingMedia in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
+            sendComment: { text, effectFlags, parentId, pendingMedia, location in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia, location: location)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            storyTimeRemaining: { storyTimeRemaining($0) },
             deleteCurrentStory: { deleteCurrentStory() },
             repostAsPostDirect: { repostAsPostDirect() },
             dismissViewer: { dismissViewer() },
@@ -1543,65 +1565,37 @@ struct StoryViewerView: View {
 
     // MARK: - Story Reactions
 
-    private func triggerStoryReaction(_ emoji: String) {
+    /// `heartBouncePulse` n'est PLUS tiqué ici — il tique à l'ARRIVÉE du vol
+    /// (`StoryReactionFlightView.onArrived`, +Canvas.swift Layer 9), c'est
+    /// l'impact qui fait rebondir le cœur (spec scrub 2026-08-11).
+    private func triggerStoryReaction(_ emoji: String, from originFrame: CGRect? = nil) {
         HapticFeedback.medium()
 
-        // Full picker covers ENTIRE screen → must dismiss immediately so the
-        // big-reaction animation (`bigReactionEmoji`) is visible. Strip is a
-        // partial overlay → keep its 0.5s dismissal delay below (deliberate
-        // visual echo of the chosen emoji before the strip disappears).
         if showFullEmojiPicker {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 showFullEmojiPicker = false
             }
         }
-
-        // Big floating emoji — dramatic 3-phase animation
-        bigReactionEmoji = emoji
-        bigReactionPhase = 0
-        // Phase 1: burst in with overshoot
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) {
-            bigReactionPhase = 1
-        }
-        // Phase 1.5: subtle pulse at peak (secondary haptic)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            HapticFeedback.light()
-        }
-        // Phase 2: float up and dissolve
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            withAnimation(.easeOut(duration: 0.6)) { bigReactionPhase = 2 }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            bigReactionEmoji = nil
-            bigReactionPhase = 0
+        // La barre disparaît VITE (~120 ms) pour laisser la scène au vol
+        // (spec scrub 2026-08-11) — l'ancien écho de 0.5 s est supprimé.
+        withAnimation(.easeOut(duration: 0.12)) {
+            showEmojiStrip = false
         }
 
-        // Collapse strip after reaction (timer auto-resumes when showEmojiStrip=false)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                showEmojiStrip = false
-            }
-        }
+        // Vol tuile → cœur ; un tap direct (originFrame nil) part du cœur
+        // lui-même : le vol dégénère en pop sur place, même chemin de code.
+        let origin = originFrame ?? heartFrame
+        reactionFlight = StoryReactionFlight(emoji: emoji, from: origin)
 
-        // Snapshot captured BEFORE the optimistic mutation below — the sole
-        // rollback target if the network call fails (most notably the
-        // gateway's 409 REACTION_LIMIT_REACHED conflict when the user's
-        // emoji actually differs from an existing server-side reaction).
-        // Without this the optimistic emoji/counter bump was never undone:
-        // the UI kept the refused emoji and an inflated count forever.
+        // Snapshot capturé AVANT la mutation optimiste — cible du rollback si
+        // le réseau échoue (409 REACTION_LIMIT_REACHED notamment).
         let priorReactions = storyCurrentUserReactions
         let priorCount = storyReactionCount
 
-        // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
-        // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
-        // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
-        // `+= 1` inconditionnel gonflait le compteur visible à chaque tap
-        // (incohérent jusqu'au refresh serveur). Bug 2026-06-01.
         if !storyCurrentUserReactions.contains(emoji) {
             storyCurrentUserReactions.append(emoji)
             storyReactionCount += 1
         }
-        heartBouncePulse += 1
         sendReaction(emoji: emoji, priorReactions: priorReactions, priorCount: priorCount)
     }
 
@@ -1665,11 +1659,29 @@ struct StoryViewerView: View {
         )
     }
 
+    /// Sentinelle « Original » de la feuille des langues.
+    ///
+    /// Une story est multilingue par nature : ses overlays peuvent être écrits
+    /// dans des langues différentes. Revenir à l'original ne peut donc PAS se
+    /// faire en choisissant la langue d'origine de la story — un overlay rédigé
+    /// en français dans une story marquée `en` possède une traduction `en`, qui
+    /// serait servie à la place de son texte réel. Aligner tous les bouts sur
+    /// une seule langue en efface.
+    ///
+    /// `StoryTextObject.resolvedText` rend le texte source dès que la chaîne
+    /// préférée est vide. « Original » est donc une chaîne VIDE : chaque overlay
+    /// retombe sur son propre texte, dans sa propre langue. La valeur choisie ne
+    /// peut pas entrer en collision avec un code BCP-47.
+    nonisolated static let originalLanguageOverride = "__meeshy.original__"
+
     /// Helper pur (testable) : prépend l'override langue à la chaine préférée, dédupliqué.
     /// `nil`/vide → chaine de base inchangée. Sinon l'override passe en tête et est retiré
     /// de sa position d'origine (jamais de doublon).
+    ///
+    /// La sentinelle « Original » VIDE la chaine — voir `originalLanguageOverride`.
     static func viewerLanguageChain(base: [String], override: String?) -> [String] {
         guard let override, !override.isEmpty else { return base }
+        if override == originalLanguageOverride { return [] }
         return [override] + base.filter { $0 != override }
     }
 
@@ -1695,6 +1707,41 @@ struct StoryViewerView: View {
             effects: story.storyEffects,
             backgroundAudio: story.backgroundAudio
         )
+    }
+
+    /// Contenu à droite de la note du header (directive user 2026-08-02) :
+    /// un son de BIBLIOTHÈQUE s'annonce par le crédit défilant
+    /// « titre · @pseudo · M:SS » à la place de la sinusoïde ; une piste
+    /// PROPRE (première publication, même si la capture l'a versée ensuite à
+    /// la bibliothèque) garde la sinusoïde. Même résolveur que la chip du
+    /// canvas ; la fenêtre du FOND (fin = fin de slide) arme le compteur de
+    /// temps restant — primitives Equatable descendues en `let`, jamais le
+    /// `BackgroundEntry` privé du mixer.
+    var headerBackgroundAudioDisplay: AudioChipHeaderModel { // internal for cross-file access
+        guard let story = currentStory else { return AudioChipHeaderModel(display: .waveform) }
+        let bg = (story.storyEffects?.audioPlayerObjects ?? [])
+            .first(where: { $0.isBackground == true })
+        if let bg, bg.soundId != nil {
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: bg.soundId, title: bg.name,
+                    authorUsername: bg.soundAuthorUsername),
+                window: AudioChipPlaybackWindow(
+                    startTime: bg.startTime.map(TimeInterval.init),
+                    duration: bg.duration.map(TimeInterval.init),
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
+        }
+        if let entry = story.backgroundAudio {
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: entry.id, title: entry.title,
+                    authorUsername: entry.uploaderName),
+                window: AudioChipPlaybackWindow(
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
+        }
+        return AudioChipHeaderModel(display: .waveform)
     }
 
     /// Probes each foreground video of the current slide for a real audio track.

@@ -45,14 +45,14 @@ public struct NotificationRowView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onDelete {
                 Button(role: .destructive) { onDelete() } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !notification.isRead, let onMarkRead {
                 Button { onMarkRead() } label: {
-                    Label("Lu", systemImage: "envelope.open")
+                    Label(String(localized: "notifications.mark_read", defaultValue: "Lu", bundle: .module), systemImage: "envelope.open")
                 }
                 .tint(Color(hex: "4338CA"))
             }

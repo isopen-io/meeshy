@@ -46,15 +46,26 @@ final class OutboxKindCodableTests: XCTestCase {
         XCTAssertFalse(OutboxKind.markAsRead.countsTowardSyncIndicator)
     }
 
+    /// `markStoryViewed` est le troisième acquittement de la famille : « vu »
+    /// binaire, idempotent côté gateway (P2002 no-op), coalescé par storyId,
+    /// et sans destination de navigation (`OutboxUIItem.Source.unknown`) — un
+    /// tap sur la pastille ne mène nulle part. Une ligne définitivement
+    /// échouée squattait donc la pastille de l'écran d'accueil pendant les
+    /// 7 jours de rétention `.exhausted`, sans aucun geste pour l'écarter
+    /// (observé en prod : « Vues story non synchronisées 7/7 » permanent).
+    func test_markStoryViewed_doesNotCountTowardSyncIndicator() {
+        XCTAssertFalse(OutboxKind.markStoryViewed.countsTowardSyncIndicator)
+    }
+
     /// Toute autre opération (envoi / édition / suppression de message,
     /// réaction, mutations sociales…) représente une écriture utilisateur
     /// qui justifie l'indicateur de synchronisation.
     ///
-    /// `reportAttachmentStatus` rejoint `markAsRead` pour la même raison :
-    /// c'est une télémétrie de lecture, pas un contenu que l'utilisateur
-    /// attend de voir partir.
+    /// `reportAttachmentStatus` et `markStoryViewed` rejoignent `markAsRead`
+    /// pour la même raison : c'est de la télémétrie de consommation, pas un
+    /// contenu que l'utilisateur attend de voir partir.
     func test_allKindsExceptAcknowledgements_countTowardSyncIndicator() {
-        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus]
+        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed]
         for kind in OutboxKind.allCases where !acquittements.contains(kind) {
             XCTAssertTrue(
                 kind.countsTowardSyncIndicator,
@@ -83,12 +94,12 @@ final class OutboxKindCodableTests: XCTestCase {
         let p = MarkAsReadPayload(
             clientMutationId: "cmid_x",
             conversationId: "c1",
-            upToMessageId: "m1"
+            messageIds: ["m1"]
         )
         let d = try roundTrip(p)
         XCTAssertEqual(d.clientMutationId, "cmid_x")
         XCTAssertEqual(d.conversationId, "c1")
-        XCTAssertEqual(d.upToMessageId, "m1")
+        XCTAssertEqual(d.messageIds, ["m1"])
     }
 
     func test_sendFriendRequest_roundTrips() throws {

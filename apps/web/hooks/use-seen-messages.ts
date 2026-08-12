@@ -20,7 +20,10 @@ import { logger } from '@/utils/logger';
  *
  * Observer les nœuds plutôt que d'ajouter un `ref` par bulle évite de toucher
  * `BubbleMessageNormalView`, dont le `ref` sert déjà au scroll-to-message : les
- * bulles portent `id="message-<id>"`, c'est suffisant.
+ * bulles portent `id="message-<id>"`, c'est suffisant. En revanche le nœud
+ * rapporté par `MutationObserver` est la RACINE de la mutation, pas la bulle :
+ * la liste enveloppe chaque bulle dans un `<div key>` sans `id`, d'où la
+ * descente dans le sous-arbre (`forEachBubble`).
  *
  * Les messages émis par l'utilisateur lui-même ne sont pas filtrés ici : le
  * gateway les écarte déjà (`senderId: { not: participantId }`), et dupliquer
@@ -59,6 +62,26 @@ function messageIdOf(node: Node): string | null {
   if (!node.id.startsWith(BUBBLE_ID_PREFIX)) return null;
   const id = node.id.slice(BUBBLE_ID_PREFIX.length);
   return id.length > 0 ? id : null;
+}
+
+/**
+ * Applique `visit` à toute bulle du nœud muté : lui-même s'il en est une, ET
+ * ses descendants.
+ *
+ * `MutationObserver` rapporte le nœud RACINE de chaque insertion/retrait, pas
+ * les bulles. Or la liste enveloppe chaque `BubbleMessage` dans un
+ * `<div key={message.id}>` (`messages-display.tsx`, branche virtualisée comme
+ * branche simple) : le nœud inséré est ce wrapper, sans `id`, et la bulle
+ * porteuse de `id="message-<id>"` n'est qu'un descendant. Ne regarder que le
+ * nœud lui-même ne matchait donc JAMAIS en production.
+ *
+ * Un sous-arbre retiré conserve ses descendants, donc la même descente vaut
+ * pour le détachement.
+ */
+function forEachBubble(node: Node, visit: (element: HTMLElement) => void): void {
+  if (!(node instanceof HTMLElement)) return;
+  if (node.id.startsWith(BUBBLE_ID_PREFIX)) visit(node);
+  node.querySelectorAll<HTMLElement>(`[id^="${BUBBLE_ID_PREFIX}"]`).forEach(visit);
 }
 
 export function useSeenMessages({
@@ -116,28 +139,27 @@ export function useSeenMessages({
       { root: container, threshold: 0.5 }
     );
 
-    const attach = (node: Node) => {
-      const messageId = messageIdOf(node);
+    const attach = (element: HTMLElement) => {
+      const messageId = messageIdOf(element);
       if (!messageId) return;
-      elementIds.set(node as Element, messageId);
-      intersection.observe(node as Element);
+      elementIds.set(element, messageId);
+      intersection.observe(element);
     };
 
-    const detach = (node: Node) => {
-      if (!(node instanceof HTMLElement)) return;
-      intersection.unobserve(node);
+    const detach = (element: HTMLElement) => {
+      intersection.unobserve(element);
       // Sortir du DOM vaut disparition : sans cela, une bulle démontée resterait
       // « visible » pour l'accumulateur et finirait par être comptée lue.
-      const messageId = elementIds.get(node);
+      const messageId = elementIds.get(element);
       if (messageId) accumulator.disappeared(messageId, Date.now());
     };
 
-    container.querySelectorAll(`[id^="${BUBBLE_ID_PREFIX}"]`).forEach(attach);
+    container.querySelectorAll<HTMLElement>(`[id^="${BUBBLE_ID_PREFIX}"]`).forEach(attach);
 
     const mutations = new MutationObserver((records) => {
       for (const record of records) {
-        record.addedNodes?.forEach?.(attach);
-        record.removedNodes?.forEach?.(detach);
+        record.addedNodes?.forEach?.((node) => forEachBubble(node, attach));
+        record.removedNodes?.forEach?.((node) => forEachBubble(node, detach));
       }
     });
     mutations.observe(container, { childList: true, subtree: true });

@@ -17,13 +17,15 @@ final class PostDetailViewModelTests: XCTestCase {
     private func makeSUT(
         postService: MockPostService = MockPostService(),
         preferredLanguages: [String] = [],
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        socialSocket: MockSocialSocket = MockSocialSocket()
     ) -> (sut: PostDetailViewModel, postService: MockPostService) {
         let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
         let sut = PostDetailViewModel(
             postService: postService,
             languageProvider: languageProvider,
-            offlineQueue: offlineQueue
+            offlineQueue: offlineQueue,
+            socialSocket: socialSocket
         )
         return (sut, postService)
     }
@@ -84,6 +86,41 @@ final class PostDetailViewModelTests: XCTestCase {
 
         XCTAssertNotNil(sut.error)
         XCTAssertNil(sut.post)
+    }
+
+    // MARK: - updatePost (position à l'édition)
+
+    func test_updatePost_forwardsLocationSet_andAppliesItOptimistically() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let place = SharedPlace(latitude: 48.8584, longitude: 2.2945, name: "Tour Eiffel")
+
+        await sut.updatePost(content: "Hello", location: .set(place))
+
+        XCTAssertEqual(mock.lastUpdateLocation, .set(place),
+                       "Le tri-état .set doit partir tel quel au service")
+    }
+
+    func test_updatePost_forwardsLocationRemove() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.updatePost(content: "Hello", location: .remove)
+
+        XCTAssertEqual(mock.lastUpdateLocation, .remove)
+    }
+
+    func test_updatePost_withoutLocation_forwardsNil() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.updatePost(content: "Hello")
+
+        XCTAssertNil(mock.lastUpdateLocation,
+                     "Sans modification, la position ne doit pas partir (inchangée)")
     }
 
     // MARK: - registerDetailOpen
@@ -446,6 +483,61 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.post?.likes, initialLikes + 1)
     }
 
+    // MARK: - likePost: write-through vers la clé cache détail (stores-09)
+
+    /// Polls the detail cache key until the fire-and-forget patch task lands
+    /// (or 1 s elapses) — a fixed sleep would flake under CI load.
+    private func waitForCachedLikes(
+        key: String,
+        expected: Int
+    ) async -> FeedPost? {
+        var cached: FeedPost?
+        for _ in 0..<50 {
+            let result = await CacheCoordinator.shared.feed.load(for: key)
+            cached = result.snapshot()?.first(where: { $0.id == key })
+            if cached?.likes == expected { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return cached
+    }
+
+    func test_likePost_enqueueSucceeds_writesThroughToDetailCacheKey() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+
+        let cached = await waitForCachedLikes(key: "p1", expected: initialLikes + 1)
+        XCTAssertEqual(cached?.isLiked, true,
+                       "le like optimiste doit être écrit sous la clé cache détail, pas seulement en RAM")
+        XCTAssertEqual(cached?.likes, initialLikes + 1)
+    }
+
+    func test_likePost_outboxExhausted_rollsBackCacheKey() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+        _ = await waitForCachedLikes(key: "p1", expected: initialLikes + 1)
+
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+
+        let cached = await waitForCachedLikes(key: "p1", expected: initialLikes)
+        XCTAssertEqual(cached?.isLiked, false,
+                       "le rollback doit aussi restaurer la clé cache détail (valeurs de restauration, pas optimistes)")
+        XCTAssertEqual(cached?.likes, initialLikes)
+    }
+
     func test_sendComment_rollsBack_whenOutcomeExhausted() async {
         let queue = MockOfflineQueue()
         let (sut, mock) = makeSUT(offlineQueue: queue)
@@ -570,20 +662,26 @@ final class PostDetailViewModelTests: XCTestCase {
     // MARK: - sendReply (flat 2-level threading)
 
     func test_sendReply_toRootComment_usesRootAsParent() async {
-        let (sut, mock) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
         let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", effectFlags: 4)
 
-        XCTAssertEqual(mock.lastAddCommentParentId, "c1", "répondre à une racine se rattache à elle")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment,
+                       "une réponse texte transite par l'outbox durable, pas par un appel direct")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1", "répondre à une racine se rattache à elle")
+        XCTAssertEqual(payload?.effectFlags, 4, "effectFlags survit à l'enfilement")
     }
 
     func test_sendReply_toReply_staysFlatUnderRoot() async {
-        let (sut, mock) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
         let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
@@ -596,10 +694,50 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.sendReply("@bob ok")
 
         // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
-        XCTAssertEqual(mock.lastAddCommentParentId, "c1")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1")
         // La nouvelle réponse s'ajoute sous c1 (et non sous r1, qui ne porte pas de fil).
         XCTAssertEqual(sut.repliesMap["c1"]?.count, 2)
         XCTAssertNil(sut.repliesMap["r1"], "aucun sous-fil créé sous une réponse")
+    }
+
+    /// La réponse optimiste apparaît AVANT toute confirmation réseau, keyée
+    /// par cmid (réconciliée plus tard par l'écho socket comment:added).
+    func test_sendReply_insertsOptimisticReplyInRepliesMap() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.id.hasPrefix("cmid") ?? false, true,
+                       "la réponse optimiste est keyée par cmid, pas par un id serveur")
+        XCTAssertEqual(sut.comments.first?.replies, 1, "le compteur du parent est incrémenté")
+        XCTAssertTrue(sut.expandedThreads.contains("c1"), "le fil est déplié pour montrer la réponse")
+    }
+
+    func test_sendReply_enqueueRefused_rollsBackOptimistic() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.addCommentResult = .failure(NSError(domain: "test", code: 500))
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialCount = sut.post?.commentCount ?? 0
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty ?? true, true,
+                       "l'enfilement refusé doit retirer la réponse optimiste")
+        XCTAssertEqual(sut.comments.first?.replies, 0, "le compteur du parent est restauré")
+        XCTAssertEqual(sut.post?.commentCount, initialCount)
     }
 
     // MARK: - topLevelComments
@@ -676,5 +814,137 @@ final class PostDetailViewModelTests: XCTestCase {
         let (sut, _) = makeSUT(preferredLanguages: [])
 
         XCTAssertEqual(sut.userLanguage, "en")
+    }
+
+
+    // MARK: - Fabriques d'événements socket
+    //
+    // `SocketPostLikedData` / `SocketPostUnlikedData` sont `Decodable` sans init
+    // public : leur init memberwise est internal au SDK. On les construit donc
+    // par décodage, comme le reste des stubs de ce fichier.
+
+    private static func makeLiked(postId: String, userId: String, likeCount: Int) -> SocketPostLikedData {
+        JSONStub.decode("""
+        {"postId":"\(postId)","userId":"\(userId)","emoji":"\u{2764}\u{FE0F}","likeCount":\(likeCount),"reactionSummary":{}}
+        """)
+    }
+
+    private static func makeUnliked(postId: String, userId: String, likeCount: Int) -> SocketPostUnlikedData {
+        JSONStub.decode("""
+        {"postId":"\(postId)","userId":"\(userId)","likeCount":\(likeCount),"reactionSummary":{}}
+        """)
+    }
+
+    // MARK: - Like temps réel (post:liked / post:unliked)
+
+    /// Le détail n'écoutait QUE les commentaires : un like posé depuis le feed,
+    /// depuis le pager de réels ou par un autre utilisateur n'atteignait jamais
+    /// l'écran ouvert, dont le compteur restait figé jusqu'au prochain fetch.
+    func test_postLiked_appliesAbsoluteServerCountToTheDisplayedPost() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postLiked.send(Self.makeLiked(postId: "p1", userId: "other", likeCount: 17))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, 17)
+    }
+
+    func test_postUnliked_appliesAbsoluteServerCountToTheDisplayedPost() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postUnliked.send(Self.makeUnliked(postId: "p1", userId: "other", likeCount: 4))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, 4)
+    }
+
+    /// Un événement portant sur un AUTRE post ne doit pas écraser le compteur
+    /// du post affiché (le filtre par postId est la seule garde).
+    func test_postLiked_forAnotherPost_leavesTheDisplayedPostUntouched() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let before = sut.post?.likes
+
+        socket.postLiked.send(Self.makeLiked(postId: "another", userId: "other", likeCount: 999))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, before)
+    }
+
+    /// Le like d'un TIERS monte le compteur sans allumer le cœur de
+    /// l'utilisateur courant.
+    func test_postLiked_byAnotherUser_doesNotFlipIsLiked() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postLiked.send(Self.makeLiked(postId: "p1", userId: "definitely-not-me", likeCount: 17))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.isLiked, false)
+    }
+
+    // MARK: - Reconnect (didReconnect) — vm-reconnect-stories-detail-01
+
+    /// La room du post est re-jointe au .connect (le flux VIVANT reprend),
+    /// mais les événements émis PENDANT la coupure restent irréconciliés :
+    /// le reconnect doit refetch le post (compteurs absolus) + la page 1.
+    func test_subscribeToSocket_reconnect_refetchesPostAndCommentsPage1() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1", content: "Fresh"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let postsBefore = mock.getPostCallCount
+        let commentsBefore = mock.getCommentsCallCount
+
+        socket.didReconnect.send(())
+        try? await waitForCondition(timeout: 5.0) {
+            mock.getPostCallCount > postsBefore && mock.getCommentsCallCount > commentsBefore
+        }
+
+        XCTAssertEqual(mock.getPostCallCount, postsBefore + 1,
+                       "le reconnect refetch le post pour les compteurs absolus")
+        XCTAssertEqual(mock.getCommentsCallCount, commentsBefore + 1,
+                       "le reconnect refetch la page 1 des commentaires")
+    }
+
+    /// La page 1 refetchée peut recouvrir des commentaires déjà affichés :
+    /// la dédup par id rend l'append idempotent — jamais de flash-vide.
+    func test_subscribeToSocket_reconnect_dedupesExistingComments() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        mock.getCommentsResult = .success(Self.makePaginatedComments(comments: [Self.stubComment]))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        await sut.loadComments("p1")
+        sut.subscribeToSocket("p1")
+        XCTAssertEqual(sut.comments.count, 1)
+        let commentsCallsBefore = mock.getCommentsCallCount
+
+        socket.didReconnect.send(())
+        try? await waitForCondition(timeout: 5.0) { mock.getCommentsCallCount > commentsCallsBefore }
+
+        XCTAssertEqual(sut.comments.count, 1,
+                       "même page 1 → dédup par id, pas de doublon ni de flash-vide")
     }
 }

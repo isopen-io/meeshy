@@ -32,6 +32,10 @@ repose uniquement sur : `presence:snapshot` (resync complet à chaque reconnect 
 (deltas temps réel) + `typing:start` (bump d'activité local) + la dégradation temporelle douce déjà
 en place (online→away à 5min, away→offline à 30min).
 
+> ⚠️ Note (mise à jour) : les seuils cités ci-dessus reflètent l'état au 2026-07-12. La règle produit
+> a depuis été resserrée à 1/3/5 (2026-07-20) : online ≤60s · away ≤3min · idle ≤5min · offline >5min.
+> Source de vérité : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`).
+
 Approches écartées :
 - **B (filet de sécurité minimal)** : garder un fallback REST rare/borné. Rejeté — complexité
   additionnelle non justifiée tant qu'aucune perte de snapshot n'a été observée en pratique.

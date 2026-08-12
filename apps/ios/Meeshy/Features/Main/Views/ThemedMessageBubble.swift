@@ -81,6 +81,14 @@ struct ThemedMessageBubble: View {
     /// Nil-default keeps preview / overlay call sites unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
+    /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
+    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// lecture déjà active porte la même carte Now Playing / avance auto que
+    /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
+    /// les surfaces sans conversation (previews) inchangées.
+    var conversationName: String? = nil
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var onScrollToMessage: ((String) -> Void)? = nil
     /// Tap on a call-summary notice → re-initiate (call back) the same media
     /// type with the conversation peer. Routed by the conversation layer to
@@ -271,6 +279,8 @@ struct ThemedMessageBubble: View {
             onShowTranslationDetail: onShowTranslationDetail,
             onPlayAudio: onPlayAudio,
             onScrollToMessage: onScrollToMessage,
+            conversationName: conversationName,
+            audioQueueTailProvider: audioQueueTailProvider,
             activeDisplayLangCode: Binding(
                 get: { resolvedActiveDisplayLangCode },
                 set: { newValue in

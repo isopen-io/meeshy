@@ -1,6 +1,6 @@
 /**
  * Location Handler
- * Handles static and live location sharing events.
+ * Handles live location sharing events.
  *
  * Real-time only — no Prisma persistence (no Location model in schema).
  * Validates participant membership, then broadcasts to conversation room.
@@ -12,8 +12,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {
   SocketIOResponse,
-  LocationShareData,
-  LocationSharedEventData,
   LocationLiveStartData,
   LocationLiveStartedEventData,
   LocationLiveUpdateData,
@@ -36,7 +34,6 @@ export interface LocationHandlerDependencies {
 }
 
 export class LocationHandler {
-  private io: SocketIOServer;
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
@@ -44,63 +41,10 @@ export class LocationHandler {
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: LocationHandlerDependencies) {
-    this.io = deps.io;
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.normalizeConversationId = deps.normalizeConversationId;
-  }
-
-  async handleLocationShare(
-    socket: Socket,
-    data: LocationShareData,
-    callback?: (response: SocketIOResponse<LocationSharedEventData>) => void
-  ): Promise<void> {
-    try {
-      const context = this._getUserContext(socket);
-      if (!context) {
-        this._sendError(callback, 'User not authenticated');
-        return;
-      }
-
-      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_SHARE);
-      if (!allowed) {
-        this._sendError(callback, 'Rate limit exceeded');
-        return;
-      }
-
-      if (!this._validateCoordinates(data.latitude, data.longitude)) {
-        this._sendError(callback, 'Invalid coordinates');
-        return;
-      }
-
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
-
-      const participantId = await this._resolveParticipantId(context, normalizedId);
-      if (!participantId) {
-        this._sendError(callback, 'Not a participant in this conversation');
-        return;
-      }
-
-      const eventData: LocationSharedEventData = {
-        messageId: this._generateTempId(),
-        conversationId: normalizedId,
-        userId: context.userId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        accuracy: data.accuracy,
-        placeName: data.placeName,
-        address: data.address,
-        timestamp: new Date(),
-      };
-
-      callback?.({ success: true, data: eventData });
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_SHARED, eventData);
-    } catch (error: unknown) {
-      logger.error('Error handling location:share', error);
-      this._sendError(callback, error instanceof Error ? error.message : 'Failed to share location');
-    }
   }
 
   async handleLiveLocationStart(
@@ -154,7 +98,12 @@ export class LocationHandler {
       };
 
       callback?.({ success: true, data: eventData });
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      // Diffuser aux AUTRES participants uniquement (socket.to, pas io.to) : le
+      // partageur connaît déjà sa propre session via l'ACK ci-dessus, et les
+      // clients traitent tout LOCATION_LIVE_* reçu comme l'état d'un pair DISTANT
+      // (cf. StatusHandler typing + CallEventsHandler media-toggle). Un self-echo
+      // ferait apparaître le partageur comme un partageur distant sur sa carte.
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-start', error);
       this._sendError(callback, error instanceof Error ? error.message : 'Failed to start live location');
@@ -191,7 +140,9 @@ export class LocationHandler {
         timestamp: new Date(),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
+      // Aux autres participants uniquement — le partageur est la source des
+      // updates, un self-echo n'aurait aucune valeur (cf. handleLiveLocationStart).
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-update', error);
     }
@@ -219,7 +170,8 @@ export class LocationHandler {
         stoppedAt: new Date(),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData);
+      // Aux autres participants uniquement (cf. handleLiveLocationStart).
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-stop', error);
     }
@@ -273,9 +225,5 @@ export class LocationHandler {
 
   private _sendError<T>(callback: ((response: SocketIOResponse<T>) => void) | undefined, message: string): void {
     callback?.({ success: false, error: message });
-  }
-
-  private _generateTempId(): string {
-    return `loc_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
 }

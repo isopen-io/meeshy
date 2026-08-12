@@ -211,7 +211,7 @@ public struct CommunitySettingsView: View {
 
             // Color picker
             VStack(alignment: .leading, spacing: 10) {
-                Text("Couleur")
+                Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textSecondary)
 
@@ -230,7 +230,7 @@ public struct CommunitySettingsView: View {
                 TextField("🏘️", text: $viewModel.localEmoji)
                     .font(.system(size: 22))
                     .foregroundColor(theme.textPrimary)
-                    .onChange(of: viewModel.localEmoji) { newValue in
+                    .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
                         let trimmed = String(newValue.unicodeScalars.prefix(2))
                         if trimmed != newValue { viewModel.localEmoji = trimmed }
                     }

@@ -145,3 +145,71 @@ describe('reportService.reportCommunity', () => {
     await expect(reportService.reportCommunity('comm-1', 'spam', 'reason')).rejects.toThrow('timeout');
   });
 });
+
+// ─── reportPost ────────────────────────────────────────────────────────────
+
+describe('reportService.reportPost', () => {
+  it('POSTs with reportedType=post and returns report on success', async () => {
+    const report = makeReport({ reportedType: 'post', reportedEntityId: 'post-1' });
+    mockApi.post.mockResolvedValue({ data: { success: true, data: report } } as any);
+
+    const result = await reportService.reportPost('post-1', 'inappropriate', 'inappropriate content');
+
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+      reportedType: 'post',
+      reportedEntityId: 'post-1',
+      reportType: 'inappropriate',
+      reason: 'inappropriate content',
+    });
+    expect(result).toEqual(report);
+  });
+
+  it('returns fallback data when success is absent', async () => {
+    const report = makeReport({ reportedType: 'post' });
+    mockApi.post.mockResolvedValue({ data: { data: report } } as any);
+
+    const result = await reportService.reportPost('post-1', 'spam', 'reason');
+
+    expect(result).toEqual(report);
+  });
+
+  it('propagates API errors', async () => {
+    mockApi.post.mockRejectedValue(new Error('network error'));
+
+    await expect(reportService.reportPost('post-1', 'spam', 'reason')).rejects.toThrow('network error');
+  });
+});
+
+// ─── reportStory ──────────────────────────────────────────────────────────
+
+describe('reportService.reportStory', () => {
+  it('POSTs with reportedType=story and returns report on success', async () => {
+    const report = makeReport({ reportedType: 'story', reportedEntityId: 'story-1' });
+    mockApi.post.mockResolvedValue({ data: { success: true, data: report } } as any);
+
+    const result = await reportService.reportStory('story-1', 'offensive', 'offensive content');
+
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+      reportedType: 'story',
+      reportedEntityId: 'story-1',
+      reportType: 'offensive',
+      reason: 'offensive content',
+    });
+    expect(result).toEqual(report);
+  });
+
+  it('returns fallback data when success is absent', async () => {
+    const report = makeReport({ reportedType: 'story' });
+    mockApi.post.mockResolvedValue({ data: { data: report } } as any);
+
+    const result = await reportService.reportStory('story-1', 'spam', 'reason');
+
+    expect(result).toEqual(report);
+  });
+
+  it('propagates API errors', async () => {
+    mockApi.post.mockRejectedValue(new Error('timeout'));
+
+    await expect(reportService.reportStory('story-1', 'spam', 'reason')).rejects.toThrow('timeout');
+  });
+});

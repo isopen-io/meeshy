@@ -39,23 +39,6 @@ const EstablishSessionBodySchema = z.object({
   conversationId: z.string().min(1, 'Conversation ID is required').max(255),
 });
 
-/**
- * Pre-Key Bundle interface (compatible with Signal Protocol)
- */
-interface PreKeyBundle {
-  identityKey: Uint8Array;
-  registrationId: number;
-  deviceId: number;
-  preKeyId: number | null;
-  preKeyPublic: Uint8Array | null;
-  signedPreKeyId: number;
-  signedPreKeyPublic: Uint8Array;
-  signedPreKeySignature: Uint8Array;
-  kyberPreKeyId: number | null;
-  kyberPreKeyPublic: Uint8Array | null;
-  kyberPreKeySignature: Uint8Array | null;
-}
-
 export default async function signalProtocolRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
   const encryptionService = await getEncryptionService(prisma);
@@ -288,32 +271,27 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'User has not generated encryption keys');
         }
 
-        // Convert back to Uint8Array format
-        const preKeyBundle: PreKeyBundle = {
-          identityKey: Uint8Array.from(Buffer.from(bundle.identityKey, 'base64')),
-          registrationId: bundle.registrationId,
-          deviceId: bundle.deviceId,
-          preKeyId: bundle.preKeyId,
-          preKeyPublic: bundle.preKeyPublic
-            ? Uint8Array.from(Buffer.from(bundle.preKeyPublic, 'base64'))
-            : null,
-          signedPreKeyId: bundle.signedPreKeyId,
-          signedPreKeyPublic: Uint8Array.from(Buffer.from(bundle.signedPreKeyPublic, 'base64')),
-          signedPreKeySignature: Uint8Array.from(
-            Buffer.from(bundle.signedPreKeySignature, 'base64')
-          ),
-          kyberPreKeyId: bundle.kyberPreKeyId,
-          kyberPreKeyPublic: bundle.kyberPreKeyPublic
-            ? Uint8Array.from(Buffer.from(bundle.kyberPreKeyPublic, 'base64'))
-            : null,
-          kyberPreKeySignature: bundle.kyberPreKeySignature
-            ? Uint8Array.from(Buffer.from(bundle.kyberPreKeySignature, 'base64'))
-            : null,
-        };
-
+        // The bundle is returned exactly as stored: base64 strings.
+        //
+        // It used to be decoded into `Uint8Array` here, which silently
+        // destroyed every key on the wire. Fastify serializes a 200 through the
+        // declared response schema, and `signalPreKeyBundleSchema` types these
+        // fields `string` — fast-json-stringify coerces a non-string with
+        // `String(value)`, and `String(Uint8Array)` is the decimal listing of
+        // its bytes. A client asking for a bundle received
+        // `"97,110,45,105,…"` where it expected `"YW4tabc…="`, so
+        // `Data(base64Encoded:)` returned nil on iOS
+        // (`E2ESessionManager.getOrCreateSession` → `invalidBase64Payload`),
+        // every peer landed in the 600 s failure cooldown, and no E2EE session
+        // could ever be derived.
+        //
+        // base64 is the format on all three sides — the column, the response
+        // schema, and `E2EAPI.BackendPreKeyBundle` — so the decoding step had
+        // no consumer to serve. `select` above already restricts the row to the
+        // schema's own fields.
         logger.debug('Fetched pre-key bundle', { userId: targetUserId });
 
-        return sendSuccess(reply, preKeyBundle);
+        return sendSuccess(reply, bundle);
       } catch (error) {
         logger.error('Error fetching pre-key bundle', { err: error });
         return sendInternalError(reply, 'Failed to fetch pre-key bundle');
@@ -390,11 +368,22 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         }
         const { recipientUserId, conversationId } = bodyResult.data;
 
-        // SECURITY: Verify user is a participant in the conversation
+        // SECURITY: Verify user is an ACTIVE participant in the conversation.
+        //
+        // `isActive: true` n'est pas décoratif ici. Un départ ne supprime pas la
+        // ligne `Participant`, il la passe à `isActive: false` — et cette route
+        // consomme la pré-clé à usage unique du destinataire un peu plus bas.
+        // Sans ce filtre, un ancien membre qui a gardé l'identifiant de
+        // conversation en cache local détruisait à volonté la pré-clé de
+        // n'importe quel membre resté : l'épuisement de pré-clés que l'en-tête
+        // de ce fichier dit prévenir, par la porte qui ne vérifiait pas ce que
+        // `GET /signal/keys/:userId` vérifie cent lignes plus haut sur ses DEUX
+        // côtés.
         const isParticipant = await prisma.participant.findFirst({
           where: {
             userId,
-            conversationId
+            conversationId,
+            isActive: true
           }
         });
 
@@ -408,11 +397,15 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'You are not a participant in this conversation');
         }
 
-        // SECURITY: Verify recipient is also a participant
+        // SECURITY: Verify recipient is also an ACTIVE participant — chiffrer
+        // vers quelqu'un qui a quitté la conversation revient à ouvrir une
+        // session avec un destinataire qui n'y lira plus rien, tout en brûlant
+        // sa pré-clé.
         const recipientIsParticipant = await prisma.participant.findFirst({
           where: {
             userId: recipientUserId,
-            conversationId
+            conversationId,
+            isActive: true
           }
         });
 
@@ -429,29 +422,6 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'Recipient has not generated encryption keys');
         }
 
-        // Convert to PreKeyBundle format
-        const preKeyBundle: PreKeyBundle = {
-          identityKey: Uint8Array.from(Buffer.from(bundle.identityKey, 'base64')),
-          registrationId: bundle.registrationId,
-          deviceId: bundle.deviceId,
-          preKeyId: bundle.preKeyId,
-          preKeyPublic: bundle.preKeyPublic
-            ? Uint8Array.from(Buffer.from(bundle.preKeyPublic, 'base64'))
-            : null,
-          signedPreKeyId: bundle.signedPreKeyId,
-          signedPreKeyPublic: Uint8Array.from(Buffer.from(bundle.signedPreKeyPublic, 'base64')),
-          signedPreKeySignature: Uint8Array.from(
-            Buffer.from(bundle.signedPreKeySignature, 'base64')
-          ),
-          kyberPreKeyId: bundle.kyberPreKeyId,
-          kyberPreKeyPublic: bundle.kyberPreKeyPublic
-            ? Uint8Array.from(Buffer.from(bundle.kyberPreKeyPublic, 'base64'))
-            : null,
-          kyberPreKeySignature: bundle.kyberPreKeySignature
-            ? Uint8Array.from(Buffer.from(bundle.kyberPreKeySignature, 'base64'))
-            : null,
-        };
-
         // Use Signal Protocol service to establish session
         const signalService = encryptionService.getSignalService();
         if (!signalService) {
@@ -464,19 +434,32 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return sendError(reply, 503, 'E2EE_UNAVAILABLE', { message: 'End-to-end encryption is not available on this server' });
         }
 
-        // Full Signal Protocol session establishment
-        // Note: This requires @signalapp/libsignal-client to be installed
-        logger.debug('Full Signal Protocol session establishment');
-
-        // Mark pre-key as used (should be removed after first use)
-        if (bundle.preKeyId) {
-          await prisma.signalPreKeyBundle.update({
-            where: { userId: recipientUserId },
-            data: { preKeyId: null, preKeyPublic: null },
-          });
-        }
-
-        logger.info('Established E2EE session', { userId, recipientUserId, conversationId });
+        // This route AUTHORIZES a session; it does not establish one, and it no
+        // longer consumes the recipient's one-time pre-key.
+        //
+        // It used to null `preKeyId`/`preKeyPublic` here. Nothing received what
+        // it destroyed: the response carries a message and no key material, and
+        // the bundle this handler built from the row was never read by anything
+        // (removed with this change). Consumption belongs to whichever route
+        // DISTRIBUTES the pre-key — `GET /signal/keys/:userId` — never to a
+        // route that hands the caller nothing.
+        //
+        // Left as it was, any active participant could strip any other member's
+        // one-time pre-key at the route's rate limit, and nothing replenishes
+        // it: clients upload a bundle once, on the authentication edge. That is
+        // the pre-key exhaustion this file's header says it prevents.
+        //
+        // The one-time pre-key is consequently still handed out more than once
+        // — a real weakness, but a pre-existing one that needs a pool of
+        // pre-keys (the schema holds a single slot) and a client-side
+        // replenishment path to fix. Recorded as open rather than half-fixed
+        // here: claiming the only slot on first fetch would leave every later
+        // peer without one and nothing to refill it.
+        logger.info('Authorized E2EE session establishment', {
+          userId,
+          recipientUserId,
+          conversationId,
+        });
 
         return sendSuccess(reply, { message: 'E2EE session established successfully' });
       } catch (error) {

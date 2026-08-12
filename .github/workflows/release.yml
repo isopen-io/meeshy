@@ -10,9 +10,13 @@ name: Release
 
 on:
   push:
+    # main UNIQUEMENT : la numérotation appartient à la branche de publication.
+    # Avec dev ici, l'auto-changeset fabriquait des bumps/tags « fantômes »
+    # (v1.23.0 le 2026-08-09, v1.24.0 le 2026-08-11) qui réservaient les
+    # numéros suivants et faisaient échouer la release de main sur
+    # « Tag vX existe déjà sur un autre commit ».
     branches:
       - main
-      - dev
     paths:
       - '.changeset/**'
       - 'apps/*/package.json'
@@ -302,12 +306,34 @@ jobs:
             type=raw,value=${{ github.ref_name }},enable=${{ github.ref != 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
 
+      - name: Determine build platforms
+        id: platforms
+        run: |
+          # Translator: AMD64 only. sentencepiece==0.1.97 (pinned transitively by
+          # espnet==202412 — cf. requirements.txt) ships no cp311/cp312 wheel for
+          # ANY platform, so uv always compiles it from source — including on
+          # native amd64 runners, where the g++ toolchain handles it fine. Under
+          # QEMU arm64 emulation the same compile fails deterministically
+          # ("Relocations in generic ELF (EM: 62)" / "file in wrong format" /
+          # collect2 exit 1) — reproduced identically in 3 separate release.yml
+          # runs (2026-07-28 10:09, 2026-07-28 16:20, 2026-08-03 13:30).
+          # docker.yml already carves out this same exception (see its
+          # "Determine build platforms" step) and has stayed green on main;
+          # release.yml built translator via the blanket $PLATFORMS
+          # (linux/amd64,linux/arm64) with no override, hence the divergence.
+          if [[ "${{ matrix.service }}" == "translator" ]]; then
+            echo "value=linux/amd64" >> $GITHUB_OUTPUT
+            echo "⚠️ Translator: building AMD64 only (ARM64 QEMU cannot compile sentencepiece==0.1.97 from source)"
+          else
+            echo "value=${{ env.PLATFORMS }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ env.PLATFORMS }}
+          platforms: ${{ steps.platforms.outputs.value }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

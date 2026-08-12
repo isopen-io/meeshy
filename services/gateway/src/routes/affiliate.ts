@@ -631,8 +631,15 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
    * Create affiliate relationship when user signs up
    */
   fastify.post('/affiliate/register', {
+    // La relation de parrainage porte désormais sur l'APPELANT, pas sur un
+    // identifiant fourni dans le corps. Sans cette garde, un anonyme forçait
+    // une relation d'ami acceptée entre le créateur d'un jeton et n'importe
+    // quel utilisateur, puis lisait les données de la victime via
+    // /affiliate/stats. Le client appelle cette route juste après
+    // l'inscription, une fois son jeton reçu : il peut donc s'authentifier.
+    onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
-      description: 'Convert an affiliate visit into a confirmed referral relationship when a user signs up. Links the new user to the affiliate who shared the token. Can use session key from track-visit or directly provide token. No authentication required (called during signup flow).',
+      description: 'Convert an affiliate visit into a confirmed referral relationship when a user signs up. Links the CALLER to the affiliate who shared the token. Authentication required: the referred user is always the authenticated caller.',
       tags: ['affiliate'],
       summary: 'Register affiliate referral',
       body: {
@@ -678,12 +685,23 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = registerAffiliateSchema.parse(request.body);
-      const { token, referredUserId, sessionKey } = body;
+      const { token, sessionKey } = body;
+
+      // `referredUserId` du corps est IGNORÉ : le référé est l'appelant
+      // authentifié, et lui seul. C'est ce qui empêche de forger une relation
+      // vers un tiers. Le champ reste accepté par le schéma pour ne pas casser
+      // les clients existants, mais il n'a plus aucun effet.
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const referredUserId = authContext?.userId;
+
+      if (!referredUserId) {
+        return sendUnauthorized(reply, 'Authentication required');
+      }
 
       const result = await AffiliateTrackingService.convertAffiliateVisit(
         fastify.prisma,
-        token, 
-        referredUserId, 
+        token,
+        referredUserId,
         sessionKey
       );
 

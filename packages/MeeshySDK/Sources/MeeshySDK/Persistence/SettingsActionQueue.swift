@@ -199,10 +199,23 @@ public actor SettingsActionQueue {
 
     // MARK: - Connection Observer
 
+    /// Vide la file à chaque fois qu'on est en ligne — Y COMPRIS à
+    /// l'abonnement.
+    ///
+    /// Il y avait un `.dropFirst()` ici, qui écartait la valeur COURANTE pour
+    /// ne garder que les fronts hors-ligne → en-ligne. Or cette file persiste
+    /// sur disque justement pour survivre à un kill : au relancement, ses
+    /// éléments étaient rechargés, l'observateur s'abonnait alors que l'appareil
+    /// était DÉJÀ en ligne, la valeur courante était jetée… et plus aucun front
+    /// ne venait. Les modifications de profil enregistrées hors ligne restaient
+    /// sur le disque indéfiniment. `flushIfPossible` est un no-op sur file vide,
+    /// donc écouter la valeur courante ne coûte rien dans le cas normal.
+    ///
+    /// Règle générale, verrouillée par `QueueDrainReachabilityGuardTests` : une
+    /// file qui survit à un kill ne peut pas dépendre d'un FRONT pour repartir.
     private func observeConnection() {
         NetworkMonitor.shared.$isOffline
             .removeDuplicates()
-            .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { [weak self] _ in

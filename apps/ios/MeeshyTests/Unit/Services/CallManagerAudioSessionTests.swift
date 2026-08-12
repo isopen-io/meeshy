@@ -79,6 +79,114 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// CallKit has its own internal per-action deadline, independent of any
+    /// app-side safety net (e.g. `pendingAnswerActionSafetyNetSeconds` for a
+    /// held `CXAnswerCallAction`). If CallKit's deadline elapses first, it
+    /// calls `provider(_:timedOutPerforming:)` — without this delegate method
+    /// implemented, the app never learns CallKit already gave up on the
+    /// action, and can be left holding a stale `pendingAnswerAction` it will
+    /// later try to `.fulfill()` on a transaction CallKit no longer tracks.
+    func test_callKitDelegateProxy_implementsTimedOutPerforming() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("func provider(_ provider: CXProvider, timedOutPerforming action: CXAction)"),
+            "CallKitDelegateProxy must implement provider(_:timedOutPerforming:) to reconcile local " +
+            "call state when CallKit's own internal action deadline elapses before we settle it."
+        )
+    }
+
+    /// Apple's CXProviderDelegate docs: once `timedOutPerforming` fires, CallKit has
+    /// already torn down its side of the action — calling `.fulfill()`/`.fail()` on it
+    /// again is undefined behavior. The handler must only reconcile local state
+    /// (clear the held reference, end the call), never re-settle the timed-out action.
+    func test_callKitDelegateProxy_timedOutPerforming_doesNotSettleAction() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {") else {
+            XCTFail("provider(_:timedOutPerforming:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertFalse(
+            body.contains("action.fulfill()"),
+            "timedOutPerforming must NOT call action.fulfill() — CallKit already gave up on the " +
+            "action by the time this fires; re-settling it is undefined behavior."
+        )
+        XCTAssertFalse(
+            body.contains("action.fail()"),
+            "timedOutPerforming must NOT call action.fail() — CallKit already gave up on the " +
+            "action by the time this fires; re-settling it is undefined behavior."
+        )
+        XCTAssertTrue(
+            body.contains("manager.endCall()") || body.contains("manager?.endCall()"),
+            "timedOutPerforming must reconcile local state by tearing down the call CallKit " +
+            "already abandoned."
+        )
+    }
+
+    // MARK: - Audio Interruption Reactivation vs. Hangup Race
+
+    /// `handleAudioInterruption`'s `.ended` branch reactivates RTCAudioSession via
+    /// `audioSessionQueue.async` (fire-and-forget, so the MainActor isn't blocked). If a
+    /// hangup races that dispatch, the reactivation can run AFTER `deactivateAudioSession()`
+    /// (or CallKit's `didDeactivate`, delivered on CallKit's own private queue — a
+    /// different thread than this dispatch) and resurrect audio post-hangup. The block
+    /// must re-check a shared "is a call still expected to be active" flag from INSIDE
+    /// `audioSessionQueue` (where it's actually serialized against every writer) rather
+    /// than only checking `callState.isActive` once, outside the queue, before dispatch.
+    func test_handleAudioInterruption_reactivation_guardsOnAudioSessionExpectedActiveFlag() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleAudioInterruption(") else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        guard let asyncRange = fnBody.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found in handleAudioInterruption"); return
+        }
+        let asyncBody = String(fnBody[asyncRange.lowerBound...])
+
+        XCTAssertTrue(
+            asyncBody.contains("isAudioSessionExpectedActive"),
+            "The interruption-ended reactivation block must re-check " +
+            "CallManager.isAudioSessionExpectedActive INSIDE the audioSessionQueue dispatch — " +
+            "a hangup racing the async dispatch must not resurrect RTCAudioSession post-teardown."
+        )
+    }
+
+    func test_configureAudioSession_setsAudioSessionExpectedActiveTrue() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func configureAudioSession() {") else {
+            XCTFail("configureAudioSession not found"); return
+        }
+        let endIdx = source.range(of: "private func updateAudioSessionModeForCurrentVideoState", range: fnRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("isAudioSessionExpectedActive = true"),
+            "configureAudioSession must mark CallManager.isAudioSessionExpectedActive = true — " +
+            "this is the single flag the interruption-reactivation race guard reads."
+        )
+    }
+
+    func test_deactivateAudioSession_setsAudioSessionExpectedActiveFalse() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func deactivateAudioSession() {") else {
+            XCTFail("deactivateAudioSession not found"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("isAudioSessionExpectedActive = false"),
+            "deactivateAudioSession must mark CallManager.isAudioSessionExpectedActive = false — " +
+            "otherwise a concurrently-dispatched interruption-ended reactivation can resurrect " +
+            "audio after this teardown ran."
+        )
+    }
+
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
         // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
@@ -802,11 +910,12 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // and restartCapturerIfStopped.
         let source = try p2pClientSource()
 
-        guard let fnRange = source.range(of: "func switchCamera() async throws {") else {
+        // Corps équilibré, pas une fenêtre de 1 500 caractères : la fonction a
+        // grossi et la vérification post-`startCapture` en est sortie, faisant
+        // rougir la garde sur du code correct.
+        guard let fnBody = DeclarationBodyScanner.body(containing: "func switchCamera() async throws", in: source) else {
             XCTFail("switchCamera not found in P2PWebRTCClient.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
             fnBody.contains("let generation = sessionGeneration"),
@@ -1520,11 +1629,18 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
 
 // MARK: - Background video suspension — peer notification
 
-/// Source-analysis guards ensuring that when the app enters the background during
-/// a video call, the remote peer receives a `call:media-toggled false` signal so
-/// it shows our avatar placeholder instead of a frozen last frame.  Without this:
-///   • The peer sees a motionless frozen frame while the app is backgrounded.
-///   • When we return to the foreground, the peer doesn't know the camera resumed.
+/// Source-analysis guards ensuring the remote peer receives
+/// `call:media-toggled false` when our camera actually stops delivering, so it
+/// shows our avatar placeholder instead of a frozen last frame, and
+/// `call:media-toggled true` when it resumes.
+///
+/// L'invariant protégé est inchangé ; sa SOURCE a bougé (lot C · C3). Le
+/// déclencheur était l'entrée en arrière-plan, ce qui est faux dès qu'un
+/// `AVPictureInPictureController` est actif : la session de capture porte
+/// `isMultitaskingCameraAccessEnabled` et la caméra survit. C'est désormais
+/// l'interruption de l'`AVCaptureSession` qui fait autorité, et
+/// `applyCameraSuspension(_:cause:)` est le point de passage unique — d'où des
+/// gardes ancrées sur cette méthode plutôt que sur les blocs d'observation.
 @MainActor
 final class CallManagerBackgroundVideoTests: XCTestCase {
 
@@ -1538,45 +1654,57 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_backgroundMonitor_declaresVideoSuspendedByBackgroundFlag() throws {
+    /// Corps de `applyCameraSuspension(_:cause:)` — le point de passage unique du
+    /// signal caméra vers le pair depuis le lot C · C3.
+    private func cameraSuspensionBody() throws -> String {
         let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("isVideoSuspendedByBackground"),
-            "CallManager must declare isVideoSuspendedByBackground to track camera suspension " +
-            "caused by backgrounding — distinguishes from user-driven video toggle")
+        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+            XCTFail("applyCameraSuspension not found in CallManager.swift"); return ""
+        }
+        let after = String(source[fnRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not find applyCameraSuspension boundary"); return ""
+        }
+        return String(after[..<end])
     }
 
-    func test_backgroundObserver_emitsToggleVideoFalse_whenVideoActive() throws {
+    func test_callManager_declaresCaptureInterruptionSuspensionFlag() throws {
         let source = try callManagerSource()
-        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
-            XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
-        }
-        let afterBg = String(source[bgRange.upperBound...])
-        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
-            XCTFail("Could not find foregroundObserver boundary"); return
-        }
-        let bgBlock = String(afterBg[..<blockEnd])
         XCTAssertTrue(
-            bgBlock.contains("isVideoEnabled") && bgBlock.contains("emitCallToggleVideo") &&
-            bgBlock.contains("enabled: false"),
-            "didEnterBackground handler must guard on isVideoEnabled and call " +
-            "emitCallToggleVideo(callId:enabled:false) so the peer shows the avatar placeholder")
+            source.contains("isVideoSuspendedByCaptureInterruption"),
+            "CallManager must track camera suspension caused by an AVCaptureSession " +
+            "interruption — distinct from a user-driven video toggle")
     }
 
-    func test_backgroundObserver_setsIsVideoSuspendedByBackgroundFlag() throws {
-        let source = try callManagerSource()
-        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
-            XCTFail("didEnterBackgroundNotification observer not found"); return
-        }
-        let afterBg = String(source[bgRange.upperBound...])
-        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
-            XCTFail("Could not find foregroundObserver boundary"); return
-        }
-        let bgBlock = String(afterBg[..<blockEnd])
+    /// Le pair doit recevoir « caméra coupée » quand la caméra cesse RÉELLEMENT
+    /// de délivrer. L'entrée en arrière-plan ne le prouve pas : avec un PiP
+    /// système actif, la caméra survit et le signal serait un mensonge — le pair
+    /// perdrait une vidéo qui continue d'arriver.
+    func test_cameraSuspension_emitsToggleVideo_gatedOnUserIntent() throws {
+        let body = try cameraSuspensionBody()
         XCTAssertTrue(
-            bgBlock.contains("isVideoSuspendedByBackground = true"),
-            "didEnterBackground handler must set isVideoSuspendedByBackground = true so the " +
-            "foreground handler can distinguish a background-caused suspension from a user toggle")
+            body.contains("emitCallToggleVideo"),
+            "applyCameraSuspension doit notifier le pair — sinon il reste sur un frame figé")
+        XCTAssertTrue(
+            body.contains("enabled: !suspended"),
+            "le signal doit être l'inverse de la suspension, dans les deux sens")
+        XCTAssertTrue(
+            body.contains("isVideoEnabled"),
+            "gardé sur isVideoEnabled : ne pas faire de bruit quand la caméra est " +
+            "éteinte par choix de l'utilisateur — sinon on désynchronise l'état du pair")
+    }
+
+    func test_cameraSuspension_isDrivenByCaptureInterruption_notByBackgrounding() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("didChangeCameraInterruption interrupted: Bool"),
+            "le signal doit venir de l'interruption de l'AVCaptureSession, republiée " +
+            "par P2PWebRTCClient — seul fait qui prouve que la caméra ne délivre plus")
+        let body = try cameraSuspensionBody()
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByCaptureInterruption = suspended"),
+            "le drapeau doit être posé au même endroit que l'émission, pour que les " +
+            "deux ne puissent pas diverger")
     }
 
     func test_backgroundObserver_promotesStillRingingCallToCallKit() throws {
@@ -1658,31 +1786,36 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "in-app — Apple's Guideline 5 (MIIT) rejection requires CallKit inactive there unconditionally")
     }
 
-    func test_foregroundObserver_emitsToggleVideoTrue_whenVideoStillEnabled() throws {
+    /// Le retour en avant-plan reste un déclencheur — comme GARDE-FOU.
+    /// `AVCaptureSession.h` documente la fin d'interruption comme survenant
+    /// « when your app comes back to foreground » : un signal de fin peut donc
+    /// ne jamais arriver tant que l'app est en arrière-plan. Sans cette levée le
+    /// pair resterait sur l'avatar jusqu'à la fin de l'appel — un mode de panne
+    /// pire que le bug corrigé.
+    func test_foregroundObserver_liftsTheSuspension() throws {
         let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+        guard let fgRange = source.range(of: "UIApplication.willEnterForegroundNotification") else {
             XCTFail("willEnterForegroundNotification observer not found"); return
         }
-        let afterFg = String(source[fgRange.upperBound...])
+        let handler = String(source[fgRange.upperBound...].prefix(1600))
         XCTAssertTrue(
-            afterFg.contains("isVideoSuspendedByBackground") &&
-            afterFg.contains("emitCallToggleVideo") &&
-            afterFg.contains("enabled: true"),
-            "willEnterForeground handler must check isVideoSuspendedByBackground and call " +
-            "emitCallToggleVideo(callId:enabled:true) when the user still wants video — " +
-            "restores the avatar placeholder to the live camera feed at the peer")
+            handler.contains("applyCameraSuspension(false"),
+            "willEnterForeground doit lever la suspension : c'est le garde-fou du " +
+            "cas où la fin d'interruption n'arrive jamais")
     }
 
-    func test_foregroundObserver_clearsFlag_unconditionally() throws {
-        let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
-        }
-        let afterFg = String(source[fgRange.upperBound...])
+    /// La levée doit passer par le MÊME point que la pose, sinon drapeau et
+    /// signal réseau peuvent diverger.
+    func test_cameraSuspension_clearsTheFlagOnTheSamePathAsItSetsIt() throws {
+        let body = try cameraSuspensionBody()
         XCTAssertTrue(
-            afterFg.contains("isVideoSuspendedByBackground = false"),
-            "willEnterForeground handler must clear isVideoSuspendedByBackground = false " +
-            "regardless of whether video was restored — prevents stale flag on next background cycle")
+            body.contains("isVideoSuspendedByCaptureInterruption = suspended"),
+            "pose ET levée du drapeau au même endroit que l'émission")
+        XCTAssertTrue(
+            body.contains("guard isVideoSuspendedByCaptureInterruption != suspended"),
+            "sortie anticipée sur non-changement : le retour en avant-plan et la fin " +
+            "d'interruption peuvent tous deux arriver, le pair ne doit recevoir " +
+            "qu'un seul signal")
     }
 
     func test_endCallInternal_resetsVideoSuspendedByBackgroundFlag() throws {
@@ -1692,8 +1825,8 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
         }
         let teardownBody = String(source[teardownRange.upperBound...])
         XCTAssertTrue(
-            teardownBody.contains("isVideoSuspendedByBackground = false"),
-            "endCallInternal must reset isVideoSuspendedByBackground = false so the flag " +
+            teardownBody.contains("isVideoSuspendedByCaptureInterruption = false"),
+            "endCallInternal must reset isVideoSuspendedByCaptureInterruption = false so the flag " +
             "does not bleed into the next call (singleton lifecycle)")
     }
 
@@ -1748,7 +1881,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 /// backgrounded), the peer would incorrectly show our frozen last frame.
 ///
 /// The reconnect sink must re-emit `call:media-toggled` reflecting the effective
-/// video state: `isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground`.
+/// video state: `isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption`.
 @MainActor
 final class CallManagerSocketReconnectVideoTests: XCTestCase {
 
@@ -1785,9 +1918,9 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
         // user toggle, survival controller, and background suspension.
         XCTAssertTrue(
             afterReconnect.contains("isVideoSuspended") &&
-            afterReconnect.contains("isVideoSuspendedByBackground"),
+            afterReconnect.contains("isVideoSuspendedByCaptureInterruption"),
             "socket.didReconnect video resync must factor in isVideoSuspended " +
-            "(survival controller) and isVideoSuspendedByBackground (app backgrounded) " +
+            "(survival controller) and isVideoSuspendedByCaptureInterruption (app backgrounded) " +
             "to compute the effective video-on/off state for the peer")
     }
 }
@@ -2075,7 +2208,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// mute indicator. Without it, the remote UI always thinks our mic is live.
     func test_toggleMute_emitsCallToggleAudio() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found in CallManager.swift"); return
         }
         // Find the closing brace of toggleMute by scanning forward.
@@ -2095,7 +2228,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// means muted, enabled=true means live microphone.
     func test_toggleMute_emitsAudioEnabled_asInverseOfIsMuted() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found"); return
         }
         let afterToggleMute = String(source[toggleMuteRange.upperBound...])
@@ -2108,6 +2241,32 @@ final class CallManagerMuteStateTests: XCTestCase {
             "emitCallToggleAudio in toggleMute() must pass `enabled: !isMuted` — " +
             "the gateway's `enabled` field means 'audio is on', which is the logical " +
             "inverse of the local isMuted flag")
+    }
+
+    /// `CXSetMutedCallAction` (Watch/lock-screen/CarPlay mute) must sync local
+    /// state via `toggleMute(reportToCallKit: false)`, NOT the bare
+    /// `toggleMute()` — CallKit is the source of this change, so its own
+    /// state already matches; resubmitting a fresh `CXSetMutedCallAction`
+    /// transaction back to CallKit from inside its own delegate callback
+    /// would be an avoidable no-op round-trip.
+    func test_cxSetMutedCallActionHandler_doesNotResubmitToCallKit() throws {
+        let source = try callManagerSource()
+        guard let handlerRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction)") else {
+            XCTFail("CXSetMutedCallAction delegate handler not found in CallManager.swift"); return
+        }
+        let afterHandler = String(source[handlerRange.upperBound...])
+        guard let nextFuncRange = afterHandler.range(of: "\n    func ") else {
+            XCTFail("Could not isolate CXSetMutedCallAction handler body"); return
+        }
+        let body = String(afterHandler[..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("toggleMute(reportToCallKit: false)"),
+            "CXSetMutedCallAction handler must call toggleMute(reportToCallKit: false) " +
+            "to avoid resubmitting a redundant CXSetMutedCallAction transaction to CallKit")
+        XCTAssertFalse(
+            body.contains("manager.toggleMute()"),
+            "CXSetMutedCallAction handler must not call bare toggleMute() — it would " +
+            "report the change back to CallKit as if it originated locally")
     }
 
     /// socket.didReconnect must re-sync audio mute state. On reconnect the gateway
@@ -2752,7 +2911,7 @@ final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
             "CallKit hold: emitting 'camera active' while on hold lies to the peer")
     }
 
-    /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByBackground.
+    /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByCaptureInterruption.
     /// iOS blocks camera access in the background; restoring video from a quality
     /// recovery would emit a false "camera active" signal while no frames are produced.
     func test_applySurvivalVideoSend_guardsBackgroundOnResume() throws {
@@ -2765,8 +2924,8 @@ final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
         }
         let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
         XCTAssertTrue(
-            body.contains("isVideoSuspendedByBackground"),
-            "applySurvivalVideoSend resume path must check isVideoSuspendedByBackground — " +
+            body.contains("isVideoSuspendedByCaptureInterruption"),
+            "applySurvivalVideoSend resume path must check isVideoSuspendedByCaptureInterruption — " +
             "iOS blocks camera access in the background; a network recovery restoring " +
             "video would send a false 'camera active' signal with no frames produced")
     }
@@ -2833,7 +2992,7 @@ final class CallManagerHoldTests: XCTestCase {
             "unhold can correctly restore video only if hold was the cause")
     }
 
-    /// handleHold unhold path must guard on isVideoSuspendedByBackground to avoid
+    /// handleHold unhold path must guard on isVideoSuspendedByCaptureInterruption to avoid
     /// restoring video when background suspension is still active.
     func test_handleHold_guardsBackgroundSuspensionOnUnhold() throws {
         let source = try callManagerSource()
@@ -2845,8 +3004,8 @@ final class CallManagerHoldTests: XCTestCase {
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("!isVideoSuspendedByBackground"),
-            "handleHold unhold path must guard on !isVideoSuspendedByBackground — " +
+            body.contains("!isVideoSuspendedByCaptureInterruption"),
+            "handleHold unhold path must guard on !isVideoSuspendedByCaptureInterruption — " +
             "restoring video while backgrounded would send a false 'camera active' " +
             "signal to the peer because iOS prevents actual camera capture anyway")
     }
@@ -3260,8 +3419,8 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
             "a held call whose socket reconnects would otherwise falsely signal " +
             "\"camera active\" to the peer while iOS blocks camera access")
         XCTAssertTrue(
-            exprLines.contains("isVideoSuspendedByBackground"),
-            "Socket-reconnect effectiveVideoOn must also check isVideoSuspendedByBackground")
+            exprLines.contains("isVideoSuspendedByCaptureInterruption"),
+            "Socket-reconnect effectiveVideoOn must also check isVideoSuspendedByCaptureInterruption")
         XCTAssertTrue(
             exprLines.contains("isVideoSuspended"),
             "Socket-reconnect effectiveVideoOn must also check isVideoSuspended (survival controller)")
@@ -3274,7 +3433,7 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
 /// "background while held" scenario:
 ///
 ///   1. Video call on hold  → `isVideoSuspendedByHold = true`
-///   2. App backgrounds     → `isVideoSuspendedByBackground = true`
+///   2. App backgrounds     → `isVideoSuspendedByCaptureInterruption = true`
 ///   3. App foregrounds     → MUST NOT emit call:media-toggled(true)
 ///                            because the call is STILL held
 ///
@@ -3293,46 +3452,34 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_foregroundRestore_guardsOnHoldSuspension() throws {
+    /// Corps de `applyCameraSuspension(_:cause:)` — depuis le lot C · C3, le
+    /// point de passage unique du signal caméra, donc le seul endroit où ces
+    /// gardes doivent vivre.
+    private func cameraSuspensionBody() throws -> String {
         let source = try callManagerSource()
-
-        // Locate the willEnterForeground observer body.
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
+        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+            XCTFail("applyCameraSuspension not found in CallManager.swift"); return ""
         }
-        // Scan forward to find the isVideoSuspendedByBackground guard block.
-        let afterFg = String(source[fgRange.upperBound...])
-        guard let bgFlagRange = afterFg.range(of: "isVideoSuspendedByBackground") else {
-            XCTFail("isVideoSuspendedByBackground not found in foreground observer"); return
+        let after = String(source[fnRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not find applyCameraSuspension boundary"); return ""
         }
-        // Capture the restore guard expression (up to 400 chars covers multi-line &&).
-        let restoreExpr = String(afterFg[bgFlagRange.lowerBound...].prefix(400))
+        return String(after[..<end])
+    }
 
+    func test_cameraSuspensionRestore_guardsOnHoldSuspension() throws {
         XCTAssertTrue(
-            restoreExpr.contains("isVideoSuspendedByHold"),
-            "Foreground-return video restore must check isVideoSuspendedByHold — " +
-            "foregrounding does not lift a CallKit hold, so the peer must not receive " +
-            "a false call:media-toggled(true) while the call is still held."
+            try cameraSuspensionBody().contains("isVideoSuspendedByHold"),
+            "La reprise du signal caméra doit vérifier isVideoSuspendedByHold — " +
+            "ni le retour en avant-plan ni la fin d'interruption ne lèvent un hold " +
+            "CallKit, donc le pair ne doit pas recevoir un faux call:media-toggled(true)."
         )
     }
 
-    func test_foregroundRestore_guardsOnSurvivalControllerSuspension() throws {
-        // Belt-and-suspenders: confirm the existing isVideoSuspended guard is still
-        // present after the hold guard was added (regressions are easy here).
-        let source = try callManagerSource()
-
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
-        }
-        let afterFg = String(source[fgRange.upperBound...])
-        guard let bgFlagRange = afterFg.range(of: "isVideoSuspendedByBackground") else {
-            XCTFail("isVideoSuspendedByBackground not found in foreground observer"); return
-        }
-        let restoreExpr = String(afterFg[bgFlagRange.lowerBound...].prefix(400))
-
+    func test_cameraSuspensionRestore_guardsOnSurvivalControllerSuspension() throws {
         XCTAssertTrue(
-            restoreExpr.contains("isVideoSuspended"),
-            "Foreground-return video restore must still check isVideoSuspended (survival controller)."
+            try cameraSuspensionBody().contains("isVideoSuspended,"),
+            "La reprise doit toujours vérifier isVideoSuspended (contrôleur de survie)."
         )
     }
 }
@@ -3423,26 +3570,30 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
         // Capture the next 800 chars — enough to cover the full handler block.
         let observerBody = String(source[bgRange.upperBound...].prefix(800))
 
-        // The background flag must always be set (so the foreground restore works)
-        // unconditionally relative to the emit guard.
-        XCTAssertTrue(
-            observerBody.contains("isVideoSuspendedByBackground = true"),
-            "Background entry must set isVideoSuspendedByBackground = true before the emit guard"
+        // Lot C · C3 — l'entrée en arrière-plan n'émet PLUS rien. C'est la
+        // suppression du doublon à sa racine : elle ne prouvait pas que la
+        // caméra s'était arrêtée (avec un PiP système actif elle survit), donc
+        // elle ne pouvait que dupliquer ou mentir.
+        XCTAssertFalse(
+            observerBody.contains("emitCallToggleVideo"),
+            "L'entrée en arrière-plan ne doit émettre aucun signal caméra : elle ne " +
+            "prouve rien sur l'état réel de la capture"
         )
 
-        // The emit must be gated on !isVideoSuspendedByHold so that when hold
-        // has already sent "camera off", we don't flood the peer with a duplicate.
+        // Le point de passage unique porte les deux gardes anti-doublon.
+        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+            XCTFail("applyCameraSuspension not found"); return
+        }
+        let body = String(source[fnRange.upperBound...].prefix(900))
         XCTAssertTrue(
-            observerBody.contains("isVideoSuspendedByHold"),
-            "Background entry emit must be gated on !isVideoSuspendedByHold to suppress " +
-            "duplicate 'camera off' events when the call is already on hold"
+            body.contains("isVideoSuspendedByHold"),
+            "L'émission doit être gardée sur !isVideoSuspendedByHold pour ne pas " +
+            "doubler le « caméra coupée » déjà envoyé par le hold"
         )
-
-        // The emit must also be gated on !isVideoSuspended (survival controller).
         XCTAssertTrue(
-            observerBody.contains("isVideoSuspended"),
-            "Background entry emit must be gated on !isVideoSuspended (survival controller) " +
-            "to suppress duplicate events when the controller already sent 'camera off'"
+            body.contains("isVideoSuspended,"),
+            "L'émission doit être gardée sur !isVideoSuspended (contrôleur de survie) " +
+            "pour ne pas doubler le signal qu'il a déjà envoyé"
         )
     }
 }
@@ -3960,9 +4111,19 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             XCTFail("private init not found in CallManager.swift")
             return
         }
-        // The init body is ~59 lines / ~2 500 chars; use 3 500 to stay robust against growth.
-        let endIdx = source.index(initRange.lowerBound, offsetBy: 3500, limitedBy: source.endIndex) ?? source.endIndex
-        let initBody = String(source[initRange.lowerBound ..< endIdx])
+        // Slice up to the next member declaration instead of a fixed character
+        // window — a fixed window rots as the init body grows (it already did:
+        // the CallKit icon block pushed the call past the old 3 500-char cut).
+        let endIdx = [
+            source.range(of: "\n    func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        // Strip comment lines so a commented-out call cannot satisfy the guard.
+        let initBody = source[initRange.lowerBound ..< endIdx]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
 
         XCTAssertTrue(
             initBody.contains("startMediaServicesResetMonitoring()"),

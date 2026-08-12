@@ -3,13 +3,20 @@ import MeeshySDK
 
 // MARK: - TextEditTool
 
-/// Les 6 contrôles de texte exposés en mode édition flottante. L'ordre des
-/// `case` fixe l'ordre d'affichage des bulles dans la rangée.
-public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
+/// Les outils de texte exposés en mode édition flottante, dans leur ordre
+/// d'affichage sur la rangée.
+///
+/// Taille et graisse n'y figurent pas : ce sont des valeurs continues, réglées
+/// par curseur dans le panneau Police. Les loger derrière une bulle chacune
+/// coûtait deux places sur une rangée dont la largeur est comptée.
+///
+/// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
+/// .self)` (SE-0466), qui isolerait cet énuméré sur le main actor et le
+/// rendrait illisible depuis les helpers purs (`StoryTextAttributeCycle`) et
+/// depuis un test non isolé. Une annotation par membre ne suffit pas.
+public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     case style
-    case weight
     case color
-    case size
     case align
     case background
     case frame
@@ -20,12 +27,15 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     /// 2026-07-25).
     case language
 
+    /// L'ordre d'affichage de la rangée. Distinct de `allCases` pour que
+    /// réordonner l'interface ne demande pas de réordonner l'énuméré, dont
+    /// l'ordre des `case` porte aussi la sérialisation.
+    static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
+
     var sfSymbol: String {
         switch self {
         case .style:      return "textformat"
-        case .weight:     return "bold"
         case .color:      return "paintpalette.fill"
-        case .size:       return "textformat.size"
         case .align:      return "text.alignleft"
         case .background: return "a.square.fill"
         case .frame:      return "rectangle.roundedtop"
@@ -34,12 +44,14 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
         }
     }
 
+    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module`, généré par
+    /// SPM sans annotation, tombe sous l'isolation par défaut du package. Seule
+    /// la vue lit ce libellé — les helpers purs n'en ont pas besoin.
+    @MainActor
     var accessibilityLabel: String {
         switch self {
         case .style:      return String(localized: "story.textEdit.tool.style", defaultValue: "Style de texte", bundle: .module)
-        case .weight:     return String(localized: "story.textEdit.tool.weight", defaultValue: "Graisse du texte", bundle: .module)
         case .color:      return String(localized: "story.textEdit.tool.color", defaultValue: "Couleur du texte", bundle: .module)
-        case .size:       return String(localized: "story.textEdit.tool.size", defaultValue: "Taille du texte", bundle: .module)
         case .align:      return String(localized: "story.textEdit.tool.align", defaultValue: "Alignement du texte", bundle: .module)
         case .background: return String(localized: "story.textEdit.tool.background", defaultValue: "Fond du texte", bundle: .module)
         case .frame:      return String(localized: "story.textEdit.tool.frame", defaultValue: "Cadrage du texte", bundle: .module)
@@ -52,7 +64,7 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
 // MARK: - TextEditingMode
 
 /// État du mode d'édition de texte flottant. Orthogonal à `BandStateMachine`.
-public enum TextEditingMode: Equatable, Sendable {
+public nonisolated enum TextEditingMode: Equatable, Sendable {
     case inactive
     case active(textId: String, expandedTool: TextEditTool?)
 

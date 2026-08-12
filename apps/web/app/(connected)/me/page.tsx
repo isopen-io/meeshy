@@ -8,6 +8,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { Badge } from '@/components/ui/badge';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 // Modal building blocks reused from the v2 design system.
@@ -235,7 +236,7 @@ export default function ProfilePage() {
           className="h-40 md:h-52"
           style={{
             background: profile.banner
-              ? `url(${profile.banner}) center/cover`
+              ? `url(${buildAttachmentUrl(profile.banner)}) center/cover`
               : 'linear-gradient(135deg, #2563eb, #7c3aed)',
           }}
         />

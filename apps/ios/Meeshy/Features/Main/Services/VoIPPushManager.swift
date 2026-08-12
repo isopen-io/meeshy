@@ -287,9 +287,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // The contains-check and insert are performed in a single MainActor
         // block to prevent a check-then-act race if PushKit ever delivers two
         // pushes concurrently on different threads.
+        //
+        // Reads/writes `self.dedupRing`, not `Self.shared.dedupRing` — this is
+        // an instance delegate method and `dedupRing` is instance state
+        // (injectable for tests). Going through the singleton here would
+        // silently split dedup state across instances the day anything other
+        // than `.shared` is ever registered as the PKPushRegistryDelegate.
         let alreadyReported = MainActor.assumeIsolated {
-            let seen = Self.shared.dedupRing.contains(callId, now: Date())
-            if !seen { Self.shared.dedupRing.insert(callId, now: Date()) }
+            let seen = self.dedupRing.contains(callId, now: Date())
+            if !seen { self.dedupRing.insert(callId, now: Date()) }
             return seen
         }
         if alreadyReported {

@@ -28,6 +28,9 @@ extension StoryComposerViewModel {
         for obj in (effects.stickerObjects ?? []) {
             map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
+        for obj in effects.locationObjects {
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
+        }
         zIndexMap = map
         nextZIndex = maxZ + 1
     }
@@ -53,6 +56,7 @@ extension StoryComposerViewModel {
         if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex }
         if let a = effects.audioPlayerObjects?.first(where: { $0.id == id }) { return a.zIndex ?? 0 }
         if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex }
+        if let l = effects.locationObjects.first(where: { $0.id == id }) { return l.zIndex }
         return 0
     }
 
@@ -141,6 +145,9 @@ extension StoryComposerViewModel {
         for s in effects.stickerObjects ?? [] {
             elements.append(AnyCanvasElement(id: s.id, elementType: .image, zIndex: zIndexMap[s.id] ?? s.zIndex))
         }
+        for l in effects.locationObjects {
+            elements.append(AnyCanvasElement(id: l.id, elementType: .image, zIndex: zIndexMap[l.id] ?? l.zIndex))
+        }
         return elements.sorted { $0.zIndex < $1.zIndex }
     }
 
@@ -154,6 +161,8 @@ extension StoryComposerViewModel {
             audios[i].zIndex = z; effects.audioPlayerObjects = audios
         } else if var stickers = effects.stickerObjects, let i = stickers.firstIndex(where: { $0.id == id }) {
             stickers[i].zIndex = z; effects.stickerObjects = stickers
+        } else if let i = effects.locationObjects.firstIndex(where: { $0.id == id }) {
+            effects.locationObjects[i].zIndex = z
         } else {
             return  // Sticker handled by view-level state — caller patches via onUpdate
         }

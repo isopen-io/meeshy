@@ -24,6 +24,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// caller must opt back in per attachment, it never carries across tracks.
     @Published public var shouldLoop = false
 
+    /// Profil de session transmis au MediaSessionCoordinator. Défaut
+    /// `.transient` (fail-safe : un moteur oublié duck comme avant, sans
+    /// jamais voler la carte Now Playing). Seul le moteur possédé par le
+    /// ConversationAudioCoordinator (app) opte pour `.content`.
+    public var sessionProfile: AudioSessionProfile = .transient
+
     public var onPlaybackFinished: (() -> Void)?
 
     /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
@@ -147,7 +153,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func acquireSession() async {
         guard !sessionRequested else { return }
         sessionRequested = true
-        try? await MediaSessionCoordinator.shared.request(role: .playback)
+        try? await MediaSessionCoordinator.shared.request(
+            role: .playback, playbackOptions: sessionProfile.categoryOptions
+        )
     }
 
     /// Libère la session via le coordinator (refcompté : désactive au count 0).
@@ -304,6 +312,37 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         }
     }
 
+    /// Pause explicite pour interruption système / changement de route.
+    /// Contrairement à `togglePlayPause()`, sans effet si le player a déjà
+    /// été mis en pause par le système (le toggle RELANCERAIT dans ce cas).
+    public func pause() {
+        guard player != nil, isPlaying else { return }
+        player?.pause()
+        isPlaying = false
+        timer?.invalidate()
+        stretchTracker.pause(positionMs)
+        reportListenProgress(complete: false)
+        persistPosition()
+    }
+
+    /// Reprise après interruption système : la session a pu être désactivée
+    /// par l'OS — la réactiver de façon synchrone (call-aware, sans toucher
+    /// le refcount) avant de relancer le player conservé.
+    public func resumeFromInterruption() {
+        guard let player, !isPlaying else { return }
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
+        MediaSessionCoordinator.shared.activatePlaybackSync(
+            options: sessionProfile.categoryOptions
+        )
+        PlaybackCoordinator.shared.willStartPlaying(audio: self)
+        player.rate = Float(speed.rawValue)
+        player.play()
+        isPlaying = true
+        listenStartTime = listenStartTime ?? Date()
+        stretchTracker.begin(positionMs)
+        startProgressTimer()
+    }
+
     public func seek(to fraction: Double) {
         guard let player = player else { return }
         let target = fraction * player.duration
@@ -419,9 +458,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     /// Tracks shorter than this are never resumed (a 1s voice note is replayed
     /// whole). Also gates `persistPosition` so we don't store noise.
-    private static let minResumableDuration: TimeInterval = 2.0
+    nonisolated private static let minResumableDuration: TimeInterval = 2.0
     /// Dead-zone at both ends of the track, in seconds.
-    private static let resumeEdgeGuard: TimeInterval = 1.0
+    nonisolated private static let resumeEdgeGuard: TimeInterval = 1.0
+
+    /// Whether `saved` is a position playback will actually honor on the next
+    /// play. Single source of truth for the dead-zone rule: the seek path
+    /// (`applyResumePositionIfAvailable`), the store path (`saveResumePosition`)
+    /// and the bubble's elapsed timecode all ask this, so the UI can never
+    /// advertise a resume point the engine would silently ignore.
+    nonisolated public static func isResumable(
+        _ saved: TimeInterval, totalDuration: TimeInterval
+    ) -> Bool {
+        totalDuration >= minResumableDuration
+            && saved > resumeEdgeGuard
+            && saved < totalDuration - resumeEdgeGuard
+    }
 
     /// Seeks to the saved resume position (if any) BEFORE playback starts.
     /// Called from `playData(_:)` once `duration` is known and the player is
@@ -429,10 +481,8 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func applyResumePositionIfAvailable() {
         guard let attId = attachmentId,
               let player,
-              duration >= Self.minResumableDuration,
               let saved = AudioPlaybackPositionStore.shared.position(for: attId),
-              saved > Self.resumeEdgeGuard,
-              saved < duration - Self.resumeEdgeGuard else { return }
+              Self.isResumable(saved, totalDuration: duration) else { return }
         player.currentTime = saved
         currentTime = saved
         progress = duration > 0 ? saved / duration : 0
@@ -456,7 +506,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// meaningful to resume). Short tracks are never stored.
     private func saveResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
         guard totalDuration >= Self.minResumableDuration else { return }
-        if elapsed > Self.resumeEdgeGuard && elapsed < totalDuration - Self.resumeEdgeGuard {
+        if Self.isResumable(elapsed, totalDuration: totalDuration) {
             AudioPlaybackPositionStore.shared.save(elapsed, for: id)
         } else {
             AudioPlaybackPositionStore.shared.clear(for: id)
@@ -598,6 +648,22 @@ extension AudioPlayerView {
     }
 }
 
+/// The progress an audio bubble renders, resolved once and shared by the
+/// waveform tint, the percentage chip and the elapsed timecode.
+/// `isLive` distinguishes a playing engine (full accent) from a persisted
+/// at-rest position (attenuated accent).
+nonisolated public struct AudioProgressDisplay: Sendable, Equatable {
+    public let fraction: Double
+    public let elapsed: TimeInterval
+    public let isLive: Bool
+
+    public init(fraction: Double, elapsed: TimeInterval, isLive: Bool) {
+        self.fraction = fraction
+        self.elapsed = elapsed
+        self.isLive = isLive
+    }
+}
+
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
@@ -611,8 +677,11 @@ public struct AudioPlayerView: View {
     /// every existing call site) means "show the original". The SDK stays
     /// agnostic of the resolution rule itself (systemLanguage > regional >
     /// custom > deviceLocale); it only renders whichever code it is handed.
-    /// This ONLY seeds the transcription display — it never changes which
-    /// audio track plays, that stays the original by default.
+    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
+    /// `init`, so the matching translated audio track (if one exists) plays
+    /// automatically, exactly like the transcription strip. See
+    /// `hasExplicitAudioLanguage`'s doc for the full contract.
     public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
@@ -686,19 +755,20 @@ public struct AudioPlayerView: View {
     /// can observe the seeding decision from MeeshyUITests without exposing
     /// it publicly — same pattern as `usesExternalPlayer` above.
     @State internal var selectedAudioLanguage: String
-    /// B9 fix — `selectedAudioLanguage` now doubles as the Prisme-seeded
-    /// transcription-STRIP default AND the user's explicit playback-language
-    /// pick, but only the latter may steer which audio track plays. Starts
-    /// `false` unconditionally (even when `initialTranscriptionLanguage` seeds
-    /// a non-"orig" value) and flips to `true` exclusively inside
-    /// `switchToLanguage` — the single choke point reached by an explicit
-    /// language-pill tap or an `externalLanguage` binding change, never by the
-    /// automatic Prisme seed. Consulted by `resolvePlaybackUrl` so
-    /// `currentAudioUrl` keeps resolving to the original track until the user
-    /// actually explores another language, per `initialTranscriptionLanguage`'s
-    /// own contract above. Internal for the same testability reason as
-    /// `selectedAudioLanguage`.
-    @State internal var hasUserSelectedAudioLanguage = false
+    /// Prisme audio-follow (2026-08-09) — `selectedAudioLanguage` doubles as
+    /// the Prisme-seeded transcription-STRIP default AND the playback
+    /// language: this flag says whether `selectedAudioLanguage` should steer
+    /// which audio track plays. Seeded in `init` to `true` when Prisme
+    /// already resolved a real translation (`initialTranscriptionLanguage !=
+    /// nil`/`!= "orig"`) — reversing the prior "B9 fix" policy that kept
+    /// transcription-strip language and playback language independent by
+    /// design. Also flips to `true` inside `switchToLanguage` on an explicit
+    /// language-pill tap or `externalLanguage` binding change (idempotent —
+    /// already `true` in that case). Consulted by `resolvePlaybackUrl` so
+    /// `currentAudioUrl` only ever falls back to the original when NEITHER
+    /// Prisme nor the user resolved a translated language. Internal for the
+    /// same testability reason as `selectedAudioLanguage`.
+    @State internal var hasExplicitAudioLanguage: Bool
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -821,6 +891,9 @@ public struct AudioPlayerView: View {
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
         self._selectedAudioLanguage = State(
             initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
+        )
+        self._hasExplicitAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage) != "orig"
         )
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
@@ -974,12 +1047,10 @@ public struct AudioPlayerView: View {
         // which goes through handlePlayTap() — gated by availability.
         player.stop()
 
-        // B9 fix — this is the only place `selectedAudioLanguage` changes in
-        // response to genuine user intent (pill tap / externalLanguage
-        // binding), as opposed to the automatic Prisme seed applied once in
-        // `init`. Recording that here is what lets `resolvePlaybackUrl` tell
-        // the two apart.
-        hasUserSelectedAudioLanguage = true
+        // Explicit user intent (pill tap / externalLanguage binding) always
+        // marks the language explicit — idempotent if Prisme had already
+        // seeded it true in `init`.
+        hasExplicitAudioLanguage = true
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
         }
@@ -1329,33 +1400,29 @@ public struct AudioPlayerView: View {
     private var currentAudioUrl: String {
         AudioPlayerView.resolvePlaybackUrl(
             selectedLanguage: selectedAudioLanguage,
-            isUserSelected: hasUserSelectedAudioLanguage,
+            hasExplicitLanguage: hasExplicitAudioLanguage,
             translatedAudios: translatedAudios,
             originalUrl: attachment.fileUrl
         )
     }
 
     /// Pure resolution of the actual URL `handlePlayTap` hands the playback
-    /// engine. B9 fix — `selectedLanguage` alone is NOT sufficient: it is
-    /// also the Prisme-auto-seeded transcription-strip default (see
-    /// `initialTranscriptionLanguage`), which must never affect which audio
-    /// track plays. Only `isUserSelected == true` (set exclusively by
-    /// `switchToLanguage`, i.e. an explicit pill tap or `externalLanguage`
-    /// change) may steer playback to a translated track; otherwise this
-    /// always resolves to `originalUrl`, matching
-    /// `initialTranscriptionLanguage`'s documented contract and the Prisme
-    /// rule that playback defaults to the original. Extracted as a
-    /// `nonisolated static` helper — same pattern as
-    /// `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
+    /// engine. Prisme audio-follow (2026-08-09) — `selectedLanguage` is
+    /// steered to playback whenever `hasExplicitLanguage` is `true`, whether
+    /// that came from the automatic Prisme seed in `init` or from an
+    /// explicit `switchToLanguage` call. When `false` (no Prisme translation
+    /// resolved and no user action yet), this always resolves to
+    /// `originalUrl`. Extracted as a `nonisolated static` helper — same
+    /// pattern as `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
     /// elsewhere in this file — so it is unit-testable without a SwiftUI
     /// render lifecycle.
     nonisolated internal static func resolvePlaybackUrl(
         selectedLanguage: String,
-        isUserSelected: Bool,
+        hasExplicitLanguage: Bool,
         translatedAudios: [MessageTranslatedAudio],
         originalUrl: String
     ) -> String {
-        guard isUserSelected, selectedLanguage != "orig",
+        guard hasExplicitLanguage, selectedLanguage != "orig",
               let translated = translatedAudios.first(where: {
                   $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
               })
@@ -1553,6 +1620,61 @@ public struct AudioPlayerView: View {
         MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
     }
 
+    /// The stored resume point for this attachment, but ONLY when playback
+    /// would honor it — see `AudioPlaybackManager.isResumable`. Filtering here
+    /// keeps the timecode from advertising a position the engine ignores.
+    private var eligibleResumePosition: TimeInterval? {
+        guard let saved = AudioPlaybackPositionStore.shared.position(for: attachment.id),
+              AudioPlaybackManager.isResumable(saved, totalDuration: estimatedDuration)
+        else { return nil }
+        return saved
+    }
+
+    private var displayedProgress: AudioProgressDisplay {
+        Self.progressDisplay(
+            liveProgress: player.progress,
+            liveCurrentTime: player.currentTime,
+            restingProgress: restingProgress,
+            resumePosition: eligibleResumePosition,
+            totalDuration: estimatedDuration)
+    }
+
+    /// What the widget SHOWS for "how far along am I" — one resolution behind
+    /// the waveform tint, the percentage chip AND the elapsed timecode, so the
+    /// three can never contradict each other.
+    ///
+    /// While the engine plays, its own head wins: the timecode must track the
+    /// audio coming out of the speaker even if the user scrubbed backwards past
+    /// the monotonic consumption mark.
+    ///
+    /// At rest — a fresh launch, a bubble whose engine was never attached — the
+    /// two persisted facts answer two different questions and are kept apart:
+    /// `fraction` (waveform + chip) reports how much of the note has EVER been
+    /// consumed, while `elapsed` reports where the play button will START. They
+    /// coincide on a simple pause; they diverge when an already-finished note
+    /// is re-listened and paused mid-way (100 % consumed, resumes at 0:22).
+    nonisolated public static func progressDisplay(
+        liveProgress: Double,
+        liveCurrentTime: TimeInterval,
+        restingProgress: Double,
+        resumePosition: TimeInterval?,
+        totalDuration: TimeInterval
+    ) -> AudioProgressDisplay {
+        guard liveProgress <= 0 else {
+            return AudioProgressDisplay(
+                fraction: liveProgress, elapsed: liveCurrentTime, isLive: true)
+        }
+        let fraction = max(0, min(1, restingProgress))
+        guard totalDuration > 0 else {
+            return AudioProgressDisplay(fraction: fraction, elapsed: 0, isLive: false)
+        }
+        // Consumption is monotonic and sticky-complete; the resume point is the
+        // only value that predicts where the play button will start.
+        let elapsed = resumePosition.map { max(0, min(totalDuration, $0)) }
+            ?? fraction * totalDuration
+        return AudioProgressDisplay(fraction: fraction, elapsed: elapsed, isLive: false)
+    }
+
     /// Maps a touch / drag x-position within the waveform strip to a normalized
     /// seek fraction (0...1), clamped at both edges. Single source of truth for
     /// BOTH the tap-to-seek and the swipe-to-scrub gestures on `waveformProgress`
@@ -1576,9 +1698,8 @@ public struct AudioPlayerView: View {
             // Live playback (incl. a resumed position) drives the bars with the
             // full accent. At rest we fall back to the persisted consumption
             // fraction with an attenuated accent — discreet, per the Prisme.
-            let isLivePlayback = player.progress > 0
-            let shownProgress = isLivePlayback ? player.progress : restingProgress
-            let playedColor = isLivePlayback ? accent : accent.opacity(0.4)
+            let shownProgress = displayedProgress.fraction
+            let playedColor = displayedProgress.isLive ? accent : accent.opacity(0.4)
 
             HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
@@ -1637,7 +1758,7 @@ public struct AudioPlayerView: View {
     /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
-            Text(formatMediaDuration(player.currentTime))
+            Text(formatMediaDuration(displayedProgress.elapsed))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
@@ -1686,7 +1807,7 @@ public struct AudioPlayerView: View {
     }
 
     private var percentageChip: some View {
-        let pct = Int(player.progress * 100)
+        let pct = Int(displayedProgress.fraction * 100)
         let isStarted = pct > 0
         let chipBg: Color = isStarted
             ? accent.opacity(0.85)

@@ -81,6 +81,30 @@ struct CallPresentationLayer: ViewModifier {
             )) {
                 CallView(callManager: callManager)
             }
+            // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
+            // vivait dans `CallView`, donc dans le `fullScreenCover` : réduire
+            // l'appel démonte le cover, `pipConfiguredSource` est `weak` et passe
+            // à nil, et plus rien ne reconfigure. Un appel réduit ne pouvait donc
+            // PLUS ouvrir de PiP — alors que le réduire est exactement le geste
+            // qui devrait le préparer.
+            //
+            // Deux gardes, chacune pour une raison distincte :
+            // • `displayMode != .fullScreen` — pendant que le cover est présenté
+            //   (`UIModalPresentationFullScreen`), UIKit détache la hiérarchie
+            //   présentante : une ancre montée ici y serait hors fenêtre, et le
+            //   bouton PiP manuel de `CallView` resterait visible mais inerte.
+            // • PAS de garde sur `isSystemPiPActive` — contrairement à la pilule
+            //   et à la bulle, qui se masquent pendant le PiP. L'ancre doit
+            //   SURVIVRE à la fenêtre flottante : c'est la vue d'où AVKit fait
+            //   émerger puis retourner l'animation.
+            .overlay(alignment: .top) {
+                if callManager.callState.isActive && callManager.displayMode != .fullScreen {
+                    PiPSourceAnchor()
+                        .frame(height: 64)
+                        .padding(.top, MeeshySpacing.sm)
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .top) {
                 FloatingCallPillView(callManager: callManager)
                     .padding(.top, MeeshySpacing.sm)
@@ -183,6 +207,9 @@ struct RootView: View {
     /// notification toast — presented as a reusable `ConversationView` preview
     /// (last messages + simple composer) over the current page.
     @State private var notificationPreviewConversation: Conversation?
+    /// Mood à republier depuis la bulle (hôte racine) — présente le composer
+    /// de statut pré-rempli. Anciennement dans ConversationListView, mort.
+    @State private var republishStatusEntry: StatusEntry?
     /// Suppresses the toast `Button`'s tap action that can fire on release right
     /// after a long-press / drag opened the preview, preventing a double action
     /// (preview sheet + underlying navigation).
@@ -276,7 +303,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -297,7 +324,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -322,7 +349,9 @@ struct RootView: View {
                             }
                         )
                     case .communityInvite(let communityId):
-                        CommunityInviteView(communityId: communityId)
+                        // Poussée dans la pile : `dismiss()` interne à son propre
+                        // NavigationStack est inerte, « Done » ne fermait rien.
+                        CommunityInviteView(communityId: communityId, onDone: { router.pop() })
                     case .notifications:
                         NotificationListView(
                             onNotificationTap: { notification in
@@ -331,7 +360,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -357,16 +386,17 @@ struct RootView: View {
                             .navigationBarHidden(true)
                     case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
                         PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
+                    case .hashtagResults(let tag):
+                        HashtagResultsView(tag: tag)
                     case .bookmarks:
+                        // Pas de `navigationBarHidden` : cet écran n'a pas
+                        // d'en-tête maison, la barre système porte son titre ET
+                        // son retour. La masquer en ferait un cul-de-sac.
                         BookmarksView()
-                            .navigationBarHidden(true)
                     case .starredMessages:
                         StarredMessagesView()
                     case .friendRequests:
                         FriendRequestListView()
-                            .navigationBarHidden(true)
-                    case .editProfile:
-                        EditProfileView()
                             .navigationBarHidden(true)
                     case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
                         StoryNotificationTargetScreen(
@@ -428,6 +458,13 @@ struct RootView: View {
                                     startAtFirstUnviewed: true,
                                     singleGroup: true
                                 ))
+                            },
+                            onOpenDetail: { postId in
+                                // Ferme le lecteur immersif avant de pousser le détail —
+                                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
+                                // reste invisible tant que l'utilisateur ne ferme pas.
+                                closeReels()
+                                router.push(.postDetail(postId))
                             },
                             authorHasStory: { userId in
                                 storyViewModel.storyRingState(forUserId: userId) != .none
@@ -503,6 +540,33 @@ struct RootView: View {
             .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
             .zIndex(201)
         }
+        // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPhone. La
+        // bulle se rend dans le repère de CE conteneur — poser l'hôte plus
+        // bas (liste, carte de feed, tray…) faisait rendre une bulle par
+        // hôte frère, chacune décalée dans son propre repère (bug
+        // 2026-07-30). Les présentations modales (sheets, fullScreenCover)
+        // gardent leur propre pose : l'overlay racine est invisible sous
+        // elles. Cf. StatusBubbleOverlayModifier.
+        .withStatusBubble()
+        // Une bulle est un popover contextuel : elle ne survit pas à une
+        // navigation (sinon elle se ré-ancre absurdement sur l'écran suivant).
+        .adaptiveOnChange(of: router.path) { _, _ in
+            if StatusBubbleController.shared.currentEntry != nil {
+                StatusBubbleController.shared.dismiss()
+            }
+        }
+        .sheet(item: $republishStatusEntry) { entry in
+            StatusComposerView(
+                viewModel: statusViewModel,
+                initialEmoji: entry.moodEmoji,
+                initialText: entry.content,
+                viaUsername: entry.username,
+                repostOfId: entry.id,
+                repostAudioUrl: entry.audioUrl
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkParser.parse(url)
             switch destination {
@@ -567,6 +631,12 @@ struct RootView: View {
             // sur les publishers de SocialSocketManager → les stories des
             // amis n'arrivent jamais dans `storyGroups` en temps réel.
             storyViewModel.subscribeToSocketEvents()
+            // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+            // écrivain disque de post:created/updated/reposted, des
+            // commentaires et des réactions. Armé par `FeedView` et désarmé à
+            // sa disparition, il ratait tout ce qui arrivait ailleurs dans
+            // l'app. `arm()` est idempotent — jamais désarmé.
+            DependencyContainer.shared.feedSocketHandler.arm()
 
             // Start SyncEngine socket relay
             await ConversationSyncEngine.shared.startSocketRelay()
@@ -580,6 +650,13 @@ struct RootView: View {
             // Observe sync events for conversation list
             conversationViewModel.observeSync()
 
+            #if DEBUG
+            // Pré-résout à pile courte les métadonnées du 1er rendu de
+            // ConversationView (classe de crashs stack-overflow du décodeur
+            // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
+            ConversationFirstRenderWarmup.run()
+            #endif
+
             // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
             // résout/ouvre la DM avec l'auteur et amorce le composer.
             StatusBubbleController.shared.onConfirmedReply = { entry in
@@ -589,6 +666,14 @@ struct RootView: View {
                             content: entry.content, publishedAt: entry.createdAt),
                     conversationListViewModel: conversationViewModel
                 )
+            }
+
+            // Republication d'un mood : câblé ICI (hôte racine de la bulle)
+            // — l'ancien branchement vivait dans un overlay mort de
+            // ConversationListView, le bouton « Republier » n'agissait donc
+            // jamais depuis la bulle du modifier.
+            StatusBubbleController.shared.onRepublish = { entry in
+                republishStatusEntry = entry
             }
 
             // Pilier 22 V3 wiring — register the StoryViewModel as the
@@ -646,6 +731,18 @@ struct RootView: View {
             // deep link), iOS retombe sur la transition cover standard.
             .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
+        // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
+        // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
+        // liste de conversations ET par la feuille de feed qui la recouvre sans
+        // la démonter : deux trays vivantes observaient le même
+        // `showStoryComposer` et présentaient le même cover en double. Détail
+        // dans `StoryComposerCover`.
+        .storyComposerCover(
+            viewModel: storyViewModel,
+            router: router,
+            conversationListViewModel: conversationViewModel,
+            statusViewModel: statusViewModel
+        )
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
         // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
         // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
@@ -708,6 +805,11 @@ struct RootView: View {
             guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
             navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
         }
+        // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
+        // ramène vers la conversation et le message audio en cours de lecture.
+        .nowPlayingReturnNavigation(router: router) { conversationId in
+            conversationViewModel.conversations.contains { $0.id == conversationId }
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
             guard let targetUserId = notification.object as? String else { return }
             if let existingConv = conversationViewModel.conversations.first(where: {
@@ -727,7 +829,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
+                    FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de créer la conversation", bundle: .main))
                 }
             }
         }
@@ -954,6 +1056,9 @@ struct RootView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 router.push(.links)
             }
+
+        case .hashtag(let tag):
+            router.push(.hashtagResults(tag: tag))
 
         case .magicLink:
             break
@@ -1678,11 +1783,20 @@ struct RootView: View {
             },
             onLeftLongPress: {
                 HapticFeedback.medium()
-                // Long-press : même action que le tap (ouvre/ferme l'overlay Feed).
-                // Les Reels se lancent depuis le bouton dédié du header « Meeshy Feed ».
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showFeed.toggle()
-                }
+                // Long-press : les Réels, en plein écran, sans graine — le lecteur
+                // va chercher sa page. Le tap garde le Flux ; les deux gestes du
+                // même bouton mènent donc aux deux formes du même contenu.
+                //
+                // `presentFresh()` a été écrite POUR ce geste (sa documentation dit
+                // « long-press launch »), et l'ancrage du liquid reveal se calcule
+                // depuis la position de CE bouton — cf. `FeedButtonAnchor` et ses
+                // tests. Le rebranchement rend au geste l'infrastructure qui
+                // l'attendait.
+                //
+                // Le bouton Réels du header « Meeshy Feed » RESTE en place : un
+                // appui long n'est pas découvrable et ne peut pas être le seul
+                // accès à une section entière.
+                ReelsPresenter.shared.presentFresh()
             },
             onRightLongPress: {
                 // Long-press sur l'avatar = raccourci direct vers la page profil
@@ -1697,7 +1811,10 @@ struct RootView: View {
                 router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
-            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            // L'appui long lance les Réels : un geste que rien ne signale à l'écran
+            // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
+            // ne peut pas le découvrir par tâtonnement.
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité. Appui long : les Réels.", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
             rightA11yValue: notificationManager.unreadCount > 0
                 ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)

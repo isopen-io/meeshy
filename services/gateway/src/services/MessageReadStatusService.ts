@@ -95,13 +95,68 @@ async function withRetry<T>(
   throw lastError;
 }
 
-// MongoDB ObjectId hex strings are chronologically sortable (leading 4 bytes
-// = creation timestamp), so a `lt` filter in the cursor-advance guard
-// approximates message recency without an extra query. Only applied when the
-// candidate id looks like a real ObjectId — non-conforming ids (tests, legacy
-// data) skip the guard so behavior is unchanged for callers that don't use
-// ObjectIds (matches the field's pre-atomic-guard behavior).
+// A MongoDB ObjectId hex string is chronologically sortable only to the SECOND
+// (leading 4 bytes = creation timestamp); its next 5 bytes are per-process
+// random. Two messages created in the same second on DIFFERENT gateway
+// processes therefore sort by string in an order unrelated to real recency, so
+// the cursor-advance freshness guard orders by the message's `createdAt`
+// (millisecond precision) instead — see `buildCursorFreshnessGuard`. Only
+// applied when the candidate id looks like a real ObjectId — non-conforming ids
+// (tests, legacy data) skip the guard so behavior is unchanged for callers that
+// don't use ObjectIds (matches the field's pre-atomic-guard behavior).
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+
+type CursorIdField = "lastDeliveredMessageId" | "lastReadMessageId";
+type CursorCreatedAtField =
+  | "lastDeliveredMessageCreatedAt"
+  | "lastReadMessageCreatedAt";
+
+const CREATED_AT_FIELD_FOR: Record<CursorIdField, CursorCreatedAtField> = {
+  lastDeliveredMessageId: "lastDeliveredMessageCreatedAt",
+  lastReadMessageId: "lastReadMessageCreatedAt",
+};
+
+/**
+ * Builds the `OR` half of the cursor-advance `updateMany` WHERE — the atomic
+ * freshness guard that decides whether an incoming receipt is newer than what
+ * the cursor already records. Ordering is by the message's `createdAt`, NOT its
+ * ObjectId hex order (which is only second-accurate and diverges across gateway
+ * processes; see `OBJECT_ID_RE`).
+ *
+ * Returns `null` when no guard applies (the caller then matches on
+ * participant+conversation alone):
+ *   - non-ObjectId ids (tests / legacy data), preserving the historical
+ *     pre-guard behavior;
+ *   - an ObjectId whose message could not be resolved to a `createdAt`, which
+ *     falls back to the historical ObjectId-order guard rather than dropping it.
+ */
+export function buildCursorFreshnessGuard(params: {
+  idField: CursorIdField;
+  createdAtField: CursorCreatedAtField;
+  messageId: string;
+  messageCreatedAt: Date | null;
+}): { OR: Array<Record<string, unknown>> } | null {
+  const { idField, createdAtField, messageId, messageCreatedAt } = params;
+  if (!OBJECT_ID_RE.test(messageId)) return null;
+
+  if (!messageCreatedAt) {
+    return { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] };
+  }
+
+  return {
+    OR: [
+      // Brand-new cursor: nothing recorded yet.
+      { [createdAtField]: null, [idField]: null },
+      // Legacy cursor written before createdAt was tracked: fall back to the
+      // ObjectId order it was recorded under, until this advance upgrades it.
+      { [createdAtField]: null, [idField]: { lt: messageId } },
+      // The recorded message is strictly older (correct to the millisecond). A
+      // same-instant sibling from another process is left for the next later
+      // receipt to carry — a transient stall, never a rollback.
+      { [createdAtField]: { lt: messageCreatedAt } },
+    ],
+  };
+}
 
 export class MessageReadStatusService {
   /**
@@ -160,9 +215,13 @@ export class MessageReadStatusService {
    * internally; the senderId-equality check uses the resolved
    * `Participant.id`, not the user-provided identifier.
    *
-   * Counting floor: `cursor.lastReadAt` → `participant.joinedAt`. A new
-   * participant therefore sees only messages received since they joined,
-   * NOT the entire historical backlog of the conversation.
+   * Counting floor: `cursor.lastReadMessageCreatedAt` (the chronological
+   * position of the read cursor) → `cursor.lastReadAt` (legacy rows) →
+   * `participant.joinedAt`. The position — not the wall-clock `lastReadAt`,
+   * which is `now` after an exact partial-prefix read — keeps skipped
+   * messages counted (design lecture-exacte §3 : « le badge reste haut »).
+   * A new participant therefore sees only messages received since they
+   * joined, NOT the entire historical backlog of the conversation.
    */
   async getUnreadCount(
     participantIdOrUserId: string,
@@ -218,7 +277,16 @@ export class MessageReadStatusService {
         });
       }
 
-      const floor: Date | null = cursor?.lastReadAt ?? participant.joinedAt ?? null;
+      // Plancher = position CHRONOLOGIQUE du curseur, pas l'horloge murale.
+      // En mode exact le curseur s'arrête au préfixe contigu : `lastReadAt` vaut
+      // `now` (postérieur à tous les messages en base) tandis que
+      // `lastReadMessageCreatedAt` est le `createdAt` du dernier message
+      // réellement lu. Compter `createdAt > lastReadAt` déclarerait lus les
+      // messages sautés — le badge tomberait à 0 (design lecture-exacte §3 :
+      // « le badge reste haut »). Repli sur `lastReadAt` pour les curseurs
+      // hérités sans clé chronologique, puis `joinedAt`.
+      const floor: Date | null =
+        cursor?.lastReadMessageCreatedAt ?? cursor?.lastReadAt ?? participant.joinedAt ?? null;
 
       return await this.prisma.message.count({
         where: {
@@ -250,7 +318,10 @@ export class MessageReadStatusService {
    * under-reported — in a 1:1 it pushed 0 unread on every incoming message — and diverged
    * from the authoritative `getUnreadCountsForUser`. See iter 46 / F23b.)
    *
-   * Counting floor per participant: `cursor.lastReadAt → joinedAt → null` (no floor).
+   * Counting floor per participant: `cursor.lastReadMessageCreatedAt (position)
+   * → cursor.lastReadAt (legacy) → joinedAt → null` (no floor). The chronological
+   * position — not the wall-clock `lastReadAt` — keeps messages skipped by an
+   * exact partial-prefix read counted (design lecture-exacte §3).
    * The `findMany` lower bound is the OLDEST floor across participants, so only the
    * messages any participant could count are fetched once; a `null` floor (never read,
    * no `joinedAt`) drops the bound entirely.
@@ -270,12 +341,18 @@ export class MessageReadStatusService {
       // Batch fetch all cursors in a single query
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { participantId: { in: participantIds }, conversationId },
-        select: { participantId: true, lastReadAt: true },
+        select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
       });
-      const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
+      // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
+      // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
+      // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
+      const cursorMap = new Map(
+        cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
+      );
 
-      // Per-participant counting floor (ms). `lastReadAt → joinedAt → null` — identical
-      // reduction to the single-participant `lastReadAt ?? p.joinedAt ?? null`.
+      // Per-participant counting floor (ms). `cursor position → joinedAt → null`
+      // — identical reduction to the single-participant
+      // `(lastReadMessageCreatedAt ?? lastReadAt) ?? p.joinedAt ?? null`.
       const floors = participants.map((p) => ({
         id: p.id,
         floorMs: ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null,
@@ -283,10 +360,20 @@ export class MessageReadStatusService {
 
       // A null floor counts every candidate message (no lower bound). If ANY participant
       // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
+      // Reduce (not `Math.min(...spread)`): this fires on the hottest path
+      // (`_updateUnreadCounts` on EVERY `message:new`) and `floors` has one entry per
+      // participant. A public/global conversation at the platform's 100k+ scale can exceed
+      // V8's argument-spread ceiling (~131k), where `Math.min(...arr)` throws
+      // `RangeError: Maximum call stack size exceeded` — swallowed by the catch below,
+      // silently zeroing unread counts for the whole conversation. `reduce` is O(n) with no
+      // per-argument stack cost, so it holds for any group size.
       const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
       const minFloorMs = hasUnboundedFloor
         ? null
-        : Math.min(...floors.map((f) => f.floorMs as number));
+        : floors.reduce(
+            (min, f) => ((f.floorMs as number) < min ? (f.floorMs as number) : min),
+            Infinity
+          );
 
       // ONE query for all participants. No `senderId` filter here — the "exclude my own
       // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
@@ -382,15 +469,20 @@ export class MessageReadStatusService {
       const participantIds = participants.map((p) => p.id);
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { participantId: { in: participantIds } },
-        select: { participantId: true, lastReadAt: true },
+        select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
       });
-      const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
+      // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
+      // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
+      // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
+      const cursorMap = new Map(
+        cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
+      );
 
       // 3. Parallel message counts — one per participant (= one per conversation)
       await Promise.all(
         participants.map(async (p) => {
-          const lastReadAt = cursorMap.get(p.id) ?? null;
-          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
+          const cursorFloor = cursorMap.get(p.id) ?? null;
+          const floor: Date | null = cursorFloor ?? p.joinedAt ?? null;
           const count = await this.prisma.message.count({
             where: {
               conversationId: p.conversationId,
@@ -455,16 +547,36 @@ export class MessageReadStatusService {
   }): Promise<boolean> {
     const { participantId, conversationId, messageId, now, idField, atField, resetUnreadCount, cursorExists } = params;
 
+    const createdAtField = CREATED_AT_FIELD_FOR[idField];
+
+    // Resolve the incoming message's createdAt — the chronological key the guard
+    // orders by. Best-effort: if it can't be read (message deleted between send
+    // and receipt, or a non-ObjectId test id), buildCursorFreshnessGuard falls
+    // back to the historical ObjectId-order guard.
+    let messageCreatedAt: Date | null = null;
+    if (OBJECT_ID_RE.test(messageId)) {
+      try {
+        const message = await this.prisma.message.findUnique({
+          where: { id: messageId },
+          select: { createdAt: true },
+        });
+        messageCreatedAt = message?.createdAt ?? null;
+      } catch {
+        messageCreatedAt = null;
+      }
+    }
+
     const guardWhere = {
       participantId,
       conversationId,
-      ...(OBJECT_ID_RE.test(messageId)
-        ? { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] }
-        : {}),
+      ...(buildCursorFreshnessGuard({ idField, createdAtField, messageId, messageCreatedAt }) ?? {}),
     };
     const advanceData = {
       [idField]: messageId,
       [atField]: now,
+      // Never overwrite a recorded createdAt with null — write-forward only, so
+      // an unresolved incoming createdAt can't erase the guard's ordering key.
+      ...(messageCreatedAt ? { [createdAtField]: messageCreatedAt } : {}),
       ...(resetUnreadCount ? { unreadCount: 0 } : {}),
       version: { increment: 1 },
     };
@@ -483,6 +595,7 @@ export class MessageReadStatusService {
           conversationId,
           [idField]: messageId,
           [atField]: now,
+          ...(messageCreatedAt ? { [createdAtField]: messageCreatedAt } : {}),
           unreadCount: 0,
           version: 0,
         },
@@ -648,6 +761,12 @@ export class MessageReadStatusService {
       readonly language?: string | null;
       /** Exceptions par message — cf. `freezeMessageStatus`. */
       readonly messageLanguages?: Readonly<Record<string, string>>;
+      /**
+       * Message le plus récent, ATTEINT par le lecteur. Fait sauter le curseur
+       * de non-lus jusque-là — donc vide le badge — sans figer un seul `readAt`
+       * de plus. Cf. `MarkReadBodySchema.caughtUpToMessageId`.
+       */
+      readonly caughtUpToMessageId?: string;
     }
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
@@ -655,6 +774,13 @@ export class MessageReadStatusService {
     // TTL and silently drop the read receipt.
     let dedupKey: string | undefined;
     const exactMessageIds = options?.messageIds;
+    // La cascade « conversation lue → notifications lues » est INDÉPENDANTE de
+    // l'avancement du curseur : elle part avant tous les early-returns
+    // (conversation vide, dédup, receipt périmé). Sinon une réaction/mention
+    // arrivée sur un message déjà lu laisse sa notification non lue à vie — le
+    // curseur ne bougeant plus, l'ancien emplacement (fin de méthode) n'était
+    // plus jamais atteint.
+    this.syncConversationNotifications(participantId, conversationId);
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -745,7 +871,7 @@ export class MessageReadStatusService {
 
         // `null` = le message suivant immédiatement le curseur n'a pas été vu.
         // Le curseur ne bouge pas : sauter au bas d'une conversation ne doit
-        // pas vider le badge de non-lus de ce qui a été survolé.
+        // pas figer un `readAt` sur ce qui a été survolé.
         if (cursorTarget) {
           await this._advanceCursor({
             participantId,
@@ -756,6 +882,25 @@ export class MessageReadStatusService {
             idField: "lastReadMessageId",
             atField: "lastReadAt",
             resetUnreadCount: false,
+          });
+        }
+
+        // Rattrapage : le lecteur a ATTEINT le dernier message. Le curseur
+        // saute jusque-là et le badge tombe, sans qu'aucun `readAt`
+        // supplémentaire n'ait été figé au-dessus — les accusés de lecture
+        // restent le reflet exact de ce qui a été affiché. Après l'avance par
+        // préfixe contigu, jamais avant : la garde de fraîcheur de
+        // `_advanceCursor` ignorerait alors la seconde comme périmée.
+        if (options?.caughtUpToMessageId) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: options.caughtUpToMessageId,
+            now,
+            cursorExists: cursorExists || cursorTarget != null,
+            idField: "lastReadMessageId",
+            atField: "lastReadAt",
+            resetUnreadCount: true,
           });
         }
       } else {
@@ -837,30 +982,6 @@ export class MessageReadStatusService {
         `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`
       );
 
-      // Synchroniser avec les notifications (requires userId from participant)
-      try {
-        const participant = await this.prisma.participant.findUnique({
-          where: { id: participantId },
-          select: { userId: true }
-        });
-
-        if (participant?.userId) {
-          const { NotificationService } = await import(
-            "./notifications/NotificationService"
-          );
-          const notificationService = new NotificationService(this.prisma);
-          await notificationService.markConversationNotificationsAsRead(
-            participant.userId,
-            conversationId
-          );
-        }
-      } catch (notifError) {
-        logger.warn(
-          "[MessageReadStatus] Error syncing notifications:",
-          notifError
-        );
-      }
-
       return frozenCount;
     } catch (error) {
       // Release the dedup key so a retry within the TTL is not swallowed by the
@@ -875,6 +996,62 @@ export class MessageReadStatusService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Cascade « conversation lue → notifications de la conversation lues ».
+   *
+   * Fire-and-forget avec sa propre clé de dédup (même TTL que les receipts) :
+   * les flushs rapprochés du client (IntersectionObserver web ~1/s) ne
+   * déclenchent qu'un update Mongo par fenêtre, tout en restant indépendants
+   * des gardes du curseur de lecture. Utilise le NotificationService PARTAGÉ
+   * (câblé `io`) quand il est enregistré, pour que `notification:counts`
+   * atteigne réellement les clients — le repli local reste correct pour les
+   * écritures DB.
+   */
+  private syncConversationNotifications(
+    participantId: string,
+    conversationId: string
+  ): void {
+    const dedupKey = `${participantId}:${conversationId}:notif-sync`;
+    const now = Date.now();
+    const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
+    if (lastCall && now - lastCall < MessageReadStatusService.DEDUP_TTL_MS) {
+      return;
+    }
+    MessageReadStatusService.recentActionCache.set(dedupKey, now);
+
+    void (async () => {
+      try {
+        const participant = await this.prisma.participant.findUnique({
+          where: { id: participantId },
+          select: { userId: true },
+        });
+        if (!participant?.userId) return;
+
+        const { getSharedNotificationService } = await import(
+          "./notifications/notification-service-registry"
+        );
+        let notificationService = getSharedNotificationService();
+        if (!notificationService) {
+          const { NotificationService } = await import(
+            "./notifications/NotificationService"
+          );
+          notificationService = new NotificationService(this.prisma);
+        }
+        await notificationService.markConversationNotificationsAsRead(
+          participant.userId,
+          conversationId
+        );
+      } catch (notifError) {
+        // Best-effort : libérer la clé pour qu'un rappel dans le TTL retente.
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+        logger.warn(
+          "[MessageReadStatus] Error syncing notifications:",
+          notifError
+        );
+      }
+    })();
   }
 
   /**

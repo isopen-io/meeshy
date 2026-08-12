@@ -89,4 +89,22 @@
     <string name="stories_composer_filter_vivid">Vivid</string>
     <string name="stories_composer_filter_fade">Fade</string>
     <string name="stories_composer_filter_chrome">Chrome</string>
+    <string name="stories_action_react">React</string>
+    <string name="stories_action_translations">Translations</string>
+
+    <!-- Story options -->
+    <string name="stories_options">Story options</string>
+    <string name="stories_action_report">Report</string>
+    <string name="stories_action_delete">Delete</string>
+    <string name="stories_cancel">Cancel</string>
+    <string name="stories_delete_confirm_title">Delete this story?</string>
+    <string name="stories_delete_confirm_message">This action cannot be undone.</string>
+    <string name="stories_report_title">Report this story</string>
+    <string name="stories_report_reason_spam">Spam</string>
+    <string name="stories_report_reason_harassment">Harassment</string>
+    <string name="stories_report_reason_inappropriate">Inappropriate content</string>
+    <string name="stories_report_reason_violence">Violence</string>
+    <string name="stories_report_reason_hate_speech">Hate speech</string>
+    <string name="stories_report_reason_impersonation">Impersonation</string>
+    <string name="stories_report_reason_other">Other</string>
 </resources>

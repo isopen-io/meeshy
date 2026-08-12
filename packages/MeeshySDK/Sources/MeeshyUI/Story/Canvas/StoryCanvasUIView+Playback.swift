@@ -235,6 +235,9 @@ extension StoryCanvasUIView {
         // sondage détecte aussi la reprise alors que le playhead est gelé.
         refreshPlaybackHealth(now: link.timestamp)
         advancePlayheadIfActive(by: link.targetTimestamp - link.timestamp)
+        // Le volume suit le playhead : posé APRÈS l'avancée, sinon l'automation
+        // retarderait d'une image sur l'image affichée.
+        applyVolumeAutomation(at: Float(currentTime.seconds))
     }
 
     /// Avance le playhead canvas (`currentTime`) si la lecture est active.

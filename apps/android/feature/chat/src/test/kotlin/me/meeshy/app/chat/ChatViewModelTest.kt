@@ -37,8 +37,10 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.InMemoryNetworkConditionMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -48,8 +50,10 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
@@ -187,6 +191,9 @@ class ChatViewModelTest {
         activeCall: ActiveCallSession? = null,
         mentionSearch: MentionSearch = FakeMentionSearch(),
         anonymousSession: AnonymousSessionContext? = null,
+        showReadReceipts: Boolean = true,
+        offline: Boolean = false,
+        initialDraftArg: String? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -206,7 +213,18 @@ class ChatViewModelTest {
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
         coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
         val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
-        val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(showReadReceipts = showReadReceipts),
+        )
+        val networkMonitor = InMemoryNetworkConditionMonitor(
+            initial = if (offline) NetworkCondition.OFFLINE else NetworkCondition.WIFI,
+        )
+        val handle = SavedStateHandle(
+            buildMap {
+                put(ChatViewModel.CONVERSATION_ID_ARG, "c1")
+                if (initialDraftArg != null) put(ChatViewModel.DRAFT_ARG, initialDraftArg)
+            },
+        )
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
         val locallyHidden = InMemoryLocallyHiddenMessagesStore(hidden)
@@ -235,6 +253,8 @@ class ChatViewModelTest {
                 mediaQueue,
                 mentionSearch,
                 anonymousStore,
+                privacyStore,
+                networkMonitor,
                 handle,
             ),
             repo,
@@ -262,6 +282,80 @@ class ChatViewModelTest {
         coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
         coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
+
+    @Test
+    fun an_unread_conversation_marks_the_first_unread_message() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        // 3 loaded messages, 2 unread → the boundary is the message at index size-2.
+        assertThat(h.vm.state.value.firstUnreadMessageId).isEqualTo("m2")
+    }
+
+    @Test
+    fun a_fully_read_conversation_marks_no_unread_message() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 0))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
+    @Test
+    fun the_unread_boundary_stays_unresolved_while_the_message_window_is_empty() = runTest(dispatcher) {
+        // The unread count is known, but no messages have loaded: the latch must
+        // not settle (an empty window has no boundary to place, and the open
+        // scroll must not fire against an empty list).
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isFalse()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
+    @Test
+    fun an_unread_conversation_resolves_the_boundary_once_the_latch_runs() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isTrue()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isEqualTo("m2")
+    }
+
+    @Test
+    fun a_fully_read_conversation_still_resolves_the_boundary_to_none() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 0))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isTrue()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
+    private fun unreadConversation(unread: Int) = ApiConversation(
+        id = "c1",
+        type = "group",
+        title = "Squad",
+        unreadCount = unread,
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth"),
+            ApiParticipant(id = "p1", userId = "other", username = "bob"),
+        ),
+    )
+
+    private fun incomingStream() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "a")),
+                synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "b")),
+                synced(ApiMessage(id = "m3", conversationId = "c1", senderId = "other", content = "c")),
+            ),
+            ageMillis = 0,
+        ),
+    )
 
     @Test
     fun probing_on_open_surfaces_a_server_side_active_call() = runTest(dispatcher) {
@@ -611,6 +705,29 @@ class ChatViewModelTest {
             .isEqualTo(DeliveryStatus.Pending)
         assertThat(bubbles.single { it.messageId == "cmid_b" }.deliveryStatus)
             .isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun a_pending_bubble_shows_the_offline_hourglass_while_the_device_is_offline() = runTest(dispatcher) {
+        val h = harness(
+            stream = flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        LocalMessage(
+                            ApiMessage(id = "cmid_a", conversationId = "c1", senderId = "me", content = "pending"),
+                            LocalSendState.SENDING,
+                        ),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+            currentUser = MeeshyUser(id = "me", username = "atabeth"),
+            offline = true,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single { it.messageId == "cmid_a" }.deliveryStatus)
+            .isEqualTo(DeliveryStatus.QueuedOffline)
     }
 
     @Test
@@ -1392,6 +1509,19 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    @Test
+    fun hiding_my_read_receipts_degrades_a_read_message_to_delivered() = runTest(dispatcher) {
+        val h = harness(
+            ownMessageReadByOnePeer(),
+            currentUser = me,
+            conversation = directConversation(),
+            showReadReceipts = false,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
     }
 
     private fun pinnedStream() = flowOf(
@@ -2975,6 +3105,53 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.draft).isEqualTo("re: salut")
         assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+    }
+
+    @Test
+    fun a_draft_nav_argument_seeds_the_composer_immediately() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Thanks!")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+    }
+
+    @Test
+    fun a_draft_nav_argument_takes_priority_over_a_stale_persisted_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            initialDraftArg = "Thanks!",
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "old draft")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Thanks!")
+    }
+
+    @Test
+    fun a_blank_draft_nav_argument_never_blocks_the_persisted_draft_restore() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            initialDraftArg = "",
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "old draft")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("old draft")
+    }
+
+    @Test
+    fun a_percent_encoded_draft_nav_argument_is_decoded() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "Call%20me%20back")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("Call me back")
+    }
+
+    @Test
+    fun a_malformed_percent_sequence_falls_back_to_the_raw_draft_text_instead_of_crashing() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, initialDraftArg = "100% ready!")
+
+        assertThat(h.vm.state.value.draft).isEqualTo("100% ready!")
     }
 
     @Test

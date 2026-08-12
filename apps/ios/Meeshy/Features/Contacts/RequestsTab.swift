@@ -88,8 +88,8 @@ struct RequestsTab: View {
             if viewModel.receivedRequests.isEmpty {
                 emptyState(
                     icon: "person.2.slash",
-                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande recue", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact recues apparaitront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact reçues apparaîtront ici", bundle: .main)
                 )
             } else {
                 receivedList
@@ -98,8 +98,8 @@ struct RequestsTab: View {
             if viewModel.sentRequests.isEmpty {
                 emptyState(
                     icon: "paperplane",
-                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyee", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaitront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaîtront ici", bundle: .main)
                 )
             } else {
                 sentList

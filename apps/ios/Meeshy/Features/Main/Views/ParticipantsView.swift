@@ -167,9 +167,9 @@ struct ParticipantsView: View {
                     }
                 }
             } message: {
-                Text(String(localized: "participants.remove.message", defaultValue: "Cette personne ne pourra plus acceder a la conversation.", bundle: .main))
+                Text(String(localized: "participants.remove.message", defaultValue: "Cette personne ne pourra plus accéder à la conversation.", bundle: .main))
             }
-            .alert(String(localized: "participants.role.title", defaultValue: "Changer le role ?", bundle: .main), isPresented: Binding(
+            .alert(String(localized: "participants.role.title", defaultValue: "Changer le rôle ?", bundle: .main), isPresented: Binding(
                 get: { roleChangeTarget != nil },
                 set: { if !$0 { roleChangeTarget = nil } }
             )) {

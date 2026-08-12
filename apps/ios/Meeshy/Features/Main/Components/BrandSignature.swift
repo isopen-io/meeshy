@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Meeshy brand signature footer — version line, the "Fait avec ❤️ par Services CEO"
-/// credit (`splash.madeWithLove`) and the heart logo. Shared by the splash screen
+/// Meeshy brand signature footer — three stacked lines: the prominent version
+/// line (`Meeshy 1.0.0 · 1`), the "Services CEO" credit
+/// (`brand.signature.credit`) and the brand logo. Shared by the splash screen
 /// (`MeeshyApp`) and the login screen (`LoginView`): editing the credit string,
 /// the styling or the logo here updates every surface that shows the signature.
 ///
@@ -18,13 +19,15 @@ struct BrandSignature: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text("Meeshy \(appVersion) · \(buildNumber)")
-                .font(MeeshyFont.relative(12, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textMuted.opacity(0.7))
+                .font(MeeshyFont.relative(14, design: .rounded))
+                .foregroundColor(theme.textMuted.opacity(0.9))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
-            Text(String(localized: "splash.madeWithLove", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .medium, design: .rounded))
+            Text(String(localized: "brand.signature.credit", bundle: .main))
+                .font(MeeshyFont.relative(14, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted.opacity(0.7))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -33,7 +36,7 @@ struct BrandSignature: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 21, height: 21)
+                .frame(width: 28, height: 28)
                 .foregroundColor(MeeshyColors.error)
                 .opacity(0.9)
                 .padding(.top, 2)
@@ -43,7 +46,7 @@ struct BrandSignature: View {
         .accessibilityLabel(
             String(
                 localized: "brand.signature.accessibilityLabel",
-                defaultValue: "Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO.",
+                defaultValue: "Meeshy version \(appVersion), build \(buildNumber). By Services CEO.",
                 bundle: .main
             )
         )

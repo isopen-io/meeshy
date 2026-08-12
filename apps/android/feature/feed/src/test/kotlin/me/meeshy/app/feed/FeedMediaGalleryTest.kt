@@ -15,6 +15,7 @@ class FeedMediaGalleryTest {
         createdAtIso: String? = "2026-07-18T10:00:00Z",
     ) = FeedPostPresentation(
         id = "p1",
+        authorId = null,
         authorName = authorName,
         authorAvatarUrl = null,
         createdAtIso = createdAtIso,

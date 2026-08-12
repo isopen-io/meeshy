@@ -50,6 +50,14 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.clip.tooltip.duration",
         "story.timeline.clip.tooltip.fadeIn",
         "story.timeline.clip.tooltip.fadeOut",
+        // Fiche d'édition — découpe (ex-double tap sur la barre vidéo)
+        "story.timeline.inspector.split",
+        "story.timeline.inspector.split.hint",
+        // Fiche d'édition — place de la piste dans le plan
+        "story.timeline.inspector.transform",
+        "story.timeline.inspector.scale",
+        "story.timeline.inspector.rotation",
+        "story.timeline.inspector.zIndex",
         // Transition
         "story.timeline.transition.crossfade",
         "story.timeline.transition.dissolve",
@@ -89,7 +97,6 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.a11y.transition",
         "story.timeline.a11y.keyframe",
         "story.timeline.a11y.playhead",
-        "story.timeline.a11y.durationHandle",
         "story.timeline.a11y.snap.on",
         "story.timeline.a11y.snap.off",
         // Transition kind labels
