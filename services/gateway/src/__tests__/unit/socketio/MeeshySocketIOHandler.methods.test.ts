@@ -61,6 +61,28 @@ describe('getManager', () => {
 // notifications passent par `NotificationService` et, pour le transport,
 // `MeeshySocketIOManager.sendToUser`.
 
+// ─── broadcastMessage ─────────────────────────────────────────────────────────
+
+describe('broadcastMessage', () => {
+  it('does nothing when the manager is not initialized', async () => {
+    const handler = makeHandlerNoManager();
+    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
+  });
+
+  it('delegates to manager.broadcastMessage with the message and conversation id', async () => {
+    const { handler, manager } = makeHandler();
+    await handler.broadcastMessage({ id: 'm-1' }, 'conv-42');
+    expect(manager.broadcastMessage).toHaveBeenCalledWith({ id: 'm-1' }, 'conv-42');
+  });
+
+  it('catches and swallows errors thrown by the manager', async () => {
+    const { handler } = makeHandler({
+      broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('crash')),
+    });
+    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
+  });
+});
+
 // ─── getConnectedUsers ────────────────────────────────────────────────────────
 
 describe('getConnectedUsers', () => {
