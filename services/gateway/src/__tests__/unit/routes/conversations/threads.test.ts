@@ -65,7 +65,12 @@ const mockParentMessage = {
   replyToId: null,
   reactionSummary: {},
   reactionCount: 0,
-  translations: [],
+  // Cycle 67 — forme RÉELLE de la colonne : une carte Mongo indexée par langue.
+  // Ce fixture portait `[]`, une forme que Prisma ne rend jamais ; le fil
+  // servait donc la carte brute sans qu'aucun témoin ne puisse le voir.
+  translations: {
+    fr: { text: 'Bonjour', translationModel: 'medium', createdAt: new Date('2026-08-11T00:00:00Z') },
+  },
   validatedMentions: [],
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -200,6 +205,115 @@ describe('GET threads — service error', () => {
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+// ─── Lot 1 : le message affiché en entier restitue sa position ────────────────
+// (racine du thread ET replyTo imbriqué — les deux affichent une vraie bulle).
+
+describe('GET threads — position hoist', () => {
+  it('restitue `location` sur le message racine géolocalisé ET sur son replyTo imbriqué', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const geoParent = {
+      ...mockParentMessage,
+      metadata: { location: GEO },
+      replyTo: {
+        id: 'quoted-1',
+        content: 'quoted message',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: { location: { ...GEO, name: 'Louvre' } },
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(geoParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.parent.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    expect(body.data.parent.replyTo.location).toMatchObject({ name: 'Louvre' });
+    await app.close();
+  });
+
+  it('restitue `location` sur une réponse géolocalisée du fil', async () => {
+    const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+    const geoReply = { ...mockReplyMessage, metadata: { location: GEO } };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>()
+          .mockResolvedValueOnce([geoReply])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+    expect(body.data.replies[0].location).toMatchObject({ name: 'Times Square' });
+    await app.close();
+  });
+});
+
+// ─── Cycle 67 : le fil sert le MÊME format de traductions que les autres routes ─
+//
+// `threadMessageSelect` sélectionne `translations` et la route renvoyait le
+// résultat Prisma verbatim — donc la carte Mongo. Le schéma de réponse du fil
+// est `additionalProperties: true` : pas de 500 comme sur `pinned-messages`,
+// mais la carte part telle quelle sur le fil. `APIMessage.init(from:)` décode
+// `translations` avec `try` et non `try?` (SDK iOS) : un message de fil serait
+// indécodable EN ENTIER, pas seulement privé de ses traductions.
+
+describe('GET threads — format des traductions', () => {
+  const expectApiTranslation = (id: string) =>
+    expect.objectContaining({
+      id: `${id}-fr`,
+      messageId: id,
+      targetLanguage: 'fr',
+      translatedContent: 'Bonjour',
+    });
+
+  it('sérialise les traductions du message racine au format API', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.json().data.parent.translations).toEqual([expectApiTranslation(MSG_ID)]);
+    await app.close();
+  });
+
+  it('sérialise les traductions de chaque réponse du fil au format API', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>()
+          .mockResolvedValueOnce([mockReplyMessage])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.json().data.replies[0].translations).toEqual([expectApiTranslation(REPLY_ID)]);
+    await app.close();
+  });
+
+  it('rend un tableau vide quand la colonne est nulle', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParentMessage, translations: null }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.json().data.parent.translations).toEqual([]);
     await app.close();
   });
 });

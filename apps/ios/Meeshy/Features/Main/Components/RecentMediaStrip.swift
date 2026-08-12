@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import AVFoundation
 import UIKit
+import MeeshySDK
 import MeeshyUI
 
 // ============================================================================
@@ -94,26 +95,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
+    /// Charge la tête de photothèque SANS jamais déclencher de prompt.
+    ///
+    /// Le strip est monté dès l'ouverture du composer : demander ici revenait à
+    /// réclamer l'accès aux photos avant la moindre intention de l'utilisateur —
+    /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
+    /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
+    /// appelle `requestAccess()`.
     func load(limit: Int = 40) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
-        switch status {
-        case .authorized, .limited:
-            fetch(limit: limit)
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] newStatus in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.status = newStatus
-                    if newStatus == .authorized || newStatus == .limited {
-                        self.fetch(limit: limit)
-                    }
-                }
-            }
-        default:
-            break
-        }
+        guard status == .authorized || status == .limited else { return }
+        fetch(limit: limit)
+    }
+
+    /// Demande déclenchée par un geste explicite (tap sur la tuile d'accès).
+    /// `announcesRefusal: false` : la tuile explique déjà le refus sur place,
+    /// un toast en plus ferait doublon sur le même geste.
+    func requestAccess() async {
+        let granted = await MediaPermissionCoordinator.ensurePhotoLibraryRead(announcesRefusal: false)
+        status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard granted else { return }
+        fetch(limit: fetchLimit)
+    }
+
+    /// `true` tant que le strip n'a rien à montrer faute d'autorisation.
+    var needsAuthorization: Bool {
+        status != .authorized && status != .limited
+    }
+
+    var isAuthorizationRefused: Bool {
+        status == .denied || status == .restricted
     }
 
     private func fetch(limit: Int) {
@@ -146,21 +159,75 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
-    /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
-    /// which keeps the continuation safe (multi-callback modes would resume it
-    /// more than once).
-    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+    // MARK: - PhotoKit request seam
+    //
+    // Every completion below is declared as an explicitly `@Sendable`-typed
+    // local instead of being written inline as a trailing closure. This is NOT
+    // stylistic.
+    //
+    // The target compiles under MainActor default isolation, so a closure
+    // literal written inside this `@MainActor` class inherits `@MainActor`.
+    // Swift 6 then emits a dynamic isolation assertion in the closure's
+    // PROLOGUE — `swift_task_isCurrentExecutor` — which traps the instant
+    // PhotoKit invokes it from its own queue, before the body runs. Wrapping
+    // the body in `Task { @MainActor in }` does not help: the trap happens at
+    // entry, so the Task is never reached.
+    //
+    // `PHImageManager.h` documents the video handlers verbatim as "The result
+    // handler is called on an arbitrary queue" — so `requestAVAsset` and
+    // `requestPlayerItem` trapped every single time. That is the crash in
+    // Meeshy-2026-07-11-131634.ips (thread `com.apple.photos.requestAVAsset`,
+    // EXC_BREAKPOINT in `closure #1 in closure #1 in resolveVideo(_:)`), seen
+    // 7× across builds 1201→1235: tapping any video in the strip killed the app.
+    //
+    // The image handlers are documented as main-thread, so they never trapped —
+    // but they carry the same latent prologue, and one `.opportunistic`
+    // delivery mode (which the header says may call back "synchronously on the
+    // calling thread") would arm them. They go through the same seam so the
+    // whole file is queue-agnostic by construction.
+    //
+    // Same fix, same reason as `CallTranscriptionService.requestPermission()`.
+
+    /// Options des vignettes de la bande d'échantillons.
+    ///
+    /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
+    /// photothèque ni contexte d'acteur : c'est le comportement des réglages qui
+    /// doit être verrouillé, pas leur présence dans le fichier.
+    ///
+    /// `.highQualityFormat` et NON `.fastFormat`. L'invariant que `.fastFormat`
+    /// protégeait est le callback UNIQUE — `withCheckedContinuation` plante si
+    /// on le reprend deux fois — et non la vitesse. Or `.highQualityFormat` est
+    /// mono-callback lui aussi : c'est déjà ce que font `preview(for:)` et
+    /// `resolveImage(_:)` juste en dessous. Seul `.opportunistic` (le défaut)
+    /// rappelle plusieurs fois. `.fastFormat` livrait un rendu dégradé que
+    /// PhotoKit ne remplace JAMAIS par une meilleure version, donc la bande
+    /// restait floue pour toujours — un prix payé pour une sûreté qui ne le
+    /// demandait pas.
+    ///
+    /// `.exact` et non `.fast` : `.fast` rend une taille seulement « proche de »
+    /// la cible, ce qui ajoute un rééchantillonnage par-dessus le rendu.
+    nonisolated static func thumbnailRequestOptions() -> PHImageRequestOptions {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .fastFormat
-        options.resizeMode = .fast
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
+        return options
+    }
+
+    /// Square thumbnail for a cell. La taille demandée est déjà en PIXELS
+    /// (`cell * displayScale`, côté `RecentMediaCell`) : demander des points
+    /// rendrait une image au tiers de la résolution sur un écran 3x.
+    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+        let options = Self.thumbnailRequestOptions()
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
-            imageManager.requestImage(
-                for: asset, targetSize: size, contentMode: .aspectFill, options: options
-            ) { image, _ in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
             }
+            imageManager.requestImage(
+                for: asset, targetSize: size, contentMode: .aspectFill, options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -174,14 +241,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 1024, height: 1024),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -194,9 +263,10 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .automatic
         options.isNetworkAccessAllowed = true
         return await withCheckedContinuation { (continuation: CheckedContinuation<PlayerItemBox, Never>) in
-            imageManager.requestPlayerItem(forVideo: asset, options: options) { item, _ in
+            let completion: @Sendable (AVPlayerItem?, [AnyHashable: Any]?) -> Void = { item, _ in
                 continuation.resume(returning: PlayerItemBox(item: item))
             }
+            imageManager.requestPlayerItem(forVideo: asset, options: options, resultHandler: completion)
         }.item
     }
 
@@ -216,14 +286,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         let box = await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 2048, height: 2048),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }
         return box.image.map { .image($0) }
     }
@@ -233,7 +305,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .highQualityFormat
         options.isNetworkAccessAllowed = true
         let url: URL? = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
-            imageManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+            let completion: @Sendable (AVAsset?, AVAudioMix?, [AnyHashable: Any]?) -> Void = { avAsset, _, _ in
                 guard let urlAsset = avAsset as? AVURLAsset else {
                     continuation.resume(returning: nil)
                     return
@@ -247,6 +319,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
                     continuation.resume(returning: nil)
                 }
             }
+            imageManager.requestAVAsset(forVideo: asset, options: options, resultHandler: completion)
         }
         return url.map { .video($0) }
     }
@@ -256,10 +329,13 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Two-row grid (four per row) of recent photos/videos shown beneath the
+/// Two-row strip of the 19 most recent photos/videos, shown beneath the
 /// attachment carousel. Tapping a thumbnail hands the resolved media to
-/// `onSelect`; the trailing 8th tile opens the full photo library via
-/// `onOpenLibrary`.
+/// `onSelect`.
+///
+/// La tuile « ouvrir la photothèque » (`onOpenLibrary`) est la PREMIÈRE cellule,
+/// avant la première image : la sortie vers la photothèque complète doit être
+/// atteignable sans faire défiler l'échantillon jusqu'au bout.
 struct RecentMediaStrip: View {
     let accentColor: String
     /// Opens the full photo library. Receives the asset identifiers currently
@@ -272,6 +348,11 @@ struct RecentMediaStrip: View {
     /// handed to the host, which opens its editor before staging the result.
     /// `nil` hides the action (hosts without an editor flow).
     var onEdit: ((RecentMediaPick) -> Void)? = nil
+    /// Mirrors the multi-selection outwards so a host that offers its OWN
+    /// shortcut to the full library (the panel grab handle) can preselect the
+    /// same assets — same invariant as `onOpenLibrary`: leaving the strip for
+    /// the picker must never lose the user's picks.
+    var onSelectionChanged: (([String]) -> Void)? = nil
 
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
@@ -289,21 +370,33 @@ struct RecentMediaStrip: View {
     /// narrower than the screen.
     private var usesGridLayout: Bool { DeviceLayout.isPad }
 
-    /// Compact (iPhone): the composer fills the screen width, so the screen is a
+    /// Compact (iPhone): the composer fills the window width, so the window is a
     /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
-    /// real container width — the comments sheet is far narrower than the screen,
-    /// and sizing four cells off the full screen is exactly what made the old
+    /// real container width — the comments sheet is far narrower than the window,
+    /// and sizing four cells off the full window is exactly what made the old
     /// strip overflow into the unstructured mess.
-    private var compactCell: CGFloat { cell(forContainerWidth: UIScreen.main.bounds.width) }
+    ///
+    /// The window, not `UIScreen.main.bounds`: identical on iPhone (where this
+    /// branch runs, `usesGridLayout` being `false` only there), and correct by
+    /// construction if the compact branch is ever reached in a narrow window.
+    private var compactCell: CGFloat { cell(forContainerWidth: DeviceLayout.windowSize.width) }
 
     private func cell(forContainerWidth width: CGFloat) -> CGFloat {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Compact reads as two rows of four (seven thumbnails + the trailing library
-    /// tile). Regular shows a fuller, scrollable grid.
-    private var compactSamples: [PHAsset] { Array(model.assets.prefix((columns * 2) - 1)) }
-    private var regularSamples: [PHAsset] { Array(model.assets.prefix((columns * 6) - 1)) }
+    /// Échantillon de tête : 19 médias. Avec la tuile « ouvrir la photothèque »
+    /// EN PREMIER, la bande compte 20 cellules — exactement 10 colonnes de deux
+    /// rangées sur iPhone, 5 rangées de quatre sur iPad. Aucun reste boiteux.
+    ///
+    /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
+    /// photothèque ni contexte d'acteur — même précédent que
+    /// `RecentMediaStripModel.thumbnailRequestOptions()`.
+    nonisolated static let headSampleCount = 19
+
+    /// Les deux dispositions montrent le même échantillon de tête ; seule la
+    /// géométrie change (bande horizontale iPhone / grille verticale iPad).
+    private var samples: [PHAsset] { Array(model.assets.prefix(Self.headSampleCount)) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -312,7 +405,9 @@ struct RecentMediaStrip: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             Group {
-                if usesGridLayout {
+                if model.needsAuthorization {
+                    authorizationTile
+                } else if usesGridLayout {
                     regularGrid
                 } else {
                     compactStrip
@@ -321,6 +416,46 @@ struct RecentMediaStrip: View {
             }
         }
         .task { model.load() }
+        .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
+    }
+
+    /// Remplace la grille tant que la photothèque n'est pas accessible.
+    ///
+    /// Deux états : jamais demandé (le tap déclenche le prompt, au moment où
+    /// l'utilisateur montre son intérêt) et refus définitif (le tap ouvre les
+    /// Réglages — auparavant le strip restait simplement vide, sans un mot).
+    private var authorizationTile: some View {
+        Button {
+            HapticFeedback.light()
+            if model.isAuthorizationRefused {
+                MediaPermissionCoordinator.openSettings()
+            } else {
+                Task { await model.requestAccess() }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, hPadding)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Shown while multi-selecting: cancel on the left, a counting "Ajouter"
@@ -387,10 +522,10 @@ struct RecentMediaStrip: View {
             let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: cols, alignment: .leading, spacing: spacing) {
-                    ForEach(regularSamples, id: \.localIdentifier) { asset in
+                    openLibraryTile(c)
+                    ForEach(samples, id: \.localIdentifier) { asset in
                         cellView(asset, size: c)
                     }
-                    openLibraryTile(c)
                 }
                 .padding(.horizontal, hPadding)
                 .padding(.vertical, 10)
@@ -407,10 +542,10 @@ struct RecentMediaStrip: View {
         ]
         return ScrollView(.horizontal, showsIndicators: false) {
             LazyHGrid(rows: rows, spacing: spacing) {
-                ForEach(compactSamples, id: \.localIdentifier) { asset in
+                openLibraryTile(c)
+                ForEach(samples, id: \.localIdentifier) { asset in
                     cellView(asset, size: c)
                 }
-                openLibraryTile(c)
             }
             .padding(.horizontal, hPadding)
             .padding(.vertical, 6)
@@ -447,6 +582,25 @@ struct RecentMediaStrip: View {
         addSingle(asset)
     }
 
+    /// `resolve` renvoie `nil` quand PhotoKit ne peut pas matérialiser l'asset :
+    /// vidéo iCloud non redescendue, ralenti/timelapse rendu en `AVComposition`
+    /// plutôt qu'en fichier, ou copie temporaire en échec. Ces trois cas
+    /// sortaient en silence : le spinner tournait puis le tap ne faisait RIEN,
+    /// sans le moindre moyen pour l'utilisateur de comprendre pourquoi son média
+    /// n'arrivait pas dans les pièces jointes. Le passage par la photothèque
+    /// complète (`PHPicker`, hors-process) reste la porte de sortie.
+    private func announceResolutionFailure(count: Int = 1) {
+        FeedbackToastManager.shared.showError(
+            count > 1
+                ? String(localized: "recentMedia.resolveFailed.multiple",
+                         defaultValue: "\(count) médias n'ont pas pu être préparés — passez par la photothèque complète",
+                         bundle: .main)
+                : String(localized: "recentMedia.resolveFailed",
+                         defaultValue: "Ce média n'a pas pu être préparé — passez par la photothèque complète",
+                         bundle: .main)
+        )
+    }
+
     /// Resolves the asset and hands it to the host — the "Ajouter" path.
     private func addSingle(_ asset: PHAsset) {
         guard resolvingId == nil, !isBatchResolving else { return }
@@ -455,7 +609,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onSelect(pick) }
+            if let pick { onSelect(pick) } else { announceResolutionFailure() }
         }
     }
 
@@ -487,14 +641,18 @@ struct RecentMediaStrip: View {
         isBatchResolving = true
         let ids = selection.ids
         Task {
+            var failures = 0
             for id in ids {
                 guard let asset = model.assets.first(where: { $0.localIdentifier == id }) else { continue }
                 resolvingId = id
-                if let pick = await model.resolve(asset) { onSelect(pick) }
+                if let pick = await model.resolve(asset) { onSelect(pick) } else { failures += 1 }
             }
             resolvingId = nil
             isBatchResolving = false
             exitSelection()
+            // Un seul message pour le lot : un toast par échec noierait les
+            // médias qui, eux, sont bien arrivés dans la barre de pièces jointes.
+            if failures > 0 { announceResolutionFailure(count: failures) }
         }
     }
 
@@ -507,7 +665,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onEdit(pick) }
+            if let pick { onEdit(pick) } else { announceResolutionFailure() }
         }
     }
 
@@ -696,7 +854,14 @@ private struct RecentMediaCell: View {
 /// Preview shown on long-press of a recent-media cell, via the system
 /// context-menu preview, sized to the asset's real aspect ratio. Photos render
 /// full quality; videos show their poster frame instantly, then start looping
-/// muted playback as soon as the player item resolves.
+/// playback AVEC LE SON as soon as the player item resolves.
+///
+/// Le son n'est pas qu'un `isMuted = false` : sans catégorie `.playback` posée,
+/// l'aperçu reste muet dès que l'interrupteur Silence est enclenché (catégorie
+/// par défaut `.soloAmbient`). La session passe donc par la source UNIQUE
+/// call-aware du SDK, comme `SharedAVPlayerManager.play()` — pendant un appel
+/// VoIP elle est un no-op, l'aperçu joue alors sous la session de l'appel et le
+/// micro reste intact.
 private struct RecentMediaPreview: View {
     let asset: PHAsset
     let model: RecentMediaStripModel
@@ -733,17 +898,26 @@ private struct RecentMediaPreview: View {
             guard asset.mediaType == .video,
                   let item = await model.videoPlayerItem(for: asset) else { return }
             let queue = AVQueuePlayer()
-            queue.isMuted = true
             queue.allowsExternalPlayback = false
             queue.preventsDisplaySleepDuringVideoPlayback = false
+            // L'aperçu sonne : les autres lecteurs de l'app se taisent d'abord.
+            // AVANT d'armer la session — `stopAll()` passe par
+            // `SharedAVPlayerManager.stop()`, qui désactive la session ; l'ordre
+            // inverse la désarmerait juste après l'avoir posée.
+            PlaybackCoordinator.shared.stopAll()
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
             looper = AVPlayerLooper(player: queue, templateItem: item)
             player = queue
             queue.play()
         }
+        // Le looper est démonté AVANT le player : il garde des observateurs KVO
+        // dessus, et l'ordre inverse risque un callback sur un player en cours
+        // de désallocation (même règle que `AttachmentQuickLookPreview`).
         .onDisappear {
             player?.pause()
-            player = nil
             looper = nil
+            player = nil
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
         }
     }
 }

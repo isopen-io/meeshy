@@ -61,6 +61,18 @@ describe('truncateFilename', () => {
       }
     }
   });
+
+  it('never emits a lone surrogate when the cut lands inside an astral char', () => {
+    // 🎉 is a surrogate PAIR (2 UTF-16 units). A raw .slice() cut between them
+    // yields a lone high surrogate → a broken "�" glyph. The truncation must cut
+    // on a code-point boundary (drop the whole emoji), like the sibling initials.ts.
+    // maxLength 18 → name budget 11 → a raw slice cuts BETWEEN 🎉's two units.
+    const out = truncateFilename('aaaaaaaaaa🎉bbbbbbbbbb.pdf', 18);
+    expect(out.endsWith('.pdf')).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(18);
+    // No unpaired surrogate anywhere in the output.
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(out)).toBe(false);
+  });
 });
 
 describe('truncateText', () => {
@@ -94,6 +106,17 @@ describe('truncateText', () => {
   it('trims a trailing space before the ellipsis', () => {
     // slice(0, 6) of "hello world" is "hello " (trailing space) → trimmed to "hello".
     expect(truncateText('hello world', 6)).toEqual({ truncated: 'hello...', isTruncated: true });
+  });
+
+  it('counts astral chars as one and never splits a surrogate pair', () => {
+    // Budget is a CONTENT budget in characters (code points). Five 🎉 = 5 chars,
+    // so a budget of 5 keeps them all; a budget of 3 keeps exactly three whole
+    // emoji — never a lone surrogate.
+    expect(truncateText('🎉🎉🎉🎉🎉', 5)).toEqual({ truncated: '🎉🎉🎉🎉🎉', isTruncated: false });
+    const { truncated, isTruncated } = truncateText('🎉🎉🎉🎉🎉', 3);
+    expect(isTruncated).toBe(true);
+    expect(truncated).toBe('🎉🎉🎉...');
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(truncated)).toBe(false);
   });
 
   // Explicit contrast: SAME input + budget, opposite length guarantees.

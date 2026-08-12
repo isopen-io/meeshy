@@ -9,16 +9,23 @@ import React, { useState } from 'react';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, SwitchCamera, Volume2, VolumeX, Sparkles, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { logger } from '@/utils/logger';
 import { useI18n } from '@/hooks/useI18n';
 
 interface CallControlsProps {
   audioEnabled: boolean;
   videoEnabled: boolean;
+  /**
+   * Whether remote audio is currently audible. Controlled by the parent —
+   * it owns the `<video>`/`<audio>` elements playing remote streams and is
+   * the only thing that can actually mute/unmute them. This component only
+   * renders the button and reports intent via `onToggleSpeaker`.
+   */
+  speakerEnabled: boolean;
   /** Outbound video auto-suspended by the adaptive controller (weak link). */
   videoSuspended?: boolean;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
+  onToggleSpeaker: () => void;
   onSwitchCamera?: () => void;
   onToggleAudioEffects?: () => void;
   onToggleStats?: () => void;
@@ -30,9 +37,11 @@ interface CallControlsProps {
 export function CallControls({
   audioEnabled,
   videoEnabled,
+  speakerEnabled,
   videoSuspended = false,
   onToggleAudio,
   onToggleVideo,
+  onToggleSpeaker,
   onSwitchCamera,
   onToggleAudioEffects,
   onToggleStats,
@@ -41,7 +50,6 @@ export function CallControls({
   showStats = false,
 }: CallControlsProps) {
   const { t } = useI18n('calls');
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
   const videoAutoPaused = videoEnabled && videoSuspended;
 
@@ -53,16 +61,6 @@ export function CallControls({
       });
     }
   }, []);
-
-  const handleSpeakerToggle = async () => {
-    try {
-      const newEnabled = !speakerEnabled;
-      setSpeakerEnabled(newEnabled);
-      logger.debug('[CallControls]', 'Speaker toggled', { enabled: newEnabled });
-    } catch (error) {
-      logger.error('[CallControls]', 'Failed to toggle speaker', { error });
-    }
-  };
 
   return (
     <div
@@ -160,7 +158,7 @@ export function CallControls({
       <Button
         size="icon"
         variant="default"
-        onClick={handleSpeakerToggle}
+        onClick={onToggleSpeaker}
         className={cn(
           'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
           speakerEnabled

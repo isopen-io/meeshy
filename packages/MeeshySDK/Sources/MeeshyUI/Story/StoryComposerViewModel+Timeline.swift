@@ -26,6 +26,14 @@ extension StoryComposerViewModel {
             guard let self, self.isTimelineVisible else { return }
             self.canvasTimelineBridge.setPlaying(playing)
         }
+        vm.onPlaybackEnded = { [weak self] in
+            guard let self, self.isTimelineVisible else { return }
+            // Fin de lecture : le canvas quitte la preview et REVIENT à
+            // l'état statique du design — tous les éléments posés, positions
+            // et opacités de base (retour user 2026-07-20). Le playhead a
+            // déjà été remis à 0 par le VM avant cette notification.
+            self.canvasTimelineBridge.end()
+        }
         _timelineViewModel = vm
         return vm
     }
@@ -138,6 +146,16 @@ extension StoryComposerViewModel {
     public func loadCurrentSlideIntoTimeline() {
         let slide = currentSlide
         var project = TimelineProject(from: slide)
+
+        // The opening/closing transition-effect chips write ONLY to this VM's
+        // own `openingEffect`/`closingEffect` (same source the live canvas
+        // preview reads) — NOT synchronously through to `slide.effects.opening`/
+        // `.closing` (that only happens via the decoupled granularCanvasSync).
+        // `TimelineProject(from: slide)` above therefore just read the stale/
+        // unsynced slide side of that split. Override with the live VM values
+        // so the chrome lane reflects what the user actually just picked.
+        project.openingEffect = openingEffect
+        project.closingEffect = closingEffect
 
         // Surface a static background image (stored separately in slideImages)
         // as a locked synthetic clip on the timeline so the user can see what

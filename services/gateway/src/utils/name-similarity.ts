@@ -15,13 +15,20 @@ export interface FullName {
 
 const SIMILARITY_THRESHOLD = 0.62;
 
+/**
+ * `NFD` + strip des marques diacritiques (`\p{M}`) replie les accents latins
+ * (`José` → `jose`), puis on ne conserve que lettres/chiffres Unicode
+ * (`\p{L}\p{N}`) — jamais uniquement l'ASCII : l'inscription autorise tout
+ * `\p{L}` (validation `register`), donc un nom cyrillique/arabe/CJK doit
+ * survivre à la normalisation au lieu d'être réduit à une chaîne vide.
+ */
 function normalizeName(value: string): string {
   return value
     .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -40,6 +40,12 @@ fun ReelVideoSurface(
         }
     }
 
+    // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
+    // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
+    LaunchedEffect(player, muted) {
+        player.volume = if (muted) 0f else 1f
+    }
+
     LaunchedEffect(player, isActive) {
         player.playWhenReady = isActive
         if (!isActive) player.seekTo(0)

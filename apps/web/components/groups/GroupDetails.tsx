@@ -11,6 +11,7 @@ import { ArrowLeft, Lock, Copy, CheckCircle2, UserPlus, Settings, Globe, Users, 
 import type { Group, Conversation } from '@meeshy/shared/types';
 import { CommunityMembersPanel } from './CommunityMembersPanel';
 import { CommunityPreferencesMenu } from './CommunityPreferencesMenu';
+import { formatShortDate } from '@/utils/date-format';
 
 const ConversationsList = lazy(() => import('./ConversationsList'));
 
@@ -26,6 +27,7 @@ interface GroupDetailsProps {
   onCopyIdentifier: (identifier: string) => void;
   onSettingsClick: () => void;
   tGroups: (key: string) => string;
+  locale: string;
 }
 
 export const GroupDetails = memo(function GroupDetails({
@@ -39,7 +41,8 @@ export const GroupDetails = memo(function GroupDetails({
   onBack,
   onCopyIdentifier,
   onSettingsClick,
-  tGroups
+  tGroups,
+  locale
 }: GroupDetailsProps) {
   const router = useRouter();
   const displayIdentifier = group.identifier?.replace(/^mshy_/, '') || '';
@@ -103,7 +106,7 @@ export const GroupDetails = memo(function GroupDetails({
       <div className="flex-1 overflow-y-auto bg-background/50 dark:bg-background/60 backdrop-blur-sm rounded-br-2xl p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Section À propos */}
-          <AboutSection group={group} tGroups={tGroups} />
+          <AboutSection group={group} tGroups={tGroups} locale={locale} />
 
           {/* Section Préférences utilisateur */}
           <div className="bg-background/80 dark:bg-background/90 backdrop-blur-sm rounded-2xl border border-border/30 dark:border-border/50 p-6 shadow-sm">
@@ -152,10 +155,12 @@ export const GroupDetails = memo(function GroupDetails({
 // Composant AboutSection extrait (rendering-hoist-jsx)
 const AboutSection = memo(function AboutSection({
   group,
-  tGroups
+  tGroups,
+  locale
 }: {
   group: Group;
   tGroups: (key: string) => string;
+  locale: string;
 }) {
   return (
     <div className="bg-background/80 dark:bg-background/90 backdrop-blur-sm rounded-2xl border border-border/30 dark:border-border/50 p-6 shadow-sm">
@@ -190,7 +195,7 @@ const AboutSection = memo(function AboutSection({
         </div>
         {group.createdAt && (
           <div>
-            {tGroups('details.createdOn')} {new Date(group.createdAt).toLocaleDateString()}
+            {tGroups('details.createdOn')} {formatShortDate(group.createdAt, locale)}
           </div>
         )}
       </div>

@@ -273,9 +273,11 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "Le builder natif doit offrir « Appeler » (icône phone.fill, DM)."
         )
         XCTAssertTrue(
-            builderBlock.contains("CallManager.shared.startCall("),
-            "« Appeler » doit passer par CallManager.shared.startCall — même chemin " +
-            "que le bouton onCall de l'aperçu custom (SSOT)."
+            builderBlock.contains("CallManager.shared.requestPermissionsThenStartCall("),
+            "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
+            "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
+            "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
+            "`startCall` brut ne demande rien et connecterait un appel muet."
         )
     }
 
@@ -471,20 +473,77 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
     /// Suppression d'un attachement via « Plus… » : modale de validation
     /// obligatoire, jamais de suppression directe (feedback device 2026-07-14).
-    func test_deleteMedia_requestsConfirmation_neverDeletesDirectly() throws {
+    func test_media_requestsConfirmation_neverDeletesDirectly() throws {
         let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
         XCTAssertTrue(
             src.contains("showDeleteMediaConfirm = true"),
-            "Le pellet .deleteMedia doit armer la confirmation (showDeleteMediaConfirm)."
+            "Le pellet .media doit armer la confirmation (showDeleteMediaConfirm)."
         )
         XCTAssertTrue(
             src.contains(".confirmationDialog(") &&
             src.contains("isPresented: $showDeleteMediaConfirm"),
-            "MessageMoreSheet doit présenter une modale de confirmation de suppression média."
+            "MessageMoreSheet doit présenter une modale de confirmation avant toute action média."
         )
+        guard let branchStart = src.range(of: "else if item == .media {"),
+              let branchEnd = src.range(of: "} else {", range: branchStart.upperBound..<src.endIndex) else {
+            return XCTFail("Branche de tap .media introuvable dans handleMoreItemTap.")
+        }
+        let branch = String(src[branchStart.upperBound..<branchEnd.lowerBound])
         XCTAssertFalse(
-            src.contains("case .deleteMedia: onDeleteMedia?()"),
-            "La suppression directe (case .deleteMedia: onDeleteMedia?()) est bannie."
+            branch.contains("onDeleteMedia?()"),
+            "La suppression directe depuis la branche .media (sans confirmation) est bannie."
+        )
+    }
+
+    /// Sous-menu média (§B design 2026-08-11) : Enregistrer / Transférer /
+    /// Supprimer — Supprimer seul destructif, et EN DERNIER (convention HIG).
+    func test_media_confirmDialog_offersSaveForwardDelete_deleteIsLastAndOnlyDestructive() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+
+        XCTAssertTrue(dialog.contains("onSaveMedia?()"), "Le bouton Enregistrer doit appeler onSaveMedia?().")
+        XCTAssertTrue(dialog.contains("onForward?()"), "Le bouton Transférer doit appeler onForward?() (réutilisé, pas de nouveau paramètre).")
+        XCTAssertTrue(dialog.contains("onDeleteMedia?()"), "Le bouton Supprimer doit appeler onDeleteMedia?().")
+        XCTAssertEqual(
+            dialog.components(separatedBy: "role: .destructive").count - 1, 1,
+            "Un seul bouton (Supprimer) doit porter role: .destructive."
+        )
+
+        guard let lastButtonRange = dialog.range(of: "Button(", options: .backwards) else {
+            return XCTFail("Aucun bouton trouvé dans le dialog.")
+        }
+        let lastButton = String(dialog[lastButtonRange.lowerBound...])
+        XCTAssertTrue(
+            lastButton.contains("role: .destructive") && lastButton.contains("onDeleteMedia?()"),
+            "Supprimer doit être le DERNIER bouton du dialog et le seul destructif (convention HIG)."
+        )
+    }
+
+    /// Le bouton Enregistrer du sous-menu média suit la même règle SSOT que
+    /// l'action primaire `.saveMedia` (`MessageActionResolver.saveableAttachmentCount
+    /// == 1`, `MessageActionResolver.swift:69`) : EXACTEMENT UN attachment
+    /// enregistrable. Un message localisation-only (0) ou multi-attachments (>1)
+    /// doit masquer le bouton — jamais l'afficher pour n'en enregistrer qu'un
+    /// silencieusement (ConversationView.swift `onSaveMedia` ne prend que
+    /// `attachments.first(where:)`).
+    func test_media_confirmDialog_hidesSaveButton_whenSaveableAttachmentCountIsNotExactlyOne() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+        guard let saveRange = dialog.range(of: "onSaveMedia?()") else {
+            return XCTFail("Bouton Enregistrer introuvable.")
+        }
+        let beforeSave = String(dialog[dialog.startIndex..<saveRange.lowerBound])
+        XCTAssertTrue(
+            beforeSave.contains("message.attachments.filter({ $0.type != .location }).count == 1"),
+            "Le bouton Enregistrer doit être conditionné à EXACTEMENT UN attachment non-location (même règle que saveableAttachmentCount == 1) — absent, pas inerte, pour 0 ou plusieurs."
         )
     }
 

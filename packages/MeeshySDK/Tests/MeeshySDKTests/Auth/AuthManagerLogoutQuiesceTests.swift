@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import MeeshySDK
 
 /// P1 hotfix — pin le contrat async de `AuthManager.logout()` après le
@@ -42,5 +43,21 @@ final class AuthManagerLogoutQuiesceTests: XCTestCase {
         await manager.logout()  // second call must not crash
 
         XCTAssertFalse(manager.isAuthenticated)
+    }
+}
+
+/// startup-03 — le logout VOLONTAIRE n'émet jamais `sessionInvalidated`
+/// (le signal est réservé au chemin serveur `requireReauthentication`).
+extension AuthManagerLogoutQuiesceTests {
+
+    @MainActor
+    func test_logout_doesNotEmitSessionInvalidated() async {
+        var emitCount = 0
+        let cancellable = AuthManager.shared.sessionInvalidated.sink { _ in emitCount += 1 }
+
+        await AuthManager.shared.logout()
+
+        XCTAssertEqual(emitCount, 0, "un logout volontaire ne doit pas se faire passer pour une invalidation serveur")
+        cancellable.cancel()
     }
 }

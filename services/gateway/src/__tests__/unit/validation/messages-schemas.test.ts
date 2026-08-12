@@ -6,6 +6,7 @@ import {
   UpdateMessageBodySchema,
   MessageStatusBodySchema,
   AttachmentStatusBodySchema,
+  MarkReadBodySchema,
 } from '../../../validation/messages-schemas';
 
 const VALID_OID = '507f1f77bcf86cd799439011';
@@ -238,6 +239,85 @@ describe('AttachmentStatusBodySchema', () => {
     expect(AttachmentStatusBodySchema.safeParse({ action: 'played' }).success).toBe(false);
   });
 
+  // ── Trace de l'interaction ──────────────────────────────────────────────
+
+  it('accepte une trace d\'écoutes continues', () => {
+    const result = AttachmentStatusBodySchema.safeParse({
+      action: 'listened',
+      stretches: [
+        { startMs: 0, endMs: 500, endedBy: 'pause' },
+        { startMs: 500, endMs: 900, endedBy: 'completed' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejette un motif de fin inconnu', () => {
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 0, endMs: 500, endedBy: 'teleported' }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejette une trace sans motif de fin', () => {
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 0, endMs: 500 }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('écarte un champ inconnu d\'une écoute sans perdre l\'écoute', () => {
+    // Un client d'une version ultérieure peut enrichir son rapport ; refuser le
+    // tout perdrait l'écoute pour un champ décoratif.
+    const result = AttachmentStatusBodySchema.safeParse({
+      action: 'listened',
+      stretches: [{ startMs: 0, endMs: 500, endedBy: 'pause', speed: 1.5 }],
+    });
+    expect(result.success).toBe(true);
+    expect((result as any).data.stretches[0]).toEqual({
+      startMs: 0,
+      endMs: 500,
+      endedBy: 'pause',
+    });
+  });
+
+  it('plafonne le nombre d\'écoutes rapportées d\'un coup', () => {
+    const stretches = Array.from({ length: 51 }, (_, i) => ({
+      startMs: i * 100,
+      endMs: i * 100 + 50,
+      endedBy: 'pause',
+    }));
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', stretches }).success).toBe(false);
+  });
+
+  // ── Prisme linguistique ─────────────────────────────────────────────────
+
+  it('accepte un code de langue simple', () => {
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'fr' }).success).toBe(true);
+  });
+
+  it('accepte une locale à tiret comme à underscore', () => {
+    // iOS envoie `Locale.current.identifier`, donc `fr_FR` ; refuser cette forme
+    // ferait échouer tout le rapport pour un séparateur.
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'fr-FR' }).success).toBe(true);
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'fr_FR' }).success).toBe(true);
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'zh-Hant-HK' }).success).toBe(true);
+  });
+
+  it('accepte un code 3-lettres', () => {
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'bas' }).success).toBe(true);
+  });
+
+  it('rejette ce qui n\'a pas la forme d\'une langue', () => {
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'f' }).success).toBe(false);
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: '@@' }).success).toBe(false);
+    expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', language: 'frenchy-language' }).success).toBe(false);
+  });
+
   it('rejects missing action', () => {
     expect(AttachmentStatusBodySchema.safeParse({}).success).toBe(false);
   });
@@ -256,5 +336,63 @@ describe('AttachmentStatusBodySchema', () => {
 
   it('rejects extra fields (strict)', () => {
     expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', extra: true }).success).toBe(false);
+  });
+});
+
+describe('MarkReadBodySchema', () => {
+  // Le corps reste OPTIONNEL côté route : les binaires déjà distribués n'en
+  // envoient pas, et les priver du repli perdrait toute lecture.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+
+  it('accepte un corps vide', () => {
+    expect(MarkReadBodySchema.safeParse({}).success).toBe(true);
+  });
+
+  it('accepte la liste des messages réellement affichés', () => {
+    expect(MarkReadBodySchema.safeParse({ messageIds: [VALID_OID] }).success).toBe(true);
+  });
+
+  it('accepte une liste VIDE — « rien n\'a défilé » est une information', () => {
+    expect(MarkReadBodySchema.safeParse({ messageIds: [] }).success).toBe(true);
+  });
+
+  it('rejette un identifiant qui n\'en est pas un', () => {
+    expect(MarkReadBodySchema.safeParse({ messageIds: ['nope'] }).success).toBe(false);
+  });
+
+  it('plafonne la taille du lot', () => {
+    const tooMany = Array.from({ length: 201 }, () => VALID_OID);
+    expect(MarkReadBodySchema.safeParse({ messageIds: tooMany }).success).toBe(false);
+  });
+
+  it('accepte la langue affichée pendant que le lot défilait', () => {
+    expect(MarkReadBodySchema.safeParse({ messageIds: [VALID_OID], language: 'en' }).success).toBe(true);
+    expect(MarkReadBodySchema.safeParse({ language: 'fr_FR' }).success).toBe(true);
+  });
+
+  it('rejette une langue malformée', () => {
+    expect(MarkReadBodySchema.safeParse({ language: '@@' }).success).toBe(false);
+  });
+
+  it('accepte les exceptions par message', () => {
+    expect(
+      MarkReadBodySchema.safeParse({
+        messageIds: [VALID_OID],
+        language: 'en',
+        messageLanguages: { [VALID_OID]: 'fr' },
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejette une clé qui n\'est pas un identifiant de message', () => {
+    expect(MarkReadBodySchema.safeParse({ messageLanguages: { nope: 'fr' } }).success).toBe(false);
+  });
+
+  it('rejette une langue d\'exception malformée', () => {
+    expect(MarkReadBodySchema.safeParse({ messageLanguages: { [VALID_OID]: '@@' } }).success).toBe(false);
+  });
+
+  it('rejette un champ inconnu (strict)', () => {
+    expect(MarkReadBodySchema.safeParse({ extra: true }).success).toBe(false);
   });
 });

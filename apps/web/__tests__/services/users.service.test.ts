@@ -320,7 +320,7 @@ describe('UsersService', () => {
     });
   });
 
-  describe('isUserOnline', () => {
+  describe('isUserOnline (délégué à la règle canonique 1/3/5)', () => {
     beforeEach(() => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
@@ -330,7 +330,7 @@ describe('UsersService', () => {
       jest.useRealTimers();
     });
 
-    it('should return true for user active within 5 minutes', () => {
+    it('should return true when isOnline within the 5min stale guard', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:57:00Z'), // 3 minutes ago
@@ -339,7 +339,7 @@ describe('UsersService', () => {
       expect(usersService.isUserOnline(user)).toBe(true);
     });
 
-    it('should return false for user active more than 5 minutes ago', () => {
+    it('should return false when isOnline is stale (beyond 5 minutes)', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:50:00Z'), // 10 minutes ago
@@ -348,10 +348,19 @@ describe('UsersService', () => {
       expect(usersService.isUserOnline(user)).toBe(false);
     });
 
-    it('should return false when isOnline is false', () => {
+    it('should return true when disconnected but active within 60 seconds (decay)', () => {
       const user = createMockUser({
         isOnline: false,
-        lastActiveAt: new Date('2024-01-15T11:59:00Z'), // 1 minute ago
+        lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
+      });
+
+      expect(usersService.isUserOnline(user)).toBe(true);
+    });
+
+    it('should return false when disconnected and last active over a minute ago', () => {
+      const user = createMockUser({
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:58:00Z'), // 2 minutes ago
       });
 
       expect(usersService.isUserOnline(user)).toBe(false);
@@ -368,7 +377,7 @@ describe('UsersService', () => {
       jest.useRealTimers();
     });
 
-    it('should return "online" for activity < 5 minutes', () => {
+    it('should return "online" when isOnline within the 5min stale guard', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:57:00Z'),
@@ -377,31 +386,40 @@ describe('UsersService', () => {
       expect(usersService.getUserStatus(user)).toBe('online');
     });
 
-    it('should return "away" for activity between 5-30 minutes', () => {
+    it('should return "away" for activity between 1-3 minutes when disconnected', () => {
       const user = createMockUser({
-        isOnline: true,
-        lastActiveAt: new Date('2024-01-15T11:45:00Z'), // 15 minutes ago
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:58:00Z'), // 2 minutes ago
       });
 
       expect(usersService.getUserStatus(user)).toBe('away');
     });
 
-    it('should return "offline" for activity > 30 minutes', () => {
+    it('should return "idle" for activity between 3-5 minutes when disconnected', () => {
+      const user = createMockUser({
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:56:00Z'), // 4 minutes ago
+      });
+
+      expect(usersService.getUserStatus(user)).toBe('idle');
+    });
+
+    it('should return "offline" for activity > 5 minutes even when isOnline is stale', () => {
       const user = createMockUser({
         isOnline: true,
-        lastActiveAt: new Date('2024-01-15T11:00:00Z'), // 60 minutes ago
+        lastActiveAt: new Date('2024-01-15T11:50:00Z'), // 10 minutes ago
       });
 
       expect(usersService.getUserStatus(user)).toBe('offline');
     });
 
-    it('should return "offline" when isOnline is false', () => {
+    it('should decay by time when isOnline is false (règle canonique, plus de gate binaire)', () => {
       const user = createMockUser({
         isOnline: false,
-        lastActiveAt: new Date('2024-01-15T11:59:00Z'),
+        lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
       });
 
-      expect(usersService.getUserStatus(user)).toBe('offline');
+      expect(usersService.getUserStatus(user)).toBe('online');
     });
   });
 
@@ -429,6 +447,22 @@ describe('UsersService', () => {
       });
       expect(usersService.getDisplayName(user)).toBe('johndoe');
     });
+
+    it('should fall through to first/last name when displayName is blank (SSOT trim guard)', () => {
+      const user = createMockUser({
+        displayName: '   ',
+        firstName: 'Jean',
+        lastName: 'Dupont',
+      });
+      // Divergence fix: raw-truthiness `if (user.displayName)` used to leak
+      // '   ' (an empty-looking name) — the canonical resolver trims-and-guards.
+      expect(usersService.getDisplayName(user)).toBe('Jean Dupont');
+    });
+
+    it('should trim a padded displayName', () => {
+      const user = createMockUser({ displayName: ' Bob ' });
+      expect(usersService.getDisplayName(user)).toBe('Bob');
+    });
   });
 
   describe('getLastSeenFormatted', () => {
@@ -453,59 +487,89 @@ describe('UsersService', () => {
       expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.online');
     });
 
-    it('should return the justNow key for very recent activity', () => {
+    it('should NOT report online for a stale isOnline flag (label matches the presence dot)', () => {
+      // Divergence fix: the old copy read raw `user.isOnline` for the online
+      // decision, so a stale `isOnline: true` (last active 10 min ago) rendered
+      // "online" while the presence dot next to it (getUserPresenceStatus)
+      // showed offline. The canonical rule guards against the stale flag.
+      const user = createMockUser({
+        isOnline: true,
+        lastActiveAt: new Date('2024-01-15T11:50:00Z'), // 10 minutes ago (> idle window)
+      });
+
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.lastSeenMinutes:{"count":10}');
+    });
+
+    it('should report online for activity under 60s even when isOnline is false (canonical window)', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
       });
 
-      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.justNow');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.online');
     });
 
-    it('should return minutes for activity < 1 hour', () => {
+    it('should return the canonical minutes key for activity < 1 hour', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-15T11:30:00Z'), // 30 minutes ago
       });
 
-      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.minutesAgo:{"count":30}');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.lastSeenMinutes:{"count":30}');
     });
 
-    it('should return hours for activity < 24 hours', () => {
+    it('should return the canonical hours key for activity < 24 hours', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-15T08:00:00Z'), // 4 hours ago
       });
 
-      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.hoursAgo:{"count":4}');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.lastSeenHours:{"count":4}');
     });
 
-    it('should return days for activity < 7 days', () => {
-      const user = createMockUser({
-        isOnline: false,
-        lastActiveAt: new Date('2024-01-12T12:00:00Z'), // 3 days ago
-      });
+    it('should return the calendar-aware "yesterday" key with the exact time', () => {
+      const lastActive = new Date('2024-01-14T12:00:00Z'); // calendar-yesterday
+      const user = createMockUser({ isOnline: false, lastActiveAt: lastActive });
 
-      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.daysAgo:{"count":3}');
+      const time = lastActive.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe(
+        `status.lastSeenYesterday:${JSON.stringify({ time })}`,
+      );
     });
 
-    it('should return days with count 1 for 1 day', () => {
-      const user = createMockUser({
-        isOnline: false,
-        lastActiveAt: new Date('2024-01-14T12:00:00Z'), // 1 day ago
-      });
+    it('should return the canonical date+time key for older activity', () => {
+      const lastActive = new Date('2024-01-01T12:00:00Z'); // 14 days ago
+      const user = createMockUser({ isOnline: false, lastActiveAt: lastActive });
 
-      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.daysAgo:{"count":1}');
+      const time = lastActive.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
+      const date = lastActive.toLocaleDateString('fr');
+      expect(usersService.getLastSeenFormatted(user, { t, locale: 'fr' })).toBe(
+        `status.lastSeenDateTime:${JSON.stringify({ date, time })}`,
+      );
+    });
+  });
+
+  describe('formatLastSeenLabel (standalone, isOnline unknown)', () => {
+    const t = (key: string, params?: Record<string, unknown>) =>
+      params ? `${key}:${JSON.stringify(params)}` : key;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
     });
 
-    it('should return a locale-formatted date for older activity', () => {
-      const user = createMockUser({
-        isOnline: false,
-        lastActiveAt: new Date('2024-01-01T12:00:00Z'), // 14 days ago
-      });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
 
-      const result = usersService.getLastSeenFormatted(user, { t, locale: 'fr' });
-      expect(result).toBe(new Date('2024-01-01T12:00:00Z').toLocaleDateString('fr'));
+    it('should delegate to the canonical formatter (minutes bucket)', () => {
+      expect(usersService.formatLastSeenLabel('2024-01-15T11:30:00Z', { t })).toBe(
+        'status.lastSeenMinutes:{"count":30}',
+      );
+    });
+
+    it('should treat sub-minute activity as online (canonical window)', () => {
+      expect(usersService.formatLastSeenLabel('2024-01-15T11:59:30Z', { t })).toBe('status.online');
     });
   });
 
@@ -522,15 +586,30 @@ describe('UsersService', () => {
       expect(avatar).toContain('JD');
     });
 
-    it('should limit initials to 2 characters', () => {
+    it('should derive multi-word initials from first + last word (canonical rule)', () => {
       const user = createMockUser({
         displayName: 'John Paul Jones',
         id: 'a',
       });
 
-      const avatar = usersService.getDefaultAvatar(user);
+      // Canonical getInitials uses first-word + last-word initials (Telegram/
+      // Discord/Slack convention), not the first two words' first chars.
+      expect(usersService.getDefaultAvatar(user)).toContain('JJ');
+    });
 
-      expect(avatar).toContain('JP');
+    it('should not emit a broken surrogate half for an emoji-leading name', () => {
+      const user = createMockUser({
+        displayName: '🎨 Studio',
+        id: 'a',
+      });
+
+      // Divergence fix: charAt(0) on '🎨' produced the isolated high surrogate
+      // '\uD83C' (a broken '�' glyph — and a lone surrogate that even makes
+      // encodeURIComponent throw). The canonical getInitials slices by Unicode
+      // code point, keeping the emoji intact.
+      const avatar = decodeURIComponent(usersService.getDefaultAvatar(user));
+      expect(avatar).toContain('🎨S');
+      expect(avatar.isWellFormed()).toBe(true);
     });
 
     it('should generate consistent colors based on user ID', () => {

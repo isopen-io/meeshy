@@ -344,6 +344,77 @@ final class CacheCoordinatorTests: XCTestCase {
         XCTAssertNil(cached)
     }
 
+    // MARK: - cache-06 — le trio traduction reste chaud sous memory warning
+
+    func test_evictUnderMemoryPressure_keepsTextTranslationsWarm() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let translation = TranslationData(
+            id: "tr-warm", messageId: "msg-warm", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.95
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-warm", translations: [translation]))
+
+        await sut.evictUnderMemoryPressure()
+
+        let cached = await sut.cachedTranslations(for: "msg-warm")
+        XCTAssertNotNil(cached,
+                        "le trio texte (cap 500 entrées, quelques centaines de Ko) ne doit pas être sacrifié sous pression — chaque bulle retomberait sur l'original (Prisme) et re-solliciterait NLLB")
+        XCTAssertEqual(cached?.first?.translatedContent, "Bonjour")
+    }
+
+    // MARK: - cache-02 — la persistance des traductions survit au memory warning
+
+    func test_flushAll_afterMemoryPressureEviction_keepsPersistedTranslationRows() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let translation = TranslationData(
+            id: "tr-1", messageId: "msg-1", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.95
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-1", translations: [translation]))
+        let countBefore = try await db.read { db in try TranslationCacheRecord.fetchCount(db) }
+        XCTAssertEqual(countBefore, 1, "precondition: la traduction est persistée incrémentalement")
+
+        await sut.evictUnderMemoryPressure()
+        await sut.flushAll()
+
+        let countAfter = try await db.read { db in try TranslationCacheRecord.fetchCount(db) }
+        XCTAssertEqual(countAfter, 1,
+                       "memory warning puis background ne doit PAS détruire la table des traductions persistées")
+    }
+
+    func test_loadTranslationCaches_rowsOlderThanCutoff_deletedFromTable() async throws {
+        let db = try makeDB()
+        let staleCachedAt = Date().addingTimeInterval(-25 * 3600)
+        try await db.write { db in
+            try TranslationCacheRecord(
+                messageId: "msg-stale", targetLanguage: "fr",
+                encodedData: Data("{}".utf8), cachedAt: staleCachedAt
+            ).save(db)
+        }
+        let (sut, _, _) = try makeSUT(db: db)
+        await sut.start()
+
+        let count = try await db.read { db in try TranslationCacheRecord.fetchCount(db) }
+        XCTAssertEqual(count, 0,
+                       "le GC du boot doit remplacer celui que le full-rewrite assurait accessoirement")
+    }
+
+    func test_cacheTranslation_persistsIncrementallyWithoutFullRewrite() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let t1 = TranslationData(id: "tr-1", messageId: "msg-1", sourceLanguage: "en", targetLanguage: "fr", translatedContent: "Bonjour", translationModel: "nllb-200", confidenceScore: 0.95)
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-1", translations: [t1]))
+        let t2 = TranslationData(id: "tr-2", messageId: "msg-2", sourceLanguage: "en", targetLanguage: "fr", translatedContent: "Salut", translationModel: "nllb-200", confidenceScore: 0.9)
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-2", translations: [t2]))
+
+        let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
+        XCTAssertEqual(Set(rows.map(\.messageId)), ["msg-1", "msg-2"])
+    }
+
     // MARK: - Transcription caching (point 42)
 
     func test_cacheTranscription_roundtrip() async throws {

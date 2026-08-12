@@ -1,13 +1,20 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Transparent Background -->
-  
-  <!-- Stacked Dashes (Solid Black for Tinting) -->
+  <!-- Variante « tinted » de l'AppIcon (iOS 18+).
+       iOS teinte l'icône d'après sa LUMINANCE : le glyphe doit donc être la
+       partie CLAIRE sur un fond SOMBRE. La version précédente dessinait des
+       dashes noirs sur fond transparent — l'icône sortait en négatif, et le
+       PNG exporté depuis ce fichier portait le même défaut. -->
+
+  <!-- Fond sombre opaque -->
+  <rect width="1024" height="1024" fill="#000000"/>
+
+  <!-- Stacked Dashes (blanc — porte la luminance du glyphe) -->
   <!-- Top (Long) -->
-  <path d="M262 384 H762" stroke="black" stroke-width="80" stroke-linecap="round"/>
-  
+  <path d="M262 384 H762" stroke="#FFFFFF" stroke-width="80" stroke-linecap="round"/>
+
   <!-- Middle (Medium) -->
-  <path d="M262 512 H662" stroke="black" stroke-width="80" stroke-linecap="round"/>
-  
+  <path d="M262 512 H662" stroke="#FFFFFF" stroke-width="80" stroke-linecap="round"/>
+
   <!-- Bottom (Short) -->
-  <path d="M262 640 H562" stroke="black" stroke-width="80" stroke-linecap="round"/>
+  <path d="M262 640 H562" stroke="#FFFFFF" stroke-width="80" stroke-linecap="round"/>
 </svg>

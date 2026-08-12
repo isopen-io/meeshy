@@ -81,7 +81,7 @@ final class DependencyContainerTests: XCTestCase {
         }
         XCTAssertEqual(one, 1)
         XCTAssertFalse(diagnostics.recoveryAttempted)
-        XCTAssertFalse(diagnostics.fellBackToInMemory)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNil(diagnostics.firstAttemptError)
     }
 
@@ -118,7 +118,7 @@ final class DependencyContainerTests: XCTestCase {
 
         XCTAssertTrue(diagnostics.recoveryAttempted)
         XCTAssertTrue(diagnostics.recoveredFromCorruption)
-        XCTAssertFalse(diagnostics.fellBackToInMemory)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNotNil(diagnostics.firstAttemptError)
         XCTAssertNotNil(diagnostics.quarantinedFilePath)
 
@@ -176,6 +176,101 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: dbPath + "-wal"))
     }
 
+    /// Regression — crash-loop macOS TestFlight build 1750 (2026-08-11).
+    /// Sur iOS-app-on-Mac, un binaire signé SANS l'entitlement app-group
+    /// obtient quand même une URL de conteneur (containermanagerd résout le
+    /// chemin), mais le sandbox refuse ensuite CHAQUE accès fichier
+    /// (SQLITE_AUTH « authorization denied »). Le fichier n'est PAS corrompu :
+    /// il ne doit être ni renommé ni supprimé — la quarantaine est réservée à
+    /// la corruption. L'ouverture doit basculer sur le chemin de repli.
+    @MainActor
+    func test_openWithRecovery_unreadablePrimary_fallsBackToFallbackPathWithoutQuarantine() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let primaryPath = dir.appendingPathComponent("denied.sqlite").path
+        let preciousBytes = Data("user data the app must never destroy".utf8)
+        try preciousBytes.write(to: URL(fileURLWithPath: primaryPath))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000], ofItemAtPath: primaryPath)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o644], ofItemAtPath: primaryPath)
+        }
+
+        let fallbackPath = dir.appendingPathComponent("fallback.sqlite").path
+
+        var diagnostics = DatabaseInitDiagnostics()
+        let pool = DependencyContainer.openWithRecovery(
+            dbPath: primaryPath,
+            fallbackPath: fallbackPath,
+            config: DependencyContainer.dbConfig(),
+            diagnostics: &diagnostics
+        )
+
+        let one = try await pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT 1") ?? 0
+        }
+        XCTAssertEqual(one, 1)
+        XCTAssertTrue(diagnostics.fellBackToSecondaryPath)
+        XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
+        XCTAssertNotNil(diagnostics.firstAttemptError)
+
+        // Le repli doit être un vrai fichier au chemin secondaire…
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fallbackPath))
+        // …et le fichier refusé doit rester INTACT à son chemin d'origine.
+        XCTAssertNil(diagnostics.quarantinedFilePath)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o644], ofItemAtPath: primaryPath)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: primaryPath)),
+            preciousBytes,
+            "un fichier inaccessible n'est pas corrompu — il ne doit jamais être quarantainé ni écrasé"
+        )
+    }
+
+    /// Dernier filet : quand le chemin primaire ET le repli sont inaccessibles,
+    /// le container doit livrer un pool utilisable sur un fichier temporaire
+    /// éphémère — jamais trapper. L'ancien repli `DatabasePool(":memory:")`
+    /// était mort-né : un DatabasePool exige le mode WAL, impossible en
+    /// mémoire (« could not activate WAL Mode at path: :memory: »), donc le
+    /// « filet » trappait TOUJOURS (preconditionFailure → SIGTRAP au boot).
+    @MainActor
+    func test_openWithRecovery_allPathsUnavailable_fallsBackToEphemeralPool() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        let lockedDir = dir.appendingPathComponent("locked")
+        try FileManager.default.createDirectory(at: lockedDir, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000], ofItemAtPath: lockedDir.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: lockedDir.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        var diagnostics = DatabaseInitDiagnostics()
+        let pool = DependencyContainer.openWithRecovery(
+            dbPath: lockedDir.appendingPathComponent("a.sqlite").path,
+            fallbackPath: lockedDir.appendingPathComponent("b.sqlite").path,
+            config: DependencyContainer.dbConfig(),
+            diagnostics: &diagnostics
+        )
+
+        try await pool.write { db in
+            try db.execute(sql: "CREATE TABLE probe (id INTEGER PRIMARY KEY, value TEXT)")
+            try db.execute(sql: "INSERT INTO probe (value) VALUES ('ephemeral')")
+        }
+        let value = try await pool.read { db in
+            try String.fetchOne(db, sql: "SELECT value FROM probe LIMIT 1")
+        }
+        XCTAssertEqual(value, "ephemeral")
+        XCTAssertTrue(diagnostics.fellBackToSecondaryPath)
+        XCTAssertTrue(diagnostics.fellBackToEphemeralStorage)
+    }
+
     // MARK: - databasePath (TestFlight crash 2026-06-12 — nil app-group container)
 
     /// Nominal path: the shared app-group container hosts `Database/`.
@@ -218,5 +313,186 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: appSupport.appendingPathComponent("Database").path
         ))
+    }
+
+    // MARK: - N1 — busy_timeout on the shared message store
+
+    /// The App Group message store is written by TWO processes (app +
+    /// notification service extension), each holding its own `DatabasePool`.
+    /// GRDB's default `busyMode` is `.immediateError`: a cross-pool write
+    /// collision surfaces as `SQLITE_BUSY` instead of waiting, which the NSE
+    /// swallows silently — the pre-persisted bubble is simply lost.
+    /// `dbConfig()` must therefore configure a busy timeout so a concurrent
+    /// writer WAITS for the lock instead of failing.
+    func test_dbConfig_busyTimeout_absorbsConcurrentCrossPoolWriter() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbPath = dir.appendingPathComponent("busy.sqlite").path
+
+        let appPool = try DatabasePool(
+            path: dbPath, configuration: DependencyContainer.dbConfig())
+        let nsePool = try DatabasePool(
+            path: dbPath, configuration: DependencyContainer.dbConfig())
+
+        try await appPool.write { db in
+            try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, v TEXT)")
+        }
+
+        // Writer A grabs the write lock and holds it for 500 ms — long enough
+        // for writer B to collide, far shorter than the 5 s busy timeout.
+        let holdingWriter = Task.detached {
+            try appPool.writeWithoutTransaction { db in
+                try db.execute(sql: "BEGIN IMMEDIATE")
+                Thread.sleep(forTimeInterval: 0.5)
+                try db.execute(sql: "INSERT INTO t (v) VALUES ('a')")
+                try db.execute(sql: "COMMIT")
+            }
+        }
+
+        // Give writer A time to acquire the lock before B attempts its write.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Without a busy timeout this throws SQLITE_BUSY. With
+        // `busyMode: .timeout(5)` it waits for A's commit and succeeds.
+        try await nsePool.write { db in
+            try db.execute(sql: "INSERT INTO t (v) VALUES ('b')")
+        }
+
+        _ = try await holdingWriter.value
+
+        let count = try await appPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM t") ?? 0
+        }
+        XCTAssertEqual(count, 2, "Both writers must have landed their row")
+    }
+
+    // MARK: - N2 — explicit file protection on the shared message store
+
+    /// The NSE is woken while the device is LOCKED. The main app carries the
+    /// `default-data-protection = NSFileProtectionComplete` entitlement, so a
+    /// database file (re)created by the app would inherit `.complete` and the
+    /// NSE could neither open nor write it until the next unlock. The path
+    /// resolver must therefore pin `.completeUntilFirstUserAuthentication` on
+    /// the Database directory AND on the sqlite file + WAL/SHM sidecars,
+    /// mirroring `AppDatabase.resolveDatabaseURL`.
+    func test_databasePath_appliesCompleteUntilFirstUserAuthenticationProtection() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Pre-create the database files as a previous app run would have,
+        // with no explicit protection class.
+        let dbDir = dir.appendingPathComponent("Database")
+        try FileManager.default.createDirectory(
+            at: dbDir, withIntermediateDirectories: true)
+        let sqlitePath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        for suffix in ["", "-wal", "-shm"] {
+            FileManager.default.createFile(atPath: sqlitePath + suffix, contents: Data())
+        }
+
+        let resolved = DependencyContainer.databasePath(groupContainer: dir)
+        XCTAssertEqual(resolved, sqlitePath)
+
+        var checkedPaths = [dbDir.path]
+        checkedPaths += ["", "-wal", "-shm"].map { sqlitePath + $0 }
+        for path in checkedPaths {
+            let attributes = try FileManager.default.attributesOfItem(atPath: path)
+            guard let protection = attributes[.protectionKey] as? FileProtectionType else {
+                throw XCTSkip("File protection attributes are not recorded on this platform")
+            }
+            XCTAssertEqual(
+                protection,
+                .completeUntilFirstUserAuthentication,
+                "\(path) must stay writable for the NSE while the device is locked"
+            )
+        }
+    }
+}
+
+/// startup-03 — décision pure du toast de perte + séquencement du hook.
+/// NE JAMAIS tester ce hook en flippant `AuthManager.shared.isAuthenticated`
+/// depuis MeeshyTests : `DependencyContainer.shared` est le singleton RÉEL
+/// branché sur la base App Group de la session de la phase 3.
+extension DependencyContainerTests {
+
+    func test_shouldSurfaceOutboxLossToast_invalidatedWithPendingRows_returnsTrue() {
+        XCTAssertTrue(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: true, pendingCount: 3))
+    }
+
+    func test_shouldSurfaceOutboxLossToast_voluntaryLogoutWithPendingRows_returnsFalse() {
+        XCTAssertFalse(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: false, pendingCount: 3),
+                       "un logout volontaire ne signale rien — la perte est assumée (contrat E9/Q3)")
+    }
+
+    func test_shouldSurfaceOutboxLossToast_invalidatedWithNoPendingRows_returnsFalse() {
+        XCTAssertFalse(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: true, pendingCount: 0))
+    }
+
+    func test_wireOutboxLogoutHook_countsPendingBeforePurging() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Services
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func wireOutboxLogoutHook()"),
+              let end = source.range(of: "\n    // MARK:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate wireOutboxLogoutHook body")
+            return
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        guard let countPos = body.range(of: "pendingOutboxCount()"),
+              let purgePos = body.range(of: "clearAllMessagesForLogout()") else {
+            XCTFail("wireOutboxLogoutHook must read pendingOutboxCount() and call clearAllMessagesForLogout() — one of them is missing")
+            return
+        }
+        XCTAssertTrue(
+            countPos.lowerBound < purgePos.lowerBound,
+            "le compte des lignes en attente doit être lu AVANT la purge — après, il vaut toujours 0 et le toast ne part jamais"
+        )
+    }
+
+    /// stores-05 volet 1 (le fix lui-même = grdb-01, lot 0) — verrou de
+    /// non-régression : feed.clearAllForLogout() doit vivre dans SON PROPRE
+    /// do/catch, jamais imbriqué dans celui de clearAllMessagesForLogout() —
+    /// sinon un échec de la purge messages empêcherait silencieusement la
+    /// purge feed (posts FRIENDS/ONLY de l'utilisateur précédent visibles
+    /// sous le compte suivant). Source-guard volontaire : jamais de flip
+    /// d'AuthManager.shared dans MeeshyTests (le singleton porte la base App
+    /// Group réelle de la session connectée de la phase 3).
+    func test_wireOutboxLogoutHook_feedPurgeIsIndependentOfMessagePurgeFailure() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Services
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func wireOutboxLogoutHook()"),
+              let end = source.range(of: "\n    // MARK:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate wireOutboxLogoutHook body")
+            return
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        guard let messagePurge = body.range(of: "clearAllMessagesForLogout()"),
+              let feedPurge = body.range(of: "feed.clearAllForLogout()") else {
+            XCTFail("wireOutboxLogoutHook must call both clearAllMessagesForLogout() and feed.clearAllForLogout() — one of them is missing")
+            return
+        }
+        XCTAssertTrue(
+            messagePurge.lowerBound < feedPurge.lowerBound,
+            "l'ordre attendu est purge messages puis purge feed"
+        )
+        let between = String(body[messagePurge.upperBound..<feedPurge.lowerBound])
+        XCTAssertTrue(
+            between.contains("} catch"),
+            "le do/catch de la purge messages doit se FERMER avant feed.clearAllForLogout() — les deux purges doivent être indépendantes"
+        )
     }
 }

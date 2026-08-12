@@ -172,4 +172,84 @@ final class DeliveryStatusResolverTests: XCTestCase {
             DeliveryStatusResolver.fromCounts(deliveredCount: 0, readCount: 0, recipientCount: 3),
             .sent)
     }
+
+    // MARK: - Réciprocité showReadReceipts
+    //
+    // Qui ne partage pas ses accusés ne voit pas ceux des autres. Le paramètre
+    // est un booléen OPAQUE : ce résolveur est documenté « stateless and pure »
+    // et lire `UserPreferencesManager` ici violerait la pureté du SDK, en plus
+    // de le rendre intestable. L'app lit la préférence et la transmet.
+    //
+    // Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+
+    func test_resolve_optedOut_degradesGroupReadToDelivered() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 3, readCount: 3, recipientCount: 3,
+                showReadReceipts: false),
+            .delivered)
+    }
+
+    func test_resolve_optedOut_degradesDirectReadToDelivered() {
+        // Conversation directe : le statut stocké fait autorité et vaut déjà
+        // `.read` — la dégradation doit aussi s'y appliquer.
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .read, deliveredCount: 1, readCount: 1, recipientCount: 1,
+                showReadReceipts: false),
+            .delivered)
+    }
+
+    func test_resolve_optedOut_degradesReadByAllMarker() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 0, readCount: 0, recipientCount: 3,
+                readByAllAt: Date(),
+                showReadReceipts: false),
+            .delivered)
+    }
+
+    func test_resolve_optedOut_leavesDeliveredUntouched() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 3, readCount: 0, recipientCount: 3,
+                showReadReceipts: false),
+            .delivered)
+    }
+
+    func test_resolve_optedOut_leavesSentUntouched() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 0, readCount: 0, recipientCount: 3,
+                showReadReceipts: false),
+            .sent)
+    }
+
+    /// Le cycle d'envoi propre à l'expéditeur n'a rien à voir avec la lecture
+    /// des pairs : il ne doit pas être touché.
+    func test_resolve_optedOut_leavesSendLifecycleUntouched() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .failed, deliveredCount: 0, readCount: 0, recipientCount: 3,
+                showReadReceipts: false),
+            .failed)
+    }
+
+    func test_resolve_sharing_stillPromotesToRead() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 3, readCount: 3, recipientCount: 3,
+                showReadReceipts: true),
+            .read)
+    }
+
+    /// Par défaut on partage : les appelants de persistance ne passent pas le
+    /// paramètre et ne doivent SURTOUT pas voir leur état dégradé — gater
+    /// l'écriture corromprait l'état stocké.
+    func test_resolve_defaultsToSharing() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 3, readCount: 3, recipientCount: 3),
+            .read)
+    }
 }

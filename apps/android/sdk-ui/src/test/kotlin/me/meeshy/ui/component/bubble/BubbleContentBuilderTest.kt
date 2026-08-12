@@ -587,6 +587,71 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a pending outgoing message while offline shows the queued-offline status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.QueuedOffline)
+    }
+
+    @Test
+    fun `a pending outgoing message with a live connection stays a clock, not the hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = false,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Pending)
+    }
+
+    @Test
+    fun `a failed outgoing message stays Failed even while offline`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isFailed = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun `a delivered outgoing message never shows the offline hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 1),
+            currentUserId = "me",
+            preferences = french,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
+    }
+
+    @Test
+    fun `an incoming message never shows the offline hourglass`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "other"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isOffline = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
     fun `a failed outgoing message shows the Failed status even while pending`() {
         val content = BubbleContentBuilder.build(
             message(senderId = "me"),

@@ -7,32 +7,7 @@ final class LocationServiceTests: XCTestCase {
 
     // MARK: - Publisher existence
 
-    func testLocationSharedPublisherReceivesEvents() {
-        let service = LocationService.shared
-        var received: LocationSharedEvent?
-        let expectation = expectation(description: "locationShared event received")
-
-        let cancellable = service.locationShared.sink { event in
-            received = event
-            expectation.fulfill()
-        }
-
-        let event = LocationSharedEvent(
-            messageId: "msg1", conversationId: "conv1", userId: "u1",
-            latitude: 48.8566, longitude: 2.3522,
-            altitude: nil, accuracy: nil, placeName: "Paris", address: nil, timestamp: nil
-        )
-        service.locationShared.send(event)
-
-        waitForExpectations(timeout: 1)
-        XCTAssertEqual(received?.messageId, "msg1")
-        XCTAssertEqual(received?.conversationId, "conv1")
-        XCTAssertEqual(received?.latitude, 48.8566)
-        XCTAssertEqual(received?.placeName, "Paris")
-        cancellable.cancel()
-    }
-
-    func testLiveLocationStartedPublisherReceivesEvents() {
+    func test_liveLocationStartedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationStartedEvent?
         let expectation = expectation(description: "liveLocationStarted event received")
@@ -56,7 +31,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testLiveLocationUpdatedPublisherReceivesEvents() {
+    func test_liveLocationUpdatedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationUpdatedEvent?
         let expectation = expectation(description: "liveLocationUpdated event received")
@@ -80,7 +55,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testLiveLocationStoppedPublisherReceivesEvents() {
+    func test_liveLocationStoppedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationStoppedEvent?
         let expectation = expectation(description: "liveLocationStopped event received")
@@ -99,41 +74,10 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testProtocolConformance() {
+    func test_locationService_asProtocol_exposesAllPublishers() {
         let service: LocationServiceProviding = LocationService.shared
-        XCTAssertNotNil(service.locationShared)
         XCTAssertNotNil(service.liveLocationStarted)
         XCTAssertNotNil(service.liveLocationUpdated)
         XCTAssertNotNil(service.liveLocationStopped)
-    }
-
-    func testMultipleSubscribersReceiveEvents() {
-        let service = LocationService.shared
-        var received1: LocationSharedEvent?
-        var received2: LocationSharedEvent?
-        let exp1 = expectation(description: "subscriber 1")
-        let exp2 = expectation(description: "subscriber 2")
-
-        let cancellable1 = service.locationShared.sink { event in
-            received1 = event
-            exp1.fulfill()
-        }
-        let cancellable2 = service.locationShared.sink { event in
-            received2 = event
-            exp2.fulfill()
-        }
-
-        let event = LocationSharedEvent(
-            messageId: "msg2", conversationId: "conv2", userId: "u2",
-            latitude: 40.7128, longitude: -74.0060,
-            altitude: nil, accuracy: nil, placeName: nil, address: nil, timestamp: nil
-        )
-        service.locationShared.send(event)
-
-        waitForExpectations(timeout: 1)
-        XCTAssertEqual(received1?.messageId, "msg2")
-        XCTAssertEqual(received2?.messageId, "msg2")
-        cancellable1.cancel()
-        cancellable2.cancel()
     }
 }

@@ -19,6 +19,8 @@ import MeeshyUI
 ///   5. Each pending outbox item — one entry per item, label = the concrete
 ///      French operation (`Envoi d'audio`, `Envoi d'image`, …), carries
 ///      `source` so taps route to the conversation / post / story.
+///   6. Chaque conversation NON ouverte où quelqu'un écrit — `@pseudo` +
+///      points animés, tap pour l'ouvrir.
 ///
 /// The pill collapses to `EmptyView` automatically when every signal
 /// clears — there is no 3-cycle auto-hide; the rotation runs as long as
@@ -26,6 +28,10 @@ import MeeshyUI
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
+    /// Source des frappes hors conversation. Injecté à la racine
+    /// (`RootView` / `iPadRootView`), donc disponible partout où cette
+    /// bannière est montée.
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     /// Flag d'environnement injecté par `RootView` / `iPadRootView` quand
     /// `StoryViewerView` est présenté en `fullScreenCover`. Cache la pill
     /// pour qu'elle ne rende plus par-dessus le header story (le cover ne
@@ -39,6 +45,14 @@ struct ConnectionBanner: View {
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
     /// to its router to push onto the navigation stack.
     private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+
+    /// Identifiant de la conversation actuellement à l'écran, quand le point de
+    /// montage en connaît une. Elle est exclue des entrées de frappe : son
+    /// propre indicateur est déjà visible, le doubler en haut serait du bruit.
+    /// Une closure, pas une valeur : la bannière est reconstruite à chaque
+    /// re-rendu du parent, et une valeur figée à la construction se périmerait
+    /// dès la navigation suivante.
+    private let activeConversationId: (() -> String?)?
 
     /// Set to `true` for ~4 seconds after the device transitions from
     /// `.offline` to any non-offline state. Drives the transient green
@@ -80,8 +94,12 @@ struct ConnectionBanner: View {
     /// it must only acknowledge a problem the user actually saw.
     @State private var downWasSurfaced: Bool = false
 
-    init(onItemTap: ((OutboxUIItem.Source) -> Void)? = nil) {
+    init(
+        onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        activeConversationId: (() -> String?)? = nil
+    ) {
         self.onItemTap = onItemTap
+        self.activeConversationId = activeConversationId
     }
 
     private var isDisconnected: Bool { statusVM.status == .disconnected }
@@ -151,7 +169,37 @@ struct ConnectionBanner: View {
             ))
         }
 
+        result.append(contentsOf: Self.typingEntries(
+            typingUsers: conversationListViewModel.typingUsers,
+            excluding: activeConversationId?()
+        ))
+
         return result
+    }
+
+    /// Une entrée par conversation NON ouverte où quelqu'un écrit.
+    ///
+    /// Le `@pseudo` plutôt que le nom d'affichage : la pastille est étroite et
+    /// le handle est ce qui identifie sans ambiguïté. Triées par identifiant de
+    /// conversation — un ordre instable ferait sauter la rotation d'une entrée
+    /// à l'autre à chaque frappe.
+    static func typingEntries(
+        typingUsers: [String: String],
+        excluding activeConversationId: String?
+    ) -> [SyncPillEntry] {
+        typingUsers
+            .filter { $0.key != activeConversationId }
+            .sorted { $0.key < $1.key }
+            .map { conversationId, username in
+                SyncPillEntry(
+                    id: "typing.\(conversationId)",
+                    label: "@\(username)",
+                    iconName: nil,
+                    dotStyle: .brand,
+                    source: .conversation(id: conversationId),
+                    showsActivityDots: true
+                )
+            }
     }
 
     var body: some View {

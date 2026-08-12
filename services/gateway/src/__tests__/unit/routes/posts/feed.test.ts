@@ -190,6 +190,48 @@ describe('GET /posts/feed/stories — cursor pagination (G1c)', () => {
   });
 });
 
+describe('GET /posts/feed/stories — tombstone truncation signal', () => {
+  it('surfaces deletedStoryIdsTruncated in meta so the client can escalate', async () => {
+    // Les tombstones n'ont pas de curseur de reprise : ce drapeau est le SEUL
+    // moyen pour le client d'apprendre qu'il garde des fantômes.
+    mockGetStories.mockResolvedValueOnce({
+      items: [],
+      hasMore: false,
+      nextCursor: null,
+      deletedIds: ['gone-1'],
+      deletedIdsTruncated: true,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/posts/feed/stories?updatedSince=2026-07-03T10:00:00.000Z',
+    });
+
+    expect(res.json().meta).toEqual(
+      expect.objectContaining({ deletedStoryIds: ['gone-1'], deletedStoryIdsTruncated: true })
+    );
+    await app.close();
+  });
+
+  it('reports the flag as false on a complete tombstone window', async () => {
+    mockGetStories.mockResolvedValueOnce({
+      items: [],
+      hasMore: false,
+      nextCursor: null,
+      deletedIds: ['gone-1'],
+      deletedIdsTruncated: false,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/posts/feed/stories?updatedSince=2026-07-03T10:00:00.000Z',
+    });
+
+    expect(res.json().meta.deletedStoryIdsTruncated).toBe(false);
+    await app.close();
+  });
+});
+
 describe('GET /posts/feed/stories — service error', () => {
   it('returns 500 when feedService throws', async () => {
     mockGetStories.mockRejectedValueOnce(new Error('DB error'));

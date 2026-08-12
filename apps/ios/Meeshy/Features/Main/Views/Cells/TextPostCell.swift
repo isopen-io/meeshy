@@ -94,10 +94,13 @@ final class TextPostCell: UICollectionViewCell {
         likeButton.setTitle("  \(record.likeCount)", for: .normal)
         likeButton.setImage(UIImage(systemName: record.isLikedByMe ? "heart.fill" : "heart"), for: .normal)
         likeButton.tintColor = record.isLikedByMe ? .systemRed : .secondaryLabel
+        likeButton.accessibilityLabel = PostStatAccessibility.likesLabel(record.likeCount)
         commentButton.setTitle("  \(record.commentCount)", for: .normal)
         commentButton.setImage(UIImage(systemName: "bubble.right"), for: .normal)
+        commentButton.accessibilityLabel = PostStatAccessibility.commentsLabel(record.commentCount)
         repostButton.setTitle("  \(record.repostCount)", for: .normal)
         repostButton.setImage(UIImage(systemName: "arrow.2.squarepath"), for: .normal)
+        repostButton.accessibilityLabel = PostStatAccessibility.repostsLabel(record.repostCount)
     }
 
     override func prepareForReuse() {

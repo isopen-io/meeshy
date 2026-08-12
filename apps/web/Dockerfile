@@ -189,11 +189,25 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
 FROM base AS runner
 WORKDIR /app
 
+# VCS_REF / BUILD_DATE sont RE-DÉCLARÉS ici : un ARG n'est visible que dans le
+# stage qui le déclare, et ceux du stage `base` ne franchissent pas ce `FROM` —
+# même en en héritant. Sans cette redéclaration, les ENV ci-dessous seraient
+# vides et /api/health annoncerait un commit `null` sur toutes les images.
+ARG VCS_REF
+ARG BUILD_DATE
+
 # === PRODUCTION ENVIRONMENT ===
+# GIT_COMMIT / BUILD_DATE : le label OCI grave déjà la révision, mais un label
+# n'est lisible que par `docker inspect` sur l'hôte. En variable
+# d'environnement, `resolveBuildInfo` la remonte dans /api/health : identifier
+# le code servi devient un `curl`, plus une corrélation entre l'uptime du
+# container et l'horodatage des tags `sha-<short>` du registre.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3100 \
-    HOSTNAME="0.0.0.0"
+    HOSTNAME="0.0.0.0" \
+    GIT_COMMIT=${VCS_REF} \
+    BUILD_DATE=${BUILD_DATE}
 
 # Create nextjs user and install tini and wget
 RUN addgroup --system --gid 1001 nodejs && \
