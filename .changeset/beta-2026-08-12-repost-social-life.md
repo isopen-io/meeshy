@@ -14,6 +14,7 @@ Beta 2026-08-12 — vie sociale des reposts, effectifs de conversation, messages
 - Départ, retrait et ajout de participant atteignent tous les membres et non plus la seule room du fil ouvert.
 - `GET /me/preferences/encryption` rapporte préférence de chiffrement et état des clés Signal, en lisant l'existence réelle d'un `SignalPreKeyBundle` actif plutôt que les colonnes miroir jamais renseignées.
 - Un message rappelé par son auteur ne reste plus lisible en clair dans l'inbox de mentions ; ses liens courts sont désactivés et ses notifications retirées.
+- Le transfert n'est plus la sortie de secours de l'éphémère et de la vue unique : la copie hérite désormais de la **durée** de la source, recomptée depuis le transfert, et un message à vue unique refuse d'être transféré — propager son budget de vues ne fermerait rien, puisqu'il repartirait à zéro sur la ligne neuve.
 
 **Web (frontend).**
 
