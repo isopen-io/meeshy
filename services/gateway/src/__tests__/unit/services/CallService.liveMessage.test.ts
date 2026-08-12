@@ -153,4 +153,27 @@ describe('CallService.createLiveCallMessage', () => {
 
     await expect(sut.createLiveCallMessage(CALL_ID)).rejects.toThrow('db down');
   });
+
+  /**
+   * Le message d'appel EN COURS doit être visible des lecteurs de messages
+   * vivants. Leur prédicat est `deletedAt: null` — présent-et-null : sur le
+   * connecteur MongoDB, une colonne `DateTime?` jamais écrite est ABSENTE du
+   * document et n'apparie donc PAS ce filtre (cf. `NOT_DELETED`,
+   * `services/posts/softDelete.ts`, et le post-mortem de `postIncludes.ts`).
+   * Un message d'appel sans la colonne serait invisible de l'aperçu de
+   * conversation, du compte de non-lus, du delta `/sync` et des recherches
+   * d'édition/réaction — tous gardés par ce même `deletedAt: null`.
+   */
+  it('marks the live call message as live so the deletedAt:null readers match it', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1' });
+
+    await sut.createLiveCallMessage(CALL_ID);
+
+    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    expect(Object.prototype.hasOwnProperty.call(data, 'deletedAt')).toBe(true);
+    expect(data.deletedAt).toBeNull();
+  });
 });

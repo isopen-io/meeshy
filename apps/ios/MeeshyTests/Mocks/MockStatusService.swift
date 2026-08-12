@@ -29,6 +29,7 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
     var createCallCount = 0
     var lastCreateMoodEmoji: String?
     var lastCreateContent: String?
+    var lastCreateOriginalLanguage: String?
     var lastCreateVisibility: String?
     var lastCreateVisibilityUserIds: [String]?
     var lastCreateViaUsername: String?
@@ -52,12 +53,14 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
         return try listResult.get()
     }
 
-    func create(moodEmoji: String, content: String?, visibility: String,
+    func create(moodEmoji: String, content: String?, originalLanguage: String?,
+                visibility: String,
                 visibilityUserIds: [String]?, viaUsername: String? = nil,
                 audioUrl: String? = nil, repostOfId: String? = nil) async throws -> APIPost {
         createCallCount += 1
         lastCreateMoodEmoji = moodEmoji
         lastCreateContent = content
+        lastCreateOriginalLanguage = originalLanguage
         lastCreateVisibility = visibility
         lastCreateVisibilityUserIds = visibilityUserIds
         lastCreateViaUsername = viaUsername
@@ -92,6 +95,7 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
         createCallCount = 0
         lastCreateMoodEmoji = nil
         lastCreateContent = nil
+        lastCreateOriginalLanguage = nil
         lastCreateVisibility = nil
         lastCreateVisibilityUserIds = nil
         lastCreateViaUsername = nil

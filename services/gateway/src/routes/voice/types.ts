@@ -270,13 +270,21 @@ export { errorResponseSchema };
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function getUserId(request: FastifyRequest): string | null {
+  // SECURITY: l'identité provient EXCLUSIVEMENT de la session authentifiée
+  // et vérifiée (`request.user`, posé par le preHandler `fastify.authenticate`
+  // sur chaque route voice — voir registerTranslationRoutes/
+  // registerAnalysisRoutes). Le repli historique sur l'en-tête `x-user-id`
+  // fourni par le client a été supprimé : cet en-tête n'est protégé par
+  // aucune vérification cryptographique et permettait à n'importe quel
+  // appelant anonyme de se faire passer pour n'importe quel utilisateur en
+  // envoyant simplement `x-user-id: <id-de-la-victime>` — une usurpation
+  // d'identité complète (CWE-290 / CWE-807), pas une simple fuite de
+  // données : le service exécutait la requête AU NOM de la victime
+  // (facturation, historique, jobs, quotas). Fail-closed : en l'absence
+  // d'identité vérifiée, on renvoie `null`, jamais une valeur fournie par
+  // l'appelant.
   const user = request.user;
-  if (user?.userId) return user.userId;
-
-  const headerUserId = request.headers['x-user-id'];
-  if (typeof headerUserId === 'string') return headerUserId;
-
-  return null;
+  return user?.userId ?? null;
 }
 
 export function isAdmin(request: FastifyRequest): boolean {

@@ -8,12 +8,21 @@ import MeeshyUI
 struct CommentAttachmentsTray: View {
     let attachments: [ComposerAttachment]
     let onRemove: (String) -> Void
+    /// Lieu partagé en attente d'envoi. Pas un `ComposerAttachment` :
+    /// `SharedPlace` porte le nom et l'adresse, l'attachement ne les portait
+    /// pas et n'est plus le véhicule (Task 11/12, 2026-07-29). `nil` par
+    /// défaut pour les hôtes qui ne câblent pas encore le partage de position.
+    var place: SharedPlace? = nil
+    var onRemovePlace: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let place {
+                    placeChip(place)
+                }
                 ForEach(attachments) { attachment in
                     HStack(spacing: 6) {
                         Image(systemName: icon(for: attachment.type))
@@ -71,6 +80,45 @@ struct CommentAttachmentsTray: View {
         }
         if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
     }
+
+    /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
+    private func placeChip(_ place: SharedPlace) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "location.fill")
+                .font(.caption)
+                .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .frame(maxWidth: 120)
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                    onRemovePlace?()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
+            }
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(theme.inputBackground)
+                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+        )
+        .foregroundColor(theme.textPrimary)
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))) {
+            onRemovePlace?()
+        }
+    }
 }
 
 /// Rendu inline du média unique d'un commentaire (image / vidéo / audio), avec
@@ -78,7 +126,11 @@ struct CommentAttachmentsTray: View {
 /// mêmes building blocks que les médias de post/message :
 /// - image  → `ProgressiveCachedImage` + plein écran `ConversationMediaGalleryView`
 /// - vidéo  → `MeeshyVideoPlayer(.inline)` + expand plein écran
-/// - audio  → `AudioPlayerView(.feedPost)` avec transcription + variantes TTS (Prisme)
+/// - audio  → `CoordinatedAudioPlayer` → `AudioPlayerView(.feedPost)` avec
+///            transcription + variantes TTS (Prisme) ; le routeur bascule sur
+///            le moteur du `ConversationAudioCoordinator` partagé (carte Now
+///            Playing, lecture background) dès que cet audio devient la tête
+///            de file — miroir standalone d'`AudioBubbleRouter`
 ///
 /// Le commentaire ne porte QU'UN SEUL média (cf. backend `commentId` FK sur PostMedia).
 /// Orchestration cache → policy → downloader déléguée aux resolvers app-side
@@ -86,6 +138,10 @@ struct CommentAttachmentsTray: View {
 struct CommentMediaView: View {
     let media: FeedMedia
     let accentColor: String
+    /// Id du commentaire porteur — entité utilisée comme `messageId`/
+    /// `conversationId` de la `QueuedAudio` routée vers le coordinator
+    /// (carte Now Playing) pour un média audio.
+    let commentId: String
     /// Infos auteur pour le label expéditeur du viewer plein écran (parité
     /// conversation : avatar + nom + date au-dessus du média).
     let authorName: String
@@ -121,7 +177,7 @@ struct CommentMediaView: View {
             videoView
         case .audio:
             audioView
-        case .document, .location:
+        case .document:
             // Hors périmètre commentaire (image/vidéo/audio) — fallback discret.
             EmptyView()
         }
@@ -185,21 +241,45 @@ struct CommentMediaView: View {
     private var audioView: some View {
         let attachment = media.toMessageAttachment()
         return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            AudioPlayerView(
-                attachment: attachment,
-                context: .feedPost,
-                accentColor: accentColor,
-                transcription: media.transcription,
-                translatedAudios: media.translatedAudios,
-                onFullscreen: {
-                    audioFullscreen = .fromFeed(
-                        media: media, author: author,
-                        originalLanguage: nil, caption: "", createdAt: sentAt
+            CoordinatedAudioPlayer(
+                attachmentId: attachment.id,
+                nowPlayingName: authorName,
+                nowPlayingArtworkURL: authorAvatarURL,
+                makeQueuedAudio: {
+                    QueuedAudio(
+                        attachmentId: attachment.id,
+                        messageId: commentId,
+                        conversationId: commentId,
+                        fileUrl: attachment.fileUrl,
+                        durationMs: attachment.duration ?? 0,
+                        senderName: authorName,
+                        senderAvatarURL: authorAvatarURL,
+                        receivedAt: sentAt
                     )
-                },
-                availability: availability,
-                onDownload: onDownload
-            )
+                }
+            ) { external, onPlay in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .feedPost,
+                    accentColor: accentColor,
+                    transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        audioFullscreen = .fromFeed(
+                            media: media, author: author,
+                            originalLanguage: nil, caption: "", createdAt: sentAt,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE commentaire doit être vu
+                            // comme la même session coordinator.
+                            conversationId: commentId
+                        )
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    externalPlayer: external,
+                    onPlayRequest: onPlay
+                )
+            }
         }
         .frame(maxWidth: 320)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))

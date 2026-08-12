@@ -5,7 +5,7 @@ import { ConversationHeader } from '../../../components/conversations/Conversati
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { AttachmentService } from '@/services/attachmentService';
-import { useCallStore } from '@/stores/call-store';
+import { useCallBanner } from '@/components/conversations/header/use-call-banner';
 import { useUserStore } from '@/stores/user-store';
 import type { Conversation, SocketIOUser as User, Participant } from '@meeshy/shared/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
@@ -70,9 +70,11 @@ jest.mock('@/services/attachmentService', () => ({
   },
 }));
 
-// Mock stores
-jest.mock('@/stores/call-store', () => ({
-  useCallStore: jest.fn(),
+// Call banner — its own data sourcing (REST + call-store) is exhaustively
+// covered by use-call-banner.test.tsx; ConversationHeader only needs to
+// prove it renders/wires OngoingCallBanner off whatever the hook reports.
+jest.mock('@/components/conversations/header/use-call-banner', () => ({
+  useCallBanner: jest.fn(),
 }));
 
 jest.mock('@/stores/user-store', () => ({
@@ -329,9 +331,12 @@ describe('ConversationHeader', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    (useCallStore as unknown as jest.Mock).mockReturnValue({
+    (useCallBanner as unknown as jest.Mock).mockReturnValue({
       currentCall: null,
-      isInCall: false,
+      callDuration: 0,
+      showCallBanner: false,
+      handleJoinCall: jest.fn(),
+      handleDismissCallBanner: jest.fn(),
     });
 
     (useUserStore as unknown as jest.Mock).mockReturnValue({
@@ -642,8 +647,8 @@ describe('ConversationHeader', () => {
   });
 
   describe('Call Banner', () => {
-    it('should show call banner when there is an active call', async () => {
-      (useCallStore as unknown as jest.Mock).mockReturnValue({
+    it('should show call banner when useCallBanner reports an active call', async () => {
+      (useCallBanner as unknown as jest.Mock).mockReturnValue({
         currentCall: {
           id: 'call-1',
           conversationId: 'conv-1',
@@ -651,7 +656,10 @@ describe('ConversationHeader', () => {
           participants: [],
           startedAt: new Date().toISOString(),
         },
-        isInCall: true,
+        callDuration: 0,
+        showCallBanner: true,
+        handleJoinCall: jest.fn(),
+        handleDismissCallBanner: jest.fn(),
       });
 
       render(<ConversationHeader {...defaultProps} />);
@@ -661,16 +669,13 @@ describe('ConversationHeader', () => {
       });
     });
 
-    it('should not show call banner for different conversation', async () => {
-      (useCallStore as unknown as jest.Mock).mockReturnValue({
-        currentCall: {
-          id: 'call-1',
-          conversationId: 'other-conv',
-          status: 'active',
-          participants: [],
-          startedAt: new Date().toISOString(),
-        },
-        isInCall: true,
+    it('should not show call banner when useCallBanner reports none', async () => {
+      (useCallBanner as unknown as jest.Mock).mockReturnValue({
+        currentCall: null,
+        callDuration: 0,
+        showCallBanner: false,
+        handleJoinCall: jest.fn(),
+        handleDismissCallBanner: jest.fn(),
       });
 
       render(<ConversationHeader {...defaultProps} />);

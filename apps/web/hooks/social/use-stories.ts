@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { storyService } from '@/services/story.service';
 import { useAuthStore } from '@/stores/auth-store';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import type { CreateStoryRequest } from '@/services/story.service';
 
@@ -130,16 +131,23 @@ export function useDeleteStoryMutation() {
 
 export function useRecordStoryViewMutation() {
   const viewedRef = useRef<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: (storyId: string) => storyService.recordView(storyId),
   });
 
   const recordView = useCallback((storyId: string) => {
+    // AVANT la dédup de session : chaque slide affiché consomme ses
+    // notifications (nouvelle story, commentaires, réactions — portée serveur
+    // `context.postId`), y compris celles arrivées après la première vue.
+    // Le « vu » serveur, lui, reste dédupliqué par session, et le marquage
+    // notifications est coalescé par le module (fenêtre 5 s par slide).
+    markScopeNotificationsRead(queryClient, { kind: 'post', postId: storyId });
     if (viewedRef.current.has(storyId)) return;
     viewedRef.current.add(storyId);
     mutation.mutate(storyId);
-  }, [mutation]);
+  }, [mutation, queryClient]);
 
   return { recordView };
 }

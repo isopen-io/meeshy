@@ -322,6 +322,36 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(api.requestCount, initialRequestCount, "Should not load more when hasMore is false")
     }
 
+    /// Regression guard: a session served entirely from a `.fresh` main-feed
+    /// cache hit never touches the network in `loadFeed`, so `nextCursor`
+    /// stays at its initial `nil` while `hasMore` stays at its initial
+    /// `true` — the old `nextCursor != nil` guard permanently stalled
+    /// infinite scroll for the rest of the session. `cursor: nil` is exactly
+    /// how `loadFeed` requests page 1, so dropping that guard clause lets
+    /// the first scroll-triggered call recover a real cursor.
+    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+        let (sut, api, _, _) = makeSUT()
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let seeded = (0..<10).map { Self.makeFeedPost(id: "cached-\($0)", content: "Post \($0)") }
+        try? await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
+
+        await sut.loadFeed() // .fresh cache hit — no network call, nextCursor stays nil
+        XCTAssertEqual(sut.posts.count, 10)
+        XCTAssertTrue(sut.hasMore)
+        let requestCountAfterCacheLoad = api.requestCount
+
+        let morePosts = [Self.makeAPIPost(id: "post-10", content: "Post 10")]
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: morePosts, hasMore: true, nextCursor: "cursor-page2"))
+
+        let triggerPost = sut.posts[5] // index 5 of 10, threshold = 10-5 = 5
+        await sut.loadMoreIfNeeded(currentPost: triggerPost)
+
+        XCTAssertGreaterThan(api.requestCount, requestCountAfterCacheLoad, "Should fetch page 1 with a nil cursor to recover a real nextCursor")
+        XCTAssertTrue(sut.posts.contains(where: { $0.id == "post-10" }))
+
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+    }
+
     /// P3.1 — coalescing regression test.
     ///
     /// Multiple cells near the threshold fire `.onAppear` essentially at the
@@ -389,6 +419,33 @@ final class FeedViewModelTests: XCTestCase {
 
         XCTAssertTrue(sut.posts[0].isLiked)
         XCTAssertEqual(sut.posts[0].likes, 11)
+    }
+
+    /// stores-09 — un post du feed peut aussi vivre sous sa clé cache détail
+    /// (ouvert une fois dans PostDetail) : le like optimiste doit patcher
+    /// TOUTES les clés du store, pas seulement "main-feed" via debouncedCacheSave.
+    func test_likePost_postAlsoCachedUnderDetailKey_patchesBothKeys() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test") } }
+
+        let (sut, api, _, _) = makeSUT()
+        let post = Self.makeAPIPost(id: "like-detail-test", likeCount: 7)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
+        await sut.loadFeed(forceRefresh: true)
+        try? await CacheCoordinator.shared.feed.save([sut.posts[0]], for: "like-detail-test")
+
+        await sut.likePost("like-detail-test")
+
+        var cached: FeedPost?
+        for _ in 0..<50 {
+            let result = await CacheCoordinator.shared.feed.load(for: "like-detail-test")
+            cached = result.snapshot()?.first(where: { $0.id == "like-detail-test" })
+            if cached?.likes == 8 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(cached?.isLiked, true,
+                       "la clé détail doit recevoir le like optimiste via patchEverywhere")
+        XCTAssertEqual(cached?.likes, 8)
     }
 
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
@@ -515,7 +572,12 @@ final class FeedViewModelTests: XCTestCase {
         }
         try? await waitForContinuation(in: queue, for: payload.clientMutationId)
         queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Deterministic wait on the fire-and-forget outcome observer instead of
+        // a fixed sleep (#1869): reacts the instant `posts` is actually
+        // reassigned rather than hoping 50ms was enough on a busy CI runner.
+        await waitForPublishedValue(sut.$posts, timeout: 2.0) { posts in
+            posts.first(where: { $0.id == "p1" })?.isLiked == false
+        }
 
         XCTAssertFalse(sut.posts[0].isLiked, "exhausted outbox row must roll back the optimistic like")
         XCTAssertEqual(sut.posts[0].likes, 5, "like count must revert on exhausted")
@@ -554,7 +616,12 @@ final class FeedViewModelTests: XCTestCase {
         }
         try? await waitForContinuation(in: queue, for: payload.clientMutationId)
         queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Deterministic wait on the fire-and-forget outcome observer instead of
+        // a fixed sleep (#1869): reacts the instant `posts` is actually
+        // reassigned rather than hoping 50ms was enough on a busy CI runner.
+        await waitForPublishedValue(sut.$posts, timeout: 2.0) { posts in
+            posts.first(where: { $0.id == "p1" })?.commentCount == 3
+        }
 
         XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must revert on exhausted")
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on exhausted")
@@ -726,6 +793,28 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.posts[0].isReel)
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         XCTAssertEqual(queue.enqueuePostMediaCalls.first?.type, "REEL")
+    }
+
+    /// Garde de la désynchronisation protocole/implémentation : `location` a été
+    /// ajoutée à l'implémentation concrète d'`enqueuePostMedia` sans être portée
+    /// sur `OfflineQueueing`, ce qui a cassé la conformité (une valeur par défaut
+    /// ne satisfait pas une exigence de protocole en Swift). Aucun test ne
+    /// traversait le protocole avec une position — d'où le silence. Celui-ci
+    /// exerce le chemin complet ViewModel → protocole → file.
+    func test_createOfflineMediaPost_withLocation_propagatesPlaceToOutbox() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris")
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
+            content: "Vue depuis le toit",
+            location: place
+        )
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.first?.location, place,
+            "une position attachée à un média posté hors-ligne doit survivre jusqu'au flush")
     }
 
     func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
@@ -946,10 +1035,45 @@ final class FeedViewModelTests: XCTestCase {
 
         sut.clearTranslationOverride(postId: "t1")
 
-        // Since userLanguage defaults to "en" (no logged in user) and no "en" translation exists,
-        // clearTranslationOverride should set translatedContent to nil
+        // Default preferredLanguages is [] (MockLanguageProvider default), so
+        // resolved(preferredLanguages: []) has no preferred language to match
+        // against — translatedContent falls back to nil (original content).
         XCTAssertNil(sut.posts[0].translatedContent)
         XCTAssertEqual(sut.posts[0].displayContent, "Hello")
+    }
+
+    func test_clearTranslationOverride_secondPreferredLanguageMatches_resolvesFullChain() {
+        // Prisme regression guard: the old implementation only ever consulted
+        // preferredLanguages.first ("de") via an exact dictionary-key lookup,
+        // losing the "fr" translation available further down the chain.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["de", "fr"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
+    }
+
+    func test_clearTranslationOverride_caseMismatchedPreferredLanguage_stillMatchesTranslation() {
+        // Prisme regression guard: the old implementation did an exact-case
+        // dictionary subscript (`translations?["FR"]`), which missed a
+        // lowercase "fr" key entirely.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["FR"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
     }
 
     // MARK: - Socket.IO: subscribeToSocketEvents()
@@ -980,6 +1104,60 @@ final class FeedViewModelTests: XCTestCase {
         sut.subscribeToSocketEvents()
 
         XCTAssertEqual(socket.connectCallCount, 1, "Guard should prevent double subscription")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// stores-02 — quitter le feed émet feed:unsubscribe mais le socket reste
+    /// connecté : au retour, connect() early-return et le handler .connect (le
+    /// seul émetteur de feed:subscribe) ne rejoue jamais — la room feed restait
+    /// quittée, plus aucun événement temps réel jusqu'à la prochaine reconnexion.
+    func test_subscribeToSocketEvents_afterUnsubscribe_reemitsFeedSubscribe() {
+        let (sut, _, socket, _) = makeSUT()
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        sut.subscribeToSocketEvents()
+
+        XCTAssertEqual(socket.subscribeFeedCallCount, 2,
+                       "Returning to the feed after leaving it must re-emit feed:subscribe even though the socket stays connected")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// rts-01 (garde-fou) — le PREMIER armement ne fetch pas : la vue appelle
+    /// déjà loadFeed() dans son .task si posts.isEmpty, un fetch ici serait
+    /// redondant.
+    func test_subscribeToSocketEvents_firstArm_doesNotFetchFeed() async {
+        let (sut, api, _, _) = makeSUT()
+        let before = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(api.requestCount, before, "le premier arm ne déclenche aucun fetch")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// rts-01 — un aller-retour hors du feed SANS coupure réseau : les sinks
+    /// étaient désarmés et la room quittée, tout ce qui s'est passé entre-temps
+    /// est perdu. Le RÉ-armement doit rattraper via un refresh silencieux
+    /// (didReconnect ne couvre que le flap réseau, jamais ce chemin).
+    func test_subscribeToSocketEvents_rearmAfterUnsubscribe_backfillsFeedFromNetwork() async {
+        let (sut, api, _, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p-rearm", content: "Backfilled")]))
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        let requestsBeforeRearm = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await waitForCondition(timeout: 5.0) { sut.posts.count == 1 }
+
+        XCTAssertEqual(api.requestCount, requestsBeforeRearm + 1,
+                       "le ré-armement rattrape le trou par un refresh réseau")
+        XCTAssertEqual(sut.posts.first?.id, "p-rearm")
 
         sut.unsubscribeFromSocketEvents()
     }
@@ -1168,6 +1346,34 @@ final class FeedViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentAdded_mapsEffectFlagsTranslationAndReactions() async {
+        // Regression guard: the handler used to build `FeedComment` with only
+        // id/author/content/likes/replies/parentId — silently dropping
+        // effectFlags (a media/effect comment rendered blank in real time),
+        // the Prisme translation (always shown in its original language),
+        // and currentUserReactions (heart state lost for an already-reacted
+        // comment landing via socket).
+        let (sut, api, socket, _) = makeSUT(preferredLanguages: ["fr"])
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "commented-post", commentCount: 3)]))
+        await sut.loadFeed(forceRefresh: true)
+
+        sut.subscribeToSocketEvents()
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"commented-post","comment":{"id":"c1","content":"Nice!","originalLanguage":"en","translations":{"fr":{"text":"Sympa !"}},"effectFlags":4,"currentUserReactions":["\u{2764}\u{FE0F}"],"createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"bob"}},"commentCount":4}
+        """)
+        socket.commentAdded.send(commentData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let comment = sut.posts[0].comments.first(where: { $0.id == "c1" })
+        XCTAssertEqual(comment?.effectFlags, 4)
+        XCTAssertEqual(comment?.translatedContent, "Sympa !")
+        XCTAssertEqual(comment?.currentUserReactions, ["\u{2764}\u{FE0F}"])
 
         sut.unsubscribeFromSocketEvents()
     }
@@ -1523,6 +1729,169 @@ final class FeedViewModelTests: XCTestCase {
             originalLanguage: nil, translationKeys: ["fr"],
             preferredLanguages: ["fr"], activeLanguage: "zz"
         ).isEmpty)
+    }
+
+
+    // MARK: - cache-03 étape A — le cache main-feed garde les 100 plus RÉCENTS
+
+    func test_debouncedCacheSave_over100AccumulatedPosts_persistsThe100Newest() async throws {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        // Convention : post-1 = le plus RÉCENT, post-140 = le plus ANCIEN
+        // (le tableau posts est newest-first).
+        let seeded = (1...140).map { Self.makeFeedPost(id: "post-\($0)", content: "c\($0)") }
+        let (sut, _, _, _) = makeSUT()
+        sut.posts = seeded
+
+        await sut.likePost("post-1")
+        // Poll au lieu d'un sleep fixe : le save débouncé part à 2 s, une
+        // marge de 0,2 s flake sous simulateur chargé (cache encore vide).
+        //
+        // Poll sur l'ENSEMBLE attendu, pas sur le compte : le store est un
+        // singleton partagé, et le save débouncé d'un test VOISIN (SUT déjà
+        // mort, débounce encore armé) peut atterrir APRÈS notre invalidate.
+        // Dans ce cas on ré-arme NOTRE save pour repasser dernier écrivain —
+        // l'assertion reste celle du comportement (prefix(100) app-side).
+        var cached: [FeedPost] = []
+        let expected = Set((1...100).map { "post-\($0)" })
+        for attempt in 0 ..< 2 {
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline {
+                cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+                if Set(cached.map(\.id)) == expected { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if Set(cached.map(\.id)) == expected { break }
+            await sut.likePost("post-\(attempt + 2)")
+        }
+        XCTAssertEqual(
+            Set(cached.map(\.id)), expected,
+            "GRDBCacheStore.save trimme par suffix (les plus ANCIENS survivent) : sans prefix(100) app-side, kill+relaunch dans la fenêtre fraîche sert la tranche la plus vieille en .fresh — les posts récents disparaissent de l'écran"
+        )
+    }
+
+
+    // MARK: - stores-12 — les sinks muets persistent leur mutation
+
+    /// Poll la clé "main-feed" jusqu'à ce que le save débouncé (2 s) atterrisse.
+    private func waitForCachedMainFeedPost(
+        id: String,
+        timeout: TimeInterval = 6,
+        until predicate: @escaping (FeedPost?) -> Bool
+    ) async -> FeedPost? {
+        var cached: FeedPost?
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot()?
+                .first(where: { $0.id == id })
+            if predicate(cached) { return cached }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return cached
+    }
+
+    func test_socketCommentAdded_persistsCommentCountToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "cc-post", commentCount: 3)]
+        sut.subscribeToSocketEvents()
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"cc-post","comment":{"id":"c1","content":"Nice!","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"bob"}},"commentCount":4}
+        """)
+        socket.commentAdded.send(commentData)
+
+        let cached = await waitForCachedMainFeedPost(id: "cc-post") { $0?.commentCount == 4 }
+        XCTAssertEqual(cached?.commentCount, 4,
+                       "un commentaire socket doit persister le compteur — un kill dans la fenêtre le perdait")
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentDeleted_persistsCommentCountToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "cd-post", commentCount: 5)]
+        sut.subscribeToSocketEvents()
+
+        let deletedData: SocketCommentDeletedData = JSONStub.decode("""
+        {"postId":"cd-post","commentId":"c1","commentCount":4}
+        """)
+        socket.commentDeleted.send(deletedData)
+
+        let cached = await waitForCachedMainFeedPost(id: "cd-post") { $0?.commentCount == 4 }
+        XCTAssertEqual(cached?.commentCount, 4)
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketPostTranslationUpdated_persistsTranslationToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "tr-post", content: "Hello world")]
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"tr-post","language":"fr","translation":{"text":"Bonjour le monde","translationModel":"nllb-200","confidenceScore":0.95,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+
+        let cached = await waitForCachedMainFeedPost(id: "tr-post") { $0?.translations?["fr"] != nil }
+        XCTAssertEqual(cached?.translations?["fr"]?.text, "Bonjour le monde",
+                       "la traduction reçue en temps réel doit survivre au cold start")
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentTranslationUpdated_persistsTranslatedContentToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT(preferredLanguages: ["fr"])
+        var post = Self.makeFeedPost(id: "ctr-post", content: "Hello")
+        post.comments = [FeedComment(id: "c1", author: "bob", authorId: "a1", content: "Nice", replies: 0)]
+        sut.posts = [post]
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketCommentTranslationUpdatedData = JSONStub.decode("""
+        {"commentId":"c1","postId":"ctr-post","language":"fr","translation":{"text":"Sympa !","translationModel":"nllb-200","confidenceScore":0.9,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.commentTranslationUpdated.send(translationData)
+
+        let cached = await waitForCachedMainFeedPost(id: "ctr-post") {
+            $0?.comments.first(where: { $0.id == "c1" })?.translatedContent != nil
+        }
+        XCTAssertEqual(cached?.comments.first(where: { $0.id == "c1" })?.translatedContent, "Sympa !")
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    // MARK: - grdb-03 — reapplyPendingLikes (volet mémoire)
+
+    func test_reapplyPendingLikes_pendingTrue_setsIsLikedAndBumpsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": true])
+
+        XCTAssertTrue(result[0].isLiked, "le like pending doit rester visible par-dessus le snapshot serveur périmé")
+        XCTAssertEqual(result[0].likes, 5)
+    }
+
+    func test_reapplyPendingLikes_pendingFalse_clearsIsLikedAndClampsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = true
+        post.likes = 0
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": false])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 0, "jamais de compteur négatif")
+    }
+
+    func test_reapplyPendingLikes_noPending_identity() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: [:])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 4)
     }
 
 }

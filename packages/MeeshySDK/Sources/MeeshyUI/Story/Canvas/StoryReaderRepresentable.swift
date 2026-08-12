@@ -178,6 +178,16 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onPlaybackTime = { t in playback?(t) }
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
+        // Le canvas naît TOUJOURS en pause, et c'est `updateUIView` — appelé par
+        // SwiftUI dans la foulée — qui lui rend la lecture.
+        //
+        // Se fier au `isPaused` de l'instant de création ne suffit pas : l'hôte
+        // pose souvent son gel APRÈS coup (l'interstitiel d'identité est armé
+        // dans `onAppear`/`onChange`, donc après l'évaluation du body qui a créé
+        // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
+        // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
+        // en pause supprime la course au lieu de tenter de la gagner.
+        view.setPaused(true)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -207,10 +217,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
+        // Le changement de langue ne touche NI l'id NI le `content` du slide
+        // (la légende du post n'a pas forcément de traduction) : sans ce test,
+        // choisir une langue dans le strip du viewer laissait le canvas afficher
+        // les textes dans l'ancienne langue (bug 2026-07-25).
+        let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
         let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
         let identityChanged = newSlide.id != view.slide.id
-        if identityChanged || newSlide.content != view.slide.content {
+        if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
+        }
+        if languagesChanged {
+            view.setPreferredLanguages(preferredLanguages)
         }
         if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :

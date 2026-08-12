@@ -59,6 +59,65 @@ class FeedRealtimeReducerTest {
         assertThat(twice.newPostsCount).isEqualTo(1)
     }
 
+    // --- created (own publish) ---
+
+    @Test
+    fun `created prepends the viewer's own just-published post at the head`() {
+        val next = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        assertThat(next.posts.map { it.id }).containsExactly("mine")
+    }
+
+    @Test
+    fun `created never bumps the new-posts banner — the post is already visible, nothing to acknowledge`() {
+        val next = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        assertThat(next.newPostsCount).isEqualTo(0)
+        assertThat(next.hasNewPosts).isFalse()
+    }
+
+    @Test
+    fun `created stacks above a prior socket arrival, newest first`() {
+        val afterSocket = FeedRealtimeReducer.accept(FeedRealtimeHead(), post("from-socket"), emptySet())
+
+        val next = FeedRealtimeReducer.created(afterSocket, post("mine"))
+
+        assertThat(next.posts.map { it.id }).containsExactly("mine", "from-socket").inOrder()
+        assertThat(next.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `created ignores a post whose id is a blank string`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.created(state, post("   "))
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `created is a defensive no-op when the id is already at the head — the later socket echo of this same publish is inert`() {
+        val once = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        val twice = FeedRealtimeReducer.accept(once, post("mine"), emptySet())
+
+        assertThat(twice).isSameInstanceAs(once)
+        assertThat(twice.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `created releases a tombstone if the id was previously deleted and is now republished`() {
+        val deleted = FeedRealtimeReducer.remove(
+            FeedRealtimeReducer.accept(FeedRealtimeHead(), post("x"), emptySet()),
+            "x",
+        )
+        assertThat(deleted.removedIds).contains("x")
+
+        val next = FeedRealtimeReducer.created(deleted, post("x"))
+
+        assertThat(next.removedIds).doesNotContain("x")
+        assertThat(next.posts.map { it.id }).containsExactly("x")
+    }
+
     // --- acknowledge ---
 
     @Test

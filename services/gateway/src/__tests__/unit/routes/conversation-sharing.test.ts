@@ -106,6 +106,7 @@ function createMockFastify() {
   const authenticate = jest.fn<any>();
   const notificationService = {
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
+    createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createConversationInviteNotification: jest.fn<any>().mockResolvedValue(undefined),
   };
   const mentionService = {
@@ -114,7 +115,16 @@ function createMockFastify() {
   const prismaOnFastify = {
     conversation: { findUnique: jest.fn<any>() },
     user: { findUnique: jest.fn<any>() },
-    participant: { create: jest.fn<any>() },
+    // `findMany` sert la décision d'entrée (`resolveConversationEntry`) : elle
+    // lit TOUTES les lignes de la paire (conversation, utilisateur), y compris
+    // celles qu'un départ ou un bannissement a laissées inactives — que
+    // `conversation.participants`, chargé avec `isActive: true`, ne peut pas
+    // voir. Vide par défaut = primo-arrivant.
+    participant: {
+      create: jest.fn<any>(),
+      update: jest.fn<any>(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
   };
   const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
   const socketIOHandler = {
@@ -725,7 +735,7 @@ describe('POST /conversations/join/:linkId', () => {
   it('returns success when user is already a member', async () => {
     const { prisma, reply, route } = getJoinRoute();
     prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant());
+    prisma.participant.findMany.mockResolvedValue([makeParticipant()]);
     const req = makeRequest({ params: { linkId: LINK_ID } });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({
@@ -814,9 +824,17 @@ describe('POST /conversations/join/:linkId', () => {
     prisma.participant.findMany.mockResolvedValue([adminParticipant]);
     const req = makeRequest({ params: { linkId: LINK_ID } });
     await route.handler(req, reply);
-    expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledTimes(2);
+    // La confirmation au nouvel arrivant reste unitaire (un destinataire, une
+    // notification) ; les administrateurs partagent une seule diffusion, qui ne
+    // bloque plus la réponse « vous avez rejoint » derrière N appels en série.
+    expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledTimes(1);
     expect(fastify.notificationService.createMemberJoinedNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientUserId: adminParticipant.userId })
+      expect.objectContaining({ recipientUserId: USER_ID })
+    );
+    expect(fastify.notificationService.createMemberJoinedNotificationsBatch).toHaveBeenCalledTimes(1);
+    expect(fastify.notificationService.createMemberJoinedNotificationsBatch).toHaveBeenCalledWith(
+      [adminParticipant.userId],
+      { newMemberUserId: USER_ID, conversationId: CONV_ID, joinMethod: 'via_link' }
     );
   });
 
@@ -1036,8 +1054,9 @@ describe('POST /conversations/:id/invite', () => {
   it('returns 400 when user is already a member', async () => {
     const { fastify, reply, route } = getInviteRoute();
     const inviter = makeInviterParticipant('admin');
-    const existingMember = { id: 'existing', userId: INVITEE_ID, role: 'member', user: { id: INVITEE_ID, username: 'bob', role: 'USER' } };
+    const existingMember = { id: 'existing', userId: INVITEE_ID, role: 'member', isActive: true, bannedAt: null, user: { id: INVITEE_ID, username: 'bob', role: 'USER' } };
     fastify.prisma.conversation.findUnique.mockResolvedValue(makeConversation([inviter, existingMember]));
+    fastify.prisma.participant.findMany.mockResolvedValue([existingMember]);
     fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);

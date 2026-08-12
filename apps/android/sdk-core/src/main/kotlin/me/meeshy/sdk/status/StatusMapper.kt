@@ -66,3 +66,12 @@ public fun List<StatusEntry>.orderedForBar(currentUserId: String?): List<StatusE
     val seen = HashSet<String>()
     return ordered.filter { seen.add(it.id) }
 }
+
+/**
+ * The live status entry belonging to [userId], or `null` when they have none —
+ * port of iOS `StatusViewModel.statusForUser(userId:)`. The lookup other
+ * surfaces (Contacts, Discover, Requests rows) use to decorate an avatar with
+ * its owner's current mood emoji.
+ */
+public fun List<StatusEntry>.statusForUser(userId: String): StatusEntry? =
+    firstOrNull { it.userId == userId }

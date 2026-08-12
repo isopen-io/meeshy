@@ -9,8 +9,7 @@ struct DataStorageView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var showClearConfirm = false
-    @State private var isClearing = false
+    @State private var cacheSize: Int = 0
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -23,13 +22,8 @@ struct DataStorageView: View {
                 scrollContent
             }
         }
-        .alert(String(localized: "settings.data.storage.clear.title", defaultValue: "Vider le cache", bundle: .main), isPresented: $showClearConfirm) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
-            Button(String(localized: "settings.data.storage.clear.confirm", defaultValue: "Vider", bundle: .main), role: .destructive) {
-                clearCache()
-            }
-        } message: {
-            Text(String(localized: "settings.data.storage.clear.message", defaultValue: "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire.", bundle: .main))
+        .task {
+            await loadCacheSize()
         }
     }
 
@@ -42,7 +36,7 @@ struct DataStorageView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -73,7 +67,10 @@ struct DataStorageView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 cacheSection
-                actionsSection
+                // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
+                // ses libellés soient servis par le catalogue du module —
+                // `bundle: .module` — plutôt que par celui de l'app.
+                SelectiveCachePurgeView()
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -92,9 +89,17 @@ struct DataStorageView: View {
                     fieldIcon("folder.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                        HStack(spacing: 8) {
+                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
+                                .font(MeeshyFont.relative(14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+
+                            Spacer()
+
+                            Text(formatCacheSize(cacheSize))
+                                .font(MeeshyFont.relative(14, weight: .semibold))
+                                .foregroundColor(Color(hex: accentColor))
+                        }
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
                             .font(MeeshyFont.relative(12, weight: .regular))
@@ -105,7 +110,7 @@ struct DataStorageView: View {
                 .padding(.vertical, 10)
                 .accessibilityElement(children: .combine)
 
-                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.", bundle: .main))
+                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
@@ -116,53 +121,18 @@ struct DataStorageView: View {
         }
     }
 
-    // MARK: - Actions Section
-
-    private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: MeeshyColors.neutral500Hex)
-
-            Button {
-                HapticFeedback.medium()
-                showClearConfirm = true
-            } label: {
-                HStack(spacing: 12) {
-                    fieldIcon("trash.fill", color: MeeshyColors.errorHex)
-
-                    Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
-
-                    Spacer()
-
-                    if isClearing {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            }
-            .disabled(isClearing)
-            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
-            .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache media", bundle: .main))
-            .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les medias mis en cache localement", bundle: .main))
-        }
-    }
-
     // MARK: - Actions
 
-    private func clearCache() {
-        isClearing = true
-        Task {
-            await CacheCoordinator.shared.images.clearAll()
-            await CacheCoordinator.shared.audio.clearAll()
-            await CacheCoordinator.shared.video.clearAll()
-            await CacheCoordinator.shared.thumbnails.clearAll()
-            HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
-            isClearing = false
-        }
+    private func loadCacheSize() async {
+        let imageSize = await CacheCoordinator.shared.images.estimatedDiskBytes()
+        let audioSize = await CacheCoordinator.shared.audio.estimatedDiskBytes()
+        let videoSize = await CacheCoordinator.shared.video.estimatedDiskBytes()
+        let thumbnailSize = await CacheCoordinator.shared.thumbnails.estimatedDiskBytes()
+        cacheSize = imageSize + audioSize + videoSize + thumbnailSize
+    }
+
+    private func formatCacheSize(_ bytes: Int) -> String {
+        AudioPlayerView.formatBytes(Int64(bytes))
     }
 
     // MARK: - Helpers
