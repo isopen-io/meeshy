@@ -281,8 +281,22 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
 
-      - name: Setup Python via uv
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Setup Python via uv (with retry)
+        run: |
+          # Le téléchargement de CPython (python-build-standalone, hébergé sur
+          # GitHub Releases) échoue par intermittence sur des erreurs de
+          # transport — « http2 error: refused stream » observé le 2026-08-12.
+          # Même motif que « Install dependencies (bun with retry) », mais on
+          # sort en échec après la 3e tentative : une boucle qui se termine
+          # sans `exit 1` rendrait la panne invisible et ferait tomber les
+          # étapes suivantes sur une erreur sans rapport.
+          for i in 1 2 3; do
+            uv python install ${{ env.PYTHON_VERSION }} && exit 0
+            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
+            sleep 10
+          done
+          echo "::error::uv python install a échoué après 3 tentatives."
+          exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -386,8 +400,22 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
 
-      - name: Setup Python via uv
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Setup Python via uv (with retry)
+        run: |
+          # Le téléchargement de CPython (python-build-standalone, hébergé sur
+          # GitHub Releases) échoue par intermittence sur des erreurs de
+          # transport — « http2 error: refused stream » observé le 2026-08-12.
+          # Même motif que « Install dependencies (bun with retry) », mais on
+          # sort en échec après la 3e tentative : une boucle qui se termine
+          # sans `exit 1` rendrait la panne invisible et ferait tomber les
+          # étapes suivantes sur une erreur sans rapport.
+          for i in 1 2 3; do
+            uv python install ${{ env.PYTHON_VERSION }} && exit 0
+            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
+            sleep 10
+          done
+          echo "::error::uv python install a échoué après 3 tentatives."
+          exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -503,8 +531,22 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
 
-      - name: Setup Python via uv
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Setup Python via uv (with retry)
+        run: |
+          # Le téléchargement de CPython (python-build-standalone, hébergé sur
+          # GitHub Releases) échoue par intermittence sur des erreurs de
+          # transport — « http2 error: refused stream » observé le 2026-08-12.
+          # Même motif que « Install dependencies (bun with retry) », mais on
+          # sort en échec après la 3e tentative : une boucle qui se termine
+          # sans `exit 1` rendrait la panne invisible et ferait tomber les
+          # étapes suivantes sur une erreur sans rapport.
+          for i in 1 2 3; do
+            uv python install ${{ env.PYTHON_VERSION }} && exit 0
+            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
+            sleep 10
+          done
+          echo "::error::uv python install a échoué après 3 tentatives."
+          exit 1
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -616,8 +658,22 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "services/translator/uv.lock"
 
-      - name: Setup Python via uv
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Setup Python via uv (with retry)
+        run: |
+          # Le téléchargement de CPython (python-build-standalone, hébergé sur
+          # GitHub Releases) échoue par intermittence sur des erreurs de
+          # transport — « http2 error: refused stream » observé le 2026-08-12.
+          # Même motif que « Install dependencies (bun with retry) », mais on
+          # sort en échec après la 3e tentative : une boucle qui se termine
+          # sans `exit 1` rendrait la panne invisible et ferait tomber les
+          # étapes suivantes sur une erreur sans rapport.
+          for i in 1 2 3; do
+            uv python install ${{ env.PYTHON_VERSION }} && exit 0
+            echo "Tentative $i échouée, nouvelle tentative dans 10 s..."
+            sleep 10
+          done
+          echo "::error::uv python install a échoué après 3 tentatives."
+          exit 1
 
       - name: Install Node.js dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
