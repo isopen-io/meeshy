@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon monochrome layer (Android 13+ themed icons / Material You).
+  Same glyph geometry as ic_launcher_foreground.xml — the system reads only
+  this drawable's alpha channel and applies its own single-colour tint, so the
+  fill colour itself is inert; kept identical to the foreground for clarity.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,38.984 L76.412,38.984 A3.541,3.541 0 0 1 76.412,46.066 L31.588,46.066 A3.541,3.541 0 0 1 31.588,38.984 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,50.459 L67.447,50.459 A3.541,3.541 0 0 1 67.447,57.541 L31.588,57.541 A3.541,3.541 0 0 1 31.588,50.459 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.588,61.934 L58.483,61.934 A3.541,3.541 0 0 1 58.483,69.016 L31.588,69.016 A3.541,3.541 0 0 1 31.588,61.934 Z" />
+</vector>

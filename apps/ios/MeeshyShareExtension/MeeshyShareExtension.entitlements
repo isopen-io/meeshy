@@ -5,6 +5,21 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.me.meeshy.apps</string>
+		<string>group.app.meeshy.me</string>
+		<string>group.apps.me.meeshy</string>
+	</array>
+	<!-- Requis pour lire le JWT écrit par AuthManager (compte
+	     `meeshy_token_<userId>`, service `me.meeshy.app`). Sans ce groupe, le
+	     process d'extension retombe sur SON propre groupe de bundle et
+	     SecItemCopyMatching renvoie errSecItemNotFound en silence : l'extension
+	     paraîtrait « jamais connectée » alors que la session est valide. Même
+	     déclaration que MeeshyNotificationExtension.
+
+	     Impose d'activer la capability Keychain Sharing sur l'App ID
+	     me.meeshy.app.share-extension (équipe QA8KGP7U96) au portail Apple. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)me.meeshy.app</string>
 	</array>
 </dict>
 </plist>

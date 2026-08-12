@@ -37,6 +37,19 @@ public struct StoryReaderContext: Sendable {
     }
 
     public static let empty = StoryReaderContext()
+
+    /// Copie avec une nouvelle chaine de langues, tous les autres réglages
+    /// conservés. L'exploration de langue en cours de lecture ne dispose que de
+    /// la chaine : reconstruire un contexte complet lui imposerait de recréer
+    /// les resolvers média posés à la construction du canvas.
+    public func withPreferredLanguages(_ languages: [String]) -> StoryReaderContext {
+        StoryReaderContext(preferredLanguages: languages,
+                           mute: mute,
+                           onCompletion: onCompletion,
+                           postMediaURLResolver: postMediaURLResolver,
+                           imageCache: imageCache,
+                           localAudioURLResolver: localAudioURLResolver)
+    }
 }
 
 /// Lightweight protocol decoupling the reader from the concrete cache type.

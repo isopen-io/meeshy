@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="profile_title">Profil</string>
+    <string name="profile_view_posts">Publications</string>
     <string name="profile_edit_title">Modifier le profil</string>
     <string name="profile_back">Retour</string>
     <string name="profile_edit">Modifier</string>

@@ -1,6 +1,35 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Localized Labels
+
+/// Localized titles for `VideoEditorTool`/`VideoEditorToolCategory` — lives
+/// here (MeeshyUI) and not on the enums themselves (MeeshySDK core,
+/// `nonisolated`, no resource bundle). Same pattern as
+/// `OpeningEffectChips.title(for:)`.
+enum VideoEditorLabels {
+    static func title(for category: VideoEditorToolCategory) -> String {
+        switch category {
+        case .edit:  return String(localized: "videoEditor.category.edit", defaultValue: "Découpe", bundle: .module)
+        case .style: return String(localized: "videoEditor.category.style", defaultValue: "Habillage", bundle: .module)
+        }
+    }
+
+    static func title(for tool: VideoEditorTool) -> String {
+        switch tool {
+        case .trim:     return String(localized: "videoEditor.tool.trim", defaultValue: "Rogner", bundle: .module)
+        case .split:    return String(localized: "videoEditor.tool.split", defaultValue: "Diviser", bundle: .module)
+        case .speed:    return String(localized: "videoEditor.tool.speed", defaultValue: "Vitesse", bundle: .module)
+        case .crop:     return String(localized: "videoEditor.tool.crop", defaultValue: "Cadrer", bundle: .module)
+        case .rotate:   return String(localized: "videoEditor.tool.rotate", defaultValue: "Pivoter", bundle: .module)
+        case .filter:   return String(localized: "videoEditor.tool.filter", defaultValue: "Filtres", bundle: .module)
+        case .adjust:   return String(localized: "videoEditor.tool.adjust", defaultValue: "Couleur", bundle: .module)
+        case .audio:    return String(localized: "videoEditor.tool.audio", defaultValue: "Audio", bundle: .module)
+        case .captions: return String(localized: "videoEditor.tool.captions", defaultValue: "Sous-titres", bundle: .module)
+        }
+    }
+}
+
 // MARK: - Band Container
 
 /// Bottom band that hosts either the tool tile grid or an active tool's
@@ -89,7 +118,7 @@ struct VideoEditorTileGrid: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(accent)
                 }
-                Text(tool.title)
+                Text(VideoEditorLabels.title(for: tool))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
@@ -121,9 +150,9 @@ struct VideoEditorToolHeader: View {
                 viewModel.backToTiles()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(.system(size: 12, weight: .bold))
-                    Text(tool.title)
+                    Text(VideoEditorLabels.title(for: tool))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(theme.textPrimary)
@@ -307,7 +336,7 @@ struct TrimController: View {
             }
 
             if !viewModel.mode.isPro {
-                Text("Astuce : poignées disponibles sur la timeline principale.")
+                Text(String(localized: "videoEditor.trim.handles_hint", defaultValue: "Astuce : poignées disponibles sur la timeline principale.", bundle: .module))
                     .font(.system(size: 10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -390,7 +419,7 @@ struct TrimController: View {
                 .foregroundStyle(theme.textPrimary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Réinitialiser")
+        .accessibilityLabel(String(localized: "media.editor.reset", defaultValue: "Réinitialiser", bundle: .module))
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -414,7 +443,7 @@ struct SplitController: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "scissors")
-                    Text("Diviser au point de lecture")
+                    Text(String(localized: "videoEditor.split.at_playhead", defaultValue: "Diviser au point de lecture", bundle: .module))
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
@@ -436,7 +465,7 @@ struct SplitController: View {
                     }
                 }
             } else {
-                Text("Placez la tête de lecture puis divisez la vidéo en segments.")
+                Text(String(localized: "videoEditor.split.instructions", defaultValue: "Placez la tête de lecture puis divisez la vidéo en segments.", bundle: .module))
                     .font(.system(size: 11))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity)
@@ -449,7 +478,7 @@ struct SplitController: View {
         let isSelected = viewModel.selectedSegmentID == segment.id
         let count = viewModel.document.segments.count
         return VStack(spacing: 5) {
-            Text("Segment \(index + 1)")
+            Text(String(localized: "videoEditor.split.segment", defaultValue: "Segment \(index + 1)", bundle: .module))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
@@ -588,7 +617,7 @@ struct CropController: View {
                 .padding(.vertical, 2)
             }
             if let recommended = viewModel.context.preferredCropRatio {
-                Text("Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)")
+                Text(String(localized: "videoEditor.captions.recommended", defaultValue: "Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)", bundle: .module))
                     .font(.system(size: 10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -635,7 +664,7 @@ struct RotateController: View {
                 Text("\(viewModel.document.rotationQuarterTurns * 90)°")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
-                Text("Rotation")
+                Text(String(localized: "videoEditor.rotation", defaultValue: "Rotation", bundle: .module))
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
             }
@@ -826,7 +855,7 @@ struct AudioController: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Son")
+                Text(String(localized: "videoEditor.audio.sound", defaultValue: "Son", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()

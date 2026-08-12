@@ -6,6 +6,7 @@
     <string name="bubble_starred">Salva</string>
     <string name="bubble_translated">Traduzido</string>
     <string name="bubble_status_pending">Pendente</string>
+    <string name="bubble_status_queued">Na fila</string>
     <string name="bubble_status_sent">Enviada</string>
     <string name="bubble_status_delivered">Entregue</string>
     <string name="bubble_status_read">Lida</string>
@@ -51,6 +52,7 @@
     <string name="emoji_category_hearts">Corações</string>
     <string name="emoji_category_animals">Animais</string>
     <string name="emoji_category_objects">Objetos</string>
+    <string name="language_strip_select">Ler em %1$s</string>
     <string name="time_relative_now">agora</string>
     <string name="time_relative_seconds">%1$d s</string>
     <string name="time_relative_minutes">%1$d min</string>

@@ -12,11 +12,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -31,6 +37,14 @@ data class FeedUiState(
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
     val newPostsCount: Int = 0,
+    /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
+    val currentUserId: String? = null,
+    /**
+     * The fullscreen media gallery currently open (a tap on a post's image tile),
+     * or `null` when the lightbox is dismissed. Ephemeral view state kept in the
+     * flow so a background re-emit never tears the open viewer down.
+     */
+    val imageViewer: FeedGallery? = null,
 )
 
 @HiltViewModel
@@ -39,6 +53,8 @@ class FeedViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val feedMediaUploader: FeedMediaUploader,
+    private val reportRepository: ReportRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -88,20 +104,25 @@ class FeedViewModel @Inject constructor(
                     // like overlays the cache has caught up to; the display work below already
                     // keeps buffered posts from double-rendering.
                     val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
-                    val reconciled = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+                    val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+                    val reconciled = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
                     // Tombstoned posts (live `post:deleted`) are hidden from both the head and
                     // the cache-projected list until a refresh drops them from the cache. Live
-                    // like overlays (`post:liked`/`post:unliked`) override the cache count/own-state.
+                    // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
+                    // (`post:bookmarked`) override the cache count/own-state.
                     val removed = reconciled.removedIds
                     val likes = reconciled.likes
+                    val bookmarks = reconciled.bookmarks
                     val visibleCache = cachePosts
                         .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
                         .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
                     val visibleRealtime = reconciled.posts
                         .filterNot { it.id in cacheIds || it.id in removed }
                         .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -137,6 +158,13 @@ class FeedViewModel @Inject constructor(
             socialSocket.postUnliked.collect { payload ->
                 val mine = if (payload.userId == currentUserId()) false else null
                 realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postBookmarked.collect { payload ->
+                realtimeHead.update {
+                    FeedRealtimeReducer.bookmark(it, payload.postId, payload.bookmarkCount, payload.bookmarked)
+                }
             }
         }
     }
@@ -181,6 +209,23 @@ class FeedViewModel @Inject constructor(
             is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
             LanguageFlagTapResolver.Result.None -> Unit
         }
+    }
+
+    /**
+     * Open the fullscreen media gallery on the image at [imageIndex] of the post
+     * [postId]. Resolves against the projected posts (the URLs already carry the
+     * media base), so an unknown post id — or one with no image — is inert: the
+     * gallery only opens when there is something to show.
+     */
+    fun openImageViewer(postId: String, imageIndex: Int) {
+        val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
+        val gallery = FeedMediaGallery.of(post, imageIndex)
+        _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
+    }
+
+    /** Dismiss the fullscreen media gallery. */
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
     }
 
     /**
@@ -235,6 +280,127 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Repost simple (pas de quote) puis refresh : le repost cree un POST nouveau
+     * cote serveur, que seul un re-fetch peut faire apparaitre en tete de flux.
+     */
+    fun repost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.repost(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /** Suppression confirmee cote UI ; le refresh retire le post du flux. */
+    fun deletePost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.delete(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /** Signale [postId] pour [reason] — best effort, echec silencieux (parite report user). */
+    fun reportPost(postId: String, reason: ReportReason) {
+        viewModelScope.launch {
+            reportRepository.reportPost(postId, reason, details = null)
+        }
+    }
+
+    /** Comptabilise un partage cote serveur — l'intent systeme part sans attendre. */
+    fun recordShare(postId: String) {
+        viewModelScope.launch {
+            postRepository.share(postId)
+        }
+    }
+
+    fun toggleBookmark(postId: String) {
+        viewModelScope.launch {
+            try {
+                postRepository.toggleBookmark(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Publish a post: the pure [FeedComposerDraft]/[FeedPostPublishRequest] already
+     * validated [content]/[visibility]/[mediaIds] before calling this (the publish gate
+     * is that draft's SSOT, not re-checked here — mirror of
+     * [StatusesViewModel.setStatus] trusting its own [StatusPublishRequest]). Port of
+     * iOS `FeedViewModel.createPost`'s direct (non-durable) path: confirmed by the
+     * network before the post is shown, so there is nothing to roll back on failure. A
+     * blank [content] (a media-only post) is sent as `null`, never an empty string, so
+     * a stricter gateway validation on the text field is never exercised for a post
+     * that carries only media. A successful create is prepended to the realtime head
+     * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
+     * the "new posts" banner. [type] carries the reel-classification decision the pure
+     * [FeedComposerDraft.postType] already resolved (`ReelComposition.defaultType`) —
+     * defaulted to [PostType.POST] so any other call site is unaffected. [location]
+     * carries the optional device-captured [me.meeshy.sdk.model.SharedPlace] attachment
+     * the composer's location tile resolved — forwarded to the gateway verbatim,
+     * `null` when no location was attached (the common case, unaffected). [language]
+     * carries the composer's source-language choice ([me.meeshy.sdk.model.ComposerLanguage],
+     * mirrors iOS's `composerLanguage`) — forwarded to the gateway's `originalLanguage`
+     * field verbatim, `null` when the caller doesn't supply one (every other existing
+     * call site is unaffected; the real composer always supplies one, see
+     * `FeedComposerDraft.language`). **Deliberate, documented scope cuts**: no
+     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
+     * post typed while offline is lost rather than durably queued; a tracked follow-up
+     * once Android's `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file and
+     * audio attachments remain separately-scoped follow-ups to this photo/video
+     * sub-slice.
+     */
+    fun publishPost(
+        content: String,
+        visibility: String,
+        mediaIds: List<String> = emptyList(),
+        type: String = PostType.POST.name,
+        location: SharedPlace? = null,
+        language: String? = null,
+    ) {
+        viewModelScope.launch {
+            try {
+                val result = postRepository.create(
+                    content = content.ifBlank { null },
+                    type = type,
+                    visibility = visibility,
+                    mediaIds = mediaIds.ifEmpty { null },
+                    location = location,
+                    originalLanguage = language,
+                )
+                when (result) {
+                    is NetworkResult.Success ->
+                        realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
+                    is NetworkResult.Failure ->
+                        _state.update { it.copy(errorMessage = result.error.message) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Uploads freshly-picked composer media as `post`-context TUS attachments — the
+     * network half of the photo/video fast-follow to the text-only Feed composer,
+     * consuming the TUS foundation the story-media fix built (never the legacy
+     * `MessageAttachment`-producing path). A plain suspend delegate (no `_state`
+     * mutation): the composer sheet owns its own upload-in-flight UI state via
+     * `remember`, mirroring the story composer's split between network call and
+     * caller-owned progress state, just without a ViewModel of its own for the sheet.
+     */
+    suspend fun uploadMedia(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> =
+        feedMediaUploader.upload(items)
+
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
     }
@@ -266,6 +432,23 @@ private fun List<ApiPost>.withLikeOverlays(likes: Map<String, LikeOverlay>): Lis
     }
 }
 
+/**
+ * Overlay each post's live bookmark state (absolute count + viewer-own flip) when a
+ * `post:bookmarked` overlay targets it. An absent overlay leaves the post untouched.
+ * Because the event is personal, both the count and `isBookmarkedByMe` are authoritative.
+ * Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withBookmarkOverlays(bookmarks: Map<String, BookmarkOverlay>): List<ApiPost> {
+    if (bookmarks.isEmpty()) return this
+    return map { post ->
+        val overlay = bookmarks[post.id] ?: return@map post
+        post.copy(
+            bookmarkCount = overlay.count,
+            isBookmarkedByMe = overlay.mine,
+        )
+    }
+}
+
 /** The posts a cache result carries, or null when it holds none (keep the prior list). */
 private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (this) {
     is CacheResult.Fresh -> value
@@ -273,15 +456,6 @@ private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (thi
     is CacheResult.Syncing -> value
     CacheResult.Empty -> emptyList()
 }
-
-private fun Map<String, ApiPostTranslationEntry>?.toTranslationRows():
-    List<LanguageResolver.TranslationLike> =
-    this?.map { (code, entry) -> PostTranslationRow(code, entry.text) }.orEmpty()
-
-private data class PostTranslationRow(
-    override val targetLanguage: String,
-    override val translatedContent: String,
-) : LanguageResolver.TranslationLike
 
 private fun List<ApiPost>.toPresentations(
     preferences: LanguageResolver.ContentLanguagePreferences,
@@ -324,11 +498,6 @@ private fun FeedUiState.project(
         showSkeleton = showSkeleton,
         errorMessage = clearedError,
         newPostsCount = newPostsCount,
+        currentUserId = user?.id,
     )
-}
-
-private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
-    override val systemLanguage: String? = null
-    override val regionalLanguage: String? = null
-    override val customDestinationLanguage: String? = null
 }

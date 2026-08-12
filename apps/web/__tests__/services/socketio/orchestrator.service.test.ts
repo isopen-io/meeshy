@@ -938,6 +938,29 @@ describe('SocketIOOrchestrator', () => {
 
       expect(mockConnInitializeConnection).not.toHaveBeenCalled();
     });
+
+    it('cancels a still-pending auth retry before arming a new one — two rapid calls do not double-fire initializeConnection', () => {
+      // setCurrentUser() used to arm its 3-attempt/200ms retry interval into a
+      // local variable, never stored on `this`. Two calls in quick succession
+      // (e.g. a user object updated twice before either has a token yet) each
+      // armed their OWN interval on the same 200ms cadence; once a token
+      // appeared, both intervals' next tick saw it and both independently
+      // called initializeConnection() — once per stray interval instead of
+      // once overall.
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socket = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socket);
+      mockAuthGetAuthToken.mockReturnValue(null);
+      mockAuthGetAnonymousSession.mockReturnValue(null);
+
+      orchestrator.setCurrentUser(makeUser({ id: 'user-a' }));
+      orchestrator.setCurrentUser(makeUser({ id: 'user-b' }));
+
+      mockAuthGetAuthToken.mockReturnValue('new-token');
+      jest.advanceTimersByTime(200);
+
+      expect(mockConnInitializeConnection).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ─── ensureConnection ──────────────────────────────────────────────────────
@@ -1753,6 +1776,27 @@ describe('SocketIOOrchestrator', () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
 
       expect(() => orchestrator.cleanup()).not.toThrow();
+    });
+
+    it('cancels a pending auth retry interval — a logout mid-retry must not resurrect the connection', () => {
+      // setCurrentUser()'s auth-retry interval was never tracked on `this`,
+      // so cleanup() (called on logout) had no handle to cancel it. A user
+      // signing out while a retry was still armed (e.g. app loaded before
+      // the token was persisted) could still see initializeConnection()
+      // fire after cleanup, once a token happened to appear within the
+      // remaining retry window — reconnecting a socket the logout was
+      // supposed to have torn down.
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockAuthGetAuthToken.mockReturnValue(null);
+      mockAuthGetAnonymousSession.mockReturnValue(null);
+
+      orchestrator.setCurrentUser(makeUser());
+      orchestrator.cleanup();
+
+      mockAuthGetAuthToken.mockReturnValue('late-token');
+      jest.advanceTimersByTime(600); // past all 3 retry attempts
+
+      expect(mockConnInitializeConnection).not.toHaveBeenCalled();
     });
   });
 

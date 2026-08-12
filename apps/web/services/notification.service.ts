@@ -239,6 +239,32 @@ export const NotificationService = {
   },
 
   /**
+   * Marque toutes les notifications d'une conversation comme lues
+   * (contenu consommé à l'ouverture de la conversation).
+   */
+  async markConversationRead(conversationId: string): Promise<ApiResponse<{ count: number }>> {
+    return withRetry(async () => {
+      return apiService.post<{ success: boolean; count: number }>(
+        `/notifications/conversation/${conversationId}/read`
+      );
+    });
+  },
+
+  /**
+   * Marque toutes les notifications d'un post (story, réel, statut, post feed)
+   * comme lues — commentaires et réactions du post inclus (portée serveur
+   * `context.postId`). Contrairement à POST /posts/:id/view (borné à la
+   * première vue), cette route couvre les notifications arrivées après coup.
+   */
+  async markPostRead(postId: string): Promise<ApiResponse<{ count: number }>> {
+    return withRetry(async () => {
+      return apiService.post<{ success: boolean; count: number }>(
+        `/notifications/post/${postId}/read`
+      );
+    });
+  },
+
+  /**
    * Supprime une notification
    */
   async deleteNotification(notificationId: string): Promise<ApiResponse<void>> {

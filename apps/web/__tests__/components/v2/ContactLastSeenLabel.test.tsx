@@ -24,7 +24,7 @@ describe('ContactLastSeenLabel', () => {
       />
     );
 
-    expect(screen.getByText('status.minutesAgo:{"count":2}')).toBeInTheDocument();
+    expect(screen.getByText('status.lastSeenMinutes:{"count":2}')).toBeInTheDocument();
   });
 
   it('recomputes the label when the user status tick fires', () => {
@@ -40,7 +40,7 @@ describe('ContactLastSeenLabel', () => {
       useUserStore.getState().triggerStatusTick();
     });
 
-    expect(screen.getByText('status.minutesAgo:{"count":7}')).toBeInTheDocument();
+    expect(screen.getByText('status.lastSeenMinutes:{"count":7}')).toBeInTheDocument();
   });
 
   it('renders nothing without lastActiveAt', () => {

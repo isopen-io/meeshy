@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
 import jwt from 'jsonwebtoken';
 
@@ -57,6 +58,7 @@ describe('AuthHandler', () => {
     mockPrisma = createMockPrisma();
     mockStatusService = {
       updateLastSeen: jest.fn(),
+      noteHeartbeat: jest.fn(),
       markConnected: jest.fn(),
       markDisconnected: jest.fn()
     } as unknown as StatusService;
@@ -416,19 +418,196 @@ describe('AuthHandler', () => {
         })
       );
       expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
+      // CALL-RESILIENCE (Vague 43) — mirrors CallEventsHandler.leaveParticipationAndBroadcast's
+      // Vague 42 fix: an anonymous participant's disconnect here is always an
+      // involuntary socket drop, never a deliberate call:leave/call:end, so
+      // leaveCall must stamp connectionLost rather than defaulting to completed.
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-1',
         userId: 'anon-123',
-        participantId: 'participant-a'
+        participantId: 'participant-a',
+        endReasonHint: CallEndReason.connectionLost
       });
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-2',
         userId: 'anon-123',
-        participantId: 'participant-b'
+        participantId: 'participant-b',
+        endReasonHint: CallEndReason.connectionLost
       });
       // Maps cleaned despite leaving calls
       expect(connectedUsers.has('anon-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
+    it('broadcasts the participant-left result via the injected callback for an anonymous participant auto-leave (Vague 44)', async () => {
+      // CALL-RESILIENCE (Vague 43) fixed the endReason stamping for this path
+      // but never broadcast anything — the other party's UI stayed "in call"
+      // until CallCleanupService's ~120s GC. This callback is the fix.
+      const participationA = { callSessionId: 'call-1', participantId: 'participant-a' };
+      const participationB = { callSessionId: 'call-2', participantId: 'participant-b' };
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        participationA,
+        participationB
+      ]);
+
+      const leftSessionA = { id: 'call-1', status: 'ended', duration: 42, endReason: CallEndReason.connectionLost, conversationId: 'conv-1' };
+      const leftSessionB = { id: 'call-2', status: 'missed', duration: 0, endReason: CallEndReason.connectionLost, conversationId: 'conv-2' };
+      mockCallService.leaveCall
+        .mockResolvedValueOnce(leftSessionA)
+        .mockResolvedValueOnce(leftSessionB);
+
+      const mockBroadcastCallParticipantLeft = jest.fn().mockResolvedValue(undefined);
+      const handler = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        broadcastCallParticipantLeft: mockBroadcastCallParticipantLeft
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await handler.handleDisconnection(createMockSocket());
+
+      expect(mockBroadcastCallParticipantLeft).toHaveBeenCalledTimes(2);
+      expect(mockBroadcastCallParticipantLeft).toHaveBeenCalledWith({
+        leftSession: leftSessionA,
+        participation: participationA,
+        userId: 'anon-123'
+      });
+      expect(mockBroadcastCallParticipantLeft).toHaveBeenCalledWith({
+        leftSession: leftSessionB,
+        participation: participationB,
+        userId: 'anon-123'
+      });
+    });
+
+    it('force-cleans the participation via the injected callback when leaveCall throws, and still processes the next one', async () => {
+      // The registered-user path (CallEventsHandler.leaveParticipationAndBroadcast)
+      // force-ends the session when leaveCall rejects; this anonymous path only
+      // logged, so a guest whose leaveCall hit a DB error stayed a zombie
+      // participant until CallCleanupService's ~120s GC.
+      const participationA = { callSessionId: 'call-1', participantId: 'participant-a' };
+      const participationB = { callSessionId: 'call-2', participantId: 'participant-b' };
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        participationA,
+        participationB
+      ]);
+
+      const leaveError = new Error('transient write failure');
+      const leftSessionB = { id: 'call-2', status: 'ended', duration: 7, endReason: CallEndReason.connectionLost, conversationId: 'conv-2' };
+      mockCallService.leaveCall
+        .mockRejectedValueOnce(leaveError)
+        .mockResolvedValueOnce(leftSessionB);
+
+      const mockBroadcastCallParticipantLeft = jest.fn().mockResolvedValue(undefined);
+      const mockForceCleanupCallParticipant = jest.fn().mockResolvedValue(undefined);
+      const handler = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        broadcastCallParticipantLeft: mockBroadcastCallParticipantLeft,
+        forceCleanupCallParticipant: mockForceCleanupCallParticipant
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await handler.handleDisconnection(createMockSocket());
+
+      expect(mockForceCleanupCallParticipant).toHaveBeenCalledTimes(1);
+      expect(mockForceCleanupCallParticipant).toHaveBeenCalledWith({
+        participation: participationA,
+        userId: 'anon-123',
+        leaveError
+      });
+      // The failing participation must not abort the loop: call-2 still leaves
+      // and still broadcasts.
+      expect(mockBroadcastCallParticipantLeft).toHaveBeenCalledTimes(1);
+      expect(mockBroadcastCallParticipantLeft).toHaveBeenCalledWith({
+        leftSession: leftSessionB,
+        participation: participationB,
+        userId: 'anon-123'
+      });
+      expect(connectedUsers.has('anon-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
+    it('swallows a failing forceCleanupCallParticipant so the remaining participations still process', async () => {
+      const participationA = { callSessionId: 'call-1', participantId: 'participant-a' };
+      const participationB = { callSessionId: 'call-2', participantId: 'participant-b' };
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        participationA,
+        participationB
+      ]);
+      mockCallService.leaveCall
+        .mockRejectedValueOnce(new Error('transient write failure'))
+        .mockResolvedValueOnce({ id: 'call-2', status: 'ended', duration: 7, endReason: CallEndReason.connectionLost, conversationId: 'conv-2' });
+
+      const handler = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        forceCleanupCallParticipant: jest.fn().mockRejectedValue(new Error('force cleanup also failed'))
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await expect(handler.handleDisconnection(createMockSocket())).resolves.not.toThrow();
+      expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
+      expect(connectedUsers.has('anon-123')).toBe(false);
+    });
+
+    it('does not throw when broadcastCallParticipantLeft is not injected (unchanged pre-Vague-44 behavior)', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-1', participantId: 'participant-a' }
+      ]);
+      mockCallService.leaveCall.mockResolvedValue({
+        id: 'call-1', status: 'ended', duration: 5, endReason: CallEndReason.connectionLost, conversationId: 'conv-1'
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await expect(authHandler.handleDisconnection(createMockSocket())).resolves.not.toThrow();
+      expect(mockCallService.leaveCall).toHaveBeenCalledTimes(1);
     });
 
     it('should not call leaveCall when there are no active call participations', async () => {
@@ -969,7 +1148,7 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(mockSocket);
 
-      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -979,10 +1158,10 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
     });
 
-    it('should update lastSeen and DB lastActiveAt for registered user', async () => {
+    it('should refresh presence via the throttled heartbeat path for a registered user (no per-beat DB write)', async () => {
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {
         id: 'user-123',
@@ -993,16 +1172,11 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'user-123' },
-          data: { lastActiveAt: expect.any(Date) }
-        })
-      );
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('should update lastSeen but skip DB update for anonymous user', async () => {
+    it('should pass the anonymous flag through to noteHeartbeat', async () => {
       socketToUser.set('socket-123', 'anon-123');
       connectedUsers.set('anon-123', {
         id: 'anon-123',
@@ -1013,11 +1187,11 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('anon-123', true);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('anon-123', true);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('should not throw when prisma.user.update fails (best-effort)', async () => {
+    it('should not throw when noteHeartbeat throws (best-effort)', async () => {
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {
         id: 'user-123',
@@ -1025,10 +1199,12 @@ describe('AuthHandler', () => {
         isAnonymous: false,
         language: 'en'
       });
-      (mockPrisma.user.update as jest.Mock).mockRejectedValue(new Error('DB timeout'));
+      (mockStatusService.noteHeartbeat as jest.Mock).mockImplementation(() => {
+        throw new Error('DB timeout');
+      });
 
       await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
     });
 
     it('should emit heartbeat:ack immediately with serverTime', async () => {
@@ -1088,6 +1264,58 @@ describe('AuthHandler', () => {
       );
       expect(emitCall).toBeDefined();
       expect(emitCall![1].latencyHintMs).toBeUndefined();
+    });
+  });
+
+  describe('handleEnginePong', () => {
+    it('should refresh presence via the throttled heartbeat path (clients with no applicative heartbeat)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should pass the anonymous flag through to noteHeartbeat', () => {
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'fr'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('anon-123', true);
+    });
+
+    it('should ignore pongs from unauthenticated sockets', () => {
+      authHandler.handleEnginePong(createMockSocket({ id: 'unknown-socket' }));
+
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when noteHeartbeat throws (best-effort)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      (mockStatusService.noteHeartbeat as jest.Mock).mockImplementation(() => {
+        throw new Error('DB timeout');
+      });
+
+      expect(() => authHandler.handleEnginePong(createMockSocket())).not.toThrow();
     });
   });
 });

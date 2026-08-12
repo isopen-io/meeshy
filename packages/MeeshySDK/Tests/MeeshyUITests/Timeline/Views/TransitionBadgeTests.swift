@@ -24,13 +24,24 @@ final class TransitionBadgeTests: XCTestCase {
         XCTAssertTrue(badge.accessibilityComposed.contains(expectedCrossfade))
     }
 
-    func test_init_dissolve_label() {
-        let badge = TransitionBadge(
+    func test_init_dissolve_rendersIdenticallyToCrossfade() {
+        // Dissolve degrades to a crossfade opacity ramp everywhere it's actually
+        // rendered (editor preview, reader, MP4 export — see
+        // ReaderTransitionResolver.liveRenderableTransition) — the badge must not
+        // promise a distinct look nothing renders. A legacy .dissolve transition
+        // reads exactly like a crossfade one now.
+        let dissolveBadge = TransitionBadge(
             id: "t-2", kind: .dissolve, duration: 0.3,
             isSelected: false, isDark: false, anchorX: 200, laneHeight: 44,
             onTap: {}, onLongPress: {}, onDurationDelta: { _ in }
         )
-        let expectedDissolve = String(localized: "story.timeline.transition.kind.dissolve", bundle: .module)
-        XCTAssertTrue(badge.accessibilityComposed.contains(expectedDissolve))
+        let crossfadeBadge = TransitionBadge(
+            id: "t-1", kind: .crossfade, duration: 0.3,
+            isSelected: false, isDark: false, anchorX: 200, laneHeight: 44,
+            onTap: {}, onLongPress: {}, onDurationDelta: { _ in }
+        )
+        let expectedCrossfade = String(localized: "story.timeline.transition.kind.crossfade", bundle: .module)
+        XCTAssertTrue(dissolveBadge.accessibilityComposed.contains(expectedCrossfade))
+        XCTAssertEqual(dissolveBadge.accessibilityComposed, crossfadeBadge.accessibilityComposed)
     }
 }

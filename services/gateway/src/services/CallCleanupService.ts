@@ -97,6 +97,14 @@ export class CallCleanupService {
   // effect is needed.
   private missedCallNotify: ((callId: string) => Promise<void>) | null = null;
 
+  // `CallEventsHandler.invalidateSignalSession` is only reachable from that
+  // instance and documents its own invariant: every path writing
+  // `CallParticipant.leftAt` must evict the entry, or `call:signal` can relay
+  // SDP/ICE for up to its 2s TTL after a participant the DB already marked
+  // departed. `forceEndCall` writes `leftAt` but had no bridge for it — mirrors
+  // `clearQualityStreaks` above.
+  private invalidateSignalCache: ((callId: string) => void) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -137,6 +145,14 @@ export class CallCleanupService {
   setQualityStreakCleanupCallback(clearQualityStreaks: (callId: string) => void): void {
     this.clearQualityStreaks = clearQualityStreaks;
     logger.info('[CallCleanupService] Quality-streak cleanup callback attached — GC-ended calls will release their streak entries');
+  }
+
+  // Mirrors `setQualityStreakCleanupCallback` — injected from server startup
+  // once CallEventsHandler exists, so GC-ended calls evict their `call:signal`
+  // session cache entry (see the field comment above).
+  setSignalCacheInvalidationCallback(invalidateSignalCache: (callId: string) => void): void {
+    this.invalidateSignalCache = invalidateSignalCache;
+    logger.info('[CallCleanupService] Signal-cache invalidation callback attached — GC-ended calls will evict their call:signal session cache entry');
   }
 
   // Phantom-ringing safety net (see field doc above) — injected from server
@@ -457,6 +473,8 @@ export class CallCleanupService {
     this.callService?.clearRingingTimeout(callId);
     // Sibling-drift fix (2026-07-05) — see the field comment on `clearQualityStreaks`.
     this.clearQualityStreaks?.(callId);
+    // See the field comment on `invalidateSignalCache`.
+    this.invalidateSignalCache?.(callId);
 
     // Release the conversation's active-call claim (CallService.initiateCall's
     // atomic race guard) so a new call can be started once this one is

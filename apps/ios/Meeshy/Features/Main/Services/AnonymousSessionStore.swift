@@ -20,7 +20,7 @@ enum AnonymousSessionStore {
 
     @discardableResult
     static func save(_ context: AnonymousSessionContext) -> Bool {
-        guard let data = try? JSONEncoder().encode(context) else { return false }
+        guard let data = JSONEncoder().encodeOrLog(context, field: "anonymous session", logger: Logger.anonSession) else { return false }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -47,7 +47,7 @@ enum AnonymousSessionStore {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(AnonymousSessionContext.self, from: data)
+        return JSONDecoder().decodeOrLog(AnonymousSessionContext.self, from: data, field: "anonymous session", logger: Logger.anonSession)
     }
 
     static func delete(linkId: String) {
@@ -58,4 +58,10 @@ enum AnonymousSessionStore {
         ]
         SecItemDelete(query as CFDictionary)
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let anonSession = Logger(subsystem: "me.meeshy.app", category: "anon-session")
 }

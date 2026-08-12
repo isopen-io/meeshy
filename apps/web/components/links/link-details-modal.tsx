@@ -28,6 +28,7 @@ import {
 import type { ConversationLink, Conversation } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { copyToClipboard } from '@/lib/clipboard';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import { toast } from 'sonner';
 
 // Extended types for properties that backend returns but aren't yet in shared types
@@ -375,7 +376,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
                     </div>
                     <div>
                       <p className="text-sm font-medium">
-                        {link.creator.displayName || `${link.creator.firstName} ${link.creator.lastName}`.trim() || link.creator.username}
+                        {getUserDisplayName(link.creator)}
                       </p>
                       <p className="text-xs text-muted-foreground">@{link.creator.username}</p>
                     </div>

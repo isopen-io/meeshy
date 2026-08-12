@@ -59,6 +59,65 @@ class FeedRealtimeReducerTest {
         assertThat(twice.newPostsCount).isEqualTo(1)
     }
 
+    // --- created (own publish) ---
+
+    @Test
+    fun `created prepends the viewer's own just-published post at the head`() {
+        val next = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        assertThat(next.posts.map { it.id }).containsExactly("mine")
+    }
+
+    @Test
+    fun `created never bumps the new-posts banner — the post is already visible, nothing to acknowledge`() {
+        val next = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        assertThat(next.newPostsCount).isEqualTo(0)
+        assertThat(next.hasNewPosts).isFalse()
+    }
+
+    @Test
+    fun `created stacks above a prior socket arrival, newest first`() {
+        val afterSocket = FeedRealtimeReducer.accept(FeedRealtimeHead(), post("from-socket"), emptySet())
+
+        val next = FeedRealtimeReducer.created(afterSocket, post("mine"))
+
+        assertThat(next.posts.map { it.id }).containsExactly("mine", "from-socket").inOrder()
+        assertThat(next.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `created ignores a post whose id is a blank string`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.created(state, post("   "))
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `created is a defensive no-op when the id is already at the head — the later socket echo of this same publish is inert`() {
+        val once = FeedRealtimeReducer.created(FeedRealtimeHead(), post("mine"))
+
+        val twice = FeedRealtimeReducer.accept(once, post("mine"), emptySet())
+
+        assertThat(twice).isSameInstanceAs(once)
+        assertThat(twice.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `created releases a tombstone if the id was previously deleted and is now republished`() {
+        val deleted = FeedRealtimeReducer.remove(
+            FeedRealtimeReducer.accept(FeedRealtimeHead(), post("x"), emptySet()),
+            "x",
+        )
+        assertThat(deleted.removedIds).contains("x")
+
+        val next = FeedRealtimeReducer.created(deleted, post("x"))
+
+        assertThat(next.removedIds).doesNotContain("x")
+        assertThat(next.posts.map { it.id }).containsExactly("x")
+    }
+
     // --- acknowledge ---
 
     @Test
@@ -367,5 +426,111 @@ class FeedRealtimeReducerTest {
 
         assertThat(next.posts).isEmpty()
         assertThat(next.newPostsCount).isEqualTo(0)
+    }
+
+    // --- bookmark ---
+
+    private fun bookmarkedPost(id: String, count: Int, mine: Boolean) =
+        ApiPost(id = id, content = "Post $id", bookmarkCount = count, isBookmarkedByMe = mine)
+
+    @Test
+    fun `bookmark records the gateway's absolute count and viewer-own state as an overlay`() {
+        val next = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), postId = "a", bookmarkCount = 5, bookmarked = true)
+
+        assertThat(next.bookmarks).containsExactly("a", BookmarkOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `bookmark of a blank id is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.bookmark(state, postId = "   ", bookmarkCount = 3, bookmarked = true)
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `bookmark with a repeated identical overlay is inert`() {
+        val once = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val twice = FeedRealtimeReducer.bookmark(once, "a", bookmarkCount = 5, bookmarked = true)
+
+        assertThat(twice).isSameInstanceAs(once)
+    }
+
+    @Test
+    fun `bookmark updates the absolute count on a fresh broadcast`() {
+        val once = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.bookmark(once, "a", bookmarkCount = 8, bookmarked = true)
+
+        assertThat(next.bookmarks["a"]).isEqualTo(BookmarkOverlay(count = 8, mine = true))
+    }
+
+    @Test
+    fun `un-bookmark overlays a false viewer-own state`() {
+        val next = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 4, bookmarked = false)
+
+        assertThat(next.bookmarks["a"]).isEqualTo(BookmarkOverlay(count = 4, mine = false))
+    }
+
+    // --- reconcileBookmarks ---
+
+    @Test
+    fun `reconcileBookmarks on an empty overlay map is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.reconcileBookmarks(state, cachePosts = listOf(bookmarkedPost("a", 5, true)))
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `reconcileBookmarks releases an overlay the cache has caught up to`() {
+        val state = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.reconcileBookmarks(state, listOf(bookmarkedPost("a", count = 5, mine = true)))
+
+        assertThat(next.bookmarks).isEmpty()
+    }
+
+    @Test
+    fun `reconcileBookmarks keeps an overlay whose count the cache has not caught up to`() {
+        val state = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.reconcileBookmarks(state, listOf(bookmarkedPost("a", count = 3, mine = true)))
+
+        assertThat(next.bookmarks["a"]).isEqualTo(BookmarkOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `reconcileBookmarks keeps an overlay for a post still absent from the cache`() {
+        val state = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.reconcileBookmarks(state, cachePosts = emptyList())
+
+        assertThat(next.bookmarks["a"]).isEqualTo(BookmarkOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `reconcileBookmarks keeps an overlay whose viewer-own state the cache has not caught up to`() {
+        val state = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.reconcileBookmarks(state, listOf(bookmarkedPost("a", count = 5, mine = false)))
+
+        assertThat(next.bookmarks["a"]).isEqualTo(BookmarkOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `reconcileBookmarks releases only the overlays the cache has caught up to`() {
+        val a = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val ab = FeedRealtimeReducer.bookmark(a, "b", bookmarkCount = 9, bookmarked = false)
+        val next = FeedRealtimeReducer.reconcileBookmarks(
+            ab,
+            listOf(bookmarkedPost("a", count = 5, mine = true), bookmarkedPost("b", count = 2, mine = false)),
+        )
+
+        assertThat(next.bookmarks.keys).containsExactly("b")
+    }
+
+    @Test
+    fun `clear also drops every live bookmark overlay`() {
+        val overlaid = FeedRealtimeReducer.bookmark(FeedRealtimeHead(), "a", bookmarkCount = 5, bookmarked = true)
+        val next = FeedRealtimeReducer.clear(overlaid)
+
+        assertThat(next.bookmarks).isEmpty()
+        assertThat(next).isEqualTo(FeedRealtimeHead())
     }
 }

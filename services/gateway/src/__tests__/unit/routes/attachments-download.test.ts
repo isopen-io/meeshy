@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // ─── Top-level mock variables (must be declared before jest.mock) ─────────────
 
@@ -67,6 +67,10 @@ const DEFAULT_ATTACHMENT = {
   id: ATTACHMENT_ID,
   mimeType: 'image/jpeg',
   originalName: 'photo.jpg',
+  // Rattachement au message : c'est par lui que passe le contrôle d'accès.
+  // Une pièce jointe sans `messageId` n'est lisible que par son déposant.
+  messageId: 'msg-1',
+  uploadedBy: 'user-1',
 };
 
 const DEFAULT_STAT = {
@@ -76,9 +80,34 @@ const DEFAULT_STAT = {
 
 // ─── App factory ─────────────────────────────────────────────────────────────
 
-async function buildApp(): Promise<FastifyInstance> {
+/** Prisma minimal : le contrôle d'accès remonte du message à la participation. */
+function makeAccessPrisma(granted: boolean) {
+  return {
+    message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: 'conv-1' }) },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(granted ? { id: 'part-1' } : null) },
+  } as any;
+}
+
+async function buildApp(opts: { authenticated?: boolean; granted?: boolean } = {}): Promise<FastifyInstance> {
+  const { authenticated = true, granted = true } = opts;
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  registerDownloadRoutes(app, {} as any);
+
+  // Ces routes servaient le fichier à qui connaissait l'identifiant. Elles
+  // exigent désormais une identité, puis l'accès à la conversation du message
+  // auquel la pièce jointe est rattachée.
+  app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!authenticated) {
+      await reply.code(401).send({ success: false, error: 'Unauthorized' });
+      return;
+    }
+    (req as unknown as Record<string, unknown>).authContext = {
+      isAuthenticated: true,
+      isAnonymous: false,
+      userId: 'user-1',
+    };
+  });
+
+  registerDownloadRoutes(app, makeAccessPrisma(granted));
   await app.ready();
   return app;
 }
@@ -232,6 +261,7 @@ describe('GET /attachments/:attachmentId/thumbnail', () => {
   describe('when thumbnail path is not found', () => {
     let app: FastifyInstance;
     beforeAll(async () => {
+      mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
       mockGetThumbnailPath.mockResolvedValue(null);
       app = await buildApp();
     });
@@ -248,6 +278,7 @@ describe('GET /attachments/:attachmentId/thumbnail', () => {
   describe('when thumbnail is not on disk (stat throws)', () => {
     let app: FastifyInstance;
     beforeAll(async () => {
+      mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
       mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
       mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
       app = await buildApp();
@@ -265,6 +296,7 @@ describe('GET /attachments/:attachmentId/thumbnail', () => {
   describe('on success', () => {
     let app: FastifyInstance;
     beforeAll(async () => {
+      mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
       mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
       mockStat.mockResolvedValue(DEFAULT_STAT);
       app = await buildApp();
@@ -296,6 +328,7 @@ describe('GET /attachments/:attachmentId/thumbnail', () => {
   describe('when service throws unexpectedly', () => {
     let app: FastifyInstance;
     beforeAll(async () => {
+      mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
       mockGetThumbnailPath.mockRejectedValue(new Error('DB connection lost'));
       app = await buildApp();
     });
@@ -521,6 +554,15 @@ describe('GET /attachments/file/*', () => {
       expect(res.headers['access-control-allow-origin']).toBe('*');
     });
 
+    it('serves stable avatar paths with no-cache so a changed file is picked up via ETag', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/avatars%2Fuser%2F68f2a81417a557e8ce4ddfc1.jpg',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, no-cache');
+    });
+
     it('returns 200 for a PDF file', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -556,5 +598,69 @@ describe('GET /attachments/file/*', () => {
       expect(res.headers['x-frame-options']).toBeUndefined();
       expect(res.headers['content-security-policy']).toContain('frame-ancestors');
     });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Contrôle d'accès
+//
+// Ces deux routes servaient le fichier — et sa miniature, qui en révèle le
+// contenu — à quiconque connaissait l'identifiant, sans aucune identité. Un
+// ObjectId MongoDB n'est pas un secret : son entropie est faible et une part
+// en est dérivable d'un horodatage.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('contrôle d\'accès aux pièces jointes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
+    mockGetFilePath.mockResolvedValue(FILE_PATH);
+    mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
+    mockStat.mockResolvedValue(DEFAULT_STAT);
+  });
+
+  it('refuse le fichier à un appelant sans identité', async () => {
+    const app = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('refuse le fichier à un compte étranger à la conversation', async () => {
+    const app = await buildApp({ granted: false });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('refuse la miniature à un compte étranger à la conversation', async () => {
+    const app = await buildApp({ granted: false });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('refuse une pièce jointe non rattachée déposée par quelqu\'un d\'autre', async () => {
+    mockGetAttachment.mockResolvedValue({
+      ...DEFAULT_ATTACHMENT,
+      messageId: null,
+      uploadedBy: 'quelqu-un-dautre',
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('sert une pièce jointe non rattachée à son propre déposant', async () => {
+    mockGetAttachment.mockResolvedValue({
+      ...DEFAULT_ATTACHMENT,
+      messageId: null,
+      uploadedBy: 'user-1',
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
   });
 });

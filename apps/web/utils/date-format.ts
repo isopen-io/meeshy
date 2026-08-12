@@ -77,7 +77,7 @@ export function formatRelativeDate(
   }
 
   // Plus ancien (>= 7 jours) : afficher la date complète simplifiée
-  return formatShortFullDate(messageDate, locale);
+  return formatShortDate(messageDate, locale);
 }
 
 /**
@@ -105,8 +105,11 @@ export function formatConversationDate(
   // Différence en jours calendaires (comparaison des minuits locaux)
   const diffDays = calendarDayDiff(messageDate.getTime(), now.getTime());
 
-  // Si c'est aujourd'hui, afficher seulement l'heure
-  if (diffDays === 0) {
+  // Si c'est aujourd'hui — ou dans le futur (décalage d'horloge client sur une
+  // frontière de minuit → diffDays négatif) — afficher seulement l'heure.
+  // Sans ce garde `<= 0`, un timestamp de demain retombait sur la branche
+  // `diffDays < 7` et s'affichait avec un jour de semaine (ex. « Mer. 00:10 »).
+  if (diffDays <= 0) {
     return formatTime(messageDate, locale);
   }
 
@@ -126,7 +129,7 @@ export function formatConversationDate(
   }
 
   // Si c'est plus ancien, afficher la date complète simplifiée
-  return formatShortFullDate(messageDate, locale);
+  return formatShortDate(messageDate, locale);
 }
 
 /**
@@ -154,17 +157,64 @@ export function formatFullDate(
   });
 }
 
-function formatTime(date: Date, locale: string): string {
-  return date.toLocaleTimeString(locale, {
+/**
+ * Formate une date + heure courte, localisée selon la locale d'interface.
+ * Format : "5 nov. 2025, 14:30" (fr) / "Nov 5, 2025, 14:30" (en)
+ *
+ * Utilisé par les cartes/détails de liens de tracking (métadonnées created/
+ * expires/lastClick). Toujours en 24h (`hour12: false`), cohérent avec
+ * `formatFullDate`/`formatTime`/`formatConversationDate`.
+ *
+ * @param date - La date à formater
+ * @param locale - Locale BCP 47 (défaut: 'fr')
+ * @returns La date formatée
+ */
+export function formatShortDateTime(
+  date: Date | string,
+  locale: string = DEFAULT_LOCALE
+): string {
+  const messageDate = typeof date === 'string' ? new Date(date) : date;
+
+  return messageDate.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
 }
 
-function formatShortFullDate(date: Date, locale: string): string {
-  const day = date.toLocaleDateString(locale, { day: 'numeric' });
-  const month = date.toLocaleDateString(locale, { month: 'short' });
-  const year = date.toLocaleDateString(locale, { year: 'numeric' });
-  return `${day} ${month} ${year}`;
+/**
+ * Formate une date courte (sans heure), localisée selon la locale d'interface.
+ * Format : "5 nov. 2025" (fr) / "Nov 5, 2025" (en) — ordre natif par locale.
+ *
+ * Helper date-seule à privilégier pour les métadonnées « créé le / expire le /
+ * dernière activité » (groupes, profils voix, contacts). Ne JAMAIS appeler
+ * `toLocaleDateString()` sans locale : la date s'afficherait dans la locale du
+ * navigateur au lieu de la langue d'interface (violation du Prisme).
+ *
+ * @param date - La date à formater
+ * @param locale - Locale BCP 47 (défaut: 'fr')
+ * @returns La date formatée
+ */
+export function formatShortDate(
+  date: Date | string,
+  locale: string = DEFAULT_LOCALE
+): string {
+  const messageDate = typeof date === 'string' ? new Date(date) : date;
+
+  return messageDate.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatTime(date: Date, locale: string): string {
+  return date.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }

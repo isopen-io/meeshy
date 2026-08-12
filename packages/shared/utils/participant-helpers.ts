@@ -8,7 +8,17 @@ export type AvatarBearingParticipant = {
   readonly user?: { readonly avatar?: string | null } | null;
 };
 
-const isNonBlankAvatar = (value?: string | null): value is string =>
+/**
+ * Forme minimale d'un participant porteur d'un nom d'affichage : `displayName`
+ * local optionnel (`Participant.displayName`) + `displayName` du compte utilisateur
+ * lié optionnel (`User.displayName`).
+ */
+export type DisplayNameBearingParticipant = {
+  readonly displayName?: string | null;
+  readonly user?: { readonly displayName?: string | null } | null;
+};
+
+const isNonBlank = (value?: string | null): value is string =>
   typeof value === 'string' && value.trim() !== '';
 
 /**
@@ -29,4 +39,22 @@ const isNonBlankAvatar = (value?: string | null): value is string =>
 export const resolveParticipantAvatar = (
   participant?: AvatarBearingParticipant | null,
 ): string | null =>
-  [participant?.avatar, participant?.user?.avatar].find(isNonBlankAvatar) ?? null;
+  [participant?.avatar, participant?.user?.avatar].find(isNonBlank) ?? null;
+
+/**
+ * Source unique de la résolution du nom d'affichage porté par un participant.
+ *
+ * Ordre canonique : `displayName` **local** du participant → `displayName` du
+ * **compte utilisateur** lié → `null`. Miroir strict de `resolveParticipantAvatar`
+ * pour la même famille de bugs : une chaîne **vide ou blanche** est traitée comme
+ * absente, ce qui restaure le fallback compte que `??` court-circuitait (un
+ * `displayName: ''` local retombe sur le nom du compte au lieu de le masquer).
+ *
+ * Ne couvre QUE le niveau `displayName` (local → compte). Les fallbacks
+ * `firstName lastName` / `username` restent la responsabilité du client via
+ * `getUserDisplayName`, exactement comme aujourd'hui.
+ */
+export const resolveParticipantDisplayName = (
+  participant?: DisplayNameBearingParticipant | null,
+): string | null =>
+  [participant?.displayName, participant?.user?.displayName].find(isNonBlank) ?? null;

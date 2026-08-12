@@ -47,6 +47,7 @@ extension StoryCanvasUIView {
             if wasActive { exitTimelinePreview() }
             return
         }
+        if !wasActive { enterTimelinePreview() }
         currentTime = CMTime(seconds: max(0, seconds), preferredTimescale: 600_000)
         rebuildLayers()
         if !timelinePreviewPlaying {
@@ -69,9 +70,27 @@ extension StoryCanvasUIView {
         }
     }
 
+    /// Entrée en preview : l'engine timeline devient l'UNIQUE source sonore.
+    ///
+    /// `stop()` (et non `pause()`) purge la `startedSlideKey` du mixer canvas :
+    /// la sortie de preview repartira donc d'une planification neuve, à zéro.
+    /// C'est l'un des deux seuls points de reset autorisés du son d'édition —
+    /// « ouvrir l'outil timeline » (directive user 2026-07-30) ; l'autre est le
+    /// bouton lecture/pause de la timeline, porté par l'engine lui-même. Toute
+    /// autre manipulation du canvas laisse la boucle intacte.
+    private func enterTimelinePreview() {
+        audioMixer.stop()
+        lastAudioConfigRevision = nil
+    }
+
     /// Sortie de preview : redonne le canvas au mode édition nominal — les
     /// boucles vidéo du composer (`applyEditPlayback`) reprennent avec leur
     /// audio, le rendu redevient intemporel (tous les éléments visibles).
+    ///
+    /// La garde audio a été levée à l'entrée (`lastAudioConfigRevision = nil`),
+    /// donc le `rebuildLayers()` ci-dessous re-planifie effectivement le mixer
+    /// via `applyEditPlayback` → `reconfigureAudioForPlayback` : refermer la
+    /// timeline relance la boucle depuis le début, comme demandé.
     private func exitTimelinePreview() {
         timelinePreviewPlaying = false
         backgroundLayer.isPlaybackActive = false

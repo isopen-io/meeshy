@@ -25,9 +25,11 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
 
     private func makeSlide(texts: [StoryTextObject] = [],
                            stickers: [StorySticker]? = nil,
-                           media: [StoryMediaObject]? = nil) -> StorySlide {
+                           media: [StoryMediaObject]? = nil,
+                           locations: [StoryLocationObject] = []) -> StorySlide {
         let effects = StoryEffects(stickerObjects: stickers,
                                    textObjects: texts,
+                                   locationObjects: locations,
                                    mediaObjects: media)
         return StorySlide(id: "slide", effects: effects, duration: 5)
     }
@@ -38,6 +40,32 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
 
     // MARK: - Regression: edit-mode behaviour preserved
 
+    /// Localized text prefix — resolved through the same catalog key as the
+    /// production code (`story.canvas.a11y.textPrefix`) so the assertion
+    /// stays correct regardless of the test host's locale, rather than
+    /// pinning one hardcoded language's literal.
+    private var textPrefix: String {
+        String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
+    }
+
+    private var imageLabel: String {
+        String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+    }
+
+    private var locationWord: String {
+        String(localized: "story.canvas.a11y.location", defaultValue: "Lieu", bundle: .module)
+    }
+
+    private var modifierActionName: String {
+        String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
+    }
+
+    private func compositionCountLabel(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "story.composer.a11y.compositionCount.one", defaultValue: "1 objet", bundle: .module)
+            : String(localized: "story.composer.a11y.compositionCount.many", defaultValue: "\(count) objets", bundle: .module)
+    }
+
     func test_accessibilityElements_inEditMode_returnsExisting() {
         let slide = makeSlide(
             texts: [StoryTextObject(id: "t1", text: "Hello")],
@@ -47,21 +75,120 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let view = makeView(slide: slide, mode: .edit)
 
         let labels = elements(view).map(\.accessibilityLabel)
-        XCTAssertTrue(labels.contains("Texte : Hello"),
-                      "Edit mode must keep the legacy 'Texte : …' prefix for the composer.")
-        XCTAssertTrue(labels.contains("Image"))
+        XCTAssertTrue(labels.contains("\(textPrefix) : Hello"),
+                      "Edit mode must keep the localized text prefix for the composer.")
+        XCTAssertTrue(labels.contains(imageLabel))
         XCTAssertTrue(labels.contains(where: { $0?.hasPrefix("Sticker") == true }))
-        XCTAssertEqual(elements(view).count, 3)
+        // A summary element is prepended ahead of the 3 per-object elements —
+        // the first VoiceOver stop on a non-empty slide is now an overview,
+        // not an arbitrary object.
+        XCTAssertEqual(elements(view).count, 4)
+        let summary = labels.first ?? nil
+        XCTAssertTrue(summary?.contains("Story") == true)
+        XCTAssertTrue(summary?.contains(compositionCountLabel(3)) == true)
     }
 
     func test_accessibilityElements_inEditMode_exposesCustomActions() {
         let slide = makeSlide(texts: [StoryTextObject(id: "t1", text: "Hello")])
         let view = makeView(slide: slide, mode: .edit)
 
-        let text = elements(view).first(where: { $0.accessibilityLabel == "Texte : Hello" })
+        let text = elements(view).first(where: { $0.accessibilityLabel == "\(textPrefix) : Hello" })
         XCTAssertNotNil(text?.accessibilityCustomActions)
-        XCTAssertEqual(text?.accessibilityCustomActions?.count, 3,
-                       "Edit mode must keep Supprimer/Dupliquer/Mettre à l'arrière custom actions.")
+        XCTAssertEqual(text?.accessibilityCustomActions?.count, 4,
+                       "Edit mode must keep delete/duplicate/send-to-back custom actions, plus Modifier.")
+    }
+
+    func test_accessibilityElements_inEditMode_locationObjects_areExposed() {
+        let location = StoryLocationObject(id: "loc1", place: SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris"))
+        let slide = makeSlide(locations: [location])
+        let view = makeView(slide: slide, mode: .edit)
+
+        let loc = elements(view).first(where: { $0.accessibilityLabel == "\(locationWord) : Paris" })
+        XCTAssertNotNil(loc, "A location pin must be exposed to VoiceOver with 'Lieu : {name}'.")
+        XCTAssertTrue(loc?.accessibilityTraits.contains(.staticText) == true)
+    }
+
+    func test_accessibilityElements_inEditMode_locationObjects_haveDeleteDuplicateSendToBack_butNotModifier() {
+        let location = StoryLocationObject(id: "loc1", place: SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris"))
+        let slide = makeSlide(locations: [location])
+        let view = makeView(slide: slide, mode: .edit)
+
+        let loc = elements(view).first(where: { $0.accessibilityLabel == "\(locationWord) : Paris" })
+        // Delete / Duplicate / Send-to-back — never "Modifier": there is no
+        // editor to open for a location pin (D4 — no VoiceOver dead end).
+        XCTAssertEqual(loc?.accessibilityCustomActions?.count, 3)
+        XCTAssertFalse(loc?.accessibilityCustomActions?.contains(where: { $0.name == modifierActionName }) ?? true)
+    }
+
+    func test_accessibilityElements_inEditMode_stickerLabel_resolvesEmojiName() {
+        let slide = makeSlide(stickers: [StorySticker(id: "s1", emoji: "🔥")])
+        let view = makeView(slide: slide, mode: .edit)
+
+        let labels = elements(view).map(\.accessibilityLabel)
+        // Must resolve through the same Unicode-name helper as `.play` mode
+        // ("Sticker Fire"), not a raw concatenation of the emoji glyph.
+        XCTAssertTrue(labels.contains(where: { $0?.contains("Fire") == true }),
+                      "Sticker label must resolve the emoji's Unicode name, got: \(labels)")
+    }
+
+    func test_accessibilityElements_inEditMode_emptySlide_returnsEmpty_noSummary() {
+        let slide = makeSlide()
+        let view = makeView(slide: slide, mode: .edit)
+
+        XCTAssertTrue(elements(view).isEmpty,
+                      "An empty slide must never synthesize a phantom summary element.")
+    }
+
+    func test_accessibilityElements_inEditMode_summaryElement_hasNoCustomActions() {
+        let slide = makeSlide(texts: [StoryTextObject(id: "t1", text: "Hello")])
+        let view = makeView(slide: slide, mode: .edit)
+
+        let summary = elements(view).first
+        XCTAssertTrue(summary?.accessibilityCustomActions?.isEmpty ?? true,
+                      "The composition summary is read-only — it must not carry destructive actions.")
+    }
+
+    func test_accessibilityElements_inEditMode_textAndMedia_haveModifierAsFirstAction() {
+        let slide = makeSlide(
+            texts: [StoryTextObject(id: "t1", text: "Hello")],
+            media: [StoryMediaObject(id: "m1", mediaType: "image", aspectRatio: 1.0)]
+        )
+        let view = makeView(slide: slide, mode: .edit)
+
+        let text = elements(view).first(where: { $0.accessibilityLabel == "\(textPrefix) : Hello" })
+        let media = elements(view).first(where: { $0.accessibilityLabel == imageLabel })
+        XCTAssertEqual(text?.accessibilityCustomActions?.first?.name, modifierActionName)
+        XCTAssertEqual(media?.accessibilityCustomActions?.first?.name, modifierActionName)
+    }
+
+    func test_accessibilityElements_inEditMode_modifierAction_invokesOnItemDoubleTapped() {
+        let slide = makeSlide(texts: [StoryTextObject(id: "t1", text: "Hello")])
+        let view = makeView(slide: slide, mode: .edit)
+
+        var invokedId: String?
+        var invokedKind: StoryCanvasUIView.CanvasItemKind?
+        view.onItemDoubleTapped = { id, kind in
+            invokedId = id
+            invokedKind = kind
+        }
+
+        let text = elements(view).first(where: { $0.accessibilityLabel == "\(textPrefix) : Hello" })
+        let modifier = text?.accessibilityCustomActions?.first(where: { $0.name == modifierActionName })
+        XCTAssertNotNil(modifier)
+        _ = modifier?.actionHandler?(modifier!)
+
+        XCTAssertEqual(invokedId, "t1")
+        XCTAssertEqual(invokedKind, .text)
+    }
+
+    func test_accessibilityElements_inEditMode_stickerAndLocation_haveNoModifierAction() {
+        let location = StoryLocationObject(id: "loc1", place: SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris"))
+        let slide = makeSlide(stickers: [StorySticker(id: "s1", emoji: "🔥")], locations: [location])
+        let view = makeView(slide: slide, mode: .edit)
+
+        let sticker = elements(view).first(where: { $0.accessibilityLabel?.hasPrefix("Sticker") == true })
+        XCTAssertEqual(sticker?.accessibilityCustomActions?.count, 3)
+        XCTAssertNotEqual(sticker?.accessibilityCustomActions?.first?.name, modifierActionName)
     }
 
     // MARK: - Reader mode (P2 bug fix)
@@ -113,8 +240,10 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let imgView = makeView(slide: imgSlide, mode: .play)
         let vidView = makeView(slide: vidSlide, mode: .play)
 
-        XCTAssertEqual(elements(imgView).first?.accessibilityLabel, "Photo de fond")
-        XCTAssertEqual(elements(vidView).first?.accessibilityLabel, "Vidéo de fond")
+        let expectedPhoto = String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
+        let expectedVideo = String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+        XCTAssertEqual(elements(imgView).first?.accessibilityLabel, expectedPhoto)
+        XCTAssertEqual(elements(vidView).first?.accessibilityLabel, expectedVideo)
     }
 
     func test_accessibilityElements_textInPreferredLanguage() {

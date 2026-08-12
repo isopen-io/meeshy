@@ -13,6 +13,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { writeConversationPreferences } from '../services/conversationPreferencesSync';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -91,19 +92,12 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Not a member of this conversation');
         }
 
-        // Upsert user conversation preferences with deletion flag
-        await prisma.userConversationPreferences.upsert({
-          where: {
-            userId_conversationId: { userId, conversationId },
-          },
-          create: {
-            userId,
-            conversationId,
-            deletedForUserAt: new Date(),
-          },
-          update: {
-            deletedForUserAt: new Date(),
-          },
+        // Per-user state: the user's other devices must drop the conversation
+        // too, so this goes through the versioned+broadcast writer.
+        await writeConversationPreferences(fastify, {
+          userId,
+          conversationId,
+          data: { deletedForUserAt: new Date() },
         });
 
         logger.info('Conversation deleted', { conversationId });
@@ -170,13 +164,12 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           return sendBadRequest(reply, 'Conversation is not deleted');
         }
 
-        await prisma.userConversationPreferences.update({
-          where: {
-            userId_conversationId: { userId, conversationId },
-          },
-          data: {
-            deletedForUserAt: null,
-          },
+        // Inverse of delete-for-me, and it owes the same broadcast: without it
+        // the other devices keep hiding a conversation the user just restored.
+        await writeConversationPreferences(fastify, {
+          userId,
+          conversationId,
+          data: { deletedForUserAt: null },
         });
 
         logger.info('Conversation restored', { conversationId });
@@ -264,19 +257,12 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Not a member of this conversation');
         }
 
-        // Upsert user conversation preferences with clear history date
-        await prisma.userConversationPreferences.upsert({
-          where: {
-            userId_conversationId: { userId, conversationId },
-          },
-          create: {
-            userId,
-            conversationId,
-            clearHistoryBefore: clearDate,
-          },
-          update: {
-            clearHistoryBefore: clearDate,
-          },
+        // The cutoff hides history on every device the user is signed in on,
+        // so it travels the same versioned+broadcast path.
+        await writeConversationPreferences(fastify, {
+          userId,
+          conversationId,
+          data: { clearHistoryBefore: clearDate },
         });
 
         logger.info('History cleared', { conversationId });

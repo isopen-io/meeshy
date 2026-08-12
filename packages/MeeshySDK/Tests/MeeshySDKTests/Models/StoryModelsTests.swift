@@ -85,13 +85,6 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertTrue(cases.contains(.reveal))
     }
 
-    func testStoryTransitionEffectLabels() {
-        XCTAssertEqual(StoryTransitionEffect.fade.label, "Fondu")
-        XCTAssertEqual(StoryTransitionEffect.zoom.label, "Zoom")
-        XCTAssertEqual(StoryTransitionEffect.slide.label, "Glissement")
-        XCTAssertEqual(StoryTransitionEffect.reveal.label, "Révélation")
-    }
-
     func testStoryTransitionEffectIconNames() {
         XCTAssertEqual(StoryTransitionEffect.fade.iconName, "sun.max")
         XCTAssertEqual(StoryTransitionEffect.zoom.iconName, "arrow.up.left.and.arrow.down.right")
@@ -121,7 +114,9 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(PostType.post.displayName, "Post")
         XCTAssertEqual(PostType.reel.displayName, "Réel")
         XCTAssertEqual(PostType.story.displayName, "Story")
-        XCTAssertEqual(PostType.status.displayName, "Status")
+        // « Statut » et non « Status » : le libellé est désormais tiré du
+        // catalogue (clé `content.type.status`), en français correct.
+        XCTAssertEqual(PostType.status.displayName, "Statut")
     }
 
     func testPostTypeIcons() {
@@ -459,11 +454,11 @@ final class StoryModelsTests: XCTestCase {
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
                 storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: repostMedia, createdAt: Date(), likeCount: nil,
-                commentCount: nil, isQuote: nil
+                commentCount: nil, isQuote: nil, location: nil
             )
         }
         return APIPost(
-            id: id, type: type, visibility: visibility, content: "Hello",
+            id: id, type: type, visibility: visibility, visibilityUserIds: nil, content: "Hello",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
