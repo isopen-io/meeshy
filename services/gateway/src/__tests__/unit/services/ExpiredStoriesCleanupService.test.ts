@@ -11,7 +11,33 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Les collaborateurs de la passe de destruction : le service les appelle AVANT
+// toute suppression et laisse volontairement remonter leurs échecs (sans
+// relation ni cascade côté Mongo, détruire après un échec laisserait des liens
+// que plus aucun chemin n'atteindrait). Un double qui les ignore fait donc
+// lever la passe entière — silencieusement, elle est en try/catch — et aucune
+// des suppressions mesurées ici n'a lieu.
+jest.mock('../../../services/posts/deactivatePostTrackingLinks', () => ({
+  deactivatePostTrackingLinks: jest.fn<any>().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../../services/posts/retractPostNotifications', () => ({
+  retractPostNotifications: jest.fn<any>().mockResolvedValue({ retracted: 0 }),
+}));
+
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => undefined,
+}));
+
+jest.mock('../../../services/posts/SoundCaptureService', () => ({
+  SoundCaptureService: jest.fn().mockImplementation(() => ({
+    releasePosts: jest.fn<any>().mockResolvedValue(undefined),
+  })),
+}));
+
 import { ExpiredStoriesCleanupService } from '../../../services/ExpiredStoriesCleanupService';
+import { EPHEMERAL_POST_TYPES } from '../../../services/posts/ephemeralPosts';
+import { NOT_DELETED } from '../../../services/posts/softDelete';
 
 function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: string }[] } = {}) {
   return {
@@ -24,7 +50,14 @@ function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: str
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    // `PostMedia.post`/`.comment` sont en `onDelete: SetNull` : sans purge
+    // explicite, chaque story détruite laissait ses lignes média orphelines
+    // pour toujours.
+    postMedia: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };
@@ -100,12 +133,18 @@ describe('ExpiredStoriesCleanupService', () => {
 
       await service.cleanup();
 
+      // `NOT_DELETED` (`isSet: false`) et JAMAIS `deletedAt: null` : sur le
+      // connecteur MongoDB, le filtre nul ne matche que les documents
+      // présent-et-null, or `post.create` n'écrit jamais cette colonne. Cette
+      // attente-là — le `null` — décrivait le défaut qui faisait que la passe
+      // n'appariait AUCUN post. Et le balayage porte les DEUX types éphémères,
+      // pas seulement `STORY` : les statuts n'étaient jamais balayés.
       expect(prisma.post.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: 'STORY',
+            type: { in: [...EPHEMERAL_POST_TYPES] },
             expiresAt: { lt: expect.any(Date) },
-            deletedAt: null,
+            deletedAt: NOT_DELETED,
           }),
         }),
       );

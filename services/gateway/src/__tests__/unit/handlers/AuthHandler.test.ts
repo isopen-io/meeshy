@@ -9,7 +9,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -21,9 +21,16 @@ jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: (t: string) => `hash:${t}`,
 }));
 
+// `TokenExpiredError` doit exister sur le mock : le handler distingue le jeton
+// EXPIRÉ (auth:token-expired + déconnexion, le client sait qu'il doit
+// rafraîchir) du jeton invalide, via `error instanceof jwt.TokenExpiredError`.
+// Sans la classe, ce `instanceof` lève — et l'échec observé n'est plus celui
+// qu'on mesure.
+class MockTokenExpiredError extends Error {}
 jest.mock('jsonwebtoken', () => ({
-  default: { verify: jest.fn() },
+  default: { verify: jest.fn(), TokenExpiredError: MockTokenExpiredError },
   verify: jest.fn(),
+  TokenExpiredError: MockTokenExpiredError,
 }));
 
 jest.mock('../../../middleware/validation', () => ({
@@ -89,6 +96,7 @@ function makeServices() {
       markConnected: jest.fn<any>(),
       markDisconnected: jest.fn<any>(),
       updateLastSeen: jest.fn<any>(),
+      noteHeartbeat: jest.fn<any>(),
     },
     maintenanceService: {
       updateUserOnlineStatus: jest.fn<any>().mockResolvedValue(undefined),
@@ -115,11 +123,21 @@ function makeHandler(prisma: any, services = makeServices()) {
 // ─── handleManualAuthentication ───────────────────────────────────────────────
 
 describe('handleManualAuthentication', () => {
+  // Le handler authentifie par JWT (`token`) ou par jeton de session anonyme,
+  // JAMAIS par un `userId` revendiqué : un identifiant nu n'est pas un
+  // credential, et l'accepter authentifierait n'importe qui comme n'importe
+  // qui. Ce bloc décrivait cette API-là — elle n'existe pas.
   beforeEach(() => {
+    process.env.JWT_SECRET = 'test-secret';
+    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: 'u-1' });
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({
       success: true,
-      data: { userId: 'u-1', sessionToken: undefined, language: undefined },
+      data: { token: 'my.jwt.token', sessionToken: undefined, language: undefined },
     });
+  });
+
+  afterEach(() => {
+    delete process.env.JWT_SECRET;
   });
 
   it('emits ERROR when schema validation fails', async () => {
@@ -133,21 +151,21 @@ describe('handleManualAuthentication', () => {
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'bad schema' }));
   });
 
-  it('emits ERROR when neither userId nor sessionToken is present', async () => {
+  it('emits ERROR when neither token nor sessionToken is present', async () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({
       success: true,
-      data: { userId: undefined, sessionToken: undefined },
+      data: { token: undefined, sessionToken: undefined },
     });
     const socket = makeSocket();
     const handler = makeHandler(makePrisma());
     await handler.handleManualAuthentication(socket, {});
-    expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'userId or sessionToken required' }));
+    expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'token or sessionToken required' }));
   });
 
   it('delegates to anonymous auth when only sessionToken is provided', async () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({
       success: true,
-      data: { sessionToken: 'tok-123', userId: undefined },
+      data: { sessionToken: 'tok-123', token: undefined },
     });
     const prisma = makePrisma({ participant: makeParticipant() });
     const socket = makeSocket();
@@ -156,22 +174,22 @@ describe('handleManualAuthentication', () => {
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.AUTHENTICATED, expect.objectContaining({ success: true }));
   });
 
-  it('emits AUTHENTICATED after registering a valid userId', async () => {
+  it('emits AUTHENTICATED after verifying the JWT and loading its user', async () => {
     const user = makeUser();
     const prisma = makePrisma({ user });
     const socket = makeSocket();
     const services = makeServices();
     const handler = makeHandler(prisma, services);
-    await handler.handleManualAuthentication(socket, { userId: user.id });
+    await handler.handleManualAuthentication(socket, { token: 'my.jwt.token' });
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.AUTHENTICATED, expect.objectContaining({ success: true }));
     expect(services.statusService.markConnected).toHaveBeenCalledWith(user.id, false);
   });
 
-  it('emits ERROR when userId is not found in prisma', async () => {
+  it('emits ERROR when the JWT names a user prisma does not have', async () => {
     const prisma = makePrisma({ user: null });
     const socket = makeSocket();
     const handler = makeHandler(prisma);
-    await handler.handleManualAuthentication(socket, { userId: 'u-unknown' });
+    await handler.handleManualAuthentication(socket, { token: 'my.jwt.token' });
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'User not found' }));
   });
 
@@ -188,7 +206,7 @@ describe('handleManualAuthentication', () => {
       userSockets: new Map(),
       emitPresenceSnapshot: presenceSnapshot,
     });
-    await handler.handleManualAuthentication(socket, { userId: user.id });
+    await handler.handleManualAuthentication(socket, { token: 'my.jwt.token' });
     await new Promise(r => setTimeout(r, 0)); // flush promises
     expect(presenceSnapshot).toHaveBeenCalledWith(socket, user.id, false);
   });
@@ -198,7 +216,7 @@ describe('handleManualAuthentication', () => {
     (prisma.user.findUnique as jest.MockedFunction<any>).mockRejectedValue(new Error('db crash'));
     const socket = makeSocket();
     const handler = makeHandler(prisma);
-    await handler.handleManualAuthentication(socket, { userId: 'u-1' });
+    await handler.handleManualAuthentication(socket, { token: 'my.jwt.token' });
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Authentication failed' }));
   });
 });
@@ -297,17 +315,21 @@ describe('handleDisconnection', () => {
     expect(services.maintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('u-1', false, true);
   });
 
-  it('calls callService.leaveCall for each active call participation', async () => {
+  // L'auto-leave immédiat est réservé aux INVITÉS : un utilisateur enregistré a
+  // droit à la grâce de reconnexion (ADR-6), portée par le handler de
+  // déconnexion d'appel, et le sortir ici lui couperait l'appel à la moindre
+  // bascule réseau. Ce test le demandait pour un compte enregistré.
+  it('calls callService.leaveCall for each active call participation of an ANONYMOUS guest', async () => {
     const socket = makeSocket('sock-1');
     const services = makeServices();
     const callParticipants = [
-      { callSessionId: 'call-1', participantId: 'cp-1' },
-      { callSessionId: 'call-2', participantId: 'cp-2' },
+      { callSessionId: 'call-1', participantId: 'cp-1', callSession: { id: 'call-1' } },
+      { callSessionId: 'call-2', participantId: 'cp-2', callSession: { id: 'call-2' } },
     ];
     const prisma = makePrisma({ callParticipants });
-    const connectedUsers = new Map([['u-1', { id: 'u-1', socketId: 'sock-1', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
-    const socketToUser = new Map([['sock-1', 'u-1']]);
-    const userSockets = new Map([['u-1', new Set(['sock-1'])]]);
+    const connectedUsers = new Map([['p-1', { id: 'p-1', socketId: 'sock-1', isAnonymous: true, language: 'en', resolvedLanguages: [] }]]);
+    const socketToUser = new Map([['sock-1', 'p-1']]);
+    const userSockets = new Map([['p-1', new Set(['sock-1'])]]);
     const handler = new AuthHandler({
       prisma,
       ...services,
@@ -347,7 +369,11 @@ describe('handleHeartbeat', () => {
     await expect(handler.handleHeartbeat(socket)).resolves.toBeUndefined();
   });
 
-  it('calls statusService.updateLastSeen for a registered user', async () => {
+  // Un battement n'écrit PAS la base : `noteHeartbeat` est throttlé à 60 s dans
+  // StatusService, précisément pour qu'une socket passivement connectée garde
+  // `lastActiveAt` fraîche sans une écriture Prisma par battement. Ce test
+  // exigeait l'inverse (`prisma.user.update` à chaque fois).
+  it('note le battement pour un utilisateur enregistré, sans écrire la base', async () => {
     const socket = makeSocket('sock-1');
     const services = makeServices();
     const prisma = makePrisma({ user: makeUser() });
@@ -361,11 +387,11 @@ describe('handleHeartbeat', () => {
       userSockets: new Map(),
     });
     await handler.handleHeartbeat(socket);
-    expect(services.statusService.updateLastSeen).toHaveBeenCalledWith('u-1', false);
-    expect(prisma.user.update).toHaveBeenCalled();
+    expect(services.statusService.noteHeartbeat).toHaveBeenCalledWith('u-1', false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it('calls statusService.updateLastSeen for an anonymous user (no prisma update)', async () => {
+  it('note le battement pour un invité anonyme, sans écrire la base', async () => {
     const socket = makeSocket('sock-a');
     const services = makeServices();
     const prisma = makePrisma();
@@ -379,7 +405,7 @@ describe('handleHeartbeat', () => {
       userSockets: new Map(),
     });
     await handler.handleHeartbeat(socket);
-    expect(services.statusService.updateLastSeen).toHaveBeenCalledWith('p-1', true);
+    expect(services.statusService.noteHeartbeat).toHaveBeenCalledWith('p-1', true);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

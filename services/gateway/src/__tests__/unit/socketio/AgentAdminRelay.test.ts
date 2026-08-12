@@ -63,9 +63,15 @@ describe('parseAgentAdminEvent', () => {
 
 // ─── AgentAdminRelay ─────────────────────────────────────────────────────────
 
+// Le subscriber est créé `lazyConnect` + `enableOfflineQueue: false` : sans
+// `connect()` explicite, le premier `subscribe()` part sur une socket fermée
+// (« Stream isn't writeable ») et le relay ne reçoit jamais rien. Le double
+// doit donc porter la méthode, sinon ce que la suite mesure n'est plus le
+// relay mais l'absence de la méthode.
 function makeSubscriber() {
   const handlers: Record<string, ((...args: any[]) => void)[]> = {};
   return {
+    connect: jest.fn<any>().mockResolvedValue(undefined),
     subscribe: jest.fn<any>().mockResolvedValue(undefined),
     unsubscribe: jest.fn<any>().mockResolvedValue(undefined),
     quit: jest.fn<any>().mockResolvedValue(undefined),

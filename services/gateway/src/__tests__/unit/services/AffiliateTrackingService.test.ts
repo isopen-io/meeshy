@@ -39,6 +39,7 @@ function makePrisma(overrides: {
   tokens?: any[];
   sessionPreference?: any;
   deleteCount?: number;
+  existingFriendRequest?: any;
 } = {}) {
   const {
     affiliateToken = ACTIVE_TOKEN,
@@ -49,6 +50,7 @@ function makePrisma(overrides: {
     tokens = [],
     sessionPreference = null,
     deleteCount = 0,
+    existingFriendRequest = null,
   } = overrides;
 
   return {
@@ -69,8 +71,15 @@ function makePrisma(overrides: {
       update: jest.fn<any>().mockResolvedValue({}),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: deleteCount }),
     },
+    // `FriendRequest` n'a pas d'index unique : le service cherche d'abord une
+    // demande dans les DEUX sens avant de créer, pour ne pas fabriquer un
+    // doublon désynchronisé. Un double sans `findFirst` faisait lever le bloc
+    // — silencieusement, il est en try/catch — et `create` n'était jamais
+    // atteint.
     friendRequest: {
+      findFirst: jest.fn<any>().mockResolvedValue(existingFriendRequest),
       create: jest.fn<any>().mockResolvedValue({}),
+      update: jest.fn<any>().mockResolvedValue({}),
     },
   };
 }
@@ -219,14 +228,34 @@ describe('convertAffiliateVisit', () => {
     );
   });
 
-  it('increments currentUses on the token', async () => {
+  // L'incrément est ATOMIQUE, pas un `currentUses + 1` calculé en mémoire :
+  // deux conversions concurrentes lues à la même valeur écriraient la même, et
+  // un token à usages limités dépasserait sa borne. Le service le documente
+  // explicitement — ce test verrouillait la version racée.
+  it('incrémente currentUses de façon atomique, sans relire la valeur', async () => {
     const prisma = makePrisma({ affiliateToken: { ...ACTIVE_TOKEN, currentUses: 3 } });
 
     await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
 
     expect(prisma.affiliateToken.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ currentUses: 4 }),
+        data: expect.objectContaining({ currentUses: { increment: 1 } }),
+      })
+    );
+  });
+
+  it('accepte la demande d\'amitié préexistante au lieu d\'en créer une seconde', async () => {
+    const prisma = makePrisma({
+      existingFriendRequest: { id: 'fr-1', status: 'pending' },
+    });
+
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'fr-1' },
+        data: expect.objectContaining({ status: 'accepted' }),
       })
     );
   });

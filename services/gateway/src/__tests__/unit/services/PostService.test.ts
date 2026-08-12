@@ -188,26 +188,32 @@ function makeSut(
 
 // ─── deletePost ───────────────────────────────────────────────────────────────
 
+// `deletePost` prend le RÔLE de l'acteur en troisième argument : un
+// modérateur retire le post d'un autre. Sans lui, la seule autorisation
+// possible serait « auteur ou personne », et la route d'administration n'aurait
+// aucun chemin. Ce bloc appelait la signature à deux arguments.
+const AS_AUTHOR = { actorRole: 'USER' };
+
 describe('deletePost', () => {
   it('returns null when post is not found', async () => {
     const prisma = makePrisma({ postFindFirst: null });
     const { sut } = makeSut(prisma);
 
-    expect(await sut.deletePost('post-1', 'user-1')).toBeNull();
+    expect(await sut.deletePost('post-1', 'user-1', AS_AUTHOR)).toBeNull();
   });
 
   it('throws FORBIDDEN when user is not the author', async () => {
     const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'user-1' }) });
     const { sut } = makeSut(prisma);
 
-    await expect(sut.deletePost('post-1', 'user-other')).rejects.toThrow('FORBIDDEN');
+    await expect(sut.deletePost('post-1', 'user-other', AS_AUTHOR)).rejects.toThrow('FORBIDDEN');
   });
 
   it('soft-deletes the post by setting deletedAt', async () => {
     const prisma = makePrisma();
     const { sut } = makeSut(prisma);
 
-    await sut.deletePost('post-1', 'user-1');
+    await sut.deletePost('post-1', 'user-1', AS_AUTHOR);
 
     expect(prisma.post.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -221,14 +227,25 @@ describe('deletePost', () => {
     const prisma = makePrisma();
     const { sut } = makeSut(prisma);
 
-    await sut.deletePost('post-1', 'user-1');
+    await sut.deletePost('post-1', 'user-1', AS_AUTHOR);
 
     expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith(
+      // La désactivation est GROUPÉE (`targetId: { in: [...] }`) : le retrait
+      // partagé traite le post et ce qu'il emporte en une écriture.
       expect.objectContaining({
-        where: { targetId: 'post-1' },
+        where: { targetId: { in: ['post-1'] } },
         data: { isActive: false },
       }),
     );
+  });
+
+  it('laisse un MODÉRATEUR retirer le post de quelqu\'un d\'autre', async () => {
+    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'user-1' }) });
+    const { sut } = makeSut(prisma);
+
+    await expect(
+      sut.deletePost('post-1', 'user-moderateur', { actorRole: 'MODERATOR', reason: 'spam' })
+    ).resolves.toBeDefined();
   });
 
   it('still returns the post even when tracking link deactivation fails', async () => {
@@ -236,7 +253,7 @@ describe('deletePost', () => {
     (prisma.trackingLink.updateMany as jest.Mock<any>).mockRejectedValue(new Error('DB error'));
     const { sut } = makeSut(prisma);
 
-    const result = await sut.deletePost('post-1', 'user-1');
+    const result = await sut.deletePost('post-1', 'user-1', AS_AUTHOR);
 
     expect(result).toEqual(expect.objectContaining({ id: 'post-1' }));
   });
@@ -792,12 +809,17 @@ describe('getPostInteractions', () => {
     await expect(sut.getPostInteractions('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
   });
 
+  // La réaction est lue dans la TABLE `PostReaction`, jamais dans le tableau
+  // embarqué `post.reactions` : le chemin socket (`post:reaction-add`)
+  // n'alimente pas ce tableau, et l'auteur y voyait donc `reaction: null` pour
+  // des réactions bien réelles. Ce test semait l'ancienne source.
   it('merges viewer reactions into the interactions response', async () => {
-    const postWithReactions = makePost({
-      reactions: [{ userId: 'viewer-1', emoji: '👏' }],
-    });
     const view = { user: { id: 'viewer-1', username: 'v', displayName: 'V', avatar: null }, viewedAt: new Date() };
-    const prisma = makePrisma({ postFindFirst: postWithReactions, viewFindMany: [view], viewCount: 1 });
+    const prisma = makePrisma({
+      reactionFindMany: [{ userId: 'viewer-1', emoji: '👏' }],
+      viewFindMany: [view],
+      viewCount: 1,
+    });
     const { sut } = makeSut(prisma);
 
     const result = await sut.getPostInteractions('post-1', 'user-1', 10, 0) as any;
