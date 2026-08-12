@@ -157,7 +157,7 @@ struct SecurityView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(.subheadline.weight(.semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.callout.weight(.medium))
@@ -216,7 +216,7 @@ struct SecurityView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -869,13 +869,13 @@ struct SecurityView: View {
                 HStack(spacing: 12) {
                     fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
 
-                    Text(String(localized: "security_sessions_manage", defaultValue: "Gerer les sessions actives"))
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Gérer les sessions actives"))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -954,7 +954,7 @@ struct SecurityView: View {
                     isEditingEmail = false
                 }
                 startResendCooldown()
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
                 HapticFeedback.error()
                 emailError = error.errorDescription
             } catch {
@@ -1003,7 +1003,7 @@ struct SecurityView: View {
                 _ = try await UserService.shared.changePhone(ChangePhoneRequest(newPhoneNumber: newPhone))
                 HapticFeedback.success()
                 withAnimation { phoneSent = true }
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
                 HapticFeedback.error()
                 phoneError = error.errorDescription
             } catch {
@@ -1029,10 +1029,15 @@ struct SecurityView: View {
                     phoneCode = ""
                     newPhone = ""
                 }
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
+                // P1 — `APIClient` only ever throws `MeeshyError` (never the
+                // legacy `APIError`); this catch used to be dead code, so the
+                // 400/"code incorrect" branch never fired and every phone
+                // verification error (including a genuinely wrong code)
+                // showed the generic "Une erreur est survenue".
                 HapticFeedback.error()
                 switch error {
-                case .serverError(400, _):
+                case .server(400, _):
                     phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expire", bundle: .main)
                 default:
                     phoneError = error.errorDescription

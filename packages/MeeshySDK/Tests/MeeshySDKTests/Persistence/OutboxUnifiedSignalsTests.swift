@@ -234,6 +234,122 @@ final class OutboxUnifiedSignalsTests: XCTestCase {
         XCTAssertEqual(actions, Set<ReactionAction>([.add, .remove]))
     }
 
+    // MARK: - mutationEnqueued (outbox-04)
+
+    /// Une mutation sociale enfilée EN LIGNE doit réveiller le flusher tout
+    /// de suite — sans ce signal la row reste .pending jusqu'au prochain
+    /// événement de cycle de vie incident (reconnect, boot, foreground).
+    func test_enqueueKindPayload_emitsMutationEnqueued() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+
+        let exp = expectation(description: "mutationEnqueued fires")
+        OfflineQueue.shared.mutationEnqueued
+            .sink { exp.fulfill() }
+            .store(in: &cancellables)
+
+        _ = try await OfflineQueue.shared.enqueue(
+            .toggleLikePost,
+            payload: ToggleLikePostPayload(
+                clientMutationId: ClientMutationId.generate(), postId: "post-1", liked: true
+            ),
+            conversationId: "post-1"
+        )
+
+        await fulfillment(of: [exp], timeout: 2)
+    }
+
+    func test_enqueueMedia_emitsMutationEnqueued() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("media_\(UUID().uuidString).jpg")
+        try Data(repeating: 0xCD, count: 16).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let exp = expectation(description: "mutationEnqueued fires")
+        OfflineQueue.shared.mutationEnqueued
+            .sink { exp.fulfill() }
+            .store(in: &cancellables)
+
+        _ = try await OfflineQueue.shared.enqueueMedia(
+            sourceMediaURLs: [url], kinds: ["image"], conversationId: "conv-1",
+            content: nil, clientMessageId: "cid_media_\(UUID().uuidString)"
+        )
+
+        await fulfillment(of: [exp], timeout: 2)
+    }
+
+    func test_enqueueReaction_insertedOutcome_emitsMutationEnqueued() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+
+        let exp = expectation(description: "mutationEnqueued fires")
+        OfflineQueue.shared.mutationEnqueued
+            .sink { exp.fulfill() }
+            .store(in: &cancellables)
+
+        try await OfflineQueue.shared.enqueueReaction(
+            messageId: "m-emit", emoji: "👍", action: .add, conversationId: "c-1"
+        )
+
+        await fulfillment(of: [exp], timeout: 2)
+    }
+
+    /// Un no-op de dédup (.droppedNew) ne crée aucune row : réveiller le
+    /// flusher pour rien serait du bruit — verrou de la décision .inserted-only.
+    func test_enqueueReaction_droppedNew_doesNotEmitMutationEnqueued() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        try await OfflineQueue.shared.enqueueReaction(
+            messageId: "m-dup", emoji: "❤️", action: .add, conversationId: "c-1"
+        )
+
+        var fired = false
+        OfflineQueue.shared.mutationEnqueued
+            .sink { fired = true }
+            .store(in: &cancellables)
+
+        try await OfflineQueue.shared.enqueueReaction(
+            messageId: "m-dup", emoji: "❤️", action: .add, conversationId: "c-1"
+        )
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(fired, "un no-op de dédup ne doit pas réveiller le flusher")
+    }
+
+    /// Un échec d'enqueue (copie audio impossible) n'écrit aucune row .pending
+    /// nouvelle à flusher — verrou du placement de l'emit après la Phase B.
+    func test_enqueueAudios_copyFailure_doesNotEmitMutationEnqueued() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        let badSource = FileManager.default.temporaryDirectory
+            .appendingPathComponent("does_not_exist_\(UUID().uuidString).m4a")
+
+        var fired = false
+        OfflineQueue.shared.mutationEnqueued
+            .sink { fired = true }
+            .store(in: &cancellables)
+
+        do {
+            _ = try await OfflineQueue.shared.enqueueAudios(
+                sourceAudioURLs: [badSource], conversationId: "conv-1",
+                content: nil, clientMessageId: "cid_fail_\(UUID().uuidString)", originalLanguage: "fr"
+            )
+            XCTFail("enqueueAudios must throw when the source copy fails")
+        } catch {
+            // expected EnqueueAudioError.audioCopyFailed
+        }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(fired, "un enqueue qui échoue ne doit pas réveiller le flusher")
+    }
+
     // MARK: - Helpers
 
     private func makeFreshPool() throws -> DatabaseQueue {

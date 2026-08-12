@@ -2,6 +2,9 @@ import { User } from '@/types';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 
+// SSOT du décodage JWT côté client (base64url-safe) — cf. `utils/jwt`.
+export { isValidJWTFormat, isJWTExpired } from './jwt';
+
 export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
@@ -11,65 +14,34 @@ export interface AuthState {
 }
 
 /**
- * Valide le format d'un token JWT
- */
-export function isValidJWTFormat(token: string): boolean {
-  if (!token || typeof token !== 'string') {
-    return false;
-  }
-
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    return false;
-  }
-
-  try {
-    parts.forEach(part => {
-      if (!part || part.length === 0) {
-        throw new Error('Empty part');
-      }
-      atob(part.replace(/-/g, '+').replace(/_/g, '/'));
-    });
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
- * Vérifie si un token JWT est expiré (avec marge de 30s)
- */
-export function isJWTExpired(token: string): boolean {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return true;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    if (!payload.exp) return false;
-    return payload.exp * 1000 < Date.now() - 30_000;
-  } catch {
-    return true;
-  }
-}
-
-/**
  * Vérifie si un utilisateur est anonyme
  */
 export function isUserAnonymous(user: User | null): boolean {
   if (!user) return false;
-  
-  const hasAnonymousProperties = user.hasOwnProperty('sessionToken') ||
-                                user.hasOwnProperty('shareLinkId') ||
-                                user.hasOwnProperty('isAnonymous');
+
+  const candidate = user as Partial<
+    Record<'sessionToken' | 'shareLinkId' | 'isAnonymous', unknown>
+  >;
+
+  // `sessionToken` / `shareLinkId` ne figurent QUE sur l'objet de compatibilité
+  // anonyme (cf. gateway `auth.ts`). `isAnonymous` doit être testé sur sa VALEUR :
+  // le gateway émet `isAnonymous: false` sur l'utilisateur inscrit, un simple
+  // `hasOwnProperty` le classerait anonyme à tort.
+  const hasAnonymousProperties =
+    candidate.sessionToken !== undefined ||
+    candidate.shareLinkId !== undefined ||
+    candidate.isAnonymous === true;
 
   const anonymousSession = authManager.getAnonymousSession();
   const hasAnonymousToken = !!anonymousSession?.token;
-  
+
+  // Pas de clause de longueur : un ObjectId Mongo (24 hex) ou un UUID (36) ne
+  // dit RIEN de l'anonymat. Seuls les préfixes explicites signalent un anonyme.
   const hasAnonymousId = !!(user.id && (
-    user.id.startsWith('anon_') || 
-    user.id.includes('anonymous') ||
-    user.id.length > 20
+    user.id.startsWith('anon_') ||
+    user.id.includes('anonymous')
   ));
-  
+
   return hasAnonymousProperties || hasAnonymousToken || hasAnonymousId;
 }
 

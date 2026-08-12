@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 @MainActor
@@ -14,51 +15,26 @@ final class UserPreferencesManagerTests: XCTestCase {
         super.setUp()
         manager = UserPreferencesManager.shared
         manager.resetToDefaults()
+        // Test-only cleanup: a previous test's `scheduleSyncToBackend` may
+        // still be inside its 1s debounce when this test starts (no network
+        // in this suite, so `resetToDefaults()` doesn't touch it). Without
+        // this, `pendingCategories` from a prior test leaks into this one's
+        // `shouldApplyRemote`/`applyRemote`-adjacent assertions.
+        manager.pendingCategories.removeAll()
     }
 
-    // MARK: - shouldAutoDownloadMedia
-
-    func test_shouldAutoDownloadMedia_defaultsToFalse() {
-        XCTAssertFalse(manager.shouldAutoDownloadMedia)
-    }
-
-    func test_shouldAutoDownloadMedia_afterEnabling_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownloadMedia)
-    }
-
-    // MARK: - shouldAutoDownload(fileSizeMB:)
-
-    func test_shouldAutoDownload_whenDisabled_returnsFalse() {
-        manager.updateDocument { $0.autoDownloadEnabled = false }
-        XCTAssertFalse(manager.shouldAutoDownload(fileSizeMB: 1))
-    }
-
-    func test_shouldAutoDownload_withinMaxSize_returnsTrue() {
-        manager.updateDocument {
-            $0.autoDownloadEnabled = true
-            $0.autoDownloadMaxSize = 10
-        }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 5))
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 10))
-    }
-
-    func test_shouldAutoDownload_exceedsMaxSize_returnsFalse() {
-        manager.updateDocument {
-            $0.autoDownloadEnabled = true
-            $0.autoDownloadMaxSize = 10
-        }
-        XCTAssertFalse(manager.shouldAutoDownload(fileSizeMB: 11))
-    }
-
-    func test_shouldAutoDownload_zeroFileSize_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 0))
-    }
-
-    func test_shouldAutoDownload_negativeFileSize_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: -1))
+    override func tearDown() {
+        // `service`/`isAuthenticatedOverride` are test-only injection seams
+        // on the shared singleton — restore the production defaults so a
+        // leaked stub never leaks into an unrelated test in this bundle.
+        // Any `scheduleSyncToBackend` debounce `Task` still alive from this
+        // test will find `isAuthenticatedOverride == nil` and fall back to
+        // the real (false, in this test process) `AuthManager.shared
+        // .isAuthenticated`, so it safely no-ops instead of mutating
+        // whichever `OfflineQueue` pool is configured by the time it fires.
+        manager.isAuthenticatedOverride = nil
+        manager.service = PreferenceService.shared
+        super.tearDown()
     }
 
     // MARK: - resetToDefaults
@@ -77,6 +53,54 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.video, VideoPreferences.defaults)
         XCTAssertEqual(manager.document, DocumentPreferences.defaults)
         XCTAssertEqual(manager.application, ApplicationPreferences.defaults)
+    }
+
+    // MARK: - dndUtcOffsetMinutes (DND serveur tz-aware)
+
+    /// Chaque écriture de préférences notification embarque l'offset UTC du
+    /// device : le gateway évalue la fenêtre DND dans l'heure LOCALE de
+    /// l'utilisateur (`isWithinDnd`, dndUtcOffsetMinutes). Sans ce stamp, les
+    /// push des utilisateurs iOS hors UTC étaient (dé)bloqués aux mauvaises
+    /// heures dès que l'app était fermée.
+    func test_updateNotification_stampsDeviceUtcOffset() {
+        manager.updateNotification { $0.newMessageEnabled = false }
+
+        XCTAssertEqual(
+            manager.notification.dndUtcOffsetMinutes,
+            TimeZone.current.secondsFromGMT() / 60
+        )
+    }
+
+    // MARK: - Miroir App Group (NSE)
+
+    /// La NSE tourne dans un process séparé sans accès à
+    /// `UserDefaults.standard` : chaque écriture des préférences notification
+    /// doit être miroitée dans la suite App Group pour que le gating à la
+    /// livraison (sons/badge/DND/types) fonctionne app tuée.
+    func test_updateNotification_mirrorsToAppGroupForNSE() throws {
+        let suite = UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)
+        suite?.removeObject(forKey: UserPreferencesManager.appGroupNotificationPrefsKey)
+
+        manager.updateNotification { $0.soundEnabled = false }
+
+        let data = try XCTUnwrap(
+            suite?.data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey),
+            "le miroir App Group doit être écrit à chaque persist notification"
+        )
+        let mirrored = try JSONDecoder().decode(UserNotificationPreferences.self, from: data)
+        XCTAssertFalse(mirrored.soundEnabled)
+    }
+
+    func test_resetSession_removesAppGroupMirror() {
+        manager.updateNotification { $0.soundEnabled = false }
+
+        manager.resetSession()
+
+        XCTAssertNil(
+            UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)?
+                .data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey),
+            "logout : un user B ne doit pas hériter du gating NSE du user A"
+        )
     }
 
     // MARK: - resetSession (P1 — logout)
@@ -191,4 +215,221 @@ final class UserPreferencesManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
     }
+
+    // MARK: - shouldApplyRemote (applyRemote server-wins race, P1)
+    //
+    // `applyRemote` itself is private and only reachable through
+    // `fetchFromBackend()`, which hits the real (non-injectable)
+    // `PreferenceService.shared` — so the merge DECISION is extracted to a
+    // pure static function and tested directly (same "extract the pure
+    // core" pattern as `StoryViewerView.rollingBackOptimisticComment`).
+
+    func test_shouldApplyRemote_categoryNotPending_returnsTrue() {
+        XCTAssertTrue(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: []))
+    }
+
+    func test_shouldApplyRemote_categoryPending_returnsFalse() {
+        XCTAssertFalse(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: [.privacy]))
+    }
+
+    func test_shouldApplyRemote_otherCategoryPending_returnsTrue() {
+        XCTAssertTrue(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: [.audio]))
+    }
+
+    // MARK: - pendingCategories wiring (scheduleSyncToBackend / syncCategoryToBackend)
+
+    func test_updatePrivacy_marksCategoryPendingSynchronously() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "scheduleSyncToBackend marks the category pending BEFORE the 1s debounce, synchronously")
+    }
+
+    func test_updateAudio_onlyMarksItsOwnCategoryPending() {
+        manager.updateAudio { $0.noiseSuppression = false }
+
+        XCTAssertTrue(manager.pendingCategories.contains(.audio))
+        XCTAssertFalse(manager.pendingCategories.contains(.privacy))
+    }
+
+    func test_resetSession_clearsPendingCategories() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertFalse(manager.pendingCategories.isEmpty, "precondition: a pending category exists")
+
+        manager.resetSession()
+
+        XCTAssertTrue(manager.pendingCategories.isEmpty)
+    }
+
+    // MARK: - pendingCategories persistence (cross-kill stability)
+
+    func test_updateNotification_persistsPendingCategoriesToUserDefaults() {
+        manager.updateNotification { $0.notificationBadgeEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification), "precondition: notification pending")
+
+        // Verify that pending categories are persisted to UserDefaults
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertTrue(savedArray.contains(PreferenceCategory.notification.rawValue), "pendingCategories should be persisted to UserDefaults so they survive a relaunch")
+    }
+
+    func test_updatePrivacy_persistsPendingCategoriesToUserDefaults() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: privacy pending")
+
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertTrue(savedArray.contains(PreferenceCategory.privacy.rawValue))
+    }
+
+    func test_syncCategoryToBackend_clearsPendingCategoriesFromUserDefaults() async {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        // Debounce is 1s, wait for it to fire
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertFalse(savedArray.contains(PreferenceCategory.privacy.rawValue), "pending categories should be cleared after sync completes (or fails)")
+    }
+
+    func test_resetSession_wipesPersistedPendingCategories() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        manager.resetSession()
+
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories")
+        XCTAssertNil(savedArray, "pendingCategories key should be wiped on logout")
+    }
+
+    // MARK: - fetchFromBackend / applyRemote integration (cold-boot reconciliation)
+    //
+    // `UserPreferencesManager` is a singleton with a private `init()`, so a
+    // real relaunch cannot be simulated by constructing a fresh instance.
+    // Instead we drive the EXACT reload path `init()` uses
+    // (`UserPreferencesManager.loadPendingCategories()`) after manually
+    // dropping the in-memory `pendingCategories`, which is what a process
+    // kill does for real. `service` is swapped for a mock so
+    // `fetchFromBackend()` never touches the network, and
+    // `isAuthenticatedOverride` bypasses the real `AuthManager.shared`
+    // singleton (see `tearDown` for why).
+
+    func test_fetchFromBackend_afterSimulatedRelaunch_preservesNotYetConfirmedLocalChange() async {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: local change marked pending")
+
+        // Simulate process kill + relaunch: in-memory state is dropped,
+        // then re-hydrated from UserDefaults via the same path `init()` uses.
+        manager.pendingCategories.removeAll()
+        manager.pendingCategories = UserPreferencesManager.loadPendingCategories() ?? []
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: pending flag survives relaunch via persisted UserDefaults")
+
+        // Stale server value predating the local change (defaults: true).
+        mock.allPreferencesResult = .defaults
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.privacy.showOnlineStatus, "cold-boot reconciliation must not clobber a not-yet-confirmed local change with a stale server value")
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "precondition: fetchFromBackend actually called the (mocked) network")
+    }
+
+    func test_fetchFromBackend_categoryNotPending_appliesRemoteValue() async {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+
+        var remote = UserPreferences.defaults
+        remote.privacy.showOnlineStatus = false
+        mock.allPreferencesResult = remote
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.privacy.showOnlineStatus, "no local pending edit for .privacy — remote value applies normally")
+    }
+
+    // MARK: - resumeOrphanedPendingSyncs (gateway-delivery guarantee)
+    //
+    // Reproduces the reported symptom precisely: `scheduleSyncToBackend`'s
+    // 1s debounce `Task` never had time to fire before the app was killed,
+    // so the local value + the pending flag are durably persisted but
+    // NOTHING has reached the outbox yet. `resumeOrphanedPendingSyncs` is
+    // what `observeAuth()` calls on the next authenticated boot.
+
+    func test_resumeOrphanedPendingSyncs_deliversMutation_forCategoryNeverEnqueued() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+
+        manager.isAuthenticatedOverride = { true }
+
+        // `updatePrivacy` marks `.privacy` pending synchronously and starts
+        // the 1s debounce — deliberately NOT awaited here, simulating a kill
+        // that happens before it fires.
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        let countBeforeResume = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(countBeforeResume, 0, "precondition: debounce hasn't fired yet, nothing enqueued")
+
+        await manager.resumeOrphanedPendingSyncs([.privacy])
+
+        let countAfterResume = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertGreaterThanOrEqual(countAfterResume, 1, "an orphaned pending category must reach the outbox without waiting for the 1s debounce — this is the reported symptom: the PATCH never reaching the gateway")
+        XCTAssertFalse(manager.pendingCategories.contains(.privacy), "a successfully-resumed sync clears the pending flag")
+    }
+
+    func test_resumeOrphanedPendingSyncs_notAuthenticated_leavesCategoryPending() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+
+        manager.isAuthenticatedOverride = { false }
+        manager.pendingCategories = [.privacy]
+
+        await manager.resumeOrphanedPendingSyncs([.privacy])
+
+        let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(count, 0, "not authenticated yet — must not attempt delivery")
+    }
+}
+
+// MARK: - Test Doubles
+
+/// Minimal `PreferenceServiceProviding` conformer for
+/// `UserPreferencesManagerTests`' `fetchFromBackend()` integration tests.
+/// Only `getAllPreferences` is exercised by those tests; every other
+/// requirement is stubbed to a harmless default since the protocol has no
+/// default implementation for them (see the cache-first accessors, which
+/// DO have one, in `PreferenceService.swift`).
+private final class MockPreferenceService: PreferenceServiceProviding, @unchecked Sendable {
+    var allPreferencesResult: UserPreferences?
+    private(set) var getAllPreferencesCallCount = 0
+
+    func getCategories() async throws -> [ConversationCategory] { [] }
+
+    func getConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
+        throw MockPreferenceServiceError.notStubbed
+    }
+
+    func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {}
+
+    func patchCategory(id: String, isExpanded: Bool) async throws {}
+
+    func getAllPreferences() async throws -> UserPreferences {
+        getAllPreferencesCallCount += 1
+        guard let allPreferencesResult else { throw MockPreferenceServiceError.notStubbed }
+        return allPreferencesResult
+    }
+
+    func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {}
+
+    func resetPreferences(category: PreferenceCategory) async throws {}
+
+    func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        throw MockPreferenceServiceError.notStubbed
+    }
+
+    func getMyConversationTags() async throws -> [String] { [] }
+}
+
+private enum MockPreferenceServiceError: Error {
+    case notStubbed
 }

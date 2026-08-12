@@ -456,7 +456,10 @@ describe('SessionService', () => {
         where: {
           userId: mockUserId,
           isValid: true,
-          invalidatedAt: null
+          OR: [
+            { invalidatedAt: null },
+            { invalidatedAt: { isSet: false } }
+          ]
         },
         orderBy: { lastActivityAt: 'asc' }
       });
@@ -530,7 +533,10 @@ describe('SessionService', () => {
           sessionToken: expect.any(String),
           isValid: true,
           expiresAt: { gt: expect.any(Date) },
-          invalidatedAt: null
+          OR: [
+            { invalidatedAt: null },
+            { invalidatedAt: { isSet: false } }
+          ]
         }
       });
     });
@@ -600,7 +606,10 @@ describe('SessionService', () => {
         where: {
           userId: mockUserId,
           isValid: true,
-          invalidatedAt: null,
+          OR: [
+            { invalidatedAt: null },
+            { invalidatedAt: { isSet: false } }
+          ],
           expiresAt: { gt: expect.any(Date) }
         },
         orderBy: { lastActivityAt: 'desc' }
@@ -841,11 +850,20 @@ describe('SessionService', () => {
         expect(result).toBe(10);
         expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
           where: {
-            OR: [
-              { expiresAt: { lt: expect.any(Date) } },
-              { isValid: false }
-            ],
-            invalidatedAt: null
+            AND: [
+              {
+                OR: [
+                  { expiresAt: { lt: expect.any(Date) } },
+                  { isValid: false }
+                ]
+              },
+              {
+                OR: [
+                  { invalidatedAt: null },
+                  { invalidatedAt: { isSet: false } }
+                ]
+              }
+            ]
           },
           data: {
             isValid: false,
@@ -1319,6 +1337,188 @@ describe('SessionService', () => {
 
       expect(result?.city).toBe('Sao Paulo');
       expect(result?.browserName).toBe("Mozilla's Firefox");
+    });
+  });
+
+  // ============================================================
+  // 11. MONGODB NULL-MATCHING FIX TESTS
+  // ============================================================
+  describe('MongoDB invalidatedAt null-matching (Bug Fix)', () => {
+    it('should find sessions where invalidatedAt field is undefined in MongoDB', async () => {
+      // This simulates MongoDB behavior: when createSession doesn't include invalidatedAt,
+      // MongoDB won't store the field at all. Queries with `invalidatedAt: null` won't match.
+      // Fix requires: OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }]
+
+      const sessionWithoutInvalidatedAtField = {
+        id: 'session-new',
+        userId: mockUserId,
+        sessionToken: mockTokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        deviceType: 'desktop',
+        deviceVendor: 'Apple',
+        deviceModel: null,
+        osName: 'macOS',
+        osVersion: '14.0',
+        browserName: 'Chrome',
+        browserVersion: '120.0',
+        isMobile: false,
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0',
+        ipAddress: '192.168.1.1',
+        country: 'FR',
+        city: 'Paris',
+        location: 'Paris, France',
+        latitude: 48.8566,
+        longitude: 2.3522,
+        timezone: 'Europe/Paris',
+        isValid: true,
+        isTrusted: false,
+        isCurrentSession: true,
+        createdAt: new Date(),
+        lastActivityAt: new Date(),
+        // NOTE: invalidatedAt field is intentionally absent (not set in MongoDB)
+        refreshToken: null
+      };
+
+      mockPrisma.userSession.findMany.mockResolvedValueOnce([sessionWithoutInvalidatedAtField]);
+
+      const result = await getUserSessions(mockUserId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('session-new');
+    });
+
+    it('should find sessions during validateSession even if invalidatedAt field is undefined', async () => {
+      const sessionWithoutInvalidatedAtField = {
+        id: 'session-validate-test',
+        userId: mockUserId,
+        sessionToken: mockTokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        deviceType: 'desktop',
+        deviceVendor: 'Apple',
+        deviceModel: null,
+        osName: 'macOS',
+        osVersion: '14.0',
+        browserName: 'Chrome',
+        browserVersion: '120.0',
+        isMobile: false,
+        userAgent: 'Mozilla/5.0',
+        ipAddress: '192.168.1.1',
+        country: 'FR',
+        city: 'Paris',
+        location: 'Paris, France',
+        latitude: 48.8566,
+        longitude: 2.3522,
+        timezone: 'Europe/Paris',
+        isValid: true,
+        isTrusted: false,
+        createdAt: new Date(),
+        lastActivityAt: new Date(),
+        // NOTE: invalidatedAt field is absent
+        invalidatedReason: null,
+        refreshToken: null
+      };
+
+      mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithoutInvalidatedAtField);
+      mockPrisma.userSession.update.mockResolvedValueOnce(sessionWithoutInvalidatedAtField);
+
+      const result = await validateSession(mockToken);
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('session-validate-test');
+    });
+
+    it('should enforce session limit for sessions without invalidatedAt field set', async () => {
+      // When enforceSessionLimit queries for existing sessions, it must match
+      // sessions where invalidatedAt is undefined (not set in MongoDB)
+      const existingSessions = Array.from({ length: 11 }, (_, i) => ({
+        id: `session-${i}`,
+        userId: mockUserId,
+        sessionToken: `token-hash-${i}`,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        deviceType: 'desktop',
+        deviceVendor: 'Apple',
+        deviceModel: null,
+        osName: 'macOS',
+        osVersion: '14.0',
+        browserName: 'Chrome',
+        browserVersion: '120.0',
+        isMobile: false,
+        userAgent: 'Mozilla/5.0',
+        ipAddress: '192.168.1.1',
+        country: 'FR',
+        city: 'Paris',
+        location: 'Paris, France',
+        latitude: 48.8566,
+        longitude: 2.3522,
+        timezone: 'Europe/Paris',
+        isValid: true,
+        isTrusted: false,
+        createdAt: new Date(),
+        lastActivityAt: new Date(Date.now() - (10 - i) * 1000),
+        // NOTE: invalidatedAt field is absent (MongoDB reality)
+        refreshToken: null
+      }));
+
+      mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
+      mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
+      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+
+      const input: CreateSessionInput = {
+        userId: mockUserId,
+        token: mockToken,
+        requestContext: mockRequestContextDesktop
+      };
+
+      await createSession(input);
+
+      // Verify that findMany was called with proper WHERE clause for active sessions
+      expect(mockPrisma.userSession.findMany).toHaveBeenCalledWith({
+        where: {
+          userId: mockUserId,
+          isValid: true,
+          OR: [
+            { invalidatedAt: null },
+            { invalidatedAt: { isSet: false } }
+          ]
+        },
+        orderBy: { lastActivityAt: 'asc' }
+      });
+
+      // Should have invalidated the oldest session
+      expect(mockPrisma.userSession.update).toHaveBeenCalled();
+    });
+
+    it('should correctly distinguish between explicitly invalidated and new sessions in cleanupExpiredSessions', async () => {
+      mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 5 });
+
+      await cleanupExpiredSessions();
+
+      // The cleanup should match both:
+      // 1. Sessions where invalidatedAt is explicitly set to null
+      // 2. Sessions where invalidatedAt field doesn't exist in MongoDB
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+        where: {
+          AND: [
+            {
+              OR: [
+                { expiresAt: { lt: expect.any(Date) } },
+                { isValid: false }
+              ]
+            },
+            {
+              OR: [
+                { invalidatedAt: null },
+                { invalidatedAt: { isSet: false } }
+              ]
+            }
+          ]
+        },
+        data: {
+          isValid: false,
+          invalidatedAt: expect.any(Date),
+          invalidatedReason: 'expired'
+        }
+      });
     });
   });
 });

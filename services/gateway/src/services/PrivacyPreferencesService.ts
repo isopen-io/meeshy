@@ -140,24 +140,59 @@ export class PrivacyPreferencesService {
       // Construire le map des valeurs stockées
       const storedMap = new Map(storedPreferences.map(p => [p.key, p.value]));
 
-      // Construire les préférences avec les valeurs stockées ou les défauts
-      const preferences: PrivacyPreferences = {
-        showOnlineStatus: this.getBooleanValue(storedMap, 'show-online-status', 'showOnlineStatus'),
-        showLastSeen: this.getBooleanValue(storedMap, 'show-last-seen', 'showLastSeen'),
-        showReadReceipts: this.getBooleanValue(storedMap, 'show-read-receipts', 'showReadReceipts'),
-        showTypingIndicator: this.getBooleanValue(storedMap, 'show-typing-indicator', 'showTypingIndicator'),
-        allowContactRequests: this.getBooleanValue(storedMap, 'allow-contact-requests', 'allowContactRequests'),
-        allowGroupInvites: this.getBooleanValue(storedMap, 'allow-group-invites', 'allowGroupInvites'),
-        saveMediaToGallery: this.getBooleanValue(storedMap, 'save-media-to-gallery', 'saveMediaToGallery'),
-        allowAnalytics: this.getBooleanValue(storedMap, 'allow-analytics', 'allowAnalytics'),
-      };
-
-      return preferences;
+      return this.buildPreferences(storedMap);
     } catch (error) {
       logger.error('privacy preferences fetch from database failed', { userId, error });
       // En cas d'erreur, retourner les valeurs par défaut
       return this.getDefaultPreferences();
     }
+  }
+
+  /**
+   * Assemble les préférences à partir des valeurs stockées, en complétant par
+   * les défauts. Partagé par la lecture unitaire et la lecture groupée.
+   */
+  private buildPreferences(storedMap: Map<string, string>): PrivacyPreferences {
+    return {
+      showOnlineStatus: this.getBooleanValue(storedMap, 'show-online-status', 'showOnlineStatus'),
+      showLastSeen: this.getBooleanValue(storedMap, 'show-last-seen', 'showLastSeen'),
+      showReadReceipts: this.getBooleanValue(storedMap, 'show-read-receipts', 'showReadReceipts'),
+      showTypingIndicator: this.getBooleanValue(storedMap, 'show-typing-indicator', 'showTypingIndicator'),
+      allowContactRequests: this.getBooleanValue(storedMap, 'allow-contact-requests', 'allowContactRequests'),
+      allowGroupInvites: this.getBooleanValue(storedMap, 'allow-group-invites', 'allowGroupInvites'),
+      saveMediaToGallery: this.getBooleanValue(storedMap, 'save-media-to-gallery', 'saveMediaToGallery'),
+      allowAnalytics: this.getBooleanValue(storedMap, 'allow-analytics', 'allowAnalytics'),
+    };
+  }
+
+  /**
+   * Lit les préférences de plusieurs utilisateurs en UNE requête, puis répartit
+   * les lignes par utilisateur. Ne rattrape pas les erreurs : l'appelant décide
+   * du repli, et surtout ne met pas un échec en cache.
+   */
+  private async fetchManyFromDatabase(
+    userIds: string[]
+  ): Promise<Map<string, PrivacyPreferences>> {
+    const dbKeys = Object.values(PRIVACY_KEY_MAPPING);
+    const rows = await this.prisma.userPreference.findMany({
+      where: { userId: { in: userIds }, key: { in: dbKeys } },
+    });
+
+    const storedByUser = new Map<string, Map<string, string>>();
+    for (const row of rows) {
+      let forUser = storedByUser.get(row.userId);
+      if (!forUser) {
+        forUser = new Map<string, string>();
+        storedByUser.set(row.userId, forUser);
+      }
+      forUser.set(row.key, row.value);
+    }
+
+    const result = new Map<string, PrivacyPreferences>();
+    for (const userId of userIds) {
+      result.set(userId, this.buildPreferences(storedByUser.get(userId) ?? new Map()));
+    }
+    return result;
   }
 
   /**
@@ -247,17 +282,43 @@ export class PrivacyPreferencesService {
     userIds: Array<{ id: string; isAnonymous: boolean }>
   ): Promise<Map<string, PrivacyPreferences>> {
     const result = new Map<string, PrivacyPreferences>();
+    const misses: string[] = [];
 
-    // Récupérer en parallèle avec Promise.all
-    const promises = userIds.map(async ({ id, isAnonymous }) => {
-      const prefs = await this.getPreferences(id, isAnonymous);
-      return { id, prefs };
-    });
+    // Anonymes et entrées encore chaudes sont servis sans toucher la base ;
+    // seuls les manquants partent en requête, et en UNE seule.
+    for (const { id, isAnonymous } of userIds) {
+      if (isAnonymous) {
+        result.set(id, this.getDefaultPreferences());
+        continue;
+      }
 
-    const results = await Promise.all(promises);
+      const cached = this.cache.get(id);
+      if (cached && (Date.now() - cached.fetchedAt) < this.CACHE_TTL_MS) {
+        result.set(id, cached.preferences);
+        continue;
+      }
 
-    for (const { id, prefs } of results) {
-      result.set(id, prefs);
+      misses.push(id);
+    }
+
+    if (misses.length === 0) return result;
+
+    let fetched: Map<string, PrivacyPreferences>;
+    try {
+      fetched = await this.fetchManyFromDatabase(misses);
+    } catch (error) {
+      logger.error('privacy preferences batch fetch failed', { count: misses.length, error });
+      // Repli sur les défauts SANS mise en cache : mémoriser un échec le
+      // figerait pour toute la durée du TTL.
+      for (const id of misses) result.set(id, this.getDefaultPreferences());
+      return result;
+    }
+
+    const fetchedAt = Date.now();
+    for (const id of misses) {
+      const preferences = fetched.get(id) ?? this.getDefaultPreferences();
+      this.cache.set(id, { preferences, fetchedAt });
+      result.set(id, preferences);
     }
 
     return result;

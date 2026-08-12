@@ -110,4 +110,69 @@ class StatusBarListStateTest {
 
         assertThat(base.reacted("zzz", "❤️")).isEqualTo(base)
     }
+
+    @Test
+    fun `unreacted decrements an existing emoji count`() {
+        val seeded = StatusBarListState(
+            statuses = listOf(StatusEntry(id = "a", userId = "u", reactionSummary = mapOf("❤️" to 3))),
+        )
+
+        val state = seeded.unreacted("a", "❤️")
+
+        assertThat(state.statuses.first().reactionSummary).containsExactly("❤️", 2)
+    }
+
+    @Test
+    fun `unreacted removes the emoji bucket when the count reaches zero`() {
+        val seeded = StatusBarListState(
+            statuses = listOf(StatusEntry(id = "a", userId = "u", reactionSummary = mapOf("❤️" to 1, "🔥" to 4))),
+        )
+
+        val state = seeded.unreacted("a", "❤️")
+
+        assertThat(state.statuses.first().reactionSummary).containsExactly("🔥", 4)
+    }
+
+    @Test
+    fun `unreacted is inert for a status not in the list`() {
+        val base = StatusBarListState.Empty.appended(page(entry("a")))
+
+        assertThat(base.unreacted("zzz", "❤️")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `unreacted is inert when the status carries no such reaction`() {
+        val seeded = StatusBarListState(
+            statuses = listOf(StatusEntry(id = "a", userId = "u", reactionSummary = mapOf("🔥" to 2))),
+        )
+
+        assertThat(seeded.unreacted("a", "❤️")).isSameInstanceAs(seeded)
+    }
+
+    @Test
+    fun `unreacted is inert when the status has no reactions at all`() {
+        val base = StatusBarListState.Empty.appended(page(entry("a")))
+
+        assertThat(base.unreacted("a", "❤️")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `updated replaces the entry in place preserving its position`() {
+        val base = StatusBarListState.Empty
+            .appended(page(entry("a"), entry("b"), entry("c")))
+
+        val state = base.updated(StatusEntry(id = "b", userId = "u", moodEmoji = "🎉", content = "edited"))
+
+        assertThat(state.statuses.map { it.id }).containsExactly("a", "b", "c").inOrder()
+        val updated = state.statuses[1]
+        assertThat(updated.moodEmoji).isEqualTo("🎉")
+        assertThat(updated.content).isEqualTo("edited")
+    }
+
+    @Test
+    fun `updated is inert for a status not in the list`() {
+        val base = StatusBarListState.Empty.appended(page(entry("a")))
+
+        assertThat(base.updated(entry("zzz"))).isEqualTo(base)
+    }
 }

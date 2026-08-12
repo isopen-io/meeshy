@@ -271,6 +271,60 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
             "markAsRead rows MUST be excluded from the SyncPill snapshot; only the real sendMessage stays")
     }
 
+    // MARK: - markStoryViewed is a background view-receipt, never a user-facing op
+
+    /// Une ligne `markStoryViewed` `.exhausted` NE DOIT PAS remonter dans le
+    /// snapshot de la pastille. C'est un « vu » de story : idempotent, coalescé
+    /// par storyId, sans destination de navigation (`source == .unknown`, donc
+    /// le tap ne mène nulle part) et sans valeur de rejeu manuel — personne ne
+    /// veut « retenter » une vue de story.
+    ///
+    /// Sans cette exclusion, la conjonction de trois mécanismes rendait la
+    /// pastille PERMANENTE : `.exhausted` est explicitement surfacé (T14b),
+    /// l'auto-masquage après 3 cycles a été retiré (2026-05-27), et la
+    /// rétention GC est de 7 jours au boot. Symptôme observé : « Vues story
+    /// non synchronisées 7/7 » figé en tête de l'écran d'accueil, sans aucun
+    /// geste utilisateur pour s'en débarrasser.
+    func test_publisher_excludes_exhausted_markStoryViewed_kind() async throws {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        try await pool.write { db in
+            // Une vraie opération utilisateur qui DOIT rester visible.
+            try OutboxRecord(
+                id: "ofq_send_visible_story",
+                kind: .sendMessage,
+                conversationId: "conv-story-mix",
+                clientMessageId: "cid_send_visible_story",
+                payload: Self.encodedSendPayload(content: "real message", cmid: "cid_send_visible_story"),
+                status: .pending,
+                createdAt: now,
+                updatedAt: now,
+                nextAttemptAt: now
+            ).insert(db)
+            // Un « vu » de story définitivement échoué qui DOIT être filtré.
+            try OutboxRecord(
+                id: "ofqm_storyviewed_exhausted",
+                kind: .markStoryViewed,
+                conversationId: "story-gone",
+                clientMessageId: "cmid_storyviewed",
+                payload: Data(),
+                status: .exhausted,
+                createdAt: now.addingTimeInterval(1),
+                updatedAt: now.addingTimeInterval(1),
+                nextAttemptAt: now.addingTimeInterval(1)
+            ).insert(db)
+        }
+        await queue.refreshForTesting()
+
+        let recorder = Recorder<[OutboxUIItem]>()
+        let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        cancellable.cancel()
+
+        let last = recorder.snapshot().last ?? []
+        XCTAssertEqual(last.map(\.id), ["ofq_send_visible_story"],
+            "markStoryViewed rows MUST be excluded from the SyncPill snapshot; only the real sendMessage stays")
+    }
+
     // MARK: - Helpers
 
     private static func encodedSendPayload(content: String, cmid: String) -> Data {

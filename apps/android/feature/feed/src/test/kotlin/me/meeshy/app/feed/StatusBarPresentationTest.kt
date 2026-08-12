@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.Test
 
 /**
@@ -190,5 +191,111 @@ class StatusBarPresentationTest {
         val model = statusPopoverModel(entry("mine"), nowMillis = 0L, isOwn = true)
 
         assertThat(model.canRepublish).isFalse()
+    }
+
+    // --- reaction picker ------------------------------------------------------
+
+    @Test
+    fun `another user's status popover offers the reaction picker`() {
+        val model = statusPopoverModel(entry("s1"), nowMillis = 0L, isOwn = false)
+
+        assertThat(model.canReact).isTrue()
+    }
+
+    @Test
+    fun `the signed-in user's own status popover hides the reaction picker`() {
+        val model = statusPopoverModel(entry("mine"), nowMillis = 0L, isOwn = true)
+
+        assertThat(model.canReact).isFalse()
+    }
+
+    @Test
+    fun `popover surfaces the existing reactions from the entry summary`() {
+        val e = entry("s1").copy(reactionSummary = mapOf("🔥" to 2, "❤️" to 5))
+
+        val model = statusPopoverModel(e, nowMillis = 0L)
+
+        assertThat(model.reactions).containsExactly(
+            StatusReactionChip("❤️", 5),
+            StatusReactionChip("🔥", 2),
+        ).inOrder()
+    }
+
+    @Test
+    fun `popover has no reactions when the summary is null`() {
+        val model = statusPopoverModel(entry("s1"), nowMillis = 0L)
+
+        assertThat(model.reactions).isEmpty()
+    }
+
+    // --- reaction chip aggregation --------------------------------------------
+
+    @Test
+    fun `reaction chips are empty for a null summary`() {
+        assertThat(statusReactionChips(null)).isEmpty()
+    }
+
+    @Test
+    fun `reaction chips drop zero and negative counts`() {
+        val chips = statusReactionChips(mapOf("🔥" to 0, "❤️" to 3, "👏" to -1))
+
+        assertThat(chips).containsExactly(StatusReactionChip("❤️", 3))
+    }
+
+    @Test
+    fun `reaction chips order by descending count`() {
+        val chips = statusReactionChips(mapOf("🔥" to 1, "❤️" to 9, "👏" to 4))
+
+        assertThat(chips).containsExactly(
+            StatusReactionChip("❤️", 9),
+            StatusReactionChip("👏", 4),
+            StatusReactionChip("🔥", 1),
+        ).inOrder()
+    }
+
+    @Test
+    fun `reaction chips break count ties by emoji for a stable order`() {
+        val chips = statusReactionChips(mapOf("🔥" to 2, "❤️" to 2, "👏" to 2))
+
+        assertThat(chips).containsExactly(
+            StatusReactionChip("❤️", 2),
+            StatusReactionChip("👏", 2),
+            StatusReactionChip("🔥", 2),
+        ).inOrder()
+    }
+
+    // --- feed-mode toggle -----------------------------------------------------
+
+    @Test
+    fun `feed-mode tabs always offer both feeds`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.FRIENDS)
+
+        assertThat(tabs.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS, StatusFeedMode.DISCOVER)
+    }
+
+    @Test
+    fun `feed-mode tabs read friends first then discover`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.DISCOVER)
+
+        assertThat(tabs.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS, StatusFeedMode.DISCOVER)
+            .inOrder()
+    }
+
+    @Test
+    fun `feed-mode tabs select the friends segment on the friends feed`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.FRIENDS)
+
+        assertThat(tabs.filter { it.isSelected }.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS)
+    }
+
+    @Test
+    fun `feed-mode tabs select the discover segment on the discover feed`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.DISCOVER)
+
+        assertThat(tabs.filter { it.isSelected }.map { it.mode })
+            .containsExactly(StatusFeedMode.DISCOVER)
     }
 }

@@ -88,7 +88,26 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
     // MARK: - Hydrate (call once after login)
 
-    public func hydrate(friendService: FriendServiceProviding = FriendService.shared) async {
+    /// cache-08 — tuple de seed hors-ligne (stores GRDB persistés) servi
+    /// AVANT le round-trip réseau : au cold start offline, les statuts
+    /// d'amitié ne sont plus faux (.none pour de vrais amis).
+    public typealias FriendshipSeed = (friends: [FriendRequestUser], received: [FriendRequest], sent: [FriendRequest])
+
+    /// Lecture par défaut du seed : les stores GRDB déjà persistés
+    /// (friends_list, requests:received, requests:sent), au-delà du TTL.
+    private static let defaultSeedSource: @Sendable () async -> FriendshipSeed? = {
+        let coord = CacheCoordinator.shared
+        let friends = await coord.friends.loadIgnoringExpiry(for: PersistenceKeys.friendsList)
+        let received = await coord.friendRequests.loadIgnoringExpiry(for: PersistenceKeys.receivedRequests)
+        let sent = await coord.friendRequests.loadIgnoringExpiry(for: PersistenceKeys.sentRequests)
+        if friends == nil && received == nil && sent == nil { return nil }
+        return (friends?.items ?? [], received?.items ?? [], sent?.items ?? [])
+    }
+
+    public func hydrate(
+        friendService: FriendServiceProviding = FriendService.shared,
+        seedSource: (@Sendable () async -> FriendshipSeed?)? = nil
+    ) async {
         // Fast path: already hydrated, nothing to do. The check is intentionally
         // outside the lock — `isHydrated` takes the lock itself, and a stale
         // false-read just falls through to the coalescer below where the
@@ -99,7 +118,10 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         // claim/release dance lives in synchronous helpers because Swift 6
         // forbids calling `NSLock.lock()/unlock()` directly from an async
         // context (it would risk a thread-hop while the lock is held).
-        let claim = claimOrJoinHydration(friendService: friendService)
+        let claim = claimOrJoinHydration(
+            friendService: friendService,
+            seedSource: seedSource ?? Self.defaultSeedSource
+        )
         await claim.task.value
         if let myGen = claim.ownerGen {
             releaseHydrationOwnership(gen: myGen)
@@ -111,7 +133,8 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// the caller is the *owner* (i.e. installed a new task), the generation
     /// number so it can later release the slot.
     private func claimOrJoinHydration(
-        friendService: FriendServiceProviding
+        friendService: FriendServiceProviding,
+        seedSource: @escaping @Sendable () async -> FriendshipSeed?
     ) -> (task: Task<Void, Never>, ownerGen: UInt64?) {
         lock.lock()
         defer { lock.unlock() }
@@ -122,7 +145,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         let myGen = _hydrationGen
         let newTask: Task<Void, Never> = Task { [weak self] in
             guard let self else { return }
-            await self.performHydration(friendService: friendService)
+            await self.performHydration(friendService: friendService, seedSource: seedSource)
         }
         _hydrationTask = newTask
         return (newTask, myGen)
@@ -140,8 +163,18 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func performHydration(friendService: FriendServiceProviding) async {
+    private func performHydration(
+        friendService: FriendServiceProviding,
+        seedSource: @Sendable () async -> FriendshipSeed?
+    ) async {
         logger.info("Hydrating friendship cache...")
+
+        // cache-08 — seed hors-ligne AVANT le round-trip : au cold start sans
+        // réseau, les statuts sont servis depuis les stores persistés au lieu
+        // de .none ; le fetch reste tenté et écrase dès qu'il répond.
+        if let seed = await seedSource() {
+            applySeed(friends: seed.friends, received: seed.received, sent: seed.sent)
+        }
 
         do {
             // Fetch sent and received requests in parallel
@@ -175,6 +208,36 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         let sentCount = _sentPending.count
         let receivedCount = _receivedPending.count
         logger.info("Friendship cache hydrated: \(friendsCount) friends, \(sentCount) sent pending, \(receivedCount) received pending")
+    }
+
+    /// cache-08 — seed hors-ligne : appliqué UNIQUEMENT sur un cache vide
+    /// (jamais par-dessus un état réseau ou des mutations optimistes), ne
+    /// pose JAMAIS _isHydrated — le réseau reste tenté et écrase dès qu'il
+    /// répond.
+    private func applySeed(friends: [FriendRequestUser], received: [FriendRequest], sent: [FriendRequest]) {
+        lock.lock()
+        let shouldApply = _friendIds.isEmpty && _sentPending.isEmpty && _receivedPending.isEmpty
+        if shouldApply {
+            for friend in friends {
+                _friendIds.insert(friend.id)
+            }
+            for request in sent {
+                switch request.status {
+                case "accepted": _friendIds.insert(request.receiverId)
+                case "pending": _sentPending[request.receiverId] = request.id
+                default: break
+                }
+            }
+            for request in received {
+                switch request.status {
+                case "accepted": _friendIds.insert(request.senderId)
+                case "pending": _receivedPending[request.senderId] = request.id
+                default: break
+                }
+            }
+        }
+        lock.unlock()
+        if shouldApply { notifyChange() }
     }
 
     private func applyHydration(sent: [FriendRequest], received: [FriendRequest]) {

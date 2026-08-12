@@ -245,8 +245,13 @@ describe('useAttachmentUpload', () => {
         uploadPromise = result.current.handleFilesSelected([mockFile]);
       });
 
-      // Check isUploading is true during upload
+      // Check isUploading is true during upload (set synchronously, before
+      // the async client-side duration-extraction pass — Task 7, point 1)
       expect(result.current.isUploading).toBe(true);
+
+      // The (async, even for a non-media file) metadata-build step runs
+      // before AttachmentService.uploadFiles is actually invoked.
+      await waitFor(() => expect(resolveUpload).toBeDefined());
 
       // Complete upload
       await act(async () => {
@@ -268,6 +273,408 @@ describe('useAttachmentUpload', () => {
       });
 
       expect(mockToastFns.error).toHaveBeenCalledWith('Upload failed: Upload failed');
+    });
+  });
+
+  describe('Rollback on media upload failure (Task 7, point 3)', () => {
+    it('reverts selectedFiles to its prior length when an image/video upload fails, symmetric with the text-attachment path', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.selectedFiles).toHaveLength(0);
+      expect(result.current.uploadedAttachments).toHaveLength(0);
+    });
+
+    it('only rolls back the files from the failed selection, keeping previously uploaded ones intact', async () => {
+      const firstFile = createMockFile('first.jpg', 1024, 'image/jpeg', 1);
+      mockServiceFns.uploadFiles.mockResolvedValueOnce({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'first.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([firstFile]);
+      });
+
+      expect(result.current.selectedFiles).toHaveLength(1);
+
+      const secondFile = createMockFile('second.jpg', 1024, 'image/jpeg', 2);
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([secondFile]);
+      });
+
+      expect(result.current.selectedFiles).toEqual([firstFile]);
+      expect(result.current.uploadedAttachments).toHaveLength(1);
+    });
+
+    it('allows re-selecting a file after its upload failed and was rolled back (no phantom duplicate)', async () => {
+      const mockFile = createMockFile('retry.jpg', 1024, 'image/jpeg', 1);
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.selectedFiles).toHaveLength(0);
+
+      mockServiceFns.uploadFiles.mockResolvedValueOnce({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'retry.jpg', 'image/jpeg', 1024)],
+      });
+
+      await act(async () => {
+        await result.current.handleFilesSelected([createMockFile('retry.jpg', 1024, 'image/jpeg', 1)]);
+      });
+
+      expect(mockToastFns.warning).not.toHaveBeenCalled();
+      expect(result.current.uploadedAttachments).toHaveLength(1);
+    });
+  });
+
+  describe('Reconciling the gateway silent-failure shape (review Important #2)', () => {
+    it('rolls back selectedFiles and sets uploadError when the server drops every file (success:true, attachments: [])', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.selectedFiles).toHaveLength(0);
+      expect(result.current.uploadedAttachments).toHaveLength(0);
+      expect(result.current.uploadError).toEqual(expect.any(String));
+      expect(mockToastFns.error).toHaveBeenCalled();
+    });
+
+    it('rolls back only the unmatched file when the server silently drops SOME files (success:true, shortened attachments)', async () => {
+      const keptFile = createMockFile('kept.jpg', 1024, 'image/jpeg', 1);
+      const droppedFile = createMockFile('dropped.jpg', 1024, 'image/jpeg', 2);
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'kept.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([keptFile, droppedFile]);
+      });
+
+      expect(result.current.selectedFiles).toEqual([keptFile]);
+      expect(result.current.uploadedAttachments).toHaveLength(1);
+      expect(result.current.uploadError).toEqual(expect.any(String));
+    });
+
+    it('fires the additive onUploadError callback for a silent partial failure', async () => {
+      const onUploadError = jest.fn();
+      const keptFile = createMockFile('kept.jpg', 1024, 'image/jpeg', 1);
+      const droppedFile = createMockFile('dropped.jpg', 1024, 'image/jpeg', 2);
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'kept.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', onUploadError }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([keptFile, droppedFile]);
+      });
+
+      expect(onUploadError).toHaveBeenCalledWith(expect.any(String));
+    });
+
+    it('does not set uploadError or roll back anything when every file is echoed back', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'photo.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.selectedFiles).toEqual([mockFile]);
+      expect(result.current.uploadError).toBeNull();
+      expect(mockToastFns.error).not.toHaveBeenCalled();
+    });
+
+    it('reconciles the swallow shape inside a batch (uploadFilesInBatches path)', async () => {
+      // batchSize defaults to 10: 11 files -> batch 1 = img-0..img-9 (all succeed),
+      // batch 2 = img-10 alone, silently dropped by the gateway (success:true, attachments: []).
+      const files = Array.from({ length: 11 }, (_, i) => createMockFile(`img-${i}.jpg`, 1024, 'image/jpeg', 1000 + i));
+      mockServiceFns.uploadFiles
+        .mockResolvedValueOnce({
+          success: true,
+          attachments: files.slice(0, 10).map((f, i) => createMockUploadedAttachment(`${i}`, f.name, 'image/jpeg', 1024)),
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          attachments: [],
+        });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', maxAttachments: 20 }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected(files);
+      });
+
+      expect(result.current.selectedFiles).toHaveLength(10);
+      expect(result.current.selectedFiles.map((f) => f.name)).not.toContain('img-10.jpg');
+      expect(result.current.uploadedAttachments).toHaveLength(10);
+      expect(result.current.uploadError).toEqual(expect.any(String));
+    });
+  });
+
+  describe('Upload error exposure (Task 7, point 4)', () => {
+    it('exposes the failure message via uploadError while still emitting the existing toast', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+      expect(mockToastFns.error).toHaveBeenCalledWith('Upload failed: Network error');
+    });
+
+    it('calls the additive onUploadError callback with the failure message', async () => {
+      const onUploadError = jest.fn();
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', onUploadError }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(onUploadError).toHaveBeenCalledWith('Network error');
+    });
+
+    it('does not populate uploadError and never calls onUploadError on a successful upload', async () => {
+      const onUploadError = jest.fn();
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'photo.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token', onUploadError }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBeNull();
+      expect(onUploadError).not.toHaveBeenCalled();
+    });
+
+    it('clears a stale uploadError once a new selection succeeds', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+
+      mockServiceFns.uploadFiles.mockResolvedValueOnce({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'photo2.jpg', 'image/jpeg', 1024)],
+      });
+
+      await act(async () => {
+        await result.current.handleFilesSelected([createMockFile('photo2.jpg', 1024, 'image/jpeg', 2)]);
+      });
+
+      expect(result.current.uploadError).toBeNull();
+    });
+
+    it('clears uploadError on clearAttachments', async () => {
+      const mockFile = createMockFile('photo.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([mockFile]);
+      });
+
+      expect(result.current.uploadError).toBe('Network error');
+
+      act(() => {
+        result.current.clearAttachments();
+      });
+
+      expect(result.current.uploadError).toBeNull();
+    });
+  });
+
+  describe('Media Duration Extraction (Task 7, point 1)', () => {
+    const realCreateElement = document.createElement.bind(document);
+
+    type FakeMediaElement = {
+      preload: string;
+      src: string;
+      duration: number | undefined;
+      addEventListener: (event: string, cb: () => void) => void;
+      removeEventListener: (event: string, cb: () => void) => void;
+    };
+
+    function mockMediaElement({ duration, shouldError = false }: { duration?: number; shouldError?: boolean }) {
+      return jest.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+        if (tagName !== 'video' && tagName !== 'audio') {
+          return realCreateElement(tagName);
+        }
+        const listeners: Record<string, Array<() => void>> = {};
+        const fakeElement: FakeMediaElement = {
+          preload: '',
+          src: '',
+          duration,
+          addEventListener: (event, cb) => {
+            listeners[event] = listeners[event] || [];
+            listeners[event].push(cb);
+          },
+          removeEventListener: (event, cb) => {
+            listeners[event] = (listeners[event] || []).filter((l) => l !== cb);
+          },
+        };
+        queueMicrotask(() => {
+          const eventName = shouldError ? 'error' : 'loadedmetadata';
+          (listeners[eventName] || []).forEach((cb) => cb());
+        });
+        return fakeElement as unknown as HTMLElement;
+      }) as typeof document.createElement);
+    }
+
+    beforeEach(() => {
+      global.URL.createObjectURL = jest.fn().mockReturnValue('blob:mock-media-url');
+      global.URL.revokeObjectURL = jest.fn();
+    });
+
+    it('attaches the extracted duration (ms) to the metadata sent for a video file', async () => {
+      mockMediaElement({ duration: 12.5 });
+      const videoFile = createMockFile('clip.mp4', 2048, 'video/mp4');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'clip.mp4', 'video/mp4', 2048)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([videoFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalledWith(
+        [videoFile],
+        'test-token',
+        [expect.objectContaining({ duration: 12500 })],
+        expect.any(Function),
+      );
+    });
+
+    it('attaches the extracted duration (ms) to the metadata sent for an audio file', async () => {
+      mockMediaElement({ duration: 3 });
+      const audioFile = createMockFile('voice.mp3', 512, 'audio/mpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'voice.mp3', 'audio/mpeg', 512)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([audioFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalledWith(
+        [audioFile],
+        'test-token',
+        [expect.objectContaining({ duration: 3000 })],
+        expect.any(Function),
+      );
+    });
+
+    it('does not build a metadata array for image-only selections', async () => {
+      const imageFile = createMockFile('pic.jpg', 1024, 'image/jpeg');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'pic.jpg', 'image/jpeg', 1024)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([imageFile]);
+      });
+
+      const callArgs = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(callArgs[2]).toBeUndefined();
+    });
+
+    it('uploads a video without a duration (never blocks) when extraction errors out', async () => {
+      mockMediaElement({ shouldError: true });
+      const videoFile = createMockFile('broken.mp4', 2048, 'video/mp4');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'broken.mp4', 'video/mp4', 2048)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([videoFile]);
+      });
+
+      expect(mockServiceFns.uploadFiles).toHaveBeenCalled();
+      const [, , metadataArray] = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(metadataArray?.[0]?.duration).toBeUndefined();
+      expect(result.current.uploadedAttachments).toHaveLength(1);
+    });
+
+    it('merges the extracted duration into caller-provided metadata without dropping existing fields', async () => {
+      mockMediaElement({ duration: 5 });
+      const audioFile = createMockFile('recorded.webm', 512, 'audio/webm');
+      mockServiceFns.uploadFiles.mockResolvedValue({
+        success: true,
+        attachments: [createMockUploadedAttachment('1', 'recorded.webm', 'audio/webm', 512)],
+      });
+
+      const { result } = renderHook(() => useAttachmentUpload({ token: 'test-token' }));
+
+      await act(async () => {
+        await result.current.handleFilesSelected([audioFile], [{ audioEffectsTimeline: { events: [] } }]);
+      });
+
+      const [, , metadataArray] = mockServiceFns.uploadFiles.mock.calls[0];
+      expect(metadataArray[0]).toEqual({ audioEffectsTimeline: { events: [] }, duration: 5000 });
     });
   });
 
@@ -386,8 +793,10 @@ describe('useAttachmentUpload', () => {
       });
 
       expect(result.current.showAttachmentLimitModal).toBe(true);
-      // attemptedCount is total: 1 selected + 1 uploaded + 1 new = 3
-      expect(result.current.attemptedCount).toBe(3);
+      // attemptedCount uses selectedFiles as the single source of truth
+      // (Task 7, point 2 — no more double-count against uploadedAttachments):
+      // 1 already selected + 1 new = 2.
+      expect(result.current.attemptedCount).toBe(2);
     });
 
     it('should close modal and reset count', async () => {
@@ -421,6 +830,33 @@ describe('useAttachmentUpload', () => {
 
       expect(result.current.showAttachmentLimitModal).toBe(false);
       expect(result.current.attemptedCount).toBe(0);
+    });
+
+    it('lets exactly maxAttachments sequential single-file uploads succeed without doubling the count (Task 7, point 2)', async () => {
+      const { result } = renderHook(() => useAttachmentUpload({ maxAttachments: 3 }));
+
+      for (let i = 0; i < 3; i += 1) {
+        mockServiceFns.uploadFiles.mockResolvedValueOnce({
+          success: true,
+          attachments: [createMockUploadedAttachment(`${i}`, `img-${i}.jpg`, 'image/jpeg', 1024)],
+        });
+
+        await act(async () => {
+          await result.current.handleFilesSelected([createMockFile(`img-${i}.jpg`, 1024, 'image/jpeg', 1000 + i)]);
+        });
+      }
+
+      expect(result.current.showAttachmentLimitModal).toBe(false);
+      expect(result.current.uploadedAttachments).toHaveLength(3);
+
+      // A 4th file must now be rejected by the cap — if the hook still
+      // double-counted (selectedFiles + uploadedAttachments), the cap would
+      // already have been hit after the 2nd file (2 + 2 = 4 > 3).
+      await act(async () => {
+        await result.current.handleFilesSelected([createMockFile('img-3.jpg', 1024, 'image/jpeg', 2000)]);
+      });
+
+      expect(result.current.showAttachmentLimitModal).toBe(true);
     });
 
     it('should use default max of 50 attachments', async () => {

@@ -4,7 +4,23 @@ import XCTest
 
 /// Task 64 — K shortcut adds keyframe at playhead on selected clip.
 /// Exercises `addKeyframeAtPlayhead()` directly (the K shortcut invokes this on the ViewModel).
-/// Runtime keyboard dispatch is skipped.
+///
+/// B22 — `test_kShortcut_runtimeDispatch_requiresUIWindow` previously read
+/// `try XCTSkipIf(true, "... covered by Phase 4 XCUITest suite.")`
+/// permanently — that suite never existed (see `HitTargetTests` /
+/// `apps/ios/project.yml`). Unlike `TransportBarKeyboardTests` (whose Space
+/// shortcut has a real `.keyboardShortcut(" ", ...)` in `TransportBar.swift`
+/// to source-guard), a repo-wide search for a "K" keyboard binding
+/// (`.keyboardShortcut(`, `UIKeyCommand`, `keyCommand`) across both
+/// `packages/MeeshySDK/Sources` and `apps/ios/Meeshy` turns up NOTHING — the
+/// only `.keyboardShortcut` call sites in the whole SDK are TransportBar's
+/// two Space-bar ones. The "K adds a keyframe" interaction today is a plain
+/// `Button(action: onAddKeyframe)` tap in `ClipInspector.swift` (line ~526);
+/// there is no source-level keyboard wiring to point a structural test at.
+/// Genuine debt, tracked honestly instead of behind a false "covered
+/// elsewhere" claim: either the K-key binding still needs to be implemented,
+/// or it needs to be found and documented if it lives somewhere this search
+/// missed.
 @MainActor
 final class KeyframeKeyboardShortcutTests: XCTestCase {
 
@@ -53,7 +69,18 @@ final class KeyframeKeyboardShortcutTests: XCTestCase {
     }
 
     func test_kShortcut_runtimeDispatch_requiresUIWindow() throws {
+        // Honest debt marker (was previously "covered by Phase 4 XCUITest
+        // suite" — false, no such suite exists in this project). A repo-wide
+        // search found no `.keyboardShortcut`/`UIKeyCommand` binding for "K"
+        // anywhere in `packages/MeeshySDK/Sources` or `apps/ios/Meeshy` — the
+        // interaction today is a plain tap Button in `ClipInspector.swift`.
+        // There is no source-level wiring to structurally source-guard, and
+        // no XCUITest target to exercise the real key dispatch. Tracked as
+        // real, open debt rather than a false completeness claim.
         try XCTSkipIf(true,
-            "Runtime K key dispatch requires UIWindow — covered by Phase 4 XCUITest suite.")
+            "No 'K' keyboard-shortcut wiring exists anywhere in the SDK or app (verified via repo-wide " +
+            "grep for .keyboardShortcut/UIKeyCommand/keyCommand) — the interaction is currently a plain " +
+            "tap Button in ClipInspector.swift, not a keyboard shortcut. This is open debt: implement the " +
+            "binding (and re-enable this test against it) or confirm the feature was descoped.")
     }
 }

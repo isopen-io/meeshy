@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import os
 
 public actor VideoFrameExtractor {
     public static let shared = VideoFrameExtractor()
@@ -64,7 +65,14 @@ public actor VideoFrameExtractor {
     private static func doExtract(url: URL, maxFrames: Int) async -> [UIImage] {
         let asset = AVURLAsset(url: url)
 
-        guard let duration = try? await asset.load(.duration) else { return [] }
+        let duration: CMTime
+        do {
+            duration = try await asset.load(.duration)
+        } catch {
+            // Aucune vignette ne sera produite pour cette vidéo.
+            Logger.media.error("Video duration unreadable, no frames extracted: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
         let totalSeconds = CMTimeGetSeconds(duration)
         guard totalSeconds > 0 else { return [] }
 
@@ -82,8 +90,16 @@ public actor VideoFrameExtractor {
             guard !Task.isCancelled else { break }
 
             let time = CMTime(seconds: interval * Double(i) + interval / 2.0, preferredTimescale: 600)
-            guard let cgImage = try? await generator.image(at: time).image else { continue }
-            frames.append(UIImage(cgImage: cgImage))
+            // Une frame manquante dégrade la bande sans l'invalider : on
+            // continue, mais l'échec reste traçable.
+            do {
+                let cgImage = try await generator.image(at: time).image
+                frames.append(UIImage(cgImage: cgImage))
+            } catch is CancellationError {
+                break
+            } catch {
+                Logger.media.error("Frame extraction failed at index \(i, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         return frames

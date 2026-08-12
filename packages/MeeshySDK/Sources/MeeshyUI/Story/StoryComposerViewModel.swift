@@ -20,6 +20,30 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var repostOfId: String?
     @Published var originalRepostOfId: String?
 
+    // MARK: - Edit mode (directive 2026-07-29 — édition d'une story publiée)
+
+    /// Non-nil quand le composer ÉDITE une story publiée (`init(editing:)`).
+    /// L'app le lit au publish pour router vers `PUT /posts/:id` (update +
+    /// reset d'engagement serveur) au lieu de `createStory`. Le mode édition
+    /// désactive aussi le système de brouillons (restore/save) et le
+    /// multi-slide — une story publiée = UN slide.
+    public internal(set) var editingPostId: String?
+    /// Ids des `PostMedia` attachés à la story au moment de l'hydratation —
+    /// sert à diff-er `removeMediaIds` au publish (médias plus référencés).
+    public internal(set) var editingOriginalMediaIds: [String] = []
+    /// Id du média de FOND original (celui de `story.media` qui n'est
+    /// référencé par aucun objet des effects) — conservé tel quel si le fond
+    /// n'a pas changé, retiré + ré-uploadé sinon.
+    public internal(set) var editingOriginalBackgroundMediaId: String?
+    /// Instance UIImage posée par le préchargement d'hydratation comme fond
+    /// de slide. Comparaison d'IDENTITÉ (`===`) au publish : la même instance
+    /// = fond inchangé (ne pas ré-uploader), une autre = l'utilisateur a
+    /// remplacé le fond.
+    public internal(set) var editingHydratedBackgroundImage: UIImage?
+    /// Visibilité initiale de la story éditée (seed de l'état du composer).
+    public internal(set) var editingInitialVisibility: String?
+    public internal(set) var editingInitialVisibilityUserIds: [String] = []
+
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
     // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
@@ -177,6 +201,40 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         }
     }
 
+    /// Scheme épinglé sur le chrome posé SUR le canvas (header, FABs, bulles,
+    /// history) : suit le fond RÉEL de la slide, jamais le thème de l'app.
+    /// Couvre les DEUX chemins média : legacy `hasBackgroundImage`
+    /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
+    /// (chip Background) — ce dernier échappait au calcul et laissait le
+    /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
+    /// boutons inexploitables (captures user 2026-07-20). Un média de fond
+    /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
+    /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
+    /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
+    var canvasChromeScheme: ColorScheme {
+        CanvasChromeScheme.scheme(
+            background: backgroundColor,
+            hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia,
+            mediaLuminance: backgroundMediaLuminance
+        )
+    }
+
+    /// Luminance WCAG moyenne du bitmap de fond effectivement affiché
+    /// (`currentSlideBackgroundImage` : média moderne d'abord, legacy
+    /// ensuite). Cache mono-entrée par IDENTITÉ d'image — le bitmap ne change
+    /// que quand l'utilisateur change de fond, et `canvasChromeScheme` est
+    /// relu à chaque évaluation de body. `nil` = pas de bitmap (fond couleur,
+    /// vidéo sans thumbnail chargée) → le scheme retombe sur `.dark`.
+    var backgroundMediaLuminance: Double? {
+        guard let image = currentSlideBackgroundImage else { return nil }
+        let key = ObjectIdentifier(image)
+        if let cached = backgroundLuminanceCache, cached.key == key { return cached.value }
+        let value = CanvasChromeScheme.averageRelativeLuminance(of: image)
+        backgroundLuminanceCache = (key, value)
+        return value
+    }
+    private var backgroundLuminanceCache: (key: ObjectIdentifier, value: Double?)?
+
     /// Format `effects.background` : hex SANS « # » ou `gradient:HEX1:HEX2`
     /// (cf. le restore SyncRestore qui re-préfixe le hex nu).
     func applyBackgroundColorToCurrentSlide() {
@@ -230,6 +288,23 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
     @Published var loadedImagesVersion: UInt64 = 0
+
+    /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
+    /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.
+    /// Le `StoryComposerCanvasView` ne reconstruit son `ComposerImageCacheReader`
+    /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
+    /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
+    /// directement sans ce bump laisse le reader périmé : un média fraîchement
+    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
+    func registerLoadedImage(_ image: UIImage?, for id: String) {
+        if let image {
+            loadedImages[id] = image
+        } else {
+            loadedImages.removeValue(forKey: id)
+        }
+        loadedImagesVersion &+= 1
+    }
 
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».
@@ -317,6 +392,54 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     var memoryObserver: Any?
 
     // MARK: - Repost Initializer (Patch B.6)
+
+    // MARK: - Identité de brouillon
+
+    /// Brouillon sous lequel cette session du composer s'autosauvegarde.
+    ///
+    /// Le store était mono-brouillon : commencer une deuxième story écrasait
+    /// silencieusement la première. Chaque session porte désormais son id —
+    /// neuf pour une ardoise vierge, celui du brouillon repris sinon
+    /// (spec 2026-08-01).
+    public private(set) var draftId: String = UUID().uuidString
+
+    /// Vrai quand la session a été rattachée à un brouillon CHOISI par
+    /// l'utilisateur (`adoptDraft(id:)`, tap dans « Mes stories »). Le composer
+    /// restaure alors ce brouillon dès l'ouverture SANS re-proposer le bandeau
+    /// de reprise — l'utilisateur vient de trancher — et « Recommencer » s'en
+    /// détache (`detachFromAdoptedDraft`) au lieu de le détruire.
+    public private(set) var isAdoptedDraftSession = false
+
+    /// Rattache la session à un brouillon existant. Appelé AVANT toute
+    /// restauration : l'autosave qui suit doit écrire sous le bon id.
+    public func adoptDraft(id: String) {
+        draftId = id
+        isAdoptedDraftSession = true
+    }
+
+    /// « Recommencer » sur une session adoptée : la session repart sous un id
+    /// NEUF et rend le brouillon choisi, qui reste intact en magasin. Le
+    /// supprimer ici détruirait précisément ce que l'utilisateur venait de
+    /// désigner comme « à reprendre ».
+    public func detachFromAdoptedDraft() {
+        draftId = UUID().uuidString
+        isAdoptedDraftSession = false
+    }
+
+    /// Absorbe les médias d'un brouillon restauré en UNE passe et bump
+    /// `loadedImagesVersion` quand des bitmaps sont arrivés : le canvas ne
+    /// reconstruit son `ComposerImageCacheReader` que sur ce cookie — merger
+    /// `loadedImages` sans lui laissait les images du brouillon repris
+    /// invisibles (même invariant que `registerLoadedImage`).
+    func mergeRestoredMedia(images: [String: UIImage],
+                            videoURLs: [String: URL],
+                            audioURLs: [String: URL]) {
+        loadedImages.merge(images) { _, new in new }
+        loadedVideoURLs.merge(videoURLs) { _, new in new }
+        loadedAudioURLs.merge(audioURLs) { _, new in new }
+        guard !images.isEmpty else { return }
+        loadedImagesVersion &+= 1
+    }
 
     /// Default initializer (kept explicit so the convenience init below has a designated
     /// init to delegate to). All stored properties default-initialise, so the body is empty.

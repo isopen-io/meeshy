@@ -159,7 +159,8 @@ struct MessageOverlayMenu: View {
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
             hasEditRevisions: true,
-            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
+            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
         )
     }
 
@@ -212,6 +213,19 @@ struct MessageOverlayMenu: View {
             // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
             let nlEmojiBarHeight: CGFloat = 52
             let nlGap: CGFloat = 12
+            // Écart bulle → liste d'actions RÉDUIT (iMessage-like) : le menu colle
+            // presque à la bulle liftée, distinct du gap barre-réactions → bulle.
+            let nlMenuGap: CGFloat = 6
+            // La frame source capturée (`messageBubbleFrame`) englobe le
+            // `.padding(.vertical, 8)` du row de la liste — MessageListView pose
+            // son `.background(GeometryReader{…frame(in:.global)})` sur `content()`
+            // QUI inclut ce padding. La bulle VISIBLE se termine donc ~8pt AVANT
+            // `nlBubbleTop + nlBubbleH`, ce qui creusait un vide sous la bulle.
+            // On soustrait cette bande transparente (scalée par `nlFitScale`) au
+            // seul calcul de `nlMenuY` — `nlBubbleH` (rendu de la bulle) reste
+            // inchangé — pour coller le menu à la bulle VISIBLE, façon iMessage.
+            // Net : gap visible ≈ nlMenuGap (~4-6pt) au lieu de ~14pt.
+            let nlRowBottomPaddingEstimate: CGFloat = 8
             let nlSidePadding: CGFloat = 16
             let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
@@ -219,13 +233,13 @@ struct MessageOverlayMenu: View {
             let nlAvailTop = safeTop + 12
             let nlAvailBottom = screenH - safeBottom - 12
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
-            let nlChrome = nlEmojiBarHeight + nlGap * 2 + nlMenuHeight
+            let nlChrome = nlEmojiBarHeight + nlGap + nlMenuGap + nlMenuHeight
             let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
                 ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
                 : bubblePreviewScale
             let nlBubbleW = bubbleRect.width * nlFitScale
             let nlBubbleH = bubbleRect.height * nlFitScale
-            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlGap + nlMenuHeight
+            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlMenuGap + nlMenuHeight
             let nlAnchorX: CGFloat = message.isMe
                 ? bubbleRect.maxX - nlBubbleW / 2
                 : bubbleRect.minX + nlBubbleW / 2
@@ -234,7 +248,7 @@ struct MessageOverlayMenu: View {
             let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
             let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
             let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
-            let nlMenuY = nlBubbleTop + nlBubbleH + nlGap + nlMenuHeight / 2
+            let nlMenuY = nlBubbleTop + nlBubbleH - nlRowBottomPaddingEstimate * nlFitScale + nlMenuGap + nlMenuHeight / 2
             let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
             let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
 
@@ -351,6 +365,12 @@ struct MessageOverlayMenu: View {
                             custom: userCustomDestinationLanguage
                         )
                     )
+                    // Gate Equatable (H3) : pendant le drag 60 fps
+                    // (`clusterDragOffset`) le body du GeometryReader se
+                    // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                    // re-rendrait à chaque frame. Ses inputs sont stables
+                    // pendant le drag → EquatableView saute son body.
+                    .equatable()
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
                     .frame(width: nlBubbleW, height: nlBubbleH)
@@ -376,6 +396,11 @@ struct MessageOverlayMenu: View {
             }
         }
         .ignoresSafeArea()
+        // A11y (C2) : l'overlay est MODAL — VoiceOver piège le focus dedans
+        // (ignore la conversation derrière) ; le geste d'échappement (scrub
+        // 2 doigts) le ferme, comme un `.contextMenu` natif.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { dismiss() }
         .onAppear {
             HapticFeedback.medium()
             // Entree spring — courbe de reponse de qualite iMessage. La
@@ -415,21 +440,19 @@ struct MessageOverlayMenu: View {
         .frame(maxWidth: 280)
     }
 
-    // MARK: - Dismiss Background (light blur — silhouettes stay readable)
+    // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)
 
     private var dismissBackground: some View {
-        // Flou doux (`thinMaterial`) double d'une voile sombre retenue +
-        // une lueur radiale teintee a l'accent de la conversation. Les
-        // silhouettes de bulles restent lisibles derriere, mais le texte
-        // sous-jacent se floute pour ne pas concurrencer le preview. La
-        // lueur indigo/accent ancre l'overlay dans l'identite Meeshy.
+        // Assombrissement NET + lueur radiale accent, SANS `.thinMaterial`
+        // plein écran. Sur iOS 26, le `glassEffect` de la pastille et du menu
+        // échantillonne le contenu RÉEL (assombri) situé derrière eux → verre
+        // VIBRANT façon iMessage. Un flou plein écran derrière le verre le
+        // faisait échantillonner du flou (flou-sur-flou) → verre plat, non
+        // natif. iMessage assombrit lui aussi sans matériau flou derrière la
+        // pastille/le menu.
         ZStack {
-            Rectangle()
-                .fill(.thinMaterial)
-                .opacity(isVisible ? 1 : 0)
-
             Color.black
-                .opacity(isVisible ? 0.22 : 0)
+                .opacity(isVisible ? (isDark ? 0.5 : 0.4) : 0)
 
             RadialGradient(
                 colors: [
@@ -488,14 +511,16 @@ struct MessageOverlayMenu: View {
 
             previewContent
         }
-        // Match the in-conversation bubble cap (BubbleStandardLayout
-        // uses 0.70 of the screen) so the preview reads as the SAME
-        // bubble the user just long-pressed — not a wider clone. The
+        // Match the in-conversation bubble cap (BubbleStandardLayout calls
+        // the same DeviceLayout helper, a share of the app's WINDOW — not of
+        // the physical display, which Split View / Slide Over / Stage Manager
+        // make far larger) so the preview reads as the SAME bubble the user
+        // just long-pressed — not a wider clone. The
         // `alignment` parameter pins the (now-compact) content to the
         // bubble's native edge inside the frame, working in tandem
         // with the parent HStack's Spacer(minLength: 44).
         .frame(
-            maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass),
+            maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
             alignment: message.isMe ? .trailing : .leading
         )
         .padding(.horizontal, 8)
@@ -991,6 +1016,8 @@ private struct PreviewVideoPlayer: View {
                 in: 0...1
             )
             .tint(accent)
+            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
+            .accessibilityValue("\(player.percentInt) %")
 
             HStack(spacing: 8) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
@@ -1110,31 +1137,60 @@ private class OverlayAudioPlayer: ObservableObject {
         if currentURL != url {
             stop()
             currentURL = url
-            guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
             isLoading = true
-            let item = AVPlayerItem(url: resolved)
-            avPlayer = AVPlayer(playerItem: item)
-
-            statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if item.status == .readyToPlay {
-                        self.isLoading = false
-                        self.avPlayer?.rate = self.playbackRate
-                        self.isPlaying = true
-                    } else if item.status == .failed {
-                        self.isLoading = false
-                    }
-                }
+            Task { [weak self] in
+                await self?.startPlayback(remoteURL: url)
             }
-
-            setupTimeObserver()
-            observeEnd(item: item)
             return
         }
 
         avPlayer?.rate = playbackRate
         isPlaying = true
+    }
+
+    /// Cache-first: consults the audio disk cache BEFORE falling back to a
+    /// network `AVPlayerItem`. The preview used to always hit the network
+    /// URL directly, ignoring whatever `AttachmentDownloader`/auto-download
+    /// already saved to disk — re-downloading the same audio and failing
+    /// outright offline even when the file was sitting in the cache the
+    /// in-conversation bubble already plays from.
+    ///
+    /// Resolution key mirrors the existing local-first pattern in
+    /// `AudioFullscreenView.runLocalTranscription`: resolve the (possibly
+    /// relative) URL to its absolute form first, THEN look that resolved
+    /// string up in the disk cache — the cache is keyed by the resolved
+    /// URL, not the raw attachment path.
+    private func startPlayback(remoteURL: String) async {
+        let resolvedString = MeeshyConfig.resolveMediaURL(remoteURL)?.absoluteString ?? remoteURL
+        let cachedLocalURL = try? await CacheCoordinator.shared.audio.localFileURLOrThrow(for: resolvedString)
+        // A rapid second tap may have already switched `currentURL` to a
+        // different attachment while this lookup was in flight — bail
+        // rather than starting playback for a track the user isn't on
+        // anymore.
+        guard currentURL == remoteURL else { return }
+        guard let playbackURL = cachedLocalURL ?? MeeshyConfig.resolveMediaURL(remoteURL) else {
+            isLoading = false
+            return
+        }
+
+        let item = AVPlayerItem(url: playbackURL)
+        avPlayer = AVPlayer(playerItem: item)
+
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if item.status == .readyToPlay {
+                    self.isLoading = false
+                    self.avPlayer?.rate = self.playbackRate
+                    self.isPlaying = true
+                } else if item.status == .failed {
+                    self.isLoading = false
+                }
+            }
+        }
+
+        setupTimeObserver()
+        observeEnd(item: item)
     }
 
     func stop() {

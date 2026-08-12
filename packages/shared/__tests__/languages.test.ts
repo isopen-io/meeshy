@@ -50,6 +50,31 @@ describe('SUPPORTED_LANGUAGES', () => {
   });
 });
 
+describe('SUPPORTED_LANGUAGES data integrity', () => {
+  // Guards against the find/replace corruption class where the ASCII word
+  // "delays" overwrote runs of native-script text (Armenian: nativeName was
+  // 'Հdelays', translateText was 'Թdelays delays այdelays …').
+  it('no nativeName or translateText contains the literal token "delays"', () => {
+    const corrupted = SUPPORTED_LANGUAGES.filter(
+      l => l.nativeName?.includes('delays') || l.translateText?.includes('delays'),
+    ).map(l => l.code);
+    expect(corrupted).toEqual([]);
+  });
+
+  it('every language has a non-empty nativeName', () => {
+    SUPPORTED_LANGUAGES.forEach(lang => {
+      expect(typeof lang.nativeName).toBe('string');
+      expect((lang.nativeName ?? '').trim().length).toBeGreaterThan(0);
+    });
+  });
+
+  it('exposes the correct Armenian endonym and translate prompt', () => {
+    const hy = getLanguageInfo('hy');
+    expect(hy.nativeName).toBe('Հայերեն');
+    expect(hy.translateText).toBe('Թարգմանել այս հաղորդագրությունը հայերեն');
+  });
+});
+
 describe('getLanguageInfo', () => {
   it('should return correct info for supported language', () => {
     const info = getLanguageInfo('fr');
@@ -74,6 +99,15 @@ describe('getLanguageInfo', () => {
   it('should return French as default for "unknown"', () => {
     const info = getLanguageInfo('unknown');
     expect(info.code).toBe('fr');
+  });
+
+  it('should treat the "unknown" sentinel case-insensitively', () => {
+    expect(getLanguageInfo('Unknown').code).toBe('fr');
+    expect(getLanguageInfo('UNKNOWN').code).toBe('fr');
+  });
+
+  it('should treat the "unknown" sentinel with surrounding whitespace', () => {
+    expect(getLanguageInfo('  unknown  ').code).toBe('fr');
   });
 
   it('should handle case insensitivity', () => {

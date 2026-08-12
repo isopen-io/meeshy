@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 import CoreMedia
 import CoreGraphics
+import UIKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -254,7 +255,8 @@ internal enum BackgroundVideoFixture {
     /// (the equivalence file's fixture is `private`).
     static func makeVideo(duration: TimeInterval,
                           size: CGSize,
-                          at url: URL) async throws {
+                          at url: URL,
+                          fill: (b: UInt8, g: UInt8, r: UInt8, a: UInt8) = (0, 0, 0, 255)) async throws {
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
@@ -311,7 +313,18 @@ internal enum BackgroundVideoFixture {
             if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
                 let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
                 let height = CVPixelBufferGetHeight(pixelBuffer)
-                memset(base, 0, bytesPerRow * height)
+                let width = CVPixelBufferGetWidth(pixelBuffer)
+                let ptr = base.assumingMemoryBound(to: UInt8.self)
+                for y in 0..<height {
+                    let rowStart = y * bytesPerRow
+                    for x in 0..<width {
+                        let o = rowStart + x * 4
+                        ptr[o + 0] = fill.b
+                        ptr[o + 1] = fill.g
+                        ptr[o + 2] = fill.r
+                        ptr[o + 3] = fill.a
+                    }
+                }
             }
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
 
@@ -363,6 +376,88 @@ internal enum BackgroundVideoFixture {
         // story », elle rogne le média) : on la pose sur `timelineDuration`, lue en
         // priorité par `computedTotalDuration()` que l'exporter utilise. Sans ce pin,
         // l'export retomberait sur la durée auto du contenu (bug pré-correctif).
+        effects.timelineDuration = slideDuration
+
+        return StorySlide(id: UUID().uuidString,
+                          effects: effects,
+                          duration: slideDuration,
+                          order: 0)
+    }
+
+    /// Builds a `StorySlide` whose background is the provided video URL with NO
+    /// foreground text/sticker — used by the pixel-level export tests so a probe
+    /// at the canvas centre reads the baked background video, not an overlay.
+    static func videoOnlySlide(backgroundURL: URL,
+                               videoDurationSec: Double,
+                               slideDuration: Double,
+                               loop: Bool) -> StorySlide {
+        let video = StoryMediaObject(
+            id: UUID().uuidString,
+            postMediaId: UUID().uuidString,
+            mediaURL: backgroundURL.absoluteString,
+            mediaType: "video",
+            placement: "media",
+            aspectRatio: 9.0 / 16.0,
+            isBackground: true,
+            loop: loop,
+            startTime: 0.0,
+            duration: videoDurationSec
+        )
+
+        var effects = StoryEffects()
+        effects.mediaObjects = [video]
+        effects.timelineDuration = slideDuration
+
+        return StorySlide(id: UUID().uuidString,
+                          effects: effects,
+                          duration: slideDuration,
+                          order: 0)
+    }
+
+    /// Writes a solid-colour PNG at `url` — used as an image background under a
+    /// foreground video overlay so the export's background reads a known colour.
+    static func makeSolidImage(color: UIColor, size: CGSize, at url: URL) throws {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            color.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        guard let data = image.pngData() else {
+            throw NSError(domain: "BackgroundVideoFixture", code: 10,
+                          userInfo: [NSLocalizedDescriptionKey: "pngData failed"])
+        }
+        try data.write(to: url)
+    }
+
+    /// Builds a `StorySlide` with an IMAGE background plus a square FOREGROUND
+    /// video overlay centred on the canvas. Used to prove the exporter bakes
+    /// overlay video pixels (Bug B), distinct from the background video path.
+    static func imageBackgroundVideoOverlaySlide(imageURL: URL,
+                                                 overlayVideoURL: URL,
+                                                 overlayDurationSec: Double,
+                                                 slideDuration: Double) -> StorySlide {
+        let background = StoryMediaObject(
+            postMediaId: UUID().uuidString,
+            mediaURL: imageURL.absoluteString,
+            mediaType: "image",
+            aspectRatio: 9.0 / 16.0,
+            isBackground: true,
+            startTime: 0.0,
+            duration: slideDuration
+        )
+        let overlay = StoryMediaObject(
+            postMediaId: UUID().uuidString,
+            mediaURL: overlayVideoURL.absoluteString,
+            mediaType: "video",
+            aspectRatio: 1.0,
+            scale: 1.0,
+            isBackground: false,
+            startTime: 0.0,
+            duration: overlayDurationSec
+        )
+
+        var effects = StoryEffects()
+        effects.mediaObjects = [background, overlay]
         effects.timelineDuration = slideDuration
 
         return StorySlide(id: UUID().uuidString,

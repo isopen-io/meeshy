@@ -20,6 +20,7 @@ export class Ringtone {
   private isPlaying = false;
   private htmlAudio: HTMLAudioElement | null = null;
   private vibrationInterval: NodeJS.Timeout | null = null;
+  private ringPatternTimeout: NodeJS.Timeout | null = null;
   private useHTMLAudioFallback = false;
 
   constructor() {
@@ -168,6 +169,16 @@ export class Ringtone {
   }
 
   /**
+   * Cancel the pending re-schedule of the ring pattern
+   */
+  private stopRingPattern(): void {
+    if (this.ringPatternTimeout) {
+      clearTimeout(this.ringPatternTimeout);
+      this.ringPatternTimeout = null;
+    }
+  }
+
+  /**
    * Stop playing the ringtone
    */
   stop(): void {
@@ -179,6 +190,10 @@ export class Ringtone {
 
     // Stop vibration
     this.stopVibration();
+
+    // Cancel the pending ring cycle so a later play() cannot end up with two
+    // overlapping loops sharing this instance
+    this.stopRingPattern();
 
     // Stop HTML Audio
     if (this.htmlAudio) {
@@ -241,9 +256,12 @@ export class Ringtone {
     this.oscillators.push(osc2);
 
     // Schedule next ring after 1.5 second pause
-    setTimeout(() => {
+    this.stopRingPattern();
+    this.ringPatternTimeout = setTimeout(() => {
+      this.ringPatternTimeout = null;
+
       if (this.isPlaying) {
-        // Clear old oscillators
+        // Clear old oscillators (already ended: they self-stop after 0.8s)
         this.oscillators = [];
         this.playRingPattern();
       }

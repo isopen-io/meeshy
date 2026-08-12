@@ -33,6 +33,13 @@ public interface ConversationDraftStore {
     public suspend fun clear(conversationId: String)
 
     /**
+     * Removes every persisted draft — the account-teardown seam
+     * ([me.meeshy.sdk.session.SessionTeardown]): a second account signing in on the
+     * same device must never inherit the previous account's unsent draft text.
+     */
+    public suspend fun clearAll()
+
+    /**
      * A live view of every persisted draft, keyed by conversation id. Re-emits on
      * each save/clear so a conversation list can float draft-bearing rows to the
      * top reactively. Corrupt/legacy entries are silently omitted.
@@ -54,6 +61,10 @@ public class InMemoryConversationDraftStore(
 
     override suspend fun clear(conversationId: String) {
         drafts.update { it - conversationId }
+    }
+
+    override suspend fun clearAll() {
+        drafts.update { emptyMap() }
     }
 
     override fun observeAll(): Flow<Map<String, ConversationDraft>> = drafts.asStateFlow()
@@ -81,6 +92,10 @@ public class DataStoreConversationDraftStore(
 
     override suspend fun clear(conversationId: String) {
         dataStore.edit { prefs -> prefs.remove(keyFor(conversationId)) }
+    }
+
+    override suspend fun clearAll() {
+        dataStore.edit { prefs -> prefs.clear() }
     }
 
     override fun observeAll(): Flow<Map<String, ConversationDraft>> =

@@ -31,7 +31,7 @@ public struct AudioConsentNotice: View, Equatable {
                         .foregroundStyle(Color(hex: accentHex))
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.caption2)
+                Image(systemName: "chevron.forward").font(.caption2)
                     .foregroundStyle(Color(hex: accentHex))
             }
             .padding(.horizontal, 10).padding(.vertical, 10)

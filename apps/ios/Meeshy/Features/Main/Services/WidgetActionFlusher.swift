@@ -17,7 +17,10 @@ final class WidgetActionFlusher {
     static let shared = WidgetActionFlusher()
 
     private let suiteName = "group.me.meeshy.apps"
-    private let pendingMarkReadKey = "pending_mark_read"
+    /// Exposée pour le wipe de logout (appgroup-01) — une seule définition de
+    /// la clé, pas de duplication de littéral.
+    nonisolated static let pendingMarkReadKey = "pending_mark_read"
+    private var pendingMarkReadKey: String { Self.pendingMarkReadKey }
 
     private lazy var sharedDefaults: UserDefaults? = {
         UserDefaults(suiteName: suiteName)
@@ -45,6 +48,14 @@ final class WidgetActionFlusher {
                     name: .conversationMarkedRead,
                     object: conversationId
                 )
+                // Frontière de lecture locale (GRDB) — sans elle le prochain
+                // reloadFromCache() ré-affichait la pastille — et notifications
+                // de la cloche (portée conversation), sans déclarer la
+                // conversation active.
+                await ConversationSyncEngine.shared.markConversationReadLocally(conversationId)
+                await MainActor.run {
+                    NotificationToastManager.shared.onConversationMarkedRead(conversationId)
+                }
             } catch {
                 logger.error("Widget mark-as-read failed for \(conversationId): \(error.localizedDescription)")
                 failed.append(conversationId)
