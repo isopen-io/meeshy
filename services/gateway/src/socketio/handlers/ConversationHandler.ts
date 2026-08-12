@@ -155,15 +155,26 @@ export class ConversationHandler {
 
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
-      const registeredUserId = connectedUser.userId;
-      if (registeredUserId) {
+      // L'identité du membre dans cette conversation : `User.id` pour un compte,
+      // `Participant.id` pour un invité de lien partagé, qui n'a pas de `userId`.
+      // C'est la MÊME convention que `ROOMS.user(userId ?? id)` (la room
+      // personnelle que ce socket a déjà rejointe), que le handler jumeau
+      // `handleConversationLeave` (clé de `socketToUser`, soit `participant.id`
+      // pour un anonyme) et que `getUnreadCount`, dont l'en-tête documente qu'il
+      // accepte indifféremment un `Participant.id` ou un `User.id`.
+      //
+      // Gater ce bloc sur le seul `userId` laissait l'invité dans la room sans
+      // accusé, sans compteur de non-lus et sans stats — alors que le contrôle
+      // d'appartenance juste au-dessus venait de le laisser passer.
+      const memberIdentity = connectedUser.userId ?? connectedUser.participantId ?? connectedUser.id;
+      if (memberIdentity) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId: registeredUserId
+          userId: memberIdentity
         });
 
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(memberIdentity, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });

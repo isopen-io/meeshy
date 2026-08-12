@@ -233,23 +233,70 @@ describe('ConversationHandler', () => {
       expect(socket.join).not.toHaveBeenCalled();
     });
 
-    it('joins room for an anonymous member without emitting conversation:joined', async () => {
-      // Anonymous SocketUser: identity IS the participantId. Membership is verified
-      // (security fix ccaa9311f) and, having no userId, no conversation:joined is sent.
+    // ─── Le join d'un invité de lien partagé ──────────────────────────────
+    //
+    // Un `SocketUser` anonyme n'a pas de `userId` — son identité EST le
+    // `Participant.id`. Gater l'accusé, le compteur de non-lus et les stats sur
+    // `connectedUser.userId` laissait donc le socket dans la room sans lui
+    // envoyer un seul de ces trois événements, alors que le contrôle
+    // d'appartenance juste au-dessus venait de le laisser passer.
+    //
+    // L'identité à porter dans `userId` n'est pas une question ouverte : le
+    // handler JUMEAU (`handleConversationLeave`) émet déjà `conversation:left`
+    // avec la clé de `socketToUser`, qui vaut `participant.id` pour un anonyme
+    // (`AuthHandler._registerUser(participant.id, …)`) — la même convention que
+    // `ROOMS.user(userId ?? id)` et que `getUnreadCount`, dont l'en-tête
+    // documente qu'il accepte un `Participant.id`. Et aucun client ne LIT ce
+    // champ : web n'invalide que sur `conversationId`, iOS de même
+    // (`ConversationSyncEngine`, `ParticipantsView`).
+    describe('anonymous member (shared-link guest)', () => {
       const SESSION_TOKEN = 'anon-session-token';
       const ANON_PARTICIPANT_ID = 'anon-part-1';
-      const connectedUsers = new Map<string, unknown>();
-      connectedUsers.set(SESSION_TOKEN, { id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr' });
-      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
-      const prisma = makePrisma({ participantFindFirst: { id: ANON_PARTICIPANT_ID } });
-      const deps = makeDeps({ connectedUsers, socketToUser, prisma });
-      const handler = new ConversationHandler(deps);
-      const socket = makeSocket();
-      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      // Valid anonymous member (owns the participant): joins the room and emits
-      // no conversation:joined (no userId on an anonymous SocketUser).
-      expect(socket.join).toHaveBeenCalled();
-      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+
+      function makeAnonDeps(readStatusService = makeReadStatusService()) {
+        const connectedUsers = new Map<string, unknown>();
+        connectedUsers.set(SESSION_TOKEN, {
+          id: ANON_PARTICIPANT_ID,
+          isAnonymous: true,
+          participantId: ANON_PARTICIPANT_ID,
+          language: 'fr',
+        });
+        const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+        const prisma = makePrisma({ participantFindFirst: { id: ANON_PARTICIPANT_ID } });
+        return makeDeps({ connectedUsers, socketToUser, prisma, readStatusService });
+      }
+
+      it('emits conversation:joined carrying the participant id as identity', async () => {
+        const handler = new ConversationHandler(makeAnonDeps());
+        const socket = makeSocket();
+        await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+        expect(socket.join).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+        expect(socket.emit).toHaveBeenCalledWith('conversation:joined', {
+          conversationId: CONV_ID,
+          userId: ANON_PARTICIPANT_ID,
+        });
+      });
+
+      it('pushes the unread count, resolved by participant id', async () => {
+        const readStatusService = makeReadStatusService(4);
+        const handler = new ConversationHandler(makeAnonDeps(readStatusService));
+        const socket = makeSocket();
+        await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+        expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(ANON_PARTICIPANT_ID, CONV_ID);
+        expect(socket.emit).toHaveBeenCalledWith('conversation:unread-updated', {
+          conversationId: CONV_ID,
+          unreadCount: 4,
+        });
+      });
+
+      it('emits conversation:stats like any other member', async () => {
+        const stats = { memberCount: 3, onlineCount: 1 };
+        mockedStats.mockResolvedValue(stats);
+        const handler = new ConversationHandler(makeAnonDeps());
+        const socket = makeSocket();
+        await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+        expect(socket.emit).toHaveBeenCalledWith('conversation:stats', expect.objectContaining({ stats }));
+      });
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
