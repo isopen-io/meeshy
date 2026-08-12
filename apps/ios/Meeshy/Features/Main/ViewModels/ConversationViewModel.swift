@@ -22,7 +22,7 @@ func withSendTimeout<T: Sendable>(
 ) async throws -> T {
     let operationTask = Task { try await operation() }
     let watchdog = Task {
-        try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        try? await Task.sleep(for: .seconds(max(0, seconds)))
         operationTask.cancel()
     }
     defer { watchdog.cancel() }
@@ -1911,7 +1911,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 // Small delay to let the current batch render and the
                 // scroll position stabilize before we start the next fetch.
-                try? await Task.sleep(nanoseconds: 150_000_000)
+                try? await Task.sleep(for: .milliseconds(150))
                 guard let self, !self.isLoadingOlder else { return }
                 await self.loadOlderMessages()
             }
@@ -3983,7 +3983,7 @@ class ConversationViewModel: ObservableObject {
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
             // won't exist yet.
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .milliseconds(150))
 
             return .loadedFromServer
         } catch {
@@ -4027,7 +4027,7 @@ class ConversationViewModel: ObservableObject {
                 lastError = error
                 if attempt < Self.paginationRetryCount {
                     Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
-                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                    try? await Task.sleep(for: .milliseconds(500))
                 }
             }
         }
@@ -4414,7 +4414,7 @@ class ConversationViewModel: ObservableObject {
         Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
 
         Task { [weak self, messageService] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            try? await Task.sleep(for: .seconds(5))
             guard let self, !Task.isCancelled else { return }
 
             // Re-fetch the same messages from REST; by now Whisper should have
