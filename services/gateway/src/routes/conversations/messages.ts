@@ -6,6 +6,7 @@ import { aggregateAttachmentReactions } from '../../socketio/serializeAttachment
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
+import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
 import {
   buildPostReplyTo,
   postReplyToFromMetadata,
@@ -2622,6 +2623,25 @@ export function registerMessagesRoutes(
       const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
 
       logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
+
+      // Le budget épuisé programme la destruction, il ne l'exécute pas : le
+      // spectateur qui vient de payer sa vue n'a pas encore fini de regarder.
+      // Le balayage éphémère détruira — c'est déjà son métier, fichiers et
+      // annonce `message:deleted` comprises. Sans cette ligne, `isFullyConsumed`
+      // ne masquait le média que dans l'UI des clients qui l'implémentent, et le
+      // clair restait servi indéfiniment à tous les autres.
+      //
+      // Non gardé par `firstConsumption` : la programmation est idempotente, et
+      // la rejouer répare aussi bien un échec d'écriture qu'un message épuisé
+      // AVANT la mise en service de ce chemin.
+      if (isFullyConsumed) {
+        // Best-effort. Échouer ici retirerait au spectateur le média dont la
+        // revendication est déjà dépensée — sans rendre pour autant le contenu
+        // plus sûr. La tentative suivante repose l'échéance.
+        await scheduleViewOnceBurn(prisma, { messageId, at: now }).catch((error) =>
+          logger.warn(`[CONSUME] view-once burn scheduling failed for ${messageId}`, error)
+        );
+      }
 
       // Annoncé seulement quand l'état a CHANGÉ. Rediffuser un compte identique
       // à toute la room n'apprend rien à personne et, sur un rejeu, ferait
