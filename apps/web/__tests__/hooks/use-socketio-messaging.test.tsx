@@ -130,6 +130,16 @@ describe('useSocketIOMessaging', () => {
   describe('Connection Management', () => {
     it('should attempt reconnection on mount if token available', async () => {
       mockGetAuthToken.mockReturnValue('token-123');
+      // Précondition EXPLICITE : pas de socket vivant. `jest.clearAllMocks()`
+      // ne remet pas les implémentations en place, donc sans cette ligne le
+      // `isConnected: true` posé par un test « Initial State » plus haut fuit
+      // jusqu'ici — et le montage refuse alors (à raison) de couper une
+      // connexion saine.
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: false,
+        hasSocket: false,
+        isConnecting: false,
+      });
 
       renderHook(() => useSocketIOMessaging());
 
@@ -149,6 +159,11 @@ describe('useSocketIOMessaging', () => {
     it('should attempt reconnection if anonymous session available', async () => {
       mockGetAuthToken.mockReturnValue(null as any);
       mockGetAnonymousSession.mockReturnValue({ token: 'anon-token' } as any);
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: false,
+        hasSocket: false,
+        isConnecting: false,
+      });
 
       renderHook(() => useSocketIOMessaging());
 
