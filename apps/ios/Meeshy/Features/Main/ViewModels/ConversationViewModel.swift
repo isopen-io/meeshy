@@ -22,7 +22,7 @@ func withSendTimeout<T: Sendable>(
 ) async throws -> T {
     let operationTask = Task { try await operation() }
     let watchdog = Task {
-        try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        try? await Task.sleep(for: .seconds(max(0, seconds)))
         operationTask.cancel()
     }
     defer { watchdog.cancel() }
@@ -231,6 +231,27 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:] {
         didSet { _allAudioItems = nil }
     }
+
+    /// On-demand translation requests currently in flight, keyed by messageId
+    /// then by target language. Owned here — not as `@State` on
+    /// `MessageLanguageDetailView` — so the "Traduire" button's loader
+    /// survives the language sheet being dismissed and re-presented: the VM
+    /// outlives the sheet, the view's `@State` does not.
+    @Published private(set) var translatingTextLanguages: [String: Set<String>] = [:]
+    @Published private(set) var translatingAudioLanguages: [String: Set<String>] = [:]
+
+    struct TranslationRequestFailure: Equatable {
+        enum Kind { case text, audio }
+        let messageId: String
+        let language: String
+        let kind: Kind
+        let message: String
+    }
+
+    /// Mirrors the `translationFailed`/`audioTranslationFailed` pattern
+    /// already consumed elsewhere for socket-driven failures — this is the
+    /// same shape for REST-driven on-demand translation failures.
+    let translationRequestFailed = PassthroughSubject<TranslationRequestFailure, Never>()
 
     /// Manual translation override per message (user selected a specific language in Language tab)
     /// nil value means user chose "show original"
@@ -788,6 +809,8 @@ class ConversationViewModel: ObservableObject {
     private let offlineQueue: OfflineMessageQueueing
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
+    private let translationService: TranslationServiceProviding
+    private let attachmentTranslationService: AttachmentTranslationProviding
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     /// Captured at init so the heavy side-effects (DB observation, initial
@@ -927,10 +950,14 @@ class ConversationViewModel: ObservableObject {
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         offlineQueue: OfflineMessageQueueing = OfflineQueue.shared,
         activeCallService: ActiveCallServiceProviding = ActiveCallService.shared,
-        liveCallJoin: LiveCallJoinContext = .live
+        liveCallJoin: LiveCallJoinContext = .live,
+        translationService: TranslationServiceProviding = TranslationService.shared,
+        attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared
     ) {
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
+        self.translationService = translationService
+        self.attachmentTranslationService = attachmentTranslationService
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.initialUnreadCount = unreadCount
@@ -1884,7 +1911,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 // Small delay to let the current batch render and the
                 // scroll position stabilize before we start the next fetch.
-                try? await Task.sleep(nanoseconds: 150_000_000)
+                try? await Task.sleep(for: .milliseconds(150))
                 guard let self, !self.isLoadingOlder else { return }
                 await self.loadOlderMessages()
             }
@@ -3956,7 +3983,7 @@ class ConversationViewModel: ObservableObject {
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
             // won't exist yet.
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .milliseconds(150))
 
             return .loadedFromServer
         } catch {
@@ -4000,7 +4027,7 @@ class ConversationViewModel: ObservableObject {
                 lastError = error
                 if attempt < Self.paginationRetryCount {
                     Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
-                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                    try? await Task.sleep(for: .milliseconds(500))
                 }
             }
         }
@@ -4192,6 +4219,78 @@ class ConversationViewModel: ObservableObject {
         activeAudioLanguageOverrides[messageId] = language
     }
 
+    /// On-demand text translation, triggered by "Traduire" in the language
+    /// detail view. Owning the in-flight flag AND the network call here
+    /// (rather than in the view) is what lets the loader survive the sheet
+    /// being dismissed and re-presented.
+    func requestTextTranslation(
+        messageId: String, content: String, sourceLanguage: String, targetLanguage: String
+    ) async {
+        guard !(translatingTextLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
+        translatingTextLanguages[messageId, default: []].insert(targetLanguage)
+        defer { translatingTextLanguages[messageId]?.remove(targetLanguage) }
+
+        do {
+            let response = try await translationService.translate(
+                text: content, sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage, messageId: messageId
+            )
+            let translation = MessageTranslation(
+                id: "\(messageId)-\(targetLanguage)",
+                messageId: messageId,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                translatedContent: response.translatedText,
+                translationModel: "on-demand",
+                confidenceScore: nil
+            )
+            var existing = messageTranslations[messageId] ?? []
+            if let idx = existing.firstIndex(where: { $0.targetLanguage == targetLanguage }) {
+                existing[idx] = translation
+            } else {
+                existing.append(translation)
+            }
+            messageTranslations[messageId] = existing
+            setActiveTranslation(for: messageId, translation: translation)
+        } catch {
+            translationRequestFailed.send(.init(
+                messageId: messageId, language: targetLanguage, kind: .text,
+                message: error.localizedDescription
+            ))
+        }
+    }
+
+    /// On-demand audio translation (transcription+NLLB+TTS pipeline behind
+    /// `POST /attachments/:id/translate`). Same in-flight-in-the-VM rationale
+    /// as `requestTextTranslation`; additionally persists the result into
+    /// `messageTranslatedAudios` so a second open of the language sheet
+    /// never re-triggers the full pipeline for a language already fetched.
+    func requestAudioTranslation(
+        messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String
+    ) async {
+        guard !(translatingAudioLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
+        translatingAudioLanguages[messageId, default: []].insert(targetLanguage)
+        defer { translatingAudioLanguages[messageId]?.remove(targetLanguage) }
+
+        do {
+            let response = try await attachmentTranslationService.translate(
+                attachmentId: attachmentId, targetLanguages: [targetLanguage],
+                sourceLanguage: sourceLanguage, generateVoiceClone: false
+            )
+            messageTranslatedAudios[messageId] = MessageLanguageDetailView.mergeAudioTranslations(
+                existing: messageTranslatedAudios[messageId] ?? [],
+                incoming: response.translations,
+                attachmentId: attachmentId
+            )
+            setActiveAudioLanguage(for: messageId, language: targetLanguage)
+        } catch {
+            let message = (error as? AttachmentConsentError)?.message ?? error.localizedDescription
+            translationRequestFailed.send(.init(
+                messageId: messageId, language: targetLanguage, kind: .audio, message: message
+            ))
+        }
+    }
+
     private var _cachedLanguagePreferences: ConversationLanguagePreferences?
 
     /// Ordered language priority used by `preferredTranslation(for:)`.
@@ -4315,7 +4414,7 @@ class ConversationViewModel: ObservableObject {
         Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
 
         Task { [weak self, messageService] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            try? await Task.sleep(for: .seconds(5))
             guard let self, !Task.isCancelled else { return }
 
             // Re-fetch the same messages from REST; by now Whisper should have

@@ -18,9 +18,13 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
+import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -61,6 +65,7 @@ class StoryViewerViewModelTest {
         authorId: String,
         hoursAgo: Long,
         reactionSummary: Map<String, Int>? = null,
+        translations: Map<String, ApiPostTranslationEntry>? = null,
     ) = ApiPost(
         id = id,
         type = "STORY",
@@ -69,6 +74,7 @@ class StoryViewerViewModelTest {
         author = ApiAuthor(id = authorId, username = "name-$authorId"),
         isViewedByMe = false,
         reactionSummary = reactionSummary,
+        translations = translations,
     )
 
     private fun viewModel(
@@ -367,6 +373,189 @@ class StoryViewerViewModelTest {
             media = listOf(ApiPostMedia(id = "m-$id", fileUrl = imageUrl)),
         )
 
+    // ---- background/foreground video + audio (Android story media parity) ----
+
+    @Test
+    fun `a background video mediaObject exposes backgroundVideoUrl and leaves imageUrl null`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                        loop = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.imageUrl).isNull()
+        assertThat(vm.state.value.current?.backgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `a legacy video-only story without storyEffects exposes backgroundVideoUrl, never a broken imageUrl`() = runTest {
+        // Regression test: before the fix, the flat media[] fallback used the
+        // VIDEO item's own `.url` as `imageUrl`, which AsyncImage/Coil cannot
+        // decode — the slide painted nothing and no video ever played.
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(
+                    id = "m1",
+                    fileUrl = "http://cdn/legacy.mp4",
+                    mimeType = "video/mp4",
+                    thumbnailUrl = "http://cdn/legacy_thumb.jpg",
+                ),
+            ),
+            storyEffects = null,
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/legacy.mp4")
+        assertThat(vm.state.value.current?.imageUrl).isNull()
+    }
+
+    @Test
+    fun `a background image mediaObject still resolves as imageUrl, not backgroundVideoUrl`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/photo.jpg")
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isNull()
+    }
+
+    @Test
+    fun `a non-background mediaObject is exposed as foreground media`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "bg", fileUrl = "http://cdn/bg.jpg", mimeType = "image/jpeg"),
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "bgObj",
+                        postMediaId = "bg",
+                        mediaURL = "http://cdn/bg.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                    StoryMediaObject(
+                        id = "fgObj",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        x = 0.3,
+                        y = 0.7,
+                        scale = 0.5,
+                        aspectRatio = 0.6,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty()
+        assertThat(fg).hasSize(1)
+        assertThat(fg.first().url).isEqualTo("http://cdn/fg.mp4")
+        assertThat(fg.first().isVideo).isTrue()
+        assertThat(fg.first().x).isEqualTo(0.3)
+        assertThat(fg.first().y).isEqualTo(0.7)
+    }
+
+    @Test
+    fun `a background audioPlayerObject resolves its URL via postMediaId into backgroundAudioUrl`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "img", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg"),
+                ApiPostMedia(id = "aud", fileUrl = "http://cdn/track.mp3", mimeType = "audio/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "bgObj",
+                        postMediaId = "img",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                ),
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(id = "audObj", postMediaId = "aud", isBackground = true),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("http://cdn/track.mp3")
+    }
+
+    @Test
+    fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(id = "voiceObj", postMediaId = "voice", isBackground = false),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.foregroundAudioUrl).isEqualTo("http://cdn/voice.mp3")
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isNull()
+    }
+
+    @Test
+    fun `the story item's direct audioUrl is used as backgroundAudioUrl when no audioPlayerObjects exist`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(audioUrl = "http://cdn/voice-direct.mp3")
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("http://cdn/voice-direct.mp3")
+    }
+
+    @Test
+    fun `a background-video slide can auto-advance immediately, same as a text-only slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "o1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.imageUrl).isNull()
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
     @Test
     fun `prefetchUrls warms the upcoming slide images of the current author`() = runTest {
         val posts = listOf(
@@ -464,5 +653,76 @@ class StoryViewerViewModelTest {
 
         assertThat(vm.state.value.current?.id).isEqualTo("a1")
         assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
+    @Test
+    fun `available languages list the slide translations with flags`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf(
+                        "fr" to ApiPostTranslationEntry(text = "bonjour"),
+                        "es" to ApiPostTranslationEntry(text = "hola"),
+                    ),
+                ),
+            ),
+        )
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsExactly("fr", "es")
+        assertThat(languages.first { it.code == "fr" }.flag).isNotEmpty()
+    }
+
+    @Test
+    fun `toggling a language override re-resolves the current slide text`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.languageOverride).isEqualTo("es")
+    }
+
+    @Test
+    fun `re-toggling the same language clears the override`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.languageOverride).isNull()
+    }
+
+    @Test
+    fun `advancing to another slide resets the override`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 2,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+                storyPost(id = "s2", authorId = "a1", hoursAgo = 1),
+            ),
+        )
+        vm.toggleLanguageOverride("es")
+        vm.advance()
+        assertThat(vm.state.value.languageOverride).isNull()
+        vm.back()
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
     }
 }

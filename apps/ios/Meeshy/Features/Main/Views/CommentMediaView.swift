@@ -267,7 +267,11 @@ struct CommentMediaView: View {
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media, author: author,
-                            originalLanguage: nil, caption: "", createdAt: sentAt
+                            originalLanguage: nil, caption: "", createdAt: sentAt,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE commentaire doit être vu
+                            // comme la même session coordinator.
+                            conversationId: commentId
                         )
                     },
                     availability: availability,

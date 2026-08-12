@@ -1065,7 +1065,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "attachmentId":"\(attachmentId)",
             "messageId":"msg1",
             "conversationId":"\(conversationId)",
-            "userId":"\(otherUserId)",
+            "userId":"\(currentUserId)",
             "action":"listened",
             "updatedAt":"2099-12-31T23:59:59.000Z",
             "playPositionMs":2500,
@@ -1092,7 +1092,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "attachmentId":"\(attachmentId)",
             "messageId":"msg1",
             "conversationId":"\(conversationId)",
-            "userId":"\(otherUserId)",
+            "userId":"\(currentUserId)",
             "action":"watched",
             "updatedAt":"2099-12-31T23:59:59.000Z",
             "playPositionMs":10000,
@@ -1129,6 +1129,35 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
+    }
+
+    func test_attachmentStatusUpdated_fromOtherParticipant_doesNotRecordMediaConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":8000,
+            "durationMs":10000,
+            "percentage":80
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(
+            MediaConsumptionStore.shared.fraction(for: attachmentId),
+            "Another participant's playback progress must never tint the local user's own view of this attachment"
+        )
     }
 
     // MARK: - messageReceived clears typing indicator for sender

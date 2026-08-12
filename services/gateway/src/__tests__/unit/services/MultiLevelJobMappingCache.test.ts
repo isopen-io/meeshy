@@ -1,173 +1,119 @@
 /**
- * MultiLevelJobMappingCache — unit tests
- *
- * Verifies that every public method delegates correctly to MultiLevelCache<JobMetadata>.
+ * Unit tests for MultiLevelJobMappingCache
+ * Uses the real MultiLevelCache implementation (memory-only, no CacheStore).
  *
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
-// ─── Mock MultiLevelCache (hoisted) ──────────────────────────────────────────
-
-const mockSet = jest.fn<any>().mockResolvedValue(undefined);
-const mockGet = jest.fn<any>().mockResolvedValue(null);
-const mockGetAndDelete = jest.fn<any>().mockResolvedValue(null);
-const mockHas = jest.fn<any>().mockResolvedValue(false);
-const mockDelete = jest.fn<any>().mockResolvedValue(false);
-const mockGetStats = jest.fn<any>().mockReturnValue({ memorySize: 0, memoryCapacity: 100, name: 'JobMapping' });
-const mockDisconnect = jest.fn<any>().mockResolvedValue(undefined);
-
-jest.mock('../../../services/MultiLevelCache', () => ({
-  MultiLevelCache: jest.fn().mockImplementation(() => ({
-    set: mockSet,
-    get: mockGet,
-    getAndDelete: mockGetAndDelete,
-    has: mockHas,
-    delete: mockDelete,
-    getStats: mockGetStats,
-    disconnect: mockDisconnect,
-  })),
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })
+  }
 }));
 
 import { MultiLevelJobMappingCache, type JobMetadata } from '../../../services/MultiLevelJobMappingCache';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Factories ────────────────────────────────────────────────────────────────
 
 function makeMetadata(overrides: Partial<JobMetadata> = {}): JobMetadata {
   return {
-    userId: 'user-1',
-    jobType: 'translation',
-    timestamp: 1700000000000,
-    messageId: 'msg-1',
-    ...overrides,
+    userId: 'user-123',
+    jobType: 'transcription',
+    timestamp: Date.now(),
+    ...overrides
   };
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+function makeCache(): MultiLevelJobMappingCache {
+  return new MultiLevelJobMappingCache();
+}
 
-beforeEach(() => jest.clearAllMocks());
+// ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('MultiLevelJobMappingCache.saveJobMapping', () => {
-  it('delegates to cache.set with jobId and metadata', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    const meta = makeMetadata();
-
-    await cache.saveJobMapping('job-abc', meta);
-
-    expect(mockSet).toHaveBeenCalledWith('job-abc', meta);
+describe('MultiLevelJobMappingCache', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
   });
 
-  it('resolves void', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    await expect(cache.saveJobMapping('j1', makeMetadata())).resolves.toBeUndefined();
-  });
-});
-
-describe('MultiLevelJobMappingCache.getAndDeleteJobMapping', () => {
-  it('delegates to cache.getAndDelete', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    const meta = makeMetadata({ jobType: 'voice' });
-    mockGetAndDelete.mockResolvedValueOnce(meta);
-
-    const result = await cache.getAndDeleteJobMapping('job-abc');
-
-    expect(mockGetAndDelete).toHaveBeenCalledWith('job-abc');
-    expect(result).toEqual(meta);
+  afterEach(async () => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
   });
 
-  it('returns null when job not found', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    mockGetAndDelete.mockResolvedValueOnce(null);
+  it('saveJobMapping then getJobMapping returns stored metadata', async () => {
+    const cache = makeCache();
+    const metadata = makeMetadata({ messageId: 'msg-1', jobType: 'translation' });
 
-    const result = await cache.getAndDeleteJobMapping('missing');
+    await cache.saveJobMapping('job-1', metadata);
+    const result = await cache.getJobMapping('job-1');
 
-    expect(result).toBeNull();
-  });
-});
-
-describe('MultiLevelJobMappingCache.getJobMapping', () => {
-  it('delegates to cache.get', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    const meta = makeMetadata();
-    mockGet.mockResolvedValueOnce(meta);
-
-    const result = await cache.getJobMapping('job-abc');
-
-    expect(mockGet).toHaveBeenCalledWith('job-abc');
-    expect(result).toEqual(meta);
+    expect(result).toEqual(metadata);
   });
 
-  it('returns null when job not found', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    const result = await cache.getJobMapping('missing');
-    expect(result).toBeNull();
-  });
-});
+  it('hasJobMapping returns false for an unknown jobId', async () => {
+    const cache = makeCache();
 
-describe('MultiLevelJobMappingCache.hasJobMapping', () => {
-  it('returns true when job exists', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    mockHas.mockResolvedValueOnce(true);
-
-    const result = await cache.hasJobMapping('job-abc');
-
-    expect(mockHas).toHaveBeenCalledWith('job-abc');
-    expect(result).toBe(true);
-  });
-
-  it('returns false when job does not exist', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    const result = await cache.hasJobMapping('missing');
-    expect(result).toBe(false);
-  });
-});
-
-describe('MultiLevelJobMappingCache.deleteJobMapping', () => {
-  it('delegates to cache.delete and returns true on success', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    mockDelete.mockResolvedValueOnce(true);
-
-    const result = await cache.deleteJobMapping('job-abc');
-
-    expect(mockDelete).toHaveBeenCalledWith('job-abc');
-    expect(result).toBe(true);
-  });
-
-  it('returns false when job did not exist', async () => {
-    const cache = new MultiLevelJobMappingCache();
-    mockDelete.mockResolvedValueOnce(false);
-
-    const result = await cache.deleteJobMapping('missing');
+    const result = await cache.hasJobMapping('nonexistent-job');
 
     expect(result).toBe(false);
   });
-});
 
-describe('MultiLevelJobMappingCache.getStats', () => {
-  it('returns stats from underlying cache', () => {
-    const cache = new MultiLevelJobMappingCache();
-    mockGetStats.mockReturnValueOnce({ memorySize: 5, memoryCapacity: 1000, name: 'JobMapping' });
+  it('hasJobMapping returns true after saveJobMapping', async () => {
+    const cache = makeCache();
+    const metadata = makeMetadata({ attachmentId: 'att-42', jobType: 'voice' });
+
+    await cache.saveJobMapping('job-voice', metadata);
+    const result = await cache.hasJobMapping('job-voice');
+
+    expect(result).toBe(true);
+  });
+
+  it('getAndDeleteJobMapping returns metadata and then hasJobMapping returns false', async () => {
+    const cache = makeCache();
+    const metadata = makeMetadata({ conversationId: 'conv-99', jobType: 'audio' });
+
+    await cache.saveJobMapping('job-audio', metadata);
+    const fetched = await cache.getAndDeleteJobMapping('job-audio');
+
+    expect(fetched).toEqual(metadata);
+    expect(await cache.hasJobMapping('job-audio')).toBe(false);
+  });
+
+  it('deleteJobMapping returns true when key exists', async () => {
+    const cache = makeCache();
+    await cache.saveJobMapping('job-del', makeMetadata());
+
+    const result = await cache.deleteJobMapping('job-del');
+
+    expect(result).toBe(true);
+  });
+
+  it('deleteJobMapping returns false when key does not exist', async () => {
+    const cache = makeCache();
+
+    const result = await cache.deleteJobMapping('no-such-job');
+
+    expect(result).toBe(false);
+  });
+
+  it('getStats returns memorySize and memoryCapacity', async () => {
+    const cache = makeCache();
+    await cache.saveJobMapping('j1', makeMetadata());
+    await cache.saveJobMapping('j2', makeMetadata());
 
     const stats = cache.getStats();
 
-    expect(mockGetStats).toHaveBeenCalled();
-    expect(stats.memorySize).toBe(5);
-    expect(stats.memoryCapacity).toBe(1000);
-  });
-});
-
-describe('MultiLevelJobMappingCache.disconnect', () => {
-  it('calls cache.disconnect', async () => {
-    const cache = new MultiLevelJobMappingCache();
-
-    await cache.disconnect();
-
-    expect(mockDisconnect).toHaveBeenCalledTimes(1);
+    expect(typeof stats.memorySize).toBe('number');
+    expect(typeof stats.memoryCapacity).toBe('number');
+    expect(stats.memorySize).toBe(2);
   });
 
-  it('resolves void', async () => {
-    const cache = new MultiLevelJobMappingCache();
+  it('disconnect resolves without throwing', async () => {
+    const cache = makeCache();
+    await cache.saveJobMapping('job-x', makeMetadata());
+
     await expect(cache.disconnect()).resolves.toBeUndefined();
   });
 });

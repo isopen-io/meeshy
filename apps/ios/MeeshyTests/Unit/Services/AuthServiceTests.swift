@@ -262,7 +262,9 @@ final class AuthServiceTests: XCTestCase {
 
         AuthManager.shared.handleUnauthorized()
 
-        await fulfillment(of: [rotated], timeout: 2)
+        // The wait is event-driven (fulfilled on tokenDidRotate) — this timeout is
+        // only a safety bound. 2s flakes on the saturated serial CI runner.
+        await fulfillment(of: [rotated], timeout: 10)
 
         XCTAssertEqual(AuthManager.shared.authToken, "refreshed-via-401")
         XCTAssertTrue(AuthManager.shared.isAuthenticated)

@@ -23,6 +23,7 @@
     <string name="conversations_preview_you">Você</string>
     <string name="conversations_preview_draft_prefix">Rascunho: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_preview_loading">Carregando…</string>
     <string name="conversations_search">Pesquisar</string>
     <string name="conversations_search_hint">Pesquisar conversas</string>
     <string name="conversations_search_close">Fechar pesquisa</string>

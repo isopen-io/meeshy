@@ -29,6 +29,23 @@ jest.mock('sonner', () => ({
   },
 }));
 
+// Identity translation — assertions below check the KEY (proves the hook
+// routes every toast through i18n instead of a hardcoded English literal),
+// same convention as use-call-retry-toast.test.tsx. Params are appended so
+// the interpolated `micAccessFailed` case can still assert on the original
+// error message without needing the real substitution logic. `t` is defined
+// OUTSIDE the returned object (module-scoped, one stable reference reused by
+// every `useI18n()` call) — mirroring the real hook's `useMemo`-backed `t` —
+// so `startCall`'s `useCallback([conversation, user, t])` doesn't churn
+// identity every render just because the mock handed back a fresh closure.
+jest.mock('@/hooks/useI18n', () => {
+  const t = (key: string, paramsOrFallback?: Record<string, unknown> | string) =>
+    paramsOrFallback && typeof paramsOrFallback === 'object'
+      ? `${key}|${JSON.stringify(paramsOrFallback)}`
+      : key;
+  return { useI18n: () => ({ t }) };
+});
+
 // Mock auth — startCall's ack handler reads the current user id to build the
 // initiator's CallSession (P0 fix, 2026-07-06). The user object/return value
 // must be a STABLE reference across renders (matching the real hook's
@@ -137,7 +154,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Please select a conversation first');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.selectConversation');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -150,9 +167,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith(
-        'Calls are only available for direct conversations'
-      );
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.directOnly');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -228,7 +243,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
     });
 
     it('should not show success toast when the ack is unsuccessful', async () => {
@@ -284,7 +299,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Failed to start call. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
     });
 
     it('should handle disconnected socket', async () => {
@@ -301,7 +316,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Connection error. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -316,7 +331,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Connection error. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.connectionError');
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
@@ -360,7 +375,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Camera/microphone permission denied.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micPermissionDenied');
     });
 
     it('should handle NotFoundError (no device)', async () => {
@@ -376,7 +391,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('No camera or microphone found.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micNotFound');
     });
 
     it('should handle generic Error with message', async () => {
@@ -393,7 +408,7 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith(
-        'Failed to access camera/microphone: Device busy'
+        'calls.toasts.micAccessFailed|{"message":"Device busy"}'
       );
     });
 
@@ -408,7 +423,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('Failed to access camera/microphone');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.micAccessFailedGeneric');
     });
 
     it('should cleanup stream on media error', async () => {
@@ -677,7 +692,7 @@ describe('useVideoCall', () => {
 
       await startPromise;
 
-      expect(mockToastError).toHaveBeenCalledWith('Failed to start call. Please try again.');
+      expect(mockToastError).toHaveBeenCalledWith('calls.toasts.startFailed');
     });
 
     it('stops the pre-authorized stream tracks when the call:initiate ack times out (no orphaned hot mic/camera)', async () => {
@@ -763,7 +778,7 @@ describe('useVideoCall', () => {
 
       await startPromise;
 
-      expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+      expect(mockToastSuccess).toHaveBeenCalledWith('calls.toasts.startingCall');
 
       await act(async () => {
         jest.advanceTimersByTime(CALL_INITIATE_ACK_TIMEOUT_MS + 5000);

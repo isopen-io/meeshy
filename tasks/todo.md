@@ -1,3 +1,3061 @@
+# Tête instruite pour le cycle 89 — six défauts livrés, cinq restent
+
+*Le cycle 88 a livré SIX des neuf défauts légués par le 86/87. Les restants sont reproduits plus
+bas **tels que les cycles précédents les ont établis** — site exact, scénario d'échec. **Ne pas
+re-auditer — vérifier puis corriger.***
+
+**Avant de commencer un item, `git fetch origin main` et vérifier qu'aucun commit récent ne le porte
+déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en parallèle).
+
+> **Et cette consigne n'est pas assez forte — elle vient d'échouer une seconde fois.** Une session
+> parallèle (`claude/keen-hamilton-r0rdv1`) a mené le cycle 88 de bout en bout en même temps que
+> celle-ci : mêmes trois premiers correctifs, RED-prouvés, suite complète verte, PR #2886 ouverte et
+> CI passée — le tout déjà sur `main` quand sa CI s'est terminée. Elle avait bien fait son
+> `git fetch` d'ouverture ; à cet instant `origin/main` valait exactement HEAD. **Le `fetch`
+> d'ouverture ne protège de rien** : il atteste du passé, pas de l'avenir, et un cycle dure des
+> heures.
+>
+> La règle praticable, à appliquer littéralement :
+>
+> ```bash
+> git fetch origin main && git log --oneline -15 origin/main   # AVANT d'écrire CHAQUE item
+> git fetch origin main                                        # ET juste avant d'ouvrir la PR
+> ```
+>
+> Ce qui a survécu de la session doublon, après salvage test par test : **un seul test** (le cas
+> capitalisé `'FR'` de `getTranslation`, que la couverture retenue ne portait pas) et deux leçons.
+> Détail du salvage et des arbitrages non rejoués : leçon 137.
+
+## Livré au cycle 88
+
+1. **L'invité anonyme n'est plus traité en silence par `conversation:join`** (ancienne priorité 1,
+   **les deux moitiés**) — ni le compteur de non-lus ni l'accusé `conversation:joined` ne se gatent
+   plus sur `userId`. Les deux portent le `Participant.id`, verrouillés par test. La lecture des
+   cinq consommateurs clients qui bloquait la seconde moitié a été faite (détail ci-dessous).
+2. **`getTranslation()` lit sous la clé normalisée** (ancienne priorité 2, item 1) — verbatim
+   d'abord, forme canonique en repli. Le repli fabriqué `[PT-BR] <original>` ne peut plus se
+   produire par manque de clé.
+3. **Monter `useSocketIOMessaging` ne coupe plus un socket sain** (ancienne priorité 3, item 1) —
+   même garde que l'étape 1C.
+4. **Rollback inconditionnel des réactions optimistes** (ancienne priorité 3, item 4).
+5. **Le translator n'envoie plus deux fois chaque audio traduit** (ancienne priorité 3, item 5).
+
+## Priorité 1 — LIVRÉE au cycle 88 : l'accusé anonyme, et la lecture client qui l'a débloquée
+
+L'item était bloqué par une question d'identité que le cycle 87 n'avait pas voulu trancher à
+l'aveugle. **La lecture client due a été faite** — et elle renverse la difficulté supposée.
+
+**Les cinq consommateurs de `conversation:joined` n'exploitent QUE `conversationId`. Aucun ne lit
+`userId` :**
+
+| Site | Ce qu'il fait du payload |
+|---|---|
+| web `use-socket-cache-sync.ts` | `invalidateQueries(participants(conversationId))` |
+| web `use-stream-socket.ts` | mémorise l'ObjectId normalisé |
+| web `orchestrator.service.ts` | résout l'identifiant (`meeshy`) → ObjectId |
+| iOS `ConversationSyncEngine.swift` | `cache.participants.invalidate(for: conversationId)` |
+| iOS `ParticipantsView.swift` | filtre sur `conversationId`, jette le payload (`{ _ in }`) |
+
+**La seule contrainte dure est un contrainte de DÉCODAGE, pas de sémantique** :
+`ConversationParticipationEvent.userId` est un `String` **non optionnel** (MessageSocketManager.swift
+:552). Omettre le champ ferait échouer le décodage Swift — l'accusé serait silencieusement jeté sur
+iOS. Le champ doit donc être présent ; sa valeur, elle, n'est lue par personne.
+
+D'où la décision livrée : `participationId = userId ?? participantId`. Le `Participant.id` est
+l'identité que le contrôle d'appartenance vient précisément de résoudre. **Jamais
+`connectedUser.id`** — c'est le jeton de SESSION, un credential, qui n'a rien à faire dans un
+payload d'événement (et qui ne résout aucune ligne Participant).
+
+Sous-question annexe **toujours** non instruite : les **stats de conversation** restent gatées sur
+`userId`. Contrairement à l'accusé, ce n'est pas un pur additif — c'est diffuser un effectif et une
+liste de présents à un invité de lien. Décision produit, pas correctif.
+
+## Priorité 2 — le pipeline de traduction (trois défauts restants sur quatre)
+
+- **Le garde « traduction périmée » jette des résultats VALIDES**
+  (`MessageTranslationService.ts:975` → `_isStaleTranslationResult`, `:781-784`). La carte
+  `latestRetranslationTask` n'est écrite que par `_processRetranslationAsync` — qui sert AUSSI la
+  traduction à la demande, où le contenu n'a pas changé. Une demande « traduis en italien » pendant
+  que les traductions initiales volent encore fait tomber `en` et `es` : ces lecteurs voient
+  l'original pour toujours, et rien ne retente.
+- **La traduction à la demande SUPPRIME avant de confirmer** (`:697-724`) : les entrées visées sont
+  retirées de `Message.translations` et persistées avant l'envoi ZMQ, sans rollback. Si le
+  remplacement se perd, la traduction correcte est perdue définitivement. Ce chemin viole en plus la
+  règle du `socketio/README.md` : il écrit `Message.translations` sans jamais se demander si le
+  message est le DERNIER de sa conversation, donc sans `emitConversationPreviewUpdate`.
+- **Une requête multi-langues est réputée soldée par son PREMIER résultat**
+  (`ZmqTranslationClient.ts:295-309`) : `removePendingRequest` désarme le deadman dès la première
+  langue. Les langues 2..N n'ont plus ni timeout, ni retry, ni erreur.
+
+## Priorité 3 — web et gateway (deux défauts restants sur cinq)
+
+- **Les accusés ne sont jamais re-synchronisés après une coupure socket.** Le lot REST
+  (`use-conversation-messages-rq.ts:261-307`) n'est relancé que lorsqu'on ENVOIE un message, et
+  `conversation:join` ne re-émet pas de `read-status:updated`. Le cycle 85 a rendu ces compteurs
+  monotones : sans backfill, un événement manqué devient un gel permanent.
+- **Rien ne recalcule les non-lus après une suppression de message** (gateway) : aucun des sept sites
+  d'émission de `conversation:unread-updated` n'est un chemin de suppression. Le badge compte des
+  messages qui n'existent plus.
+
+## Ce qui reste ouvert des cycles précédents
+
+- **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
+  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de la
+  routine** — inchangé aux cycles 86, 87 et 88. Exige une machine macOS.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). **Non reproduit au cycle 88** : la suite gateway complète est passée 654/654 suites,
+  16 504/16 504 tests, sans un seul échec. Reste donc un ordonnancement intermittent, non instruit.
+
+## Fragilité CI relevée au cycle 88 — le build web dépend du réseau Google Fonts
+
+Le job `Build (bun)` de `ci.yml` a échoué une fois sur ce cycle, à l'étape « Build web frontend »,
+avec :
+
+```
+Failed to fetch font file from `https://fonts.gstatic.com/s/roboto/v51/...woff2`  (×3 retries)
+lib/fonts.ts  `next/font` error: Failed to fetch `Roboto` from Google Fonts.
+> Build failed because of webpack errors
+```
+
+**C'est un défaut d'infrastructure, pas de code.** Le run précédent du MÊME code web (`74eee6a1`,
+run 9640) avait passé `Build` vingt minutes plus tôt ; le commit incriminé (`eb7ceb4c`) ne touche
+que du TypeScript gateway et des `.md`. Tous les autres jobs sont verts sur les deux runs.
+
+**Cause structurelle** : `apps/web/lib/fonts.ts` utilise `next/font/google`, qui télécharge les
+fichiers de police **au moment du build**. Chaque build web exige donc un accès sortant à
+`fonts.gstatic.com` — huit familles environ. Une seule indisponibilité réseau côté runner casse le
+build entier, sans rapport avec le diff.
+
+**Piste de correction, non faite ici** (hors périmètre d'un cycle de correctifs temps réel) :
+vendoriser les `.woff2` et passer à `next/font/local`. Le build devient alors hermétique, plus
+rapide, et cesse d'exposer l'adresse des runners à un tiers à chaque build. À chiffrer par qui
+possède la zone build web.
+
+**À savoir en attendant** : la porte `actions: write` étant close pour la routine (cycle 82),
+`rerun_failed_jobs` renvoie `403 Resource not accessible by integration`. Le seul moyen de relancer
+est de pousser un commit.
+
+## Contraintes d'environnement de la routine (à jour au cycle 88)
+
+Trois zones du dépôt sont **non exécutables** depuis cet environnement — le savoir évite d'y perdre
+un cycle :
+
+| Zone | État | Cause |
+|---|---|---|
+| iOS / SDK Swift | ✗ | ni `swift`, ni `swiftc`, ni `xcodebuild` (Linux) |
+| translator (pytest) | ✗ | `numpy`/`torch` s'installent depuis l'index PyTorch, **bloqué par le proxy** |
+| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
+
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
+interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+---
+
+# Cycle 88 — Cinq défauts prouvés, cinq correctifs, et une porte laissée fermée exprès
+
+*Branche `claude/keen-hamilton-blazrp`. Cinq correctifs (2 gateway, 2 web, 1 translator), chacun
+RED-prouvé avant correction. Suites complètes vertes des deux côtés : **gateway 654/654 suites,
+16 504/16 504 tests** ; **web 563/563 suites, 12 089 tests passés, 21 ignorés, 0 échec**.*
+
+## 1. L'invité de lien partagé rejoignait en silence — accusé ET badge
+
+`conversation:join` gatait TOUTES ses émissions post-join sur `connectedUser.userId` — `undefined`
+pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a laissé passer et que le
+socket EST dans la room.
+
+**Le compteur.** `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` (son
+en-tête nomme même le chemin anonyme comme le cas courant). Piège évité : passer `connectedUser.id`
+(le jeton de session) aurait rendu `0` en silence — un badge « correct » et faux. Un test verrouille
+l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+
+**L'accusé.** Le cycle 87 l'avait laissé fermé faute d'avoir lu les clients. **Cette lecture a été
+faite ici**, et elle renverse la difficulté : les cinq consommateurs
+(web `use-socket-cache-sync` / `use-stream-socket` / `orchestrator`, iOS `ConversationSyncEngine` /
+`ParticipantsView`) n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+La seule contrainte dure est de DÉCODAGE : `ConversationParticipationEvent.userId` est un `String`
+**non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé serait
+silencieusement jeté sur iOS. Le champ doit exister ; sa valeur n'est lue par personne. D'où
+`participationId = userId ?? participantId`, une seule résolution d'identité pour les deux
+émissions.
+
+**Ce qui reste fermé, et pourquoi.** Les stats de conversation restent gatées sur `userId` :
+diffuser un effectif et une liste de présents à un invité de lien est une décision produit, pas un
+correctif.
+
+## 2. `getTranslation()` lisait une clé que personne n'écrit
+
+Lecture verbatim de `translations[targetLanguage]` alors que tous les écrivains stockent sous la
+forme canonique de `normalizeLanguageCode` (`'pt-BR'` → `'pt'`). Une demande `pt-BR` sondait donc
+une clé absente pendant que la traduction attendait une clé plus loin — puis l'appelant rendait un
+repli **fabriqué** `[PT-BR] <texte original>` après 10 s. La pire forme de violation du Prisme : du
+contenu non traduit présenté comme traduit.
+
+Verbatim d'abord, normalisé en repli — aucune traduction ne change de gagnant, seules celles qu'on
+ne trouvait pas deviennent trouvables. La cible RENDUE reste celle demandée (`'pt-BR'`) : le client
+corrèle sa requête dessus, la normalisation est un détail de stockage.
+
+## 3. Ouvrir un profil coupait la connexion temps réel
+
+`useSocketIOMessaging` appelait `reconnect()` sans condition au montage. Or `reconnect()` n'est pas
+un « connecte si besoin » : c'est `disconnect()` + reconnexion différée par backoff (1 à 2,5 s au
+premier essai, `connection.service.ts:141`). Cinq composants montent ce hook — ouvrir un profil
+coupait donc un socket parfaitement sain. L'étape 1C, quinze lignes plus bas, fait le même geste
+correctement gardé ; c'est cette garde qui a été appliquée.
+
+**Ce que le RED a révélé au passage** : les deux tests de montage existants ne passaient que parce
+que le code ignorait les diagnostics. Ils héritaient par FUITE d'un `isConnected: true` posé par un
+test « Initial State » plus haut — `jest.clearAllMocks()` remet les appels à zéro mais **pas les
+implémentations**. Leur précondition est désormais explicite.
+
+## 4. Une réaction refusée par le serveur restait affichée pour toujours
+
+Les deux mutations gardaient leur rollback derrière `if (context?.previousData)`. Or `onMutate`
+FABRIQUE l'état quand le cache est vide — `previousData` vaut alors `undefined`, et le garde refusait
+précisément de défaire ce qui venait d'être inventé.
+
+**Le rollback inconditionnel ne suffisait pas** : `setQueryData(key, undefined)` est un **no-op** en
+React Query (`undefined` = « ne rien changer »), et les tests sont restés ROUGES après le premier
+correctif. Restaurer l'absence de donnée exige `removeQueries`. D'où `restoreReactionSnapshot`, qui
+retire l'entrée quand il n'y avait rien et la réécrit sinon.
+
+## 5. Chaque audio traduit partait en double
+
+Bloc `if audio_bytes:` dupliqué VERBATIM dans le sender multipart : 2× la charge ZMQ par message
+vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son propre index — celle-ci
+désignait le doublon, et la première copie restait un frame orphelin.
+
+**Pourquoi ça n'avait rien cassé, et donc survécu** : le gateway résout les frames STRICTEMENT par
+`info.index` (`extractAudioBinaryFrames`, bornes vérifiées, aucune hypothèse de position). Origine
+sans ambiguïté au `git log -L` : un hunk de conflit résolu en double dans un commit de merge.
+
+**Réserve d'honnêteté** : la suite pytest du translator n'a PAS pu être exécutée — `numpy`/`torch`
+s'installent depuis l'index PyTorch, bloqué par le proxy. La sûreté du retrait est établie par
+lecture des deux côtés du contrat, **pas par exécution**. C'est le seul des cinq correctifs qui ne
+soit pas couvert par un test vert.
+
+## Ce que le cycle 88 a mesuré au passage
+
+- **La suite gateway a plus que doublé depuis la dernière note du dossier** : 654 suites / 16 504
+  tests, contre les « 249 suites » que `CLAUDE.md` annonce encore. Durée : 8 min 06.
+- **`npx tsc --noEmit` sur `apps/web` remonte 1 757 erreurs pré-existantes**, toutes dans des
+  fichiers de test (`TS7031` implicit any sur des mocks, `TS2345` sur des littéraux
+  `ReactionUpdateEvent`). Le CI ne s'en émeut pas : l'étape `Type-check` de `ci.yml` porte
+  `continue-on-error: true`. Aucune n'est imputable à ce cycle — les lignes écrites ici n'en
+  produisent aucune. À traiter comme une dette déclarée, pas comme une régression.
+- **`bun install` échoue sans `--ignore-scripts`** : le postinstall de `grpc-tools` sort en erreur
+  et interrompt l'installation entière (`node_modules` racine à 8 entrées, aucun workspace servi).
+
+
+---
+
+# Cycle 87 — Trois compteurs qui mentaient, et un correctif écrit deux fois
+
+*Branche `claude/keen-hamilton-tpltop`. Trois correctifs gateway, chacun RED-prouvé par
+réintroduction du défaut. Suite gateway complète verte.*
+
+## 1. `conversation:leave` ne retractait pas la frappe — livré par une AUTRE session
+
+Écrit ici, et simultanément sur `claude/keen-hamilton-8m3aqm` qui l'a mergé sur main en premier.
+Les deux implémentations ont convergé : même nom (`retractTypingIn`), même signature à id déjà
+normalisé, même ordre (retracter avant `socket.leave`), même refus de re-résoudre la conversation.
+
+**Résolution du merge, en faveur de main partout où les deux se touchent** — sa dépendance
+`retractTyping` est optionnelle là où la mienne était requise, et son `try/catch` vit au point
+d'appel plutôt que dans la retraction. Deux choix défendables, déjà mergés, non rejoués.
+
+Ce qui a survécu de cette branche :
+
+- **`StatusHandler.test.ts` : trois tests de `retractTypingIn`** — main n'en avait aucun, sa
+  couverture passait entièrement par `ConversationHandler`. Dont celui qui compte : *« costs nothing
+  for a socket that never typed »* (aucune résolution, aucune requête, aucune diffusion), soit
+  l'écrasante majorité des changements de conversation.
+- **Deux garanties ajoutées à `ConversationHandler.test.ts`** : la conversation n'est résolue
+  QU'UNE fois, et un payload refusé ne retracte rien.
+- Un test que j'avais écrit affirmait « la retraction ne rejette jamais » : c'était **mon** contrat,
+  pas celui de main, qui place le `try/catch` chez l'appelant. Réécrit pour affirmer ce que la
+  version de main garantit réellement — l'ordre untrack-avant-I/O, qui est ce qui évite un socket
+  éternellement « en train d'écrire » après une panne DB.
+
+## 2. `mark-read` diffusait un `read-status:updated` amputé — iOS ne synchronisait jamais ses lectures
+
+`POST /conversations/:id/mark-read` construisait son payload sans `lastReadAt` ni `unreadCount`.
+`ReadStatusUpdatedEventData` les déclare comme une **paire** sur `type: 'read'`, et le contrat dit
+qu'un consommateur les applique ensemble ou pas du tout. iOS le fait à la lettre
+(`ConversationStoreSocketBridge` : `guard … let lastReadAt, let unreadCount else { return }`), donc
+un payload amputé n'est pas appliqué partiellement — il est **jeté**.
+
+Et c'est cette route que poste `ConversationService.markRead`, le transport de lecture primaire
+d'iOS. **Chaîne vérifiée de bout en bout** (Swift → route → payload → garde client) : la synchro de
+lecture multi-appareils d'iOS ne partait jamais. Lire sur son iPhone ne descendait pas le badge sur
+son iPad. La route jumelle `message-read-status.ts` envoyait le couple correctement depuis toujours.
+
+Le couple est désormais résolu une fois et utilisé deux fois — il accompagne la diffusion ET
+alimente la remise à zéro du badge, qui faisait jusqu'ici son propre `getUnreadCount` : **une
+requête de moins par marquage**. Payload typé `ReadStatusUpdatedEventData`.
+
+## 3. `GET /conversations/:id` rendait toujours `unreadCount: 0` à un invité de lien partagé
+
+Clause `where: { conversationId, userId, isActive: true }` écrite à la main. Pour un invité,
+`authContext.userId` PORTE un `Participant.id` : la clause comparait un id de participant à la
+colonne `userId`, ne matchait rien, et le `0` obtenu **écrasait le badge que le socket venait de
+pousser juste**. Le badge d'un invité ne pouvait que disparaître à chaque ouverture.
+
+`resolveCallerParticipant` existe exactement pour ce site — son en-tête décrit ce défaut mot pour
+mot pour les autres routes. Sa précédence (`participantId` avant `userId`) est celle de
+`canAccessConversation` : accès et comptage ne peuvent plus diverger sur l'identité de l'appelant.
+Le helper exclut en plus les bannis, ce que la clause manuelle ne faisait pas.
+
+**Le site jumeau signalé par le cycle 86 n'en est pas un** : `_emitUnreadCountsSnapshot`
+(`MeeshySocketIOManager`) est gardé par un `if (!isAnonymous)` explicite. Il ne produit pas une
+valeur fausse, il n'en produit aucune — c'est une omission délibérée, pas le même défaut. L'étendre
+aux anonymes est une évolution, pas un correctif, et rejoint la question d'identité de la
+priorité 1 ci-dessus.
+
+## Méthode
+
+Chaque correctif RED-prouvé **en réintroduisant le défaut** dans le code de production, pas en
+supposant le rouge : retraction débranchée → 1 rouge ; couple retiré du payload → 2 rouges ; clause
+manuelle restaurée → 1 rouge. Restaurés, re-vérifiés verts à chaque fois.
+
+Un test écrit pour le n°3 partait d'une prémisse fausse — il posait un compteur pré-marquage à 0,
+or la route court-circuite légitimement quand il n'y a rien à marquer. **C'était le test qui avait
+tort, pas la route** : corrigé pour distinguer le compteur d'avant et celui d'après le marquage.
+
+Le double de base de données du test d'invité ne répond **que sur la colonne interrogée** — une
+clause `{ userId: <participant id> }` n'y matche rien, comme en base. Et le module d'access-control
+n'y est plus stubbé que sur `canAccessConversation` : c'est la vraie règle de précédence qui est
+exercée, pas un mock qui la répète.
+
+---
+
+## Cycle 87 (bis) — la retraction de frappe, telle que la session qui l'a mergée l'a consignée
+
+*Section écrite par `claude/keen-hamilton-8m3aqm`, la session qui a livré PR #2880. Conservée
+telle quelle au merge : sa vérification par mutation est la sienne, et elle porte une information
+que l'autre session n'avait pas.*
+
+Livré et mergé : PR #2880. Détail dans `.changeset/gateway-leave-retracts-typing.md` et dans la
+section « Livré au cycle 87 » ci-dessus.
+
+Vérification : RED prouvé (d'abord à la compilation, puis 3 rouges de comportement) ; **5 mutations,
+5 rouges** — retraction jamais appelée, retraction déplacée après `socket.leave`, id brut relayé,
+`try/catch` local retiré, extraction rendue injoignable depuis `typing:stop` (10 rouges sur les
+suites StatusHandler, ce qui prouve que le chemin d'origine passe bien par l'unité extraite). Suite
+gateway complète **654/654 suites, 16 491 tests** (baseline au même commit : 16 486). `tsc` gateway
+0 diagnostic avant comme après. CI verte sur `e5a88697`, `main` mergé à la main sans conflit avant
+le merge.
+
+**Un test du fichier ne discriminait rien, et seule la mutation l'a montré.** Le double de
+`validateSocketEvent` rend un `conversationId` CONSTANT : « id normalisé » et « id brut » y étaient
+indistinguables, et la mutation correspondante a survécu au premier passage. Le test fait désormais
+échoïser son entrée au double. C'est la deuxième fois en deux cycles qu'un double trop complaisant
+laisse passer les deux versions du code (leçon 128) — la mutation reste le seul détecteur fiable.
+
+
+# Cycle 86 — Les indicateurs de saisie du web : morts à la réception, fantômes à l'émission
+
+## Le correctif livré (PR #2879)
+
+Sur le web, la **vue conversation** n'a jamais affiché « X est en train d'écrire… », et n'a jamais
+retracté ce qu'elle faisait afficher aux autres. Deux défauts indépendants sur la même
+fonctionnalité.
+
+**Réception.** `ConversationLayout.onUserTyping` — le callback que la vue confie au socket — se
+réduisait à deux gardes suivies de rien :
+
+```ts
+const onUserTyping = useCallback((userId, _username, _isTyping, typingConversationId) => {
+  if (!user || userId === user.id) return;
+  if (typingConversationId !== selectedConversation?.id) return;
+}, [user, selectedConversation?.id]);        // ← la fonction se termine ici
+```
+
+`useConversationTyping.handleUserTyping` — **seul écrivain** de `typingUsers` — n'était ni
+déstructuré ni appelé. Chaque `typing:start`/`typing:stop` était reçu, filtré, jeté. L'en-tête rend
+pourtant bien cet état (`ConversationView.mapTypingUsers` → `ConversationHeader` →
+`ParticipantsDisplay` → `TypingIndicator`) : il n'a simplement jamais rien eu à rendre.
+
+Ce qui a caché la panne : le **flux d'accueil** (`use-stream-socket.ts:128,306`) tient sa PROPRE
+copie du handler et la câble correctement. La fonctionnalité marchait sur une surface et pas sur
+l'autre.
+
+**Émission.** Le nettoyage de `useConversationTyping` est une fermeture créée au rendu où
+`conversationId` a changé pour la dernière fois : elle y capture un `isTyping` qui vaut toujours
+`false`, donc `if (isTyping) stopTyping()` était **inatteignable** — et le même nettoyage annule le
+timer d'auto-stop (3 s), si bien qu'aucun des deux chemins d'arrêt ne partait. Rien en aval ne
+rattrapait (cf. priorité 1 ci-dessus). Changer de conversation sans vider le composeur laissait donc
+un fantôme chez tous les pairs jusqu'à leur filet de 8 s.
+
+Trois décisions :
+
+- **Le layout délègue, il ne recopie pas.** Les deux gardes du callback existaient déjà dans
+  `handleUserTyping` ; les rebrancher aurait dupliqué la règle. Le callback relaie, point.
+- **Un ref pour casser le cycle.** `useConversationTyping` a besoin de `startTyping`/`stopTyping` que
+  produit `useSocketIOMessaging`, qui a besoin du récepteur : la dépendance est réellement
+  bidirectionnelle. Le ref la casse, et rend le callback STABLE — l'abonnement socket cesse de se
+  refaire à chaque changement de conversation.
+- **Un miroir de `isTyping` écrit à la main, pas synchronisé par effet.** React exécute tous les
+  nettoyages avant tous les effets : un ref synchronisé par `useEffect` serait juste par accident
+  d'ordonnancement. Écrit aux trois mêmes endroits que l'état, il est juste par construction.
+
+### Vérification
+
+- **RED prouvé avant le correctif** : 4 rouges (2 hook, 2 vue). Les 4 gardes négatives (écho de soi,
+  autre conversation, pas de stop si on ne tapait pas, pas de double stop) passaient déjà — elles
+  verrouillent le correctif contre une sur-émission.
+- **Mutation appliquée et vérifiée — 6 réversions, 6 rouges** : relais neutralisé (2), branchement du
+  ref retiré (2), nettoyage relisant l'état périmé (2), miroir non armé par `handleTypingStart` (2),
+  non désarmé par `handleTypingStop` (1), non désarmé par l'auto-stop (1). Restauré, re-vérifié vert.
+- **Suite web complète : 563/563 fichiers, 12 084 tests verts** (21 skipped).
+- `tsc --noEmit` : **1 224 diagnostics avant comme après**, aucun dans les fichiers touchés.
+- Baseline gateway relevée au même commit, non touchée : **654/654 suites, 16 486 tests verts**.
+
+### Deux tests qui ne prouvaient rien
+
+Le défaut d'émission a traversé une suite verte parce que deux tests le DOCUMENTAIENT au lieu de
+l'affirmer — « The cleanup effect may or may not call stopTyping depending on React's cleanup
+timing » — et n'assertaient donc rien sur `stopTyping`. Le défaut de réception, lui, était hors de
+portée de tout test de la vue : `useConversationTyping` y était doublé en ENTIER, ce qui figeait
+`typingUsers: []` et rendait `undefined` tout export nouvellement consommé (leçon 128, corollaire).
+Le double est retiré ; le hook réel tourne désormais sous le test de la vue.
+
+### Réserve d'honnêteté
+
+Le dépôt est arrivé en **clone superficiel** (`--depth`, 24 greffes) : `origin/main` pointait sur un
+commit vieux de trois jours et `git merge-base` ne trouvait AUCUN ancêtre commun avec la branche de
+travail, ce qui affichait « 334 en avance / 340 en retard » pour deux références en réalité
+identiques. Diagnostic établi par `git ls-remote` (main = `4fd18273` = HEAD), pas par déduction.
+Toute conclusion de divergence tirée d'un `git log` dans cet environnement doit d'abord vérifier
+`git rev-parse --is-shallow-repository`.
+
+
+---
+
+# (Reporté — non exécuté au cycle 86, faute de toolchain Swift) Dossier iOS : la suite rend des verdicts que le code ne justifie pas
+
+*Le cycle 85 est allé chercher pourquoi la suite de référence iOS est rouge un run sur trois. La
+réponse n'est pas « des tests flaky » : au moins un verdict est DÉMONTRABLEMENT faux.*
+
+## Le fait à instruire en priorité
+
+Run `31543763910` (`push dev`, 2026-08-11 22:45 UTC, head `bec43248`) rapporte :
+
+```
+XCTAssertTrue failed - hasActiveEffects must also check config.hasAdvancedFilters,
+not just config.isEnabled, …
+CallViewAccessibilityTests/test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone()
+```
+
+Or `git show bec43248:apps/ios/Meeshy/Features/Main/Views/CallView.swift` contient bien, ligne
+1528, `return config.isEnabled || config.hasAdvancedFilters`. Le test cherche `hasAdvancedFilters`
+dans les **700 premiers caractères** suivant `private var hasActiveEffects: Bool {` : la chaîne s'y
+trouve à l'**offset 500**, et le motif d'ancrage n'apparaît **qu'une fois** dans le fichier
+(vérifié en rejouant l'assertion caractère par caractère sur le blob de ce commit exact).
+
+**L'assertion ne PEUT pas échouer sur la source du commit testé. Elle a donc lu autre chose.**
+
+C'est un défaut de classe, pas un test isolé : `MeeshyTests` compte **137 fichiers** et
+**242 lectures** de la forme `String(contentsOf: URL(fileURLWithPath: #filePath)…)` — des « source
+guards » qui grep le code produit **au runtime**, depuis un chemin figé à la COMPILATION. Le verdict
+de ces 242 assertions ne dépend donc pas de ce qui a été compilé, mais de ce que le système de
+fichiers de l'hôte présente au moment de l'exécution. Quand les deux divergent — cache DerivedData
+restauré, worktree partagé, re-tentative après `** TEST EXECUTE FAILED **` (le log de ce run montre
+bien un second `Testing started`) — la suite prononce un verdict sans rapport avec le commit.
+
+Ce qu'il faut instruire, dans l'ordre :
+
+1. **Reproduire sur macOS** : relancer ce test seul sur `bec43248` et logguer le chemin ET la taille
+   du fichier réellement lu (`url.path`, `source.count`) avant l'assertion. C'est la mesure qui
+   tranche entre « mauvais chemin » et « bon chemin, contenu périmé ».
+2. **Décider du sort de l'idiome.** Un source guard qui passe vert sur une source qu'il n'a pas
+   compilée ne garde rien. Soit on l'ancre à la compilation (ressource copiée dans le bundle de test
+   par une build phase, donc solidaire du binaire), soit on le remplace par une assertion de
+   COMPORTEMENT là où c'est possible. 242 sites : chantier à cadencer, pas à faire d'un bloc.
+3. **Ne pas confondre avec le reste du rouge.** Sur 30 runs `push dev`, 11 échecs (37 %). Trois
+   récidivistes — `AuthServiceTests` (timeout 2 s), `MiniAudioPlayerBarTests`,
+   `LocalizationConsistencyTests` — ont été corrigés le 2026-08-11 par `0032297d`, déjà sur `main`
+   ET sur `dev`. Le rouge restant se partage entre le défaut ci-dessus et le RETARD de `dev` :
+   au moment du relevé, `dev` était **40 commits derrière `main`** et n'avait pas le correctif du
+   cycle 81 que `StoryUploadQueueTests/test_uploadSucceeds_dequeuesItsWriteAheadIntent` exige.
+   **Rapprocher `dev` de `main` avant de conclure quoi que ce soit d'un run rouge.**
+
+## Ce qui reste ouvert des cycles précédents
+
+- La porte `actions: write` reste close (cycle 82) : la routine ne peut toujours pas déclencher
+  `workflow_dispatch`, donc pas de lancement à la demande de la suite complète.
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+
+## Ce que le cycle 85 n'a PAS pu faire
+
+Aucune toolchain Swift dans l'environnement de la routine (`swift`, `swiftc`, `xcodebuild` absents,
+Linux). Tout ce dossier iOS est donc établi par lecture de source, rejeu d'assertion et API Actions —
+jamais par exécution. C'est suffisant pour affirmer le point 1 (l'arithmétique de l'offset est
+vérifiable hors Xcode) ; ça ne l'est pas pour corriger.
+
+---
+
+# Cycle 85 — Un accusé de lecture ne recule pas, et la suite iOS rend un verdict faux
+
+## 1. Le correctif livré — web, accusés de lecture monotones
+
+`readStatusSummaries` / `messageReadStatuses` (`apps/web/stores/conversation-ui-store.ts`) ont deux
+écrivains et **un seul est ordonné** :
+
+| écrivain | nature | ordre |
+|---|---|---|
+| socket — `presence.service.ts` → `updateReadStatusSummary` | événement | ordonné par connexion |
+| lot REST — `use-conversation-messages-rq.ts` → `getReadStatuses` → `updateMessageReadStatusBatch` | **instantané** pris au départ de la requête | **aucun** |
+
+`updateMessageReadStatusBatch` faisait `{ ...state.messageReadStatuses, ...statuses }` — le dernier
+arrivé écrase, quelle que soit son ancienneté.
+
+**La fenêtre est large.** La clé de garde du lot (`batchFetchedRef`) est indexée sur l'id du dernier
+message propre : chaque message envoyé relance la lecture REST. Un pair qui lit pendant que la
+requête est en vol suffit pour que l'instantané, parti AVANT cette lecture, atterrisse APRÈS elle.
+
+**Et c'est visible.** `DeliveryIndicator` rend `readCount > 0` en double coche BLEUE,
+`readCount === 0 && deliveredCount > 0` en double coche GRISE. Les coches passent au bleu, puis
+reviennent au gris, et restent fausses jusqu'au prochain accusé. Le même écrasement pouvait
+« dé-livrer » un message (`deliveredCount` qui redescend).
+
+Correctif : un prédicat unique `isStaleReceipt(current, incoming)` dans le store, appliqué par les
+TROIS écrivains — un seul énoncé de la règle, là où l'état vit.
+
+Trois décisions, chacune verrouillée :
+
+- **`totalMembers` est le discriminant.** Les accusés ne sont croissants que pour un effectif FIXE ;
+  quand quelqu'un part, le serveur recompte sur les survivants et rapporte légitimement MOINS de
+  lectures. Sans ce discriminant la garde figerait les compteurs à vie.
+- **Un résumé qui recule est rejeté ENTIER**, jamais fusionné champ par champ : un max par champ
+  synthétiserait un état qu'aucun serveur n'a rapporté, alors que `readCount >= totalMembers` pilote
+  la branche « lu par tous ».
+- **Le lot filtre par ENTRÉE**, pas en tout-ou-rien ; et le miroir vers le dernier message propre est
+  gardé sur SA propre histoire, pas sur celle de la conversation (le lot REST écrit cette entrée
+  directement, elle peut être en avance).
+
+### Vérification
+
+- **RED prouvé avant le correctif** : 10 tests neufs, 6 rouges / 4 verts (les 4 verts sont les cas
+  « la progression s'applique », qui passaient déjà). GREEN après : 10/10.
+- **Mutation appliquée et vérifiée (leçon 117) — 7 réversions, 7 rouges** : prédicat neutralisé
+  (6 rouges), discriminant `totalMembers` retiré (1), garde du lot retirée (3), garde du miroir
+  retirée (1), garde de `updateMessageReadStatus` retirée (1), garde conversationnelle retirée (1),
+  `||` changé en `&&` (5). Restauré, re-vérifié 10/10.
+- **Suite web complète : 563/563 fichiers, 12 077 tests verts** (21 skipped).
+- `tsc --noEmit` : **1 757 diagnostics avant comme après** (pré-existants, fichiers de test admin
+  sans rapport), **aucun** dans les fichiers touchés.
+
+Réserve d'honnêteté : un premier passage de suite complète a rapporté 6 échecs — c'était MON
+`git stash` de mesure du tsc de référence qui a retiré le correctif sous une exécution de fond déjà
+lancée. Relancé sur arbre propre : vert. Et les 23 « suites en échec » du passage suivant étaient
+toutes des erreurs de CONFIGURATION (`@meeshy/shared/dist` non construit — prérequis documenté dans
+le CLAUDE.md racine), pas des tests : après `bun run build` dans `packages/shared`, 563/563.
+
+## 2. Le dossier iOS — mesure, et un verdict qui ne tient pas
+
+Le cycle 84 signalait la suite `dev` « rouge très fréquemment » et la renvoyait à qui possède la
+zone. Relevé de ce cycle sur les **30 derniers runs `push dev`** d'`ios-tests.yml` : **11 échecs,
+soit 37 %**.
+
+Échecs relevés sur 4 runs échantillonnés :
+
+| run | date (UTC) | tests en échec |
+|---|---|---|
+| `31543763910` | 08-11 22:45 | `CallViewAccessibilityTests/test_hasActiveEffects_…`, `StoryUploadQueueTests/test_uploadSucceeds_dequeuesItsWriteAheadIntent` |
+| `31482338455` | 08-11 10:28 | `AuthServiceTests/test_handleUnauthorized_…`, `MiniAudioPlayerBarTests/test_tapPlayPause_…` |
+| `31468948328` | 08-11 07:26 | `LocalizationConsistencyTests/test_everyAppCatalogIdentifierKeyIsReferencedInCode`, `MiniAudioPlayerBarTests/test_tapPlayPause_…` |
+| `31417194286` | 08-10 18:04 | `AuthServiceTests/test_handleUnauthorized_…` (« Exceeded timeout of 2 seconds ») |
+
+**Les trois récidivistes sont déjà corrigés** par `0032297d` (2026-08-11 11:45 UTC) : timeout
+AuthService porté à 10 s, `MiniAudioPlayerBar` adapté à la relance de tête, 39 clés orphelines
+purgées du catalogue. Ce commit est sur `main` ET sur `dev`.
+
+**Le run le plus récent, lui, ne s'explique pas ainsi** — et c'est le point porté en tête de cycle
+ci-dessus : son verdict sur `CallViewAccessibilityTests` est faux au regard de la source du commit
+testé (démonstration reproduite en tête). Sa seconde ligne rouge, `StoryUploadQueueTests`, est en
+revanche un simple RETARD : le correctif du cycle 81 (`704a3c5b`, 2026-08-12 03:03 UTC) est
+POSTÉRIEUR au run et n'était pas sur `dev` au moment du relevé — `dev` accusait alors 40 commits de
+retard sur `main`.
+
+Conséquence pratique, à retenir avant de rouvrir ce dossier : **un run `dev` rouge ne prouve rien
+tant que `dev` n'a pas été rapproché de `main`.**
+
+## 3. Ce qui a été audité et trouvé SAIN (ne pas re-défricher)
+
+- **`emitToConversationParticipants`** (gateway) — chaînage `to()` (une copie par socket au plus),
+  `userId ?? id` pour les participants sans compte, seed de la room de conversation. Correct.
+- **Ajout d'un participant** (`routes/conversations/participants.ts`) — auto-join des sockets vivants
+  à la room, `CONVERSATION_NEW` en room personnelle, effectif ABSOLU et non delta, arrivant écarté du
+  fan-out. Correct. Retrait/bannissement/départ font bien `fetchSockets()` + `leave()`.
+- **Catch-up incrémental web** (`use-conversation-messages-rq.ts` → `syncNewerMessages`) — déclenché
+  sur le front montant de la reconnexion socket ET au focus d'onglet ; filigrane calculé sur les
+  seuls messages CONFIRMÉS par le serveur (un optimiste stampé par l'horloge locale sauterait la
+  fenêtre) ; réconciliation des optimistes par `clientMessageId`. La boucle de pagination est
+  correcte **parce que** le gateway trie `asc` en mode `after`
+  (`routes/conversations/messages.ts` : `orderBy: { createdAt: afterMode ? 'asc' : 'desc' }`) —
+  en `desc` elle sauterait le milieu d'un trou plus grand qu'une page. Vérifié.
+- **`admitEditedContent`, `emitMentionCreated`, `isStaleEdit`** — corrects.
+
+## 4. Un constat reporté, non traité
+
+`message:read-status-updated` est **dual-émis** avec `read-status:updated` aux 5 points d'émission,
+et **aucun client ne l'écoute** (web, iOS, Android : tous sur le nom legacy). C'est délibéré et
+documenté (`tasks/socketio-events-cleanup.md` #3, coexistence ~3 mois depuis le 2026-07-05), donc
+**pas un défaut** — mais les accusés de lecture/livraison sont la classe d'événements la plus
+volumineuse d'une messagerie, et chacun coûte aujourd'hui deux trames par socket. La fenêtre se
+ferme début octobre 2026 : migrer les clients vers le nom namespacé est le préalable au retrait du
+legacy. À cadencer, pas urgent.
+
+---
+
+# Tête instruite pour le cycle 84 — le gate compile existe ; ce qui reste à instruire est ce qu'il ne voit pas
+
+*Le cycle 83 a exécuté la consigne du cycle 82 : mesurer avant de câbler. La mesure a répondu, le
+gate est câblé, et pour la première fois depuis le 2026-07-27 une PR qui touche du Swift le compile.*
+
+## Ce que le cycle 84 hérite, et ne doit pas défaire
+
+Le gate est **compile seule**, délibérément. Il ne dit RIEN de :
+
+- **la suite `MeeshyTests`** — toujours sur `dev` uniquement. Un test qui compile mais échoue passe
+  le gate sans un mot. C'est le compromis assumé : les 8 min d'exécution sont exactement l'un des
+  deux postes qui avaient saturé la file en juillet ;
+- **la suite `MeeshySDK`** (`sdk-tests.yml`) — déjà déclenchée sur PR, mais gatée sur
+  `packages/MeeshySDK/**` seul. Une PR qui ne touche que `apps/ios` ne l'exerce pas ;
+- **les baselines de snapshot Timeline** — enregistrées sur iOS 18.2, donc invérifiables sans le
+  runtime que le gate saute exprès.
+
+## Ce que le cycle 84 devrait instruire
+
+1. **Relever le coût réel du gate après un mois.** Deux points de mesure réels existent désormais
+   (cf. rapport du cycle 83) : **10m02 à froid, 4m54 en régime permanent**. Le régime permanent
+   étant le cas courant, la projection tombe à 340 runs/mois × ~5 min ≈ **1 700 min de runner
+   macOS**, la moitié de l'estimation qui accompagnait le câblage. Cela reste une projection à
+   partir des horodatages de commits, pas un relevé de facturation — et le nombre de runs, lui,
+   n'a pas été re-mesuré. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
+   est le filtre de chemins (aujourd'hui `apps/ios/**` entier, y compris les ressources et les
+   `.md`, qui ne changent rien à la compilation).
+2. **Vérifier que le cache DerivedData profite bien aux PR.** Les runs de PR écrivent maintenant
+   sous la même lignée de clés que `dev` (`ios-dd-macos15-xc26_1_1-…`). Deux hypothèses non
+   vérifiées : que les produits d'un build `generic/platform=iOS Simulator` (arm64 épinglé) se
+   réutilisent sans rebuild complet par un build `id=<sim>`, et l'inverse. Si elles sont fausses,
+   les deux modes se piétinent le cache et chaque run repart à froid — mesurable dans les logs à
+   la durée de l'étape `Build for testing` sur deux runs consécutifs.
+3. **La porte `actions: write` reste close** (cycle 82) et le reste : l'intégration GitHub App de la
+   routine ne peut toujours pas déclencher `workflow_dispatch`. Le gate compile la contourne pour le
+   Swift ; elle continue de bloquer tout lancement à la demande de la suite complète.
+
+Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « PR GATE RESTORED, COMPILE-ONLY ») et
+son garde `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`.
+
+---
+
+# Cycle 83 — La routine cesse de merger du Swift que rien n'a compilé
+
+## La mesure que la tête du cycle 83 exigeait
+
+La consigne était explicite : *« combien de PR touchent `apps/ios/**` simultanément ? Si c'est 1-2,
+un job de 10-18 min ne sature rien. Si c'est 5-6, la réponse est encore non. Mesurer d'abord,
+câbler ensuite. »*
+
+Le clone de la session était **shallow** (82 commits de premier parent, ~1,5 jour) — la première
+mesure tentée portait donc sur 3 jours en se croyant sur 30. Approfondi
+(`git fetch --shallow-since="35 days ago"`, 2 178 commits, retour au 2026-07-08), puis : pour chaque
+merge de premier parent sur `main`, les commits propres au côté fusionné qui touchent
+`apps/ios/**` ou `packages/MeeshySDK/**` ; commits à moins de 5 min regroupés en une poussée ; chaque
+poussée ouvre une fenêtre de 18 min, tronquée par la poussée suivante sur la même PR — c'est ce que
+fait `cancel-in-progress`.
+
+**148 PR, 340 poussées sur 30 jours.** Concurrence pondérée par le temps :
+
+| runs iOS en vol | part du temps calendaire |
+|---|---|
+| ≥ 1 | 8,9 % (64,2 h / 720) |
+| ≥ 2 | 1,9 % (13,4 h) |
+| ≥ 3 | 0,7 % (5,1 h) |
+| ≥ 5 | 0,2 % (1,6 h) |
+
+**La réponse est 1-2, pas 5-6.** La fenêtre est vide 91 % du temps. Le chiffre de juillet est
+atteint 1,6 h par mois, et seulement dans des salves d'intégration groupée — dont les horodatages de
+commits SURESTIMENT les poussées réelles (une session humaine qui merge dix vieilles branches d'un
+coup produit dix commits rapprochés qui n'ont jamais été poussés séparément). Cette queue est donc
+un MAJORANT. Ce qui saturait le plafond macOS n'était pas le déclencheur : c'était la suite complète
+à 29-45 min derrière lui.
+
+## Le correctif
+
+Un seul job, un seul jeu d'étapes, une bascule nommée : `COMPILE_ONLY` vaut `'true'` sur le seul
+événement `pull_request`. Elle gate les deux étapes qui coûtent le plus et prouvent le moins au
+temps de la PR — celles que le fichier lui-même signalait comme « déjà séparées » :
+
+- **provisionnement du runtime iOS 18.2** (~7 min, borné par le réseau) — inutile :
+  `generic/platform=iOS Simulator` compile contre le SDK simulateur sans runtime installé ;
+- **exécution des tests** (~8 min) — c'est le poste qui a saturé la file en juillet.
+
+Reste `build-for-testing`, qui compile l'app **et les cibles de test** : un fichier de test qui ne
+compile pas rougit, ce qui couvre l'autre moitié du Swift que la routine écrit. ~18 min à froid,
+~10 min sur cache SPM chaud, sur le runner standard, au tarif standard.
+
+**Le piège évité, et il est réel** : une destination générique n'a PAS d'architecture active, donc
+`ONLY_ACTIVE_ARCH=YES` n'a rien à quoi se réduire et `xcodebuild` compile arm64 **et** x86_64 — le
+double du poste le plus cher du job, soit un gate plus lent que la suite qu'il remplace. Les runners
+`macos-15` sont Apple Silicon : l'architecture est épinglée explicitement (`ARCHS=arm64`) dans la
+branche compile-seule, et `ONLY_ACTIVE_ARCH=YES` reste inchangé dans la branche simulateur.
+
+Trois réglages de coût, chacun motivé sur place : `ready_for_review` ajouté aux `types` (sans lui,
+une PR ouverte en brouillon puis marquée prête n'émet plus aucun événement et le gate serait sauté
+en silence), les brouillons exclus par un `if` de job, et `timeout-minutes` ramené à 30 sur PR (50
+reste le plafond de la suite complète — une compilation qui déborde 30 min est bloquée, pas lente).
+
+## Vérification
+
+- **RED prouvé avant tout YAML** : le garde écrit en premier, 8 échecs sur 10 contre le workflow
+  d'origine. GREEN après câblage : 10/10.
+- **Mutation appliquée et vérifiée (leçon 117) — 7 réversions, 7 rouges** : déclencheur
+  `pull_request` retiré (3 témoins tombent), gate du simulateur retiré, gate des tests retiré,
+  `ARCHS=arm64` retiré, `ready_for_review` retiré, `COMPILE_ONLY` figé à `'false'`, destination
+  générique annulée. Restauré, re-vérifié vert.
+- **Suite `shared` complète** : 52 fichiers, 1 506 tests verts (vitest 4.1.10), contre 51/1 496 au
+  départ. `tsc --noEmit` : 0 erreur.
+- **YAML re-parsé après édition** (`yaml.safe_load`) : 3 déclencheurs, 12 étapes, 5 conditionnées ;
+  les expressions de `name`, `if`, `env` et `timeout-minutes` du job relues une à une.
+- **Les deux branches du script bash exécutées** : `COMPILE_ONLY=true` →
+  `generic/platform=iOS Simulator` + `ARCHS=arm64` ; `false` → `platform=iOS Simulator,id=<sim>` +
+  `ONLY_ACTIVE_ARCH=YES`. `bash -n` propre.
+- **Le gate s'est prouvé sur sa propre PR** (PR #2875, run #31564979638, job 94014846909) :
+  `.github/workflows/ios-tests.yml` fait partie du filtre de chemins, donc cette PR-là a déclenché le
+  job compile qu'elle introduisait. **Vert en 10m02**, cache SPM ET DerivedData froids, contre les
+  35 min de la baseline `dev` :
+
+  | étape | baseline `dev` | gate de PR |
+  |---|---|---|
+  | provision du runtime iOS 18.2 | 7m01 | **sautée (0 s)** |
+  | résolution SPM (froide dans les deux cas) | 8m07 | 2m02 |
+  | `build-for-testing` | 8m58 | **6m33** |
+  | sauvegarde DerivedData | 40 s | 32 s |
+  | `test-without-building` | 8m20 | **sautée (0 s)** |
+  | **total** | **~35 min** | **10m02** |
+
+  L'estimation d'avant câblage disait « ~18 min à froid, ~10 min à chaud » : le run FROID a fait le
+  temps prédit pour un run CHAUD. Et le compile est **plus rapide** que celui de la baseline, pas
+  plus lent — c'est la preuve observable que le pin `ARCHS=arm64` prend effet. Sa perte se verrait
+  ici comme un compile environ double, jamais comme un échec.
+- **Le régime permanent, mesuré au run suivant** (job 94017664432, caches SPM ET DerivedData
+  chauds) : **4m54**. Restauration SPM 18 s (hit), DerivedData 14 s (hit, semé par le run froid),
+  résolution SPM 23 s (contre 2m02), `build-for-testing` **3m19** en incrémental (contre 6m33),
+  sauvegarde 17 s. **Un gate froid coûte ~10 min, le régime permanent ~5** — le froid ne revient
+  que si la clé SPM (`project.yml`) change ou si la lignée DerivedData repart, pas à chaque PR.
+- **Une des deux hypothèses de cache est levée** : les produits DerivedData d'un run compile-seule
+  SONT réutilisés par le run compile-seule suivant (6m33 → 3m19). Reste non vérifié le cas
+  CROISÉ — `generic/platform` ↔ `id=<sim>` — dont l'échec ne coûterait qu'un compile froid sur
+  `dev`, jamais un résultat faux.
+- **Les 16 checks de la PR verts** (Quality, Security, Build, shared, web, gateway, agent, Prisma,
+  Python, audio, TTS, Voice API ; Trivy `neutral`, son état habituel).
+
+## Où vit le garde, et pourquoi là
+
+`packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`. La suite `shared` est celle que
+`ci.yml` exécute sur **chaque** PR : c'est donc la seule qui puisse constater la disparition du gate
+iOS. Le dépôt hébergeait déjà un garde d'hygiène sans rapport avec le runtime partagé au même
+endroit (`esm-relative-imports.test.ts`), et le précédent Swift (`ArchiveSignatureStripGuardTests`)
+ne s'exécuterait, lui, que sur `dev` — précisément le chemin qui ne surveille rien au bon moment.
+
+Le retrait du 2026-07-27 était juste et n'a rien signalé pendant six semaines. Celui-ci rougira.
+
+---
+
+# Tête instruite pour le cycle 83 — les deux portes du gate iOS sont instruites, l'une est close par un droit, l'autre par une dépense
+
+*Le cycle 82 a exécuté la consigne du cycle 81 : instruire une des deux portes avant tout Swift. Les
+deux le sont. Aucune ne se referme par du code, et c'est le résultat.*
+
+## Porte 2 — `actions: write` : close, re-mesurée aujourd'hui
+
+`POST /repos/isopen-io/meeshy/actions/workflows/ios-tests.yml/dispatches` répond
+**403 Resource not accessible by integration**. Le cycle 80 l'avait constaté depuis la CLI ; ce
+cycle l'a rejoué depuis l'**intégration GitHub App** de la routine, qui est la seule identité dont
+elle dispose. Ce n'est donc pas un défaut d'outil : le jeton de l'App n'a pas le droit `actions:
+write` sur ce dépôt. Les runs `workflow_dispatch` existants sur `main` et sur une branche de
+worktree (#30748751746, #31079195135) prouvent que la porte s'ouvre pour un humain — pas pour elle.
+
+**C'est une décision d'accès, hors du code.** Rien qu'un cycle puisse écrire ne la lève. Elle est
+remontée à la propriétaire de la routine.
+
+## Porte 1 — `macos-15-xlarge` : ouverte, mais c'est une dépense, et la mesure dit qu'elle vise à côté
+
+Décomposition RÉELLE d'un run vert de 35 min (#31488415343, `dev`, 2026-08-11, pas à pas) :
+
+| étape | durée |
+|---|---|
+| checkout + Xcode + caches + XcodeGen | 38 s |
+| **provision du runtime iOS 18.2** | **7 min 01** |
+| **résolution SPM** (cache manqué) | **8 min 07** |
+| sauvegarde du cache SPM | 36 s |
+| **compilation (`build-for-testing`)** | **8 min 58** |
+| sauvegarde de DerivedData | 40 s |
+| **exécution des tests** | **8 min 20** |
+| relevé + fin de job | 26 s |
+
+Deux des quatre gros postes — téléchargement du runtime et résolution SPM, soit **15 min sur 35** —
+sont bornés par le RÉSEAU, pas par le CPU. `macos-15-xlarge` ne les raccourcit pas. Il attaque les
+17 min de compile+tests, qu'il peut plausiblement ramener à ~6-8 (plus de cœurs, assez de RAM pour
+du vrai parallélisme, ce que l'en-tête du fichier appelle « the RIGHT fix »). Gain espéré : 35 min →
+~24. Pas les « reliably under ~30 min » promis parce que le fichier ne comptait pas les 15 min de
+réseau, mais un vrai gain — payé environ **2 à 4× la minute**, ce qui rend le run PLUS CHER en
+valeur absolue malgré sa brièveté.
+
+**Réponse à la question que le cycle 81 posait — « les deux gestes ne sont-ils pas UN SEUL ? » :
+non.** Le trigger `pull_request` avait été retiré le 2026-07-27 pour une raison qui n'est pas la
+durée du job mais la SATURATION du plafond de concurrence macOS du compte (24-49 min de pure attente
+de runner, 5-6 runs de PR simultanés). Diviser la durée par 1,5 ne crée pas de runner ; la file
+reste la file. Rétablir le trigger PR après un passage à xlarge referait exactement ce que la mesure
+de juillet a puni, en plus cher.
+
+## Ce que le cycle 83 devrait instruire à la place — une troisième porte, non explorée
+
+Le gate qui manque à cette routine n'est pas « tous les tests iOS passent » : c'est **« le Swift que
+je viens d'écrire compile »**. Les deux sont séparés dans le workflow depuis toujours
+(`build-for-testing` puis `test-without-building`, étapes 10 et 12). Un job **compile seule** :
+
+- n'a PAS besoin du runtime iOS 18.2 (`-destination 'generic/platform=iOS Simulator'` suffit à
+  compiler) → **−7 min**, et le poste le plus variable disparaît ;
+- n'exécute pas les tests → **−8 min**, le second poste variable disparaît ;
+- coûte donc ≈ **18 min à froid, ~10 min avec le cache SPM chaud**, sur le runner standard, au tarif
+  standard.
+
+Reste la seule vraie question, celle que le 2026-07-27 a tranchée pour l'AUTRE job et qu'il faut
+mesurer pour celui-ci : **combien de PR touchent `apps/ios/**` simultanément ?** Si c'est 1-2, un job
+de 10-18 min ne sature rien et la routine cesse de merger du Swift non compilé. Si c'est 5-6, la
+réponse est encore non, et il faut alors le restreindre (label d'opt-in, ou branches `claude/**`).
+**Mesurer d'abord, câbler ensuite** — c'est la leçon 125, et elle vaut aussi pour la porte qu'on
+ouvre soi-même.
+
+Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « TRIGGER SCOPE (2026-07-27) », étapes
+10 et 12), et l'historique des PR touchant `apps/ios/**` sur les 30 derniers jours.
+
+---
+
+# Cycle 82 — Le badge d'un invité de lien partagé ne pouvait que monter
+
+## Ce que la tête demandait, et pourquoi le Swift n'a pas été touché
+
+La tête du cycle 82 interdisait de partir en Swift avant d'avoir tranché une des deux portes du gate
+iOS. Les deux sont instruites ci-dessus ; aucune ne se referme par du code. Le travail de ce cycle
+est donc allé là où un gate RÉEL existe — la passerelle, dont les 654 suites tournent en local — et
+il y a trouvé un défaut que le dépôt documentait sans le voir.
+
+## Le défaut : le serveur compte les non-lus d'un invité, et refuse qu'il les acquitte
+
+Trois faits que le dépôt porte déjà, chacun écrit délibérément :
+
+- `MessageReadStatusService.getUnreadCount` résout son argument par `OR: [{ id }, { userId }]` — il
+  SAIT compter pour un participant sans compte ;
+- `emitUnreadCountsToRecipients` adresse `ROOMS.user(recipient.userId ?? recipient.id)` ;
+- `AuthHandler` fait rejoindre cette room aux sockets anonymes, avec le motif écrit sur place :
+  « joining anything else had already left anonymous participants without their unread badge ».
+
+Le compte est donc tenu, et poussé. Ce qui manquait est la moitié qui le REMET À ZÉRO, et elle
+manquait deux fois : la porte (`allowAnonymous: false` sur `message-read-status.ts` et sur les trois
+routes de lecture de `conversations/messages.ts`) et la clé (six gardes filtrant `Participant.userId`
+avec `authContext.userId`, qui vaut un `Participant.id` pour un anonyme).
+
+**Le dépôt l'avait déjà constaté, sans le nommer comme un défaut serveur** :
+`apps/web/components/common/bubble-stream-page.tsx` débranche son propre suivi de lecture pour les
+sessions anonymes — « la route mark-as-read est JWT-only (allowAnonymous: false) — chaque flush
+partirait en 401 » — trois lignes après avoir expliqué qu'un écran sans ce hook voit « son compteur
+croître indéfiniment ». Le contournement client était la trace du défaut serveur.
+
+## Le correctif
+
+- **La porte** : `requireAuth: true, allowAnonymous: true` — « authentifié, avec ou sans compte ».
+  Pas `optionalAuth` (`requireAuth: false`), qui laisserait entrer un appelant sans jeton. C'est
+  exactement la configuration de `routes/reactions.ts` (« Les anonymes peuvent aussi réagir »), et
+  l'invité envoyait déjà des messages par une route `optionalAuth`.
+- **La clé** : un `resolveCallerParticipant` unique dans `access-control.ts`, dont la précédence
+  (`participantId` d'abord, `userId` ensuite) est celle de `canAccessConversation` juste au-dessus —
+  les deux fonctions répondent à la même question et ne peuvent plus diverger. Les contextes
+  enregistrés ne portent jamais `participantId` (branche `type: 'user'` de `UnifiedAuthService`), la
+  précédence est donc sans ambiguïté et non conventionnelle.
+- Trois effets de bord réparés : les préférences de confidentialité d'un anonyme sont demandées EN
+  TANT QU'anonyme ; `mark-unread` ne relit plus deux fois le même participant ; et
+  `GET /messages/:messageId/read-status` cesse de filtrer l'appartenance EN RELATION (5ᵉ copie).
+
+## Vérification
+
+- **Suite passerelle complète** : `654/654` suites, `16 481` tests verts (`jest --maxWorkers=50%`),
+  sous bun 1.3.11 après `prisma generate --generator client` + `packages/shared && bun run build`.
+- `tsc --noEmit` sur `services/gateway` : **0 erreur**.
+- **Mutation appliquée et vérifiée** (leçon 117) : production ramenée à `allowAnonymous: false` ET à
+  une garde `where: { conversationId, userId, isActive }` ⇒ **3 témoins tombent** (options du
+  middleware, identité de résolution, préférences d'anonyme). Restauré, re-vérifié vert.
+- **Les doubles Prisma des nouveaux tests ÉVALUENT le `where`** (`helpers/mongo-where`, déjà dans le
+  dépôt) : une garde revenue à `userId` seul ne trouve plus la ligne anonyme et rougit. Un
+  `mockResolvedValue` constant, lui, aurait passé dans les deux sens — c'est ainsi que le défaut a
+  traversé des suites vertes pendant des mois.
+- **Quatre fichiers de test corrigés, pas contournés** : ceux qui doublaient `access-control` en
+  entier rendaient `resolveCallerParticipant` indéfini ; ils gardent désormais l'implémentation
+  RÉELLE (`jest.requireActual`) et ne doublent que `canAccessConversation`. Le double de
+  `departed-member-status-gates` a été enseigné à discriminer sur `isActive` par
+  `participant.findFirst` — la garde qu'il mesure reste mesurée.
+- iOS : **aucune ligne de Swift**, et aucune n'était nécessaire — `APIClient.swift` envoie déjà
+  `X-Session-Token` et `ConversationService.swift` appelle exactement `/mark-read` et `/mark-unread`.
+
+## Reste ouvert après ce cycle
+
+- **Le gate iOS** — voir la tête du cycle 83. Les deux portes prescrites sont closes ; la troisième
+  (job compile seule) est chiffrée mais demande une mesure de concurrence avant d'être câblée.
+- **La webapp ne rebranche PAS son suivi de lecture dans ce lot.** Le blocage y est ailleurs :
+  `apiService` (`apps/web/services/api.service.ts`) ne pose que `Authorization: Bearer` et ignore
+  `X-Session-Token` — un flush anonyme partirait en 401 sans avoir touché la nouvelle porte. Le
+  geste correct est de faire porter le jeton de session à `apiService` (le chemin anonyme du web
+  l'ajoute aujourd'hui à la main, service par service : `anonymous-chat.service.ts`,
+  `link-conversation.service.ts`, `message-translation.service.ts`, `tusUploadService.ts` — quatre
+  copies), PUIS de retirer l'exclusion `isAnonymousMode` de `bubble-stream-page.tsx`. Chantier
+  web à part entière, avec sa propre suite.
+- **Les autres routes filtrant `Participant` par `userId` n'ont pas toutes été auditées.** Ce cycle a
+  traité la famille lecture/non-lus. `calls.ts`, `sync.ts`, `translation-non-blocking.ts`,
+  `messages-advanced.ts`, `conversations/leave.ts`, `participants.ts` portent le même motif ; pour
+  certaines c'est délibéré (un invité ne gère pas les membres), pour d'autres il faudra regarder.
+  `resolveCallerParticipant` existe maintenant pour celles qui doivent changer.
+- Les points hérités des cycles précédents restent ouverts tels quels.
+
+---
+
+# Cycle 81 — Le tray coupé à 50 sur le web, et un intent write-ahead qui courait contre son propre succès
+
+## Ce que la tête annonçait, et ce que l'inventaire a répondu
+
+**Borne 1 levée sans ambiguïté : une des deux copies est morte.** `apps/web/services/posts.service.ts`
+et `apps/web/services/story.service.ts` déclaraient tous deux un `getStories()` appelant
+`GET /posts/feed/stories` sans paramètre. `rg` exhaustif des consommateurs : `postsService.getStories`
+n'a **aucun lecteur de production** — sa seule occurrence dans tout le dépôt est son propre test
+(`__tests__/services/posts.service.test.ts:49`). Le lecteur vivant est
+`storyService.getStories`, via `hooks/social/use-stories.ts:26` (`useStoriesFeedQuery`). La copie
+morte est supprimée, son test avec ; paginer les deux aurait dupliqué la dette, comme la tête le
+craignait — mais la question n'était même pas « laquelle garder », c'était « laquelle existe ».
+
+**Borne 2 respectée : rien de la troncature de tombstones n'a été transposé.** Le web ne passe
+jamais `updatedSince`, donc `meta.deletedStoryIds` lui vaut toujours `[]` et
+`meta.deletedStoryIdsTruncated` toujours `false`. L'escalade sur troncature du cycle 80 n'a
+strictement rien à faire ici, et n'y est pas.
+
+## Le correctif web
+
+`storyService.getStories` drainait une page unique et jetait l'enveloppe : ni `limit`, ni `cursor`,
+aucune lecture de `pagination.hasMore`/`nextCursor`. Le tray web était donc coupé à 50 stories
+exactement comme celui d'iOS avant le cycle 80.
+
+Il draine désormais, avec les **deux arrêts** que le cycle 80 avait établis comme nécessaires et
+distincts :
+
+- **Plafond de pages** (`STORY_TRAY_MAX_PAGES_PER_PASS = 6`, valeur miroir d'iOS) — protège contre
+  un serveur qui annoncerait `hasMore` sans fin. Ce n'est PAS une protection de bande passante : le
+  tray ne préfetche aucun média par page.
+- **`hasMore` sans curseur ⇒ arrêt** (cycle 80, D2) — une page suivante qu'on ne sait pas demander ;
+  boucler dessus rejouerait la même page indéfiniment. Deux témoins, `null` et `''`.
+
+La pagination de cette route est réellement exacte (fenêtre filtrée par `updatedAt`, mais curseur
+porté sur le couple `(createdAt, id)` de l'ordre) — c'est ce qui rend le drain suffisant, sans
+l'escalade dont le cycle 79 avait besoin.
+
+## Le défaut qui n'était pas au programme — et qui rougissait le gate
+
+En exécutant la consigne du cycle 80 (« vérifier l'état de iOS Tests avant tout »), le dernier run
+sur `dev` (#31543763910, 5471 verts) portait **2 rouges**, dont un jamais consigné :
+`StoryUploadQueueTests.test_uploadSucceeds_dequeuesItsWriteAheadIntent`. Le fichier n'avait pas
+bougé depuis `0737b063` et deux runs antérieurs du même code étaient verts : **intermittent**, donc
+une course, pas une régression.
+
+La course est dans la production, pas dans le test. `StoryViewModel.launchUploadTask`, sur succès
+serveur, retirait l'intent write-ahead dans un `Task.detached` — puis, sans aucune synchronisation,
+vidait `activeUploads`, affichait le toast de succès et libérait le slot. Rien n'ordonne les deux.
+Le test observe la fin visible (`activeUploads.isEmpty`) et lit la queue : il gagne ou perd la
+course selon l'ordonnancement.
+
+**Ce que la course coûte en production, et pourquoi ce n'est pas qu'un test flaky** : le commentaire
+du site le dit lui-même — « sinon le boot suivant re-publierait ». L'intent est le garde-fou contre
+la re-publication ; le détacher de la déclaration de succès ouvre une fenêtre où l'app peut mourir
+avec l'intent encore en base alors que la story est **déjà en ligne**. Le drain de boot la publie
+une seconde fois.
+
+Le retrait est donc désormais **awaité** — la tâche englobante est déjà `async`, la mesure ne coûte
+qu'un saut d'acteur. C'est exactement le geste que le chemin de drain hors-ligne
+(`executeQueuedPublish`, ligne ~2518) applique depuis toujours : le `Task.detached` du chemin online
+était l'incohérence, pas la règle. Le ménage disque, lui, RESTE détaché — c'est de l'IO synchrone
+`nonisolated` qu'on ne veut pas sur le MainActor, et aucun boot n'en dépend une fois l'intent parti.
+
+## Le second rouge : déjà réparé sur `main`, et pour une raison instructive
+
+`CallViewAccessibilityTests.test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone` est
+un garde de SOURCE : il cherche `hasAdvancedFilters` dans une fenêtre de N caractères après la
+déclaration de `hasActiveEffects`. La production était déjà correcte ; le token se trouve à
+**exactement 500 caractères** de la déclaration, sous une fenêtre de 500 — `[i, i+500)` s'arrête un
+caractère avant de pouvoir matcher. `180e364f` a élargi à 700 sur `main`, donc ce rouge est éteint.
+
+Aucun correctif supplémentaire n'a été tenté ici, **délibérément** : réécrire un scanner de source
+en Swift non compilable (cf. tête du cycle 82) pour gagner de la robustesse est un mauvais échange.
+Follow-up ci-dessous.
+
+## Vérification
+
+- **Suite web complète** : `561/561` suites, `12 062` tests verts, 21 skipped (`jest --maxWorkers=50%`).
+- **Mutations appliquées et vérifiées** (leçon 117), trois fois, revert confirmé par grep :
+  - production ramenée à la page unique ⇒ **3 témoins tombent** (drain, plafond, signature d'appel) ;
+  - garde `!nextCursor` retirée ⇒ **les 2 témoins** `hasMore`-sans-curseur tombent (`null` et `''`) ;
+  - plafond 6 → 9 ⇒ **le témoin de plafond** tombe.
+- `tsc --noEmit` sur `apps/web` : **1757 erreurs avant, 1757 après** — base pré-existante inchangée,
+  et **zéro** sur les fichiers touchés (`services/story.service.ts`, `services/posts.service.ts`).
+  Relevé après `prisma generate --generator client` + `packages/shared && bun run build`, donc le
+  chiffre n'est pas un artefact d'install incomplète.
+- **Local sous bun 1.3.11**, pas 1.3.14 comme la CI (`bun upgrade` non tenté dans le conteneur) —
+  l'écart n'a pas mordu ici (aucun test de couverture relevé), mais il est réel.
+- iOS : **rien n'a compilé le lot `apps/ios`**, même contrainte qu'au cycle 80 (pas de toolchain
+  Swift dans le conteneur, `ios-tests.yml` ne tourne pas sur PR, dispatch manuel `403`). Mitigation :
+  aucun fichier ni symbole neuf, 2 lignes déplacées dans un `do { try await … }` déjà async,
+  `await` sur un acteur déjà awaité 6 lignes plus haut dans le même fichier.
+
+## Reste ouvert après ce cycle
+
+- **Le gate iOS lui-même** — voir la tête du cycle 82. C'est le vrai reliquat, et il commande tout
+  travail iOS futur de cette routine.
+- **`cancelUpload(id:)` garde le même `Task.detached` pour le même intent**, et il n'est PAS
+  réparable de la même façon : c'est une `func` synchrone appelée depuis l'UI, elle ne peut pas
+  awaiter. La fenêtre y est la même (annulation confirmée à l'écran, intent encore en base ⇒ le
+  drain de boot publie une story que l'utilisateur a annulée). Le geste correct est probablement de
+  rendre le chemin d'annulation async, ou de faire porter au drain de boot une vérification
+  « cette story a-t-elle déjà été publiée/annulée ». Chantier à part entière, pas un mini-fix.
+- **Le garde de source `hasActiveEffects` reste une fenêtre de N caractères** — 700 aujourd'hui, ce
+  qui laisse 200 de marge. Toute ligne de commentaire ajoutée dans ce bloc le re-rougit sans qu'un
+  seul comportement change. Le geste robuste est de scanner jusqu'à l'accolade fermante appariée de
+  la propriété ; il vaut mieux le faire quand le gate iOS sait dire oui.
+- **Le web n'a toujours aucun delta stories** (`updatedSince` jamais passé) : `staleTime: Infinity`
+  + invalidations socket. Ce n'est pas un défaut du tray, c'est une capacité absente ; la comparer à
+  iOS demanderait d'abord de décider si le web en a besoin.
+- **Le drain web ne lit pas `meta.mentionedUsers`** — il ne le lisait pas avant non plus (aucune
+  régression), mais si un jour il le fait, l'union inter-pages sera à écrire, pas juste la dernière
+  page à garder.
+- **`STORY_TRAY_PAGE_LIMIT`/`STORY_TRAY_MAX_PAGES_PER_PASS` sont tenues à la main** face au
+  `Math.min(limit, 50)` du serveur, comme leurs jumelles iOS. Troisième cycle consécutif à relever
+  cette dette de constantes non liées (`deltaPageLimit`/`DELTA_PAGE_LIMIT` au 79, `trayPageLimit` au
+  80) : le motif mériterait un geste unique — exposer les plafonds de la route dans
+  `packages/shared` et les lire des deux côtés.
+
+---
+# Cycle 80 — Deux troncatures, deux gestes opposés : l'une se pagine, l'autre s'escalade
+
+## Le défaut
+
+`GET /posts/feed/stories` plafonne `limit` à 50 et annonce la suite par
+`pagination.hasMore`/`nextCursor`. **Ces deux champs n'avaient aucun lecteur dans tout le dépôt** —
+`rg` sur `apps/ios`, `packages/MeeshySDK` et `apps/web` : les 3 call sites iOS passent
+`cursor: nil` et ne lisent jamais `pagination`. Le tray était donc coupé à 50 stories pour tout le
+monde, sans qu'une ligne de code puisse s'en apercevoir.
+
+Et le plafond des tombstones (`STORY_TOMBSTONE_LIMIT = 500`) n'était signalé que par un
+`logger.warn` **côté serveur** : un client dont les disparitions avaient été coupées gardait ses
+stories fantômes en silence.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Le fetch « complet » n'est pas complet — il emprunte la MÊME route plafonnée à 50.** La tête
+proposait, en s'appuyant sur le cycle 79, d'escalader vers un full fetch sur `hasMore`. Ce geste
+n'aurait **rien rattrapé** : `storyService.list(cursor: nil, limit: 50)` est une page unique, elle
+aussi tronquée. Pire, c'est le chemin qui fait `storyGroups = groups` (REMPLACEMENT) puis sauve le
+cache disque : la troncature n'y laissait pas un trou, elle EFFAÇAIT les stories coupées de l'état
+affiché et gravait le résultat. Le défaut était donc plus grave sur le chemin que la tête
+considérait comme le recours.
+
+**La route offre une pagination réellement exacte, contrairement aux conversations.** La page est
+filtrée par `updatedAt` mais ordonnée par `(createdAt, id)` — le mésappariement de la leçon 121 —
+SAUF que son curseur porte sur ce même couple `(createdAt, id)`. Le parcours est donc exact : ni
+saut ni doublon. C'est ce qui rend le drain suffisant ici là où le cycle 79 devait escalader.
+
+**Le coût redouté n'existe pas.** `prefetchAllStoryMedia` est borné à `groups.prefix(8)` : drainer
+6 pages ne télécharge pas un octet de média de plus. La borne de pages ne protège donc pas la
+bande passante — elle protège contre un serveur qui annoncerait `hasMore` sans fin.
+
+## L'ordre des gestes, qui EST le correctif
+
+**Deux signaux de troncature, deux gestes OPPOSÉS** — et c'est le point du cycle :
+
+- **Page tronquée ⇒ paginer.** Un curseur de reprise existe et il est exact. Escalader serait
+  inutile (même plafond) et coûteux.
+- **Tombstones tronqués ⇒ escalader.** Aucun curseur de reprise n'existe pour les disparitions :
+  il n'y a pas de « page suivante » de tombstones à demander. Le seul geste qui fasse sortir les
+  fantômes restants est le REMPLACEMENT du tray par un fetch complet.
+
+Les confondre — appliquer le geste de l'un à l'autre — donnait dans un sens une escalade stérile,
+dans l'autre une purge qu'on croit complète. Et l'escalade des tombstones ne devient *correcte*
+que parce que le drain a été livré : sans lui, le fetch complet vers lequel on escalade serait
+lui-même tronqué.
+
+## D1 — la sonde plutôt que l'égalité, et pourquoi ce n'est pas cosmétique
+
+`deletedIds.length === STORY_TOMBSTONE_LIMIT` ne distingue pas une page coupée d'une fenêtre de très
+exactement 500 suppressions, qui est **complète**. Sous cette égalité, un tel utilisateur aurait
+déclenché un fetch complet **à chaque delta**, indéfiniment, tant que sa fenêtre reste sur ce
+nombre. La sonde (`take: LIMIT + 1` + slice) est le patron que la même méthode utilise déjà trois
+lignes plus haut pour `hasMore` — il n'y avait pas de raison de l'abandonner ici.
+
+## D2 — un `hasMore` sans curseur s'arrête, il ne rejoue pas
+
+`hasMore: true` avec `nextCursor` nul ou vide est une page suivante qu'on ne sait pas demander.
+Boucler dessus rejouerait la même page indéfiniment ; le drain s'arrête. Témoin dédié
+(`test_fullFetch_stopsWhenHasMoreCarriesNoCursor`), parce que c'est exactement le genre de branche
+qu'un serveur mal réveillé finit par produire.
+
+## D3 — la fiche gwcontract-11 existait, et disait juste
+
+`docs/reviews/2026-08-01-ios-local-first-realtime/06-reseau-et-contrat-gateway.md` prescrivait
+déjà ce correctif de tombstones, sonde comprise, et nommait même le RED discriminant. Trouvée en
+cherchant où documenter, pas avant. **Chercher la fiche d'audit AVANT de concevoir** aurait fait
+gagner l'aller-retour de conception — le backlog du dépôt est une source, pas seulement un
+registre. Elle est marquée LIVRÉ, avec la mention du défaut voisin qu'elle ne listait pas.
+
+## Vérification
+
+- Gateway : `PostFeedService.test.ts` **64/64 vert**, `routes/posts/feed.test.ts` **46/46 vert**.
+- **Mutations appliquées et vérifiées** (leçon 117) : l'égalité `=== LIMIT` remise en place fait
+  tomber **2 témoins sur 2** (les deux qui distinguent sonde et heuristique) ; le retrait du champ
+  `meta.deletedStoryIdsTruncated` de la route fait tomber ses **2 témoins**. Reverts confirmés par
+  grep après coup.
+- `tsc --noEmit` gateway : 0 erreur (après `packages/shared && bun run build`).
+- Suite gateway **complète** (`bun run test:coverage`, parité CI) : **653/653 suites, 16 462/16 462
+  tests**, exit 0. (Le pourcentage global de couverture n'a pas été relevé — la commande était
+  filtrée par `| tail -35`, qui a coupé la ligne `All files`. Aucun témoin retiré, donc la
+  couverture ne peut que monter sur les fichiers touchés ; le chiffre n'est pas rapporté plutôt que
+  deviné.)
+- **CI de la PR #2867 : tous les checks verts** — `Quality (bun)`, `Build (bun)`, `Security`,
+  `Test gateway`, `Test shared`, `Test web`, `Test agent`, `Test Python (translator)`, `Prisma`,
+  `Audio Pipeline`, `TTS/STT`, `Voice API`, `Summary`, et **`sdk-tests`** (qui compile
+  `packages/MeeshySDK` et valide donc le décodage du nouveau champ). `Trivy` neutre,
+  `Voice E2E Benchmark` sauté — comme sur les PR précédentes.
+- iOS : 9 témoins ajoutés à `StoryViewModelTests` (drain de pages, chaînage des curseurs, plafond
+  de pages, `hasMore` sans curseur, union des tombstones inter-pages, escalade sur troncature,
+  non-escalade sur fenêtre complète, rétro-compat `meta` absent). **Ces 9 témoins n'ont été
+  exécutés par personne** — voir §Reste ouvert, c'est la limite la plus importante de ce cycle.
+- Aucun fichier Swift NEUF : les témoins vivent dans des suites déjà enregistrées au pbxproj —
+  donc pas d'orphelin possible (leçon 120).
+
+## Reste ouvert après ce cycle
+
+- **⚠️ LE LOT `apps/ios` A ÉTÉ MERGÉ SANS AVOIR ÉTÉ COMPILÉ NULLE PART.** À dire franchement,
+  parce que c'est un écart au gate documenté d'`apps/ios/CLAUDE.md` (« `./apps/ios/meeshy.sh test`
+  MUST pass before any commit ») et que les cycles suivants doivent le savoir. Trois faits qui se
+  cumulent, aucun contournable depuis la routine :
+  1. **pas de toolchain Swift dans le conteneur** (`swift`/`xcodebuild` absents — vérifié, pas
+     supposé) ;
+  2. **`ios-tests.yml` ne tourne pas sur une PR** : son trigger est `push` sur `dev` +
+     `workflow_dispatch` ;
+  3. **le dispatch manuel est REFUSÉ à l'intégration** (`403 Resource not accessible by
+     integration`) — donc la porte de sortie que le workflow prévoit exprès pour ce cas est fermée
+     à cette routine.
+  `sdk-tests` couvre `packages/MeeshySDK` (donc `APIResponseMeta`), mais **rien** ne compile
+  `apps/ios/**`. Différence matérielle avec le cycle 79, qui touchait le SDK et était donc bien
+  gaté : **ne pas se référer à ce précédent pour conclure « la routine sait gater l'iOS ».**
+  Mitigation appliquée à défaut : revue statique ciblée (équilibrage des accolades comparé à HEAD
+  pour écarter les artefacts du parseur maison, aplatissement du chaînage d'optionnels
+  `pagination?.hasMore`, inférence générique de `JSONStub.decode` sous `return` implicite,
+  interpolation `os.Logger` avec `privacy:`, continuations `\` et indentation des littéraux
+  multi-lignes, isolation des types imbriqués dans une classe `@MainActor`), et **aucun fichier
+  Swift neuf** donc aucun risque d'orphelin pbxproj. Points de rupture les plus probables s'il y a
+  une erreur : la compilation du drain (`DrainedStoryPages`, `for _ in 0..<Self.maxTrayPagesPerPass`)
+  et la file `listResults` du mock.
+  **Action pour le prochain cycle : commencer par vérifier l'état de « iOS Tests » sur `dev`/`main`
+  et corriger sans délai ce qui viendrait de ce lot.** Et si la routine doit continuer à toucher
+  `apps/ios`, la vraie correction est structurelle : obtenir le droit `actions: write` pour
+  l'intégration, ou ajouter un trigger `pull_request` restreint aux chemins `apps/ios/**`.
+- **Le tray WEB reste coupé à 50**, et deux services se disputent la route. Voir la tête du
+  cycle 81 ci-dessus.
+- **`maxTrayPagesPerPass = 6` est une borne tenue à la main**, comme `trayPageLimit = 50` face au
+  `Math.min(limit, 50)` de la route. Rien de mécanique ne les lie — même dette jumelle que
+  `deltaPageLimit`/`DELTA_PAGE_LIMIT` relevée au cycle 79.
+- **Le drain ne déduplique pas entre pages.** Une story dont l'`updatedAt` bouge PENDANT la passe
+  peut apparaître deux fois (la borne keyset porte sur `createdAt`, pas sur ce qui a changé).
+  `toStoryGroups` + `insertOrMergeStoryGroups` dédupliquent par id en aval, donc l'effet est nul
+  aujourd'hui — mais c'est une propriété du consommateur, pas du drain.
+
+## Suite livrée après coup — les tombstones scopent la FENÊTRE, pas la page
+
+Le drain fait jusqu'à 6 requêtes pour une même fenêtre delta. La requête de tombstones, elle, ne
+dépend PAS du curseur : sa clause est `deletedAt != null AND updatedAt > since`, identique d'une
+page à l'autre. Elle repartait donc à CHAQUE page — jusqu'à 6 lectures de 501 lignes sous filtre de
+visibilité, pour un résultat que le client tenait déjà depuis la première.
+
+Elle ne court plus que sur la page qui OUVRE la fenêtre (`options.updatedSince && !cursorData`).
+Sûr **parce que** le drain fusionne par union (`formUnion`) et par `||`, jamais par écrasement : une
+page suivante sans tombstone ne peut pas effacer ceux de la première. Deux témoins encadrent la
+règle — pas de requête sur une page cursorée, et la requête TOUJOURS présente sur la page
+d'ouverture (sans ce second témoin, l'optimisation pourrait supprimer les tombstones du produit).
+
+Trouvé en instruisant le même cycle 80 depuis une session concurrente, qui a livré le reste du
+correctif (PR #2867). Les deux sessions ont convergé sur le drain, la ligne sonde et le drapeau ;
+seul ce point les distinguait.
+
+---
+
+# Cycle 79 — Un curseur persisté qui avance sur une page dont on ignore si elle est complète
+
+## Le défaut
+
+`ConversationSyncEngine.deltaSyncCore` (SDK iOS) demandait `limit=500` à
+`GET /conversations?updatedSince=`, que la route plafonne à 100
+(`Math.min(parseInt(limit), 100)`). Puis il avançait `lastSyncTimestamp` au max des `updatedAt`
+REÇUS — **sans jamais regarder si la page avait été coupée**.
+
+Le tri par `updatedAt` croissant livré au cycle 77 fait pointer le curseur sur les lignes coupées
+dans le cas général : la troncature y est devenue une pagination. Le résidu que l'ordre ne rattrape
+pas est celui de plus de 100 conversations partageant la MÊME milliseconde d'`updatedAt` : la borne
+serveur est stricte (`gt`), donc le débordement était enjambé **définitivement**, jusqu'à la
+réconciliation complète bornée à 1× par 24 h. Entre les deux, la liste iOS affichait des compteurs
+de non-lus et des aperçus périmés sans qu'aucun signal ne l'indique.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Le serveur dit déjà la vérité, personne ne l'écoutait.** Une page delta part toujours
+d'`offset=0`, et la route ne compte alors PAS un total décoratif : elle exécute
+`prisma.conversation.count({ where: whereClause })` sur la **même clause `updatedAt > since`**
+(`routes/conversations/core.ts`, branche `totalCount > 0 && (includeCount || offset === 0)`).
+Son `pagination.hasMore` vaut donc exactement « la fenêtre contenait plus de lignes que cette page
+n'en rend ». La tête proposait de détecter la troncature par `count >= limit` — l'heuristique du
+web. Le signal autoritaire était disponible des deux côtés depuis toujours.
+
+**La différence n'est pas cosmétique** : `count >= limit` escalade sur une fenêtre de très
+exactement 100 conversations, qui est pourtant COMPLÈTE. Sur le web, cette escalade est une
+relecture de TOUTES les pages chargées — précisément ce que le cycle 77 avait retiré du chemin de
+focus. Le web a donc été corrigé dans le même lot : il lit `pagination.hasMore`, dont
+`getConversations` porte déjà le repli conservateur `length >= limit` quand la réponse omet son
+bloc pagination.
+
+## L'ordre des gestes, qui EST le correctif
+
+Ne pas avancer le curseur, PUIS escalader. Pas l'inverse, et pas seulement escalader :
+`fullSync()` peut échouer (offline, panne gateway), et un curseur persisté déjà avancé aurait
+survécu à cet échec — les lignes coupées auraient été perdues pour de bon, le delta suivant
+repartant d'après elles. Parce que le curseur est resté en arrière, une escalade échouée laisse la
+fenêtre **entière** rejouable au prochain delta. La fusion de la page reçue, elle, est conservée
+dans les deux cas : ce qu'on a reçu est vrai, c'est seulement la COUVERTURE qui n'est pas prouvée.
+
+## D1 — la divergence web/iOS sur le curseur est assumée, pas une dette
+
+Le web ne peut pas « ne pas avancer » : son curseur est RECALCULÉ depuis le cache à chaque passe,
+donc fusionner la page l'avance mécaniquement. iOS PERSISTE le sien. Deux natures, deux gestes —
+et c'est le curseur persisté qui exige la garde, puisque lui seul survit à l'échec de l'escalade.
+La note est écrite en tête de `syncSinceLastCheckpoint` pour que la prochaine passe de parité ne
+« corrige » pas l'un vers l'autre.
+
+## D2 — `limit=500` n'était pas qu'une coquette inexactitude
+
+Le corriger à 100 ne change rien au nombre de lignes rendues — la route plafonnait déjà. Mais le
+repli heuristique `data.count >= deltaPageLimit`, celui qui sert quand une réponse n'annonce pas sa
+pagination, **n'aurait jamais pu déclencher** sous `limit=500`. Un mensonge de constante avait
+désactivé silencieusement le filet de sécurité qu'on venait d'écrire.
+
+## Vérification
+
+- `apps/web` : suite `use-conversations-delta-sync` **28/28 verte**, dont le nouveau témoin
+  « page de très exactement 100 que le serveur dit complète ⇒ aucune escalade », **vérifié ROUGE**
+  contre l'ancienne règle `length >= DELTA_PAGE_LIMIT` avant d'être livré.
+- `apps/web` (large) : `__tests__/hooks` + `__tests__/lib/conversations` — 2 003 tests verts,
+  2 sautés. Les 6 suites qui ne démarrent pas (posts/commentaires/register/encryption) échouent sur
+  de la résolution de module dans ce conteneur, sans rapport avec le lot.
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- SDK iOS : 4 témoins d'ingénierie (`ConversationSyncEngineTests`) + 3 témoins de règle pure
+  (`SyncWatermarkTests`) — pas de toolchain Swift dans ce conteneur, la validation passe par
+  `sdk-tests.yml` (macOS) sur la PR.
+
+## Reste ouvert après ce cycle
+
+- **Le résidu même-milliseconde n'est pas FERMÉ, il est rendu convergent.** Une fenêtre de plus de
+  100 conversations à la même milliseconde escalade désormais vers `fullSync` ; elle ne se rattrape
+  toujours pas par pagination delta. Fermer vraiment demanderait un curseur composite
+  `(updatedAt, id)` côté route — chantier de contrat.
+- **La troncature de tombstones du delta des stories est le même angle mort, un cran plus grave**
+  (le serveur la journalise sans la dire au client). Voir la tête du cycle 80 ci-dessus.
+- **`ConversationSyncEngine.deltaPageLimit` et `DELTA_PAGE_LIMIT` (web) restent deux constantes
+  jumelles tenues à la main**, comme `fullReconcileInterval` / `FULL_RECONCILE_INTERVAL_MS`. Rien
+  de mécanique ne les lie au `Math.min(limit, 100)` de la route.
+
+---
+
+# Cycle 78 — Une dizaine d'écrivains tenaient un cache que personne ne lisait
+
+## Le défaut
+
+`queryKeys.conversations` exposait deux formes de liste : `lists()` / `list(filters)` valant
+`['conversations','list', …]`, et `infinite()` valant `['conversations','infinite']`. **Les deux
+préfixes sont DISJOINTS** — un `setQueriesData` sur l'un ne touche jamais l'autre.
+
+Et **aucun écran ne lisait la forme plate.** La sidebar passe par `useConversationsPaginationRQ`
+→ `useInfiniteConversationsQuery`, donc `infinite()`. `rg` sur tout le dépôt : les hooks de la
+forme plate n'apparaissaient que dans leur propre fichier, leur fichier de témoins, et le baril
+`hooks/queries/index.ts`.
+
+Une dizaine d'écrivains l'alimentaient quand même, à chaque événement.
+
+Le coût n'était pas la performance — un `setQueriesData` sans correspondance est un no-op. C'était
+la LECTURE : le code se lisait comme si deux caches étaient tenus en phase alors qu'un seul
+existait. Le prochain à corriger un aperçu de liste avait une chance sur deux de corriger la copie
+morte et de conclure que son correctif ne marchait pas.
+
+## Ce que l'inventaire a trouvé et que la tête n'annonçait pas
+
+**Les témoins passaient au vert sans rien prouver.** Trois blocs de `use-socket-cache-sync` —
+« déplacer la conversation en tête sur message:new », « avancer l'aperçu quand le dernier message
+est supprimé », « purger la conversation refusée » — n'étaient assertés QUE sur la forme plate. Le
+chemin réel, celui que la sidebar lit, n'avait donc **aucune couverture**. C'est le vrai danger
+d'un cache mort : il ne se contente pas de dormir, il capte les témoins.
+
+**`use-send-message-mutation.ts` était mort en entier.** Ses quatre mutations
+(`useSendMessageMutation`, `useEditMessageMutation`, `useDeleteMessageMutation`,
+`useMarkAsReadMutation`) n'ont aucun appelant : l'envoi réel passe par l'orchestrateur Socket.IO
+(`services/socketio/orchestrator.service.ts` + `createOptimisticMessage`). Le module est un vestige
+d'une approche abandonnée. Ses six écritures de liste n'étaient PAS doublées d'une écriture
+`infinite()` — les « corriger » plutôt que les supprimer aurait ressuscité un chemin d'envoi
+concurrent de celui qui fonctionne.
+
+**Deux `invalidateQueries` de réaction ne visaient rien.** `use-reactions-query.ts` invalidait
+`conversations.lists()` sur réaction ajoutée / retirée, commentaire à l'appui (« réaction ajoutée =
+conversation modifiée »). Préfixe disjoint ⇒ **l'intention déclarée ne s'exécutait jamais.**
+
+## L'ordre des gestes, qui EST le correctif
+
+Rebrancher les témoins sur `infinite()` **avant** de retirer quoi que ce soit, puis vérifier qu'ils
+sont ROUGES contre une écriture `infinite()` cassée. Fait : neutraliser
+`updateInfiniteConversationCache` dans `advanceConversationPreviewOnDelete` fait tomber 3 témoins
+sur 30. Sans cette étape, le retrait des écritures plates aurait fait passer les témoins du vert au
+vert — en supprimant toute couverture du chemin réel sans qu'une seule ligne ne rougisse.
+
+## D1 — rediriger n'est pas toujours le geste juste
+
+Pour les six écritures de `use-socket-cache-sync`, chacune était DOUBLÉE d'une écriture `infinite()`
+identique : le retrait est strictement neutre. Pour les deux invalidations de réaction, rediriger
+vers `infinite()` aurait déclenché **une relecture de TOUTES les pages chargées à chaque réaction**
+— exactement ce que le cycle 77 (lot focus) venait de retirer du chemin de focus. Vérifié avant de
+trancher : la ligne de liste ne porte rien qui dépende des réactions de message
+(`reaction={prefs?.reaction}` dans `ConversationList` est une PRÉFÉRENCE de conversation, pas un
+agrégat de réactions). Supprimées.
+
+## D2 — une option silencieusement ignorée est un piège de la même famille
+
+`useInfiniteConversationsQuery` acceptait un `filters` que sa clé de requête n'incluait pas : un
+appelant qui l'aurait passé aurait reçu la liste NON filtrée, sans erreur. Retiré avec le reste.
+Une liste filtrée, le jour où elle existera, devra naître avec sa propre clé ET son lecteur.
+
+## Vérification
+
+- `apps/web` : **561 suites, 12 055 tests verts**. Le compte de témoins baisse de 41 : ceux des
+  hooks morts, qui ne testaient rien de vivant. Une suite en moins — le fichier de témoins du module
+  supprimé.
+- Les témoins rebranchés sur `infinite()` ont été vérifiés ROUGES contre une écriture cassée AVANT
+  le retrait — la couverture est réelle, pas déplacée.
+- `tsc --noEmit` : aucune erreur sur les fichiers touchés.
+- Bilan : **545 lignes retirées, 92 ajoutées**, dont un fichier de production entier.
+
+## Reste ouvert après ce cycle
+
+- **`conversations.all` reste, et couvre bien `infinite()`** (préfixe commun). Les
+  `invalidateQueries({ queryKey: conversations.all })` sont vivants et hors lot — ne pas les
+  confondre avec ce qui vient d'être retiré.
+- **La règle « un seul cache de liste » n'est portée que par une note** dans `apps/web/CLAUDE.md` et
+  le commentaire de `queryKeys.conversations`. Rien de mécanique n'empêche une deuxième forme de
+  renaître sans lecteur ; un lint maison sur « clé de requête sans `useQuery` correspondant » serait
+  la seule garde réelle.
+- **Le même audit n'a PAS été mené sur les autres familles de clés** (`posts`, `notifications`),
+  qui portent toutes le couple `lists()` / `infinite()`. `queryKeys.messages.list` est, lui, bien
+  vivant — il sert de PRÉFIXE à `messages.infinite(id)`. Les autres sont à instruire par le même
+  `rg`, pas par déduction.
+
+---
+
+# Cycle 78 — Une réaction n'est pas une ligne de liste (et D1 a été livré par une autre session)
+
+Ce cycle a instruit et corrigé les DEUX têtes ouvertes pour le cycle 78. Il n'en livre qu'une.
+Le récit de la seconde est conservé ici parce qu'il vaut plus que le code retiré.
+
+## D2 — deux invalidations de réaction ne matchaient aucun cache (LIVRÉ)
+
+`use-reactions-query.ts` invalidait `conversations.lists()` (`['conversations','list']`) sur
+réaction ajoutée / retirée, commentaire à l'appui : « réaction ajoutée = conversation modifiée ».
+La sidebar lit `conversations.infinite()` : **préfixes disjoints, intention jamais exécutée.**
+Panne silencieuse, pas code mort — le commentaire faisait foi pour le prochain lecteur.
+
+Le geste juste n'était PAS de rediriger vers `infinite()` : ça aurait relu toutes les pages
+chargées à chaque réaction, exactement le refetch que le cycle 77 venait de retirer du chemin de
+focus. Vérifié avant de trancher : **une ligne de liste ne porte rien qui dérive des réactions**
+(aperçu, non-lus, horodatage). Le `reaction` rendu par `ConversationList` est l'emoji de
+PRÉFÉRENCE de conversation — homonyme, sans rapport.
+
+Convergence : la PR #2860 (session parallèle, entrée ci-dessus) a supprimé les mêmes deux lignes
+en retirant la forme plate. Ce qui reste ici est donc le **commentaire** qui dit pourquoi il n'y
+a pas d'invalidation, plus les deux témoins. Un retrait silencieux invite le prochain lecteur à
+« réparer l'invalidation manquante » ; c'est le seul piège encore ouvert sur ce site.
+
+## D1 — la page delta tronquée : LIVRÉ PAR LA PR #2863, pas par ce cycle
+
+Ce cycle avait écrit, testé et fait passer la CI (SDK Tests verts, runs #965/#967/#971) sur une
+marche de pages : `limit=100` demandé, page courte = fin de fenêtre, page pleine = reprise SOUS
+son groupe d'`updatedAt` le plus haut (`SyncWatermark.resumeAfterFullPage`), escalade vers
+`fullSync` sur le seul résidu (page pleine à une milliseconde unique, ou au-delà de 5 pages).
+
+Pendant la CI, la PR #2863 (« une page delta qui laisse du reste ne fait plus avancer le
+curseur ») a été mergée sur `main` par une session parallèle. Elle corrige le MÊME défaut, plus
+simplement : `advancedAfterDeltaPage(previous:receivedUpdatedAt:pageMayHaveMore:)` — si la page
+laisse du reste, **le curseur ne bouge pas du tout**, et l'appelant escalade vers `fullSync`.
+
+**Le merge a été résolu en faveur de `main`, intégralement.** Trois raisons, dans cet ordre :
+
+1. **Leur détection est MEILLEURE que la mienne.** `mayHaveMore = pagination?.hasMore ??
+   (data.count >= deltaPageLimit)` : le serveur ANNONCE le reste, et le comptage n'est que le
+   repli. Ma version ne connaissait que le repli.
+2. **Les deux mécanismes sont incompatibles, pas superposables.** Leur contrat testé dit « le
+   curseur n'avance pas sur une page qui laisse du reste » ; ma marche, elle, AVANCE (sous le
+   groupe du haut) pour paginer. Garder les deux, c'est faire échouer leurs témoins.
+3. **Réécrire en résolution de merge un correctif déjà mergé et testé n'est pas un droit qu'on
+   se donne.** L'instruction de la routine est explicite : gérer le merge à la main pour ne rien
+   écraser. Le fait d'être arrivé deuxième ne rend pas ma version prioritaire.
+
+Ce qui est retiré avec elle : `SyncWatermark.resumeAfterFullPage`, la boucle de pages,
+`maxDeltaPages`, `DeltaSyncOutcome`, `MockAPIClient.stubSequence` et 10 témoins. Aucun n'a de
+consommateur une fois `main` adopté ; les garder aurait été exactement la « plomberie
+mensongère » que ce cycle dénonce par ailleurs.
+
+### Ce qui reste vrai et non couvert par `main` — tête instruite pour un prochain cycle
+
+`main` escalade vers `fullSync` sur **CHAQUE** page qui laisse du reste. C'est correct et
+prudent, et c'est cher : dès que plus de 100 conversations bougent dans la fenêtre (reconnexion
+après une longue coupure, compte à gros volume), le client relit sa liste ENTIÈRE au lieu de
+tirer une deuxième page.
+
+La marche paginée reste donc une amélioration réelle, mais elle doit être instruite CONTRE le
+comportement désormais en place, pas contre l'ancien défaut. Deux bornes qui ne se devinent pas,
+payées par ce cycle :
+
+1. **Sur une page pleine, reprendre au max des `updatedAt` reçus est FAUX.** La coupure peut
+   tomber au milieu d'un groupe partageant une milliseconde ; la borne stricte `gt` enjamberait
+   ses survivantes. Le seul curseur sûr est le plus haut `updatedAt` STRICTEMENT inférieur au
+   max de la page — le groupe du haut est alors relu entier (upsert idempotent).
+2. **Il reste un résidu qu'aucun curseur ne franchit** : une page pleine dont toutes les lignes
+   portent la même milliseconde. Là, et là seulement, l'escalade de `main` est la seule réponse.
+   Une marche qui l'oublierait bouclerait à l'infini.
+
+Fermer proprement demanderait plutôt un curseur composite `(updatedAt, id)` côté route —
+chantier de contrat serveur, pas garde de client.
+
+## Vérification
+
+- **D2** : 2 témoins neufs, **RED observé** avant correctif (`flatFetch` appelé 2× au lieu de
+  1×). Ils montent de VRAIS observateurs sur les deux formes de clé — une `invalidateQueries` ne
+  refetch que les requêtes ACTIVES, donc un cache posé à la main (`setQueryData`/`fetchQuery`)
+  serait resté muet et le témoin serait passé au vert sans rien prouver.
+- Suite web complète : **561 suites / 12 057 tests verts** en local (bun/jest) après le merge de
+  `main`.
+- CI complète verte sur la tête (13 jobs) + SDK Tests verts.
+- **D1 : la vérification de ce cycle a bien eu lieu et est verte** (SDK Tests #965, #967, #971
+  sur la marche de pages) — elle ne prouve plus rien d'utile, puisque le code qu'elle couvrait
+  a été retiré au profit de celui de `main`. C'est dit franchement plutôt qu'effacé : le coût
+  d'un cycle est aussi ce qu'il jette.
+
+## Addendum — trois sessions, un cycle, deux collisions
+
+Ce cycle a collisionné DEUX fois avec des sessions parallèles :
+
+| Tête | Session parallèle | Issue |
+|---|---|---|
+| D2 (invalidations mortes) | PR #2860 | convergence — les deux ont retiré les mêmes lignes ; ce cycle garde le commentaire |
+| D1 (page delta tronquée) | PR #2863 | **collision** — leur version, mergée d'abord et mieux instrumentée, l'emporte intégralement |
+
+Plus un troisième conflit, sans rapport avec le fond : `tasks/lane-cursor.md`, avancé par la
+routine Android pendant le run. Résolu en faveur de `main` sans discussion — ce fichier est
+l'état d'une AUTRE routine, et ce cycle n'avait aucune raison d'y écrire.
+
+Trois collisions sur un cycle, ce n'est plus de la malchance : c'est le régime normal quand
+plusieurs routines instruisent la MÊME liste de têtes ouvertes. La parade n'est pas de merger
+plus vite — c'est de **relire `main` avant d'ouvrir une tête, pas seulement avant de merger**.
+Une tête instruite dans `todo.md` n'est pas une réservation.
+
+## Reste ouvert après ce cycle
+
+- **La marche paginée** (ci-dessus), à instruire contre le comportement de `main`, avec ses deux
+  bornes déjà payées.
+- **Le résidu des égalités** — plus de 100 conversations à la même milliseconde — reste ouvert
+  sur les deux plateformes ; il demande un curseur composite `(updatedAt, id)` côté route.
+- **`apps/web` porte 1224 erreurs `tsc --noEmit` préexistantes** sous son propre tsconfig
+  (aucune introduite ici ; le fichier de tests touché en portait déjà 20 de la même forme). Ce
+  n'est pas un gate CI aujourd'hui, et c'est précisément pourquoi ça mérite d'être écrit.
+
+---
+
+
+# Cycle 77 — L'enrichissement audio n'atteignait que les lecteurs déjà dans le fil, et une page delta tronquée sautait des lignes
+
+Deux défauts de la même famille, tous deux côté gateway, tous deux du type « la convergence
+dépend de la ROUTE du lecteur plutôt que de son état » : le premier trouvé en balayant les
+émetteurs qui n'adressent QUE `ROOMS.conversation(...)`, le second déjà instruit par la tête
+du cycle 77 — dont la moitié SERVEUR se corrige sans toucher au client.
+
+## D1 — `message:attachment-updated` devait trois audiences, en servait une
+
+Whisper finit de transcrire une note vocale une à deux secondes après l'envoi ;
+NLLB+Chatterbox rendent l'audio traduit langue par langue, plus tard encore. Chaque étape
+écrit la pièce jointe en base et diffuse un delta — **dans la seule room de conversation**.
+
+| Audience | Ce qu'elle perdait |
+|---|---|
+| lecteurs DANS le fil | rien — la seule servie |
+| lecteurs sur la LISTE | iOS ne joint `conversation:<id>` qu'à **l'ouverture** du fil (`roomsToRejoinOnConnect`) : au lancement de l'app, un lecteur resté sur la liste n'est dans AUCUNE room de conversation |
+| lecteurs HORS LIGNE | le `message:new` mis en file à l'ENVOI porte la pièce jointe SANS transcription ni audio traduit (ils n'existent pas encore) : sans rejeu, la copie rejouée à la reconnexion reste définitivement celle-là |
+
+Vérifié, pas déduit : le SDK iOS applique ce delta **sans regarder quel fil est ouvert**
+(`ConversationSyncEngine.handleAttachmentUpdated` patche le message en cache de n'importe
+quelle conversation, no-op s'il est absent) — la room personnelle n'est donc pas une
+audience plus large pour le principe, c'est là que l'écriture atterrit vraiment. Le web est
+pareillement idempotent et clé par conversation (`use-socket-cache-sync`).
+
+Même classe que les cycles 73/74 : le Prisme — « il s'applique à TOUT le contenu,
+transcriptions audio comprises » — devenait fonction du fait d'avoir le fil ouvert au moment
+où Whisper a fini.
+
+Le correctif chaîne room de conversation + rooms personnelles (une seule copie par socket,
+`emitToConversationParticipants`) et met l'enrichissement en file sous le nouveau
+`eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` au drain.
+
+Deux points qui ne se devinent pas :
+
+1. **`dedupKey` = l'id de la PIÈCE JOINTE.** L'identité par défaut `(messageId, eventType)`
+   ferait superséder l'enrichissement de la première pièce jointe par celui de la seconde
+   sur un message à deux audios. Par pièce jointe, la règle « le dernier payload gagne » est
+   exactement la bonne : le payload porte l'état COMPLET de la pièce jointe.
+2. **Aucun filtrage par langue du destinataire**, contrairement à `message:new`
+   (`filterMessagePayloadForLanguages`). Les clients REMPLACENT la carte de traductions de
+   la pièce jointe : un sous-ensemble par lecteur EFFACERAIT les langues qu'un fetch REST
+   antérieur avait mises en cache. La bande passante n'est pas gratuite ; la corriger ici
+   demanderait un contrat de fusion côté client, pas un filtre.
+
+Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+d'avant), jamais vers le silence.
+
+## D2 — l'ordre d'une page delta décide si sa troncature est rattrapable
+
+`GET /conversations?updatedSince=` plafonne à 100 et triait par `lastMessageAt` décroissant
+— l'ordre de l'écran de liste, **sans aucun rapport avec le filtre**. Les deux clients
+avancent pourtant leur watermark au max des `updatedAt` REÇUS : les lignes coupées étaient
+enjambées **définitivement**, jusqu'à la réconciliation complète (1×/24 h sur iOS).
+
+Trié par `updatedAt` croissant, les lignes coupées sont exactement celles d'`updatedAt`
+SUPÉRIEUR à la dernière rendue : le watermark qui les enjambait pointe dessus. La troncature
+devient une pagination naturelle, **sans aucun changement client** — la tête du cycle 77
+proposait de câbler la détection côté iOS ; l'ordre serveur rend la détection presque sans
+objet. `id` départage les égalités pour que deux appels identiques rendent la même page.
+
+Résidu assumé, et il reste à la charge des clients (le web le couvre déjà via
+`DELTA_PAGE_LIMIT` ⇒ relecture complète) : plus de 100 conversations portant la MÊME
+milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que la borne stricte
+`gt` ne peut pas reprendre.
+
+## Vérification
+
+- **13 témoins neufs**, écrits AVANT le code, RED observé sur chacun :
+  - `emitAttachmentUpdated.test.ts` (10) — l'audience chaînée dans l'ORDRE attendu, une
+    seule émission pour un socket présent dans deux rooms, la mise en file des seuls hors
+    ligne, l'auteur inclus (« Whisper et NLLB ne sont pas des gens »), la clé de dédup par
+    pièce jointe, la réutilisation de la liste de participants (une requête, pas deux), et
+    les deux dégradations : requête participants en panne ⇒ room de conversation seule,
+    file en panne ⇒ l'émission live a quand même eu lieu.
+  - `MeeshySocketIOManager.test.ts` (1) — `attachment-updated` rejoué en
+    `MESSAGE_ATTACHMENT_UPDATED` au drain.
+  - `conversation-core.test.ts` (3) — page delta triée par `updatedAt` croissant, page
+    ordinaire et `updatedSince` illisible gardant l'ordre de récence.
+- `tsc --noEmit` propre sur le gateway.
+
+## Reste ouvert après ce cycle
+
+- **Les deux têtes instruites pour le cycle 77 restent ouvertes** (voir ci-dessous), la
+  première REDUITE par D2 : côté iOS il ne reste que la détection du résidu d'égalités,
+  plus la perte systématique. La seconde (écrivains du cache PLAT côté web) est intacte.
+- **`limit=500` demandé par `deltaSyncCore` reste un mensonge silencieux** — le plafond
+  serveur est 100. Hygiène, sans effet sur le défaut, maintenant que la troncature se
+  rattrape.
+- **`message:attachment-updated` n'est pas filtré par langue** (voir D1 §2) : une
+  conversation à N langues paie N diffusions complètes de la pièce jointe à tous les
+  participants. Le rendre par destinataire suppose que les clients FUSIONNENT la carte de
+  traductions au lieu de la remplacer — chantier de contrat client, à instruire avant tout
+  code serveur.
+- **`ATTACHMENT_STATUS_UPDATED` (`routes/messages.ts`) n'a pas été audité contre la même
+  règle** — il porte un état par utilisateur (écouté/vu/téléchargé), donc sa room n'est
+  peut-être pas la bonne non plus. À instruire, pas à déduire.
+- **Aucun client iOS n'écoute `message:pending-delivered`** (le web s'en sert pour invalider
+  les conversations touchées par un drain). Constaté en croisant les 110 `SERVER_EVENTS`
+  avec les deux clients ; conséquence non mesurée.
+- **`message:read-status-updated` n'a toujours aucun consommateur** : les deux clients
+  écoutent le legacy `read-status:updated`, dual-émis depuis le 2026-07-05 avec une
+  coexistence annoncée d'environ 3 mois (échéance ~2026-10-05). Migrer les clients est un
+  geste par client, sûr tant que le serveur émet les deux ; retirer le legacy ne l'est pas
+  avant qu'Android ait migré aussi.
+- Les points hérités des cycles précédents restent ouverts tels quels (mentions du chemin de
+  lien, `link:message:new` sans écouteur iOS, arbitrage `delete-for-me` du cycle 12, `eslint`
+  impossible sur le gateway faute de `eslint.config.js`).
+
+---
+# Cycle 77 — Le retour d'onglet relisait la liste de conversations page par page, et l'écrasait
+
+## Le défaut
+
+`useInfiniteConversationsQuery` héritait du `refetchOnWindowFocus: 'always'` du QueryClient global.
+Sur une `useInfiniteQuery`, ce réglage ne « rafraîchit » pas : il **rejoue TOUTES les pages
+chargées et REMPLACE le cache**. Trois coûts distincts, pas un :
+
+1. **Charge** — dix pages de scroll = dix requêtes à chaque retour d'onglet, sur une route qui
+   charge participants, dernier message avec ses traductions et sa pièce jointe, et les compteurs
+   de non-lus par curseur.
+2. **Écrasement** — tout ce que la socket écrit pendant la séquence est remplacé par une réponse
+   partie avant.
+3. **Instabilité d'offset** — c'est le point qu'aucune note antérieure n'avait relevé. La route
+   pagine par OFFSET sur un tri `lastMessageAt` DÉCROISSANT (`orderBy: { lastMessageAt: 'desc' }`,
+   `services/gateway/src/routes/conversations/core.ts:498`). Les pages sont relues
+   SÉQUENTIELLEMENT : un message arrivé entre la page k et la page k+1 promeut sa conversation en
+   tête et décale toutes les pages suivantes d'un cran. Résultat : une ligne **dupliquée** à la
+   frontière, une autre **disparue**. Sur une messagerie, ce n'est pas un cas rare — c'est le cas
+   nominal dès qu'un onglet reprend le focus pendant qu'une conversation vit.
+
+C'est exactement le réglage que `use-conversation-messages-rq.ts` avait désactivé pour le fil de
+messages, motif écrit au-dessus de la ligne. La liste, elle, l'avait gardé.
+
+## Ce qu'on ne pouvait PAS faire : basculer à `false`
+
+Le refetch de focus était le SEUL chemin web qui purgeait une ligne **fantôme** — une conversation
+hard-supprimée côté serveur. Le delta du cycle 76 est upsert-only : une ligne qui n'existe plus ne
+revient dans AUCUNE réponse `updatedSince`, donc rien ne la retire. iOS avait rencontré ce cas
+exact (E2E 2026-07-02, « Test Conv » épinglée et absente du serveur) et l'avait réglé par une
+réconciliation complète bornée à 1× par 24 h. Le contenu du chantier était donc le **pendant web de
+cette borne**, jamais la désactivation seule.
+
+## Le correctif
+
+- `refetchOnWindowFocus: false` sur `useInfiniteConversationsQuery`, dérogation documentée jumelle
+  de celle du fil de messages.
+- **Trigger 2 — focus** dans `useConversationsDeltaSync` : le focus tire le MÊME delta borné que le
+  reconnect socket (une requête, fusion non destructrice), débouncé 1 s — la valeur de
+  `FOCUS_CATCH_UP_DEBOUNCE_MS` du fil de messages, pour que les deux rattrapages répondent ensemble
+  au même geste plutôt qu'en escalier. Il partage le garde anti-rafale de 5 s déjà en place.
+- **Réconciliation complète bornée** : `invalidateQueries` sur la clé infinie, chaînée APRÈS un
+  delta RÉUSSI, au plus 1× par 24 h. Pendant exact de `fullReconcileInterval` /
+  `syncSinceLastCheckpoint` (SDK iOS). Horodatage dans `localStorage`
+  (`meeshy_conversations_last_full_reconcile_at`, pendant de la clé `UserDefaults`
+  `me.meeshy.lastFullReconcileAt`).
+
+## Trois décisions qui ne se déduisent pas
+
+**D1 — la réconciliation doit courir MÊME sur un delta VIDE.** L'ancien corps sortait tôt
+(`if (conversations.length === 0) return;`). Y adosser la réconciliation aurait rendu la purge
+**inatteignable** : une conversation hard-supprimée ne produit AUCUNE ligne de delta, donc le compte
+calme — précisément celui qui garde son fantôme le plus longtemps — n'aurait jamais réconcilié. Le
+corps a donc été restructuré : la fusion est conditionnelle, la réconciliation ne l'est pas.
+
+**D2 — un delta ÉCHOUÉ ne réconcilie pas et ne consomme pas la fenêtre.** Même règle que
+`syncSinceLastCheckpoint` sur iOS (`if ok && isFullReconcileDue`). Offline ou gateway en panne, on
+garde le cache intact (local-first) plutôt que de déclencher une relecture complète qui échouera
+aussi, et l'horodatage n'avance pas — le prochain déclenchement couvre la même fenêtre.
+
+**D3 — la fenêtre de 24 h démarre au PREMIER delta, pas à l'époque zéro.** iOS part de
+`.distantPast` et réconcilie donc au premier lancement. Le web ne peut pas copier ce choix : le
+montage vient de lire le serveur en entier (`refetchOnMount: 'always'`), et réconcilier tout de
+suite doublerait cette lecture pour rien. Un navigateur sans horodatage en reçoit donc un, daté de
+maintenant, sans réconcilier.
+
+Repli mémoire par QueryClient si `localStorage` jette (navigation privée, quota) : la borne dégrade
+en « 1× par session », jamais en « à chaque focus » — le garde tient la valeur autoritaire, le
+stockage n'en est que la persistance.
+
+## Hygiène au passage
+
+`mergeConversationDelta` était appelé avec un littéral portant **deux fois** la clé `hasMore`
+(`{ hasMore, openConversationId, hasMore }`). Sans effet — la seconde écrasait la première avec la
+même valeur — mais c'est le genre de ligne qui fait douter le prochain lecteur du contrat. Le corps
+de la fusion a été sorti en helper de module (`mergeDeltaIntoCache`) au lieu de vivre dans le `try`,
+et le doublon a disparu avec.
+
+## Vérification
+
+- `apps/web` : **562 suites, 12 095 tests verts** (0 régression). 7 tests neufs sur le delta
+  (`use-conversations-delta-sync.test.tsx` : 16 → 26 avec les 4 du focus), 1 sur la liste
+  (`use-conversations-query.test.tsx`).
+- Le témoin de la liste a été vérifié ROUGE contre le code d'avant (`refetchOnWindowFocus` remis à
+  l'hérité ⇒ `mockGetConversations` appelé au focus), puis vert après.
+- `tsc --noEmit` : aucune erreur sur les trois fichiers touchés (le bruit préexistant du dossier
+  `__tests__/admin` est hors lot).
+
+## Reste ouvert après ce cycle
+
+- **La réconciliation complète relit elle aussi les pages une par une**, donc porte la même
+  instabilité d'offset décrite en 3 ci-dessus — mais 1× par 24 h au lieu d'à chaque focus, et c'est
+  déjà le comportement de `fullSync()` sur iOS. La fermer demanderait une pagination par CURSEUR
+  (`lastMessageAt` + id) côté gateway, chantier de contrat, pas correctif.
+- **Les autres surfaces héritent toujours du `refetchOnWindowFocus: 'always'` global.** Le réglage
+  n'est un défaut que sur les listes INFINIES temps réel ; les deux qui existent
+  (`useInfiniteConversationsQuery`, `useConversationMessagesRQ`) y dérogent désormais toutes les
+  deux. Une troisième qui naîtrait sans déroger reprendrait le défaut en silence — le noter dans
+  `apps/web/CLAUDE.md` était le seul garde-fou disponible.
+- **iOS n'a toujours pas la détection de page tronquée** — tête instruite du cycle 78 ci-dessus,
+  inchangée par ce lot.
+
+---
+
+# Cycle 76 — La liste de conversations web restait figée après une coupure SOCKET
+
+## Le défaut
+
+Le QueryClient web tourne en `staleTime: Infinity` — Socket.IO EST la source de vérité
+temps réel. Ce qui n'arrive pas par socket n'est rattrapé par rien tant que l'écran
+reste monté.
+
+Trois surfaces web pouvaient porter ce trou ; le cycle 75 avait établi le relevé :
+
+| Messages d'une conversation | oui — `syncNewerMessages` sur le front `false → true` (« Trigger 1 ») |
+| Notifications | oui depuis le cycle 75 — `onSyncDesync('reconnect')` |
+| **Liste de conversations** | **non** — corrigé ici |
+
+Ce qui semblait la couvrir : le QueryClient global pose `refetchOnReconnect: 'always'`.
+Il écoute le `onlineManager` de React Query — la transition réseau du **navigateur**.
+Un redémarrage gateway, un drop de load balancer ou un échec d'upgrade de transport
+tuent la socket **sans bouger `navigator.onLine`** : rien ne se déclenche. Pendant cette
+fenêtre, la sidebar garde ses compteurs de non-lus, ses aperçus de dernier message et
+son effectif d'avant la coupure, et ne se corrige qu'au prochain focus ou remontage.
+
+## Le correctif
+
+`useConversationsDeltaSync` (`apps/web/hooks/queries/use-conversations-delta-sync.ts`),
+monté DANS `useInfiniteConversationsQuery` — sur le propriétaire du cache
+`conversations.infinite()`, pour qu'aucun consommateur ne puisse l'oublier.
+
+Quatre arbitrages qui portent le correctif :
+
+1. **Delta, pas `refetch()`.** `refetch()` rejoue TOUTES les pages chargées d'une route
+   lourde (participants, dernier message avec traductions et pièce jointe, compteurs de
+   non-lus par curseur). Le rattrapage est UNE requête bornée par ce qui a bougé —
+   `GET /conversations?updatedSince=`, l'endpoint que le SDK iOS utilise déjà, avec son
+   index dédié côté schema (`@@index([isActive, updatedAt])`). La capacité serveur
+   existait ; seul le web ne s'en servait pas.
+2. **Le watermark se DÉDUIT du cache, il ne se stocke pas.** Soit `T` le max des
+   `updatedAt` en cache et `F` l'instant de la lecture serveur qui les a produits :
+   `T <= F`, et tout changement postérieur à cette lecture porte un `updatedAt > F >= T`.
+   `updatedSince=T` ne peut donc rien rater ; au pire il re-livre `]T, F]`, que l'upsert
+   rend idempotent. Aucun curseur à persister, aucune horloge locale — et le repli sur
+   `new Date()` quand rien n'est lisible est explicitement refusé (règle R15b d'iOS : un
+   client en avance sur le serveur enjamberait des mises à jour réelles).
+3. **Le cache est relu DANS `setQueryData`, pas avant l'`await`.** Un event socket
+   arrivé pendant la requête doit survivre à la fusion — c'est la fusion atomique
+   d'iOS (`cache.messages.mergeUpdate`), transposée.
+4. **Une page PLEINE est une preuve d'incomplétude.** La route plafonne à 100 et trie
+   par `lastMessageAt`, pas par `updatedAt` : les lignes coupées ne sont pas « les plus
+   anciennes », et avancer le watermark par-dessus les perdrait. Le hook garde la fusion
+   (correction immédiate de ce qu'il tient) et escalade vers l'invalidation complète.
+
+Effet de bord assumé et utile : `rebuildInfiniteConversationPages` est sorti de
+`use-socket-cache-sync.ts` vers `lib/conversations/infinite-cache.ts`. Les deux écrivains
+du cache infinite partagent désormais UNE règle de repagination au lieu de deux, et le
+`pagination: any` du passage est remplacé par la forme réelle (`GetConversationsResponse`).
+
+## Vérification
+
+- **27 témoins neufs** : 14 sur les valeurs pures (watermark, fusion), 13 sur le hook.
+- **ROUGE prouvé par mutation, pas par inspection** — 9 mutations, toutes rouges,
+  restauration verte à chaque fois :
+  déclencher au PREMIER connect → 1 rouge ; capturer le cache avant l'`await` (la
+  variante plausible-mais-fausse) → 1 rouge ; supprimer le throttle → 1 rouge ; replier
+  le watermark sur l'horloge locale → 3 rouges ; upserter un delta `isActive: false` →
+  3 rouges ; prendre le PREMIER `updatedAt` au lieu du plus récent → 3 rouges ; fusionner
+  toutes les pages en une (le bug historique de repagination) → 1 rouge ; faire confiance
+  à une page pleine → 1 rouge ; escalader sur CHAQUE delta → 1 rouge.
+- **VERT exécuté** : suite web complète, `562/562` suites, `12070` tests (après
+  `packages/shared → bun run build`, prérequis que la CI fait automatiquement).
+- **Typecheck** : `1222` erreurs, exactement la ligne de base du projet, et **aucune** ne
+  touche un fichier modifié par ce cycle.
+
+## Portée établie, pas supposée
+
+Le relevé des trois surfaces web est désormais complet — plus aucune n'est découverte au
+reconnect socket. La liste PLATE (`useConversationsQuery`) n'est pas traitée : `grep` sur
+tout `apps/web` ne rend **aucun consommateur** hors du module de hooks lui-même.
+
+
+## Addendum — deux sessions ont livré ce cycle en parallèle
+
+La tête du cycle 75 a été instruite par deux sessions à la fois. Les deux ont écrit le
+même correctif, sur les mêmes fichiers, avec les mêmes arbitrages de fond (delta plutôt
+que refetch, watermark déduit du cache, front `false → true` seul déclencheur, montage
+sur le propriétaire du cache). La version ci-dessus est celle qui a atterri la première ;
+la seconde s'aligne dessus et n'ajoute que ce qui manquait. Règle héritée du cycle 25b :
+**comparer défaut par défaut, jamais « qui est arrivé en premier »**.
+
+Ce que la version ci-dessus fait STRICTEMENT MIEUX, et qui est conservé tel quel :
+- la démonstration `T <= F` du watermark, qui rend le clamp `now` de l'autre version
+  inutile plutôt que faux ;
+- le traitement de la page PLEINE comme preuve d'incomplétude, adossé au fait que la
+  route trie par `lastMessageAt` et pas par `updatedAt`. L'autre version paginait par
+  offset sur 5 pages : correct en régime stable, mais exposé au décalage d'offset si une
+  ligne change de rang entre deux pages, et surtout moins bien argumenté ;
+- la découverte du défaut iOS qui en découle (tête du cycle 77 ci-dessus).
+
+Ce que la seconde version apporte, appliqué PAR-DESSUS :
+- **la garde de la conversation OUVERTE** (`ConversationDeltaMergeOptions`). L'upsert
+  intégral écrasait le compteur de non-lus avec la valeur serveur, y compris pour la
+  conversation qu'on est en train de LIRE — rallumant un badge que le handler socket
+  `conversation:unread-updated` prend déjà soin de clamper. Le delta est le second
+  chemin d'écriture du même compteur ; il devait porter la même garde ;
+- **la purge du cache de MESSAGES** d'une conversation retirée, à côté de la purge de son
+  `detail` — miroir de `cache.messages.invalidate(for:)` sur iOS.
+
+Ce que la seconde version proposait et qui est REJETÉ, preuve à l'appui : un cliquet plus
+large (« le delta ne peut monter le compteur que s'il apporte un `lastMessageAt` plus
+récent »), censé couvrir aussi la conversation fermée dont le `mark-as-read` traîne.
+C'est la transposition de la règle 2 de `reconcileUnread` (iOS) — sauf que celle-ci
+s'appuie sur `userState.lastReadAt`, et que **`markAsUnread` marche précisément parce
+qu'il EFFACE cette frontière**, ce qui désarme la règle et rend la main au serveur. Un
+cliquet basé sur `unreadCount` n'a pas cet interrupteur : il rendrait un « marquer comme
+non lu » fait sur un autre appareil définitivement invisible sur le web. Un témoin
+existant de la version ci-dessus (« the delta is server truth ») l'a fait tomber
+immédiatement — c'est lui qui a révélé le défaut, pas une relecture. Un badge rallumé une
+seconde après un reconnect se répare au `conversation:unread-updated` suivant ; un
+mark-as-unread perdu, non.
+
+Reste ouvert : faire voyager la frontière de lecture jusqu'au modèle web fermerait
+l'écart pour de bon. Chantier de contrat, pas garde de fusion — noté dans
+`ConversationSyncEngine.swift` en tête de `deltaSyncCore`.
+
+
+---
+
+# Cycle 76b — Addendum : TROIS sessions ont livré le cycle 76 en parallèle
+
+Même défaut, même endpoint, même miroir iOS, jusqu'aux noms de fichiers à un mot près, découvert
+trois fois sans que personne se voie : `upbeat-dirac-ozao52` (mergée la première, sa version vit
+dans l'arbre), `keen-hamilton-jrysns` (mergée ensuite, addendum sur la même base), et celle-ci.
+Chacune s'aligne sur ce qui est déjà mergé et n'ajoute que ce qui manquait — appliqué par-dessus,
+jamais à la place (précédent du cycle 25b ; leçon du cycle 23 : comparer défaut par défaut, jamais
+« qui est arrivé en premier »).
+
+**Ce que la première version fait strictement mieux** que celle de cette session, et qui aurait
+manqué autrement :
+1. **Le plafond serveur est traité comme une preuve d'incomplétude.** Elle demande `limit = 100`
+   (le plafond réel de `Math.min(limit, 100)`) et, sur page PLEINE, escalade vers une relecture
+   complète. Cette session demandait le `limit` de la liste et prétendait, dans sa documentation,
+   que « le reste est rattrapé au reconnect suivant » — **c'est faux**, pour la raison que la
+   première a su nommer : la route trie par `lastMessageAt` décroissant et NON par `updatedAt`,
+   donc les lignes tronquées ne sont pas les plus anciennes, et le watermark calculé sur ce qui a
+   été fusionné passe définitivement par-dessus.
+2. **Les caches dérivés sont purgés** (`removedIds` → `conversations.detail`, puis
+   `messages.infinite` ajouté par la deuxième session).
+
+**Ce que cette session ajoute par-dessus** — la borne de la fenêtre chargée. Une conversation
+INCONNUE du cache et plus ancienne que la dernière ligne chargée était insérée par la fusion ; le
+`fetchNextPage` suivant la rapporte à sa place réelle, donc **la même conversation apparaissait
+deux fois**. `mergeConversationDelta` prend désormais `{ hasMore }` en plus de
+`{ openConversationId }`, et l'écarte tant qu'il reste des pages ; une inconnue récente appartient
+bien à la fenêtre et entre normalement, un retrait (`isActive: false`) n'est jamais écarté, et sans
+borne fournie on insère — perdre une ligne serait pire que la dupliquer jusqu'au prochain montage.
+Le plancher se mesure avec `orderKey`, la MÊME clé que le tri final : la borne signifie « sous la
+dernière ligne visible », et la fenêtre est ordonnée par cette clé.
+
+## Convergence indépendante sur la réconciliation du non-lu
+
+Cette session avait écrit, testé, puis **retiré** une règle « non-lu local à 0 et aucun message plus
+récent ⇒ garder 0 », au motif qu'elle confond un accusé de lecture en retard avec un `mark-unread`
+délibéré fait depuis un autre appareil. La deuxième session est arrivée **indépendamment à la même
+conclusion**, l'a écrite dans `ConversationDeltaMergeOptions` avec l'argument décisif que cette
+session n'avait pas formulé — côté iOS, `markAsUnread` fonctionne parce qu'il EFFACE `lastReadAt`,
+ce qui désarme la règle 2 et rend la main au serveur ; une transposition basée sur `unreadCount`
+n'a pas cet interrupteur — et a livré le sous-ensemble sûr : forcer à zéro la seule conversation
+OUVERTE, lue depuis `useNotificationStore.getState().activeConversationId`.
+
+Le reste (conversation FERMÉE dont l'accusé de lecture traîne encore) demande de faire voyager la
+frontière de lecture jusqu'au modèle web — chantier de contrat gateway, pas garde de fusion. Deux
+sessions y sont arrivées séparément : ce n'est pas une opinion, c'est la borne du modèle actuel.
+
+## Hors cycle — un flake d'une milliseconde dans le gateway
+
+`PostFeedService` › « bounds the author archive to a finite window in the past » comparait
+`before - floor` à `AUTHOR_ARCHIVE_WINDOW_MS` au millième près, alors que `before` est lu par le
+TEST avant l'appel et le plancher calculé par le SERVICE après : les deux ne sont égales que si
+l'horloge ne change pas de milliseconde entre elles. Rouge en CI sur une PR ne touchant pas le
+gateway (604799999 contre 604800000). L'invariant réel est un encadrement entre les deux lectures
+qui bornent l'appel — corrigé sans tolérance arbitraire.
+
+---
+
+# Cycle 75 — Le web ne décodait pas `_seq` : une notification manquée l'était pour la session entière
+
+## Le défaut
+
+Le gateway tamponne un numéro de séquence monotone PER-USER (`_seq`) sur ses émissions Socket.IO
+user-scoped (`emitWithSeq`). iOS le suit depuis 2026-05 : `SyncSeqState` détecte le trou
+(`next > lastSeq + 1`), `NotificationGapResyncCoordinator` re-tire la liste, et le reconnect
+déclenche la même resync inconditionnellement (A5.4).
+
+`grep -rn "_seq" apps/web` ne rendait **aucune occurrence**. Le singleton de notifications
+reconstruit son objet champ par champ depuis le payload : le `_seq` tombait au sol sans être lu.
+
+Ce qui rend l'absence coûteuse sur cette plateforme précisément : le QueryClient global tourne en
+`staleTime: Infinity` — Socket.IO EST la source de vérité temps réel. Une notification qui n'arrive
+pas n'est donc rattrapée par rien tant que l'écran reste monté. Elle manque dans la cloche, dans le
+compteur et sur `/notifications`, **pour toute la session**.
+
+Deux fenêtres aveugles distinctes, aucune couverte :
+- **perte en vol** — des events arrivent, mais pas tous (le `_seq` saute) ;
+- **coupure socket** — aucun event n'arrive, donc aucun `_seq` ne peut révéler quoi que ce soit.
+  `refetchOnReconnect: 'always'` du QueryClient ne ferme PAS celle-là : il écoute le
+  `onlineManager` (réseau navigateur), pas la socket. Un redémarrage gateway ne bouge pas
+  `navigator.onLine`.
+
+## Le correctif
+
+`apps/web/lib/sync/sync-seq-state.ts` — miroir EXACT de `SyncSeqState.swift`, valeur pure :
+`detectSyncSeqGap` avant `recordSyncSeq`, jamais de trou au premier event, jamais de régression du
+curseur, `_seq` absent = no-op. Pas une seconde interprétation de la règle : les deux fichiers se
+nomment mutuellement, et `emitWithSeq.ts` nomme désormais ses DEUX observateurs.
+
+Le transport (`notification-socketio.singleton`) observe et expose `onSyncDesync(reason)` —
+`'gap'` ou `'reconnect'`. La décision « quoi refetch » vit chez le consommateur
+(`use-notifications-manager-rq`), débouncée 300 ms comme iOS. C'est le découpage SDK/app d'iOS,
+transposé transport/hook.
+
+Trois arbitrages qui portent le correctif :
+1. **Le curseur SURVIT à la reconnexion automatique de socket.io** — c'est précisément ce qui
+   permet au premier event d'après de révéler le trou. Il n'est purgé que sur `disconnect()`
+   explicite (changement de token, logout, `reset()`), parce que le `_seq` est alloué par user et
+   que le curseur d'un compte ne veut rien dire pour le suivant.
+2. **Le premier `connect` ne signale rien** ; seul un RE-connect prouve une fenêtre aveugle. Au
+   premier, les écrans montent déjà en `refetchOnMount: 'always'`.
+3. **Un event sans `_seq` est un no-op, pas un trou.** `emitWithSeq` émet délibérément sans `_seq`
+   quand l'allocation rejette ou dépasse son timeout : compter ce chemin dégradé comme un trou
+   déclencherait une resync à chaque hoquet Mongo.
+
+## Vérification
+
+- **19 témoins neufs** : 15 sur la valeur pure + le câblage transport, 4 sur le consommateur.
+- **ROUGE prouvé par mutation, pas par inspection** (5 mutations, toutes rouges, restauration verte) :
+  neutraliser le signal de trou → 2 rouges ; signaler `reconnect` dès le premier connect → 7 rouges ;
+  purger le curseur sur l'event `disconnect` de socket.io (la variante plausible-mais-fausse) →
+  1 rouge ; supprimer le débounce → 3 rouges ; abonner un no-op → 3 rouges.
+- **VERT exécuté** : suite web complète, `559/559` suites, `12043` tests (après
+  `packages/shared → bun run build`, prérequis que la CI fait automatiquement).
+- Typecheck : la ligne d'erreur touchant un fichier modifié
+  (`notification-socketio.singleton.test.ts:45`, spread argument) est **antérieure** — vérifiée
+  présente sur `main` stashé, parmi 1222 erreurs de base du projet.
+
+## Portée établie, pas supposée
+
+Le `_seq` n'a qu'UN émetteur (`NotificationService` → `notification:new`) : le lockstep
+émission/observation est donc intact après ce cycle, et c'est la seule raison pour laquelle porter
+l'observation d'un seul event est correct. Étendre `emitWithSeq` (A2.2) obligera à étendre
+l'observation des DEUX clients dans le même train — noté en tête du fichier gateway.
+
+---
+
+# Cycle 74 — La ligne de liste gelait sur la traduction D'AVANT (portillon de mémoïsation iOS)
+
+## Le défaut
+
+Le cycle 73 a rendu `lastMessageTranslations` **vivant** : le gateway ré-émet désormais
+`conversation:updated` quand une traduction atterrit, et — c'est le point — il ne l'émet QU'aux
+lecteurs dont la carte d'aperçu porte cette langue (`PreviewUpdateScope.onlyIfPreviewCarriesLanguage`).
+Le payload est donc, par construction, un payload où **seule la valeur traduite a changé** : même
+`lastMessageId`, même `lastMessagePreview` (l'original ne bouge pas), même `lastMessageAt`.
+
+`MeeshyConversation.renderFingerprint` est le portillon de mémoïsation de la ligne de liste :
+`ThemedConversationRow.==` et `ConversationRowItem.==` ne comparent la conversation QUE par ce hash,
+derrière `.equatable()`. Il repliait `translations.keys.sorted().joined(separator: ",")` — **les
+clés, pas les valeurs**.
+
+Conséquence : une RETRADUCTION (`["fr": "Bonjour"] → ["fr": "Salut"]`) produit le hash identique.
+Le portillon renvoie `true`, SwiftUI n'appelle même pas `body`, et la ligne garde le texte d'avant
+**définitivement**. Le seul champ qui bougeait était le seul non replié.
+
+Le chemin produit qui le déclenche : `message:edit` lance `retranslateMessageAsync` (fire-and-forget,
+`MessageHandler:845`) puis fane l'aperçu (`:889`). Quand l'émission d'aperçu gagne la course contre
+la purge en base de `Message.translations`, elle porte la carte PÉRIMÉE sous la clé `fr` ; la
+retraduction atterrit 1–2 s plus tard sous la MÊME clé. Un lecteur francophone lit alors, dans sa
+liste, la traduction du texte d'AVANT l'édition.
+
+Hasher les clés suffisait tant que la carte n'arrivait qu'une fois par message, au fetch de liste.
+Le cycle 73 a levé cette hypothèse sans mettre le portillon à jour.
+
+## Le correctif
+
+Replier clé ET valeur, chacune combinée séparément (`Hasher.combine` par composant, pas une
+concaténation qui confondrait `["a": "bc"]` et `["ab": "c"]`), en itérant les clés TRIÉES —
+`Dictionary` n'a pas d'ordre d'itération stable, et un hash non déterministe ouvrirait le portillon
+au hasard, ce qui annulerait le gain de `.equatable()`.
+
+## Second trou du même contrat, fermé au passage
+
+`lastMessageLocation` n'était replié **nulle part** dans le fingerprint, alors que la ligne en compose
+son libellé — visuellement (`ThemedConversationRow`, branche `.standard`, quand un message
+position-seule a un `lastMessagePreview` vide par construction) comme dans son label VoiceOver. Le
+doc-comment du hash dit pourtant « mettre à jour ce hash quand un nouveau champ est affiché » : c'est
+une violation du contrat déclaré, pas une approximation. La PRÉSENCE est repliée en plus du nom — une
+position sans nom affiche quand même « Position », transition que `name` seul (nil des deux côtés)
+raterait.
+
+## Vérification
+
+- **8 témoins neufs** (`ConversationRenderFingerprintTests`), dont 3 volontairement non-discriminants
+  seuls (stabilité du hash, première traduction, langue ajoutée) : ils verrouillent ce qui ne doit
+  PAS changer, et c'est leur seule fonction.
+- **RED prouvé par inspection, pas par exécution** — aucune toolchain Swift dans ce conteneur Linux.
+  La preuve est déterministe et vérifiable à la lecture : `["fr":"Bonjour"]` et `["fr":"Salut"]`
+  rendent tous deux la chaîne `"fr"` par `keys.sorted().joined(separator: ",")`, et
+  `lastMessageLocation` n'apparaissait pas une seule fois dans l'ancienne fonction. GREEN est exécuté
+  par `sdk-tests.yml` en CI (macOS), seul chemin d'exécution disponible.
+
+### Le témoin de stabilité a fait EXACTEMENT son travail — première passe CI rouge
+
+La première rédaction de ce fichier partait vert à six témoins sur huit, et c'était faux.
+`MeeshyConversation.init` défaute `lastMessageAt` à `Date()`, champ **replié dans le hash** : deux
+instances construites séparément diffèrent donc TOUJOURS. Les trois témoins `_changes` passaient
+sans rien prouver — ils auraient passé sur le code d'AVANT le correctif.
+
+Seuls les deux témoins d'égalité (stabilité du hash, ordre d'insertion) pouvaient voir le problème,
+et ils l'ont vu. C'est la démonstration littérale de pourquoi un lot de témoins « non-discriminants
+seuls » n'est pas du remplissage : sans eux, ce fichier serait entré vert en verrouillant zéro
+comportement.
+
+Correctif du fichier de test : `lastMessageAt` épinglé à une date fixe, et toutes les variantes
+dérivées d'une seule fabrique paramétrée — seul le champ testé varie, par construction.
+
+## L'audit instruit par le cycle 73 est CLOS — aucun défaut
+
+Le cycle 73 laissait ouvert : « `emitConversationPreviewUpdate` et les autres émetteurs par room
+personnelle n'ont pas été audités contre la même clé `userId ?? id` ». Fait, par une recherche sur
+`ROOMS.user(` (≈40 sites). **Rien à corriger** :
+
+- Tous les fan-outs par participant passent par `participantUserRoomTargets` /
+  `emitToConversationParticipants` — `emitConversationPreviewUpdate` compris.
+- Les émetteurs qui adressent `ROOMS.user(userId)` en dur ciblent la room PROPRE de l'acteur
+  (reset de badge multi-device, accusés, requêtes d'amitié, `user:updated`), où `userId` vient de
+  `authContext.userId` — lequel vaut déjà `participant.id` pour un anonyme
+  (`middleware/auth.ts:444`), c'est-à-dire exactement la room que rejoint le socket anonyme.
+- `MessageReadStatusService._loadReadReceiptOptOuts` filtre sur `userId` seul à dessein : la
+  préférence est stockée sur `User`, un participant sans compte n'en a pas et reste visible.
+
+À ne PAS rouvrir sans fait neuf : la règle est portée par le type et par le helper, pas par la
+vigilance des call sites.
+
+## Reste ouvert après ce cycle
+
+- **Android ne décode pas le Prisme de la ligne de liste** — tête du cycle 74 conservée ci-dessous.
+  Toujours NON traité ici : le défaut vit entièrement dans `apps/android/`, lane d'une autre routine
+  (`tasks/lane-cursor.md`). Vérifié encore ce cycle : `grep -rn lastMessageTranslations apps/android`
+  ne rend toujours rien.
+- Le web n'a aucun `_seq` — tête instruite du cycle 75 ci-dessus.
+
+---
+
+# Cycle 74b — iOS n'écoutait pas `user:updated`, et le contrat rendait l'écoute inutile
+
+*Deux sessions ont tourné en parallèle sur le cycle 74. Celle-ci a travaillé sur une AUTRE
+surface (le profil public d'un contact, pas le Prisme de l'aperçu) : aucun fichier commun, rien
+à arbitrer. Les deux rapports sont conservés tels quels.*
+
+## Le défaut
+
+`emitUserUpdated` (`NotificationService:2858`) diffuse le profil public d'un
+utilisateur à TOUS ses contacts — quatre appelants dans `routes/users/profile.ts`
+(profil, avatar, bannière, handle). Le web l'applique
+(`use-socket-cache-sync.ts:1107`). **iOS n'avait aucun `socket.on("user:updated")`.**
+
+Surfaces figées côté iOS jusqu'au prochain refetch complet : la ligne de liste
+d'une conversation directe (`title`, `participantAvatarURL`, `participantBanner`),
+l'en-tête de conversation, `ForwardPickerSheet`, `GlobalSearchViewModel`,
+`ProfileSheetUser`.
+
+## Le contrat rendait l'écoute inutile
+
+Brancher un listener n'aurait pas suffi. Le nom RENDU est
+`displayName > « Prénom Nom » > username`, et un client ne stocke que le nom
+**déjà composé** (`MeeshyConversation.title`) — pas ses composants. Un delta
+partiel (« firstName vaut désormais Bob ») est donc **irrecomposable** chez le
+destinataire : il lui manque toujours les autres composants.
+
+Deux corrections possibles, une seule tenable :
+- *Résoudre côté serveur et envoyer un `resolvedDisplayName`* — écarté : cela
+  fabrique une QUATRIÈME copie de la règle (web, iOS, Android, serveur), qui
+  diverge silencieusement dès qu'un client change la sienne.
+- **Envoyer les quatre composants en GROUPE** — retenu : chaque client applique
+  SON résolveur, déjà écrit, déjà testé. Aucun nouveau champ dans le contrat.
+
+`null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ. Omettre la clé
+se lirait « inchangé » et figerait l'ancien nom — c'est le seul moyen de faire
+retomber l'affichage sur le composant suivant.
+
+Le chemin `PATCH /users/me/username` demandait en plus d'élargir son `select`,
+qui ne ramenait que `{ id, username }` : envoyer le groupe sans le sélectionner
+aurait produit trois `undefined`, c'est-à-dire un groupe qui ment. Un témoin
+verrouille le `select` lui-même, pas seulement l'emit.
+
+## Ce qui a été VÉRIFIÉ, pas déduit
+
+- **La présence de `username` est un marqueur de groupe FIABLE.** Les quatre
+  appelants de `emitUserUpdated` ont été lus : `avatar` et `banner` partent
+  seuls, le nom jamais. `hasNameGroup` peut donc se lire sur `changes.username`.
+- **Le nom recomposé côté socket suit la règle du chemin REST**, pas celle de
+  web. `title` d'une conversation directe est hydraté par
+  `APIConversationUser.name` (`displayName ?? username`, sans first/last).
+  Recomposer avec `displayName > « Prénom Nom » > username` aurait fait diverger
+  la ligne selon le transport qui l'a remplie — un utilisateur sans
+  `displayName` mais avec un prénom aurait vu son nom changer au rechargement.
+- **`avatar`/`banner` sont tri-états**, comme `LastMessagePreviewTranslations` :
+  clé absente ≠ `null`. Un `if let` sur la valeur aurait gardé l'ancienne image
+  après une SUPPRESSION d'avatar — le défaut inverse de celui corrigé.
+- **La liste persistée devait suivre.** Le store RAM seul laissait la ligne
+  redevenir périmée au prochain démarrage à froid. `ConversationSyncEngine`
+  délègue à la MÊME règle pure que le store, comme son jumeau
+  `applyingConversationUpdate`.
+
+## Vérification
+
+- 5 témoins gateway (dont 2 neufs) — **RED prouvé par mutation** : le stash du
+  seul `profile.ts` les fait tomber tous les cinq.
+- 12 témoins Swift neufs (8 sur la règle pure et son décodage, 1 sur l'actor,
+  1 sur le bridge, 2 sur les non-cibles groupe/autre-contact).
+- Suite Jest complète du gateway : **652 suites, 16429 tests, verte**.
+  `tsc --noEmit` gateway : vert. Le Swift est gaté par `sdk-tests` (pas de
+  toolchain Swift sur cette machine).
+
+## Suite du cycle — `main` est passé au ROUGE, puis au vert
+
+Le merge a cassé la compilation Swift : `ConversationSyncEngine` ne détient pas un
+`MessageSocketManager` mais un `MessageSocketProviding`, et le publisher n'était pas sur le
+protocole. Corrigé par `5fcd634c` (publisher ajouté au protocole + aux deux `MockMessageSocket`).
+
+**`sdk-tests` vert sur `main` (5fcd634c), `CI` vert.** Les 12 témoins Swift n'avaient RIEN prouvé
+à la première passe : une erreur de compilation tue le build avant que la moindre cible de test
+compile. Leçon 113.
+
+## Reste ouvert après ce cycle
+
+- **Le web a la même famille de défaut sur la LIGNE DE LISTE.** Son
+  `handleUserUpdated` n'invalide que `queryKeys.users.detail(userId)` ; la ligne
+  d'une conversation directe se nourrit du payload conversation, pas de cette
+  requête. À instruire en lisant d'où `ConversationList` tire le nom et l'avatar
+  d'un direct — pas en le déduisant. Non traité ici : une session parallèle
+  travaille sur `apps/web` (PR #2836).
+- **Android ne décode pas `user:updated` non plus** — lane d'une autre routine
+  (`tasks/android-parity-ios-debt-agent-prompt.md`), comme le Prisme de la ligne
+  de liste du cycle 73. Documenté, pas corrigé.
+- **`conversation:online-stats` est déclaré, écouté par le web, JAMAIS émis.**
+  Trouvé en balayant les 120 `SERVER_EVENTS` (émis gateway vs consommés
+  iOS/web). Le web y branche `onActiveUsersUpdate` depuis
+  `use-stream-socket.ts:244` — code mort tant que rien ne l'émet. À trancher :
+  l'émettre ou le supprimer. `conversation:stats` (émis, lui) alimente déjà la
+  même sortie, ce qui plaide pour la suppression.
+- Les points hérités restent tels quels — voir « Reste ouvert » du cycle 73
+  ci-dessous.
+
+---
+
+# Tête instruite pour le cycle 74 — Android ne DÉCODE pas le Prisme de la ligne de liste
+
+*Trouvé en instruisant le cycle 73, vérifié, NON corrigé : le défaut est réel et user-visible, mais
+il vit entièrement dans `apps/android/`, c'est-à-dire dans la lane d'une AUTRE routine
+(`tasks/android-parity-ios-debt-agent-prompt.md`, curseur `tasks/lane-cursor.md`). Le corriger ici
+aurait produit un conflit de fichiers avec une routine qui travaille sur les mêmes écrans.*
+
+## Le fait
+
+Le gateway sert `lastMessageTranslations` + `lastMessageOriginalLanguage` au niveau CONVERSATION,
+sur les trois chemins (`GET /conversations` → `routes/conversations/core.ts:678`, la recherche →
+`search.ts:277`, et le temps réel → `resolveLastMessagePreviewPrism`). Web les lit
+(`transformers.service.ts:490`, `use-socket-cache-sync.ts:75`), iOS les lit
+(`MeeshyConversation.resolvedLastMessagePreview`, `ConversationStore.merging`).
+
+**Android ne les déclare nulle part.** `ApiConversation` (`core/model/.../Conversation.kt:6`) n'a
+aucun des deux champs, `ApiConversationLastMessage` (`:55`) porte `content` et `originalLanguage`
+mais aucune traduction, et `lastMessagePreview()`
+(`feature/conversations/.../LastMessagePreview.kt:42`) rend `message.content` brut.
+
+L'asymétrie est interne à Android et c'est ce qui la rend coûteuse : le FIL applique le Prisme
+(`Message.resolvedContent` → `LanguageResolver.preferredTranslation`, `Message.kt:98`), la LISTE
+non. Un lecteur francophone voit donc « Hello » dans sa liste et « Bonjour » dès qu'il ouvre — la
+friction linguistique exacte que le principe produit interdit.
+
+## Ce que le cycle 74 doit faire
+
+1. Ajouter `lastMessageTranslations: Map<String, String>? = null` et
+   `lastMessageOriginalLanguage: String? = null` à `ApiConversation`.
+2. Un résolveur `resolvedLastMessagePreview` porté de `MeeshyConversation` (Swift) — **règle #3 du
+   Prisme** : parcourir les langues du lecteur DANS L'ORDRE, la première servie gagne, par une
+   traduction OU parce que le message est déjà écrit dedans. Ne jamais court-circuiter sur la
+   langue d'origine.
+3. Brancher `lastMessagePreview()` dessus, et le cache disque (`ConversationCacheSource.kt`) doit
+   persister les deux champs — sinon le démarrage à froid re-perd le prisme.
+4. La source socket : `conversation:updated` porte les deux champs par destinataire depuis le cycle
+   69, et depuis CE cycle il en porte aussi après une traduction. Android doit les appliquer au même
+   endroit que `lastMessagePreview`.
+
+---
+
+# Cycle 73 — Le Prisme de la ligne de liste dépendait de l'ORDRE D'ARRIVÉE
+
+## Le défaut
+
+`message:translation` n'est diffusé que dans `ROOMS.conversation(id)`
+(`MeeshySocketIOManager._handleTextTranslationReady`). Le rafraîchissement de la LIGNE DE LISTE,
+lui, n'existait pas : `conversation:updated` n'était émis que par l'envoi, l'édition, la
+suppression et l'épinglage. Or l'aperçu est servi **à l'envoi**, à un instant où la traduction
+n'existe pas encore — la traduction NLLB atterrit une à deux secondes plus tard, par ZMQ.
+
+Résultat : la carte `lastMessageTranslations` posée sur la ligne vaut `null` au moment où elle est
+servie, et **rien ne repasse jamais**. Un lecteur francophone garde « Hello » dans sa liste,
+indéfiniment, jusqu'à un rechargement complet.
+
+Ce qui rend le défaut coûteux, c'est qu'il est **conditionnel au parcours** : ouvrir la conversation
+traduit la ligne (le fil reçoit `message:translation`, le refetch de liste suivant réhydrate), ne
+pas l'ouvrir la laisse dans la langue de l'expéditeur. Le même compte, sur le même appareil, voit
+deux comportements selon ce qu'il a fait avant. « Le prisme s'applique à TOUT le contenu — previews
+comprises » : c'était la seule surface où il dépendait de l'ordre d'arrivée plutôt que des
+préférences du lecteur.
+
+## Le correctif
+
+Le chemin de traduction devient le **troisième appelant** de `emitConversationPreviewUpdate` — le
+fan-out qui existait déjà pour l'édition/suppression, avec son Prisme PAR destinataire, sa
+recomputation du dernier message non supprimé et son contrat best-effort. Aucune copie.
+
+Mais une traduction n'est pas une édition, et la différence est la moitié du travail : une édition
+change la ligne pour TOUT LE MONDE, une traduction ne la change que pour **les lecteurs de cette
+langue-là**, et seulement **tant que le message traduit est encore le dernier**. D'où
+`PreviewUpdateScope`, deux bornes optionnelles que les appelants d'édition ne passent pas :
+
+- `onlyIfLatestIs` — un message plus récent est arrivé pendant que la traduction volait ? Son propre
+  chemin d'envoi a déjà servi l'aperçu. Ré-émettre l'ancien ferait **RECULER** la ligne de liste,
+  c'est-à-dire pire que le défaut corrigé.
+- `onlyIfPreviewCarriesLanguage` — le test porte sur la carte SORTIE, pas sur les préférences en
+  entrée. C'est elle qui décide, et elle applique déjà les quatre exclusions de
+  `buildLastMessagePreviewTranslations` (hors prisme, langue d'origine, traduction chiffrée, texte
+  inexploitable). Un lecteur dont la carte ne bouge pas recevrait un payload **identique à l'octet
+  près** : le filtrer n'est pas une optimisation opportuniste, c'est la définition de « qui est
+  concerné par CETTE traduction ». Sans lui, une conversation à N langues paie N fan-outs complets
+  par message, sur le chemin le plus chaud du service.
+
+`updatedBy` est OBLIGATOIRE dans `ConversationUpdatedEventData` et une traduction n'a pas d'acteur
+humain. L'auteur du message traduit est la seule identité honnête à porter là — et c'est déjà le
+repli que le chemin d'envoi utilise (`senderUserId ?? message.senderId`). Les deux clients ignorent
+le champ (web le destructure et le jette, iOS le décode en optionnel).
+
+## Ce qui a été VÉRIFIÉ, pas déduit
+
+- **Les deux clients appliquent bien un `conversation:updated` dont seul le prisme a changé.** Le
+  payload garde le même `lastMessageId`, le même `lastMessagePreview`, le même `lastMessageAt` : un
+  client qui ne réagirait qu'au changement d'identité du dernier message l'avalerait.
+  - iOS : `ConversationStore.merging` compare `lastMessageAt >= conv.lastMessageAt` — **`>=`, pas
+    `>`**, et le commentaire dit pourquoi (une édition garde le `createdAt`). L'égalité passe, donc
+    tout le groupe d'aperçu est appliqué.
+  - Web : `normalizeConversationPatch` traite `lastMessageTranslations` comme une clé toujours
+    présente, `null` compris, et le cache applique `{ ...conv, ...patch }`.
+- **Le lecteur sur l'écran de liste EST joignable.** `AuthHandler._joinUserConversations` fait
+  rejoindre TOUTES les rooms de conversation à l'authentification — le lecteur reçoit donc bien
+  `message:translation`, mais aucun client ne s'en sert pour patcher la ligne de liste : iOS le
+  range dans `CacheCoordinator.cacheTranslation` (cache MESSAGE, jamais la liste), web ne l'écoute
+  que depuis `ConversationLayout`/`bubble-stream-page`, c'est-à-dire depuis la vue conversation. La
+  ligne de liste se nourrit exclusivement de `lastMessageTranslations`.
+
+## Vérification
+
+- **10 témoins neufs.** 6 sur `emitConversationPreviewUpdate` (la portée), 4 sur le manager (le
+  câblage).
+- **RED prouvé par mutation**, pas supposé : les deux gardes retirées ⇒ 3 témoins de portée rouges ;
+  l'appel au fan-out neutralisé ⇒ le témoin de câblage rouge.
+- Deux témoins de portée sont volontairement non-discriminants seuls (« fan-out normal quand le
+  message EST le dernier », « les appelants d'édition restent intacts ») : ils verrouillent ce qui
+  ne doit PAS changer, et c'est leur seule fonction.
+- `tsc --noEmit` du gateway : vert. Suite Jest complète du gateway : verte.
+
+## Reste ouvert après ce cycle
+
+- **Android ne décode pas le Prisme de la ligne de liste** — tête instruite du cycle 74 ci-dessus.
+  Lane d'une autre routine, pas un arbitrage.
+- **Le coût des deux requêtes quand la garde `onlyIfLatestIs` échoue.** Le helper interroge
+  participants et dernier message EN PARALLÈLE, puis abandonne. Sérialiser (dernier message d'abord,
+  bail, puis participants) économiserait la requête participants sur ce chemin-là mais ralentirait
+  l'appelant DOMINANT (l'édition, où les deux sont toujours nécessaires). Arbitrage assumé en faveur
+  du chemin dominant ; mesuré ici pour que le prochain cycle n'ait pas à le redécouvrir.
+- **Le chemin AUDIO n'est pas touché.** Une transcription/traduction audio ne change pas
+  `Message.content` — l'aperçu d'un vocal est un libellé de type, pas un texte. À revérifier si
+  l'aperçu venait un jour à porter la transcription.
+- Les points hérités restent tels quels — voir « Reste ouvert » du cycle 72 ci-dessous.
+
+---
+
+# Tête instruite (cycle 73, NON traitée) — la fenêtre de transition dépasse la moitié du slide le plus court
+
+*Reportée telle quelle : c'est un arbitrage PRODUIT, et cette routine tourne sans personne pour le
+trancher. Elle reste intégralement valable pour le prochain cycle qui disposera d'un avis produit.*
+
+*Trouvé en corrigeant le cycle 72, mesuré, NON corrigé : contrairement aux deux défauts de ce
+cycle-là, celui-ci demande un arbitrage produit, pas un correctif mécanique. L'arithmétique est
+faite ; la décision ne l'est pas.*
+
+## Le fait
+
+`StoryComposerViewModel+Slides.currentSlideDuration` borne la durée d'un slide à
+`max(2, min(600, …))` — **2 secondes minimum**. `StoryRenderer.slideTransitionDuration` vaut
+désormais **1,2 s**, partagée par l'ouverture ET la fermeture.
+
+Sur un slide de 2 s :
+- l'ouverture court de `0` à `1,2` ;
+- la fermeture ouvre à `2,0 − 1,2 = 0,8`.
+
+**Les deux fenêtres se chevauchent sur 0,4 s**, et le slide n'a aucun instant où il est simplement
+lui-même. Le seuil est `2 × 1,2 = 2,4 s` : tout slide plus court chevauche. À 0,5 s le seuil valait
+1 s, sous le plancher de 2 s — le chevauchement était donc *impossible* avant `fcd002ee`. C'est une
+conséquence non instruite du passage à 1,2 s, pas une dette ancienne.
+
+## Ce que le cycle 72 a fait, et pourquoi il s'est arrêté là
+
+Le correctif du chevauchement des *animations* (`clearOpeningFill`) ne retire l'entrée qu'à partir
+de `progress > 0`, donc à `0,8 s` sur un slide de 2 s — au milieu d'une ouverture qui en est aux
+deux tiers. Le saut est réel : opacité ~0,67 → ~1,0 d'une frame à l'autre. Il est **moins grave que
+le défaut qu'il remplace** (une fermeture jamais jouée), et c'est le seul arbitrage que le cycle 72
+s'est autorisé sans instruction.
+
+## Les trois options, et ce qu'elles coûtent
+
+1. **Relever le plancher de durée à `2 × slideTransitionDuration`** (2,4 s). Une ligne, dérivée de
+   la SSOT, aucune régression de rendu. Coût : refuse une durée que des slides existants portent
+   déjà en base — il faut décider ce qu'on fait des projets déjà enregistrés à 2 s.
+2. **Comprimer la fenêtre de sortie dans ce qui reste** :
+   `start = max(slideTransitionDuration, totalDuration − slideTransitionDuration)` et normaliser la
+   rampe sur `totalDuration − start`. Aucun slide refusé, mais **`closingProgress` change de
+   contrat** — et `StoryAVCompositor` doit suivre au même instant, sinon l'export re-diverge de
+   l'aperçu, exactement le défaut n°2 du cycle 72 sous une autre forme.
+3. **Ne rien faire et l'assumer** : un slide de 2 s avec entrée ET sortie est un cas que l'auteur
+   a construit à la main ; le saut est visible mais borné.
+
+**Ne pas trancher ça sans l'avis produit.** Les options 1 et 2 sont toutes deux défendables et
+n'ont pas le même effet sur les stories déjà publiées.
+
+## Ce qui reste vrai de la contrainte d'environnement
+
+`ios-tests.yml` reste hors de portée de cette routine (`403 Resource not accessible by
+integration` — pas de `actions: write`). **`sdk-tests.yml` tourne sur les PR** et a gaté les deux
+correctifs du cycle 72, y compris le Swift de production : c'est le seul gate Swift disponible, et
+il suffit dès que le code vit dans `packages/MeeshySDK`. Seule la couche `apps/ios` reste aveugle.
+
+---
+
+# Cycle 72 — Deux défauts sur la même surface : `main` redevient vert, et l'aperçu cesse de mentir sur l'export
+
+## Le fil instruit, tenu jusqu'au bout
+
+Le cycle 71 laissait une tête entièrement instruite : `sdk-tests` rouge sur `main`, cause prouvée
+par l'arithmétique, correctif décrit, « mécanique pour qui dispose d'un Mac ». Elle avait raison sur
+tout **sauf sur la contrainte** : le cycle 71 s'était interdit d'écrire ce Swift faute de pouvoir le
+compiler. Or `sdk-tests.yml` tourne **sur les PR**. Le gate existait ; il n'avait pas été reconnu
+comme tel pour du code de production.
+
+C'est la leçon dominante du cycle, et elle vaut au-delà de ce correctif : **la question n'est pas
+« puis-je compiler ici ? » mais « existe-t-il un gate qui compile ceci ? »**. Les deux réponses ont
+divergé pendant cinq cycles.
+
+## Défaut n°1 — huit témoins figés sur une durée qui a bougé
+
+`fcd002ee` fait passer `StoryRenderer.slideTransitionDuration` de 0,5 à 1,2 s. Il a relevé la borne
+de `StoryOpeningParityTests` mais laissé, dans deux autres fichiers, des instants d'échantillonnage
+choisis pour la fenêtre précédente. Aucun comportement n'avait changé : la rampe est toujours nulle
+avant la fenêtre, linéaire dedans, plafonnée après. **Seuls les témoins mentaient.**
+
+Recaler les littéraux sur 1,2 s aurait « marché » et re-cassé au prochain ajustement — c'est la
+deuxième fois que cette constante bouge, et la deuxième fois qu'elle laisse des témoins rouges
+décrivant un comportement inchangé. Les instants s'expriment donc en fonction de la SSOT
+(`totalDuration − window`, `− window / 2`), et les valeurs dérivées aussi (`zoomTransitionScale`,
+`slideTransitionTravelFraction`).
+
+Contrepartie assumée : `test_badgeWidth_matchesSlideTransitionDuration` devient **tautologique** une
+fois lié à la SSOT — l'implémentation est littéralement l'expression attendue. Deux témoins lui
+rendent sa portée, tous deux indépendants de la durée : la largeur reste celle de la FENÊTRE et non
+celle du slide (la régression que le commentaire de la lane documente), et elle respire avec le zoom.
+
+## Défaut n°2 — celui que le premier a fait apparaître
+
+En relisant `StoryRenderer` pour dériver les instants, une asymétrie s'est vue : `applyOpening` pose
+des `CABasicAnimation` (`fillMode = .forwards`, `isRemovedOnCompletion = false`) là où `applyClosing`
+écrit des valeurs **modèle**. Un remplissage `.forwards` non retiré recouvre la valeur modèle — donc
+la fermeture est calculée, stockée, et jamais vue.
+
+Vérifié, pas déduit : **zéro `removeAnimation` dans tout `MeeshyUI`**, et `rootLayer` est un `let`
+stocké que `rebuildLayers()` ne remplace pas. Le remplissage vit aussi longtemps que le canvas.
+
+Le balayage des trois chemins de rendu a donné la portée exacte — et c'est elle qui rend le défaut
+coûteux :
+
+| Chemin | Touché | Pourquoi |
+|---|---|---|
+| **Aperçu du composer** | **oui** | seul chemin qui traverse `applyOpening` (transition `edit → play`) |
+| Lecteur | non | canvas né en `.play` ; `self.mode = mode` dans l'`init` ne déclenche pas les observateurs — fait déjà consigné par `StoryOpeningParityTests` |
+| Export MP4 | non | `applyStaticOpening` n'écrit que des valeurs modèle, `layer.render(in:)` n'exécutant pas le moteur d'animation |
+
+**La surface où l'auteur vérifie ses transitions est la seule qui les avale.** L'aperçu mentait sur
+l'export.
+
+Le conflit se joue par **keyPath**, pas par effet : `.zoom` et `.slide` écrivent tous deux
+`sublayerTransform`, donc une entrée `.zoom` masque une sortie `.slide` aussi sûrement que la sienne.
+Le retrait est en conséquence chirurgical (une entrée `.fade` sous une sortie `.zoom` est laissée
+en place) et ne se déclenche qu'à `progress > 0`, pour ne pas tronquer une entrée encore en vol.
+
+## Vérification
+
+- **7 témoins neufs**, dont **3 rouges avant** le correctif n°2 (`dropsTheOpeningFadeFill`,
+  `dropsTheOpeningZoomFill`, `dropsEveryOpeningFillOnTheRootLayer`) ; les 2 autres verrouillent ce
+  qui ne doit PAS être retiré (`keepsTheOpeningFill` avant la fenêtre, `keepsTheUnrelatedOpeningFade`).
+- Les témoins portent sur `animation(forKey:)` et non sur le pixel : `presentationLayer()` exige un
+  render server qu'aucun test unitaire n'a, et le remplissage attaché **est** le défaut.
+- Gate : `sdk-tests.yml` sur la PR #2826 — compile et exécute `MeeshyUITests`, code de production
+  compris.
+
+## Reste ouvert après ce cycle
+
+- **La fenêtre de transition dépasse la moitié du slide le plus court** — tête instruite du cycle 73
+  ci-dessus. Arbitrage produit, pas correctif mécanique.
+- **`ios-tests.yml` reste hors de portée** (`403`, pas de `actions: write`). Inchangé depuis le
+  cycle 68 — mais la portée réelle de cette dette s'est réduite : tout ce qui vit dans
+  `packages/MeeshySDK` est gatable par PR. Seule la couche `apps/ios` reste aveugle.
+- **`eslint` ne peut toujours pas tourner sur le gateway** (aucun `eslint.config.js` depuis ESLint
+  v9). Condition préexistante, non couverte par la CI.
+- Les points hérités des cycles précédents restent tels quels : `@Display Name` inextractible dans
+  le domaine social, `createStoryCommentNotificationsBatch` et son `visibility?` optionnel, les deux
+  scripts de réparation base en attente d'exécution humaine, l'arbitrage `delete-for-me` du cycle 12.
+
+---
+
+# Tête instruite pour le cycle 72 — `sdk-tests` est ROUGE sur `main`, cause trouvée et prouvée
+
+# Cycle 71b — L'effectif était AUSSI faux à la SOURCE (session parallèle, intégrée)
+
+*Deux sessions ont traité la tête du cycle 71 en même temps, et sont tombées sur la MÊME racine —
+un nom d'événement pour deux faits. Celle-ci a rebasé sur l'autre plutôt que de la doubler. Ce
+qui suit ne garde de ce côté-ci que ce que l'autre n'avait pas, et dit pourquoi.*
+
+## Ce qui a été REPRIS de l'autre session, et pourquoi c'est meilleur
+
+- **Un événement dédié (`conversation:participant-joined`) plutôt qu'un champ discriminant.**
+  Cette session distinguait les deux sens de `conversation:joined` par la PRÉSENCE de
+  `memberCount` dans le payload. Ça marche, mais ça fait porter une sémantique à une option, et
+  ça élargit l'audience d'un événement que des clients déployés écoutent déjà. Un nom distinct
+  ne demande rien à personne : `conversation:joined` reste intact, room et payload compris, et
+  un témoin le fige. **Repris, et le `memberCount` de `ConversationParticipationEventData` a été
+  RETIRÉ** — il y aurait entretenu l'idée que cet événement parle d'appartenance.
+- **`conversation:left` est le MÊME piège, et cette session ne l'avait pas vu.** L'autre l'a
+  trouvé : un seul émetteur, `socket.emit` après `socket.leave(room)`, c'est-à-dire la FERMETURE
+  d'un fil. Le web y décrémentait — un membre en moins à chaque fermeture. Les deux erreurs se
+  compensaient en partie, ce qui les cachait.
+- **L'arrivant écarté de l'éventail** : son effectif lui vient de `conversation:new`, qui le
+  compte déjà.
+
+## Ce qui reste de CE côté-ci, parce que l'autre session ne l'avait pas
+
+1. **La colonne `memberCount` est MORTE, et deux routes en dépendaient.** C'est le défaut le plus
+   grave des deux, et il est en amont de tout le travail temps réel : le compteur que l'autre
+   session vient de maintenir correctement en direct partait, sur la LISTE, d'une valeur qui vaut
+   `0` pour toute conversation créée depuis la migration héritée. Détail ci-dessous.
+2. **Le bannissement et la levée n'atteignaient pas non plus les écrans de liste.** L'autre
+   session a élargi départ, retrait et ajout ; `ban.ts` était resté thread-only.
+3. **L'effectif absolu dans le payload.** L'autre session laisse les clients faire ±1. Un delta
+   ne converge pas — détail ci-dessous — et le total ne coûte rien : il est lu sur la requête qui
+   sert déjà à nommer les rooms. Porté par les quatre événements d'appartenance, y compris le
+   nouveau `conversation:participant-joined`.
+
+
+## La question posée par le cycle 70, et sa réponse
+
+Le cycle 70 instruisait : *avant d'élargir l'audience des trois émetteurs de
+`participants.ts`, établir si la ligne de liste rend quelque chose qui dépende de ces faits.*
+
+**Elle en rend.** `ThemedConversationRow.swift` :
+- `:351` badge de groupe, affiché sous condition `conversation.memberCount > 1` ;
+- `:66` intensité visuelle, `min(memberCount / 50, 1)` ;
+- et surtout `ConversationContext(… memberCount:)` → `DynamicColorGenerator`, où l'effectif
+  pilote le **saturation boost** de la couleur d'accent (`min(memberCount / 100, 1) × 0.2`).
+
+C'est cette vérification qui a trouvé le vrai défaut, et il n'était pas où le cycle 70 le
+cherchait : **l'effectif était déjà faux avant tout événement.**
+
+## Défaut 1 — `Conversation.memberCount` est une colonne MORTE, et deux routes en dépendaient
+
+`memberCount Int @default(0)` existe dans le schéma. Le gateway ne l'écrit **nulle part** :
+la seule écriture du dépôt est `migrations/migrate-from-legacy.ts`, qui recopie la valeur du
+document hérité. Aucun `conversation.create` ne la pose, aucun `update` ne la maintient.
+
+Toute conversation créée par le code actuel porte donc `0` à vie. Or :
+
+| Route | Ce qu'elle servait |
+|---|---|
+| `GET /conversations` (LISTE) | la colonne → **0** |
+| `GET /conversations/:id` (DÉTAIL) | `_count` filtré `isActive` → l'effectif réel |
+| `GET /conversations/search` | `_count` filtré → l'effectif réel |
+| `GET /admin/users/:id/conversations` | la colonne → **0** |
+
+Deux réponses portaient le même nom de champ pour deux valeurs différentes. Conséquences
+visibles, et elles n'ont pas la signature d'un bug de compteur :
+- le badge de groupe iOS ne s'affiche JAMAIS sur la liste (`0 > 1` est faux) ;
+- **la couleur d'accent d'une conversation change quand on l'ouvre** — saturation 0 sur la
+  liste, saturation réelle sur le fil. La règle « toute la surface d'une conversation utilise
+  `accentColor` » était respectée partout ; c'est son entrée qui divergeait ;
+- côté web, `transformers.service.ts` faisait `memberCount || _count?.participants ||
+  participants.length` : le `0` tombait sur le repli, et la liste n'envoie que 5 participants —
+  un groupe de 200 s'affichait « 5 ».
+- l'écran admin annonçait « 0 membres » sur toute conversation post-migration.
+
+Le fragment `_count` est hissé en `utils/active-member-count.ts` et partagé par le détail, la
+liste et l'admin. Il vit dans son propre module et non dans `core.ts` : l'écran admin peut le
+consommer sans importer un module de routes entier — l'import qui traîne ses dépendances
+jusque dans les doubles jest des suites voisines est exactement la leçon 93.
+
+## Défaut 2 — `conversation:joined` porte DEUX sens (trouvé des DEUX côtés ; c'est la forme de l'AUTRE session qui reste)
+
+`SERVER_EVENTS.CONVERSATION_JOINED` est émis par :
+- `routes/conversations/participants.ts:377` — « untel devient membre » (diffusion) ;
+- `socketio/handlers/ConversationHandler.ts:144` — « ton socket vient d'entrer dans la room »,
+  un accusé adressé au SEUL socket qui rejoint, réémis à **chaque ouverture de conversation**
+  et à chaque reconnexion.
+
+`use-socket-cache-sync.ts` faisait `memberCount + 1` sur cet événement. **Ouvrir cinq fois le
+même fil ajoutait cinq membres au compteur de la ligne de liste**, et `staleTime: Infinity`
+ne relit jamais de lui-même pour corriger. C'est un défaut vivant, reproductible sans réseau
+dégradé ni concurrence.
+
+Aucun client ne pouvait faire mieux : rien dans le payload ne distinguait les deux sens.
+
+**Le correctif retenu est celui de l'autre session** — un événement dédié
+`conversation:participant-joined`, `conversation:joined` laissé strictement intact. Cette session
+proposait de discriminer par la présence de `memberCount` ; c'est moins bon, et le champ a été
+retiré de `ConversationParticipationEventData` pour ne pas laisser croire l'inverse. L'autre
+session a en outre trouvé le jumeau que celle-ci avait manqué : `conversation:left` est lui aussi
+un accusé de ROOM, et le web y décrémentait à chaque fermeture de fil.
+
+## Le correctif — un effectif ABSOLU dans le payload, pas un delta
+
+Les quatre transitions d'appartenance (`participants.ts` ajout et retrait, `leave.ts`,
+`ban.ts` ban et unban) portent désormais `memberCount`, compté APRÈS l'écriture, sur la même
+requête qui sert déjà à nommer les rooms — aucune requête supplémentaire.
+
+C'est ce qui rend l'effectif **convergent**, et c'est le point de fond du cycle :
+- un delta ne se rattrape jamais d'un événement manqué (hors room, hors ligne, trou de
+  reconnexion), et les deux clients PERSISTENT la dérive — cache disque iOS
+  (`schedulePersist`), `staleTime: Infinity` côté web ;
+- un compte absolu se rattrape à l'événement suivant ;
+- il tranche `membershipEnded` / `membershipRestored` de lui-même : bannir un ex-membre ne
+  retire personne, donc le compte est simplement inchangé. Les drapeaux restent pour les
+  clients qui décomptent encore ;
+- **et il sépare les deux sens de `conversation:joined`** : seul l'événement d'appartenance
+  le porte. Son absence n'est pas « serveur ancien » mais « cet événement ne parle pas
+  d'appartenance » — le web ne touche donc plus au compteur sur l'accusé de room.
+
+## Le correctif — l'audience, comme au cycle 70
+
+Départ, retrait, bannissement, levée et ajout passent par `emitToConversationParticipants` :
+rooms personnelles des membres ACTIFS comprises. Le commentaire de `participants.ts` nommait
+pourtant « ConversationListViewModel count » depuis sa création — l'intention était écrite, et
+l'audience la contredisait.
+
+Aucune question de confidentialité : l'audience passe de « les membres qui ont le fil ouvert »
+à « les membres », soit les mêmes personnes sur d'autres sockets.
+
+La liste des membres restants est lue APRÈS l'écriture, donc la personne retirée ou bannie en
+est naturellement absente — elle n'apprend pas son retrait par une ligne de liste qui se
+décrémente, mais par la notification que la route lui envoie déjà. À l'inverse, une levée de
+bannissement qui RESTAURE l'appartenance remet la cible dans l'audience : elle apprend son
+retour sur sa propre ligne de liste, ce que la room de conversation ne pouvait pas lui dire.
+Le commentaire de `ban.ts` qui justifiait l'ordre « rebrancher AVANT de diffuser » par
+« la diffusion ne va qu'à la room de conversation » est devenu faux : il est corrigé, pas
+supprimé — l'ordre garde une raison (aucun événement de room manqué entre les deux).
+
+## `PARTICIPANT_ROLE_UPDATED` reste thread-only, et c'est écrit dans le code
+
+Le troisième émetteur du balayage du cycle 70. Vérifié plutôt que supposé : aucun écran de
+liste ne rend un rôle. Les consommateurs sont `use-participants.ts` (web) et `ParticipantsView`
+(iOS), qui ne vivent que le fil ouvert. Élargir ferait payer une diffusion par changement de
+rôle sans rien mettre à jour. La note est dans le code, pour que le cycle 72 ne refasse pas
+l'enquête.
+
+## Témoins
+
+- liste : l'effectif vient du `_count` et non de la colonne ; le `select` demande bien le
+  compte filtré `isActive` ; `_count` ne fuit pas dans la réponse ;
+- admin : même chose, sur la route d'un autre module ;
+- ajout de membre : les rooms personnelles sont adressées — y compris celle d'un participant
+  SANS compte, nommée par son `Participant.id` — et le payload porte l'effectif absolu ;
+- départ : idem, et le compte est celui des restants ;
+- web : l'accusé de room (sans `memberCount`) ne touche plus au compteur, même répété ;
+  l'événement d'appartenance POSE la valeur ; et un `memberCount: 2` sur un cache à 5 rend 2 —
+  c'est la propriété de rattrapage, qu'un décrément (qui rendrait 4) ne peut pas avoir.
+
+Le double `io` des suites touchées CHAÎNE désormais (`__tests__/helpers/chainable-io.ts`,
+extrait de `recordEmitChains`) : `io.to(fil).to(perso).emit()` est la forme de production, et
+un double qui casse dessus décrit un autre programme. `expect(io.to).toHaveBeenCalledWith(room)`
+ne prouvait de toute façon pas que la room appartenait à la chaîne qui a émis.
+
+Un défaut de fixture trouvé en passant : `conversations-ban.test.ts` faisait
+`{ participant: { …défauts, ...overrides.participant }, ...overrides }` — le second spread
+réécrasait `participant` en entier, annulant la fusion par clé que le premier prétendait faire.
+
+## Ce que ce cycle NE fait pas
+
+- **iOS**. Aucune chaîne Swift dans ce conteneur, et `ios-tests.yml` reste indéclenchable
+  depuis cette routine (`403 Resource not accessible by integration` — pas d'`actions: write`).
+  Le client iOS continue de faire ±1 ; il reçoit désormais un `memberCount` qu'il ignore.
+  C'est la tête du cycle 72, et elle est maintenant sans risque : le serveur est correct et
+  se décrit lui-même.
+- **La colonne morte elle-même**. Elle reste dans le schéma. Plus aucune route du gateway ne
+  la lit ; `services/agent/src/scheduler/eligible-conversations.ts` la recopie encore dans un
+  champ que rien ne consomme.
+
+---
+
+
+# Cycle 71 — L'effectif d'une conversation cesse de mentir : un événement pour l'adhésion, une audience pour les listes
+
+## Contrainte d'environnement — inchangée depuis le cycle 68
+
+Conteneur Linux distant : aucune chaîne Swift (`swift: command not found`), aucun SDK Android,
+`node_modules` absent au démarrage. Les trois commandes de la leçon 102 se réutilisent telles
+quelles (`bun install --ignore-scripts`, `prisma generate --generator client`, `shared: bun run build`).
+
+**Le premier geste instruit par le cycle 70 — « faire tourner `ios-tests.yml` sur `main` » — reste
+impossible** : l'intégration GitHub de cette routine n'a pas `actions: write`, et le workflow ne se
+déclenche autrement que sur push vers `dev`. La dette est donc reportée telle quelle. Ce cycle la
+limite autrement : **la moitié la plus grave du défaut a été trouvée sur le WEB**, qui est gaté par
+jest ici. Le Swift écrit reste ungatable, mais il n'est plus la seule preuve.
+
+## Le fil instruit : trois émetteurs thread-only de `participants.ts`
+
+Le cycle 70 demandait d'ÉTABLIR, avant d'écrire, si la ligne de liste rend quelque chose qui dépende
+de ces trois faits. Réponse, vérifiée dans le code des deux clients :
+
+- **Oui pour l'adhésion et le départ.** iOS `ThemedConversationRow:351` rend `conversation.memberCount`,
+  et web `use-socket-cache-sync` le tient dans le cache React Query.
+- **Non pour le rôle.** `PARTICIPANT_ROLE_UPDATED` n'a que des consommateurs d'écrans de participants,
+  tous ouverts DANS la conversation. Il reste thread-only, et la raison est désormais **écrite dans le
+  code** (`participants.ts`) plutôt que redécouverte au cycle 72, exactement comme demandé.
+
+## Le vrai défaut, plus grave que l'audience : `conversation:joined` porte DEUX faits
+
+C'est la découverte du cycle, et elle ne se déduisait pas du balayage des rooms.
+
+`conversation:joined` est émis à deux endroits, avec **le même nom et le même payload
+`{conversationId, userId}`** :
+- `ConversationHandler:144` — ack **self-only** d'un socket qui vient de REJOINDRE LA ROOM, produit
+  à **chaque ouverture de fil**, et qui ne change aucune appartenance ;
+- `participants.ts:377` — diffusion d'une **adhésion réelle**.
+
+Un client ne peut pas les distinguer. Conséquences mesurées dans chaque client :
+
+1. **Web — le compteur grossissait d'une unité à chaque ouverture du fil.** `handleConversationJoined`
+   faisait `memberCount + 1` sur l'ack. Trois ouvertures affichaient un groupe de 4 comme un groupe
+   de 7, et `staleTime: Infinity` ne relit jamais la valeur d'elle-même. C'est un défaut visible,
+   quotidien, et il vivait dans le code gaté.
+2. **iOS — le compteur ne pouvait que décroître.** Aucun `+1` n'existait (précisément parce qu'il
+   aurait compté les ouvertures), alors que départ, retrait et bannissement soustraient tous. Dérive
+   monotone vers le bas, **persistée** par `schedulePersist` dans le cache disque.
+
+Les deux symptômes sont opposés et ont la même racine : un nom d'événement pour deux faits.
+
+### Et le pendant, trouvé en corrigeant le premier : `conversation:left`
+
+Une fonction plus bas dans le MÊME fichier web, `handleConversationLeft` **décrémentait**
+`memberCount` sur `conversation:left` — qui n'a qu'un seul émetteur, `socket.emit` après
+`socket.leave(room)` (`ConversationHandler.handleConversationLeave`). C'est la FERMETURE d'un fil,
+jamais un départ.
+
+Les deux erreurs se compensaient **en partie**, ce qui les a cachées — et c'est précisément ce qui
+rendait la correction partielle dangereuse : retirer le `+1` sans retirer le `-1` aurait transformé
+une dérive à peu près nulle en **une soustraction nette par fermeture de fil**. Elles ne se
+compensaient d'ailleurs jamais exactement : une reconnexion socket rejoint la room sans avoir émis
+de `leave`, l'appli fermée n'en émet pas non plus, et la soustraction était bornée à 0 quand
+l'addition ne l'était pas. Les deux handlers ne gardent désormais que leur invalidation.
+
+iOS n'était pas exposé : ni `ConversationSyncEngine` ni `ParticipantsView` ne touchent l'effectif
+sur `conversationLeft`.
+
+## Le correctif : séparer les faits, puis élargir l'audience
+
+`conversation:participant-joined` — nouvel événement, **symétrique de `conversation:participant-left`
+jusque dans son payload** (`{conversationId, userId, displayName, joinedAt}`).
+
+- `conversation:joined` **n'est pas touché** : même émetteur, même room, même payload. Les
+  consommateurs existants (ParticipantsView, ConversationSyncEngine, web) ne bougent pas, et aucun
+  client déployé ne régresse. Un témoin le fige.
+- Web : `handleConversationJoined` perd son `+1` et ne garde que l'invalidation, légitime dans les
+  deux lectures. Le `+1` passe sur le nouvel événement.
+- iOS : nouveau `participantJoined` (SDK) et `+1` dans `ConversationListViewModel`.
+- **Le nouvel arrivant est écarté de l'éventail, des DEUX côtés.** Le serveur l'omet
+  (`NOT: { userId }`) ; le client écarte aussi sa propre identité, parce que l'auto-join de room
+  côté serveur est asynchrone et pourrait le faire entrer dans la room avant l'emit. Son effectif
+  lui vient de `conversation:new`, qui le compte déjà — l'incrémenter le mettrait en trop.
+
+Et l'audience, comme au cycle 70 : `leave.ts`, le retrait et l'ajout passent tous par
+`emitToConversationParticipants` — chaînage des rooms (au plus une copie par socket), room d'un
+participant sans compte nommée par son `Participant.id`, membres inactifs écartés. **La room de
+conversation reste en tête de chaîne** : elle porte le partant / le retiré, encore dedans à cet
+instant (l'éviction vient après l'emit), donc leur propre signal est strictement inchangé.
+
+## Témoins
+
+- gateway `participants-membership-fanout.test.ts` (5) : la chaîne de rooms de l'ajout et du
+  retrait, l'exclusion du nouvel arrivant, le payload symétrique, et `conversation:joined` figé sur
+  la seule room du fil ;
+- gateway `leave.test.ts` (+2) : la chaîne du départ, et le fait que l'éventail ne lise que les
+  membres ACTIFS. Le test socket qui existait n'assertait rien du tout sur l'audience ;
+- web `use-socket-cache-sync.test.tsx` (+4) : le `+1` sur le nouvel événement, et surtout **trois
+  `conversation:joined` d'affilée qui laissent l'effectif à 4**, plus deux `conversation:left` qui
+  le laissent à 4 également — les deux défauts web exactement ;
+- web `presence.service.test.ts` (+1) : le relais du nouvel événement ;
+- iOS `ConversationListViewModelTests` (+3) : `+1`, garde sur soi-même, et le `-1` du départ qui
+  n'avait aucun témoin jusqu'ici. **Non exécutés** (pas de chaîne Swift ici).
+
+---
+
+
+# Tête instruite pour le cycle 72 — `sdk-tests` est ROUGE sur `main`, cause trouvée et prouvée
+
+*Découvert en gatant le cycle 71, diagnostiqué mais NON corrigé : le correctif est du Swift que ce
+conteneur ne peut ni compiler ni exécuter, et la leçon 95 condamne précisément d'en poser sur `main`
+sans gate. Ce qui suit rend la correction mécanique pour qui dispose d'un Mac — l'arithmétique est
+déjà faite.*
+
+## Le fait
+
+`sdk-tests.yml` échoue sur `main` : **8 échecs / 7017 succès / 35 ignorés** — chiffres et valeurs
+**identiques** sur la PR #2817, donc totalement indépendants d'elle (c'est ce qui a autorisé son
+merge). Déterministe, pas un flake : les mêmes valeurs octet pour octet à deux runs distants de 2 h.
+
+Fenêtre de régression : run `b100ccfd1` (04:05) **vert** → run `9477dd74` (07:25) **rouge**.
+
+## La cause, prouvée
+
+`fcd002ee` — *« feat(story): allonge les interludes de lecture à 1,2 s »* — fait passer
+`StoryRenderer.slideTransitionDuration` de **0.5 à 1.2**. Ce commit a relevé la borne de
+`StoryOpeningParityTests` (1.0 → 1.5), mais **a oublié `StoryClosingTests` et
+`TransitionChromeLaneTests`**, qui codent en dur des valeurs dérivées de 0,5 s.
+
+L'arithmétique referme le dossier sans compilateur :
+
+- `test_badgeWidth_matchesSlideTransitionDuration` attend `25.0`, obtient `60.0`.
+  **60 / 25 = 2,4 = 1,2 / 0,5.** La largeur du badge est proportionnelle à la durée.
+- `test_closingProgress_beforeWindow_returnsZero` : `closingProgress(totalDuration: 6.0, at: 5.5)`.
+  Avec 0,5 s la fermeture commence à `6,0 − 0,5 = 5,5` ⇒ progress 0. Avec 1,2 s elle commence à
+  `4,8` ⇒ `(5,5 − 4,8) / 1,2 = 0,58333…` — **exactement la valeur observée** `0.5833333333333335`.
+- `test_closingProgress_midWindow_returnsLinearRamp` : `at: 5.75` ⇒ `(5,75 − 4,8) / 1,2 = 0,79166…`
+  — **exactement** `0.7916666666666669`.
+
+Les 5 autres (`applyClosing_fade/reveal/slide/zoom`, `simulateTickAt_fadeClosingInsideWindow`)
+échouent par le même mécanisme : un instant d'échantillonnage choisi pour une fenêtre de 0,5 s.
+
+## Le correctif à écrire
+
+**Lier les témoins à la SSOT plutôt que de recaler des littéraux** — exactement ce que l'auteur de
+`fcd002ee` a fait pour `StoryOpeningParityTests`. Les instants d'échantillonnage s'expriment en
+fonction de `StoryRenderer.slideTransitionDuration` :
+
+- « avant la fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration` (progress 0) ;
+- « mi-fenêtre » ⇒ `at: totalDuration - StoryRenderer.slideTransitionDuration / 2` (progress 0,5) ;
+- largeur de badge ⇒ dériver de la même constante.
+
+Recaler les littéraux sur 1,2 s « marcherait » et **re-casserait au prochain ajustement de durée** —
+c'est la troisième fois que cette constante bouge. Fichiers :
+`packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Animation/StoryClosingTests.swift` et
+`.../Timeline/Views/TransitionChromeLaneTests.swift`.
+
+## Ce que ce cycle n'a PAS pu faire, et ce qu'il faudrait
+
+`ios-tests.yml` reste hors de portée de cette routine (`403 Resource not accessible by integration`
+— pas de `actions: write`). **`sdk-tests.yml`, lui, tourne sur les PR** : c'est le seul gate Swift
+dont cette routine dispose, et il a bien servi au cycle 71 — les 7017 tests verts incluent les tests
+de cache du SDK qui consomment `MockMessageSocket`, donc la moitié SDK du cycle a bien été compilée
+et vérifiée. À garder en tête : **une PR suffit à gater le SDK ; seule la couche `apps/ios` reste
+aveugle.**
+
+---
+
+
+# Tête instruite pour le cycle 72 — le client iOS compte encore par deltas, sur un serveur qui lui donne le total
+
+*Vérifié dans le code de `main`, pas déduit. Aucune ligne de Swift écrite : `apps/ios` n'est ni
+compilable ni gatable dans ce conteneur, et `ios-tests.yml` ne se déclenche que sur `dev` ou à la
+main (`403` depuis cette routine, cf. cycle 70). Écrire du Swift invérifiable qui atterrit sur
+`main` est ce que la leçon 95 condamne — d'où l'instruction plutôt que le correctif.*
+
+## Le défaut : `ConversationListViewModel` fait ±1, et ne fait JAMAIS +1 sur un ajout
+
+`apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift`, ~ligne 950 :
+
+- `participantSelfLeft` → `memberCount -= 1` puis `schedulePersist()` ;
+- `participantBanned` (si `didEndMembership`) → `-= 1` ;
+- `participantUnbanned` (si `didRestoreMembership`) → `+= 1` ;
+- **`conversationJoined` : aucun abonnement.** Le compteur ne peut donc que DESCENDRE.
+
+Le second point est la conséquence directe du défaut 2 du cycle 71 : `conversation:joined`
+portait deux sens, et iOS a choisi — raisonnablement — de n'en tirer aucun delta. Le web avait
+choisi l'autre branche et gonflait son compteur à chaque ouverture.
+
+**Ce qui a changé** : les cinq transitions portent maintenant `memberCount`, ABSOLU, et l'accusé
+de room de `ConversationHandler` est le seul à ne pas le porter. Le correctif iOS est donc une
+AFFECTATION, pas un abonnement de plus à arbitrer :
+
+1. ajouter `memberCount: Int?` à `ParticipantLeftEvent`, `ParticipantBannedEvent`,
+   `ParticipantUnbannedEvent` et `ConversationParticipationEvent`
+   (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`) — optionnel, un
+   serveur plus ancien ne le porte pas ;
+2. dans chaque `sink`, `if let count = event.memberCount { conversations[i].memberCount = count }`
+   **avant** de retomber sur le delta existant. Poser plutôt que soustraire est ce qui rattrape
+   une dérive au lieu de la continuer — et `schedulePersist()` écrit la valeur corrigée ;
+3. s'abonner à `conversationJoined` UNIQUEMENT pour l'affectation, jamais pour un `+= 1` :
+   l'événement sans `memberCount` est l'accusé de room, réémis à chaque ouverture. C'est le
+   piège exact dans lequel le web était tombé — le reproduire à l'identique côté iOS serait la
+   pire issue possible de ce cycle.
+
+Les trois témoins à écrire sont symétriques de ceux du web : accusé de room répété ⇒ compteur
+inchangé ; événement d'appartenance ⇒ valeur POSÉE ; cache à 5 + payload à 2 ⇒ 2.
+
+## Second point, plus petit : la colonne morte
+
+`Conversation.memberCount` n'est plus lue par aucune route du gateway. Restent deux gestes, à
+arbitrer plutôt qu'à exécuter en aveugle :
+- `services/agent/src/scheduler/eligible-conversations.ts:66` la recopie dans un champ
+  `EligibleConversation.memberCount` que **rien ne consomme** (`conversation-scanner.ts` pose
+  même `0` en dur sur l'autre chemin). C'est du code mort au sens strict.
+- la colonne elle-même : la supprimer du schéma est une migration Mongo, donc un geste de
+  déploiement, pas de code. La laisser coûte un champ trompeur que la prochaine route
+  sélectionnera par mimétisme — c'est déjà arrivé deux fois.
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit
+  `Message.validatedMentions` ; aucun client iOS n'écoute `link:message:new` ; les pièces
+  jointes du chemin de lien n'entrent pas dans le pipeline audio ; l'arbitrage `delete-for-me`
+  du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne
+  gate que `test:coverage`.
+- La suppression de branche distante échoue depuis cette routine (`git push --delete` répond
+  « Everything up-to-date » sans agir) — à faire depuis l'interface GitHub.
+
+# Tête instruite pour le cycle 72 — le même « un nom, deux faits » ailleurs, et la réconciliation de l'effectif
+
+*Deux pistes, la première vérifiée, la seconde à instruire.*
+
+## 1. L'effectif n'a AUCUN chemin de réconciliation — ~~à instruire~~ **RÉPONDU, et corrigé (cycle 71b)**
+
+*La question posée ici — « est-ce que `GET /conversations` renvoie `memberCount` à chaque page,
+et le client l'écrase-t-il ? » — a été instruite par la session parallèle. La réponse était pire
+que les deux branches envisagées, et elle est écrite au cycle 71b ci-dessus :*
+
+**la liste renvoyait bien un `memberCount`… lu dans une colonne dénormalisée que le gateway
+n'écrit NULLE PART.** Il n'y avait donc pas « rafraîchissement qui auto-corrige » ni « pas de
+source de vérité » : il y avait une source de vérité qui MENTAIT, et qui valait `0` pour toute
+conversation créée depuis la migration héritée. Un rafraîchissement de liste ne réparait pas la
+dérive : il la remplaçait par zéro.
+
+Les deux moitiés sont faites : la liste (et l'écran admin) comptent désormais les participants
+actifs en base, et les quatre événements d'appartenance portent un `memberCount` **absolu** que
+le web POSE au lieu de l'additionner. Reste la moitié iOS, instruite juste au-dessus.
+
+## 2. Le balayage des événements surchargés est FAIT — et il est CLOS
+
+*Exécuté à la fin du cycle 71, avec le critère mécanique que le défaut de ce cycle a fourni :
+un `SERVER_EVENTS.X` émis à la fois par `socket.emit` (self-only) et par une diffusion
+(`io.to(...)` / `emitToConversationParticipants`). 12 événements self-only croisés avec tous les
+émetteurs de diffusion. **Trois intersections, aucun nouveau défaut de la classe du cycle 71.**
+
+- `CONVERSATION_JOINED` — le défaut de ce cycle, corrigé.
+- `CONVERSATION_UNREAD_UPDATED` — **résultat négatif, et il vaut d'être écrit** : ses quatre
+  émetteurs « de diffusion » adressent tous `ROOMS.user(...)`, une room PERSONNELLE. Le fait porté
+  est donc le même des deux côtés — « votre compteur non-lu pour cette conversation » — seule
+  l'adresse change (ce socket-ci vs tous les appareils de la personne). Le `io.to(ROOMS.user(...))`
+  est même le meilleur des deux : il couvre le multi-appareil. Rien à faire.
+- `MESSAGE_TRANSLATION` — **même FAIT des deux côtés** (« voici la traduction du message X en
+  langue Y » : une traduction n'est pas propre à un destinataire), donc pas le défaut du cycle 71.
+  Mais **deux FORMES de payload sous un même nom** : `MeeshySocketIOManager:1342` émet
+  `{messageId, translatedText, targetLanguage, confidenceScore}` (réponse à une demande à la
+  volée, cache chaud) là où `:1509` diffuse `translationData`, qui porte un tableau
+  `translations: [...]`. Chaque client doit donc décoder deux formes pour un seul événement.
+  Défaut de contrat mineur, sans conséquence d'état observée — à traiter pour lui-même, pas
+  comme une urgence.
+
+**Ne pas refaire ce balayage.** S'il faut le rejouer après une évolution :
+`grep -rhoE "socket\.emit\(SERVER_EVENTS\.[A-Z_]+" services/gateway/src` croisé avec les
+émetteurs `.to(` — attention aux parenthèses imbriquées (`io.to(ROOMS.conversation(id))`), qu'un
+`[^)]*` naïf manque.
+
+## 3. Ancienne formulation, conservée pour mémoire — chercher les autres événements surchargés
+
+`conversation:joined` et `conversation:left` sont traités — les deux sont **clos**. Le critère de
+recherche se réutilise tel quel et n'a PAS été appliqué au-delà de ces deux-là : **un
+`SERVER_EVENTS.X` émis à la fois par `socket.emit` (self-only) et par `io.to(...).emit`
+(diffusion)**, ou dont le nom décrit un ÉTAT DE SOCKET là où un client lit un ÉTAT MÉTIER. Le
+balayage complet reste à faire ; `grep -n "socket.emit(SERVER_EVENTS" services/gateway/src` en est
+le point de départ, à croiser avec les émetteurs `io.to(`.
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne gate
+  que `test:coverage`.
+- `ios-tests.yml` reste hors de portée de cette routine (`actions: write` manquant). Chaque cycle
+  iOS repousse la même dette tant que le droit n'est pas accordé.
+- La suppression de branche distante échoue depuis cette routine — à faire depuis l'interface GitHub.
+
+# Cycle 70 — Le Prisme franchit la porte du ViewModel, et deux événements de conversation trouvent enfin les écrans de liste
+
+## Contrainte d'environnement — un maillon de PLUS que les cycles précédents
+
+Même conteneur Linux distant : aucune chaîne Swift (`swift: command not found`), aucun SDK Android,
+`node_modules` absent au démarrage (`bun install --ignore-scripts` puis les deux commandes de la
+leçon 102 : verifié, la note du cycle 68 se réutilise telle quelle).
+
+**Nouveau, et il faut le lire avant d'instruire une lane iOS** : le cycle 69 laissait comme gate
+« lancer `ios-tests.yml` à la main sur la branche (onglet Actions → Run workflow) ». **Cette
+routine n'en a pas le droit.** `POST /actions/workflows/ios-tests.yml/dispatches` répond
+`403 Resource not accessible by integration` — l'intégration GitHub de la routine n'a pas
+`actions: write`. Le workflow ne se déclenche par ailleurs QUE sur push vers `dev`, et pousser sur
+`dev` n'est pas autorisé depuis cette branche.
+
+Conséquence à écrire noir sur blanc plutôt qu'à contourner : **la moitié iOS de ce cycle est
+livrée SANS son gate**. Ni compilée, ni testée. Ce qui a été fait à la place, faute de mieux :
+- toute inférence de type évitable a été retirée du Swift écrit (la closure immédiatement appliquée
+  à type tuple étiqueté est devenue une `private static func` à type déclaré ; le ternaire
+  `NSNull() : map` du helper de test porte `as Any` des deux côtés, sinon les deux branches n'ont
+  pas de type commun) ;
+- chaque API touchée a été relue dans son fichier source (`LastMessageFacet.init` accepte bien
+  `translations:`/`originalLanguage:` ; `MeeshyConversation.lastMessageTranslations` est bien
+  `public var` ; `MockMessageSocket.conversationUpdated` est bien un `PassthroughSubject`) ;
+- `line_length` et les règles de style sont dans `disabled_rules` de `.swiftlint.yml` — rien à
+  gagner de ce côté.
+
+Cela ne remplace pas une compilation. **Premier geste du cycle 71 : faire tourner `ios-tests.yml`
+sur `main` et corriger ce qui rougit.** Si la routine doit continuer à traiter des lanes iOS, il
+faut lui accorder `actions: write` — sans quoi chaque cycle iOS repousse la même dette.
+
+## Moitié iOS — la tête instruite du cycle 70, consommée
+
+Le défaut décrit par le cycle 69 a été **revérifié dans le code de `main` avant la première ligne**
+et la description était exacte : `ConversationListViewModel.conversationUpdated` ne lisait jamais
+`lastMessageTranslations`.
+
+- **Branche `else` (horodatage ÉGAL ⇒ ÉDITION)** : le nouveau texte était appliqué, la carte de
+  traduction de l'ANCIEN restait. Le résolveur PRÉFÉRANT la traduction à `lastMessagePreview`, la
+  ligne rendait le texte d'avant **indéfiniment**. C'était le défaut du cycle 69, toujours vivant
+  sur le chemin que voit l'écran.
+- **Branche `bumpToTop`** : la facette était construite sans `translations:` ni `originalLanguage:`
+  — la carte que le gateway venait de résoudre POUR CE lecteur était jetée.
+
+L'extraction du tri-état est faite **une seule fois**, avant les deux branches, en recopiant
+`ConversationStore.merging` (SDK) : `.replaced` applique la paire (carte vide ⇒ `nil`),
+`.unchanged` ne touche à rien. Le `>` strict du garde de bump **n'a pas bougé**, exactement comme
+le cycle 69 l'avait instruit : il protège une facette délibérément neutre, et le relâcher ferait
+perdre pièce jointe, expiration et « vue unique » à chaque édition.
+
+Trois témoins : édition ⇒ carte périmée, nouveau message ⇒ carte servie, **métadonnées ⇒ carte
+intacte**. Le troisième est le seul qui exerce la moitié `.unchanged` du tri-état, et il se trouve
+que la moitié gateway de ce même cycle en dépend (voir ci-dessous) : les deux se prouvent
+mutuellement le contrat.
+
+Le helper `makeConversationUpdatedEvent` construit l'événement **depuis du JSON** — seule façon
+d'exprimer « clé absente » face à « clé nulle ». Il a fallu l'élargir (`lastMessagePreview`,
+`lastMessageTranslations`, `lastMessageOriginalLanguage`) : la note du cycle 69 disait que les deux
+cas étaient déjà exprimables sans y toucher, ce n'était pas le cas.
+
+## Moitié gateway — deux événements de conversation n'atteignaient QUE le fil ouvert
+
+Trouvé en cherchant les autres émetteurs de `CONVERSATION_UPDATED`, gaté localement (jest).
+
+`PUT /conversations/:id` et `DELETE /conversations/:id` n'adressaient leurs événements qu'à
+`ROOMS.conversation(id)`. Or c'est **le cas exact que `emitConversationPreviewUpdate` documente
+depuis sa création pour l'autre moitié du même payload** : un participant posé sur l'écran de liste
+a QUITTÉ la room de conversation et n'est joignable que par sa room personnelle.
+
+1. **Renommage** (et avatar, bannière, mode lent, canal d'annonce, traduction auto) : la ligne de
+   liste de tous ceux qui n'avaient pas le fil ouvert gardait l'ancienne valeur jusqu'à un
+   rechargement complet.
+2. **Clôture** : le membre gardait la ligne dans sa liste et ne l'apprenait qu'en tapant dessus.
+   Le commentaire du code annonçait pourtant « Broadcast closure to all members ». Les deux clients
+   écoutent bien `conversation:closed` — web `use-socket-cache-sync.ts` (qui RETIRE la ligne du
+   cache de liste), iOS `MessageSocketManager` — l'événement ne leur parvenait simplement jamais.
+
+Les deux passent par `emitToConversationParticipants`, déjà la formulation de référence : chaînage
+des rooms (au plus UNE copie par socket), room d'un participant sans compte nommée par son
+`Participant.id` (`userId ?? id`), participants inactifs écartés. La clôture lit ses participants
+**dans son écriture** (`include`), sans requête supplémentaire.
+
+Un témoin fige que le payload ne porte **aucune clé `lastMessage*`** — et c'est ici que les deux
+moitiés du cycle se rejoignent : le tri-état client distingue « clé absente » de « clé nulle », donc
+un `lastMessageTranslations: null` posé par un renommage effacerait une traduction parfaitement
+valide sur toutes les lignes de liste. Le témoin iOS n° 3 est l'autre bout de ce même contrat.
+
+Le hard-delete de conversation **n'avait aucun témoin de route** jusqu'ici : le fichier de test
+homonyme (`conversation-deleted-broadcast.test.ts`) couvre `delete-for-me`, une autre route.
+
+## Retiré du backlog après enquête — l'audit `ROOMS.user(` est CLOS
+
+Le backlog le portait depuis le cycle 69 : « la règle *adresser par `userId ?? id`* vaut pour tout
+émetteur personnel, et rien ne garantit que les autres la respectent ». Instruit par recherche sur
+`ROOMS.user(`, comme demandé, plutôt que par déduction. **Aucun défaut restant** :
+
+- `emitConversationPreviewUpdate` passe déjà par `participantUserRoomTargets` (cycle 69) ;
+- `emitUnreadCountsToRecipients`, `callEndedFanout`, `offlineParticipantQueue`, `MessageHandler`
+  portent tous `userId ?? id` ;
+- `core.ts:1238` (CONVERSATION_NEW) adresse des **User.id**, pas des lignes `Participant` — la
+  règle ne s'y applique pas ;
+- les `.map(p => p.userId)` restants sont **sémantiquement corrects** et non des oublis : contrôle
+  de blocage (`MessageHandler:2029`, `messages.ts:1769` — un anonyme ne peut pas être bloqué),
+  préférences d'accusés de lecture (`MessageReadStatusService:1080` — pas de `userId`, pas de ligne
+  de préférence, donc visible par défaut), notifications push (il faut un compte).
+
+C'est un résultat négatif, et il vaut d'être écrit : sans lui, le prochain cycle refait l'enquête.
+
+---
+
+# Tête instruite pour le cycle 71 — les mêmes écrans de liste, sur les événements de MEMBRES
+
+*Repéré par le même balayage que ci-dessus (`to(ROOMS.conversation(`), NON traité faute d'avoir
+vérifié ce que la ligne de liste rend réellement. C'est cette vérification qui doit précéder le
+correctif, pas l'inverse : élargir une audience a un coût et une dimension de confidentialité.*
+
+Trois émetteurs de `routes/conversations/participants.ts` sont thread-only, comme l'étaient le
+renommage et la clôture :
+
+- `:377` `CONVERSATION_JOINED` — un membre rejoint ;
+- `:562` `CONVERSATION_PARTICIPANT_LEFT` — un membre part ;
+- `:748` `PARTICIPANT_ROLE_UPDATED` — un rôle change.
+
+**Ce qu'il faut établir AVANT d'écrire quoi que ce soit** : la ligne de liste rend-elle quelque
+chose qui dépende de ces trois faits ? Si la ligne affiche un compteur de membres ou une pile
+d'avatars, les deux premiers sont le même défaut que ce cycle vient de corriger et se corrigent
+pareil (`emitToConversationParticipants`, participants actifs, payload inchangé). Si elle n'en rend
+rien, ils sont thread-only à juste titre et il faut le NOTER dans le code plutôt que de le
+redécouvrir au cycle 72. `PARTICIPANT_ROLE_UPDATED` est le plus douteux des trois : un rôle ne se
+voit nulle part dans une liste.
+
+Le reste des émetteurs thread-only du balayage est légitime et n'a pas besoin d'être réinstruit :
+réactions, typing, position live, transcription/traduction audio, `MESSAGE_EDITED` (déjà doublé par
+`emitConversationPreviewUpdate` pour la liste).
+
+## Points hérités, inchangés
+
+- Les mentions du chemin de lien attendent toujours l'extraction qui écrit `Message.validatedMentions` ;
+  aucun client iOS n'écoute `link:message:new` ; les pièces jointes du chemin de lien n'entrent pas
+  dans le pipeline audio ; l'arbitrage `delete-for-me` du cycle 12 attend une validation humaine.
+- `bun run lint` échoue toujours immédiatement (ESLint v9) — condition préexistante, la CI ne gate
+  que `test:coverage`.
+- La suppression de branche distante échoue depuis cette routine (`git push --delete` répond
+  « Everything up-to-date » sans agir) — à faire depuis l'interface GitHub.
+
 # Cycle 69b — Solde d'une session parallèle, et la tête du cycle 70
 
 *Deux sessions ont traité la tête instruite du cycle 68 en même temps. Celle-ci a rebasé sur
@@ -6909,3 +9967,169 @@ contrat, pas correctif. Retiré du backlog comme défaut.
   règle « adresser par `userId ?? id` » vaut pour tout émetteur personnel, et rien ne garantit
   que les autres la respectent. À instruire par une recherche sur `ROOMS.user(` plutôt que par
   déduction.
+
+## Review — Follow-ups différés audio immersif iOS (2026-08-11, branche `fix/ios-audio-followups`)
+
+Traite les 4 follow-ups différés du chantier "audio immersif iOS" (merge `02c7f69b4`, mémoire
+`project_ios_immersive_audio_2026_08_11`). 3 commits + revue finale de branche (Opus) : APPROVE
+avec réserves, mergeable.
+
+**Livré (commits `1691b2b62`, `b15d67ca6`, `982b0e390`, `7b89f02f9`)** :
+- Warning Sendable sur `beginBackgroundTaskProvider` résolu (`@Sendable` sur le type du handler).
+- Cold-open du plein écran audio depuis une conversation (tap direct, aucune lecture en cours)
+  câble désormais `conversationName`/`queueTailProvider` — `AudioMediaView.fullscreenSource(for:)`,
+  threadé sur 5 niveaux de vues (`MessageListViewController` → `ThemedMessageBubble` →
+  `BubbleStandardLayout` → `AudioMediaView`/`AudioCarouselView`).
+- Convention d'id synthétique du plein écran standalone unifiée avec les 3 sites
+  `CoordinatedAudioPlayer` inline (feed/commentaire/post).
+- Vérification manuelle iPhone SE 375pt : rangée transport (reculer/play/avancer/AirPlay) OK,
+  aucun changement de code nécessaire.
+- Test ajouté verrouillant la capture PER-ITEM de `queueTailProvider` (trouvé par la revue finale :
+  le test original stubbait `{ _ in ... }` sans jamais vérifier l'id reçu — un provider recevant
+  l'id de la VUE au lieu de celui de l'ITEM aurait cassé l'avance de file en multi-audio pager sans
+  faire rougir un seul test).
+
+**Découverte non liée à ce mini-chantier, à traiter séparément** : `AudioFullscreenView` plante de
+façon déterministe sur simulateur iPhone SE (3e gen) / iOS 18.2 (~250-900ms après ouverture,
+assertion libdispatch main-queue ~400-500ms après le push `NowPlayingInfo`). Confirmé PRÉ-EXISTANT
+(`cd7504e5e`, ancêtre de `main`, plante aussi) — ces 3 commits ne l'aggravent pas. L'hypothèse
+"AirPlayRoutePicker" a été RÉFUTÉE par deux expériences contrôlées (délai de montage du picker,
+délai de `startPlayback()` — même signature de crash dans les deux cas). Racine encore inconnue,
+dans une assertion AVKit/MediaPlayer fermée. Périmètre (autre device/OS ?) non déterminé — à
+tester sur iPhone 16 Pro et/ou device réel avant de pouvoir clore. Note : la "dette pbxproj"
+initialement soupçonnée pour `CoordinatedAudioPlayer.swift` était un faux positif du worktree
+d'investigation (pas régénéré) — `main` a bien les 4 références attendues, aucune action requise.
+
+**Follow-ups non-bloquants restants (verdict de la revue finale)** :
+- Artwork Now Playing du cold-open reste celui de l'EXPÉDITEUR (`item.authorAvatarURL`,
+  `AudioFullscreenView.swift:575`) alors que le nom est désormais celui de la CONVERSATION
+  (`item.nowPlayingContextName`) — incohérent avec `ConversationViewModel.playAudio` qui passe la
+  paire `currentConversationName`/`currentConversationArtworkURL`. Fix : ajouter un
+  `nowPlayingContextArtworkURL` sur `AudioFullscreenSource`, même threading que
+  `nowPlayingContextName` (5 fichiers, même patron que le commit `b15d67ca6`).
+- `PostDetailView.swift:~1941-1952` (cold-open d'un repost cité) : `conversationId` pointe le
+  repost cité mais `author`/`caption`/`createdAt` viennent toujours du post extérieur — même classe
+  de bug que `7ddcb6f22` avait corrigée côté inline, ici seulement pour le chemin froid (le chemin
+  chaud `playKeepingQueue` est sain). Fix : petite conversion `DetailMediaAuthor` → `ProfileSheetUser`.
+- `AudioFullscreenSource.conversationId` porte 3 sens différents (vraie `Conversation.id` / id
+  d'entité porteuse / `nil`) documentés par de la prose plutôt qu'un renommage — `playbackSessionId`
+  éliminerait le besoin d'expliquer. Touche l'API publique du coordinator, hors scope d'un mini-fix.
+
+## Review — 3 chantiers UI Liquid Glass/menu (2026-08-12, branches fix/message-more-menu-and-media + feat/inline-video-liquid-glass + feat/scroll-to-bottom-morph, mergées dans main)
+
+Workflow autonome (Opus, 51 agents, TDD RED-GREEN + revue par tâche + revue finale holistique par
+piste) sur 3 sous-projets indépendants. Verdicts des 3 revues finales : **MERGEABLE AVEC RÉSERVES**
+(message-more), **MERGEABLE AVEC RÉSERVES** (inline-video), **MERGEABLE** (scroll-morph). Aucun
+Critical sur les 3 pistes. Gate complet réel vérifié sur chaque worktree + sur le résultat fusionné.
+
+**Corrigé avant merge** (pas un follow-up, déjà fait) : le bouton "Enregistrer" du sous-menu média
+affichait dès qu'un message avait ≥1 attachment non-location, alors que la règle SSOT du dépôt
+(`MessageActionResolver.saveableAttachmentCount == 1`) exige EXACTEMENT UN — un message à 3 photos
+aurait silencieusement sauvegardé la première seulement. Fix + test corrigés avant le merge.
+
+**Follow-ups Important non-bloquants (verdict des revues finales)** :
+- **Auto-PiP en arrière-plan désormais armé pour TOUTE vidéo inline** (`inline-video`, 6 surfaces :
+  bulle, pièce jointe de bulle, feed, détail de post, média de commentaire, attachment de bulle) —
+  conséquence directe des 2 décisions produit prises pendant le brainstorm (câbler le PiP + élargir
+  `inlineDefault` partout). `MediaLifecycleBridge.prepareForBackground` ne met plus en pause une
+  vidéo dont le PiP s'engage. Invisible en simulateur (`isPictureInPictureSupported()` y est
+  toujours faux) — à ajouter explicitement à la checklist de vérification device, avec le scénario
+  bulle-en-lecture → passage aux réels (contention du `pipController` singleton partagé).
+- `apps/ios/meeshy.sh` : le nouveau garde-fou anti-tests-non-enregistrés (`verify_test_classes_are_compiled`,
+  Leçon 120) utilise `nm | grep -oF` — correspondance par SOUS-CHAÎNE. 7 paires de classes en
+  collision existent aujourd'hui (`RouterTests` ⊂ `DeepLinkRouterTests`/`ComposerIngestRouterTests`/
+  `AudioBubbleRouterTests`/`NotificationContentRouterTests`, `ConversationViewModelTests` ⊂
+  `NewConversationViewModelTests`, `StatusViewModelTests` ⊂ `ConnectionStatusViewModelTests`,
+  `BubbleEquatableTests` ⊂ `ThemedMessageBubbleEquatableTests`) : si l'une devenait orpheline, la
+  garde ne la verrait pas. Fix : ancrer sur le nom manglé Swift (préfixe de longueur, ex.
+  `11RouterTests`) au lieu du nom nu. Fichier PARTAGÉ par tous les worktrees iOS — coordonner avant
+  d'y toucher.
+- `_FullscreenRenderer` (plein écran vidéo) n'opte toujours pas pour le PiP après un expand depuis
+  l'inline : le `pipController` singleton reste lié au layer inline masqué. No-op en pratique
+  aujourd'hui, mais `prepareForBackground` y consomme jusqu'à 400ms d'attente inutile. Suivi
+  naturel : propager `enablesPip` à la surface plein écran aussi.
+
+**Follow-ups Minor (dette, aucun ne bloque)** :
+- 3ᵉ copie verbatim de la construction `MediaSaveRequest` dans `ConversationView.swift` (757, 1800,
+  1950) — extraction en helper `requestSaveFirstMedia(of:)` recommandée.
+- Cibles incohérentes dans le sous-menu média : Supprimer vise `attachments.first?.id` (sans filtre
+  `.location`), Enregistrer vise `first(where: { $0.type != .location })` — pré-existant, rendu
+  visible par le regroupement des 2 actions dans un seul dialog.
+- `.media` reste gaté par `canDelete` (`MessageActionResolver.swift:92`) — un média REÇU (non
+  admin/mod) ne voit pas ce point d'entrée Enregistrer/Transférer (atténué : `.saveMedia` primaire
+  et `.forward` pellet couvrent déjà le cas).
+- `isCompactShape` (scroll-to-bottom) porte un nom inversé — renvoie `true` pour la capsule LARGE,
+  `false` pour le cercle compact. `usesCapsuleShape` dirait la vérité ; figé dans 4 tests.
+- Glyphe média dupliqué entre `unreadCallIndicator` (app) et `CallNoticePresentation.mediaGlyph`
+  (`BubbleCallNoticeView.swift:278`) — extraire un helper partagé sur `CallNoticePresentation`.
+- Accessibilité : `scrollToBottomAccessibilityLabel` ne mentionne pas l'état d'appel — VoiceOver
+  n'annonce que "N messages non lus", alors que manqué/échoué se distinguent SEULEMENT par la
+  teinte (WCAG 1.4.1, couleur seule).
+- Aucun des 3 fichiers de plan n'a ses cases `- [ ]` cochées après exécution — les plans ne
+  reflètent plus l'état d'avancement réel pour une session qui reprendrait. Sans impact fonctionnel.
+
+**Découverte annexe, HORS PÉRIMÈTRE de ce chantier** : le gate complet sur le résultat fusionné a
+révélé `CallViewAccessibilityTests.test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone`
+ROUGE de façon déterministe (reproduit isolément, 1/36 dans la classe) — `hasActiveEffects` ne
+vérifie que `config.isEnabled`, pas `config.hasAdvancedFilters`. Fichier dernièrement touché par
+`7b8f7e33d` (PR #2859, "calls: updateCallStatus duration anchor + video filter silent no-op"),
+totalement étranger aux 3 chantiers ci-dessus. Poussé sur `main` tel quel (pré-existant, pas
+introduit par ce travail) — à triager par qui possède la zone calls/effets vidéo.
+
+---
+
+## Cycle 84 — mesure du gate iOS (réponse aux items 1 et 2 de la tête de cycle)
+
+Les trois seuls runs `pull_request` d'`ios-tests.yml` existants au 2026-08-12 06:00 UTC (tous sur
+`claude/keen-hamilton-ghcir8`, la branche qui a câblé le gate au cycle 83), relevés par l'API
+Actions :
+
+| Run | `Restore DerivedData` | `Resolve SPM` | **`Build for testing`** | `Save DerivedData` | Total job |
+|---|---|---|---|---|---|
+| `31564979638` | **1 s** (miss) | 122 s | **393 s** (6m33) | 32 s | **606 s** (10m06) |
+| `31565952871` | 14 s (hit) | 23 s | **199 s** (3m19) | 17 s | **298 s** (4m58) |
+| `31566561699` | 15 s (hit) | 41 s | **295 s** (4m55) | 25 s | **432 s** (7m12) |
+
+### Item 1 — le « régime permanent à 4m54 » était le meilleur des deux points, pas la moyenne
+
+Le cycle 83 disposait de DEUX points (10m02 à froid, 4m54) et a retenu le second comme régime
+permanent. Le troisième point tombe à **7m12** : le régime chaud lui-même varie, `Build for testing`
+allant de **3m19 à 4m55** d'un run chaud à l'autre. Moyenne des trois : **7m25**.
+
+**Correction à porter au dossier** : la projection n'est pas 340 poussées × ~5 min ≈ 1 700 min, mais
+340 × ~7,4 min ≈ **2 500 min de runner macOS/mois**. Cela reste très en-dessous de l'estimation
+~18 min qui accompagnait le câblage — **le gate demeure justifié**, et aucune coupe n'est requise ;
+c'est le chiffre consigné qui doit être corrigé, pas la décision.
+
+Réserve d'honnêteté : les trois runs portent sur des commits quasi identiques de la même branche
+(deux d'entre eux ne touchent que des `.md` et le YAML). Les builds chauds mesurés sont donc un
+**meilleur cas** ; une PR qui remue vraiment du Swift reconstruira davantage. Trois points restent
+trois points — à re-mesurer quand la population de runs `pull_request` aura grossi.
+
+### Item 2 — le cache DerivedData profite bien aux PR (hypothèse confirmée, à une réserve près)
+
+L'étape `Restore DerivedData build cache` répond en **1 s au premier run** (rien à restaurer, clé
+neuve) puis en **14 s et 15 s** aux deux suivants : ce sont de vraies restaurations, pas des miss.
+Et l'effet est visible là où il compte — `Build for testing` passe de **393 s à froid** à
+**199 s / 295 s à chaud**, soit **25 à 49 % de moins**.
+
+Les deux modes ne se piétinent donc **pas** le cache : la première hypothèse du cycle 83 (les
+produits d'un build `generic/platform=iOS Simulator` se réutilisent) est **soutenue par la mesure**.
+
+**Ce qui reste non vérifié** : les trois runs sont tous des runs de PR. La question croisée —
+un build de PR (`generic/…`, arm64 épinglé) réutilise-t-il ce qu'un build de `dev` (`id=<sim>`) a
+écrit, et réciproquement — demande de comparer un run de PR à un run de `dev` consécutifs sous la
+même lignée de clés. Aucun couple de ce genre n'existe encore.
+
+### Observation annexe, hors périmètre du gate
+
+La suite complète sur `dev` (`push`, 28 à 54 min) est **rouge très fréquemment** : sur les 20
+derniers runs `push dev` d'`ios-tests.yml`, on relève des `failure` les 08-11 (×3), 08-10 (×2),
+08-09 (×2), 08-07, 08-06 et 08-04. Le gate de PR ne voit rien de tout cela — il est compile seule,
+et c'est le compromis assumé — mais une suite de référence durablement rouge prive le dépôt du
+signal que le gate ne prétend pas donner. À triager par qui possède la suite iOS.
+
+### Ce que le cycle 84 n'a PAS instruit
+
+L'item 3 (porte `actions: write` close, pas de `workflow_dispatch` pour la routine) est inchangé et
+n'a pas été retesté — rien n'indiquait un changement côté intégration GitHub App.

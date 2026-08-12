@@ -1540,7 +1540,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `markUnreadOptimistic is a no-op when the conversation is already unread`
       (18 run, 1 failed, no collateral). ; details/invite/favorite/move/
       lock/block/delete pending
-- [ ] Hard-press conversation preview popover
+- [x] Hard-press conversation preview popover — port of iOS `ConversationPreviewView` (header +
+      up to 5 recent cached messages, Prisme-resolved) rendered as the first child of the
+      long-press context menu (slice `conversation-hardpress-preview`, 2026-08-11)
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
       « Vous » pour soi) + unread badge + **draft preview** done (slice
@@ -1680,6 +1682,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
+- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+      `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
+      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
+      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
+      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
+      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
+      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
+      `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
+      preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
+      the presence-lookup key. `ConversationListViewModel.observePresence()` (mirrors
+      `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
+      `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
+      `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
+      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
+      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
+      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
+      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
+      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
+      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
+      direct-type gate and the snapshot merge.
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
@@ -2817,7 +2840,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       inbound server truth); `ChatViewModel` collects the flow, conversation-scoped. +37 tests
       (18 `AttachmentAudioTranslationMergeTest`, 2 `AudioTranslationEventTest` decode-contract, 8
       `BubbleContentBuilderTest`, 4 repo, 2 VM, +3 wiring). Diff = `apps/android` only.
-- [ ] Ad-hoc blocking text translation
+- [x] Ad-hoc blocking text translation — **stale checkbox, RE-PROUVEN 2026-08-11**: already fully
+      shipped. iOS's own `/translate-blocking` on-demand mechanism (`MessageLanguageDetailView.
+      translateTo`, `TranslationService.shared.translate(messageId:)` — passing `messageId` routes
+      the gateway into its "retranslation" branch, which persists AND broadcasts via
+      `message:translation`) has a direct Android counterpart:
+      `ChatViewModel.onExplorerRetranslate(messageId, code)` → `requestOnDemandTranslation` →
+      `MessageRepository.requestTranslation(messageId, targetLanguage)` — a real, synchronous
+      (`suspend fun`) REST call (`translationApi.translate(...)`) that persists the result,
+      exactly mirroring the "blocking" semantics. Wired from `MessageDetailExplorer`'s per-language
+      retranslate affordance in the same long-press → "Explore languages" sheet root `CLAUDE.md`
+      documents as the sole translation-exploration entry point. Fully tested: 7
+      `MessageRepositoryTest` cases (success, translator failure, unknown/deleted message, blank
+      target, blank result ignored, idempotent-on-match) + ~10 `ChatViewModelTest` cases (success,
+      failure, in-flight double-tap guard, unknown-message no-op, blank-target no-op). No code
+      change needed this run — just the checkbox.
 - [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
       (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
       `originalLanguage = user.systemLanguage ?: "fr"` — doubly wrong: it ignored the Prisme
@@ -4368,7 +4405,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
-- [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
+- [x] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
       **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
       `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
       All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
@@ -4380,7 +4417,58 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
       is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
       online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
-      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
+      and the friend row renders green/amber/none accordingly. **Mood-emoji presence shipped** (slice
+      `contacts-mood-emoji-presence`, 2026-08-11): port of iOS `ContactsListTab.swift`'s
+      `statusViewModel.statusForUser(userId:)?.moodEmoji` passed into `MeeshyAvatar`. `MeeshyAvatar`
+      (`:sdk-ui`) already rendered a `moodEmoji: String?` badge (shipped with the avatar atom itself,
+      just never fed a real value from Contacts) — this slice is the missing orchestration wire, not a
+      new UI atom. New pure `List<StatusEntry>.statusForUser(userId) → StatusEntry?` (`:sdk-core/status`,
+      exact port of iOS's `statuses.first { $0.userId == userId }`) backs a new
+      `ContactsListUiState.moodEmojiFor(userId) → String?` (blank-guarded — a structurally-impossible-
+      but-defended-against blank `moodEmoji`). `ContactsListViewModel` now injects the already-existing
+      `StatusBarCache` (`:sdk-core`, the Feed status bar's L1 in-memory cache) and reads its **FRIENDS**-
+      mode snapshot synchronously on every `load()` — deliberately best-effort, no dedicated network
+      fetch of its own: `valueOrNull` collapses Fresh/Stale/Syncing uniformly (a decorative avatar badge
+      doesn't need a freshness distinction, mirrors the existing `CategoryRepository` precedent), and a
+      cold/never-loaded cache just means no badges yet — exactly iOS's own behaviour before its Feed
+      status bar has ever loaded (no popup, no error, the row simply renders without the badge). +9 tests
+      (4 `StatusMapperTest`: found/absent/empty-list/first-of-duplicates; 5 `ContactsListViewModelTest`:
+      pure state blank-guard, live emoji painted from the FRIENDS cache, no emoji when the user has no
+      live status, and the DISCOVER cache never leaking into a Contacts row). Mutation-proven: dropping
+      `moodEmojiFor`'s blank-guard fails **exactly** the pure state test (21 others green); swapping the
+      cache read from `StatusFeedMode.FRIENDS` to `.DISCOVER` fails **exactly** the two mode-scoped tests
+      (19 others green). Both applied via a scratch `cp`-backed edit (never `git checkout --`), restored
+      via `cp`, diffed clean against the backup afterward. **Deliberate, documented scope cut**: only the
+      Contacts tab is wired this slice (the checklist bullet this closes is specifically "Contacts list")
+      — Discover/Requests/Blocked tabs' `MeeshyAvatar(...)` call sites still pass no `moodEmoji` and are
+      a natural, small follow-up (same `moodEmojiFor` pattern, same `StatusBarCache` injection, per-tab
+      `StatusFeedMode` where relevant — Discover reads the DISCOVER-mode cache, not FRIENDS). No
+      cross-screen reactivity: a mood set/cleared while the Contacts tab is already open only shows up on
+      the next `load()` (pull-to-retry or re-entry), never live via a socket/Flow — matches the
+      "best-effort decoration, not primary content" scope, tracked as a future refinement alongside the
+      other 3 tabs, not a regression (iOS itself has no live-update wiring into this specific row either,
+      only through re-render on the shared `statusViewModel`'s own `@Published` updates when SwiftUI
+      happens to re-evaluate the row).
+      **Presence dot now updates LIVE (2026-08-11, slice `presence-live-contacts-overlay`)** — a
+      DIFFERENT gap than the mood-emoji one just above: the three-state online/away/offline dot
+      shipped by `presence-away-indicator` (2026-07-04) read `FriendRequestUser.isOnline`/
+      `lastActiveAt` off the roster's last full `/friends` fetch only, frozen until the next reload
+      — unlike mood, this one already HAD a live wire target ready to use: `MessageSocketManager`
+      already listened for `user:status`/`presence:snapshot` (both real, gateway-emitted events —
+      confirmed via `SERVER_EVENTS.USER_STATUS`/`_broadcastUserStatus` in
+      `MeeshySocketIOManager.ts`), just with zero consumers anywhere in the app. **A genuine
+      correctness bug found and fixed en route**: `UserStatusEvent`/`PresenceSnapshotEvent`
+      (`:core:model`) didn't even match the real payload shape (`status`/`lastSeenAt`/flat
+      `onlineUserIds: List<String>` vs. the gateway's actual `isOnline`/`lastActiveAt`/`username` /
+      `{users: [...]}`) — so even wiring a consumer to the OLD shape would have silently decoded
+      every live frame to blank defaults. Fixed both DTOs against the shared TS type
+      (`packages/shared/types/socketio-events.ts`), then wired `ContactsListViewModel.
+      observePresence()` (mirrors the existing `observeFriendshipCache()` pattern) to overlay live
+      updates via new pure `PresenceOverlay.applyStatus`/`.applySnapshot` (`:feature:contacts`).
+      +15 tests (4 `UserStatusEventTest` decode-contract, 6 `PresenceOverlayTest`, 3 new
+      `ContactsListViewModelTest`). Mutation-proven on the filter/decode branches. Conversation-
+      participant presence (a separate, still-open gap noted in the Home-screen widgets item
+      above) can now reuse this same corrected wire in a future slice.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
@@ -5239,8 +5327,57 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`meeshy://` + `https://meeshy.me`)
 - [ ] Universal Link / push / socket notification routing into the correct screen
 - [ ] Home-screen widgets (recent conversations, unread count, favorite contacts, quick reply, mark-read)
+      **Angle mort catégoriel comblé (2026-08-11)** : premier `GlanceAppWidget`/`AppWidgetProvider` de
+      `apps/android` (slice `widget-unread-count-scaffold`) — foundation minimale + sous-tranche
+      "unread count" (`UnreadCountWidget`, parité avec iOS `MeeshyWidgets.UnreadCountWidget`
+      `.systemSmall`). Statique/déclenché par l'OS, pas de push-refresh sur changement de données
+      (l'analogue Android de `WidgetCenter.reloadAllTimelines()`). **Deuxième sous-tranche
+      (2026-08-11)** : `RecentConversationsWidget` (slice `widget-recent-conversations`), parité
+      avec iOS `MeeshyWidgets.RecentConversationsWidget` — pinned-first puis plus-récent-d'abord
+      (`ConversationRowTime` SSOT), jusqu'à 5 lignes, tap sur une ligne = deep-link direct
+      `meeshy://conversation/{id}`. A nécessité un ajout de fondation : `TokenStore.userId`
+      (persisté à côté du JWT) — `SessionRepository` est en mémoire seule et vide dans un
+      processus widget froid qui n'a jamais tourné le flux de démarrage normal de l'app ; le
+      widget lit désormais l'id utilisateur persisté pour résoudre le nom du bon participant
+      dans une conversation directe. **Troisième sous-tranche (2026-08-11)** :
+      `FavoriteContactsWidget` (slice `widget-favorite-contacts`), parité avec iOS
+      `MeeshyWidgets.FavoriteContactsWidget` — une "favorite contact" est une conversation
+      DIRECTE épinglée (`isPinned && type == direct`), pas une notion distincte, exactement
+      comme `WidgetDataManager.publishFavoriteContacts` sur iOS ; jusqu'à 8 lignes,
+      plus-récent-d'abord (`ConversationRowTime` SSOT), tap = deep-link direct dans la
+      conversation (`meeshy://conversation/{id}` — Android n'a pas l'équivalent de l'URI
+      `meeshy://contact/{id}` d'iOS, réutilise la route déjà câblée plutôt que d'en créer une
+      seconde pour le même id). Pas de badge de présence en ligne : `ApiConversation.participants`
+      ne porte aucun champ `isOnline`/`lastActiveAt` côté Android (contrairement à
+      `MeeshyConversation.lastSeenText` sur iOS) — un vrai gap documenté, pas un oubli. Restent :
+      quick reply, mark-read, tailles/kinds additionnels, push-refresh, badge de présence.
+      **Fondation posée (2026-08-11, slice `chat-composer-prefill-draft`)** : le deep-link
+      `meeshy://conversation/{id}?draft={texte}` pré-remplit désormais le composer via
+      `ChatViewModel.initialDraft` — débloque un futur Quick Reply RÉELLEMENT fonctionnel (celui
+      d'iOS s'est avéré mort en production, cf. slice `dynamic-launcher-shortcuts`).
+      **Quatrième sous-tranche livrée (2026-08-11, slice `widget-quick-reply`)** :
+      `QuickReplyWidget`, parité avec iOS `MeeshyWidgets.QuickReplyWidget` — même règle de
+      sélection (`premier non-lu, sinon premier`, sur le même ordre pinned-first-then-recency),
+      4 chips de réponse pré-écrite (👍/OK/Merci !/Rappelle-moi, exactement le jeu d'iOS),
+      chaque tap ouvrant la conversation avec la réponse déjà pré-remplie via le deep-link
+      `?draft=` — **réellement fonctionnel, contrairement à son homologue iOS** (confirmé mort en
+      production lors du slice `dynamic-launcher-shortcuts`). Restent : mark-read, tailles/kinds
+      additionnels, push-refresh, badge de présence.
 - [ ] Ongoing-call / translation-progress foreground-service notification (iOS Live Activity equivalent)
 - [ ] App Actions / dynamic shortcuts (send message, call, recent conversation) — Siri/Shortcuts equivalent
+      **First sub-slice shipped (2026-08-11, slice `dynamic-launcher-shortcuts`)**: dynamic launcher
+      shortcuts (long-press the launcher icon) publishing up to the device's own reported max
+      (`ShortcutManagerCompat.getMaxShortcutCountPerActivity`) recent conversations, pinned-first
+      then most-recent (same ordering SSOT the home-screen widgets already apply), tapping one
+      deep-links straight into that conversation. This is the closest ALWAYS-local, fully-testable
+      Android equivalent to iOS's `OpenRecentConversationIntent` App Shortcut — confirmed by reading
+      `MeeshyAppIntents.swift` end to end that iOS's other 4 App Shortcuts (Send Message, Call
+      Contact, Translate, Check Notifications) are Siri/Assistant voice phrases requiring the
+      `AppIntents` framework's NL parameter resolution, with **no direct Android equivalent**:
+      Android's nearest analogue (Google Assistant "App Actions" via `shortcuts.xml` capability
+      bindings) needs external Assistant indexing/review and isn't reliably locally verifiable —
+      deliberately deferred as its own, larger follow-up rather than attempted here. Restent :
+      Assistant App Actions (send message/call/translate/check notifications voice phrases).
 - [ ] Crash / hang / ANR diagnostics with on-device persistence + remote report
 - [ ] Privacy-gated analytics (screen tracking); client telemetry headers; network reachability awareness
 - [ ] Adaptive iPad/tablet/foldable two-column layout (feed + conversation list/detail, resizable splitter)

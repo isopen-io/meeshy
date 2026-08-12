@@ -211,10 +211,25 @@ struct StoryTrayView: View {
                 ))
             },
             onAddStatus: onAddStatus,
-            onManageStories: { showMyStories = true }
+            onManageStories: { showMyStories = true },
+            onShowProfile: { selectedProfileUser = myProfileUser() }
         )
         // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
         .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
+    }
+
+    /// Résolution du profil « Moi » : le groupe de stories (avatar/couleur à
+    /// jour, comme pour les autres utilisateurs via `StoryRingCell`) l'emporte
+    /// quand il existe ; sinon repli sur `MeeshyUser` — « Voir le profil »
+    /// doit fonctionner même sans aucune story active (directive user
+    /// 2026-08-11).
+    private func myProfileUser() -> ProfileSheetUser? {
+        let currentUser = AuthManager.shared.currentUser
+        let userId = currentUser?.id ?? ""
+        let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        if let myGroup { return .from(storyGroup: myGroup) }
+        guard let currentUser else { return nil }
+        return .from(user: currentUser)
     }
 
     // MARK: - Story Ring
@@ -374,6 +389,7 @@ private struct MyStoryButton: View {
     let onViewMyStory: () -> Void
     var onAddStatus: (() -> Void)?
     var onManageStories: (() -> Void)?
+    var onShowProfile: (() -> Void)?
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
@@ -452,6 +468,14 @@ private struct MyStoryButton: View {
                         })
                         items.append(AvatarContextMenuItem(label: StoryTrayCopy.changeMood, icon: "face.smiling.inverse") {
                             onAddStatus?()
+                            HapticFeedback.medium()
+                        })
+                        // Parité avec `StoryRingCell` (les AUTRES utilisateurs) :
+                        // accès à sa PROPRE feuille de profil (posts, bio…)
+                        // depuis le même avatar, sans passer par les
+                        // paramètres. Directive user 2026-08-11.
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") {
+                            onShowProfile?()
                             HapticFeedback.medium()
                         })
                         return items

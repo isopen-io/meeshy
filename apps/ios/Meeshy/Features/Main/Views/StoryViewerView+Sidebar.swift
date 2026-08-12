@@ -156,7 +156,12 @@ struct StoryActionSidebarView: View {
     @Binding var sharedContentWrapper: SharedContentWrapper?
     @Binding var isPresented: Bool
 
-    let triggerStoryReaction: (String) -> Void
+    /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
+    /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
+    let triggerStoryReaction: (String, CGRect?) -> Void
+    /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
+    /// neutralise la navigation du canvas).
+    let onScrubStateChanged: (Bool) -> Void
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
@@ -170,6 +175,13 @@ struct StoryActionSidebarView: View {
 
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
+
+    @State private var scrubHoveredReactionIndex: Int?
+    @State private var scrubHoveredLanguageIndex: Int?
+    @State private var reactionTileFrames: [Int: CGRect] = [:]
+    @State private var languageTileFrames: [Int: CGRect] = [:]
+    @State private var isScrubbingReactions = false
+    @State private var isScrubbingLanguages = false
 
     /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
     /// Re-résolu UNIQUEMENT au changement de story — jamais sur une mise à
@@ -201,9 +213,9 @@ struct StoryActionSidebarView: View {
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
 
-    /// Quick pop on the heart button that confirms the user just sent a
-    /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
-    /// own multi-phase animation.
+    /// Quick pop on the heart button that confirms the reaction landed —
+    /// ticked at the ARRIVAL of the reaction flight (`StoryReactionFlightView.onArrived`),
+    /// not at send time.
     private func bounceHeart() {
         withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
             heartScale = 1.35
@@ -213,6 +225,124 @@ struct StoryActionSidebarView: View {
                 heartScale = 1.0
             }
         }
+    }
+
+    /// Longpress (0.25 s) → la barre surgit → drag continu SANS lever le doigt :
+    /// survol des tuiles (×1.35 rebond via highlightedIndex), sélection au
+    /// relâchement. Posé en `.highPriorityGesture` sur le bouton : un tap court
+    /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
+    /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
+    /// le swipe de navigation est donc structurellement neutralisé.
+    /// Ouvre la barre de réactions au moment où le longpress est ACQUIS.
+    /// Appelé des cas `.first(true)` ET `.second(true, _)` : en pratique
+    /// SwiftUI ne livre souvent JAMAIS `.first(true)` — la séquence saute
+    /// directement à `.second(true, nil)` quand le longpress aboutit
+    /// (prouvé au log HID 2026-08-11 : premier onChanged = `second(true,
+    /// nil)`). Ne traiter que `.first(true)` laissait la barre fermée à
+    /// jamais.
+    private func beginReactionScrubIfNeeded() {
+        guard !isScrubbingReactions else { return }
+        isScrubbingReactions = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showEmojiStrip = true
+        }
+    }
+
+    private var reactionScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginReactionScrubIfNeeded()
+                case .second(true, let drag):
+                    beginReactionScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: reactionTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredReactionIndex { HapticFeedback.light() }
+                    scrubHoveredReactionIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredReactionIndex
+                isScrubbingReactions = false
+                onScrubStateChanged(false)
+                scrubHoveredReactionIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: quickEmojis.count) {
+                case .select(let index):
+                    triggerStoryReaction(quickEmojis[index], reactionTileFrames[index])
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showEmojiStrip = false
+                        showFullEmojiPicker = true
+                    }
+                case .keepOpen:
+                    break // la barre reste ouverte en mode posé (tap possible)
+                }
+            }
+    }
+
+    /// Même mécanique pour la barre de langues (relâchement = sélection de la
+    /// langue ; « + » = liste complète ; hors barre = barre posée).
+    /// Même contrat que `beginReactionScrubIfNeeded` — cf. son commentaire :
+    /// le longpress est acquis à l'entrée en `.second`, pas en `.first(true)`.
+    private func beginLanguageScrubIfNeeded() {
+        guard !isScrubbingLanguages else { return }
+        isScrubbingLanguages = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showLanguageOptions = true
+        }
+    }
+
+    private var languageScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginLanguageScrubIfNeeded()
+                case .second(true, let drag):
+                    beginLanguageScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: languageTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredLanguageIndex { HapticFeedback.light() }
+                    scrubHoveredLanguageIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredLanguageIndex
+                isScrubbingLanguages = false
+                onScrubStateChanged(false)
+                scrubHoveredLanguageIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: availableTranslationLanguages.count) {
+                case .select(let index):
+                    onSelectLanguageOverride(availableTranslationLanguages[index].id)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                    }
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                        showFullLanguagePicker = true
+                    }
+                case .keepOpen:
+                    break
+                }
+            }
     }
 
     var body: some View {
@@ -305,16 +435,27 @@ struct StoryActionSidebarView: View {
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
                     accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55"),
+                    handlesTapViaGesture: true
                 ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showEmojiStrip.toggle()
-                    }
+                    // Tap court = ❤️ immédiat (pattern Instagram/WhatsApp) —
+                    // la barre s'ouvre désormais au LONGPRESS (scrub).
+                    triggerStoryReaction("❤️", nil)
                 }
+                .highPriorityGesture(reactionScrubGesture)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: StoryHeartFrameKey.self,
+                            value: proxy.frame(in: .named(StoryScrubSpace.name))
+                        )
+                    }
+                )
                 .scaleEffect(heartScale)
-                // Bounce on every reaction sent — via the quick strip below
-                // OR the full-screen picker — since heartBouncePulse ticks
-                // inside triggerStoryReaction, the single reaction-sent seam.
+                // Bounce on every reaction that LANDS — via the quick strip,
+                // the scrub, or the full-screen picker — since heartBouncePulse
+                // ticks at the flight's arrival (+Canvas.swift Layer 9), the
+                // single impact seam regardless of origin.
                 .adaptiveOnChange(of: heartBouncePulse) { _, _ in
                     bounceHeart()
                 }
@@ -324,7 +465,8 @@ struct StoryActionSidebarView: View {
                             quickEmojis: quickEmojis,
                             style: .dark,
                             onReact: { emoji in
-                                triggerStoryReaction(emoji)
+                                let index = quickEmojis.firstIndex(of: emoji)
+                                triggerStoryReaction(emoji, index.flatMap { reactionTileFrames[$0] })
                             },
                             onDismiss: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -336,7 +478,10 @@ struct StoryActionSidebarView: View {
                                     showEmojiStrip = false
                                     showFullEmojiPicker = true
                                 }
-                            }
+                            },
+                            highlightedIndex: scrubHoveredReactionIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { reactionTileFrames = $0 }
                         )
                         .fixedSize()
                         .transition(.asymmetric(
@@ -623,13 +768,15 @@ struct StoryActionSidebarView: View {
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions || showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
-                    activeGlow: MeeshyColors.indigo400
+                    activeGlow: MeeshyColors.indigo400,
+                    handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showLanguageOptions.toggle()
                     }
                 }
+                .highPriorityGesture(languageScrubGesture)
                 .overlay(alignment: .topLeading) {
                     if let code = displayedLanguageCode, !code.isEmpty {
                         Text(code.uppercased())
@@ -665,7 +812,10 @@ struct StoryActionSidebarView: View {
                                     showLanguageOptions = false
                                     showFullLanguagePicker = true
                                 }
-                            }
+                            },
+                            highlightedIndex: scrubHoveredLanguageIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { languageTileFrames = $0 }
                         )
                         // Présentée comme la barre de réaction (L292) : `.fixedSize()`
                         // pour que la pilule ÉPOUSE son contenu, jamais une largeur

@@ -281,10 +281,35 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
         // B1 — make the row re-render when a fresh translation arrives.
+        //
+        // La VALEUR est repliée, pas seulement la clé : c'est elle que la ligne
+        // affiche (`resolvedLastMessagePreview`). Le gateway ne ré-émet
+        // `conversation:updated` qu'aux lecteurs dont la carte porte la langue
+        // qui vient d'atterrir (`PreviewUpdateScope.onlyIfPreviewCarriesLanguage`),
+        // et une RETRADUCTION garde le même `lastMessageId`, le même
+        // `lastMessagePreview` (l'original ne bouge pas), le même
+        // `lastMessageAt` et le même jeu de clés. Hasher les seules clés gelait
+        // donc la ligne sur la traduction d'avant, définitivement : le portillon
+        // `.equatable()` renvoyait `true` et SwiftUI n'appelait pas `body`.
+        //
+        // Tri par clé : `Dictionary` n'a pas d'ordre d'itération stable, et un
+        // hash non déterministe ouvrirait le portillon au hasard. Chaque clé et
+        // chaque valeur sont combinées SÉPARÉMENT — une concaténation confondrait
+        // `["a": "bc"]` et `["ab": "c"]`.
         if let translations = lastMessageTranslations {
-            h.combine(translations.keys.sorted().joined(separator: ","))
+            for key in translations.keys.sorted() {
+                h.combine(key)
+                h.combine(translations[key])
+            }
         }
         h.combine(lastMessageOriginalLanguage)
+        // Position hissée : un message position-seule a un `lastMessagePreview`
+        // vide par construction et la ligne compose son libellé depuis ce champ
+        // (`ThemedConversationRow`, branche `.standard`, + label VoiceOver). La
+        // présence est repliée en plus du nom : une position sans nom affiche
+        // quand même « Position », que `name` seul (nil des deux côtés) raterait.
+        h.combine(lastMessageLocation != nil)
+        h.combine(lastMessageLocation?.name)
         h.combine(name)
         h.combine(userState.isMuted)
         h.combine(userState.isPinned)

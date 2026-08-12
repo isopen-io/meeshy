@@ -12,10 +12,11 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import {
-  loadPostAcl,
   loadCommentPostAcl,
   canUserConsumePost,
   canUserInteractWithPost,
+  resolveInteractionTarget,
+  resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
 
 /**
@@ -67,12 +68,18 @@ export function registerCommentRoutes(
       // Le fil hérite de l'audience du post : lire les commentaires d'un post
       // qu'on n'a pas le droit de voir, c'est en lire le contenu. Refus en 404
       // et non 403 — distinguer révélerait l'existence du post.
-      const postAcl = await loadPostAcl(prisma, postId);
-      if (!postAcl || !(await canUserConsumePost(prisma, postAcl, currentUserId))) {
+      //
+      // Repost simple → racine (tâche 9) : un repost `isQuote:false` n'a pas
+      // de fil propre — lire ses commentaires renvoie ceux de sa RACINE
+      // (`resolveConsumptionTarget`, même point unique que l'écriture ci-dessous,
+      // avec le verdict de CONSOMMATION — amis ∪ contacts DM). Une citation
+      // garde son propre fil.
+      const target = await resolveConsumptionTarget(prisma, postId, currentUserId);
+      if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      const result = await commentService.getComments(postId, cursor, limit, currentUserId);
+      const result = await commentService.getComments(target.id, cursor, limit, currentUserId);
 
       const commentContents = result.items
         .map((c: any) => c.content as string)
@@ -154,10 +161,17 @@ export function registerCommentRoutes(
       // fil d'une story FRIENDS sans pouvoir y écrire. La garde précède
       // l'écriture — sans elle, le commentaire était persisté puis notifiait
       // l'auteur, qui découvrait un intrus dans un fil restreint.
-      const postAcl = await loadPostAcl(prisma, postId);
-      if (!postAcl || !(await canUserInteractWithPost(prisma, postAcl, authContext.registeredUser.id))) {
+      //
+      // Repost simple → racine (tâche 9) : un repost `isQuote:false` n'a pas
+      // de fil propre — le commentaire atterrit sur le fil de sa RACINE
+      // (`resolveInteractionTarget`, même point unique que REST like/unlike
+      // et le socket `post:reaction-add/remove`). Une citation garde son
+      // propre fil. Racine invisible pour l'acteur → refus standard.
+      const target = await resolveInteractionTarget(prisma, postId, authContext.registeredUser.id);
+      if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      const targetPostId = target.id;
 
       // Idempotent via clientMutationId — replays return the same comment.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
@@ -168,7 +182,7 @@ export function registerCommentRoutes(
         kind: 'createComment',
         op: async () => {
           const c = await commentService.addComment(
-            postId,
+            targetPostId,
             authContext.registeredUser.id,
             SecuritySanitizer.sanitizeText(parsed.data.content),
             parsed.data.parentId,
@@ -195,15 +209,17 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast comment added via Socket.IO
+      // Broadcast comment added via Socket.IO — porte l'id de la CIBLE réelle
+      // (`targetPostId`, la racine pour un repost simple) : les clients
+      // patchent l'original partout où il apparaît.
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
-        where: { id: postId },
+        where: { id: targetPostId },
         select: { authorId: true, commentCount: true, type: true, content: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
       });
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
-          postId,
+          postId: targetPostId,
           comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
           commentCount: post.commentCount,
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: broadcast comment added failed'));
@@ -233,7 +249,7 @@ export function registerCommentRoutes(
 
             notifService.createCommentMentionNotificationsBatch({
               commentId: comment.id,
-              postId,
+              postId: targetPostId,
               commenterId: authContext.registeredUser.id,
               mentionedUserIds,
               commentExcerpt: parsed.data.content?.slice(0, 100),
@@ -266,7 +282,7 @@ export function registerCommentRoutes(
           if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId)) {
             notifService.createCommentReplyNotification({
               actorId: authContext.registeredUser.id,
-              postId,
+              postId: targetPostId,
               commentAuthorId: parentComment.authorId,
               commentId: comment.id,
               parentCommentId: parsed.data.parentId,
@@ -286,7 +302,7 @@ export function registerCommentRoutes(
           // commentaire : post_comment + story_new_comment).
           notifService.createPostCommentNotification({
             actorId: authContext.registeredUser.id,
-            postId,
+            postId: targetPostId,
             postAuthorId: post.authorId,
             commentId: comment.id,
             commentPreview: parsed.data.content,
@@ -302,7 +318,7 @@ export function registerCommentRoutes(
       // excludeUserIds: skip users who already received user_mentioned (higher priority)
       if (notifService && post?.authorId && !parsed.data.parentId) {
         notifService.createStoryCommentNotificationsBatch({
-          postId,
+          postId: targetPostId,
           commentId: comment.id,
           storyAuthorId: post.authorId,
           commenterId: authContext.registeredUser.id,
@@ -325,7 +341,7 @@ export function registerCommentRoutes(
           const translationService = PostTranslationService.shared;
           translationService.translateComment(
             comment.id,
-            postId,
+            targetPostId,
             parsed.data.content,
             (comment as any).originalLanguage,
           ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: translate comment failed'));
@@ -346,7 +362,7 @@ export function registerCommentRoutes(
         && !parsed.data.mobileTranscription
       ) {
         PostAudioService.shared.processPostAudio({
-          postId,
+          postId: targetPostId,
           postMediaId: linkedMedia.id,
           fileUrl: linkedMedia.fileUrl ?? '',
           authorId: authContext.registeredUser.id,

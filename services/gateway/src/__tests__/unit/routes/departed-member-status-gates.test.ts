@@ -169,7 +169,23 @@ function buildPrisma(isActive: boolean) {
         },
       })),
     },
-    participant: { findFirst: jest.fn().mockResolvedValue(null) },
+    // `GET /messages/:messageId/read-status` ne filtre plus l'appartenance EN
+    // RELATION : elle passe par `resolveCallerParticipant`, la règle d'identité
+    // partagée. Le double doit donc discriminer ici AUSSI — même exigence
+    // qu'au-dessus : une ligne `isActive: false` ne sort pas d'un `where` qui
+    // exige `isActive: true`, sinon la garde mesurée par ce fichier n'est plus
+    // mesurée du tout.
+    participant: {
+      findFirst: jest.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const matches =
+          (where.userId === undefined || where.userId === USER_ID) &&
+          (where.id === undefined) &&
+          (where.conversationId === undefined || where.conversationId === CONV_ID) &&
+          (where.isActive === undefined || where.isActive === isActive);
+        return matches ? { id: 'participant-departed-1' } : null;
+      }),
+    },
   } as any;
 }
 

@@ -118,6 +118,12 @@ async function buildApp(opts: {
       findFirst: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
       }),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1). Défaut :
+      // aucun repost dans le batch — même comportement qu'avant. L'unitaire
+      // replie sa résolution dans le `select` de `update` (Important #2,
+      // revue), aucun `findUnique` séparé n'est plus nécessaire.
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   };
 
@@ -571,6 +577,54 @@ describe('POST /posts/:id/impression — detail source increments postOpenCount'
   });
 });
 
+describe('POST /posts/:id/impression — on a repost, credits the root impressionCount too', () => {
+  it('folds repostOfId/originalRepostOfId resolution into the update select (no standalone findUnique) and increments the root once', async () => {
+    const ROOT_ID = '507f1f77bcf86cd799439077';
+    const prisma = {
+      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      post: {
+        // Le `select` de `update` porte la résolution — pas de findUnique
+        // séparé sur ce chemin chaud (Important #2, revue chantier reposts).
+        update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn<any>(),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
+    expect(res.statusCode).toBe(200);
+    // Réduction de requêtes : plus de lecture dédiée avant l'écriture.
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: POST_ID },
+      data: { impressionCount: { increment: 1 } },
+      select: { repostOfId: true, originalRepostOfId: true },
+    });
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: ROOT_ID, deletedAt: { isSet: false } },
+      data: { impressionCount: { increment: 1 } },
+    });
+    await app.close();
+  });
+
+  it('non-repost post: no root credit attempted, no standalone findUnique either', async () => {
+    const prisma = {
+      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      post: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn<any>(),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
+    expect(prisma.post.updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
@@ -615,6 +669,46 @@ describe('POST /posts/impressions/batch — empty postIds returns 0', () => {
   });
 });
 
+describe('POST /posts/impressions/batch — 2 reposts of the same original credit it +2, not +1', () => {
+  it('resolves repostOf/originalRepostOfId in ONE findMany and groups root credits by occurrence count', async () => {
+    const ROOT_ID = '507f1f77bcf86cd799439077';
+    const REPOST_A = '507f1f77bcf86cd799439078';
+    const REPOST_B = '507f1f77bcf86cd799439079';
+    const prisma = {
+      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: REPOST_A, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
+          { id: REPOST_B, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
+        ]),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts/impressions/batch',
+      payload: { postIds: [REPOST_A, REPOST_B] },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // UNE requête pour résoudre repostOf/originalRepostOfId de tout le batch.
+    expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.post.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [REPOST_A, REPOST_B] }, repostOfId: { not: null } },
+      select: { id: true, repostOfId: true, originalRepostOfId: true },
+    });
+
+    // Chaque repost distinct du batch crédite la MÊME racine → +2, jamais +1
+    // (piège `in` dédupliqué, appliqué ici au crédit de racine).
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [ROOT_ID] }, deletedAt: { isSet: false } },
+      data: { impressionCount: { increment: 2 } },
+    });
+    await app.close();
+  });
+});
+
 describe('POST /posts/impressions/batch — caps at 50 entries', () => {
   it('returns 200 and caps batch at 50 entries', async () => {
     const postIds = Array.from({ length: 60 }, (_, i) => `507f1f77bcf86cd7994390${i.toString().padStart(2, '0')}`);
@@ -622,7 +716,10 @@ describe('POST /posts/impressions/batch — caps at 50 entries', () => {
       postImpression: {
         createMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
       },
-      post: { updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds } });
@@ -636,7 +733,10 @@ describe('POST /posts/impressions/batch — service error', () => {
   it('returns 500 when createMany throws', async () => {
     const prisma = {
       postImpression: { createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
-      post: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      post: {
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds: [POST_ID] } });

@@ -183,6 +183,26 @@ describe('PostsFeedScreen — handlePublish relay (Task 1)', () => {
     );
   });
 
+  it('relays optimisticMedia to createPostMutation (Task 4, point 0bis)', () => {
+    render(<PostsFeedScreen />);
+
+    const optimisticMedia = [
+      { id: 'att-1', mimeType: 'image/png', fileUrl: 'https://cdn.test/1.png', thumbnailUrl: undefined, order: 0 },
+    ];
+    capturedOnPublish.current!({
+      content: '',
+      type: 'POST',
+      visibility: 'PUBLIC',
+      mediaIds: ['att-1'],
+      optimisticMedia,
+    });
+
+    expect(mockCreatePostMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ optimisticMedia }),
+      expect.anything(),
+    );
+  });
+
   it('omits visibilityUserIds and mediaIds when PostComposer does not send them', () => {
     render(<PostsFeedScreen />);
 

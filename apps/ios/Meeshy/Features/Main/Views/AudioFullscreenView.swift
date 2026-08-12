@@ -23,7 +23,18 @@ struct AudioFullscreenSource: Identifiable {
     /// Renseigné uniquement en conversation — permet de scroller vers le
     /// message d'origine à la fermeture. `nil` pour feed/commentaire/réel/post.
     let messageId: String?
-    /// Conversation d'origine — nil pour feed/commentaire/post.
+    /// Id "session" utilisé par le coordinator (`playThroughCoordinator`,
+    /// `attachmentFinishedPublisher`) pour reconnaître deux lectures comme
+    /// faisant partie du même ensemble. En conversation : la vraie
+    /// `Conversation.id`. Standalone (feed/commentaire/post) : l'id de
+    /// l'ENTITÉ PORTEUSE (commentId / post.id / repost.id) — repris tel quel
+    /// du `QueuedAudio.conversationId` que le `CoordinatedAudioPlayer` inline
+    /// de la même surface utilise déjà, pour que l'ouverture plein écran de
+    /// cette entité soit vue comme la MÊME session (pas de reset de file/
+    /// carte Now Playing). `nil` uniquement pour un plein écran sans session
+    /// inline connue à faire correspondre (ex. réels, non wirés à ce jour) —
+    /// jamais un simple oubli de câblage sur une surface qui, elle, a un id
+    /// porteur disponible.
     let conversationId: String?
     /// Nom affiché par la carte Now Playing (conversation, sinon auteur).
     let nowPlayingContextName: String
@@ -1199,12 +1210,17 @@ extension AudioFullscreenSource {
     /// Construit une source plein écran depuis un média audio de feed
     /// (commentaire, post, réel). La transcription et les versions traduites
     /// (Prisme) proviennent du `FeedMedia` ; l'auteur et les métadonnées du
-    /// post/commentaire porteur.
+    /// post/commentaire porteur. `conversationId` : id de l'entité porteuse
+    /// (commentId/post.id/repost.id) quand l'appelant a déjà un
+    /// `CoordinatedAudioPlayer` inline pour ce même audio — voir
+    /// `AudioFullscreenSource.conversationId`. `nil` pour un appelant sans
+    /// session inline connue (ex. réels, non wirés à ce jour).
     static func fromFeed(media: FeedMedia,
                          author: ProfileSheetUser,
                          originalLanguage: String?,
                          caption: String,
-                         createdAt: Date) -> AudioFullscreenSource {
+                         createdAt: Date,
+                         conversationId: String? = nil) -> AudioFullscreenSource {
         AudioFullscreenSource(
             id: media.id,
             attachment: media.toMessageAttachment(),
@@ -1214,7 +1230,8 @@ extension AudioFullscreenSource {
             caption: caption,
             author: author,
             createdAt: createdAt,
-            messageId: nil
+            messageId: nil,
+            conversationId: conversationId
         )
     }
 }

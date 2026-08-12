@@ -1,9 +1,8 @@
 /**
  * conversation-unread-cache — écriture centralisée du compteur non-lu d'une
- * conversation dans les DEUX caches React Query (liste plate + infinite).
- * Utilisée par le handler socket `conversation:unread-updated` (avec garde de
- * conversation active) et par le reset optimiste à l'ouverture d'une
- * conversation.
+ * conversation dans le cache infinite, le SEUL que la sidebar lit. Utilisée par
+ * le handler socket `conversation:unread-updated` (avec garde de conversation
+ * active) et par le reset optimiste à l'ouverture d'une conversation.
  */
 
 import { QueryClient } from '@tanstack/react-query';
@@ -13,7 +12,6 @@ import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 type TestConversation = { id: string; unreadCount?: number; title?: string };
 
 function seedCaches(queryClient: QueryClient, conversations: TestConversation[]) {
-  queryClient.setQueryData(queryKeys.conversations.list(undefined), conversations);
   queryClient.setQueryData(queryKeys.conversations.infinite(), {
     pages: [
       {
@@ -36,17 +34,13 @@ describe('setConversationUnreadInCache', () => {
     queryClient = new QueryClient();
   });
 
-  it('écrit le compteur dans la liste plate ET dans toutes les pages du cache infinite', () => {
+  it('écrit le compteur dans TOUTES les pages du cache infinite', () => {
     seedCaches(queryClient, [
       { id: 'a', unreadCount: 2 },
       { id: 'b', unreadCount: 5 },
     ]);
 
     setConversationUnreadInCache(queryClient, 'b', 0);
-
-    const flat = queryClient.getQueryData(queryKeys.conversations.list(undefined)) as TestConversation[];
-    expect(flat.find((c) => c.id === 'b')!.unreadCount).toBe(0);
-    expect(flat.find((c) => c.id === 'a')!.unreadCount).toBe(2);
 
     const infinite = queryClient.getQueryData(queryKeys.conversations.infinite()) as {
       pages: Array<{ conversations: TestConversation[] }>;

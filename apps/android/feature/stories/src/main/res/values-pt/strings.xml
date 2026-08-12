@@ -89,6 +89,8 @@
     <string name="stories_composer_filter_vivid">Vívido</string>
     <string name="stories_composer_filter_fade">Esmaecido</string>
     <string name="stories_composer_filter_chrome">Cromo</string>
+    <string name="stories_action_react">Reagir</string>
+    <string name="stories_action_translations">Traduções</string>
 
     <!-- Story options -->
     <string name="stories_options">Opções da história</string>

@@ -333,7 +333,11 @@ extension FeedPostCard {
                             author: ProfileSheetUser.from(feedPost: post),
                             originalLanguage: post.originalLanguage,
                             caption: post.content,
-                            createdAt: post.timestamp
+                            createdAt: post.timestamp,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE post doit être vu comme
+                            // la même session coordinator.
+                            conversationId: post.id
                         )
                     },
                     availability: availability,

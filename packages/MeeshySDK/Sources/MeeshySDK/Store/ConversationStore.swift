@@ -483,6 +483,62 @@ public actor ConversationStore {
         return changed ? conv : nil
     }
 
+    /// Apply a `user:updated` socket event — un CONTACT a changé son profil
+    /// public (nom, avatar, bannière). Ne touche QUE les conversations
+    /// directes dont ce contact est l'interlocuteur : dans un groupe, la ligne
+    /// porte l'identité du GROUPE, pas celle d'un membre.
+    public func applyUserUpdated(_ event: UserUpdatedEvent) {
+        // Snapshot AVANT la boucle : `commit` réécrit `conversations`, et itérer
+        // la vue `.values` d'un dictionnaire qu'on mute est un comportement
+        // indéfini.
+        for conv in Array(conversations.values) {
+            guard let merged = Self.merging(conv, withUserUpdate: event) else { continue }
+            commit(merged)
+        }
+    }
+
+    /// Pure merge rule behind `applyUserUpdated`, returning `nil` when the
+    /// payload changes nothing for this conversation. Lifted out of the actor
+    /// for the same reason as `merging(_:with:)` — le cache disque doit
+    /// appliquer LA MÊME règle que le store RAM.
+    ///
+    /// La ligne d'une conversation directe est hydratée par le REST depuis le
+    /// participant d'en face : `title` ← `APIConversationUser.name`,
+    /// `participantAvatarURL` ← `resolvedAvatar`, etc. Le socket rejoue
+    /// exactement ces champs-là, avec le même résolveur de nom, sinon la ligne
+    /// dirait deux choses différentes selon le transport qui l'a remplie.
+    public nonisolated static func merging(
+        _ conversation: MeeshyConversation,
+        withUserUpdate event: UserUpdatedEvent
+    ) -> MeeshyConversation? {
+        guard conversation.type == .direct,
+              conversation.participantUserId == event.userId else { return nil }
+
+        var conv = conversation
+        var changed = false
+
+        if let name = event.resolvedDisplayName, name != conv.title {
+            conv.title = name
+            changed = true
+        }
+        if event.hasNameGroup, let handle = event.username, handle != conv.participantUsername {
+            conv.participantUsername = handle
+            changed = true
+        }
+        // `.replaced(nil)` = photo RETIRÉE : poser `nil` est le but, pas un
+        // no-op. Un `if let` ici aurait gardé l'ancienne image pour toujours.
+        if case .replaced(let url) = event.avatar, url != conv.participantAvatarURL {
+            conv.participantAvatarURL = url
+            changed = true
+        }
+        if case .replaced(let url) = event.banner, url != conv.participantBanner {
+            conv.participantBanner = url
+            changed = true
+        }
+
+        return changed ? conv : nil
+    }
+
     // MARK: - Composite mutations
 
     /// Create a new category (server round-trip) then assign `convId` to it.

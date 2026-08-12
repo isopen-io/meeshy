@@ -470,6 +470,39 @@ final class ConversationListViewModelTests: XCTestCase {
                        "4xx must roll back to the previous unread count")
     }
 
+    /// Bug user 2026-08-11 : une conversation déjà ouverte réaffichait parfois
+    /// sa pastille de non-lu indéfiniment. Cause racine — `ConversationStore`
+    /// (RAM, tiers) n'apprenait jamais qu'une conversation venait d'être lue
+    /// via le flux normal d'ouverture (`.conversationMarkedRead`, posté par
+    /// `ConversationViewModel.markAsRead`/les quick-actions push/le widget) :
+    /// sa prochaine republication — déclenchée par N'IMPORTE QUELLE mutation
+    /// sur N'IMPORTE QUELLE AUTRE conversation — regreffait son `unreadCount`
+    /// périmé sur la ligne pourtant déjà lue.
+    func test_conversationMarkedRead_correctsTheStore_survivesAnUnrelatedRepublish() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([
+            makeConversation(id: "conv1", unreadCount: 9),
+            makeConversation(id: "conv2", unreadCount: 0)
+        ])
+        await sut.storeHydrationTask?.value
+
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: "conv1")
+        await waitForListState(sut, id: "conv1") { $0.unreadCount == 0 }
+
+        // N'IMPORTE QUELLE autre mutation republie TOUT le snapshot du store
+        // (`ConversationStore.commit` → `publishList`) — avant le correctif,
+        // le store n'ayant jamais appris la lecture de "conv1", cette
+        // republication regreffait son vieux `unreadCount=9` sur la ligne.
+        try await store.apply(.setPinned(true), for: "conv2")
+        await waitForListState(sut, id: "conv2") { $0.isPinned }
+
+        XCTAssertEqual(
+            sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+            "Une mutation SANS RAPPORT sur une autre conversation ne doit pas ressusciter le badge d'une conversation déjà lue"
+        )
+    }
+
     // MARK: - deleteConversation: Success (soft delete via store)
 
     func test_deleteConversation_softDeletesViaStore() async throws {
@@ -718,6 +751,86 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations[0].userState.unreadCount, 5)
         XCTAssertEqual(sut.conversations[1].userState.unreadCount, 3, "Other conversations should not be affected")
+    }
+
+    // MARK: - Socket: effectif de la ligne de liste
+
+    /// Les événements d'appartenance sont `Decodable` seuls : leur init
+    /// mémberwise reste interne au SDK. Le JSON est donc la seule façon de les
+    /// construire depuis le module de test — et c'est aussi la forme exacte
+    /// que le gateway envoie.
+    private func makeParticipantJoinedEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantJoinedEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    private func makeParticipantLeftEvent(
+        conversationId: String,
+        userId: String
+    ) -> ParticipantLeftEvent {
+        JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","leftAt":"2026-08-11T10:00:00.000Z"}
+        """)
+    }
+
+    /// L'effectif ne connaissait que des soustractions — départ, retrait,
+    /// bannissement — et dérivait durablement vers le bas, `schedulePersist`
+    /// écrivant chaque valeur fausse dans le cache disque.
+    func test_socketParticipantJoined_incrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 5)
+    }
+
+    /// Le nouvel arrivant reçoit son effectif par `conversation:new`, où le
+    /// serveur le compte DÉJÀ. Le gateway l'écarte de l'éventail, mais son
+    /// auto-join de room est asynchrone : le garde local est la seconde barrière.
+    func test_socketParticipantJoined_ignoresSelf() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "me")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 4)
+    }
+
+    func test_socketParticipantSelfLeft_decrementsMemberCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 4
+        sut.conversations = [conversation]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 3)
     }
 
     // MARK: - Socket: Typing
@@ -1743,6 +1856,94 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertNil(sut.conversations.first?.lastMessageLocation,
                      "Un texte qui remplace la position doit EFFACER la pastille du message précédent — c'est l'atomicité de la facette")
+    }
+
+    // MARK: - conversation:updated : Prisme Linguistique de la ligne
+
+    /// Une ÉDITION arrive à horodatage ÉGAL — pas de bump, c'est la branche
+    /// `else`. Le gateway périme la carte du Prisme dans la MÊME écriture que
+    /// le nouveau texte (`translations: null`, `routes/messages.ts`). Sans
+    /// application de la paire, le résolveur — qui PRÉFÈRE la traduction à
+    /// `lastMessagePreview` — rendrait le texte D'AVANT indéfiniment.
+    func test_conversationUpdatedEvent_edit_expiresTheStalePrismCard() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        let sameInstant = Date(timeIntervalSince1970: 5_000)
+        var conv = makeConversation(id: "prism-edit", lastMessageAt: sameInstant)
+        conv.lastMessageId = "m-1"
+        conv.lastMessagePreview = "Old text"
+        conv.lastMessageTranslations = ["fr": "Ancien texte"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-edit", lastMessageAt: sameInstant,
+            lastMessageId: "m-1", lastMessagePreview: "New text",
+            lastMessageTranslations: .replaced([:]))
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageTranslations,
+                     "Une carte reçue `null` DIT que la traduction est périmée : la garder fait rendre le texte d'avant")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "New text",
+            "Le lecteur francophone doit voir le texte ÉDITÉ, jamais la traduction de l'ancien")
+    }
+
+    /// Nouveau message : branche `bumpToTop`. La facette est délibérément
+    /// neutre pour ce qu'elle IGNORE, mais la carte que le gateway vient de
+    /// résoudre POUR CE lecteur voyage dans l'événement — la jeter affiche
+    /// l'original là où une traduction était disponible et déjà payée.
+    func test_conversationUpdatedEvent_bump_carriesThePrismCardToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-bump", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-2", lastMessagePreview: "Hello",
+            lastMessageTranslations: .replaced(["fr": "Bonjour"]),
+            lastMessageOriginalLanguage: "en")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "La carte résolue par le gateway pour ce lecteur doit atteindre la ligne dès le bump")
+        XCTAssertEqual(
+            sut.conversations.first?.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "Bonjour",
+            "Prisme ['fr'], message anglais, traduction française disponible ⇒ « Bonjour », jamais « Hello »")
+    }
+
+    /// Le tri-état existe pour CE cas : un renommage ne parle pas du dernier
+    /// message. Clé absente ⇒ `.unchanged` ⇒ la carte du cache survit. Un
+    /// `Optional` seul confondrait ce cas avec le `null` du test ci-dessus, et
+    /// vider inconditionnellement effacerait la carte que `message:new` vient
+    /// d'installer sur le chemin d'envoi.
+    func test_conversationUpdatedEvent_metadataOnly_leavesThePrismCardIntact() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "prism-meta", type: .group,
+                                    lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessagePreview = "Hello"
+        conv.lastMessageTranslations = ["fr": "Bonjour"]
+        conv.lastMessageOriginalLanguage = "en"
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "prism-meta", lastMessageAt: nil, title: "Nouveau nom")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom")
+        XCTAssertEqual(sut.conversations.first?.lastMessageTranslations?["fr"], "Bonjour",
+                       "Une mise à jour de métadonnées ne parle pas du dernier message : sa carte doit survivre")
     }
 
     // MARK: - conversation:updated socket event with lastMessageAt
@@ -3306,6 +3507,9 @@ private func makeConversationUpdatedEvent(
     avatar: String? = nil,
     includeUpdatedBy: Bool = true,
     lastMessageId: String? = nil,
+    lastMessagePreview: String? = nil,
+    lastMessageTranslations: LastMessagePreviewTranslations? = nil,
+    lastMessageOriginalLanguage: String? = nil,
     locationName: String? = nil,
     senderId: String? = nil
 ) -> ConversationUpdatedEvent {
@@ -3321,6 +3525,17 @@ private func makeConversationUpdatedEvent(
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
     if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let lastMessagePreview { json["lastMessagePreview"] = lastMessagePreview }
+    if let lastMessageOriginalLanguage { json["lastMessageOriginalLanguage"] = lastMessageOriginalLanguage }
+    // Le tri-état du Prisme se joue sur la PRÉSENCE de la clé, jamais sur sa
+    // valeur : `nil` ne l'écrit pas (donc `.unchanged` au décodage),
+    // `.replaced([:])` l'écrit à `null` — c'est littéralement ce que le gateway
+    // envoie pour périmer la carte après une édition — et `.replaced(map)`
+    // l'écrit peuplée. Passer par le JSON plutôt que par le mémberwise init est
+    // ce qui rend cette distinction exprimable ici.
+    if case .some(.replaced(let map)) = lastMessageTranslations {
+        json["lastMessageTranslations"] = map.isEmpty ? NSNull() as Any : map as Any
+    }
     if let senderId { json["senderId"] = senderId }
     if let locationName {
         json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]

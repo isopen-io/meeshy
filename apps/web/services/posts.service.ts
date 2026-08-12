@@ -57,6 +57,24 @@ export interface RepostRequest {
   readonly isQuote?: boolean;
 }
 
+export interface SharePostOptions {
+  readonly platform?: string;
+  /**
+   * Mints a per-caller tracking link (`meeshy.me/l/<token>`) the gateway can
+   * attribute clicks back to, mirroring iOS `POST /posts/:id/share
+   * {generateLink:true}`. Reusing an existing link does NOT re-increment
+   * `shareCount` — the counter tracks unique sharers, not repeated taps.
+   */
+  readonly generateLink?: boolean;
+}
+
+export interface SharePostResponse {
+  readonly shared: boolean;
+  readonly shareCount: number;
+  readonly shortUrl?: string;
+  readonly token?: string;
+}
+
 /**
  * Surface a post impression originates from. Mirrors the gateway's accepted
  * `source` enum (`/posts/:postId/impression` + `/posts/impressions/batch`) and
@@ -77,6 +95,12 @@ export type ImpressionSource =
  * call. Repeated ids are legitimate (one impression per appearance) and each
  * consumes a slot — the gateway groups them and increments by the count. */
 const IMPRESSION_BATCH_LIMIT = 50;
+
+/**
+ * Surface a media download originates from. Mirrors the gateway's
+ * `DOWNLOAD_SURFACES` (`services/gateway/src/routes/posts/types.ts`).
+ */
+export type DownloadSurface = 'feed' | 'detail' | 'reel';
 
 export interface FeedFilters {
   readonly cursor?: string;
@@ -172,11 +196,6 @@ export const postsService = {
     return unwrap(response);
   },
 
-  async getStories(): Promise<{ success: boolean; data: Post[] }> {
-    const response = await apiService.get<{ success: boolean; data: Post[] }>('/posts/feed/stories');
-    return unwrap(response);
-  },
-
   async getStatuses(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed/statuses${buildQuery(filters)}`);
     return unwrap(response);
@@ -253,10 +272,19 @@ export const postsService = {
     return unwrap(response);
   },
 
-  async sharePost(postId: string, platform?: string): Promise<{ shared: boolean; shareCount: number }> {
-    const response = await apiService.post<{ shared: boolean; shareCount: number }>(
+  /**
+   * `platform` accepts either the legacy bare string (backward-compatible
+   * with `useSharePostMutation`) or a {@link SharePostOptions} object to also
+   * request a tracking link (`generateLink: true`) — see {@link SharePostResponse}.
+   */
+  async sharePost(postId: string, platform?: string | SharePostOptions): Promise<SharePostResponse> {
+    const options: SharePostOptions = typeof platform === 'string' ? { platform } : (platform ?? {});
+    const body: Record<string, unknown> = {};
+    if (options.platform) body.platform = options.platform;
+    if (options.generateLink) body.generateLink = true;
+    const response = await apiService.post<SharePostResponse>(
       `/posts/${postId}/share`,
-      platform ? { platform } : undefined,
+      Object.keys(body).length > 0 ? body : undefined,
     );
     return unwrap(response);
   },
@@ -302,6 +330,24 @@ export const postsService = {
 
   async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
     await apiService.post(`/posts/${postId}/impression`, { source });
+  },
+
+  // ── Downloads ────────────────────────────────────────────────────────────
+  // Best-effort analytics ping for "Save media" (PostCard/PostDetail/ReelPlayer,
+  // lightbox `<a download>` pattern) — never throws, a failed ping must not
+  // block the download the browser already triggered.
+
+  async recordMediaDownloads(
+    postId: string,
+    mediaIds: readonly string[],
+    surface: DownloadSurface = 'detail',
+  ): Promise<void> {
+    if (mediaIds.length === 0) return;
+    try {
+      await apiService.post(`/posts/${postId}/downloads`, { mediaIds, surface });
+    } catch {
+      // fire-and-forget : ne jamais bloquer le téléchargement
+    }
   },
 
   // ── Translation ─────────────────────────────────────────────────────────

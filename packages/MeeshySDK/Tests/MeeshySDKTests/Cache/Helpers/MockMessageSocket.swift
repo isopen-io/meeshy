@@ -24,6 +24,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
+    let participantJoined = PassthroughSubject<ParticipantJoinedEvent, Never>()
     let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()

@@ -1,9 +1,11 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PostCard } from '@/components/v2/PostCard';
+import { useToast } from '@/components/v2';
 import { useI18n } from '@/hooks/use-i18n';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import {
@@ -11,6 +13,8 @@ import {
   useFeedPosts,
   useTrendingHashtagsQuery,
 } from '@/hooks/queries/use-feed-query';
+import { reportService } from '@/services/report.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
@@ -55,11 +59,24 @@ export default function HashtagPage() {
   const router = useRouter();
   const { t } = useI18n('feed');
   const userLanguage = usePreferredLanguage();
+  const toastCtx = useToast();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const feedQuery = useHashtagFeedQuery(tag);
   const posts = useFeedPosts(feedQuery);
   const trendingQuery = useTrendingHashtagsQuery();
   const trending = trendingQuery.data ?? [];
+
+  const handleReportPost = useCallback(
+    (postId: string) => {
+      if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
+      reportService
+        .reportPost(postId, 'inappropriate', '')
+        .then(() => toastCtx.addToast(t('toast.postReported', 'Post reported'), 'success'))
+        .catch(() => toastCtx.addToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+    },
+    [t, toastCtx],
+  );
 
   return (
     <DashboardLayout title={`#${tag}`} hideSearch>
@@ -97,6 +114,11 @@ export default function HashtagPage() {
               time={formatRelativeTime(post.createdAt, t)}
               likes={post.likeCount}
               comments={post.commentCount}
+              isAuthor={post.authorId === currentUserId}
+              repostOf={post.repostOf}
+              isQuote={post.isQuote}
+              onReport={() => handleReportPost(post.id)}
+              onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
               onClick={() => router.push(`/feeds/post/${post.id}`)}
             />
           ))}

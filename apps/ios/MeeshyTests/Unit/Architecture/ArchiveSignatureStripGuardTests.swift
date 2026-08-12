@@ -24,6 +24,7 @@ import XCTest
 /// et satisferaient seuls les assertions.
 final class ArchiveSignatureStripGuardTests: XCTestCase {
 
+    private static let postCloneScript = "ci_post_clone.sh"
     private static let stripScript = "ci_post_xcodebuild.sh"
     private static let verifyScript = "verify_embedded_signatures.sh"
     private static let stripHelper = "strip_embedded_signatures"
@@ -285,5 +286,53 @@ final class ArchiveSignatureStripGuardTests: XCTestCase {
         let name = String(line.dropLast(4))
         guard !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return nil }
         return name
+    }
+
+    // MARK: - Entitlements des builds Xcode Cloud (incident builds 1744-1750)
+
+    /// `ci_post_clone.sh` injectait `CODE_SIGNING_ALLOWED = NO` dans les configs
+    /// Release pour contourner un échec d'archive de mai 2026. Conséquence non
+    /// anticipée : l'archive sortait NON SIGNÉE, et l'export Xcode Cloud dérive
+    /// les entitlements de la signature existante — il ne restait donc que les 4
+    /// entitlements par défaut. Tous les builds TestFlight ont été livrés sans
+    /// `aps-environment` ni `application-groups` (push mort, stores App Group
+    /// inaccessibles), et l'app macOS crashait en boucle au boot (build 1750,
+    /// 2026-08-11 : SQLITE_AUTH sur le conteneur → repli `:memory:` impossible
+    /// en WAL → preconditionFailure). Le patch ne doit JAMAIS revenir.
+    func test_ciPostClone_neverDisablesCodeSigningInReleaseConfigs() throws {
+        let script = strippingHashComments(try contents(
+            of: iosDirectory
+                .appendingPathComponent("ci_scripts")
+                .appendingPathComponent(Self.postCloneScript)
+        ))
+        XCTAssertFalse(
+            script.contains("CODE_SIGNING_ALLOWED"),
+            "ci_post_clone.sh ne doit plus désactiver la signature de l'archive : une archive non signée perd TOUS ses entitlements à l'export Xcode Cloud (incident builds 1744-1750)"
+        )
+    }
+
+    /// Verrou aval du même incident : le hook post-archive doit VÉRIFIER que
+    /// l'app archivée est signée et porte les entitlements produit
+    /// (`application-groups`, `aps-environment`) et sortir non-zéro sinon —
+    /// c'est ce qui rend le run Xcode Cloud VISIBLEMENT rouge au lieu de
+    /// laisser partir un build TestFlight muet et amputé.
+    func test_ciPostXcodebuild_gatesArchiveEntitlements() throws {
+        let script = strippingHashComments(try contents(
+            of: iosDirectory
+                .appendingPathComponent("ci_scripts")
+                .appendingPathComponent(Self.stripScript)
+        ))
+        XCTAssertTrue(
+            script.contains("com.apple.security.application-groups"),
+            "ci_post_xcodebuild.sh doit vérifier l'entitlement application-groups de l'app archivée"
+        )
+        XCTAssertTrue(
+            script.contains("aps-environment"),
+            "ci_post_xcodebuild.sh doit vérifier l'entitlement aps-environment de l'app archivée"
+        )
+        XCTAssertTrue(
+            script.contains("exit 1"),
+            "la vérification d'entitlements doit faire échouer le run (exit non-zéro), pas seulement logger"
+        )
     }
 }

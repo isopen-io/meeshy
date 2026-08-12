@@ -47,7 +47,7 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return UIScreen.main.bounds.height
+        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
         }
     }
 

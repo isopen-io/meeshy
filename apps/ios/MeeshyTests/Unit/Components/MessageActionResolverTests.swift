@@ -105,10 +105,10 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(Array(items.prefix(3)), [.reply, .forward, .thread])
     }
 
-    func test_moreSections_deleteMediaBeforeMessageDelete_whenBothPresent() {
+    func test_moreSections_mediaBeforeMessageDelete_whenBothPresent() {
         let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
-        guard let mediaIdx = items.firstIndex(of: .deleteMedia), let msgIdx = items.firstIndex(of: .delete) else {
-            return XCTFail("deleteMedia et delete attendus")
+        guard let mediaIdx = items.firstIndex(of: .media), let msgIdx = items.firstIndex(of: .delete) else {
+            return XCTFail("media et delete attendus")
         }
         XCTAssertLessThan(mediaIdx, msgIdx)
     }

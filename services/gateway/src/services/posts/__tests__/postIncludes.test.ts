@@ -206,7 +206,24 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'likeCount',
           'commentCount',
           'metadata',
+          'viewCount',
+          'repostCount',
+          'shareCount',
+          'bookmarkCount',
+          'impressionCount',
         ].sort(),
+      );
+    });
+
+    it("selects the original's reach counters — sans eux, aucune UI ne peut afficher les vues/reposts/partages/favoris de l'original (chantier reposts cohérents, tâche 1)", () => {
+      expect(repostOfInclude.select).toEqual(
+        expect.objectContaining({
+          viewCount: true,
+          repostCount: true,
+          shareCount: true,
+          bookmarkCount: true,
+          impressionCount: true,
+        }),
       );
     });
   });

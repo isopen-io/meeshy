@@ -9,7 +9,8 @@ import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from 
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
-import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
 
 export interface PostPublishPayload {
   content: string;
@@ -17,6 +18,14 @@ export interface PostPublishPayload {
   visibility: PostVisibility;
   visibilityUserIds?: string[];
   mediaIds?: string[];
+  /**
+   * Client-only echo of the already-uploaded media (id/mimeType/fileUrl are
+   * known before the post exists server-side), built from `uploadedAttachments`.
+   * Consumed by `useCreatePostMutation` to seed the optimistic post's `media`
+   * so a media-only publish never flashes an empty card — never sent to the
+   * wire (the mutation strips it before calling `postsService.createPost`).
+   */
+  optimisticMedia?: readonly PostMedia[];
 }
 
 export interface PostComposerProps {
@@ -61,6 +70,10 @@ function PostComposer({
   // partaient sans liste → visibilité cassée). Même picker/gate que stories.
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
+  // W7 — Reel ⇄ Post toggle (Task 5). Default REEL, as iOS; only meaningful
+  // while `compositionQualifies` is true — see below, `handlePublish` always
+  // sends 'POST' otherwise so this state can never leak a false promotion.
+  const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -79,17 +92,25 @@ function PostComposer({
     clearAttachments,
   } = useAttachmentUpload({
     token: authToken ?? undefined,
-    // useAttachmentUpload counts `selectedFiles.length + uploadedAttachments.length`
-    // against maxAttachments (useAttachmentUpload.ts:280-281), but selectedFiles is
-    // never trimmed after a successful upload while uploadedAttachments grows
-    // alongside it (:332, :359) — after N successful uploads both arrays hold N,
-    // so the hook counts 2N. Double the ceiling here for headroom; MEDIA_LIMIT
-    // stays the single client-facing cap via `mediaLimitReached` below.
-    maxAttachments: MEDIA_LIMIT * 2,
+    // useAttachmentUpload now counts `selectedFiles` alone as the single
+    // source of truth for the cap check (Task 7, point 2 — it used to sum
+    // selectedFiles.length + uploadedAttachments.length, double-counting
+    // once uploads settled since selectedFiles is never trimmed on
+    // success). MEDIA_LIMIT can be passed as-is.
+    maxAttachments: MEDIA_LIMIT,
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
   const uploadPercentage = uploadProgress[0] ?? 0;
+
+  // W7 — same source-of-truth predicate the gateway degrades REEL→POST with
+  // (`@meeshy/shared/utils/reel-composition`). An attachment whose duration
+  // is not yet known client-side is treated as non-qualifying — never a
+  // false REEL promise the gateway would silently downgrade.
+  const compositionQualifies = qualifiesAsReel(
+    uploadedAttachments.map((att) => ({ mimeType: att.mimeType, duration: att.duration })),
+  );
+  const effectivePostType: PostType = compositionQualifies ? postType : 'POST';
 
   // Blob URLs for image previews, memoized per File identity so retyping the
   // caption (re-render on every keystroke) never mints a new object URL —
@@ -168,20 +189,31 @@ function PostComposer({
 
     onPublish({
       content: trimmed,
-      type: 'POST',
+      type: effectivePostType,
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
         ? visibilityUserIds
         : undefined,
       mediaIds: hasMedia ? mediaIds : undefined,
+      optimisticMedia: hasMedia
+        ? uploadedAttachments.map((att, order) => ({
+            id: att.id,
+            mimeType: att.mimeType,
+            fileUrl: att.fileUrl,
+            thumbnailUrl: att.thumbnailUrl,
+            duration: att.duration,
+            order,
+          }))
+        : undefined,
     });
 
     setContent('');
     setVisibilityUserIds([]);
     setIsExpanded(false);
     setMediaError(null);
+    setPostType('REEL');
     clearAttachments();
-  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, clearAttachments]);
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -347,6 +379,49 @@ function PostComposer({
                       </div>
                     )}
                   </div>
+
+                  {/* W7 — Reel ⇄ Post toggle: only shown once the uploaded
+                      composition qualifies (mirrors the gateway's
+                      qualifiesAsReel degradation threshold client-side) */}
+                  {compositionQualifies && (
+                    <div
+                      className="flex items-center gap-0.5 rounded-lg border border-[var(--gp-border)] p-0.5"
+                      role="group"
+                      aria-label={t('postComposer.reelToggle.groupLabel')}
+                      data-testid="post-composer-type-toggle"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPostType('REEL')}
+                        aria-pressed={postType === 'REEL'}
+                        aria-label={t('postComposer.reelToggle.reel')}
+                        data-testid="post-composer-type-reel"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'REEL'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        🎬 {t('postComposer.reelToggle.reel')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPostType('POST')}
+                        aria-pressed={postType === 'POST'}
+                        aria-label={t('postComposer.reelToggle.post')}
+                        data-testid="post-composer-type-post"
+                        className={cn(
+                          'px-2 py-1 rounded-md text-xs transition-colors',
+                          postType === 'POST'
+                            ? 'bg-[var(--gp-terracotta)] text-white'
+                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
+                        )}
+                      >
+                        {t('postComposer.reelToggle.post')}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Character count */}
                   {charCount > 4500 && (
