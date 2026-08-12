@@ -24,6 +24,18 @@ Trois bornes avant d'ouvrir :
    par symétrie. Le seul défaut web est la page tronquée.
 3. **Le curseur web serait recalculé, pas persisté** (D1 du cycle 79) : si un delta arrive un jour,
    c'est le geste iOS qui ne se transpose pas, pas l'inverse.
+4. **Il y a un TROISIÈME consommateur, et c'est le plus dangereux : ANDROID.**
+   `StoryCacheSource.revalidate()` (`apps/android/sdk-core/.../story/StoryCacheSource.kt:55`) appelle
+   `storyApi.list(null, STORIES_PAGE_SIZE = 50)`, ne lit pas `pagination`, et son `persist()`
+   **REMPLACE** les lignes du cache Room. C'est exactement la variante nuisible du chemin complet
+   iOS relevée au cycle 80 : la troncature n'omet pas des stories, elle les EFFACE, et le cache
+   grave le résultat. `StoryRepository.kt:73` passe bien un `cursor`, lui — il y a donc deux usages
+   divergents de la même API à inventorier, comme sur le web.
+   Nuance qui joue en faveur d'Android : son enveloppe `ApiResponse` décode DÉJÀ
+   `pagination.hasMore`/`nextCursor` (`core/model/.../ApiResponse.kt`), là où le web jette
+   l'enveloppe entière. Le drain y est donc à portée de main, sans changement de type.
+   ⇒ La tête ci-dessus dit « le WEB » ; le périmètre réel est **web + Android**, et si l'un des deux
+   doit passer en premier, c'est Android (l'écrasement fait perdre des données, le web n'en omet).
 
 Point d'entrée : `apps/web/services/story.service.ts` + `apps/web/services/posts.service.ts`,
 miroir serveur inchangé (`PostFeedService.getStories` rend déjà `hasMore`/`nextCursor` juste).
