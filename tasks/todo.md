@@ -1,9 +1,9 @@
-# Tête instruite pour le cycle 95 — la veine « qui fait respecter cette promesse ? » a rendu TROIS fois ; la famille message est close, les familles Story/Post/Call sont intactes
+# Tête instruite pour le cycle 96 — la chaîne de destruction est complète jusqu'aux OCTETS ; ce qui reste n'est plus un trou, c'est un compromis
 
-*Le cycle 94 a fermé la dernière sortie de la famille éphémère/vue-unique : le TRANSFERT. Les
-cycles 92, 93 et 94 forment maintenant un ensemble cohérent — la promesse est posée (92), la
-consommation la déclenche (93), et aucune copie ne s'en échappe (94). La même question n'a jamais
-été posée aux modèles `Story`, `Post` et `Call`.*
+*Le cycle 95 a fermé le dernier maillon de la veine ouverte au cycle 92 : les routes qui rendent
+les octets ignoraient toute la chaîne que les cycles 92, 93 et 94 avaient bâtie. Elles la
+respectent. Ce que le cycle 95 a EN PLUS établi, en vérifiant au lieu de supposer, c'est que le
+défaut annoncé par la tête du cycle 95 n'avait pas la forme qu'elle lui prêtait.*
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
 >
@@ -21,76 +21,151 @@ consommation la déclenche (93), et aucune copie ne s'en échappe (94). La même
 > Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
 > COUVERTURE, pas l'intitulé.** Un doublon de défaut n'est pas un doublon de correctif.
 
-> ## La méthode, validée trois fois : chercher la PROMESSE, pas l'événement
+> ## La leçon que le cycle 95 ajoute, et elle est la plus chère du lot
 >
-> Les cycles 85 à 91 cherchaient tous des défauts de la même forme — *un événement socket manqué
-> que rien ne rejoue*. Le cycle 92 a ouvert une seconde veine, plus riche : **une fonctionnalité
-> peut n'avoir jamais eu d'implémentation serveur du tout**. Elle est indétectable en suivant les
-> événements, précisément parce qu'elle n'en produit aucun.
+> **Une tête de cycle peut désigner un vrai défaut ET se tromper sur sa forme. Vérifier la forme
+> AVANT de dimensionner le correctif.**
+>
+> La tête du cycle 95 annonçait que le budget de vue unique « se contourne par un simple GET », et
+> que le fermer serait « le chantier le plus rentable ouvert à ce jour ». Les deux moitiés étaient
+> vraies à moitié :
+>
+> - **Le défaut existait**, mais pas comme un contournement du COMPTEUR : comme une absence totale
+>   de garde de CYCLE DE VIE. La route ne regardait ni `deletedAt`, ni `expiresAt` — donc elle
+>   servait aussi les messages rappelés et les éphémères expirés, pas seulement la vue unique.
+>   Le correctif juste est trois fois plus large que celui qui était demandé, et trois fois plus
+>   simple : il ne compte rien, il lit deux colonnes.
+> - **Le chantier annoncé — « décider ce qui compte comme une vue côté serveur », avec ses
+>   sous-questions vignettes/Range/rejeu — n'avait pas lieu d'être.** Il se dissout entièrement
+>   dès qu'on remarque que `scheduleViewOnceBurn` écrit le budget épuisé SOUS FORME d'échéance.
+>   L'échéance EST la brûlure : une garde qui lit `expiresAt` couvre la vue unique sans connaître
+>   un seul de ses champs. Trois sous-questions épineuses, zéro ligne de code.
+>
+> **Le motif à retenir** : quand une tête décrit un chantier coûteux, chercher d'abord si une
+> pièce déjà écrite ne le rend pas sans objet. Ici `scheduleViewOnceBurn`, livré au cycle 93,
+> portait déjà la réponse.
+
+> ## La méthode, validée quatre fois : chercher la PROMESSE, pas l'événement
 >
 > **La question à poser à chaque champ de `schema.prisma` qui promet un comportement :**
 > *qui, côté serveur, fait respecter cette promesse ?* Si la réponse est « les clients », la
 > promesse est cosmétique.
 >
-> Trois pour trois : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94).
+> Quatre pour quatre : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94),
+> et les OCTETS eux-mêmes (95).
 >
-> **Le corollaire que le cycle 94 ajoute, et il vaut pour toute la veine : quand une promesse a
-> plusieurs sorties, elles n'ont pas forcément la MÊME réponse.** La tête du cycle 93 posait le
-> choix « propager ou refuser » comme une décision produit unique. C'en était deux, et chacune
-> était forcée par ce qui ferme réellement le trou : propager tient la promesse éphémère (la copie
-> meurt), et ne tient PAS la promesse de vue unique (`viewOnceCount` repart à zéro — la copie rend
-> un budget neuf). **Vérifier que la réponse envisagée ferme le trou, plutôt que de la choisir sur
-> sa cohérence apparente avec la sortie voisine.**
+> **Le corollaire que le cycle 95 ajoute : poser la question au DERNIER maillon, pas seulement au
+> premier.** Les cycles 92 à 94 ont chacun vérifié qui fait respecter la promesse au niveau du
+> MODÈLE. Aucun n'a demandé qui la fait respecter au niveau de l'OCTET — et c'est là qu'elle ne
+> l'était pas. Pour toute promesse déjà « fermée », se demander une fois de plus : *et la route
+> qui sert le fichier, elle la connaît ?*
 
-## Livré au cycle 94
+## Livré au cycle 95
 
-1. **`admitMessageForward` — le transfert ne défait plus la destruction.** Garde unique dans
-   `services/messaging/forwardAdmission.ts`, appelé depuis `MessagingService.handleMessage` (le
-   seul point où REST, socket texte et socket pièces jointes convergent avant l'écriture).
-   Éphémère → la copie hérite de la DURÉE de la source, recomptée depuis le transfert, et la
-   propriété est transitive sans code dédié. Vue unique → refus, comme WhatsApp et Signal.
-   Best-effort : source introuvable ou lecture en échec ⇒ le transfert dégénère en message
-   ordinaire (comportement d'avant, ne fuit rien de plus).
-2. **`Message.ephemeralDuration` est un champ MORT, constaté et documenté.** Zéro écrivain :
-   aucun des trois transports ne le transmet, `saveMessage` ne le range pas, il vaut `null` sur
-   toute la collection. Le garde reconstitue la durée par `expiresAt − createdAt`, seules colonnes
-   réellement peuplées. **À retirer du schéma, ou à câbler — mais ne jamais le LIRE en l'état.**
-3. **Constat annexe : `MessageAttachment.isViewOnce` n'a lui non plus aucun écrivain** sur le
-   chemin d'envoi (il n'est que lu, par `attachmentIncludes` et les mappings d'`AttachmentService`).
-   La vue unique vit donc entièrement au niveau `Message` — ce qui rend le garde suffisant, mais
-   fait du champ attachement une seconde promesse cosmétique, non traitée.
+1. **`carrierMessageStillServesBytes` — les octets suivent la vie du message porteur.** Prédicat
+   pur dans `services/attachments/carrierMessageLifecycle.ts`, appelé depuis
+   `resolveAttachmentReadVerdict` (`routes/attachments/download.ts`), qui garde les DEUX routes
+   authentifiées : `GET /attachments/:attachmentId` et `GET /attachments/:attachmentId/thumbnail`.
+   Refuse un message rappelé (`deletedAt`), expiré (`expiresAt` passé) ou dont la brûlure de vue
+   unique est consommée — cette dernière gratuitement, l'échéance étant la brûlure.
+2. **Trois issues au lieu de deux.** `callerMayReadAttachment` (booléen) devient
+   `resolveAttachmentReadVerdict` → `'allow' | 'forbidden' | 'gone'`. L'appartenance se juge
+   AVANT le cycle de vie : un étranger reçoit le même 403 que le message soit vivant ou détruit,
+   sinon la paire 403/404 lui apprendrait ce qu'il est advenu d'un contenu auquel il n'a jamais eu
+   accès.
+3. **Le refus est un 404, pas un 403** — identique à celui que la route rendra une minute plus
+   tard, quand le balayage aura `unlink` le fichier. Aucun client ne voit son comportement changer
+   selon qu'il arrive avant ou après le balayage.
+4. **Coût nul en aller-retours** : `deletedAt`/`expiresAt` voyagent dans le `select` qui lisait
+   déjà `conversationId`.
 
-## Ce que le cycle 95 doit faire
+Tests : 12 sur le prédicat (`carrierMessageLifecycle.test.ts`), 11 sur les routes
+(`attachments-download.test.ts`, section « cycle de vie du message porteur »). Les 6 refus étaient
+RED avant correctif. Suite gateway complète : 684 suites / 16 927 tests verts, `tsc --noEmit` propre.
 
-### 1. Poser la question aux modèles `Story`, `Post` et `Call` — la famille message est close
+## Ce que le cycle 95 a VÉRIFIÉ et qui corrige le dossier
 
-C'est la suite naturelle, et elle n'a jamais été instruite. **Attention : `ExpiredStoriesCleanupService`
-existe déjà**, donc la famille story/post est PARTIELLEMENT couverte — chercher ce qu'il ne balaie
-PAS plutôt que de supposer le vide. Le bon filtre reste celui du cycle 93 : *un client déduit un
-comportement d'un champ dont AUCUN code serveur ne lit la valeur pour agir* — pas « le champ
-ressemble à une promesse ».
+### 1. `/attachments/file/*` est une URL-CAPACITÉ, pas un trou d'énumération — et c'est elle que les clients utilisent
 
-### 2. VÉRIFIÉ au cycle 94, non traité : le budget de vue unique se contourne par un simple GET
+**C'est le constat le plus important du cycle, et il tempère le correctif ci-dessus.**
 
-**C'est la même forme de défaut, un cran plus bas, et il est confirmé dans le code.**
-`viewOnceCount` n'est incrémenté QUE par la route explicite
-`POST /conversations/:id/messages/:messageId/consume`. La route qui sert réellement les octets,
-`GET /attachments/:attachmentId` (`routes/attachments/download.ts`), ne gate que sur
-l'APPARTENANCE à la conversation : `callerMayReadAttachment` lit `messageId → conversationId` puis
-cherche un `Participant` actif, et ne regarde ni `isViewOnce`, ni `viewOnceCount`, ni `deletedAt`,
-ni `expiresAt`.
+`UploadProcessor.getAttachmentUrl` émet `/api/v1/attachments/file/<chemin encodé>` : c'est cette
+URL qui est rangée dans `MessageAttachment.url` et remise à tous les clients. Cette route
+**n'a aucune authentification** — ni `onRequest`, ni `preValidation`, et il n'existe aucun hook
+d'auth global (vérifié : `server.ts` n'ajoute que `request-id`, `clientMutationId`, `deviceLocale`,
+`deviceCountry`). Le dépôt le sait : `routes/posts/audio.ts:27` le documente noir sur blanc.
 
-Conséquence : un membre — ou un `curl` muni d'un jeton valide — télécharge le média à vue unique
-autant de fois qu'il veut sans jamais appeler `consume`. Le budget n'est donc jamais épuisé,
-`isFullyConsumed` reste faux, `scheduleViewOnceBurn` n'est jamais appelé, et **le message ne brûle
-jamais**. Le cycle 93 a câblé la destruction sur un compteur que seuls les clients bien élevés
-alimentent.
+**La garde du cycle 95 ne couvre donc PAS le chemin par lequel les octets circulent réellement.**
 
-Ce n'est PAS un petit correctif : décider ce qui compte comme « une vue » côté serveur touche le
-préchargement de vignettes (`/thumbnail`), les requêtes Range (lecture vidéo en plusieurs morceaux
-— chacune ne doit pas coûter une vue) et le rejeu réseau. **C'est le chantier le plus rentable
-ouvert à ce jour, et il passe avant la prospection Story/Post/Call de la section 1** : celle-ci
-cherche des promesses non tenues, celui-là en a une, déjà localisée et déjà prouvée.
+Avant de crier à la faille, ce qui a été vérifié :
+
+- **Les noms de fichiers portent un UUIDv4** (`UploadProcessor:156`, `${cleanName}_${uuidv4()}${ext}`)
+  — 122 bits d'entropie. Ce n'est pas énumérable. C'est le motif URL-capacité que pratiquent les
+  CDN de WhatsApp et de Slack, pas un `/attachments/1,2,3…`.
+- **`deleteAttachment` `unlink` VRAIMENT le fichier** (`AttachmentService:266`), miniature comprise,
+  et les quatre écrivains de `deletedAt` l'appellent (handler socket, les deux routes DELETE,
+  `MaintenanceService`), tout comme le balayage `ExpiredMessagesCleanupService:250`.
+
+**Conséquence — l'hypothèse « unsend laisse la photo téléchargeable pour toujours » est FAUSSE**,
+et elle a été testée avant d'être écrite. Le résiduel réel sur cette route se réduit à :
+
+- **la fenêtre d'une minute** entre l'échéance et le passage du balayage ;
+- **l'absence de révocation** propre aux URL-capacité : une URL captée avant destruction
+  (capture d'écran, lien transféré, journal de proxy, historique) reste valable tant que le
+  fichier est là ;
+- **la fiabilité du balayage** — et là, voir le point ouvert sur l'index MongoDB non appliqué.
+
+**Décision assumée, pas oubli : aucune garde n'a été ajoutée sur `/attachments/file/*`.** Elle
+coûterait une lecture base sur la route la plus chaude du produit (chaque avatar, chaque vignette,
+chaque image de fil) — et `MessageAttachment.filePath` **n'est pas indexé** (vérifié dans
+`schema.prisma`) — pour ne gagner que la fenêtre d'une minute ci-dessus. Le compromis est
+consigné dans l'en-tête de `carrierMessageLifecycle.ts` pour que le prochain cycle ne le
+redécouvre pas comme un oubli.
+
+**Si un cycle veut vraiment fermer cette route**, le chantier n'est pas « ajouter une garde » mais
+**passer aux URL signées à durée de vie courte** (HMAC du chemin + expiration, vérifié sans base) —
+ce qui ferme la révocation ET le cycle de vie d'un coup, sans aller-retour base. C'est un chantier
+d'infrastructure : il touche `UploadProcessor`, `MediaService`, `MediaStorage`, le cache nginx
+immutable, et les trois clients. À instruire comme tel, pas à improviser.
+
+### 2. Ce que la tête du cycle 95 annonçait et qui ne s'est PAS confirmé
+
+- « le budget de vue unique se contourne par un simple GET » — **exact sur le fond, faux sur la
+  conséquence**. `viewOnceCount` n'est effectivement incrémenté que par `POST …/consume`, mais
+  compter les GET n'était pas le correctif : le cycle de vie l'était. Le compteur reste alimenté
+  par les seuls clients bien élevés, **et c'est acceptable** — parce que ce qui protège le contenu
+  n'est plus le compteur mais l'échéance qu'il pose une fois épuisé.
+- « décider ce qui compte comme une vue touche les vignettes, les requêtes Range et le rejeu » —
+  **sans objet**, cf. la leçon en tête.
+
+## Ce que le cycle 96 doit faire
+
+### 1. La prospection Story / Post / Call — désormais en tête de file
+
+La famille message est close pour de bon (92 → 95). C'est la suite naturelle et elle n'a jamais
+été instruite. **Attention : `ExpiredStoriesCleanupService` existe déjà**, donc la famille
+story/post est PARTIELLEMENT couverte — chercher ce qu'il ne balaie PAS plutôt que de supposer le
+vide. Le bon filtre reste celui du cycle 93 : *un client déduit un comportement d'un champ dont
+AUCUN code serveur ne lit la valeur pour agir* — pas « le champ ressemble à une promesse ».
+
+**Et poser la question du cycle 95 en plus de celle du cycle 92** : pour chaque promesse trouvée,
+demander AUSSI qui la fait respecter au niveau de l'octet. `PostMedia` a son propre chemin de
+téléchargement (`__tests__/posts-media-download-route.test.ts` existe) — il mérite exactement
+l'audit que `download.ts` vient de recevoir.
+
+### 2. L'index MongoDB non appliqué — devenu le maillon faible de TOUTE la chaîne
+
+**Ce point change de rang : il n'est plus une dette d'exploitation, c'est la dépendance dont
+dépendent maintenant les cycles 92, 93, 94 ET 95.**
+
+`expiresAt_ephemeral_partial` (cycle 92) est fourni mais **jamais appliqué** — aucun déploiement ne
+joue les migrations MongoDB manuelles. Sans lui, le balayage fait un COLLSCAN par minute sur
+`Message`. Or c'est le balayage qui `unlink` les fichiers, donc c'est LUI qui ferme la seule
+fenêtre restante sur `/attachments/file/*`. Un balayage en retard rallonge cette fenêtre
+proportionnellement.
+
+À jouer à la main sur la production, ou à automatiser — et l'automatiser serait un chantier utile
+en soi, puisque le problème est générique (aucune migration Mongo manuelle n'est jouée nulle part).
 
 ### 3. Les deux constats du cycle 93, toujours non instruits
 
@@ -100,24 +175,35 @@ cherche des promesses non tenues, celui-là en a une, déjà localisée et déj�
 - **Le passif en base ne se rattrape pas tout seul.** `scheduleViewOnceBurn` n'est appelé que depuis
   la route de consommation : un message épuisé AVANT la mise en service de ce chemin n'obtient
   jamais son échéance. Une passe de rattrapage unique (`viewOnceCount >= maxViewOnceCount ?? 1` ET
-  `expiresAt` absent) fermerait le passif ; elle n'est toujours pas écrite.
+  `expiresAt` absent) fermerait le passif ; elle n'est toujours pas écrite. **Le cycle 95 la rend
+  plus utile qu'avant** : l'échéance est désormais ce qui coupe l'accès aux octets, donc un message
+  du passif reste lisible là où un message récent ne l'est plus.
 
-### 4. Les deux suivis que le cycle 94 ouvre
+### 4. Les deux suivis ouverts par le cycle 94
 
 - **Aucun client ne masque `.forward` sur un message à vue unique.** L'action est offerte puis
   refusée par le serveur — correct pour la sécurité, médiocre pour l'UX. Côté iOS le correctif est
   contenu et purement logique : ajouter `isViewOnce` à `MessageMenuContext` (avec une valeur par
   défaut, pour ne casser aucun site de construction) et filtrer `.forward` — et `.share`, qui est
   la même sortie sous un autre nom — dans `MessageActionResolver.moreSections`.
-  **Non fait ici faute de toolchain Swift dans l'environnement de la routine** : le fichier est
-  PARTAGÉ par tous les worktrees iOS et une édition non compilée y est un risque net.
+  **Toujours pas faisable ici faute de toolchain Swift** : le fichier est PARTAGÉ par tous les
+  worktrees iOS et une édition non compilée y est un risque net.
 - **`copyForwardedAttachments` copie `filePath` VERBATIM** : la copie et l'original partagent le
   fichier sur disque, donc la destruction de l'original (`deleteAttachment` → `fs.unlink`) emporte
-  le média de la copie avant sa propre échéance. Défaut ANTÉRIEUR au cycle 94 (la copie perdait
-  déjà son fichier quand elle était permanente) et qui ne fuit rien — il dégrade. Le fermer
-  demande de dupliquer l'octet ou de compter les références.
+  le média de la copie avant sa propre échéance. Défaut ANTÉRIEUR au cycle 94, qui ne fuit rien —
+  il dégrade. Le fermer demande de dupliquer l'octet ou de compter les références.
+  **Le cycle 95 y ajoute une conséquence** : maintenant que la garde de cycle de vie existe, la
+  copie transférée dont l'original a brûlé rendra un 404 cohérent sur la route authentifiée — mais
+  le fichier manquant reste un 404 « File not found on disk » sur l'autre. Symptôme identique,
+  causes distinctes : ne pas confondre les deux en diagnostic.
 
-### 5. La veine « événement socket manqué », toujours ouverte
+### 5. `MessageAttachment.isViewOnce` — seconde promesse cosmétique, toujours non traitée
+
+Constatée au cycle 94 : aucun écrivain sur le chemin d'envoi (le champ n'est que LU, par
+`attachmentIncludes` et les mappings d'`AttachmentService`). La vue unique vit entièrement au
+niveau `Message`. Soit le retirer, soit le câbler — mais ne jamais s'y fier.
+
+### 6. La veine « événement socket manqué », toujours ouverte
 
 - **La modération admin** reste le candidat restant parmi les chemins qui rendent un message
   invisible sans repousser la pastille de non-lus.
@@ -129,7 +215,7 @@ cherche des promesses non tenues, celui-là en a une, déjà localisée et déj�
 
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
   depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
-  la routine** — inchangé aux cycles 86 à 94. Exige une machine macOS.
+  la routine** — inchangé aux cycles 86 à 95. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
 - **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
   `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
@@ -137,12 +223,7 @@ cherche des promesses non tenues, celui-là en a une, déjà localisée et déj�
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
   n'existe toujours pas.
 - **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
-  charge** (cycle 87). Non reproduit aux cycles 88 à 94.
-- **Les migrations MongoDB manuelles ne sont jouées par AUCUN déploiement.** L'index du cycle 92
-  (`expiresAt_ephemeral_partial`) est fourni mais **pas appliqué** : sans lui le balayage fait un
-  COLLSCAN par minute sur `Message`. Les cycles 93 et 94 augmentent tous deux le débit de ce
-  balayage (la vue unique puis les copies transférées l'alimentent). À jouer à la main sur la
-  production, ou à automatiser — ce serait un chantier utile en soi.
+  charge** (cycle 87). Non reproduit aux cycles 88 à 95.
 
 ## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
 
@@ -154,6 +235,15 @@ cherche des promesses non tenues, celui-là en a une, déjà localisée et déj�
 
 `bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
 et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+**Ordre exact vérifié au cycle 95** (sans lui, `tsc --noEmit` rend un faux positif
+`Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
+
+```bash
+bun install --ignore-scripts
+cd packages/shared && npx prisma generate --generator client && bun run build
+cd services/gateway && npx tsc --noEmit && bun run test
+```
 ---
 
 # Cycle 93 — La vue unique ne se consommait nulle part, et « ce n'est pas le contenu » était faux
