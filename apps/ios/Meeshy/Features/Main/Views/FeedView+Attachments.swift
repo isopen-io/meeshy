@@ -377,6 +377,17 @@ extension FeedView {
                     originalLanguage: composerLanguage
                 )
 
+                guard viewModel.publishError == nil else {
+                    await MainActor.run {
+                        feedCleanupAttachments()
+                        uploadProgress = nil
+                        isUploading = false
+                        HapticFeedback.error()
+                        FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publishError", defaultValue: "Échec de la publication du post", bundle: .main))
+                    }
+                    return
+                }
+
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = false
@@ -428,6 +439,15 @@ extension FeedView {
                 originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
             )
+
+            guard viewModel.publishError == nil else {
+                await MainActor.run {
+                    isUploading = false
+                    HapticFeedback.error()
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+                }
+                return
+            }
 
             await MainActor.run {
                 isUploading = false
@@ -1549,6 +1569,17 @@ struct FeedComposerSheet: View {
 
                 await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
+                guard viewModel.publishError == nil else {
+                    await MainActor.run {
+                        isUploading = false
+                        uploadProgress = nil
+                        for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
+                        HapticFeedback.error()
+                        FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publishError", defaultValue: "Échec de la publication du post", bundle: .main))
+                    }
+                    return
+                }
+
                 await MainActor.run {
                     isUploading = false
                     uploadProgress = nil
@@ -1589,6 +1620,14 @@ struct FeedComposerSheet: View {
                 originalLanguage: transcription?.language ?? composerLanguage,
                 mobileTranscription: transcription
             )
+            guard viewModel.publishError == nil else {
+                await MainActor.run {
+                    isUploading = false
+                    HapticFeedback.error()
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+                }
+                return
+            }
             await MainActor.run {
                 isUploading = false
                 onDismiss()

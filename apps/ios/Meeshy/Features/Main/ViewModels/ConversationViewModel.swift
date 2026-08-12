@@ -186,6 +186,18 @@ class ConversationViewModel: ObservableObject {
     private static let duplicateSendDebounce: TimeInterval = 0.6
     @Published var error: String?
 
+    /// Maps a raw error to a string safe to show verbatim in the conversation
+    /// error banner. `MeeshyError.server` carries a raw debug/decoding
+    /// message meant for logs, not end users — it is swapped for a generic
+    /// localized message. Every other error keeps its `localizedDescription`
+    /// (already user-facing: `AuthError`, `NetworkError`, `MessageError`, ...).
+    private func userFacingMessage(for error: Error) -> String {
+        if let meeshyError = error as? MeeshyError, case .server = meeshyError {
+            return String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
+        }
+        return error.localizedDescription
+    }
+
     /// Set before prepend so the view can restore scroll position
     @Published var scrollAnchorId: String?
 
@@ -3455,7 +3467,7 @@ class ConversationViewModel: ObservableObject {
             } catch {
                 // Rollback: restore the message to a non-deleted state
                 try? await messagePersistence.markUndeleted(localId: messageId)
-                self.error = error.localizedDescription
+                self.error = userFacingMessage(for: error)
             }
         }
     }
@@ -3486,7 +3498,7 @@ class ConversationViewModel: ObservableObject {
             // Revert on failure
             let originalJson = try? JSONEncoder().encode(originalAttachments)
             try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: originalJson)
-            self.error = error.localizedDescription
+            self.error = userFacingMessage(for: error)
         }
     }
 
@@ -3507,7 +3519,7 @@ class ConversationViewModel: ObservableObject {
             } catch {
                 // Revert
                 try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: previousPinnedAt, pinnedBy: previousPinnedBy)
-                self.error = error.localizedDescription
+                self.error = userFacingMessage(for: error)
             }
         } else {
             // Optimistic pin
@@ -3520,7 +3532,7 @@ class ConversationViewModel: ObservableObject {
             } catch {
                 // Revert
                 try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
-                self.error = error.localizedDescription
+                self.error = userFacingMessage(for: error)
             }
         }
     }
@@ -3608,7 +3620,7 @@ class ConversationViewModel: ObservableObject {
                 try? await messagePersistence.markEdited(localId: messageId, newContent: original, editedAt: editedAt)
                 EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }
-            self.error = error.localizedDescription
+            self.error = userFacingMessage(for: error)
         }
     }
 
@@ -3630,7 +3642,7 @@ class ConversationViewModel: ObservableObject {
             try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: reason)
             return true
         } catch {
-            self.error = error.localizedDescription
+            self.error = userFacingMessage(for: error)
             return false
         }
     }
@@ -3912,7 +3924,7 @@ class ConversationViewModel: ObservableObject {
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
         } catch {
-            self.error = error.localizedDescription
+            self.error = userFacingMessage(for: error)
         }
     }
 
