@@ -65,6 +65,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // Local-only: which output the user wants remote audio on. Never synced to
+  // peers (unlike controls.audioEnabled/videoEnabled) — it drives `muted` on
+  // every <video> element playing a remote stream, nothing else.
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
 
   // Local self-view dragging + ticking call duration (extracted hooks).
   const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
@@ -391,6 +395,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     };
   }, []);
 
+  // Toggles whether remote audio is audible. Purely local playback state —
+  // never emitted to the socket (unlike audio/video), since it has no
+  // meaning for the other participants.
+  const handleToggleSpeaker = () => {
+    setSpeakerEnabled((prev) => !prev);
+  };
+
   // Handle media toggles
   const handleToggleAudio = () => {
     const newEnabled = !controls.audioEnabled;
@@ -701,7 +712,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
             <VideoStream
               key={displayParticipant[0]}
               stream={displayParticipant[1]}
-              muted={false}
+              muted={!speakerEnabled}
               isLocal={false}
               className="w-full h-full object-cover"
               participantName={
@@ -761,6 +772,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isAudioEnabled={participant?.isAudioEnabled ?? true}
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
+              muted={!speakerEnabled}
               initialPosition={{ x: 20 + index * 160, y: 20 }}
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
@@ -787,9 +799,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <CallControls
         audioEnabled={controls.audioEnabled}
         videoEnabled={controls.videoEnabled}
+        speakerEnabled={speakerEnabled}
         videoSuspended={videoSuspended}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
+        onToggleSpeaker={handleToggleSpeaker}
         onSwitchCamera={handleSwitchCamera}
         onToggleAudioEffects={() => setShowAudioEffects(!showAudioEffects)}
         onToggleStats={() => setShowStats(!showStats)}

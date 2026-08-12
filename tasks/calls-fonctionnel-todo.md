@@ -7188,23 +7188,74 @@ précédents.
   concerne la SÉMANTIQUE du statut `'active'`, pas l'ancre du chrono, et mériterait son propre cycle
   d'investigation dédié plutôt qu'un fix couplé à celui-ci.
 
+## Vague 111 — le bouton haut-parleur du web ne mutait/démutait jamais aucun audio (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, `origin/main` strictement à
+jour avec `HEAD` de la branche dédiée au démarrage (`00c6665c`, qui contient déjà la Vague 110 — PR
+mergée), 0 commit d'avance/retard, aucune PR ouverte de cette routine. Candidat repris directement du
+runner-up laissé en tête de la Vague 110 (confiance moindre annoncée là-bas — vérifié ici avant fix).
+
+- **Root cause confirmée par lecture directe** : `CallControls.tsx` (`handleSpeakerToggle`) ne
+  faisait que basculer un `useState` **local au composant** — jamais lu par personne. Aucune des deux
+  surfaces qui jouent réellement l'audio distant (`VideoCallInterface.tsx`, `<VideoStream>` plein
+  écran du participant principal ; `DraggableParticipantOverlay.tsx`, `<VideoStream>` des tuiles
+  secondaires) ne recevait de prop dérivée de cet état — les deux codaient en dur `muted={false}`.
+  `rg setSinkId` sur tout `apps/web` : **zéro résultat**. Le bouton changeait d'icône
+  (`Volume2`/`VolumeX`) et de libellé (« Désactiver le haut-parleur » / « Activer ») sans qu'aucun
+  `<video>` ne change de volume — 100% cosmétique, sur toute la stack web, quel que soit le nombre de
+  participants. Confirme et clôt le runner-up laissé ouvert par la Vague 110 : ce n'est pas une
+  limitation navigateur (aucune tentative de `setSinkId`/routage n'existait pour buter dessus), c'est
+  un câblage jamais fait.
+- **Fix** : `speakerEnabled` devient un état du CONTAINER (`VideoCallInterface`, seul propriétaire des
+  éléments `<video>` qui jouent l'audio distant), jamais synchronisé au socket (contrairement à
+  `controls.audioEnabled`/`videoEnabled` — c'est un choix de lecture 100% local, sans signification
+  pour les autres participants). `CallControls` redevient un composant strictement contrôlé — plus de
+  `useState` interne, `speakerEnabled`/`onToggleSpeaker` en props, même patron que
+  `audioEnabled`/`onToggleAudio`. `!speakerEnabled` est propagé comme `muted` sur les DEUX surfaces
+  (plein écran + `DraggableParticipantOverlay`, qui gagne une nouvelle prop `muted` réexportée vers
+  son propre `<VideoStream>`).
+- **Tests** (TDD, RED confirmé en exécutant réellement les 7 nouveaux cas AVANT le fix — le composant
+  contrôlé n'existait pas encore, `speakerEnabled`/`onToggleSpeaker` non consommés) :
+  - `CallControls.test.tsx` (2 nouveaux cas) : le clic invoque `onToggleSpeaker` et NE change PAS son
+    propre libellé (preuve que l'état n'est plus géré en interne) ; `speakerEnabled=false` affiche le
+    libellé call-to-action inverse.
+  - `VideoCallInterface.test.tsx` (3 nouveaux cas, + mock `VideoStream` étendu pour capturer `muted`
+    et `isLocal` — nécessaire pour distinguer la tuile locale, toujours mute, de la tuile distante) :
+    audio distant audible par défaut ; le clic sur le bouton mute la tuile plein écran ; un second
+    clic redémute.
+  - `DraggableParticipantOverlay.test.tsx` (2 nouveaux cas) : non-mute par défaut, propage
+    `muted=true` reçu du parent vers son `<VideoStream>` interne.
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **49 suites / 425 tests verts**, 0 régression.
+  - `npx tsc --noEmit` : diff ligne-à-ligne AVANT/APRÈS (`git stash`) — **même 1757 erreurs
+    pré-existantes, caractère pour caractère**, seuls les numéros de ligne des fichiers touchés
+    décalent des lignes ajoutées ; aucune nouvelle erreur.
+  - `eslint`/`next lint` : **non exécutables dans ce sandbox** (config circulaire pré-existante,
+    `TypeError: Converting circular structure to JSON` sur le plugin `react`, reproductible sur un
+    fichier non touché par ce diff — limitation d'environnement, pas un signal sur ce changement).
+- **Portée volontairement non étendue** : le libellé produit reste « haut-parleur » (calqué sur le
+  vocabulaire mobile CallKit) alors que le web n'a pas de dichotomie haut-parleur/écouteur — la
+  sémantique retenue ici est « l'audio distant est-il audible localement », qui correspond exactement
+  au texte affiché (« Désactiver/Activer le haut-parleur ») sans changer les clés i18n existantes
+  (4 langues, `speakerOn(Label)`/`speakerOff(Label)`). Une vraie sélection de périphérique de sortie
+  (`navigator.mediaDevices.enumerateDevices` + `HTMLMediaElement.setSinkId`, limité aux navigateurs
+  Chromium desktop) reste un candidat séparé et plus ambitieux, hors scope d'un fix ciblé sur le
+  symptôme rapporté (le bouton ne fait rien).
+
 ### Reste ouvert
 
-Reconduit tel quel (rien de plus trouvé côté gateway ce cycle, audit dédié effectué) : dead code /
-god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
 `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
 `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
 `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
 string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
-ce sandbox. **Candidats pour la Vague 111** (runners-up de l'audit web de ce cycle, non traités,
-confiance moindre — à vérifier avant fix) :
-- `CallControls.tsx` `handleSpeakerToggle` bascule un booléen local `speakerEnabled` sans jamais
-  appeler d'API de routage audio (`setSinkId` ou équivalent) — bouton potentiellement cosmétique ;
-  vérifier s'il s'agit d'une limitation navigateur intentionnelle avant de le traiter comme un bug.
+ce sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, cf. ci-dessus). **Candidats
+pour la Vague 112** (runners-up de la Vague 110, non traités, confiance moindre — à vérifier avant
+fix) :
 - `handleParticipantJoined` bascule `status` vers `'active'` sur le premier `call:participant-joined`,
   qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché (cf. Vague 104 côté
-  gateway pour le même symptôme sur un chemin différent) — distinct du fix de ce cycle (qui ne touche
-  que l'ancre du chrono, pas la sémantique de `status`).
+  gateway pour le même symptôme sur un chemin différent).
 - `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
   — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
   sévérité, probablement pas suffisant pour son propre cycle isolément.
