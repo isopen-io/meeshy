@@ -17,10 +17,12 @@ Le gate est **compile seule**, délibérément. Il ne dit RIEN de :
 
 ## Ce que le cycle 84 devrait instruire
 
-1. **Relever le coût réel du gate après un mois.** Avec le premier point de mesure réel (10m02 à
-   froid, cf. rapport du cycle 83), la projection se resserre à 340 runs/mois × ~10 min
-   ≈ **3 400 min de runner macOS**, borne haute — les runs suivants profitent du cache SPM. Cela
-   reste une projection à partir des horodatages de commits, pas un relevé de facturation. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
+1. **Relever le coût réel du gate après un mois.** Deux points de mesure réels existent désormais
+   (cf. rapport du cycle 83) : **10m02 à froid, 4m54 en régime permanent**. Le régime permanent
+   étant le cas courant, la projection tombe à 340 runs/mois × ~5 min ≈ **1 700 min de runner
+   macOS**, la moitié de l'estimation qui accompagnait le câblage. Cela reste une projection à
+   partir des horodatages de commits, pas un relevé de facturation — et le nombre de runs, lui,
+   n'a pas été re-mesuré. La mesurer pour de vrai, et si elle dérape, la première coupe évidente
    est le filtre de chemins (aujourd'hui `apps/ios/**` entier, y compris les ressources et les
    `.md`, qui ne changent rien à la compilation).
 2. **Vérifier que le cache DerivedData profite bien aux PR.** Les runs de PR écrivent maintenant
@@ -128,6 +130,15 @@ reste le plafond de la suite complète — une compilation qui déborde 30 min e
   temps prédit pour un run CHAUD. Et le compile est **plus rapide** que celui de la baseline, pas
   plus lent — c'est la preuve observable que le pin `ARCHS=arm64` prend effet. Sa perte se verrait
   ici comme un compile environ double, jamais comme un échec.
+- **Le régime permanent, mesuré au run suivant** (job 94017664432, caches SPM ET DerivedData
+  chauds) : **4m54**. Restauration SPM 18 s (hit), DerivedData 14 s (hit, semé par le run froid),
+  résolution SPM 23 s (contre 2m02), `build-for-testing` **3m19** en incrémental (contre 6m33),
+  sauvegarde 17 s. **Un gate froid coûte ~10 min, le régime permanent ~5** — le froid ne revient
+  que si la clé SPM (`project.yml`) change ou si la lignée DerivedData repart, pas à chaque PR.
+- **Une des deux hypothèses de cache est levée** : les produits DerivedData d'un run compile-seule
+  SONT réutilisés par le run compile-seule suivant (6m33 → 3m19). Reste non vérifié le cas
+  CROISÉ — `generic/platform` ↔ `id=<sim>` — dont l'échec ne coûterait qu'un compile froid sur
+  `dev`, jamais un résultat faux.
 - **Les 16 checks de la PR verts** (Quality, Security, Build, shared, web, gateway, agent, Prisma,
   Python, audio, TTS, Voice API ; Trivy `neutral`, son état habituel).
 

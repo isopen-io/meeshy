@@ -60,6 +60,25 @@ name: iOS Tests
 # that the ARCHS=arm64 pin below is taking effect. Losing that pin would show up
 # here as a compile roughly double this, not as a failure.
 #
+# The next run on the same branch (job 94017664432), warm on BOTH caches, is the
+# steady state to budget against:
+#     18s    restore SPM cache                  ← hit
+#     14s    restore DerivedData                ← hit, seeded by the cold run
+#     23s    resolve SPM (warm)                             (was 2m02 cold)
+#     3m19   build-for-testing (incremental)                (was 6m33 cold)
+#     17s    save DerivedData
+#   =4m54 total. So a cold gate costs ~10 min and the steady state ~5 — budget
+# ~5, not ~10. Cold recurs when the SPM key (`project.yml`) changes or the
+# DerivedData lineage restarts, not per PR.
+#
+# That second run also settles half of an open question: DerivedData saved by a
+# compile-only run IS reused by the next compile-only run (6m33 → 3m19). What is
+# still unverified is the CROSS-mode case — whether a `generic/platform` build's
+# products are reused by an `id=<sim>` build on dev, and the reverse. Both modes
+# share one cache lineage deliberately (two multi-GB lineages would thrash the
+# repo's cache limit and evict the SPM cache); if the cross-mode reuse turns out
+# to be nil, the cost is a cold compile on dev, never a wrong result.
+#
 # One job, one set of steps: `COMPILE_ONLY`
 # gates steps 10 and 12 (already separate since forever), so there is no second
 # copy of the toolchain to drift. Guarded by
