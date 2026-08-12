@@ -124,6 +124,10 @@ struct MyStoriesView: View {
             }
             .task {
                 draftsViewModel.reload()
+                // Archive complète (stories en cours ET passées) : les stories
+                // ne sont plus jamais détruites — cette page liste l'historique
+                // au-delà de la fenêtre de 7 j que la page du tray borne.
+                await viewModel.loadMyStoriesArchive()
                 guard !hasSeededTab else { return }
                 hasSeededTab = true
                 tab = MyStoriesTabResolver.initialTab(
@@ -724,10 +728,16 @@ struct MyStoriesView: View {
         HapticFeedback.medium()
         Task {
             do {
-                _ = try await PostService.shared.repost(
-                    postId: story.id, targetType: .story, content: nil, isQuote: false)
+                // `POST /posts/:id/republish` : la MÊME story repart avec une
+                // date de publication fraîche et un engagement remis à zéro.
+                // L'ancien chemin `repost` échouait STRUCTURELLEMENT ici :
+                // 404 sur toute story expirée (le repost refuse un original
+                // périmé) et 403 sur toute story FRIENDS (le repost exige
+                // PUBLIC) — le toast d'échec était le comportement nominal.
+                let post = try await StoryService.shared.republish(storyId: story.id)
                 await MainActor.run {
                     isReposting = false
+                    viewModel.applyRepublishedStory(post)
                     FeedbackToastManager.shared.showSuccess(
                         String(localized: "story.mine.repost.success", defaultValue: "Story republiée"))
                 }

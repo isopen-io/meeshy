@@ -2288,6 +2288,60 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(sut.storyGroups.isEmpty, "sans utilisateur courant, aucune insertion")
     }
 
+    // MARK: - Archive auteur (« Mes stories », stories en cours ET passées)
+
+    func test_loadMyStoriesArchive_mergesMissingStoriesIntoSelfGroup() async {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        let live = makeStoryItem(id: "s-live")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [live])]
+        // L'archive renvoie la story vivante ET une story passée absente du tray.
+        let archived = Self.makeStoryAPIPost(id: "s-archived", authorId: "me-id", authorUsername: "me")
+        let liveAgain = Self.makeStoryAPIPost(id: "s-live", authorId: "me-id", authorUsername: "me")
+        mockStoryService.listMineResult = .success(Self.makeStoriesResponse(posts: [liveAgain, archived]))
+
+        await sut.loadMyStoriesArchive()
+
+        let selfIds = sut.storyGroups.first(where: { $0.id == "me-id" })?.stories.map(\.id) ?? []
+        XCTAssertTrue(selfIds.contains("s-archived"),
+                      "la story passée rejoint le groupe self — « Mes stories » liste l'historique complet")
+        XCTAssertEqual(selfIds.filter { $0 == "s-live" }.count, 1,
+                       "dédup par id : la story déjà présente n'est pas dupliquée")
+        XCTAssertEqual(mockStoryService.listMineCallCount, 1)
+    }
+
+    func test_loadMyStoriesArchive_networkFailure_leavesTrayUntouched() async {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        let live = makeStoryItem(id: "s-live")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [live])]
+        mockStoryService.listMineResult = .failure(NSError(domain: "test", code: -1009))
+
+        await sut.loadMyStoriesArchive()
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s-live"])
+    }
+
+    func test_applyRepublishedStory_replacesItemInPlace_sameId() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        let stale = makeStoryItem(id: "s-repub")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [stale])]
+        let republished = Self.makeStoryAPIPost(id: "s-repub", authorId: "me-id", authorUsername: "me")
+
+        sut.applyRepublishedStory(republished)
+
+        let selfStories = sut.storyGroups.first(where: { $0.id == "me-id" })?.stories ?? []
+        XCTAssertEqual(selfStories.filter { $0.id == "s-repub" }.count, 1,
+                       "la republication remplace l'item EN PLACE — même id, jamais de doublon")
+    }
+
     func test_loadStories_forceNetwork_preservesPendingOptimisticStories() async {
         // L'auteur a une story optimiste hors-ligne en attente. Un refetch réseau
         // (qui ne la contient pas) ne doit PAS la faire disparaître du tray.

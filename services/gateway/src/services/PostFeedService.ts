@@ -246,7 +246,7 @@ export class PostFeedService {
 
   async getStories(
     userId: string,
-    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number }
+    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number; archiveOfAuthor?: boolean }
   ) {
     const now = new Date();
     // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
@@ -254,6 +254,32 @@ export class PostFeedService {
     // de 50 reproduit le plafond historique (rétro-compatible).
     const limit = Math.min(Math.max(options?.limit ?? 50, 1), 50);
     const cursorData = options?.cursor ? decodeCursor(options.cursor) : null;
+
+    // Mode ARCHIVE AUTEUR (`GET /posts/stories/mine`, 2026-08-12) : toutes MES
+    // stories non supprimées, expirées comprises, SANS plancher temporel — les
+    // stories ne sont plus jamais détruites (cf. ephemeralPosts.SWEPT_POST_TYPES)
+    // et « Mes stories » pagine cet historique complet. Pas de filtre de
+    // visibilité (ce sont les posts de l'appelant), pas de tombstones (le mode
+    // ne porte pas de delta-sync). Vit DANS getStories pour réutiliser à
+    // l'identique include, enrichissement (vu/réactions) et mapping — une
+    // seconde requête copiée aurait divergé.
+    if (options?.archiveOfAuthor) {
+      const archiveWhere: any = {
+        deletedAt: NOT_DELETED,
+        type: PostType.STORY,
+        authorId: userId,
+        AND: [] as unknown[],
+      };
+      if (cursorData) {
+        archiveWhere.AND.push({
+          OR: [
+            { createdAt: { lt: new Date(cursorData.createdAt) } },
+            { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+          ],
+        });
+      }
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]));
+    }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
@@ -269,8 +295,9 @@ export class PostFeedService {
     // avec la réponse serveur (`StoryViewModel.storyGroups = groups`).
     //
     // Bornée : sans plancher, la réponse enflerait indéfiniment avec
-    // l'ancienneté du compte. Les stories des AUTRES restent filtrées à leur
-    // expiration, comme avant.
+    // l'ancienneté du compte — l'historique complet vit derrière
+    // `GET /posts/stories/mine` (mode `archiveOfAuthor` ci-dessus). Les
+    // stories des AUTRES restent filtrées à leur expiration, comme avant.
     const authorArchiveFloor = new Date(now.getTime() - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
 
     const where: any = {
@@ -305,34 +332,6 @@ export class PostFeedService {
         ],
       });
     }
-
-    // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
-    // du plein corps — opt-in, le défaut reste l'include canonique complet.
-    // Deux appels distincts : Prisma type `select`/`include` comme des
-    // overloads exclusifs, un spread conditionnel produit une union rejetée.
-    const isTrayProjection = options?.projection === 'tray';
-    const fetched = isTrayProjection
-      ? await this.prisma.post.findMany({
-          where,
-          select: trayStorySelect,
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: limit + 1,
-        })
-      : await this.prisma.post.findMany({
-          where,
-          // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
-          // que l'interstitiel d'identité du viewer résolve la présence AU
-          // moment du switch de groupe (jamais après affichage du slide).
-          include: storyPostInclude,
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: limit + 1,
-        });
-
-    const hasMore = fetched.length > limit;
-    const stories = hasMore ? fetched.slice(0, limit) : fetched;
-    const nextCursor = hasMore && stories.length > 0
-      ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
-      : null;
 
     // Tombstones du delta-sync — les DISPARITIONS, que le delta ne peut pas
     // exprimer autrement (il ne renvoie que ce qui existe encore).
@@ -374,13 +373,14 @@ export class PostFeedService {
     // la page qui OUVRE la fenêtre. Sûr parce que le drain fusionne par union
     // (`formUnion`) et par `||`, jamais par écrasement : une page suivante sans
     // tombstone ne peut pas effacer ceux de la première.
-    const deletedIdsPromise: Promise<string[]> = options?.updatedSince && !cursorData
-      ? this.prisma.post
+    const updatedSince = options?.updatedSince;
+    const deletedIdsFactory: () => Promise<string[]> = updatedSince && !cursorData
+      ? () => this.prisma.post
           .findMany({
             where: {
               type: PostType.STORY,
               deletedAt: { not: null },
-              updatedAt: { gt: options.updatedSince },
+              updatedAt: { gt: updatedSince },
               AND: [visibilityFilter],
             },
             select: { id: true },
@@ -388,7 +388,55 @@ export class PostFeedService {
             take: STORY_TOMBSTONE_LIMIT + 1,
           })
           .then((rows) => rows.map((r) => r.id))
-      : Promise.resolve([]);
+      : () => Promise.resolve([]);
+
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory);
+  }
+
+  /**
+   * Corps partagé de `getStories` (tray/delta) et de son mode archive auteur :
+   * fetch keyset + curseur, enrichissement vu/réactions, mapping. Extrait pour
+   * que le mode archive ne duplique pas la requête — une copie aurait divergé.
+   * `deletedIdsFactory` est une FABRIQUE (pas une promesse) : la requête
+   * tombstones part APRÈS le fetch des stories, en parallèle de
+   * l'enrichissement — l'ordre historique des requêtes est observable (tests).
+   */
+  private async fetchAndEnrichStories(
+    where: any,
+    userId: string,
+    limit: number,
+    isTrayProjection: boolean,
+    deletedIdsFactory: () => Promise<string[]>,
+  ) {
+    // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
+    // du plein corps — opt-in, le défaut reste l'include canonique complet.
+    // Deux appels distincts : Prisma type `select`/`include` comme des
+    // overloads exclusifs, un spread conditionnel produit une union rejetée.
+    const fetched = isTrayProjection
+      ? await this.prisma.post.findMany({
+          where,
+          select: trayStorySelect,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+        })
+      : await this.prisma.post.findMany({
+          where,
+          // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
+          // que l'interstitiel d'identité du viewer résolve la présence AU
+          // moment du switch de groupe (jamais après affichage du slide).
+          include: storyPostInclude,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+        });
+
+    const hasMore = fetched.length > limit;
+    const stories = hasMore ? fetched.slice(0, limit) : fetched;
+    const nextCursor = hasMore && stories.length > 0
+      ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
+      : null;
+
+    // Lancée APRÈS le fetch, en parallèle des requêtes d'enrichissement.
+    const deletedIdsPromise = deletedIdsFactory();
 
     const storyIds = stories.map((s) => s.id);
     // Le tray ne rend pas les réactions — la requête batch est coupée en

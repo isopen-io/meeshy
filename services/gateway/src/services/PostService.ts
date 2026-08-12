@@ -1030,6 +1030,56 @@ export class PostService {
   }
 
   /**
+   * Republication d'une STORY par son auteur : la MÊME story repart avec une
+   * date de publication fraîche (`createdAt = now`, `expiresAt = now + TTL`)
+   * et un engagement remis à zéro — mêmes effacements que l'édition de contenu
+   * (`storyContentEdit`) : la story « recommence » pour tous, `contentEditedAt`
+   * fait céder la garde « viewed monotone » des clients. Aucun nouveau Post,
+   * aucune duplication de PostMedia : c'est l'archive de l'auteur (les stories
+   * ne sont plus jamais détruites) qui redevient publique.
+   *
+   * Retourne le post rechargé avec l'include canonique (prêt pour le
+   * broadcast `story:created` qui la re-fanne dans les trays), `null` si la
+   * story n'existe pas/plus, jette `FORBIDDEN` (non-auteur) ou `NOT_A_STORY`.
+   */
+  async republishStory(postId: string, userId: string) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, deletedAt: NOT_DELETED },
+      select: { id: true, authorId: true, type: true },
+    });
+    if (!post) return null;
+    if (post.authorId !== userId) throw new Error('FORBIDDEN');
+    if (post.type !== PostType.STORY) throw new Error('NOT_A_STORY');
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.postView.deleteMany({ where: { postId } });
+      await tx.postReaction.deleteMany({ where: { postId } });
+      await tx.postImpression.deleteMany({ where: { postId } });
+      await tx.post.update({
+        where: { id: postId },
+        data: {
+          createdAt: now,
+          expiresAt: ephemeralExpiresAt(PostType.STORY, now),
+          contentEditedAt: now,
+          viewCount: 0,
+          impressionCount: 0,
+          reactionCount: 0,
+          likeCount: 0,
+          reactionSummary: {},
+          reactions: [],
+          storyViews: [],
+        },
+      });
+    });
+
+    return this.prisma.post.findFirst({
+      where: { id: postId },
+      include: postInclude,
+    });
+  }
+
+  /**
    * Soft-delete d'un poste.
    *
    * Auteur : toujours autorisé. Modérateur et plus : autorisé sur le poste

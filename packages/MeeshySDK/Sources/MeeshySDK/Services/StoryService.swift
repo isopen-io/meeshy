@@ -25,6 +25,13 @@ public protocol StoryServiceProviding: Sendable {
     /// deep-link — `cachedPost(id:)` la resservirait AVANT le `fetchPost` qui,
     /// lui, aurait dit 404.
     func invalidate(postIds: Set<String>)
+    /// Archive COMPLÈTE des stories de l'appelant (en cours ET passées),
+    /// paginée keyset — les stories ne sont plus jamais détruites côté serveur.
+    func listMine(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// Republie une story de l'appelant : la MÊME story repart avec une date
+    /// de publication fraîche (createdAt/expiresAt) et un engagement remis à
+    /// zéro. Retourne la story rechargée.
+    func republish(storyId: String) async throws -> APIPost
 }
 
 public extension StoryServiceProviding {
@@ -102,6 +109,26 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     public func repost(storyId: String) async throws {
         let body = RepostRequest()
         let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/repost", body: body)
+    }
+
+    public func listMine(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
+            endpoint: "/posts/stories/mine", method: "GET", body: nil, queryItems: queryItems
+        )
+        cachePosts(response.data)
+        return response
+    }
+
+    public func republish(storyId: String) async throws -> APIPost {
+        let response: APIResponse<APIPost> = try await api.request(
+            endpoint: "/posts/\(storyId)/republish", method: "POST"
+        )
+        cachePosts([response.data])
+        return response.data
     }
 
     // MARK: - Single-post cache & fetch
