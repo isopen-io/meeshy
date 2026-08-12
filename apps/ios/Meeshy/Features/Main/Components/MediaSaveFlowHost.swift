@@ -63,6 +63,17 @@ struct MediaSaveFlowModifier: ViewModifier {
                 ShareSheet(activityItems: [staged.url])
                     .ignoresSafeArea()
             }
+            .overlay(alignment: .center) {
+                // Préparer un média marqué n'est pas instantané : graver le
+                // filigrane dans une vidéo la ré-encode. Sans cet indicateur,
+                // l'app resterait muette entre le tap et le toast — l'utilisateur
+                // croirait que rien ne s'est passé et retaperait.
+                if coordinator.isProcessing {
+                    MediaSavePreparingIndicator()
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: coordinator.isProcessing)
             .adaptiveOnChange(of: coordinator.lastOutcome) { _, outcome in
                 switch outcome {
                 case .saved(let destination):
@@ -86,6 +97,35 @@ struct MediaSaveFlowModifier: ViewModifier {
         case .share:
             return NSLocalizedString("media.save.done.share", value: "Partagé", comment: "")
         }
+    }
+}
+
+// MARK: - Indicateur de préparation
+
+/// Pastille de patience affichée pendant la résolution + le marquage du média.
+/// Volontairement passive : l'opération n'est pas annulable (le ré-encodage
+/// d'`AVAssetExportSession` a déjà commencé), donc rien de tappable ici — un
+/// bouton qui ne fait rien ment plus qu'il n'aide.
+private struct MediaSavePreparingIndicator: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(.white)
+            Text(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: "Shown while the media is being resolved and watermarked before saving"))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: ""))
     }
 }
 

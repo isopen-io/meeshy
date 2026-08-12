@@ -32,6 +32,21 @@ private final class MockPhotoLibrarySaver: PhotoLibrarySaving, @unchecked Sendab
     }
 }
 
+/// Marquage simulé : sert la copie « marquée » qu'on lui donne, ou rend le
+/// fichier d'origine (marquage renoncé) quand `stampedURL` est nil.
+private final class StubMediaSaveBranding: MediaSaveBranding, @unchecked Sendable {
+    var stampedURL: URL?
+    private(set) var stampedKinds: [AttachmentKind] = []
+    private(set) var stampedFiles: [URL] = []
+
+    func stamp(_ file: URL, kind: AttachmentKind) async -> BrandedMedia {
+        stampedKinds.append(kind)
+        stampedFiles.append(file)
+        guard let stampedURL else { return .original(file) }
+        return BrandedMedia(url: stampedURL, isStamped: true)
+    }
+}
+
 private final class MockDownloadReporter: MediaSaveDownloadReporting, @unchecked Sendable {
     private(set) var reportedAttachmentIds: [String] = []
 
@@ -45,11 +60,15 @@ private final class MockDownloadReporter: MediaSaveDownloadReporting, @unchecked
 @MainActor
 final class MediaSaveCoordinatorTests: XCTestCase {
 
-    private func makeSUT() -> (sut: MediaSaveCoordinator, resolver: MockMediaSaveResolver, photos: MockPhotoLibrarySaver, reporter: MockDownloadReporter) {
+    /// `branding` par défaut : un marquage qui ne marque rien, pour que les
+    /// tests historiques restent hermétiques (pas d'AVFoundation, pas de rendu).
+    private func makeSUT(branding: MediaSaveBranding = StubMediaSaveBranding())
+    -> (sut: MediaSaveCoordinator, resolver: MockMediaSaveResolver, photos: MockPhotoLibrarySaver, reporter: MockDownloadReporter) {
         let resolver = MockMediaSaveResolver()
         let photos = MockPhotoLibrarySaver()
         let reporter = MockDownloadReporter()
-        let sut = MediaSaveCoordinator(resolver: resolver, photoSaver: photos, downloadReporter: reporter)
+        let sut = MediaSaveCoordinator(resolver: resolver, photoSaver: photos,
+                                       downloadReporter: reporter, branding: branding)
         return (sut, resolver, photos, reporter)
     }
 
@@ -405,5 +424,126 @@ final class MediaSaveCoordinatorTests: XCTestCase {
 
         try? await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertTrue(reporter.reportedAttachmentIds.isEmpty)
+    }
+
+    // MARK: Marque Meeshy (demande user 2026-08-12)
+
+    /// Copie « marquée » simulée, dans un dossier `meeshy-branded-…` comme en
+    /// production — c'est ce préfixe qui autorise le nettoyage.
+    private func makeStampedFile(named name: String,
+                                 contents: Data = Data("meeshy-branded-bytes".utf8)) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-branded-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent(name)
+        try contents.write(to: url)
+        return url
+    }
+
+    func test_pick_photoLibrary_image_savesTheStampedBytes_notTheOriginal() async throws {
+        let branding = StubMediaSaveBranding()
+        let stamped = try makeStampedFile(named: "photo.jpg")
+        branding.stampedURL = stamped
+        let (sut, resolver, photos, _) = makeSUT(branding: branding)
+        resolver.result = .success(try makeTempSourceFile(named: "photo.jpg",
+                                                          contents: Data("original".utf8)))
+        sut.requestSave(makeRequest(kind: .image))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertEqual(photos.savedImageData, [Data("meeshy-branded-bytes".utf8)],
+                       "Ce qui atterrit dans Photos, c'est la COPIE MARQUÉE")
+        XCTAssertEqual(branding.stampedKinds, [.image])
+    }
+
+    func test_pick_photoLibrary_video_savesTheStampedFile() async throws {
+        let branding = StubMediaSaveBranding()
+        let stamped = try makeStampedFile(named: "clip.mp4")
+        branding.stampedURL = stamped
+        let (sut, resolver, photos, _) = makeSUT(branding: branding)
+        resolver.result = .success(try makeTempSourceFile(named: "clip.mp4"))
+        sut.requestSave(makeRequest(kind: .video, url: "https://x/clip.mp4", suggestedName: "Clip.mp4"))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertEqual(photos.savedVideoURLs, [stamped])
+        XCTAssertEqual(branding.stampedKinds, [.video])
+    }
+
+    func test_pick_photoLibrary_discardsTheStampedCopy_butNeverTheResolvedFile() async throws {
+        let branding = StubMediaSaveBranding()
+        let stamped = try makeStampedFile(named: "photo.jpg")
+        branding.stampedURL = stamped
+        let (sut, resolver, _, _) = makeSUT(branding: branding)
+        let resolved = try makeTempSourceFile(named: "photo.jpg")
+        resolver.result = .success(resolved)
+        sut.requestSave(makeRequest(kind: .image))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stamped.path),
+                       "Le temporaire marqué est nettoyé une fois écrit chez l'utilisateur")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolved.path),
+                      "Le fichier RÉSOLU appartient au cache disque — le supprimer forcerait un re-téléchargement")
+    }
+
+    func test_pick_files_stagesTheStampedFile_underItsRealExtension() async throws {
+        let branding = StubMediaSaveBranding()
+        // Un audio marqué ressort en M4A quel que soit son format d'entrée.
+        branding.stampedURL = try makeStampedFile(named: "voice.m4a")
+        let (sut, resolver, _, _) = makeSUT(branding: branding)
+        resolver.result = .success(try makeTempSourceFile(named: "voice.mp3"))
+        sut.requestSave(makeRequest(kind: .audio, url: "https://x/voice.mp3",
+                                    suggestedName: "Note vocale.mp3"))
+
+        await sut.pick(.files)
+
+        let staged = try XCTUnwrap(sut.exportURL)
+        XCTAssertEqual(staged.lastPathComponent, "Note vocale.m4a",
+                       "Un nom qui ment sur son format est refusé par les autres apps")
+        XCTAssertEqual(try Data(contentsOf: staged), Data("meeshy-branded-bytes".utf8))
+    }
+
+    func test_pick_whenStampingIsDeclined_savesTheOriginalFile() async throws {
+        let branding = StubMediaSaveBranding()   // stampedURL nil = marquage renoncé
+        let (sut, resolver, photos, _) = makeSUT(branding: branding)
+        let resolved = try makeTempSourceFile(named: "photo.gif", contents: Data("gif-bytes".utf8))
+        resolver.result = .success(resolved)
+        sut.requestSave(makeRequest(kind: .image))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertEqual(photos.savedImageData, [Data("gif-bytes".utf8)],
+                       "Un marquage impossible n'empêche JAMAIS un enregistrement")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolved.path))
+        XCTAssertEqual(sut.lastOutcome, .saved(.photoLibrary))
+    }
+
+    // MARK: exportFileName — extension réelle du fichier écrit
+
+    func test_exportFileName_adoptsTheStampedExtension_whenItDiffers() {
+        let request = MediaSaveRequest(kind: .image, remoteURLString: "https://x/photo.heic",
+                                       suggestedFileName: "Vacances.heic")
+
+        XCTAssertEqual(MediaSaveCoordinator.exportFileName(for: request, actualExtension: "jpg"),
+                       "Vacances.jpg")
+    }
+
+    func test_exportFileName_keepsTheSuggestedName_whenExtensionsAgree() {
+        let request = MediaSaveRequest(kind: .image, remoteURLString: "https://x/photo.jpg",
+                                       suggestedFileName: "Vacances.jpg")
+
+        XCTAssertEqual(MediaSaveCoordinator.exportFileName(for: request, actualExtension: "JPG"),
+                       "Vacances.jpg",
+                       "La casse ne doit pas provoquer un renommage cosmétique")
+    }
+
+    func test_discardStagingDirectory_refusesAnythingOutsideABrandedFolder() throws {
+        let cacheLike = try makeTempSourceFile(named: "cached.jpg")
+
+        MediaSaveCoordinator.discardStagingDirectory(of: cacheLike)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cacheLike.path),
+                      "La garde protège le cache disque d'une suppression accidentelle")
     }
 }

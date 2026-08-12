@@ -106,13 +106,16 @@ final class MediaSaveCoordinator: ObservableObject {
     private let resolver: MediaSaveSourceResolving
     private let photoSaver: PhotoLibrarySaving
     private let downloadReporter: MediaSaveDownloadReporting
+    private let branding: MediaSaveBranding
 
     init(resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
          photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
-         downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter()) {
+         downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter(),
+         branding: MediaSaveBranding = MeeshyMediaSaveBranding()) {
         self.resolver = resolver
         self.photoSaver = photoSaver
         self.downloadReporter = downloadReporter
+        self.branding = branding
     }
 
     func requestSave(_ request: MediaSaveRequest) {
@@ -144,22 +147,30 @@ final class MediaSaveCoordinator: ObservableObject {
         defer { isProcessing = false }
         do {
             let localFile = try await resolver.resolveLocalFile(for: request)
+            // Un média qui quitte Meeshy porte sa marque — filigrane sur les
+            // images et les vidéos, signature sonore sur les audios. Le
+            // marquage produit TOUJOURS une copie : `localFile` est très
+            // souvent le fichier du cache disque, qui doit rester la copie
+            // fidèle de l'original. Un marquage impossible retombe sur
+            // l'original (cf. `MeeshyMediaSaveBranding`).
+            let branded = await branding.stamp(localFile, kind: request.kind)
+            defer { if branded.isStamped { Self.discardStagingDirectory(of: branded.url) } }
             switch destination {
             case .photoLibrary:
                 if request.kind == .image {
-                    let data = try Data(contentsOf: localFile)
+                    let data = try Data(contentsOf: branded.url)
                     try await photoSaver.saveImage(data)
                 } else {
-                    try await photoSaver.saveVideo(at: localFile)
+                    try await photoSaver.saveVideo(at: branded.url)
                 }
                 lastOutcome = .saved(.photoLibrary)
                 await reportDownloadedOnce()
             case .files:
                 // Le save n'est acquis qu'au retour du document picker — pas
                 // d'outcome ici, l'hôte UI le rapporte à la complétion.
-                exportURL = try Self.stageForExport(localFile, request: request)
+                exportURL = try Self.stageForExport(branded.url, request: request)
             case .share:
-                shareURL = try Self.stageForExport(localFile, request: request)
+                shareURL = try Self.stageForExport(branded.url, request: request)
             }
         } catch {
             mediaSaveLog.error("pick FAILED: \(error.localizedDescription, privacy: .public)")
@@ -198,15 +209,35 @@ final class MediaSaveCoordinator: ObservableObject {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("media-save-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appendingPathComponent(exportFileName(for: request))
+        let destination = directory.appendingPathComponent(
+            exportFileName(for: request, actualExtension: source.pathExtension))
         try FileManager.default.copyItem(at: source, to: destination)
         return destination
+    }
+
+    /// Supprime le dossier temporaire d'une COPIE MARQUÉE, une fois celle-ci
+    /// écrite chez l'utilisateur.
+    ///
+    /// Garde volontairement étroite : ne supprime que sous un dossier
+    /// `meeshy-branded-…`. Le fichier résolu, lui, appartient au cache disque —
+    /// le supprimer forcerait un re-téléchargement et, pire, ferait disparaître
+    /// le média des vues qui le lisent depuis ce même cache.
+    nonisolated static func discardStagingDirectory(of file: URL) {
+        let directory = file.deletingLastPathComponent()
+        guard directory.lastPathComponent.hasPrefix("meeshy-branded-") else { return }
+        try? FileManager.default.removeItem(at: directory)
     }
 
     /// Nom de fichier d'export : nom suggéré assaini, sinon dernier segment
     /// de l'URL distante, sinon défaut par famille — l'extension de l'URL
     /// est réappliquée quand le nom choisi n'en porte pas.
-    nonisolated static func exportFileName(for request: MediaSaveRequest) -> String {
+    ///
+    /// - Parameter actualExtension: extension du fichier RÉELLEMENT écrit.
+    ///   Le marquage ré-encode (un HEIC ressort en JPEG, un MP3 en M4A) : sans
+    ///   ce recalage, l'export porterait un nom qui ment sur son contenu et les
+    ///   autres apps refuseraient de l'ouvrir.
+    nonisolated static func exportFileName(for request: MediaSaveRequest,
+                                           actualExtension: String = "") -> String {
         let remoteExtension = URL(string: request.remoteURLString)?.pathExtension ?? ""
         let sanitized = request.suggestedFileName?
             .replacingOccurrences(of: "/", with: "-")
@@ -222,6 +253,10 @@ final class MediaSaveCoordinator: ObservableObject {
         }
         if (name as NSString).pathExtension.isEmpty && !remoteExtension.isEmpty {
             name += ".\(remoteExtension)"
+        }
+        let actual = actualExtension.lowercased()
+        if !actual.isEmpty, (name as NSString).pathExtension.lowercased() != actual {
+            name = (name as NSString).deletingPathExtension + ".\(actual)"
         }
         return name
     }
