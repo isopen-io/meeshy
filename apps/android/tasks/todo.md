@@ -4,7 +4,132 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅
+## This loop (Phase: Chat §C) — slice `chat-unread-separator` ✅
+The "new messages" boundary above the first unread message on open — completes the "unread separator" pending
+sub-item of the §C date-headers box. Pure `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?`
+SSOT (port of iOS `unreadStartIndex = messages.count - initialUnreadCount`, guarded by `!candidate.isMe`: boundary
+at `size-unreadCount`, `null` if nothing unread / empty window / count>window / boundary on an outgoing message).
+`ChatListItem.UnreadSeparator` row + `buildChatListItems(firstUnreadId = null)` inserts one separator directly above
+the matching message (below its day header). `ChatViewModel` captures the cached `unreadCount` BEFORE `markConversationRead`
+zeroes it, then latches the boundary once (a later message never shifts it); `ChatScreen` renders an accent-coherent
+`UnreadSeparatorRow` (EN/FR/ES/PT). +17 tests (8 marker, +5 list-item, +2 VM); mutation-proven (drop the `isOutgoing`
+guard → exactly the own-at-boundary test fails, `8 completed, 1 failed`). Full `assembleDebug testDebugUnitTest` green.
+Diff = `apps/android` only. Reviewer PASS. Next: §C joined banner / unread-scroll-to-first affordance, `CategoryPickerField`,
+`OnboardingFlowView`, or Kover coverage-gate infra.
+
+## Prior loop (Phase: Conversations §B) — slice `conversation-drag-to-category` ✅
+Conversation → user-category (re)assignment — closes the last box on the §B "Sectioned list … +
+drag-to-category" line (reducer/hydration/socket shipped 2026-07-26 had no way to *move* a conversation into a
+category). Pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT (idempotent:
+same → `Unchanged`, else `AssignTo(id)`, port of iOS `setCategory`); `ConversationRepository.setCategoryOptimistic`
+via the shared `updatePreferencesOptimistic` (cache re-buckets instantly, outbox snapshot flushes); `categoryId`
+threaded through `ConversationPrefsPayload` + `ConversationPreferencesUpdate` → `PUT /user-preferences/conversations/:id`
+(gateway already accepts it, `null` = uncategorize, broadcasts back); VM `reassignCategory` + long-press context-menu
+"Move to category" (current checked, en/fr/es/pt). +7 tests, idempotency-guard mutation-proven (always-`AssignTo` →
+exactly the 2 no-op tests fail). Full `assembleDebug testDebugUnitTest` green (4m 51s, 943 tasks, APK). Diff =
+`apps/android` only. Reviewer PASS. Uncategorize (`categoryId = null`) deferred: `explicitNulls = false` drops a null
+field so it needs an explicit-null `PUT`.
+
+## Prior loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
+Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical
+reaction-removal event into the live mood-statuses bar (a SOTA symmetry iOS's `StatusViewModel` bar handlers lack).
+`:core:model` `SocketStatusUnreactedData{statusId,userId,emoji}`; `:sdk-core` `SocialSocketManager.statusUnreacted`
+flow + `listen("status:unreacted")`; `:feature:feed` pure `StatusBarListState.unreacted` reducer (decrement, clamp ≥0,
+drop spent bucket, inert on absent/no-such-reaction) + `StatusesViewModel` fold skipping the un-reactor's own echo.
++8 tests, mutation-proven own-echo guard. `:app:assembleDebug` + touched test modules green. Diff = `apps/android`
+only. Reviewer PASS. Next: §H Calls WebRTC core, or the tracked Kover 90% coverage-gate infra.
+
+## Prior loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
+**@-mention autocomplete — debounced remote directory merge.** Completes §Chat "@-mention autocomplete (debounced
+API + local merge)" (local roster shipped 2026-07-06; this is the online half). Extends the existing pure
+`:feature:chat` `ChatMention` SSOT with `shouldQueryRemote` (≥2 trimmed chars) + `mergeSuggestions` (local-first
+dedup: locals win, remote appended when its handle — trimmed, case-insensitive — is non-blank, not local, not a
+remote dup), plus a staleness-guarded `MentionAutocompleteState.applyRemote(query, remote)` reducer (folds only while
+`query == activeQuery` — the pure equivalent of iOS's `Task.isCancelled`). Protocol-injected `MentionSearch` +
+`DirectoryMentionSearch` over `UserRepository.searchUsers` (`@Binds` module; failure → empty, roster still serves).
+`ChatViewModel` fires a 300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous `Job`),
+excludes self, applies via `applyRemote`; cancelled on paste-capture + select. Panel binding unchanged (merged rows
+render below the roster — SSOT). +20 tests (5 gate, 8 merge, 3 applyRemote, 4 VM), mutation-checked (dropping the
+dedup/blank guard fails exactly the 6 dedup/blank/merge cases). `:feature:chat:testDebugUnitTest` green; full
+`assembleDebug testDebugUnitTest` APK assembles + all touched modules green (lone failure = documented `:sdk-core`
+DataStore flake, green in isolation). Diff = `apps/android` only. Reviewer PASS. Next: audio-over-socket send
+(`message:send-with-attachments` + voice-pill bytes), a file/photo picker over the REST attachment chain, the
+conversation info sheet, or advance to §Feed.
+
+## Prior loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
+**Live-location socket start/update/stop wiring.** Feeds the previously-unfed `LiveLocationSessions` reducer from
+the socket. Ships `:core:model` pure `LiveLocationEventFold` (`started`/`updated`/`stopped` fold the already-modelled
+`Location.kt` wire DTOs into the reducer, resolving ISO dates via the shared `isoToEpochMillisOrNull` and applying
+iOS's exact fallbacks — `expiresAt ?? now+duration·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive
+window→`now` — with `now` threaded in for purity, surpassing iOS's internal `Date()`). Wired real (exempt glue):
+`MessageSocketManager` gains three `liveLocation*` flows + `location:live-*` listeners; `ChatViewModel` collects
+them (conversation-scoped) into `ChatUiState.liveLocations` and exposes `liveLocationBadges`; `ChatScreen` renders a
+self-terminating accent-coherent `LiveLocationBadge` per active session. +17 tests (fold 13, VM 4), mutation-checked
+(anchoring the expiry fallback on `startedAt` vs `now` fails exactly the boundary test — `now` set 10 min past
+`startedAt`). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android`
+only. Reviewer PASS. Next: in-app browser (Chrome Custom Tabs) + rich-card image loading, or the fullscreen
+map/directions for live location (needs Maps SDK), or the attachment send pipeline.
+
+## Prior loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
+**Large-paste detection → clipboard-content preview.** Advances the §Chat "Large-paste detection →
+clipboard-content attachment" line to detection+preview done. Ships `:feature:chat` pure `LargePasteDetector`
+(fires when composer text grows past 2000 chars **and** jumps >250 chars in one edit — readable port of iOS
+`handleClipboardCheck`'s `delta = 2·growth` heuristic) + clock-injected `ClipboardContent` value type
+(`of(text, nowMillis)` → id / charCount / 200-char truncated preview; surpasses iOS's twin `Date()` reads +
+id-only equality). Wired real (exempt glue): `ChatViewModel.onDraftChange` folds a captured paste into
+`ChatUiState.clipboardContent` + clears the draft; `removeClipboardContent` discards it; `ChatComposer` shows an
+accent-tinted `ClipboardContentPreview` chip (en/fr/es/pt). +24 tests (detector 13, model 8, VM 3), mutation-checked
+(growth boundary `>`→`>=` fails exactly the boundary test). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon
+recipe, 5m14s), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS. Next: send the captured content
+as a real clipboard_content attachment (gated on the attachment send pipeline), or live-location socket wiring, or
+the in-app browser / rich-card image loading link-preview follow-ups.
+
+## Prior loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
+**Floating preview-bubble overlay layout law — pure SSOT + real lifted hero.** Completes the §Chat "Long-press
+overlay menu" line (all four parts now done: quick-reactions + action-grid + drag-to-detail + preview bubble). Ships
+`:feature:chat` `MessageOverlayLayout.compute(...)` — a faithful port of the iOS `MessageOverlayMenu` "native-lean"
+`nl*` geometry: stacks `[emoji bar]·gap·[preview hero]·gap·[action menu]` into a `MessageOverlayCluster` (scale +
+preview rect + emoji/menu anchor points), with a two-stage scale cascade (height cap at 320px/floor 0.55 → fit
+squeeze/floor 0.4, band floored at 160), a trailing/leading unclamped hero anchor, a safe-area cluster-top clamp,
+and independent emoji/menu X clamps. +17 tests, mutation-checked (swap anchor branches → exactly 3 red; the check
+caught a symmetric-at-scale-1.0 anchor blind spot in the first draft → fixed by testing on a scaled preview). Wired
+for real in `ChatScreen` (exempt glue): each row's window frame captured via `onGloballyPositioned` into a plain
+`bubbleFrames` map; on long-press a new `MessageOverlayPreviewHero` Popup lifts a scaled copy of the tapped
+`MessageBubble` above the action sheet, positioned by the law (frame-miss skips gracefully). Full `assembleDebug
+testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS.
+Next: universal composer / voice-recording pill (waveform core already exists), or the in-overlay audio/video preview.
+
+## Prior loop (Phase: Chat) — slice `chat-composer-effects-picker` ✅
+**Composer effects picker — pure presentation SSOT + real send wiring.** The whole pure effects pipeline
+(`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) and the effects-ready `sendOptimistic` already
+existed, but nothing armed or sent effects — the composer had no picker. Ships `:core:model`
+`MessageEffectsPickerPresenter.build(effects)` (+ `MessageEffectOption`/`MessageEffectSection` catalog): a pure
+derivation of the whole sheet state the iOS `EffectsPickerView` recomputes inline (per-chip `isActive`, ephemeral
+`showEphemeralDuration`/`isSelected` under flag authority, `activeCount` popcount, `showSummary`). +16 tests,
+mutation-checked (force `showEphemeralDuration=true` → exactly 3 fail). Wired for real in `:feature:chat`:
+`ChatUiState.pendingEffects`/`isEffectsPickerOpen`, ViewModel intents (`toggleEffect`/`selectEphemeralDuration`/
+`clearEffects`/`open`/`dismiss` — dismiss keeps the selection), `send()` stamps `pendingEffects` onto
+`sendOptimistic(effects=…)` then disarms; `ChatComposer` AutoAwesome button opens the `EffectsPickerSheet` (exempt
+Compose glue, accent chips, en/fr/es/pt). +7 ViewModel tests. Full `assembleDebug testDebugUnitTest` green, APK
+produced, diff = `apps/android` only. Reviewer PASS. Next: propagate the already-decoded `ApiMessage.effects` into
+`BubbleContent` so `Modifier.messageEffects` fires on received messages; or the one-shot appearance rendering.
+
+## Prior loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+**ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
+`me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
+`thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,
+`hasAlpha`, `isLandscape`, `decode`→`ThumbHashImage(w,h,rgba)`) — YCoCg→RGB inverse-DCT over primitives, no
+Android `Bitmap`. Surpasses the reference: rejects a hash too short for the region it reads
+(`IllegalArgumentException` vs silent OOB) + clamps the raster to ≥1×1 (no zero-sized image from a degenerate
+header). +21 tests. `:core:model` tests green; `:app:assembleDebug` → BUILD SUCCESSFUL, APK produced.
+Two-mutation RED check (flip YCoCg blue reconstruction + drop portrait aspect scale) failed exactly the 4
+relevant tests. Reviewer PASS, diff = `apps/android` only. Full-tree tests show only 2 pre-existing flaky
+`:sdk-core` DataStore-timeout failures (pass on retry; unrelated module). The raster→`Bitmap` wrap + Coil
+placeholder wiring + ThumbHash *encoder* (slide generation) remain app-side/next. Next: raster→`Bitmap` + Coil
+placeholder consuming `ThumbHash.decode`; ThumbHash encoder; app-side Bitmap re-encode consuming
+`ImageCompressionPlan`; or app-side voice recorder pill consuming the waveform core.
+
+## Prior loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅ (merged PR #1896)
 **Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
 shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
 `AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
@@ -14,8 +139,7 @@ guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHis
 interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
 produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
 exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
-`Canvas` paint remain app-side glue. Next: app-side recorder pill / player waveform consuming this core; app-side
-Bitmap re-encode consuming `ImageCompressionPlan`; or ThumbHash blur placeholders (§P).
+`Canvas` paint remain app-side glue.
 
 ## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
 **Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`

@@ -57,7 +57,39 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
             showsComments: commentCount > 0,
-            showsTranslations: !isOwnStory && hasTranslatableContent
+            // Les traductions ne sont PAS réservées aux lecteurs (changement
+            // 2026-07-25) : l'auteur explore les langues de sa propre story
+            // comme il choisit déjà sa langue d'export. Le Prisme est un outil
+            // de lecture, pas une permission.
+            showsTranslations: hasTranslatableContent
+        )
+    }
+}
+
+// MARK: - Export Rail Buttons (Partager / Enregistrer)
+
+/// Résolution PURE de la paire Partager/Enregistrer du rail — extraite pour
+/// être testée sans instancier de vue (Task 10, revue « le reader a perdu
+/// tout accès au partage externe »).
+///
+/// Membership des DEUX boutons = `showsExport` (== `isOwnStory`, voir
+/// `StoryActionRailPlan.resolve`) : Partager et Enregistrer apparaissent ou
+/// disparaissent TOUJOURS ensemble. Seul Enregistrer bascule vers l'anneau de
+/// progression pendant un job de sauvegarde — Partager reste au premier plan
+/// tout du long : il doit rester atteignable jusqu'à la présentation de la
+/// share sheet système, jamais relégué derrière une tâche de fond, sinon
+/// cette sheet surgirait après coup alors que l'utilisateur a déjà navigué
+/// ailleurs.
+nonisolated struct StoryExportRailButtons: Equatable {
+    let showsShareButton: Bool
+    let showsSaveButton: Bool
+    let showsSaveProgressRing: Bool
+
+    static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
+        StoryExportRailButtons(
+            showsShareButton: showsExport,
+            showsSaveButton: showsExport && saveProgress == nil,
+            showsSaveProgressRing: showsExport && saveProgress != nil
         )
     }
 }
@@ -82,6 +114,13 @@ struct StoryActionSidebarView: View {
     let currentStory: StoryItem?
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
+    /// Impulsion dédiée à la réconciliation d'OUVERTURE de slide — voir
+    /// `StoryViewerView.storyCommentCountReconciledPulse`. Distincte de
+    /// `storyCommentCount` : celui-ci bouge aussi en temps réel (activité live,
+    /// propre composer), cette impulsion NE bouge QUE quand
+    /// `loadStoryCommentCount()` (+Content.swift) confirme un compteur plus
+    /// exact que le payload d'entrée.
+    let storyCommentCountReconciledPulse: Int
     /// Forward / external-share count for the Envoyer button label (user spec
     /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
     let storyShareCount: Int
@@ -95,6 +134,14 @@ struct StoryActionSidebarView: View {
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
+    /// Langue d'exploration en cours (`nil` = la chaine préférée de l'utilisateur
+    /// s'applique, aucun override). Marque le drapeau correspondant dans le strip
+    /// pour que « quelle langue je lis » soit lisible d'un coup d'œil.
+    let activeLanguageCode: String?
+    /// Langue effectivement affichée (résolue) — alimente le badge accolé au
+    /// bouton « Abc ». Remplace l'ancien badge (EN) du coin bas-gauche
+    /// (directive user 2026-07-26).
+    let displayedLanguageCode: String?
     /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
     let onSelectLanguageOverride: (String) -> Void
 
@@ -107,15 +154,34 @@ struct StoryActionSidebarView: View {
     @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var isPresented: Bool
 
-    let triggerStoryReaction: (String) -> Void
+    /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
+    /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
+    let triggerStoryReaction: (String, CGRect?) -> Void
+    /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
+    /// neutralise la navigation du canvas).
+    let onScrubStateChanged: (Bool) -> Void
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
+    /// Source de vérité des exports story → photothèque
+    /// (`StoryPhotoSaveService.shared`, Task 7). `@ObservedObject` — pas
+    /// une simple lecture de `StoryPhotoSaveService.shared.progress(for:)`
+    /// dans `body` — est nécessaire pour que cette vue se redessine quand la
+    /// progression change ; `@Published` seul ne déclenche rien sans
+    /// souscription SwiftUI.
+    @ObservedObject private var saveService = StoryPhotoSaveService.shared
+
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
+
+    @State private var scrubHoveredReactionIndex: Int?
+    @State private var scrubHoveredLanguageIndex: Int?
+    @State private var reactionTileFrames: [Int: CGRect] = [:]
+    @State private var languageTileFrames: [Int: CGRect] = [:]
+    @State private var isScrubbingReactions = false
+    @State private var isScrubbingLanguages = false
 
     /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
     /// Re-résolu UNIQUEMENT au changement de story — jamais sur une mise à
@@ -123,24 +189,33 @@ struct StoryActionSidebarView: View {
     /// pendant la lecture.
     @State private var frozenRailPlan: StoryActionRailPlan?
 
-    /// Résolution depuis les entrées courantes (payload déjà seedé de manière
-    /// synchrone par `startTimer()` avant le rendu du slide).
+    /// Résolution depuis les entrées courantes. La MEMBERSHIP
+    /// (`showsComments`) lit `currentStory?.commentCount` — le payload déjà
+    /// en paramètre de la vue — plutôt que le miroir `@State
+    /// storyCommentCount`, pour ne JAMAIS dépendre de l'ordre réel des
+    /// `.onAppear` SwiftUI : `StoryActionSidebarView` est un descendant
+    /// profond du viewer (Layer 8), et rien ne garantit structurellement que
+    /// le `.onAppear` ancêtre qui seed `storyCommentCount` (via
+    /// `startTimer()`) s'exécute avant celui-ci. Lire le payload élimine ce
+    /// risque par construction. Le LABEL affiché, lui, reste sur
+    /// `storyCommentCount` (compteur vivant, mis à jour en temps réel par
+    /// les réconciliations post-gel) — voir `sidebarContent` plus bas.
     private var liveRailPlan: StoryActionRailPlan {
         StoryActionRailPlan.resolve(
             isOwnStory: isOwnStory,
             canReply: onReplyToStory != nil,
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
-            commentCount: storyCommentCount,
+            commentCount: currentStory?.commentCount ?? 0,
             hasTranslatableContent: storyHasTranslatableContent
         )
     }
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
 
-    /// Quick pop on the heart button that confirms the user just sent a
-    /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
-    /// own multi-phase animation.
+    /// Quick pop on the heart button that confirms the reaction landed —
+    /// ticked at the ARRIVAL of the reaction flight (`StoryReactionFlightView.onArrived`),
+    /// not at send time.
     private func bounceHeart() {
         withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
             heartScale = 1.35
@@ -150,6 +225,124 @@ struct StoryActionSidebarView: View {
                 heartScale = 1.0
             }
         }
+    }
+
+    /// Longpress (0.25 s) → la barre surgit → drag continu SANS lever le doigt :
+    /// survol des tuiles (×1.35 rebond via highlightedIndex), sélection au
+    /// relâchement. Posé en `.highPriorityGesture` sur le bouton : un tap court
+    /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
+    /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
+    /// le swipe de navigation est donc structurellement neutralisé.
+    /// Ouvre la barre de réactions au moment où le longpress est ACQUIS.
+    /// Appelé des cas `.first(true)` ET `.second(true, _)` : en pratique
+    /// SwiftUI ne livre souvent JAMAIS `.first(true)` — la séquence saute
+    /// directement à `.second(true, nil)` quand le longpress aboutit
+    /// (prouvé au log HID 2026-08-11 : premier onChanged = `second(true,
+    /// nil)`). Ne traiter que `.first(true)` laissait la barre fermée à
+    /// jamais.
+    private func beginReactionScrubIfNeeded() {
+        guard !isScrubbingReactions else { return }
+        isScrubbingReactions = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showEmojiStrip = true
+        }
+    }
+
+    private var reactionScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginReactionScrubIfNeeded()
+                case .second(true, let drag):
+                    beginReactionScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: reactionTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredReactionIndex { HapticFeedback.light() }
+                    scrubHoveredReactionIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredReactionIndex
+                isScrubbingReactions = false
+                onScrubStateChanged(false)
+                scrubHoveredReactionIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: quickEmojis.count) {
+                case .select(let index):
+                    triggerStoryReaction(quickEmojis[index], reactionTileFrames[index])
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showEmojiStrip = false
+                        showFullEmojiPicker = true
+                    }
+                case .keepOpen:
+                    break // la barre reste ouverte en mode posé (tap possible)
+                }
+            }
+    }
+
+    /// Même mécanique pour la barre de langues (relâchement = sélection de la
+    /// langue ; « + » = liste complète ; hors barre = barre posée).
+    /// Même contrat que `beginReactionScrubIfNeeded` — cf. son commentaire :
+    /// le longpress est acquis à l'entrée en `.second`, pas en `.first(true)`.
+    private func beginLanguageScrubIfNeeded() {
+        guard !isScrubbingLanguages else { return }
+        isScrubbingLanguages = true
+        onScrubStateChanged(true)
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showLanguageOptions = true
+        }
+    }
+
+    private var languageScrubGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    beginLanguageScrubIfNeeded()
+                case .second(true, let drag):
+                    beginLanguageScrubIfNeeded()
+                    guard let drag else { return }
+                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
+                        tileFrames: languageTileFrames,
+                        point: drag.location,
+                        verticalTolerance: 16)
+                    if hovered != scrubHoveredLanguageIndex { HapticFeedback.light() }
+                    scrubHoveredLanguageIndex = hovered
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let hovered = scrubHoveredLanguageIndex
+                isScrubbingLanguages = false
+                onScrubStateChanged(false)
+                scrubHoveredLanguageIndex = nil
+                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: availableTranslationLanguages.count) {
+                case .select(let index):
+                    onSelectLanguageOverride(availableTranslationLanguages[index].id)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                    }
+                case .expand:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions = false
+                        showFullLanguagePicker = true
+                    }
+                case .keepOpen:
+                    break
+                }
+            }
     }
 
     var body: some View {
@@ -182,6 +375,52 @@ struct StoryActionSidebarView: View {
         .adaptiveOnChange(of: currentStory?.id) { _, _ in
             frozenRailPlan = liveRailPlan
         }
+        // La présence d'une piste audio dans une vidéo est établie par un probe
+        // ASYNCHRONE (`AVURLAsset.loadTracks`) qui conclut souvent après le gel :
+        // le rail restait alors sans bouton son sur une story qui en a un
+        // (constaté 2026-07-25, probe `tracks=1` arrivé ~1 s trop tard).
+        // Transition à sens unique « silencieux → sonore » : un bouton peut
+        // apparaître quand la donnée arrive, jamais disparaître en cours de
+        // lecture — la directive 2026-07-10 (pas de rail qui clignote) tient.
+        .adaptiveOnChange(of: storyHasAudibleSound) { wasAudible, isAudible in
+            guard !wasAudible, isAudible else { return }
+            frozenRailPlan = liveRailPlan
+        }
+        // Réconciliation du compteur de commentaires — MÊME contrat que le
+        // probe audio juste au-dessus, pour le MÊME symptôme : un thread de
+        // commentaires bien réel restait invisible pour toute la lecture
+        // d'un slide ouvert NORMALEMENT (tray, profil, feed…), car
+        // `liveRailPlan` fige la membership sur `currentStory?.commentCount`
+        // — le payload du tray, potentiellement périmé jusqu'à 72 h (cache
+        // stories). Le chemin notification est déjà couvert en amont
+        // (`StoryViewModel.refreshFromCachedPostIfAvailable` +
+        // `StoryViewerContainer.isGroupReadyToPresent`, qui rafraîchissent le
+        // payload AVANT le premier montage) ; celui-ci couvre tous les
+        // autres points d'entrée, où aucun postId de notification n'est
+        // connu et où ce verrou ne s'applique jamais.
+        //
+        // `storyCommentCountReconciledPulse` ne tique QUE sur la
+        // réconciliation d'ouverture de `loadStoryCommentCount()`
+        // (+Content.swift : cache commentaires local, puis — si toujours à
+        // 0 — une requête réseau bornée ~400 ms) : ni `sendComment` (propre
+        // composer), ni le socket `comment:added` reçu pendant la lecture
+        // (`applyStoryCommentAdded` +Content.swift,
+        // `StoryViewModel.applyStoryCommentCountDelta`) ne l'incrémentent —
+        // ces derniers restent volontairement hors du gel (directive
+        // 2026-07-10 : jamais de bouton qui surgit en cours de lecture).
+        // Transition à sens unique comme le probe audio : ne fait
+        // qu'apparaître, jamais disparaître.
+        .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
+            guard !railPlan.showsComments else { return }
+            frozenRailPlan = StoryActionRailPlan.resolve(
+                isOwnStory: isOwnStory,
+                canReply: onReplyToStory != nil,
+                isPublicStory: currentStory?.isPublic == true,
+                hasAudibleSound: storyHasAudibleSound,
+                commentCount: storyCommentCount,
+                hasTranslatableContent: storyHasTranslatableContent
+            )
+        }
     }
 
     @ViewBuilder
@@ -191,21 +430,32 @@ struct StoryActionSidebarView: View {
             if railPlan.showsReact {
                 StoryActionButton(
                     icon: "heart.fill",
-                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
+                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main),
                     isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
                     accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55"),
+                    handlesTapViaGesture: true
                 ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showEmojiStrip.toggle()
-                    }
+                    // Tap court = ❤️ immédiat (pattern Instagram/WhatsApp) —
+                    // la barre s'ouvre désormais au LONGPRESS (scrub).
+                    triggerStoryReaction("❤️", nil)
                 }
+                .highPriorityGesture(reactionScrubGesture)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: StoryHeartFrameKey.self,
+                            value: proxy.frame(in: .named(StoryScrubSpace.name))
+                        )
+                    }
+                )
                 .scaleEffect(heartScale)
-                // Bounce on every reaction sent — via the quick strip below
-                // OR the full-screen picker — since heartBouncePulse ticks
-                // inside triggerStoryReaction, the single reaction-sent seam.
+                // Bounce on every reaction that LANDS — via the quick strip,
+                // the scrub, or the full-screen picker — since heartBouncePulse
+                // ticks at the flight's arrival (+Canvas.swift Layer 9), the
+                // single impact seam regardless of origin.
                 .adaptiveOnChange(of: heartBouncePulse) { _, _ in
                     bounceHeart()
                 }
@@ -215,7 +465,8 @@ struct StoryActionSidebarView: View {
                             quickEmojis: quickEmojis,
                             style: .dark,
                             onReact: { emoji in
-                                triggerStoryReaction(emoji)
+                                let index = quickEmojis.firstIndex(of: emoji)
+                                triggerStoryReaction(emoji, index.flatMap { reactionTileFrames[$0] })
                             },
                             onDismiss: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -227,7 +478,10 @@ struct StoryActionSidebarView: View {
                                     showEmojiStrip = false
                                     showFullEmojiPicker = true
                                 }
-                            }
+                            },
+                            highlightedIndex: scrubHoveredReactionIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { reactionTileFrames = $0 }
                         )
                         .fixedSize()
                         .transition(.asymmetric(
@@ -244,7 +498,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsReply {
                 StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
-                    label: "Répondre"
+                    label: String(localized: "story.viewer.action.reply", defaultValue: "Répondre", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
@@ -270,7 +524,7 @@ struct StoryActionSidebarView: View {
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : "Envoyer"
+                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main)
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -290,7 +544,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Partager", bundle: .main)
                 ) {
                     guard let story = currentStory else { return }
                     HapticFeedback.light()
@@ -304,19 +558,23 @@ struct StoryActionSidebarView: View {
                             )
                             await MainActor.run {
                                 HapticFeedback.success()
-                                FeedbackToastManager.shared.show("Story republiée")
+                                FeedbackToastManager.shared.show(
+                                    String(localized: "story.viewer.repost.success", defaultValue: "Story republiée", bundle: .main))
                             }
                         } catch APIError.serverError(404, _) {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("La story n'est plus disponible")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
                             }
                         } catch APIError.serverError(403, _) {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
                             }
                         } catch {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("Échec de la republication")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.error", defaultValue: "Échec de la republication", bundle: .main))
                             }
                         }
                     }
@@ -324,7 +582,7 @@ struct StoryActionSidebarView: View {
             } else if railPlan.showsViews {
                 StoryActionButton(
                     icon: "eye.fill",
-                    label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
+                    label: storyViewCount > 0 ? "\(storyViewCount)" : String(localized: "story.viewer.action.views", defaultValue: "Vues", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -332,20 +590,107 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // Author-only export — bakes a fidèle-au-preview MP4 the user
-            // can share to Photos / Messages / WhatsApp. Available pour
-            // TOUTES les stories de l'auteur (static OU animée — le
-            // compositor synthétise un substrat pour les statiques).
-            // NEVER uploads to the Meeshy backend (stories publish RAW,
-            // see CLAUDE.md "Story Architecture").
-            if railPlan.showsExport {
+            // Author-only Partager + Enregistrer — deux actions DISTINCTES
+            // (Task 10, revue Task 7 : le rail avait perdu tout accès au
+            // partage externe en passant l'ancien bouton « Exporter » par
+            // `StoryPhotoSaveService`, silencieusement, sous une icône et un
+            // libellé de partage). Alignées sur la ligne « Mes stories » :
+            //
+            //   Partager    → sheet `StoryExportShareSheet` (choix de langue)
+            //                 → `UIActivityViewController` (WhatsApp, Messages,
+            //                 AirDrop, Photos…). Reste au PREMIER PLAN — une
+            //                 sheet modale, jamais une tâche de fond, sinon
+            //                 elle surgirait après coup alors que l'utilisateur
+            //                 a déjà navigué ailleurs.
+            //   Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
+            //                 EXACTEMENT comme sur la ligne « Mes stories »
+            //                 (Task 7) : même source de vérité, donc un export
+            //                 lancé ici apparaît aussi dans la liste et
+            //                 réciproquement. Tant qu'un job est en vol pour
+            //                 cette story, ce bouton (lui seul) devient
+            //                 l'anneau de progression et son tap annule.
+            //
+            // NEVER uploads to the Meeshy backend (stories publish RAW, see
+            // CLAUDE.md "Story Architecture").
+            //
+            // Membership des DEUX boutons = `railPlan.showsExport` SEUL,
+            // jamais `currentStory` — même patron que Reply (L276) et Repost
+            // (L322) : `currentStory` n'est déballé que DANS les closures, pas
+            // pour décider si un bouton existe. Conditionner l'existence sur
+            // `let story = currentStory` romprait l'invariant documenté plus
+            // haut (L160-164) : un bouton ne doit jamais apparaître/disparaître
+            // en cours de lecture — seul le rail figé à l'entrée du slide en
+            // décide. `currentStory` n'a aucune raison structurelle de
+            // s'aligner sur ce figement (revue Task 7, finding Important).
+            //
+            // Résolution PURE extraite dans `StoryExportRailButtons` (testée
+            // par `StoryViewerExportRailTests`) : Partager reste vrai que la
+            // sauvegarde soit ou non en vol, seul Enregistrer bascule vers
+            // l'anneau.
+            let exportSaveProgress = railPlan.showsExport
+                ? currentStory.flatMap { saveService.progress(for: $0.id) }
+                : nil
+            let exportRailButtons = StoryExportRailButtons.resolve(
+                showsExport: railPlan.showsExport,
+                saveProgress: exportSaveProgress
+            )
+            // MÊME booléen pour le rendu de l'anneau et pour `.disabled` : sur
+            // des `Shape` à couleur explicite, `.disabled` seul ne change
+            // strictement rien à l'écran (cf. `StorySaveProgressRing.appearance`).
+            let exportIsCancellable = currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false
+
+            if exportRailButtons.showsShareButton {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
-                    label: "Exporter"
+                    label: String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main)
                 ) {
                     HapticFeedback.light()
+                    // Sheet MODALE : on pause tout de suite (comme Envoyer /
+                    // Vues / Éditer-et-republier) — `resumeTimer()` est déjà
+                    // câblé sur `onDismiss` de cette sheet (StoryViewerView).
                     pauseTimer()
                     showExportShareSheet = true
+                }
+            }
+
+            if exportRailButtons.showsSaveProgressRing, let progress = exportSaveProgress {
+                // Même job, même source de vérité que la ligne « Mes
+                // stories » : un export lancé depuis l'une des deux
+                // surfaces progresse sur les deux.
+                Button {
+                    HapticFeedback.light()
+                    guard let story = currentStory else { return }
+                    saveService.cancel(storyId: story.id)
+                } label: {
+                    StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400,
+                                          diameter: 32, isCancellable: exportIsCancellable)
+                }
+                .buttonStyle(.plain)
+                // Le tap cesse d'être actif dès que l'écriture photothèque a
+                // commencé : `PHPhotoLibrary.performChanges` n'est pas
+                // annulable (cf. `StoryPhotoSaveService.isCancellable`). Le
+                // rail suit la MÊME règle que la ligne « Mes stories », sinon
+                // les deux surfaces divergeraient sur le même job.
+                .disabled(!exportIsCancellable)
+                // Contrairement à la ligne « Mes stories »
+                // (`.accessibilityElement(children: .ignore)`, libellé
+                // composé au niveau de la LIGNE), ce bouton n'est enfant
+                // d'AUCUN élément fusionné ici : il doit porter lui-même
+                // son libellé et sa valeur, sinon VoiceOver n'annoncerait
+                // que son contenu visuel brut (un nombre nu).
+                .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
+                                           defaultValue: "Annuler l'enregistrement", bundle: .main))
+                .accessibilityValue(Text(String(
+                    localized: "story.mine.save.progress.a11y",
+                    defaultValue: "Enregistrement \(StorySaveProgressRing.percent(progress)) %", bundle: .main)))
+            } else if exportRailButtons.showsSaveButton {
+                StoryActionButton(
+                    icon: "square.and.arrow.down.fill",
+                    label: String(localized: "story.viewer.action.save", defaultValue: "Enregistrer", bundle: .main)
+                ) {
+                    HapticFeedback.light()
+                    guard let story = currentStory else { return }
+                    saveService.save(story: story)
                 }
             }
 
@@ -355,22 +700,29 @@ struct StoryActionSidebarView: View {
             if railPlan.showsSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                    label: isGlobalMuted ? "Mute" : "Son",
+                    label: isGlobalMuted
+                        ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
+                        : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
                     isActive: !isGlobalMuted,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
                 ) {
-                    // Action handled by .highPriorityGesture below
+                    // VoiceOver active un Button par son ACTION d'accessibilité,
+                    // il ne synthétise pas de `TapGesture` — laisser ce closure
+                    // vide rendait le mute inatteignable au lecteur d'écran :
+                    // le bouton était annoncé, focalisable, et le double-tap ne
+                    // faisait rien. Les deux chemins appellent donc le même
+                    // toggle. Pas de double déclenchement : un tap réel est
+                    // capté par le `highPriorityGesture` (qui gagne sur le tap
+                    // interne du Button), et une activation VoiceOver ne passe
+                    // que par ce closure.
+                    toggleGlobalMute()
                 }
                 .highPriorityGesture(
-                    TapGesture().onEnded {
-                        HapticFeedback.light()
-                        isGlobalMutedBinding.toggle()
-                        NotificationCenter.default.post(
-                            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-                            object: nil
-                        )
-                    }
+                    // Le geste haute priorité reste nécessaire : sans lui, les
+                    // gestes parents du reader avalent le tap (cf. régression
+                    // « drags lents mangés par les Buttons »).
+                    TapGesture().onEnded { toggleGlobalMute() }
                 )
             }
 
@@ -403,28 +755,79 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 6. Translate — brand cyan when active (only for stories with text/audio)
+            // 6. Traductions — ouvre la BARRE RAPIDE horizontale des langues
+            //    prêtes (directive user 2026-07-26). Le tap toggle
+            //    `showLanguageOptions` ; la barre (rendue au-dessus du composer)
+            //    porte les langues prêtes + un « + » à droite qui ouvre la
+            //    liste complète (`showFullLanguagePicker`). Un badge accolé
+            //    montre la langue courante — il remplace le badge (EN) qui était
+            //    ancré en bas-gauche du canvas.
             if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
-                    label: "Traductions",
-                    isActive: showLanguageOptions,
+                    label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
+                    isActive: showLanguageOptions || showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
-                    activeGlow: MeeshyColors.indigo400
+                    activeGlow: MeeshyColors.indigo400,
+                    handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showLanguageOptions.toggle()
                     }
                 }
+                .highPriorityGesture(languageScrubGesture)
+                .overlay(alignment: .topLeading) {
+                    if let code = displayedLanguageCode, !code.isEmpty {
+                        Text(code.uppercased())
+                            .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(MeeshyColors.indigo500))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.5))
+                            .offset(x: -12, y: -2)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                // Barre rapide des langues — surgit À GAUCHE du bouton, EXACTEMENT
+                // comme le strip de réactions au-dessus (même overlay trailing,
+                // même transition scale-depuis-trailing, même offset -56). Défile
+                // horizontalement si la liste dépasse ; le « + » ouvre la liste
+                // complète (directive user 2026-07-26).
                 .overlay(alignment: .trailing) {
                     if showLanguageOptions {
-                        languageScrollStrip
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                            .offset(x: -56)
+                        StoryLanguageQuickBar(
+                            languages: availableTranslationLanguages,
+                            activeLanguageCode: activeLanguageCode ?? displayedLanguageCode,
+                            onSelect: { lang in
+                                onSelectLanguageOverride(lang)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showLanguageOptions = false
+                                }
+                            },
+                            onOpenFullPicker: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showLanguageOptions = false
+                                    showFullLanguagePicker = true
+                                }
+                            },
+                            highlightedIndex: scrubHoveredLanguageIndex,
+                            scrubFrameSpace: StoryScrubSpace.name,
+                            onTileFrames: { languageTileFrames = $0 }
+                        )
+                        // Présentée comme la barre de réaction (L292) : `.fixedSize()`
+                        // pour que la pilule ÉPOUSE son contenu, jamais une largeur
+                        // fixe vide (directive user 2026-07-26 : même taille que la
+                        // barre de réaction). Le cap/défilement éventuel est géré
+                        // À L'INTÉRIEUR de StoryLanguageQuickBar quand la liste est longue.
+                        .fixedSize()
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .offset(x: -56)
                     }
                 }
                 .zIndex(10)
@@ -432,81 +835,21 @@ struct StoryActionSidebarView: View {
         }
     }
 
-    // MARK: - Language Scroll Strip
-
-    private var languageScrollStrip: some View {
-        let available = availableTranslationLanguages
-
-        return HStack(spacing: 0) {
-            if !available.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(LanguageUsageTracker.sorted(available)) { lang in
-                            Button {
-                                HapticFeedback.light()
-                                LanguageUsageTracker.recordUsage(languageId: lang.id)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    showLanguageOptions = false
-                                }
-                                // Prisme « Exploration » : bascule l'affichage dans la
-                                // langue choisie (override) ; demande la traduction si absente.
-                                onSelectLanguageOverride(lang.id)
-                                guard let story = currentStory else { return }
-                                Task {
-                                    await StoryInteractionService().requestTranslation(
-                                        storyId: story.id,
-                                        targetLanguage: lang.id
-                                    )
-                                }
-                            } label: {
-                                // Drapeau dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
-                                Text(lang.flag)
-                                    .font(.system(size: 22))
-                                    .frame(width: 38, height: 38)
-                                    .background(Circle().fill(Color.white.opacity(0.1)))
-                            }
-                            .accessibilityLabel(String(localized: "story.viewer.a11y.viewIn", defaultValue: "Voir en \(lang.name)", bundle: .main))
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                }
-                .frame(width: min(CGFloat(available.count) * 46 + 20, 222), height: 50)
-            }
-
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showLanguageOptions = false
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showFullLanguagePicker = true
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 38, height: 38)
-                    // Glyphe dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.85))
-                }
-            }
-            .padding(.trailing, 10)
-            .padding(.vertical, 6)
-            .accessibilityLabel(String(localized: "story.viewer.a11y.requestTranslation", defaultValue: "Demander une traduction", bundle: .main))
-            .accessibilityHint(String(localized: "story.viewer.a11y.requestTranslation.hint", defaultValue: "Ouvre la liste des langues pour demander une nouvelle traduction", bundle: .main))
-        }
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.4)))
-                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+    /// Bascule le mute global du reader et prévient le canvas.
+    ///
+    /// Extrait pour que l'action du `Button` (chemin VoiceOver) et le
+    /// `highPriorityGesture` (chemin tactile) partagent exactement le même
+    /// comportement — la divergence entre les deux était la cause du mute
+    /// inatteignable au lecteur d'écran.
+    private func toggleGlobalMute() {
+        HapticFeedback.light()
+        isGlobalMutedBinding.toggle()
+        NotificationCenter.default.post(
+            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
+            object: nil
         )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.viewer.a11y.availableTranslations", defaultValue: "Traductions disponibles", bundle: .main))
     }
+
 }
 
 // MARK: - Story Header
@@ -518,6 +861,18 @@ struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
     let currentStory: StoryItem?
     let isOwnStory: Bool
+    /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
+    /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
+    let hasBackgroundAudio: Bool
+    /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
+    /// (piste propre), plus la fenêtre du fond qui arme le compteur de temps
+    /// restant. Résolu par le parent — même règle Equatable/primitives.
+    let headerAudioDisplay: AudioChipHeaderModel
+    /// La story porte-t-elle une transcription affichable ? Primitive, même
+    /// règle : le header ne consulte pas les `StoryEffects` lui-même.
+    let hasAudioTranscript: Bool
+    /// Bascule d'affichage de la transcription, pilotée depuis le menu « … ».
+    @Binding var showAudioTranscript: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -554,12 +909,12 @@ struct StoryHeaderView: View {
             shareableStoryLink = ShareableLink(url: fallback)
             HapticFeedback.light()
         } else {
-            FeedbackToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError(
+                String(localized: "story.viewer.share.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
         }
     }
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
@@ -576,6 +931,28 @@ struct StoryHeaderView: View {
     @Binding var chromeVisible: Bool
 
     @State private var avatarLongPressGlow = false
+    /// Cache du label VoiceOver du bouton profil auteur — recalculé
+    /// UNIQUEMENT au changement de slide (`.onChange(of: currentStory?.id)`),
+    /// jamais inline dans `body`. `StoryHeaderView` est reconstruit à chaque
+    /// tick de la barre de progression (jusqu'à 60 Hz, cf.
+    /// `StoryViewerView.storyCard(geometry:)`) — sans ce cache, `String
+    /// (format:)` + plusieurs `String(localized:)` s'exécutaient des
+    /// dizaines de fois par seconde pour un contenu inchangé (post-revue
+    /// 2026-07-13, angle optimisation).
+    @State private var cachedProfileLabel: String = ""
+
+    /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
+    /// republication (icône + @handle visuels que ce label unique remplace).
+    private func computeProfileLabel(for group: StoryGroup) -> String {
+        guard let story = currentStory, story.repostOfId != nil,
+              let handle = story.repostAuthorUsername ?? story.repostAuthorName else {
+            return String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main)
+        }
+        return String(
+            format: String(localized: "story.viewer.a11y.profileOf.repost", defaultValue: "Profil de %@, republication de @%@", bundle: .main),
+            group.username, handle
+        )
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -619,7 +996,10 @@ struct StoryHeaderView: View {
                                 avatarURL: group.avatarURL,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [
-                                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                    AvatarContextMenuItem(
+                                        label: String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                                        icon: "person.fill"
+                                    ) {
                                         selectedProfileUser = .from(storyGroup: group)
                                     }
                                 ]
@@ -639,36 +1019,97 @@ struct StoryHeaderView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(group.username)
-                                .font(MeeshyFont.relative(15, weight: .bold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 5) {
+                                // Nom borné à 16 caractères comme dans les bulles de
+                                // conversation (directive user 2026-07-30) : au-delà,
+                                // un pseudo long poussait l'attribution de repost et
+                                // la méta hors du header. `lineLimit(1)` reste, mais
+                                // en dernier recours seulement — la borne est posée
+                                // à la source.
+                                Text(DisplayName.truncated(group.username))
+                                    .font(MeeshyFont.relative(15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+
+                                // Republication : icône repost + "@handle" à la
+                                // SUITE du nom, en graisse normale, SANS « via »
+                                // (l'icône dit déjà la republication — directive
+                                // user 2026-07-13, IMG_1154).
+                                if let story = currentStory, story.repostOfId != nil {
+                                    Image(systemName: "arrow.2.squarepath")
+                                        .font(MeeshyFont.relative(10, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
+                                        Text("@\(handle)")
+                                            .font(MeeshyFont.relative(12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
+                                    // Horloge accolée à l'HEURE DE PUBLICATION —
+                                    // elle qualifie la date affichée, elle ne parle
+                                    // plus d'expiration. Le compte à rebours
+                                    // « Expire dans Xh » a été retiré du header
+                                    // (directive user 2026-07-30) : la durée de vie
+                                    // d'une story est une constante produit, pas une
+                                    // information à relire à chaque slide.
+                                    Image(systemName: "clock")
+                                        .font(MeeshyFont.relative(9, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .accessibilityHidden(true)
+
                                     Text(story.timeAgo)
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    if story.repostOfId != nil {
-                                        Image(systemName: "arrow.2.squarepath")
+                                    // Note musicale juste après la date : signale la
+                                    // PRÉSENCE d'un audio de fond sur la story — pas
+                                    // son état de lecture (ni mute, ni timing de la
+                                    // timeline). Directive user 2026-07-13.
+                                    // L'onde qui la suit, elle, dit que ça joue
+                                    // (directive user 2026-07-30).
+                                    if hasBackgroundAudio {
+                                        Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.6))
-                                        if let authorName = story.repostAuthorName {
-                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
-                                                .font(MeeshyFont.relative(11, weight: .medium))
-                                                .foregroundColor(.white.opacity(0.55))
-                                        }
-                                    }
+                                            .foregroundColor(.white.opacity(0.7))
+                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
 
-                                    if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
-                                        Text("\u{00B7}")
-                                            .foregroundColor(.white.opacity(0.4))
-                                        Image(systemName: "clock")
-                                            .font(MeeshyFont.relative(9, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.5))
-                                        Text(storyTimeRemaining(expiresAt))
-                                            .font(MeeshyFont.relative(12, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.55))
+                                        // Le header est reconstruit à chaque tick de
+                                        // la barre de progression : l'animation vit
+                                        // dans un `TimelineView` interne à l'atome,
+                                        // donc elle ne redéclenche jamais le rendu de
+                                        // ce header. Pas de câblage de la pause :
+                                        // l'appui long qui met la story en pause
+                                        // masque déjà tout le chrome, header compris.
+                                        //
+                                        // Son de BIBLIOTHÈQUE → crédit défilant
+                                        // « titre · @pseudo · M:SS » à la place de
+                                        // l'onde — le temps restant du fond défile
+                                        // AVEC le texte ; piste propre → onde, comme
+                                        // toujours (directive user 2026-08-02).
+                                        // Hauteur/police passées à l'atome (14/11) au
+                                        // lieu d'écraser son ancien 18 interne ; le
+                                        // compteur observe le playhead DANS l'atome,
+                                        // jamais ici (doctrine du commentaire
+                                        // ci-dessus). Pas de `paused` : le long-press
+                                        // qui met en pause masque tout le chrome, et
+                                        // le temps gèle déjà via le playhead.
+                                        switch headerAudioDisplay.display {
+                                        case .marquee(let text):
+                                            AudioChipMarquee(text: text,
+                                                             window: headerAudioDisplay.window,
+                                                             height: 14,
+                                                             fontSize: 11)
+                                                .frame(width: 124)
+                                                .opacity(0.85)
+                                        case .waveform:
+                                            StoryHeaderAudioWaveform()
+                                                .opacity(0.8)
+                                        }
                                     }
                                 }
                             }
@@ -678,8 +1119,16 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                // Le bouton porte un SEUL accessibilityLabel qui remplace tout
+                // le contenu de son label closure (icône repost + @handle
+                // inclus) — VoiceOver ne lirait jamais la republication sans
+                // l'inclure explicitement ici (post-revue 2026-07-13).
+                .accessibilityLabel(cachedProfileLabel)
                 .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
+                .onAppear { cachedProfileLabel = computeProfileLabel(for: group) }
+                .adaptiveOnChange(of: currentStory?.id) { _, _ in
+                    cachedProfileLabel = computeProfileLabel(for: group)
+                }
             }
 
             Spacer()
@@ -709,6 +1158,26 @@ struct StoryHeaderView: View {
                             ? "arrow.down.right.and.arrow.up.left"
                             : "arrow.up.left.and.arrow.down.right"
                     )
+                }
+
+                // Transcription de l'audio parlé — item 7a : elle vit ICI, dans
+                // les options, et non en bandeau permanent sur la story. Le
+                // texte affiché suit la langue choisie via « Traductions »,
+                // puisqu'il se résout sur la même chaîne de langues préférées.
+                if hasAudioTranscript {
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showAudioTranscript.toggle()
+                        }
+                    } label: {
+                        Label(
+                            showAudioTranscript
+                                ? String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main)
+                                : String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
+                            systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
+                        )
+                    }
                 }
 
                 Divider()

@@ -56,15 +56,12 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State private var sdpOfferSlow = false
     private let sdpOfferSlowSeconds: UInt64 = 6
-    // 2026-07-04 — les alertes qualité (« réseau faible chez votre contact »,
-    // « connexion au serveur perdue ») sont PONCTUELLES : la pill s'affiche
-    // quelques secondes à chaque bascule en dégradé puis se retire — l'état
-    // persistant est porté par le glyphe signal / les status pills, pas par
-    // une bannière permanente (retour user : la pill orange qui ne disparaît
-    // jamais est problématique en plein appel).
-    @State private var showRemoteQualityAlertPill = false
-    @State private var showSignalingAlertPill = false
-    private let qualityAlertPillSeconds: UInt64 = 5
+    // 2026-07-13 — les alertes qualité (« réseau faible chez votre contact »,
+    // « connexion au serveur perdue ») ne s'affichent plus en bannière pop-up
+    // (retour user : la pill était du bruit inutile en plein appel). L'état de
+    // faiblesse réseau vit UNIQUEMENT dans les indicateurs discrets déjà
+    // présents dans la vue : glyphe de signal près du chrono + status pills
+    // inline. VoiceOver reste notifié via les annonces a11y dans les onChange.
     // Profil du correspondant (avatar + bannière) — résolu cache-first dès que
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
@@ -161,27 +158,12 @@ struct CallView: View {
             // inline dans le badge durée de videoCallLayout) — jamais par un overlay
             // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
 
-            // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
-            // when the remote end reports sustained poor stats; CallManager sets
-            // `isRemoteQualityDegraded`. La pill est TRANSITOIRE (auto-retrait
-            // après `qualityAlertPillSeconds`) — l'état qui persiste vit dans le
-            // glyphe signal + la status pill « Réseau faible (contact) ».
-            if showRemoteQualityAlertPill {
-                remoteQualityDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-
-            // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
-            // appel établi. Le média P2P continue ; annonce ponctuelle, empilée
-            // sous la bannière qualité éventuelle — l'état persistant est porté
-            // par la status pill dédiée.
-            if showSignalingAlertPill {
-                signalingDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, showRemoteQualityAlertPill ? 44 : 0)
-            }
+            // §4.4 — la dégradation réseau du pair (`call:quality-alert`) et la
+            // perte du signaling (`isSignalingDegraded`) ne sont plus surfacées
+            // par une bannière pop-up : l'état persiste dans les indicateurs
+            // discrets de la vue (glyphe signal + status pills « Réseau faible
+            // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
+            // onChange plus bas.
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
@@ -315,10 +297,9 @@ struct CallView: View {
             }
         }
         .adaptiveOnChange(of: callManager.isRemoteQualityDegraded) { _, isDegraded in
-            // Pill ponctuelle : levée à chaque bascule en dégradé, retirée
-            // sitôt le lien rétabli (le retrait anticipé est le comportement
-            // attendu — plus de « réseau faible » affiché sur un lien sain).
-            showRemoteQualityAlertPill = isDegraded
+            // Plus de bannière pop-up : l'état persiste dans la status pill
+            // discrète « Réseau faible (contact) ». On notifie seulement VoiceOver
+            // à la bascule en dégradé.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
@@ -327,27 +308,14 @@ struct CallView: View {
                                 bundle: .main))
         }
         .adaptiveOnChange(of: callManager.isSignalingDegraded) { _, isDegraded in
-            showSignalingAlertPill = isDegraded
+            // Idem : l'état vit dans la status pill « Serveur déconnecté » ;
+            // simple annonce VoiceOver à la bascule.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
                 argument: String(localized: "call.a11y.signaling.degraded",
                                 defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
-        }
-        // Auto-retrait des pills d'alerte : visibles `qualityAlertPillSeconds`
-        // puis retour dans l'île, MÊME si l'état reste dégradé (chaque nouvelle
-        // bascule false→true du flag les re-présente). SwiftUI annule le Task
-        // au retrait anticipé (lien rétabli) — pas de timer orphelin.
-        .task(id: showRemoteQualityAlertPill) {
-            guard showRemoteQualityAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showRemoteQualityAlertPill = false }
-        }
-        .task(id: showSignalingAlertPill) {
-            guard showSignalingAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showSignalingAlertPill = false }
         }
     }
 
@@ -877,6 +845,14 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
+                    // Without an explicit label the combined capsule announces a
+                    // context-free "1:23" (the signal glyph is invisible on a
+                    // healthy link) — VoiceOver users can't tell it is the call
+                    // timer. Static label + dynamic value mirror the video badge
+                    // (and FloatingCallPillView 211i): the label reads once, the
+                    // timer updates via .accessibilityValue under .updatesFrequently.
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -884,7 +860,14 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+            // previously announced a bare "0:34" with no context. Signal state is
+            // already surfaced by the separate statusPill row here (unlike the video
+            // badge), so this label carries only call-duration context — no double
+            // announcement. Reuses the existing `call.duration.a11y.label` key.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -943,8 +926,17 @@ struct CallView: View {
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundColor(durationColor)
+                        // Same context-free-timer fix as audioCallLayout: this
+                        // caption-mode header has no status-pill row, so the
+                        // labelled value is the only place the timer gains meaning.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
                 }
-                .accessibilityElement(children: .combine)
+                // Same naked-readout fix as audioCallLayout — captions-active
+                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.formattedDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1002,64 +994,6 @@ struct CallView: View {
             parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
         }
         return parts.joined(separator: ", ")
-    }
-
-    /// §4.3 — reconnecting banner shown over the frozen call layout while an
-    /// ICE restart recovers a dropped connection (warning-tinted capsule with a
-    /// spinner). The call is NOT torn down; the peer's last frame stays visible.
-    /// §4.4 — remote peer quality alert. Présentée PONCTUELLEMENT (flag
-    /// `showRemoteQualityAlertPill`, auto-expirant) quand `call:quality-alert`
-    /// fait basculer `isRemoteQualityDegraded` ; l'état persistant vit dans la
-    /// status pill « Réseau faible (contact) » + le glyphe du badge vidéo.
-    /// Mirrors FaceTime's "Contact has a poor connection" indicator.
-    private var remoteQualityDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.remote.quality.degraded",
-                            defaultValue: "Réseau faible chez votre contact",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.remote.quality.degraded",
-                                   defaultValue: "Réseau faible chez votre contact",
-                                   bundle: .main))
-    }
-
-    /// EXIGENCE №1 — the signaling socket dropped while the call is connected.
-    /// The P2P media keeps flowing; annonce PONCTUELLE (flag
-    /// `showSignalingAlertPill` auto-expirant), l'état persistant vit dans la
-    /// status pill « Serveur déconnecté ». Never implies the call is at risk.
-    private var signalingDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.signaling.degraded",
-                            defaultValue: "Connexion au serveur perdue — l'appel continue",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.signaling.degraded",
-                                   defaultValue: "Connexion au serveur perdue — l'appel continue",
-                                   bundle: .main))
     }
 
     private var isConnectionDegraded: Bool {
@@ -1315,7 +1249,8 @@ struct CallView: View {
                         HStack(spacing: 8) {
                             pipFrameButton(
                                 icon: "arrow.triangle.2.circlepath.camera.fill",
-                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main),
+                                hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
                             ) {
                                 callManager.switchCamera()
                             }
@@ -1552,6 +1487,10 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+                    // Final call-total duration: same naked-readout fix, static
+                    // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
 
             if callManager.canRetryCall {
@@ -1567,7 +1506,7 @@ struct CallView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Capsule().fill(Color.green))
+                    .background(Capsule().fill(MeeshyColors.success))
                 }
                 .padding(.top, 8)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
@@ -1581,8 +1520,12 @@ struct CallView: View {
 
     private var hasActiveEffects: Bool {
         // Voice effects are no longer settable from the UI (dead pipeline,
-        // entry removed) — only video filters light this up.
-        callManager.videoFilters.config.isEnabled
+        // entry removed) — only video filters light this up. `isEnabled`
+        // alone misses background blur/skin smoothing enabled without ever
+        // picking a colorimetry preset — same root cause as the pipeline's
+        // own gate (VideoFilterPipeline.process), mirrored here.
+        let config = callManager.videoFilters.config
+        return config.isEnabled || config.hasAdvancedFilters
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1591,21 +1534,6 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
-    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
-    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
-    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
-    private struct PiPSourceAnchor: UIViewRepresentable {
-        func makeUIView(context: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .clear
-            view.isUserInteractionEnabled = false
-            return view
-        }
-        func updateUIView(_ uiView: UIView, context: Context) {
-            CallManager.shared.attachSystemPiP(sourceView: uiView)
-        }
-    }
-
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
@@ -1630,6 +1558,7 @@ struct CallView: View {
                 isActive: callManager.isMuted,
                 caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
                 label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+                hint: String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main),
                 isToggle: true
             ) {
                 callManager.toggleMute()
@@ -1645,6 +1574,7 @@ struct CallView: View {
                     isActive: callManager.isSpeaker,
                     caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
                     label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main),
+                    hint: String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main),
                     isToggle: true
                 ) {
                     callManager.toggleSpeaker()

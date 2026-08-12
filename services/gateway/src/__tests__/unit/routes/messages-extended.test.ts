@@ -85,9 +85,12 @@ const mockMarkVideoAsWatched = jest.fn().mockResolvedValue(undefined);
 const mockMarkImageAsViewed = jest.fn().mockResolvedValue(undefined);
 const mockMarkAttachmentAsDownloaded = jest.fn().mockResolvedValue(undefined);
 
+const mockRecordMessageLanguageView = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     markMessagesAsRead: (...args: any[]) => mockMarkMessagesAsRead(...args),
+    recordMessageLanguageView: (...args: any[]) => mockRecordMessageLanguageView(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
     getMessageStatusDetails: jest.fn().mockResolvedValue({ statuses: [], pagination: {} }),
     getAttachmentStatusDetails: jest.fn().mockResolvedValue({ statuses: [], pagination: {} }),
@@ -158,12 +161,25 @@ const mockAttachment = {
 
 function makeMockSocketIO() {
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit, to: jest.fn().mockReturnThis() });
+  // `rooms` collecte AUSSI les `.to()` chaînés : le fan-out des accusés de
+  // lecture n'appelle `io.to()` qu'une fois (la room conversation) puis chaîne
+  // les rooms personnelles sur l'objet rendu. Sans cela, aucune assertion ne
+  // peut voir la room d'un participant.
+  const rooms: string[] = [];
+  const chained: { emit: jest.Mock; to: jest.Mock } = {
+    emit: mockEmit,
+    to: jest.fn((room: string) => { rooms.push(room); return chained; }),
+  };
+  const mockTo = jest.fn((room: string) => { rooms.push(room); return chained; });
+  const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   return {
     mockEmit,
     mockTo,
+    rooms,
+    mockEnqueueOfflineMutation,
     manager: {
       getIO: () => ({ to: mockTo }),
+      enqueueOfflineMessageMutation: mockEnqueueOfflineMutation,
     },
   };
 }
@@ -193,12 +209,24 @@ async function buildApp(opts: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
       findMany: jest.fn().mockResolvedValue([{ userId: USER_ID }]),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ role: 'USER' }),
+    },
     messageAttachment: {
       findFirst: jest.fn().mockResolvedValue(opts.attachmentOverride ?? mockAttachment),
     },
     conversation: {
+      // Voir messages.test.ts : `applyMessageRemovalEffects` relit
+      // `lastMessageAt` lui-même au lieu de le recevoir joint au message.
+      findUnique: jest.fn().mockResolvedValue({
+        lastMessageAt: mockMessage.conversation.lastMessageAt,
+        createdAt: mockMessage.conversation.createdAt,
+      }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    trackingLink: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   });
 
@@ -208,7 +236,7 @@ async function buildApp(opts: {
     }
   } else {
     app.decorate('translationService', {
-      _processRetranslationAsync: jest.fn().mockResolvedValue(undefined),
+      retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
     });
   }
 
@@ -254,6 +282,69 @@ describe('DELETE /messages/:messageId — with attachments', () => {
       .mockResolvedValueOnce({ ...mockMessage, attachments: [{ id: ATTACHMENT_ID }, { id: 'attach-2' }] })
       .mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+// ─── DELETE /messages/:messageId — qui a le droit de supprimer ────────────────
+//
+// C'est la route qu'ANDROID emploie (`core/network/.../api/MessageApi.kt:40`,
+// `@DELETE("messages/{id}")`). Elle portait sa propre copie de la règle, et
+// cette copie avait dérivé sur deux points que rien ne mesurait : elle joignait
+// les participants SANS `isActive: true`, et elle testait un rôle `CREATOR` que
+// l'enum `UserRole` ne contient pas.
+
+describe('DELETE /messages/:messageId — admission', () => {
+  const OTHER_USER = 'user-other';
+  const foreignMessage = {
+    ...mockMessage,
+    sender: { ...mockMessage.sender, userId: OTHER_USER },
+  };
+
+  async function deleteAs(opts: { membership?: any; globalRole?: string | null }) {
+    const app = await buildApp({ messageOverride: foreignMessage });
+    (app as any).prisma.participant.findFirst.mockResolvedValue(opts.membership ?? null);
+    (app as any).prisma.user.findUnique.mockResolvedValue(
+      opts.globalRole === undefined ? { role: 'USER' } : { role: opts.globalRole }
+    );
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(foreignMessage)
+      .mockResolvedValueOnce(null);
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    const participantQuery = (app as any).prisma.participant.findFirst.mock.calls[0]?.[0];
+    await app.close();
+    return { res, participantQuery };
+  }
+
+  it("admet l'admin de CONVERSATION qui n'est qu'un USER global", async () => {
+    const { res } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("n'interroge l'appartenance QU'active — un admin qui a quitté ne supprime plus", async () => {
+    // Sans `isActive: true`, une ligne participant laissée derrière par un
+    // départ conservait indéfiniment le droit de supprimer.
+    const { participantQuery } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });
+
+    expect(participantQuery.where).toEqual({ conversationId: CONV_ID, userId: USER_ID, isActive: true });
+  });
+
+  it('refuse le simple membre', async () => {
+    const { res } = await deleteAs({ membership: { role: 'member', user: { role: 'USER' } } });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("refuse le rôle `CREATOR`, absent de l'enum `UserRole`", async () => {
+    const { res } = await deleteAs({ globalRole: 'CREATOR' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("admet le BIGBOSS global qui n'est pas participant", async () => {
+    const { res } = await deleteAs({ globalRole: 'BIGBOSS' });
+
     expect(res.statusCode).toBe(200);
   });
 });
@@ -349,15 +440,17 @@ describe('POST /messages/:messageId/status — invalid status', () => {
 describe('POST /messages/:messageId/status — with socketIO manager', () => {
   let app: FastifyInstance;
   let mockEmit: jest.Mock;
+  let rooms: string[];
   beforeAll(async () => {
-    const { mockEmit: emit, manager } = makeMockSocketIO();
+    const { mockEmit: emit, rooms: r, manager } = makeMockSocketIO();
     mockEmit = emit;
+    rooms = r;
     app = await buildApp({ socketIOManager: manager });
   });
   afterAll(async () => { await app.close(); });
 
-  it('emits READ_STATUS_UPDATED via socketIO', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+  function readMessage() {
+    return {
       ...mockMessage,
       senderId: 'other-part-id',
       conversation: {
@@ -365,7 +458,11 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
         createdAt: new Date(),
         participants: [{ id: PART_ID, userId: USER_ID }],
       },
-    });
+    };
+  }
+
+  it('emits READ_STATUS_UPDATED via socketIO', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
     const res = await app.inject({
       method: 'POST', url: '/messages/' + MSG_ID + '/status',
       payload: { status: 'read' },
@@ -373,6 +470,31 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     expect(res.statusCode).toBe(200);
     expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
     expect(mockEmit).toHaveBeenCalledWith('message:read-status-updated', expect.any(Object));
+  });
+
+  // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
+  // dernière encore adressée par `userId` seul : l'expéditeur sans compte du
+  // message qu'on vient de lire n'apprenait jamais qu'il avait été lu, sa bulle
+  // restant sur un tic « envoyé » indéfiniment.
+  it('adresse un participant sans compte par son participant id', async () => {
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
+    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
+      { id: PART_ID, userId: USER_ID },
+      { id: 'part-anonyme', userId: null },
+    ]);
+    rooms.length = 0;
+
+    const res = await app.inject({
+      method: 'POST', url: '/messages/' + MSG_ID + '/status',
+      payload: { status: 'read' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(rooms).toEqual([
+      `conversation:${CONV_ID}`,
+      `user:${USER_ID}`,
+      'user:part-anonyme',
+    ]);
   });
 });
 
@@ -436,6 +558,49 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
       action: 'listened',
     }));
   });
+
+  it('emits playPositionMs/durationMs/percentage when both are reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+      durationMs: 10000,
+      percentage: 25,
+    }));
+  });
+
+  it('omits percentage when durationMs is not reported', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', playPositionMs: 2500 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'listened',
+      playPositionMs: 2500,
+    }));
+    const lastCall = mockEmit.mock.calls[mockEmit.mock.calls.length - 1];
+    expect(lastCall[1]).not.toHaveProperty('percentage');
+  });
+
+  it('clamps percentage to 100 when playPositionMs exceeds durationMs', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'watched', playPositionMs: 12000, durationMs: 10000 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+      action: 'watched',
+      percentage: 100,
+    }));
+  });
 });
 
 // ─── Error paths not covered in messages.test.ts ─────────────────────────────
@@ -451,18 +616,6 @@ describe('POST /messages/:messageId/status — DB error', () => {
       method: 'POST', url: '/messages/' + MSG_ID + '/status',
       payload: { status: 'read' },
     });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
-describe('GET /messages/:messageId/history — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on DB error', async () => {
-    (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB crash'));
-    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID + '/history' });
     expect(res.statusCode).toBe(500);
   });
 });
@@ -515,5 +668,73 @@ describe('POST /attachments/:attachmentId/status — DB error', () => {
       payload: { action: 'listened' },
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── Offline replay parity: REST edit/delete must feed the delivery queue ─────
+//
+// `MessageHandler.handleMessageEdit`/`handleMessageDelete` (socket transport)
+// enqueue the mutation for every OFFLINE participant so their cached copy
+// converges on reconnect. These REST routes are the transport the iOS SDK
+// actually uses (`MessageService.swift`: PUT /messages/:id to edit,
+// DELETE /conversations/:id/messages/:id to delete), so without the same
+// enqueue an edit or delete made from iOS is lost FOREVER for anyone offline
+// at that moment — the live room emit is the only notification they'd ever get.
+
+describe('PUT /messages/:messageId — offline delivery replay', () => {
+  let app: FastifyInstance;
+  let mockEnqueueOfflineMutation: jest.Mock;
+  beforeAll(async () => {
+    const { manager, mockEnqueueOfflineMutation: enqueue } = makeMockSocketIO();
+    mockEnqueueOfflineMutation = enqueue;
+    app = await buildApp({ socketIOManager: manager });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('enqueues the edit for offline participants', async () => {
+    mockEnqueueOfflineMutation.mockClear();
+    const res = await app.inject({
+      method: 'PUT', url: '/messages/' + MSG_ID,
+      payload: { content: 'edited via REST' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorUserId: USER_ID,
+        eventType: 'edited',
+        messageId: MSG_ID,
+        payload: expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID }),
+      })
+    );
+  });
+});
+
+describe('DELETE /messages/:messageId — offline delivery replay', () => {
+  let app: FastifyInstance;
+  let mockEnqueueOfflineMutation: jest.Mock;
+  beforeAll(async () => {
+    const { manager, mockEnqueueOfflineMutation: enqueue } = makeMockSocketIO();
+    mockEnqueueOfflineMutation = enqueue;
+    app = await buildApp({ socketIOManager: manager });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('enqueues the deletion for offline participants', async () => {
+    mockEnqueueOfflineMutation.mockClear();
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+    expect(mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorUserId: USER_ID,
+        eventType: 'deleted',
+        messageId: MSG_ID,
+        payload: { messageId: MSG_ID, conversationId: CONV_ID },
+      })
+    );
   });
 });

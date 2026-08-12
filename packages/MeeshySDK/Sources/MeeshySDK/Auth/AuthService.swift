@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public protocol AuthServiceProviding: Sendable {
     func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData
@@ -22,6 +23,14 @@ public protocol AuthServiceProviding: Sendable {
     /// below falls back to the legacy fire-and-forget `logout()` for
     /// conformers that don't override it.
     func logoutThrowing() async throws
+    /// D5.hygiene — variant that pins the Authorization header to an
+    /// explicitly captured `token`, decoupled from `APIClient.shared.authToken`'s
+    /// live value. `AuthManager.logout()` wipes that shared property
+    /// concurrently with the retry loop's `Task`, so reading it lazily at
+    /// send-time was a race that frequently sent the server logout with NO
+    /// Authorization header at all. Default forwards to the parameterless
+    /// variant for conformers that haven't opted in (tests, stubs).
+    func logoutThrowing(token: String) async throws
 }
 
 public extension AuthServiceProviding {
@@ -32,12 +41,17 @@ public extension AuthServiceProviding {
     func logoutThrowing() async throws {
         await logout()
     }
+
+    func logoutThrowing(token: String) async throws {
+        try await logoutThrowing()
+    }
 }
 
 /// Stateless auth API calls. All state management is in AuthManager.
 public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public static let shared = AuthService()
     private let api: APIClientProviding
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -180,6 +194,29 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         return response.data
     }
 
+    /// Vérifie si un numéro appartient déjà à un compte et, si une identité est
+    /// fournie, si ce compte est dormant avec un nom qui matche — auquel cas
+    /// `recoverySuggested` est vrai (récupération de compte plutôt que doublon).
+    /// Réutilise le endpoint existant `/auth/phone-transfer/check`.
+    public func checkPhoneOwnership(
+        phone: String,
+        countryCode: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil
+    ) async throws -> PhoneOwnershipResponse {
+        struct Body: Encodable {
+            let phoneNumber: String
+            let countryCode: String?
+            let firstName: String?
+            let lastName: String?
+        }
+        let response: APIResponse<PhoneOwnershipResponse> = try await api.post(
+            endpoint: "/auth/phone-transfer/check",
+            body: Body(phoneNumber: phone, countryCode: countryCode, firstName: firstName, lastName: lastName)
+        )
+        return response.data
+    }
+
     // MARK: - Refresh Token
 
     public func refreshToken(_ currentToken: String, sessionToken: String? = nil) async throws -> LoginResponseData {
@@ -237,7 +274,16 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     // MARK: - Logout
 
     public func logout() async {
-        let _: APIResponse<[String: Bool]>? = try? await api.request(endpoint: "/auth/logout", method: "POST")
+        do {
+            let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+        } catch {
+            // Best-effort assumé : la déconnexion locale doit aboutir même hors
+            // ligne. `logoutThrowing()` est la variante à utiliser quand
+            // l'appelant sait retenter (cf. `performServerLogoutWithRetries`).
+            logger.error(
+                "Server logout failed — local session cleared anyway, gateway session may stay live: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     /// D5 — throwing variant used by `AuthManager.performServerLogoutWithRetries`
@@ -247,5 +293,19 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     /// offline at the moment of logout.
     public func logoutThrowing() async throws {
         let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+    }
+
+    /// D5.hygiene — sends the explicit `token` as the Authorization header
+    /// via `requestWithHeaders`, instead of relying on `APIClient.shared.authToken`
+    /// (which `AuthManager.logout()` may have already wiped to `nil` by the
+    /// time this retry loop actually sends its request).
+    public func logoutThrowing(token: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.requestWithHeaders(
+            endpoint: "/auth/logout",
+            method: "POST",
+            body: nil,
+            queryItems: nil,
+            headers: ["Authorization": "Bearer \(token)"]
+        )
     }
 }

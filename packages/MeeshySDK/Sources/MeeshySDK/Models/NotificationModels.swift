@@ -116,6 +116,18 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case incomingCall = "incoming_call"
     case callEnded = "call_ended"
     case callDeclined = "call_declined"
+    /// Guideline 5 (MIIT) — China-region incoming-call push. Distinct raw
+    /// value from `.incomingCall` because CallEventsHandler.ts always sends
+    /// `data.type: "call"` for the incoming-call push (both the 'voip' and
+    /// 'apns' routing share this payload) — VoIPPushManager already depends
+    /// on this exact literal (`payloadType == "call"`) to validate PushKit
+    /// payloads, so the string can't be renamed to "incoming_call" without
+    /// breaking that unrelated, functioning path. Routes identically to
+    /// `.incomingCall` for icon/preference-filtering purposes, but drives
+    /// the full call-answer flow (not just a conversation deep-link) in
+    /// `RootView.navigateFromNotification` since it is the ONLY affordance
+    /// a backgrounded/killed-app China user has to engage the call.
+    case incomingCallAlert = "call"
 
     // Translation events
     case translationCompleted = "translation_completed"
@@ -184,7 +196,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
         case .missedCall, .callDeclined, .legacyCallMissed: return "phone.arrow.down.left"
-        case .incomingCall, .callEnded, .legacyCallIncoming: return "phone.fill"
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming: return "phone.fill"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike: return "hand.thumbsup.fill"
         case .commentReaction: return "heart.fill"
         case .postComment, .commentReply, .legacyPostComment, .legacyStoryReply: return "text.bubble.fill"
@@ -226,7 +238,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             return "F8B500"
-        case .missedCall, .callDeclined, .incomingCall, .callEnded, .legacyCallMissed, .legacyCallIncoming:
+        case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
         case .legacyAffiliateSignup:
             return "2ECC71"
@@ -579,7 +591,7 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return "Role modifie pour \(actorName)"
         case .missedCall, .callDeclined, .legacyCallMissed:
             return "Appel manque de \(actorName)"
-        case .incomingCall, .callEnded, .legacyCallIncoming:
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
             return "Appel de \(actorName)"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
             if let content, !content.isEmpty {
@@ -729,9 +741,9 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
         switch notificationType {
         case .commentReply:
             if let parent = metadata?.parentCommentPreview, !parent.isEmpty {
-                return "En réponse à « \(parent) »"
+                return String(format: String(localized: "notification.reply.toComment.preview", defaultValue: "En réponse à « %@ »", bundle: .main), parent)
             }
-            return "En réponse à votre commentaire"
+            return String(localized: "notification.reply.toComment", defaultValue: "En réponse à votre commentaire", bundle: .main)
         case .commentLike, .commentReaction, .friendNewStory, .friendNewPost, .friendNewMood:
             // Le body montre déjà le commentaire/extrait — pas d'aperçu dupliqué ici.
             return socialKindLabel
@@ -777,21 +789,21 @@ extension APINotification {
     /// `metadata.contentType` (friend_new_*), avec repli sur le type de notif.
     var socialKindLabel: String {
         switch (metadata?.postType ?? metadata?.contentType)?.uppercased() {
-        case "STORY": return "Story"
-        case "REEL": return "Réel"
-        case "MOOD": return "Humeur"
-        case "STATUS": return "Statut"
-        case "POST": return "Publication"
+        case "STORY": return String(localized: "content.kind.story", defaultValue: "Story", bundle: .main)
+        case "REEL": return String(localized: "content.kind.reel", defaultValue: "Réel", bundle: .main)
+        case "MOOD": return String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
+        case "STATUS": return String(localized: "content.kind.status", defaultValue: "Statut", bundle: .main)
+        case "POST": return String(localized: "content.kind.post", defaultValue: "Publication", bundle: .main)
         default:
             switch notificationType {
             case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
-                return "Story"
+                return String(localized: "content.kind.story", defaultValue: "Story", bundle: .main)
             case .statusReaction:
-                return "Statut"
+                return String(localized: "content.kind.status", defaultValue: "Statut", bundle: .main)
             case .friendNewMood:
-                return "Humeur"
+                return String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
             default:
-                return "Publication"
+                return String(localized: "content.kind.post", defaultValue: "Publication", bundle: .main)
             }
         }
     }
@@ -799,9 +811,9 @@ extension APINotification {
     /// Résumé média pour un contenu sans texte (« 📷 Photo », « 🎥 Vidéo »…).
     var mediaSummary: String? {
         switch metadata?.mediaType?.lowercased() {
-        case "image": return "📷 Photo"
-        case "video": return "🎥 Vidéo"
-        case "audio": return "🎵 Audio"
+        case "image": return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: .main)
+        case "video": return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: .main)
+        case "audio": return String(localized: "media.summary.audio", defaultValue: "🎵 Audio", bundle: .main)
         default: return nil
         }
     }
@@ -856,6 +868,7 @@ extension APINotification {
         )
         return APINotification(
             id: id, userId: userId, type: type, priority: priority,
+            title: title, subtitle: subtitle,
             content: content, actor: actor, context: context,
             metadata: metadata, state: newState, delivery: delivery
         )

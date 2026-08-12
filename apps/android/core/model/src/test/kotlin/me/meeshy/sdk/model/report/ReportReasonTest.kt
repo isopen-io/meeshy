@@ -34,6 +34,12 @@ class ReportReasonTest {
     }
 
     @Test
+    fun `the message-only reasons carry their gateway tokens`() {
+        assertThat(ReportReason.VIOLENCE.wireValue).isEqualTo("violence")
+        assertThat(ReportReason.HATE_SPEECH.wireValue).isEqualTo("hate_speech")
+    }
+
+    @Test
     fun `wire values are lowercase - the iOS uppercase bug is not reintroduced`() {
         ReportReason.entries.forEach { reason ->
             assertThat(reason.wireValue).isEqualTo(reason.wireValue.lowercase())
@@ -52,8 +58,30 @@ class ReportReasonTest {
     }
 
     @Test
-    fun `ordered covers the full enum with no omissions`() {
-        assertThat(ReportReason.ordered).containsExactlyElementsIn(ReportReason.entries)
+    fun `ordered stays the user subset - it never grows the message-only reasons`() {
+        // The user-report list is deliberately narrower than the message list: reporting a
+        // person for "violence"/"hate_speech" is a message-content judgement, not an identity one.
+        assertThat(ReportReason.ordered).containsNoneOf(ReportReason.VIOLENCE, ReportReason.HATE_SPEECH)
+    }
+
+    @Test
+    fun `messageOrdered mirrors the iOS ReportType order`() {
+        // Parity with iOS `ReportMessageSheet.ReportType.allCases`:
+        // spam, inappropriate, harassment, violence, hate_speech, impersonation, other.
+        assertThat(ReportReason.messageOrdered).containsExactly(
+            ReportReason.SPAM,
+            ReportReason.INAPPROPRIATE,
+            ReportReason.HARASSMENT,
+            ReportReason.VIOLENCE,
+            ReportReason.HATE_SPEECH,
+            ReportReason.IMPERSONATION,
+            ReportReason.OTHER,
+        ).inOrder()
+    }
+
+    @Test
+    fun `messageOrdered covers the full enum with no omissions`() {
+        assertThat(ReportReason.messageOrdered).containsExactlyElementsIn(ReportReason.entries)
     }
 
     @Test

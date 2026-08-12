@@ -50,6 +50,16 @@ data class CachePolicy(
             keepForMillis = 24 * 60 * 60_000L,
         )
 
+        // Mood statuses live ~24h and the bar shifts quickly as friends post, so it
+        // is fresh only briefly (a return to the feed within the minute serves the
+        // last bar with no revalidation) and kept for the mood lifetime so a warm
+        // re-entry paints the last bar instantly while a background refresh reconciles
+        // it — the Android analogue of iOS `CacheCoordinator.statuses`.
+        val Statuses = CachePolicy(
+            freshForMillis = 60_000L,
+            keepForMillis = 24 * 60 * 60_000L,
+        )
+
         val Notifications = CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 24 * 60 * 60_000L,

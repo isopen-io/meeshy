@@ -13,8 +13,11 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.AttachmentAudioTranslationMerge
 import me.meeshy.sdk.model.AttachmentTranscriptionMerge
 import me.meeshy.sdk.model.MessageTranslationMerge
@@ -67,6 +70,20 @@ class MessageRepository @Inject constructor(
     }
 
     /**
+     * Cache-only read of a conversation's [limit] most recent messages, oldest
+     * first — a "peek" surface (hard-press preview card) that must render
+     * instantly without a network round-trip. Deliberately skips the
+     * background-revalidate half of [messagesStream]'s stale-while-revalidate
+     * contract: a preview the user may dismiss within a second should never
+     * trigger unbounded background sync work. Empty on a never-synced
+     * conversation (mirrors [messagesStream]'s cold-cache [CacheResult.Empty]).
+     */
+    suspend fun recentMessages(conversationId: String, limit: Int = PREVIEW_LIMIT): List<LocalMessage> =
+        messageDao.recentForConversation(conversationId, limit)
+            .asReversed()
+            .map { it.toLocalMessage() }
+
+    /**
      * Backwards pagination: fetches the page of messages older than the oldest
      * cached server row (`before` cursor) and appends it to the Room cache.
      * The freshness watermark is untouched — history pages do not make the
@@ -104,14 +121,24 @@ class MessageRepository @Inject constructor(
         replyToId: String? = null,
         forwardedFromId: String? = null,
         forwardedFromConversationId: String? = null,
+        effects: MessageEffects = MessageEffects(),
+        messageType: String = "text",
+        attachmentUploadCmids: List<String> = emptyList(),
+        attachments: List<ApiMessageAttachment> = emptyList(),
     ): String {
         val cmid = OutboxIds.cmid()
         val now = clock.nowMillis()
+        val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
+        // A queued send references each prerequisite upload by its cmid until the
+        // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
+        // list keeps a text-only send exactly as before (null attachmentIds).
+        val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
         val optimistic = ApiMessage(
             id = cmid,
             conversationId = conversationId,
             senderId = sender.id,
             content = content,
+            messageType = messageType,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
             createdAt = Instant.ofEpochMilli(now).toString(),
@@ -122,16 +149,29 @@ class MessageRepository @Inject constructor(
                 avatar = sender.avatar,
             ),
             clientMessageId = cmid,
+            attachments = attachments,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            effectFlags = wire.effectFlags,
+            isBlurred = wire.isBlurred,
+            isViewOnce = wire.isViewOnce,
+            expiresAt = wire.expiresAt,
         )
         val request = SendMessageRequest(
             content = content,
             originalLanguage = originalLanguage,
+            messageType = messageType,
             replyToId = replyToId,
             clientMessageId = cmid,
+            attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            effectFlags = wire.effectFlags,
+            isBlurred = wire.isBlurred,
+            isViewOnce = wire.isViewOnce,
+            ephemeralDuration = wire.ephemeralDuration,
+            expiresAt = wire.expiresAt,
+            maxViewOnceCount = wire.maxViewOnceCount,
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(optimistic.toLocalEntity(now, LocalSendState.SENDING)))
@@ -142,6 +182,7 @@ class MessageRepository @Inject constructor(
                 lane = OutboxLanes.forMessage(conversationId),
                 targetId = conversationId,
                 payload = MeeshyApi.json.encodeToString(request),
+                dependsOn = placeholderIds.toSet(),
                 cmid = cmid,
             ),
         )
@@ -200,6 +241,10 @@ class MessageRepository @Inject constructor(
                         clientMessageId = cmid,
                         forwardedFromId = message.forwardedFromId,
                         forwardedFromConversationId = message.forwardedFromConversationId,
+                        effectFlags = message.effectFlags,
+                        isBlurred = message.isBlurred,
+                        isViewOnce = message.isViewOnce,
+                        expiresAt = message.expiresAt,
                     ),
                 ),
                 cmid = cmid,
@@ -515,6 +560,7 @@ class MessageRepository @Inject constructor(
 
     private companion object {
         const val OLDER_PAGE_SIZE = 30
+        const val PREVIEW_LIMIT = 5
         const val RANK_SENT = 0
         const val RANK_DELIVERED = 1
         const val RANK_READ = 2

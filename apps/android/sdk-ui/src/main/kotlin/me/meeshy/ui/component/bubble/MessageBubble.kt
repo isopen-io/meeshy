@@ -1,5 +1,10 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +35,9 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
@@ -60,6 +67,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -84,11 +92,45 @@ public fun MessageBubble(
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
     trackedLinks: Map<String, String>? = null,
+    effects: MessageEffects? = null,
+    hasPlayedAppearance: Boolean = false,
 ) {
+    // Combine the server deletion flag, the view-once consume count and the ephemeral
+    // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
+    // (visible → the inner `isDeleted` branch renders it); a consumed view-once message
+    // shows the "Seen and deleted" burned tombstone; an ephemeral message whose timer
+    // elapses collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
+    val renderKind = rememberBubbleRenderKind(
+        isDeleted = content.isDeleted,
+        expiresAtIso = content.expiresAtIso,
+        isViewOnce = content.isViewOnce,
+        viewOnceCount = content.viewOnceCount,
+    )
+    AnimatedVisibility(
+        visible = !renderKind.isEphemeralExpired,
+        modifier = modifier,
+        enter = EnterTransition.None,
+        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+    ) {
+    if (renderKind.isBurned) {
+        // A consumed view-once message shows the persistent "Seen and deleted"
+        // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
+        // the sender side like the deleted tombstone.
+        BubbleBurnedView(isOutgoing = content.isOutgoing)
+    } else {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+            .padding(
+                start = MeeshySpacing.lg,
+                end = MeeshySpacing.lg,
+                // Consecutive-sender runs stack tightly: only the first message of a
+                // run gets a top gap and only the last a bottom gap, so a run reads
+                // as one visual block while distinct messages keep their 4dp breathing
+                // room (isFirst && isLast).
+                top = if (content.isFirstInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+                bottom = if (content.isLastInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+            ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
         val isFreeEmoji =
@@ -103,9 +145,22 @@ public fun MessageBubble(
             content.isOutgoing -> outgoingColor
             else -> MeeshyTheme.tokens.backgroundTertiary
         }
+        BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
+                .messageEffects(
+                    // Drive the visual-treatment modifier from the resolved bubble
+                    // content by default (so received messages actually glow / pulse);
+                    // the `effects` param stays an optional override for previews/tests.
+                    effects = effects ?: content.effects,
+                    hasPlayedAppearance = hasPlayedAppearance,
+                    shape = RoundedCornerShape(MeeshyRadius.xl),
+                    // Seed the one-shot appearance burst on a stable per-message value so a
+                    // confetti/fireworks message renders the same reproducible burst across
+                    // recompositions (a scroll off/on never re-rolls it — surpasses iOS).
+                    appearanceSeed = content.messageId.hashCode().toLong(),
+                )
                 .clip(RoundedCornerShape(MeeshyRadius.xl))
                 .background(bubbleBackground)
                 .let { base ->
@@ -276,7 +331,13 @@ public fun MessageBubble(
                     .fillMaxWidth()
                     .padding(top = MeeshySpacing.xs),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                ) {
+                    if (!content.isDeleted) {
+                        EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
+                    }
                     if (content.isStarred && !content.isDeleted) {
                         Icon(
                             imageVector = Icons.Filled.Bookmark,
@@ -313,6 +374,74 @@ public fun MessageBubble(
                 }
             }
         }
+        }
+    }
+    }
+    }
+}
+
+/**
+ * "Seen and deleted" tombstone for a consumed view-once message — Android render of the
+ * iOS `BubbleBurnedView`. A flame glyph plus a muted italic label sit in a warning-tinted
+ * capsule, aligned to the sender's side (like the deleted tombstone) rather than centered.
+ */
+@Composable
+private fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.bubble_burned)
+    val a11y = stringResource(R.string.bubble_burned_a11y)
+    val capsule = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(capsule)
+                .background(MeeshyPalette.Warning.copy(alpha = 0.08f))
+                .border(0.5.dp, MeeshyPalette.Warning.copy(alpha = 0.15f), capsule)
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .semantics(mergeDescendants = true) { contentDescription = a11y },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocalFireDepartment,
+                contentDescription = null,
+                tint = MeeshyPalette.Warning,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        }
+    }
+}
+
+/**
+ * Conceals its [content] behind the "tap to reveal" fog + blur when [spec] is non-null;
+ * otherwise renders the bubble body unchanged (zero cost for a normal message). The
+ * boundary clips the conceal to the bubble's rounded shape so the fog never bleeds past
+ * the corners.
+ */
+@Composable
+private fun BubbleBlurRevealBoundary(
+    messageId: String,
+    spec: BubbleBlurRevealSpec?,
+    content: @Composable () -> Unit,
+) {
+    if (spec == null) {
+        content()
+    } else {
+        BubbleBlurReveal(
+            messageId = messageId,
+            spec = spec,
+            shape = RoundedCornerShape(MeeshyRadius.xl),
+        ) { content() }
     }
 }
 
@@ -950,6 +1079,12 @@ private fun DeliveryStatusIcon(
         DeliveryStatus.Pending -> Icon(
             imageVector = Icons.Filled.Schedule,
             contentDescription = stringResource(R.string.bubble_status_pending),
+            tint = onColor.copy(alpha = 0.5f),
+            modifier = Modifier.size(16.dp),
+        )
+        DeliveryStatus.QueuedOffline -> Icon(
+            imageVector = Icons.Filled.HourglassEmpty,
+            contentDescription = stringResource(R.string.bubble_status_queued),
             tint = onColor.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),
         )

@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.CategoryOption
 import org.junit.Test
 
 /**
@@ -14,14 +15,21 @@ import org.junit.Test
  */
 class ConversationSectionsTest {
 
-    private fun conv(id: String, pinned: Boolean = false, viaUserPrefs: Boolean = false): ApiConversation {
-        val prefs = ApiConversationPreferences(isPinned = pinned)
+    private fun conv(
+        id: String,
+        pinned: Boolean = false,
+        viaUserPrefs: Boolean = false,
+        categoryId: String? = null,
+    ): ApiConversation {
+        val prefs = ApiConversationPreferences(isPinned = pinned, categoryId = categoryId)
         return if (viaUserPrefs) {
             ApiConversation(id = id, userPreferences = listOf(prefs))
         } else {
             ApiConversation(id = id, preferences = prefs)
         }
     }
+
+    private fun cat(id: String, name: String = id, order: Int? = null) = CategoryOption(id, name, order)
 
     private fun ids(section: ConversationSection) = section.items.map { it.id }
 
@@ -115,5 +123,121 @@ class ConversationSectionsTest {
 
         val all = sections.first { it.kind == ConversationSectionKind.ALL }
         assertThat(ids(all)).containsExactly("a")
+    }
+
+    // --- User-category grouping (parity §B: categories between Pinned and Autres) ---
+
+    @Test
+    fun `categorized rows are grouped under their category in catalogue order`() {
+        val input = listOf(
+            conv("w1", categoryId = "work"),
+            conv("f1", categoryId = "fam"),
+            conv("w2", categoryId = "work"),
+        )
+        val categories = listOf(cat("work", "Travail"), cat("fam", "Famille"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections.map { it.kind })
+            .containsExactly(ConversationSectionKind.CATEGORY, ConversationSectionKind.CATEGORY)
+            .inOrder()
+        assertThat(sections[0].categoryId).isEqualTo("work")
+        assertThat(sections[0].title).isEqualTo("Travail")
+        assertThat(ids(sections[0])).containsExactly("w1", "w2").inOrder()
+        assertThat(sections[1].categoryId).isEqualTo("fam")
+        assertThat(sections[1].title).isEqualTo("Famille")
+        assertThat(ids(sections[1])).containsExactly("f1")
+    }
+
+    @Test
+    fun `sections order is Pinned then categories then the All catch-all`() {
+        val input = listOf(
+            conv("p", pinned = true),
+            conv("w", categoryId = "work"),
+            conv("o"),
+        )
+        val categories = listOf(cat("work"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections.map { it.kind })
+            .containsExactly(
+                ConversationSectionKind.PINNED,
+                ConversationSectionKind.CATEGORY,
+                ConversationSectionKind.ALL,
+            )
+            .inOrder()
+        assertThat(ids(sections.first { it.kind == ConversationSectionKind.ALL })).containsExactly("o")
+    }
+
+    @Test
+    fun `a pinned conversation with a category stays inside its category section`() {
+        val input = listOf(conv("w", pinned = true, categoryId = "work"))
+        val categories = listOf(cat("work"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections).hasSize(1)
+        assertThat(sections.single().kind).isEqualTo(ConversationSectionKind.CATEGORY)
+        assertThat(sections.single().categoryId).isEqualTo("work")
+        assertThat(ids(sections.single())).containsExactly("w")
+    }
+
+    @Test
+    fun `a pinned conversation without a category still floats to Pinned when categories exist`() {
+        val input = listOf(conv("p", pinned = true), conv("w", categoryId = "work"))
+        val categories = listOf(cat("work"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections.first().kind).isEqualTo(ConversationSectionKind.PINNED)
+        assertThat(ids(sections.first())).containsExactly("p")
+    }
+
+    @Test
+    fun `a row whose category is absent from the catalogue is orphaned into All`() {
+        val input = listOf(conv("ghost", categoryId = "deleted"), conv("plain"))
+        val categories = listOf(cat("work"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections.map { it.kind }).containsExactly(ConversationSectionKind.ALL)
+        assertThat(ids(sections.single())).containsExactly("ghost", "plain").inOrder()
+    }
+
+    @Test
+    fun `an empty category produces no section`() {
+        val input = listOf(conv("w", categoryId = "work"))
+        val categories = listOf(cat("work"), cat("empty"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(sections.map { it.categoryId }).containsExactly("work")
+    }
+
+    @Test
+    fun `an empty catalogue orphans every categorized row into All`() {
+        val input = listOf(conv("a", categoryId = "work"), conv("b"))
+
+        val sections = ConversationSections.of(input, categories = emptyList())
+
+        assertThat(sections.map { it.kind }).containsExactly(ConversationSectionKind.ALL)
+        assertThat(ids(sections.single())).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `a category section preserves the incoming relative order of its rows`() {
+        val input = listOf(
+            conv("w1", categoryId = "work"),
+            conv("f1", categoryId = "fam"),
+            conv("w2", categoryId = "work"),
+            conv("w3", categoryId = "work"),
+        )
+        val categories = listOf(cat("work"), cat("fam"))
+
+        val sections = ConversationSections.of(input, categories)
+
+        assertThat(ids(sections.first { it.categoryId == "work" }))
+            .containsExactly("w1", "w2", "w3").inOrder()
     }
 }

@@ -51,6 +51,11 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// reactions, copy, delete, …). The container fires the haptic so each
     /// caller doesn't have to.
     let onLongPress: () -> Void
+    /// `false` (iOS 26+) désactive le `LongPressGesture` custom : le cell
+    /// attache alors un `.contextMenu` NATIF (Liquid Glass) qui possède la
+    /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
+    /// Les deux ne coexistent jamais (double déclenchement).
+    var enableLongPress: Bool = true
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
@@ -125,13 +130,12 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // le LongPressGesture s'annule et laisse le pan parent
                 // s'approprier le geste sans aucune contention. Le
                 // scroll est ainsi prioritaire sur le long press.
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
-                        .onEnded { _ in
-                            HapticFeedback.medium()
-                            onLongPress()
-                        }
-                )
+                //
+                // iOS 26+ : `enableLongPress == false` — le cell attache
+                // un `.contextMenu` NATIF (Liquid Glass) qui possède la
+                // pression ; ce geste custom est retiré pour éviter le
+                // double déclenchement (overlay custom + menu natif).
+                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress, action: onLongPress))
         }
     }
 
@@ -239,6 +243,105 @@ struct BubbleSwipeContainer<Content: View>: View {
 }
 
 
+/// Applique le `LongPressGesture` custom de la bulle UNIQUEMENT quand
+/// `enabled` (< iOS 26). Sur iOS 26+ le cell attache un `.contextMenu` natif
+/// à la place — ce geste doit alors disparaître pour éviter le double
+/// déclenchement. Un modifier conditionnel (plutôt qu'un `.simultaneousGesture`
+/// masqué) garantit que le recognizer n'est même pas installé.
+private struct ConditionalBubbleLongPress: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        action()
+                    }
+            )
+        } else {
+            content
+        }
+    }
+}
+
+/// Attache un `.contextMenu` NATIF (Liquid Glass iOS 26) au contenu SwiftUI
+/// d'une cellule de message quand un builder est fourni ET que l'OS rend le
+/// menu système. `menu` est résolu UNE fois par configuration de cellule
+/// (précédent `ConversationRowItem.nativeContextMenu` : AnyView stable, jamais
+/// un `@ViewBuilder` générique — sinon EXC_BAD_ACCESS iOS 26). `preview` rend
+/// la VRAIE bulle d'origine à l'endroit (la collection view étant inversée, le
+/// snapshot par défaut ne l'affichait pas correctement) — feedback 2026-07-14.
+extension View {
+    @ViewBuilder
+    func nativeMessageContextMenu<Preview: View>(
+        menu: (() -> AnyView)?,
+        @ViewBuilder preview: @escaping () -> Preview
+    ) -> some View {
+        if #available(iOS 26.0, *), let menu {
+            self.contextMenu { menu() } preview: { preview() }
+        } else {
+            self
+        }
+    }
+}
+
+// MARK: - Aperçu du menu contextuel de message (hug + scale-to-fit)
+
+/// Conteneur d'aperçu du `.contextMenu` NATIF d'un message. Il rend la bulle
+/// « standalone » (déjà dépouillée de ses spacers de row côté `BubbleStandard
+/// Layout` → elle épouse son contenu) et la met à l'échelle UNIQUEMENT si elle
+/// dépasse la hauteur disponible, pour qu'elle tienne dans l'écran SANS jamais
+/// déformer ses proportions. La `.frame` finale (dimensions mises à l'échelle)
+/// informe le layout SwiftUI de la taille visible — le platter système colle
+/// alors à la bulle, sans bordure ni card. Anti-« effet bordure » 2026-07-14.
+struct MessageMenuPreviewContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var naturalSize: CGSize = .zero
+
+    /// Plafond de hauteur de l'aperçu — 62 % de la **fenêtre** de l'app, pour
+    /// laisser respirer la rangée d'emojis + le menu au-dessus/dessous. Mesuré
+    /// sur la fenêtre et non sur l'écran physique : en Split View, Slide Over
+    /// ou Stage Manager, l'app n'occupe qu'une fraction de l'écran, et un
+    /// plafond dérivé de l'écran cesse alors de plafonner quoi que ce soit.
+    /// (L'overlay custom `MessageOverlayMenu` poursuit le même but avec un
+    /// plafond FIXE de 320 pt : il met à l'échelle une frame déjà capturée,
+    /// pas une taille naturelle — mécanisme distinct, pas une valeur jumelle.)
+    private var maxHeight: CGFloat { DeviceLayout.windowSize.height * 0.62 }
+
+    private var fitScale: CGFloat {
+        guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }
+        // Plancher 0.5 : au-delà, un média très haut resterait lisible plutôt
+        // que de rétrécir à l'infini (l'overlay custom pose le sien à 0.55).
+        return max(0.5, maxHeight / naturalSize.height)
+    }
+
+    var body: some View {
+        content()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: MessageMenuPreviewSizeKey.self, value: proxy.size)
+                }
+            )
+            .onPreferenceChange(MessageMenuPreviewSizeKey.self) { naturalSize = $0 }
+            .scaleEffect(fitScale, anchor: .center)
+            .frame(
+                width: naturalSize.width > 0 ? naturalSize.width * fitScale : nil,
+                height: naturalSize.height > 0 ? naturalSize.height * fitScale : nil
+            )
+    }
+}
+
+private struct MessageMenuPreviewSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
 struct MessageListView: UIViewControllerRepresentable {
     let store: MessageStore
     /// Owner of the live per-message dynamic state (translations,
@@ -262,6 +365,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (counter) so the bridge detects each distinct request.
     var scrollToMessageId: String? = nil
     var scrollToMessageTrigger: Int = 0
+    /// Incrémenté par le parent aux instants où le lecteur DÉCLARE regarder le
+    /// bas : ouverture de l'écran, bouton « dernier message », départ en
+    /// arrière-plan. Le pont déclenche alors `flushSeenNow()`, qui signale ce
+    /// qui est affiché sans attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     /// True while the ViewModel is searching for a quoted message on the server.
     /// Drives the slow continuous scroll on the underlying UICollectionView.
     var isSearchingQuotedMessage: Bool = false
@@ -275,6 +383,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
+    /// compter comme lus. Voir
+    /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var onMessagesSeen: (([String]) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
@@ -288,6 +400,15 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …).
     var onLongPress: ((String) -> Void)?
+    /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
+    /// construit par `ConversationView` (là où toutes les actions sont déjà
+    /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
+    /// long-press custom → overlay reste alors le chemin).
+    var nativeMessageMenu: ((Message) -> AnyView)? = nil
+    /// id de la bulle présentée dans l'overlay custom d'appui long — la
+    /// cellule live correspondante est masquée (opacity 0) le temps de
+    /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
+    var overlaidMessageId: String? = nil
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
@@ -329,6 +450,7 @@ struct MessageListView: UIViewControllerRepresentable {
     class Coordinator {
         var lastScrollToBottomTrigger: Int = 0
         var lastScrollToMessageTrigger: Int = 0
+        var lastFlushSeenTrigger: Int = 0
         var wasSearchingQuotedMessage: Bool = false
     }
 
@@ -350,11 +472,14 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -383,6 +508,10 @@ struct MessageListView: UIViewControllerRepresentable {
             context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
             vc.scrollToBottom(animated: true)
         }
+        if flushSeenTrigger != context.coordinator.lastFlushSeenTrigger {
+            context.coordinator.lastFlushSeenTrigger = flushSeenTrigger
+            vc.flushSeenNow()
+        }
         // If the trigger changed, FAST scroll to the requested message
         // (this fires after jumpToQuotedMessage loaded the target from server).
         if scrollToMessageTrigger != context.coordinator.lastScrollToMessageTrigger {
@@ -403,11 +532,14 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -433,5 +565,9 @@ struct MessageListView: UIViewControllerRepresentable {
     // été déclenché par le chemin de dismiss emprunté.
     static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
         vc.stopSlowScroll()
+        // Fermer la conversation ne doit pas perdre une lecture déjà acquise :
+        // `deinit` ne peut pas s'en charger, il n'est pas isolé au MainActor.
+        vc.flushSeenMessages()
+        vc.stopSeenTracking()
     }
 }

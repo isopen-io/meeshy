@@ -34,14 +34,19 @@ describe('CallQualityOverlay', () => {
 
   // --- remote alerts (call:quality-alert / call:screen-capture-alert) ------
 
-  it('shows the remote-quality pill while the peer link is degraded', () => {
+  it('shows the discreet remote-quality indicator while the peer link is degraded', () => {
     render(<CallQualityOverlay stats={null} remoteQualityDegraded participantName="Alice" />);
-    expect(screen.getByTestId('remote-quality-pill')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-quality-indicator')).toBeInTheDocument();
   });
 
-  it('hides the remote-quality pill by default', () => {
-    render(<CallQualityOverlay stats={null} />);
+  it('no longer renders the intrusive text pill for a degraded peer link', () => {
+    render(<CallQualityOverlay stats={null} remoteQualityDegraded participantName="Alice" />);
     expect(screen.queryByTestId('remote-quality-pill')).not.toBeInTheDocument();
+  });
+
+  it('hides the remote-quality indicator by default', () => {
+    render(<CallQualityOverlay stats={null} />);
+    expect(screen.queryByTestId('remote-quality-indicator')).not.toBeInTheDocument();
   });
 
   it('shows the privacy pill while the peer captures the screen', () => {
@@ -54,7 +59,7 @@ describe('CallQualityOverlay', () => {
     expect(screen.queryByTestId('screen-capture-pill')).not.toBeInTheDocument();
   });
 
-  it('interpolates the participant name into both pill labels', () => {
+  it('interpolates the participant name into the quality indicator aria-label and the capture pill', () => {
     render(
       <CallQualityOverlay
         stats={null}
@@ -63,8 +68,11 @@ describe('CallQualityOverlay', () => {
         participantName="Alice"
       />,
     );
-    expect(screen.getByTestId('remote-quality-pill').textContent).toContain('Alice');
-    expect(screen.getByTestId('remote-quality-pill').textContent).not.toContain('{name}');
+    // The degraded-peer signal is now a discreet icon: the interpolated label
+    // lives in its accessible name (aria-label), not visible body text.
+    const indicator = screen.getByTestId('remote-quality-indicator');
+    expect(indicator.getAttribute('aria-label')).toContain('Alice');
+    expect(indicator.getAttribute('aria-label')).not.toContain('{name}');
     expect(screen.getByTestId('screen-capture-pill').textContent).toContain('Alice');
     expect(screen.getByTestId('screen-capture-pill').textContent).not.toContain('{name}');
   });

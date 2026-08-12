@@ -15,6 +15,7 @@ import { getAllFontVariables } from "@/lib/fonts";
 import { CriticalPreloader } from "@/components/common/CriticalPreloader";
 import { CallManager } from "@/components/video-call";
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";
+import { SessionRevocationHandler } from "@/components/common/SessionRevocationHandler";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
 import { ServiceWorkerInitializer } from "@/components/providers/ServiceWorkerInitializer";
@@ -109,6 +110,7 @@ export default async function RootLayout({
                       </PresenceProvider>
                       <CallManager />
                       <TabNotificationManager />
+                      <SessionRevocationHandler />
                     </ClientOnly>
                   </ErrorBoundary>
                 </MessageViewProvider>

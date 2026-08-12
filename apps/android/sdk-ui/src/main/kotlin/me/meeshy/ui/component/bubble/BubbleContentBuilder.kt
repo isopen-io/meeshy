@@ -5,8 +5,14 @@ import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffectRenderPlanner
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
+import me.meeshy.sdk.model.SendLifecycle
+import me.meeshy.sdk.model.SendLifecycleResolver
 
 public object BubbleContentBuilder {
 
@@ -22,6 +28,8 @@ public object BubbleContentBuilder {
         activeLanguageCode: String? = null,
         mediaBaseUrl: String? = null,
         recipientCount: Int = 0,
+        showReadReceipts: Boolean = true,
+        isOffline: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -41,19 +49,29 @@ public object BubbleContentBuilder {
         val isShowingOriginal = isTranslated && activeIsOriginal
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
-            isFailed -> DeliveryStatus.Failed
-            isPending -> DeliveryStatus.Pending
             else -> when (
-                DeliveryStatusResolver.resolve(
-                    deliveredCount = message.deliveredCount,
-                    readCount = message.readCount,
-                    recipientCount = recipientCount,
-                    readByAllAt = message.readByAllAt,
+                SendLifecycleResolver.resolve(
+                    isPending = isPending,
+                    isFailed = isFailed,
+                    isOffline = isOffline,
                 )
             ) {
-                DeliveryTier.Read -> DeliveryStatus.Read
-                DeliveryTier.Delivered -> DeliveryStatus.Delivered
-                DeliveryTier.Sent -> DeliveryStatus.Sent
+                SendLifecycle.Failed -> DeliveryStatus.Failed
+                SendLifecycle.QueuedOffline -> DeliveryStatus.QueuedOffline
+                SendLifecycle.InFlight -> DeliveryStatus.Pending
+                SendLifecycle.Settled -> when (
+                    DeliveryStatusResolver.resolve(
+                        deliveredCount = message.deliveredCount,
+                        readCount = message.readCount,
+                        recipientCount = recipientCount,
+                        readByAllAt = message.readByAllAt,
+                        showReadReceipts = showReadReceipts,
+                    )
+                ) {
+                    DeliveryTier.Read -> DeliveryStatus.Read
+                    DeliveryTier.Delivered -> DeliveryStatus.Delivered
+                    DeliveryTier.Sent -> DeliveryStatus.Sent
+                }
             }
         }
         val reactions = message.reactionSummary
@@ -174,8 +192,39 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
+            blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
+            // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when
+            // deleted (a tombstone never glows). The played-appearance gate is resolved
+            // later at render time by `MessageEffectRenderPlanner.plan`.
+            effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
+            // View-once burned tombstone inputs — mirror iOS gating burned on
+            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
+            // takes precedence (its own path), so zero these out when deleted.
+            isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
+            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+        )
+    }
+
+    /**
+     * Derives the "tap to reveal" conceal spec from a message's resolved
+     * [MessageEffects] — parity with iOS gating `BubbleBlurRevealController` on
+     * `effects.isBlurred || effects.isViewOnce`. Returns null (no conceal) when
+     * neither lifecycle bit is set; a deleted tombstone never conceals. The
+     * visibility window uses the message's `blurRevealDuration` param when present,
+     * falling back to the shared default (iOS `effects.blurRevealDuration ??`).
+     */
+    private fun buildBlurReveal(effects: MessageEffects): BubbleBlurRevealSpec? {
+        val isBlurred = effects.has(MessageEffectFlags.BLURRED)
+        val isViewOnce = effects.has(MessageEffectFlags.VIEW_ONCE)
+        if (!isBlurred && !isViewOnce) return null
+        return BubbleBlurRevealSpec(
+            isViewOnce = isViewOnce,
+            visibilitySeconds = effects.blurRevealDuration
+                ?: BlurRevealLifecycle.defaultRevealDurationSeconds,
         )
     }
 

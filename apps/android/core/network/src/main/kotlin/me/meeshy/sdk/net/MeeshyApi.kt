@@ -1,6 +1,8 @@
 package me.meeshy.sdk.net
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.api.ActiveCallApi
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.api.BlockApi
@@ -9,6 +11,7 @@ import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.DataExportApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
@@ -16,8 +19,10 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.api.ReportApi
+import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.UserApi
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -43,9 +48,12 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val activeCall: ActiveCallApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
     val media: MediaApi = retrofit.create()
+    val tus: TusApi = retrofit.create()
     val preferences: PreferencesApi = retrofit.create()
     val reports: ReportApi = retrofit.create()
     val dataExport: DataExportApi = retrofit.create()
+    val shareLinks: ShareLinkApi = retrofit.create()
+    val links: LinkApi = retrofit.create()
 
     companion object {
         val json: Json = Json {
@@ -55,9 +63,41 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
             coerceInputValues = true
         }
 
-        fun create(config: MeeshyConfig, tokenStore: TokenStore): MeeshyApi {
+        /**
+         * @param onSessionExpired appele quand la passerelle refuse l'identite
+         *   (401/403) hors des routes d'authentification. Sans lui, une session
+         *   expiree remontait comme une erreur de chargement et l'utilisateur
+         *   lisait « verifiez votre connexion » alors que le reseau allait bien.
+         */
+        fun create(
+            config: MeeshyConfig,
+            tokenStore: TokenStore,
+            onSessionExpired: () -> Unit = {},
+        ): MeeshyApi {
+            // The authenticator needs to call `auth.refresh` on the very instance it
+            // guards; the instance does not exist yet. The refresher closure is only
+            // invoked on a 401 — long after `api` is assigned — so a lateinit binding
+            // safely breaks the cycle. `/auth/refresh` is a handshake endpoint the
+            // policy marks ineligible, so the refresh call never re-enters the
+            // authenticator (no recursion).
+            lateinit var api: MeeshyApi
+            val refresher = TokenRefresher {
+                val session = tokenStore.sessionToken ?: return@TokenRefresher null
+                runCatching {
+                    runBlocking { api.auth.refresh(RefreshTokenRequest(session)) }
+                }.getOrNull()
+                    ?.takeIf { it.success }
+                    ?.data
+                    ?.token
+            }
+
             val client = OkHttpClient.Builder()
                 .addInterceptor(AuthInterceptor(tokenStore))
+                // Apres l'authenticator: si le rafraichissement a pu sauver la
+                // session, la reponse finale n'est plus un 401 et rien ne se
+                // declenche. On ne signale donc que les expirations REELLES.
+                .addInterceptor(AuthExpiryInterceptor(onSessionExpired))
+                .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {
                         addInterceptor(
@@ -77,7 +117,8 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 )
                 .build()
 
-            return MeeshyApi(retrofit)
+            api = MeeshyApi(retrofit)
+            return api
         }
     }
 }

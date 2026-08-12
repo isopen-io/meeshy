@@ -42,13 +42,7 @@ final class TransportBarTests: XCTestCase {
         XCTAssertEqual(TransportBar.zoomLabel(scale: 2.0), "200%")
     }
 
-    func test_modeSwitchLabel_quickTowardPro_isPRO() {
-        XCTAssertEqual(TransportBar.modeSwitchLabel(currentMode: .quick), "PRO ↗")
-    }
 
-    func test_modeSwitchLabel_proTowardQuick_isQUICK() {
-        XCTAssertEqual(TransportBar.modeSwitchLabel(currentMode: .pro), "QUICK ↗")
-    }
 
     // MARK: - HIG Hit Target Contract
 
@@ -87,12 +81,31 @@ final class TransportBarTests: XCTestCase {
     }
 
     func test_quickTimeline_transportShowsTimeReadout() {
-        XCTAssertTrue(QuickTimelineView.transportShowsTimeReadout,
+        XCTAssertTrue(StoryTimelineView.transportShowsTimeReadout,
                       "Le timer est affiché en Quick — retiré puis redemandé par le user (2026-07-11)")
     }
 
-    func test_proTimeline_transportKeepsTimeReadout() {
-        XCTAssertTrue(ProTimelineView.transportShowsTimeReadout,
-                      "Le mode Pro conserve le readout temps courant / durée")
+
+    // MARK: - Snap chip (fusion Simple+Pro : le snap vit dans le transport)
+
+    func test_init_withSnapParams_showsSnapChip() {
+        let bar = TransportBar(
+            isPlaying: false, currentTime: 0, duration: 10,
+            zoomScale: 1.0, isMuted: false,
+            isSnapEnabled: true,
+            onPlayToggle: {}, onMuteToggle: {},
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {},
+            onSnapToggle: {}
+        )
+        XCTAssertEqual(bar.isSnapEnabled, true)
+        _ = bar.body
+    }
+
+    func test_init_withoutSnapParams_hidesSnapChip() {
+        // nil = pas de chip — les surfaces sans moteur de snap (par ex. un
+        // futur éditeur média réutilisant TransportBar) ne l'affichent pas.
+        let bar = makeSUT()
+        XCTAssertNil(bar.isSnapEnabled)
+        _ = bar.body
     }
 }

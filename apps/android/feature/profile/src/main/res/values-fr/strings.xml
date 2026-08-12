@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="profile_title">Profil</string>
+    <string name="profile_view_posts">Publications</string>
     <string name="profile_edit_title">Modifier le profil</string>
     <string name="profile_back">Retour</string>
     <string name="profile_edit">Modifier</string>
@@ -25,6 +26,7 @@
     <string name="profile_image_error_update">Impossible de mettre à jour votre photo de profil. Veuillez réessayer.</string>
     <string name="profile_e2ee">Chiffré de bout en bout</string>
     <string name="profile_member_since">Membre depuis %1$s</string>
+    <string name="profile_last_seen">Vu %1$s</string>
     <string name="profile_completion">Profil complété à %1$d%%</string>
     <string name="profile_presence_online">En ligne</string>
     <string name="profile_presence_away">Absent</string>

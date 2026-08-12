@@ -1,46 +1,43 @@
 # Iteration 167 — Plan d'implémentation (2026-07-11)
 
 ## Objectifs
-Corriger `resolveBroadcastRecipients` (`services/gateway/src/services/posts/StoryTextObjectTranslationService.ts`)
-pour traiter la visibilité `PRIVATE` en fan-out **auteur-seul**, alignée sur le jumeau
-`SocialEventsHandler.getVisibilityFilteredRecipients` (`case 'PRIVATE': return []`). Sans ce
-guard, le texte traduit d'une story privée fuit vers tous les amis de l'auteur.
+Appliquer l'invariant « max 1 réaction distincte par user par commentaire » sur le chemin
+REST `PostCommentService.likeComment`, à parité avec le chemin socket
+`CommentReactionService.addReaction` et le modèle canonique `ReactionService` (remplace).
 
 ## Modules affectés
-- `services/gateway/src/services/posts/StoryTextObjectTranslationService.ts` — guard `PRIVATE`
-  (3 lignes de prod + commentaire d'intention), inséré après le bloc `COMMUNITY`.
-- `services/gateway/src/services/posts/__tests__/StoryTextObjectTranslationService.test.ts` —
-  1 test ajouté (`describe` « handleTranslationCompleted — PRIVATE visibility »).
+- `services/gateway/src/services/PostCommentService.ts` — `likeComment` (prod).
+- `services/gateway/src/__tests__/unit/services/PostCommentService.test.ts` — 3 tests (RED→GREEN).
 
-## Phases d'implémentation
-1. **RED** — Test « story PRIVATE avec 2 amis → broadcast auteur-seul, `friendRequest.findMany`
-   jamais appelé » (échec attendu : fan-out ami inclus).
-2. **GREEN** — Ajouter `if (visibility === 'PRIVATE') return [...recipients];`. Réexécuter → vert.
-3. **REFACTOR** — Néant (guard minimal, cohérent avec les blocs `ONLY`/`COMMUNITY` existants).
+## Phases
+1. **RED** — Ajouter `describe('PostCommentService.likeComment')` : purge multi-emoji,
+   idempotence same-emoji, comment absent. ✅
+2. **GREEN** — Insérer `deleteMany({ where: { commentId, userId, emoji: { not: emoji } } })`
+   avant l'`upsert` dans `likeComment`. ✅
+3. **REFACTOR** — Documenter l'invariant + rationale « remplace / fallback sûr » en commentaire. ✅
+4. **VALIDATION** — jest ciblé + suites voisines + tsc. ✅
 
 ## Dépendances
-Aucune. Méthode quasi-pure, pas de nouvelle dépendance.
+Aucune nouvelle. Réutilise `commentReaction.deleteMany` (Prisma) et `syncCommentLikeCounters`
+existant.
 
 ## Risques estimés
-Très faibles. Guard additif ; ne modifie que le cas `PRIVATE`. Aucune autre visibilité impactée.
+Très faibles. Purge bornée au `(commentId, userId)` et aux emojis ≠ demandé ; no-op sur le cas
+fallback ❤️/❤️. Aucun changement d'API/schéma/signature.
 
 ## Stratégie de rollback
-Revert du commit unique. Aucune migration, aucun état persistant impacté.
+Revert du commit unique. Fonction pure côté service, pas de migration ni d'état à défaire.
 
 ## Critères de validation
-- `jest StoryTextObjectTranslationService.test.ts` → 22/22 vert.
-- `jest src/services/posts` → 192/192 vert.
-- `tsc --noEmit` (gateway) → 0 erreur.
+- 3 nouveaux tests verts (dont 1 RED-avant-fix).
+- Suites `PostCommentService.test.ts` + `comments-like-delete.test.ts` + `comments.test.ts`
+  vertes (106 tests) — **atteint**.
+- Aucune nouvelle erreur tsc imputable à `PostCommentService.ts` — **atteint**
+  (seul résidu `@meeshy/shared` non résolu par tsc, environnemental, pré-existant).
 
 ## Statut de complétion
-✅ Implémenté et validé (RED confirmé, GREEN 22/22, 192/192 posts, tsc propre).
+✅ Terminé. Fix + tests + docs. Prêt à merger dans `main`.
 
-## Suivi progression
-- [x] RED — test PRIVATE ajouté, échec vérifié
-- [x] GREEN — guard `PRIVATE`
-- [x] Validation locale (jest + tsc)
-
-## Améliorations futures
-- `TranslationToggle` (web) — Prisme non réactif (langue gelée au montage).
-- Reels comment overlay (web) — heart toujours « unliked » → re-like infini.
-- `reactionSummary` (web) — chip « 0 » résiduel quand l'emoji était absent.
+## Suivi / améliorations futures
+- Harmoniser la sémantique de switch d'emoji des commentaires (socket rejette vs REST remplace).
+- Backlog web réaction cross-session (Participant ID vs User ID) — cross-couche, futur cycle.

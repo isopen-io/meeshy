@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
 import { CallWaitingBanner } from './CallWaitingBanner';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
+import { CallErrorBoundary } from '@/components/video-calls/CallErrorBoundary';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
@@ -39,6 +40,17 @@ import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 // web caller. Aligned to 45s (2026-07-11, Vague 38) to match that convention.
 const CALL_TIMEOUT_MS = 45000; // 45 seconds
 
+// call:join ack timeout (Vague 88, 2026-08-10). Socket.IO client 4.8 does NOT
+// auto-reject a pending ack callback when the transport drops between the
+// emit and the response — mirrors the existing SOCKET_ACK_TIMEOUT_MS pattern
+// in use-post-mutations.ts / use-comment-mutations.ts. Without this, a
+// dropped ack (transient disconnect right after the emit, gateway restart
+// mid-request, mobile flakiness) left acceptOrJoinCall's promise pending
+// forever: acceptingCallIdRef never released (Accept became permanently
+// inert), the pre-authorized mic/camera stream never stopped, and no error
+// ever surfaced to the user.
+const CALL_JOIN_ACK_TIMEOUT_MS = 10_000;
+
 export function CallManager() {
   const { t } = useI18n('calls');
   const { user, isChecking } = useAuth();
@@ -52,8 +64,6 @@ export function CallManager() {
     removeParticipant,
     updateParticipant,
     reset,
-    removeRemoteStream,
-    removePeerConnection,
     startHeartbeat,
     stopHeartbeat,
     joinRequest,
@@ -308,10 +318,59 @@ export function CallManager() {
       // or swap to them. Auto-declines on timeout if ignored (busy for real).
       const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
       if (busyInCall && busyCall && busyCall.id !== event.callId) {
+        // A THIRD caller arriving while a SECOND is already showing in the
+        // waiting banner must not silently bump it out of local state — that
+        // orphans the second caller's ring with no decline signal until its
+        // own timeout eventually fires. Explicitly decline it first (same
+        // call:end reason=rejected path as the Decline button/auto-timeout),
+        // then let the third caller take over the banner.
+        if (waitingCall && waitingCall.callId !== event.callId) {
+          logger.info('[CallManager]', 'Third caller bumping waiting call ' + waitingCall.callId + ' — declining it for ' + event.callId);
+          clearWaitingTimeout();
+          rejectWaitingCall(waitingCall.callId);
+        }
         logger.info('[CallManager]', 'Busy in another call — showing call-waiting banner for ' + event.callId);
         setWaitingCall(event);
         startWaitingTimeout(event.callId);
         return;
+      }
+
+      // A SECOND caller ringing in while the first `incomingCall` is still
+      // unanswered (not busy — isInCall is false, so the busy-path branch
+      // above never runs) used to fall straight through to setIncomingCall
+      // below, silently overwriting `incomingCall` and its shared
+      // `callTimeoutRef` with zero decline signal for the first caller — the
+      // same class of bug the busy-path fix above (third caller bumping the
+      // waiting banner) already closed, left open on this sibling branch.
+      // Explicitly decline the bumped call first, same call:end
+      // reason=rejected path Decline/auto-timeout already use.
+      if (incomingCall && incomingCall.callId !== event.callId) {
+        // Vague 90 (2026-08-10) — an Accept is already in flight for
+        // `incomingCall` (getUserMedia + call:join ack, up to
+        // CALL_JOIN_ACK_TIMEOUT_MS = 10s). isInCall/currentCall don't
+        // reflect that yet — acceptOrJoinCall's setInCall(true) is its LAST
+        // statement — so the busyInCall branch above hasn't triggered. Left
+        // unguarded, this branch would reject the very call the user just
+        // committed to accepting, racing a call:end against its own pending
+        // call:join for the SAME callId — the caller sees a spurious reject
+        // moments before the callee actually joins. Queue the new caller as
+        // a waiting call instead, same as the already-busy case — including
+        // the same "don't silently bump an existing waiting call" guard
+        // Vague 59 added to the sibling branch above.
+        if (acceptingCallIdRef.current === incomingCall.callId) {
+          if (waitingCall && waitingCall.callId !== event.callId) {
+            logger.info('[CallManager]', 'Third caller bumping waiting call ' + waitingCall.callId + ' — declining it for ' + event.callId + ' (accept in flight for ' + incomingCall.callId + ')');
+            clearWaitingTimeout();
+            rejectWaitingCall(waitingCall.callId);
+          }
+          logger.info('[CallManager]', 'Accept already in flight for ' + incomingCall.callId + ' — queuing ' + event.callId + ' as a waiting call instead of bumping it');
+          setWaitingCall(event);
+          startWaitingTimeout(event.callId);
+          return;
+        }
+        logger.info('[CallManager]', 'Second incoming call bumping unanswered call ' + incomingCall.callId + ' — declining it for ' + event.callId);
+        clearCallTimeout();
+        rejectWaitingCall(incomingCall.callId);
       }
 
       // I am being called - show notification
@@ -326,7 +385,7 @@ export function CallManager() {
       startCallTimeout(event.callId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout]);
+  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout, waitingCall, clearWaitingTimeout, rejectWaitingCall, incomingCall, clearCallTimeout]);
 
   /**
    * Handle participant joined
@@ -348,12 +407,20 @@ export function CallManager() {
       // Add participant to call
       addParticipant(event.participant);
 
-      // Update call status to 'active' if it was 'initiated'
+      // Update call status to 'active' if it was 'initiated'. This is also
+      // the caller's true "answered" moment (Vague 110, 2026-08-12): the
+      // first participant to join a still-ringing call is the callee
+      // picking up. Stamp `answeredAt` here — it's what VideoCallInterface
+      // anchors the visible call-duration clock on, instead of `startedAt`
+      // (set at ring-start in use-video-call.ts), so the ring delay is never
+      // counted as talk time. Guarded by the same 'initiated' check so a
+      // later participant joining a group call never re-stamps it.
       const { currentCall } = useCallStore.getState();
       if (currentCall && currentCall.status === 'initiated') {
         setCurrentCall({
           ...currentCall,
           status: 'active',
+          answeredAt: new Date(),
         });
       }
 
@@ -376,23 +443,27 @@ export function CallManager() {
         mode: event.mode
       });
 
-      // Use userId for WebRTC cleanup (peer connections and streams are tracked by userId)
-      const userIdForCleanup = event.userId || (event as unknown).anonymousId;
-
-      if (userIdForCleanup) {
-        // Remove their stream and peer connection (tracked by userId)
-        removeRemoteStream(userIdForCleanup);
-        removePeerConnection(userIdForCleanup);
-      } else {
-        console.warn('⚠️ [CallManager] No userId or anonymousId for cleanup!', event);
-      }
-
-      // Remove participant from call (tracked by database participantId)
+      // WebRTC-level teardown (peer connection, remote stream, and
+      // use-webrtc-p2p's per-participant maps) is owned exclusively by
+      // VideoCallInterface's own CALL_PARTICIPANT_LEFT listener — it delays
+      // 2s and snapshots the connection at leave-time to detect a
+      // same-session rejoin within that grace window, and clears the
+      // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/
+      // offerInFlightRef entries `useWebRTCP2P.removeParticipant` owns, not
+      // just the store's peer connection object. CallManager's listener is
+      // attached unconditionally on mount (before any call is active) and
+      // therefore always fires FIRST — closing the RTCPeerConnection here
+      // too raced ahead of that grace window: a rejoin's fresh offer
+      // arriving within it found `use-webrtc-p2p.ts`'s maps still stale
+      // (pointing at the connection just closed here) and got misrouted
+      // through the renegotiation branch against an already-closed
+      // connection, permanently failing the reconnect. This handler now
+      // only updates the participant list (database-participantId-keyed).
       removeParticipant(event.participantId);
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [removeParticipant, removeRemoteStream, removePeerConnection]
+    [removeParticipant]
   );
 
   /**
@@ -413,6 +484,32 @@ export function CallManager() {
         return;
       }
 
+      // A call:ended for a callId this client isn't tracking as its current
+      // session is stale/unrelated — e.g. the server force-ending a phantom
+      // call session (CallService.initiateCall's reaped-call cleanup) fires an
+      // async call:ended for THAT callId, which can arrive after this client
+      // has already moved on to a brand-new call. Without this guard the
+      // unconditional reset() below (and the waiting-call promotion further
+      // down) would tear down a healthy, unrelated active call.
+      const { currentCall: trackedCall } = useCallStore.getState();
+      if (trackedCall && trackedCall.id !== event.callId) {
+        return;
+      }
+
+      // Same guard, pre-accept: before the user has answered anything,
+      // `trackedCall` is still null, so the guard above short-circuits and
+      // falls through — even though a DIFFERENT call is ringing
+      // (`incomingCall`, local state, distinct from the store). The gateway's
+      // call:ended fan-out reaches every conversation member's user room, not
+      // just call participants (so a still-ringing callee can learn a call it
+      // was never near ended — `callEndedFanout.ts`'s `resolveCallEndedRooms`),
+      // so this is a realistic delivery, not a contrived one. Mirrors how
+      // `handleAnsweredElsewhere` already scopes itself to
+      // `incomingCall?.callId === event.callId`.
+      if (!trackedCall && incomingCall && incomingCall.callId !== event.callId) {
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 
@@ -422,13 +519,28 @@ export function CallManager() {
       // also covering the server-authoritative call:ended path (the majority
       // real-world drop scenario for an already-established call). Read from
       // the store BEFORE reset() wipes currentCall/controls.
-      if (isRetryableCallFailure(event.reason)) {
-        const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+      // Any OTHER end reason clears a stale unconsumed offer left behind by an
+      // earlier failed call on the SAME conversation: that offer is superseded
+      // the moment a later call attempt on this conversation actually resolves
+      // (successfully or not) — otherwise it can resurface, e.g. via
+      // useCallRetryToast on a later visit, prompting a retry for a failure the
+      // user already worked around.
+      // …unless a call is WAITING: it is about to be promoted to a fresh
+      // incoming ring (below), which is the user's next action. Stacking a
+      // « Réessayer » offer for the just-dropped active call behind that ring
+      // is conflicting UI, so the promotion path owns the teardown and neither
+      // branch below runs.
+      if (!waitingCall) {
+        const { currentCall, controls, offerCallRetry, clearCallRetry } = useCallStore.getState();
         if (currentCall?.conversationId) {
-          offerCallRetry({
-            conversationId: currentCall.conversationId,
-            type: controls.videoEnabled ? 'video' : 'audio',
-          });
+          if (isRetryableCallFailure(event.reason)) {
+            offerCallRetry({
+              conversationId: currentCall.conversationId,
+              type: controls.videoEnabled ? 'video' : 'audio',
+            });
+          } else {
+            clearCallRetry(currentCall.conversationId);
+          }
         }
       }
 
@@ -453,7 +565,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall, incomingCall]
   );
 
   /**
@@ -467,17 +579,33 @@ export function CallManager() {
       // tab sonnait indéfiniment (audit appels 2026-07-11, finding #1).
       // Scopé au callId qui sonne : ne touche ni le ring d'un autre appel ni
       // un appel déjà établi sur CE tab.
-      if (!incomingCall || incomingCall.callId !== event.callId) return;
+      if (incomingCall?.callId === event.callId) {
+        logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
 
-      logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
+        import('@/utils/ringtone').then(({ stopRingtone }) => {
+          stopRingtone();
+        });
+        clearCallTimeout();
+        setIncomingCall(null);
+        return;
+      }
 
-      import('@/utils/ringtone').then(({ stopRingtone }) => {
-        stopRingtone();
-      });
-      clearCallTimeout();
-      setIncomingCall(null);
+      // Same multi-device race, but for the BUSY-path call-waiting banner
+      // (routine calling-feature, Vague 55, 2026-08-05): a second call rang
+      // in while already on an active call, showing `waitingCall` instead of
+      // `incomingCall`. Without this branch, answering that second call on
+      // another device left the banner AND its 45s auto-decline timer
+      // (`startWaitingTimeout`) running unattended here — the orphaned timer
+      // would fire `rejectWaitingCall` (a real `call:end reason=rejected`)
+      // for a call the user is now actively on elsewhere, silently killing
+      // it from a stale banner nobody is looking at.
+      if (waitingCall?.callId === event.callId) {
+        logger.info('[CallManager]', 'Waiting call answered on another device - dismissing banner - callId: ' + event.callId);
+        clearWaitingTimeout();
+        setWaitingCall(null);
+      }
     },
-    [incomingCall, clearCallTimeout]
+    [incomingCall, waitingCall, clearCallTimeout, clearWaitingTimeout]
   );
 
   /**
@@ -575,7 +703,11 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('CALL_JOIN_ACK_TIMEOUT')),
+          CALL_JOIN_ACK_TIMEOUT_MS
+        );
         (socket as unknown).emit(
           CLIENT_EVENTS.CALL_JOIN,
           {
@@ -585,7 +717,10 @@ export function CallManager() {
               videoEnabled: params.isVideo,
             },
           },
-          resolve
+          (response: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+            clearTimeout(timer);
+            resolve(response);
+          }
         );
       });
 
@@ -600,14 +735,19 @@ export function CallManager() {
         setIceServers(ack.data.iceServers);
       }
 
-      // Create call session in store
+      // Create call session in store. `answeredAt` (Vague 110, 2026-08-12) is
+      // what VideoCallInterface anchors the visible call-duration clock on —
+      // for the callee this IS the answer moment, unlike the caller whose
+      // `startedAt` is stamped back at ring-start (use-video-call.ts).
+      const answeredAt = new Date();
       setCurrentCall({
         id: params.callId,
         conversationId: params.conversationId,
         mode: params.mode,
         status: 'active',
         initiatorId: params.initiatorId,
-        startedAt: new Date(),
+        startedAt: answeredAt,
+        answeredAt,
         participants: params.participants,
       } as CallSession);
 
@@ -994,6 +1134,7 @@ export function CallManager() {
           s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
           s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
           s.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+          s.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
           s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
           s.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
         }
@@ -1007,8 +1148,13 @@ export function CallManager() {
    */
   useEffect(() => {
     return () => {
-      // Clear timeout on unmount
+      // Clear timeouts on unmount — both the no-answer timeout AND the
+      // call-waiting auto-decline timeout. Missing the latter left an
+      // orphaned setTimeout that, 45s after unmount, would still call
+      // rejectWaitingCall() — a real call:end emit — for a component nothing
+      // is observing anymore.
       clearCallTimeout();
+      clearWaitingTimeout();
 
       if (isInCall) {
         logger.debug('[CallManager]', 'Cleaning up on unmount');
@@ -1016,7 +1162,7 @@ export function CallManager() {
         // CallInterface will handle WebRTC cleanup
       }
     };
-  }, [isInCall, reset, clearCallTimeout]);
+  }, [isInCall, reset, clearCallTimeout, clearWaitingTimeout]);
 
   if (process.env.NODE_ENV === 'development') {
     console.log('[CallManager] Rendering:', {
@@ -1052,7 +1198,9 @@ export function CallManager() {
 
       {/* Active Call Interface */}
       {isInCall && currentCall && user?.id && (
-        <VideoCallInterface callId={currentCall.id} />
+        <CallErrorBoundary>
+          <VideoCallInterface callId={currentCall.id} />
+        </CallErrorBoundary>
       )}
     </>
   );

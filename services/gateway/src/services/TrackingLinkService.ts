@@ -514,8 +514,19 @@ export class TrackingLinkService {
     // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
     // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
     // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
-    const uniqueClicks = (trackingLink as TrackingLink).uniqueClicks
-      ?? Math.max(uniqueIps.size, uniqueFingerprints.size);
+    //
+    // MAIS le compteur stocké est all-time : il ne connaît pas la fenêtre
+    // [startDate, endDate]. Dès qu'un filtre de date est appliqué, `clicks`
+    // (et donc totalClicks + les histogrammes) ne couvre que la fenêtre, alors
+    // que le compteur stocké resterait sur le total historique — cassant
+    // l'invariant `uniqueClicks ≤ totalClicks`. Sur une fenêtre, on recalcule
+    // donc depuis le set filtré ; sinon on garde le compteur stocké (cohérence
+    // cross-endpoint).
+    const recomputedUniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    const isDateFiltered = Boolean(params?.startDate || params?.endDate);
+    const uniqueClicks = isDateFiltered
+      ? recomputedUniqueClicks
+      : ((trackingLink as TrackingLink).uniqueClicks ?? recomputedUniqueClicks);
 
     const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
 
@@ -733,11 +744,16 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        // Function replacer, not a string: String.prototype.replace interprets
+        // $$, $&, $` and $' in a replacement STRING (regardless of a string vs
+        // regex search), so any $-sequence in the restored URL would be mangled.
+        // A () => value replacer reinstates the text verbatim with identical
+        // first-occurrence semantics (mirror of processLinksInContent).
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing [[url]]', { error: linkError });
         // On error, replace with URL without brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
@@ -775,17 +791,20 @@ export class TrackingLinkService {
         }
 
         const meeshyShortLink = `m+${token}`;
-        processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
       } catch (linkError) {
         logger.error('Error processing <url>', { error: linkError });
         // On error, replace with URL without angle brackets
-        processedContent = processedContent.replace(fullMatch, url);
+        processedContent = processedContent.replace(fullMatch, () => url);
       }
     }
 
-    // STEP 4: Restore protected markdown links
+    // STEP 4: Restore protected markdown links.
+    // Function replacer: `original` is user text that may contain $&, $$, $` or
+    // $' — a replacement STRING would substitute those and corrupt the link
+    // (e.g. "$&" would leak the __PROTECTED_MD_n__ sentinel back into content).
     for (const { placeholder, original } of protectedItems) {
-      processedContent = processedContent.replace(placeholder, original);
+      processedContent = processedContent.replace(placeholder, () => original);
     }
 
     return { processedContent, trackingLinks };
@@ -862,7 +881,8 @@ export class TrackingLinkService {
         // via metadata.trackingLinks, sans réécriture du contenu).
         if (rewriteToShortLink) {
           const replacement = `m+${trackingLink.token}`;
-          processedContent = processedContent.replace(url, replacement);
+          // Function replacer — same $-substitution guard as processExplicitLinksInContent.
+          processedContent = processedContent.replace(url, () => replacement);
         }
 
       } catch (error) {

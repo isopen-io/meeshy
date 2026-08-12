@@ -292,6 +292,11 @@
         "except": "Amis sauf...",
         "only": "Seulement...",
         "private": "Privé"
+      },
+      "reelToggle": {
+        "groupLabel": "Type de publication",
+        "reel": "Reel",
+        "post": "Post"
       }
     },
     "audioUnavailable": "URL audio non disponible",

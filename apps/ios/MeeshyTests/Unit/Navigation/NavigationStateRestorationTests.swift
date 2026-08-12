@@ -30,7 +30,7 @@ final class NavigationStateRestorationTests: XCTestCase {
     func test_router_pathDoesNotSurviveReinitialization() {
         let router1 = Router()
         router1.push(.profile)
-        router1.push(.editProfile)
+        router1.push(.userStats)
         XCTAssertEqual(router1.path.count, 2)
 
         let router2 = Router()

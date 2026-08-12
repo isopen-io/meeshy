@@ -6,7 +6,9 @@ import MeeshyUI
 // MARK: - Audio Post Composer
 
 struct AudioPostComposerView: View {
-    let onPublish: (URL, String, MobileTranscriptionPayload?) -> Void
+    /// Duration (ms) feeds `ReelComposition`'s 3-second qualification floor —
+    /// without it the composer couldn't tell a short clip from a long one.
+    let onPublish: (URL, String, Int, MobileTranscriptionPayload?) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -45,15 +47,15 @@ struct AudioPostComposerView: View {
                         contentPanel
                         Color.clear.frame(height: 100)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.lg)
                 }
 
                 VStack {
                     Spacer()
                     actionBar
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.bottom, MeeshySpacing.lg)
                         .background(
                             LinearGradient(
                                 colors: [Color.clear, backgroundBaseColor.opacity(0.7), backgroundBaseColor],
@@ -122,6 +124,10 @@ struct AudioPostComposerView: View {
                     .frame(width: 132, height: 132)
 
                 centerContent
+                    // Visualisation d'état purement décorative (waveform / sceau / micro /
+                    // spinner). L'état parlé est porté par `durationLabel` juste en dessous
+                    // → on masque le décor pour éviter le bruit VoiceOver.
+                    .accessibilityHidden(true)
             }
             .frame(height: 168)
 
@@ -151,7 +157,7 @@ struct AudioPostComposerView: View {
                 .scaleEffect(1.6)
         } else if phase == .preview {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
+                .font(MeeshyFont.relative(56))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
@@ -160,7 +166,7 @@ struct AudioPostComposerView: View {
                 )
         } else {
             Image(systemName: "mic.fill")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundStyle(MeeshyColors.brandGradient)
         }
     }
@@ -177,6 +183,16 @@ struct AudioPostComposerView: View {
             Text(formattedDuration)
                 .font(.system(.largeTitle, design: .monospaced).weight(.light))
                 .foregroundColor(theme.textPrimary)
+                // A bare monospaced "0:34" reads to VoiceOver as a context-less
+                // number. Name what the timer measures via the label (elapsed
+                // while recording vs. the recorded length in preview) and expose
+                // the running time as the value.
+                .accessibilityLabel(audioRecorder.isRecording
+                    ? String(localized: "Durée d'enregistrement",
+                             defaultValue: "Dur\u{00E9}e d'enregistrement")
+                    : String(localized: "Durée enregistrée",
+                             defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
+                .accessibilityValue(formattedDuration)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
                 Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
@@ -200,6 +216,7 @@ struct AudioPostComposerView: View {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
                     .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
                 Text(String(localized: "Langue de transcription",
                             defaultValue: "Langue de transcription"))
                     .font(.caption.weight(.semibold))
@@ -247,6 +264,11 @@ struct AudioPostComposerView: View {
                         .stroke(MeeshyColors.indigo400.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
                 )
         }
+        // Le libellé visuel est un code court (« FR ») ; VoiceOver annonce le nom
+        // complet localisé. L'état sélectionné n'était signalé que par la couleur
+        // (fond gradient) → invisible sans la vue : on ajoute le trait `.isSelected`.
+        .accessibilityLabel(Self.fullDisplayName(for: loc))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var moreLanguagesButton: some View {
@@ -257,6 +279,7 @@ struct AudioPostComposerView: View {
             HStack(spacing: 4) {
                 Image(systemName: "line.3.horizontal.decrease.circle.fill")
                     .font(.footnote)
+                    .accessibilityHidden(true)
                 Text(String(localized: "Plus", defaultValue: "Plus"))
                     .font(.footnote.weight(.semibold))
             }
@@ -267,6 +290,8 @@ struct AudioPostComposerView: View {
                 Capsule().stroke(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1)
             )
         }
+        // « Plus » seul est ambigu en VoiceOver → intention explicite.
+        .accessibilityLabel(String(localized: "Plus de langues", defaultValue: "Plus de langues"))
     }
 
     private var suggestedLocales: [Locale] {
@@ -296,6 +321,16 @@ struct AudioPostComposerView: View {
         return locale.identifier.uppercased()
     }
 
+    // Nom complet localisé (« Français ») pour l'annonce VoiceOver — le chip
+    // n'affiche visuellement que le code court.
+    private static func fullDisplayName(for locale: Locale) -> String {
+        if let name = Locale.current.localizedString(forIdentifier: locale.identifier),
+           !name.isEmpty {
+            return name.prefix(1).uppercased() + name.dropFirst()
+        }
+        return shortDisplayName(for: locale)
+    }
+
     // MARK: - Content Panel
 
     @ViewBuilder
@@ -313,6 +348,7 @@ struct AudioPostComposerView: View {
                 Image(systemName: "text.bubble.fill")
                     .font(.footnote)
                     .foregroundColor(MeeshyColors.indigo400)
+                    .accessibilityHidden(true)
                 Text(String(localized: "Transcription", defaultValue: "Transcription"))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo400)
@@ -333,6 +369,8 @@ struct AudioPostComposerView: View {
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineSpacing(4)
+                // La transcription est du contenu utilisateur → copiable (sélection native).
+                .textSelection(.enabled)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -353,6 +391,7 @@ struct AudioPostComposerView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundColor(MeeshyColors.error)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "Transcription indisponible",
                                 defaultValue: "Transcription indisponible"))
@@ -606,7 +645,7 @@ struct AudioPostComposerView: View {
     private func publish() {
         guard let url = recordedURL else { return }
         let payload = transcription.map { buildPayload($0) }
-        onPublish(url, "audio/mp4", payload)
+        onPublish(url, "audio/mp4", Int(recordedDuration * 1000), payload)
     }
 
     private func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {

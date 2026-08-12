@@ -240,4 +240,330 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "(confirmation système) — jamais de suppression directe."
         )
     }
+
+    /// iOS 26+ : le builder natif doit exposer « Rechercher » et « Appeler »
+    /// (décision 2026-07-14) — l'aperçu natif étant statique, ces actions
+    /// vivent dans le menu, câblées sur les MÊMES chemins que les boutons de
+    /// l'aperçu du fallback custom : Rechercher arme `pendingOpenSearch` puis
+    /// ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
+    func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
+        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+
+        guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
+            XCTFail("Le builder natif conversationContextMenu(for:) doit exister.")
+            return
+        }
+        let blockEnd = overlaysSource.range(
+            of: "// MARK: - Custom Context Menu Overlay",
+            range: builderRange.lowerBound ..< overlaysSource.endIndex
+        )?.lowerBound ?? overlaysSource.endIndex
+        let builderBlock = String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+
+        XCTAssertTrue(
+            builderBlock.contains("context.search") && builderBlock.contains("magnifyingglass"),
+            "Le builder natif doit offrir « Rechercher » (icône magnifyingglass)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("router.pendingOpenSearch = true"),
+            "« Rechercher » doit armer router.pendingOpenSearch — même chemin que " +
+            "le bouton onSearch de l'aperçu custom (SSOT)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("context.call") && builderBlock.contains("phone.fill"),
+            "Le builder natif doit offrir « Appeler » (icône phone.fill, DM)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("CallManager.shared.requestPermissionsThenStartCall("),
+            "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
+            "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
+            "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
+            "`startCall` brut ne demande rien et connecterait un appel muet."
+        )
+    }
+
+    // MARK: - Menu d'appui long des MESSAGES (design système par version)
+    //
+    // Décision produit 2026-07-14 (« hybride ») : le menu d'appui long des
+    // messages adopte le design système par version d'iOS pour sa LISTE
+    // d'actions (`MessageActionsMenu` : même `adaptiveGlass` + highlight au
+    // press que le menu des conversations), tout en CONSERVANT la barre de
+    // réactions emoji rapides et l'aperçu de bulle (`MessageOverlayMenu`).
+
+    /// La liste d'actions du menu message rend le design système : conteneur
+    /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
+    /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
+    /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
+        let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
+
+        XCTAssertTrue(
+            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
+            "MessageActionsMenu doit appliquer .adaptiveGlass sur son conteneur " +
+            "(Liquid Glass iOS 26 réel + fallback), comme le menu conversation."
+        )
+        XCTAssertTrue(
+            menuSource.contains("MenuRowHighlightButtonStyle"),
+            "Les rows du menu message doivent surligner la ligne pressée (parité " +
+            "menus système) via le style partagé MenuRowHighlightButtonStyle."
+        )
+        XCTAssertFalse(
+            menuSource.contains(".buttonStyle(.plain)"),
+            "MessageActionsMenu ne doit plus utiliser .buttonStyle(.plain) " +
+            "(aucun highlight au press) — régression du design système."
+        )
+        XCTAssertTrue(
+            menuSource.contains("@ScaledMetric(relativeTo: .body) private var rowMinHeight"),
+            "La hauteur de row du menu message doit scaler avec Dynamic Type " +
+            "(@ScaledMetric), comme les menus système et le menu conversation."
+        )
+    }
+
+    /// Le chrome « natif-lean » de l'overlay message est CONSERVÉ (décision
+    /// hybride) : barre de réactions emoji rapides (`EmojiReactionPicker`) +
+    /// aperçu de bulle réel (`ThemedMessageBubble`) + liste d'actions restylée
+    /// (`MessageActionsMenu`). Le passage au design système ne doit pas
+    /// dépouiller ces surfaces.
+    func test_messageOverlay_keepsEmojiBarAndBubblePreview_hybridDecision() throws {
+        let overlaySource = try source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+
+        XCTAssertTrue(
+            overlaySource.contains("EmojiReactionPicker"),
+            "MessageOverlayMenu doit garder la barre de réactions emoji rapides " +
+            "(EmojiReactionPicker) — décision hybride 2026-07-14."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("ThemedMessageBubble"),
+            "MessageOverlayMenu doit garder l'aperçu de bulle réel (ThemedMessageBubble)."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("MessageActionsMenu("),
+            "MessageOverlayMenu doit composer la liste d'actions restylée MessageActionsMenu."
+        )
+    }
+
+    // MARK: - Menu message NATIF (iOS 26 Liquid Glass) + fallback overlay
+    //
+    // Pivot 2026-07-14 : sur iOS 26 la bulle attache un `.contextMenu` NATIF
+    // (Liquid Glass, comme les lignes de conversation) avec aperçu de la bulle
+    // d'origine ; < iOS 26 garde l'overlay custom (`MessageOverlayMenu`). Deux
+    // chemins par version d'OS, exactement comme `ConversationRowItem`.
+
+    /// iOS 26+ : `.contextMenu` natif + aperçu, long-press custom coupé ;
+    /// < iOS 26 : overlay custom conservé (ConditionalBubbleLongPress).
+    func test_messageRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
+        let listSource = try source("Meeshy/Features/Main/Views/MessageListView.swift")
+        XCTAssertTrue(
+            listSource.contains("if #available(iOS 26.0, *), let menu"),
+            "Le .contextMenu natif des bulles doit être gaté #available(iOS 26.0, *)."
+        )
+        XCTAssertTrue(
+            listSource.contains(".contextMenu { menu() } preview: { preview() }"),
+            "Le chemin iOS 26 doit attacher le .contextMenu NATIF AVEC preview " +
+            "(la vraie bulle d'origine)."
+        )
+        XCTAssertTrue(
+            listSource.contains("ConditionalBubbleLongPress"),
+            "Le long-press custom de la bulle doit être conditionnel (coupé quand " +
+            "le menu natif est actif, gardé < iOS 26)."
+        )
+
+        let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(
+            vcSource.contains(".nativeMessageContextMenu(menu: nativeMenu)"),
+            "La cellule doit attacher le menu natif via .nativeMessageContextMenu(menu:)."
+        )
+        XCTAssertTrue(
+            vcSource.contains("enableLongPress: nativeMenu == nil"),
+            "La cellule doit couper le long-press custom quand le menu natif est actif."
+        )
+    }
+
+    /// Le builder du menu natif (ConversationView) : rangée d'emojis en
+    /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
+    /// actions via `MessageActionResolver` (SSOT avec l'overlay), et Supprimer
+    /// qui ARME la confirmation — jamais de suppression directe.
+    func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
+        let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+
+        guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
+            XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
+            return
+        }
+        let end = vSource.index(range.lowerBound, offsetBy: 4000, limitedBy: vSource.endIndex) ?? vSource.endIndex
+        let block = String(vSource[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains(".controlGroupStyle(.compactMenu)"),
+            "La rangée d'emojis rapides doit utiliser .controlGroupStyle(.compactMenu) " +
+            "(rangée horizontale système — sans ce style le ControlGroup empile)."
+        )
+        XCTAssertTrue(
+            block.contains("EmojiUsageTracker.topEmojis(count: 4"),
+            "La rangée rapide doit afficher 4 emojis (plafond : au-delà, " +
+            ".compactMenu passe à la ligne)."
+        )
+        XCTAssertTrue(
+            block.contains("MessageActionResolver.primaryActions(ctx)"),
+            "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
+        )
+
+        guard let btnRange = vSource.range(of: "func nativeMenuButton(") else {
+            XCTFail("ConversationView doit exposer nativeMenuButton(_:msg:).")
+            return
+        }
+        // Fenêtre large : `nativeMenuButton` est un switch de 10 cas (~6 k
+        // caractères) ; `.delete` est le DERNIER — la borne doit l'atteindre.
+        let btnEnd = vSource.index(btnRange.lowerBound, offsetBy: 6500, limitedBy: vSource.endIndex) ?? vSource.endIndex
+        let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
+        XCTAssertTrue(
+            btnBlock.contains("Button(role: .destructive)") &&
+            btnBlock.contains("overlayState.deleteConfirmMessageId = msg.id"),
+            "La suppression du menu natif doit être destructive ET armer " +
+            "deleteConfirmMessageId (confirmation) — jamais de suppression directe."
+        )
+    }
+
+    // MARK: - Aperçu du menu natif = la bulle « prise de sa position »
+    //
+    // Feedback device 2026-07-14 : l'aperçu doit PRÉSERVER le format de la
+    // bulle/attachement d'origine, épouser son contenu (pas de « card » bordé)
+    // et se mettre à l'échelle pour tenir à l'écran. Aucun padding de bordure.
+
+    /// L'aperçu rend la bulle « standalone » dans `MessageMenuPreviewContainer`
+    /// (scale-to-fit), la cellule live reste NON-standalone, et le padding qui
+    /// créait l'effet bordure a disparu.
+    func test_messageMenuPreview_usesStandaloneBubble_noBorderPadding() throws {
+        let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(
+            vcSource.contains("MessageMenuPreviewContainer") &&
+            vcSource.contains("makeThemedBubble(true)"),
+            "L'aperçu doit rendre la bulle standalone dans MessageMenuPreviewContainer."
+        )
+        XCTAssertTrue(
+            vcSource.contains("makeThemedBubble(false)"),
+            "Le contenu de cellule doit rester une bulle NON-standalone (row alignée)."
+        )
+        guard let range = vcSource.range(of: ".nativeMessageContextMenu(menu: nativeMenu)") else {
+            XCTFail("La cellule doit attacher .nativeMessageContextMenu(menu: nativeMenu).")
+            return
+        }
+        let end = vcSource.index(range.lowerBound, offsetBy: 600, limitedBy: vcSource.endIndex) ?? vcSource.endIndex
+        let block = String(vcSource[range.lowerBound ..< end])
+        XCTAssertFalse(
+            block.contains(".padding(.horizontal, 6)"),
+            "L'aperçu ne doit plus wrapper la bulle dans un padding (effet bordure banni)."
+        )
+    }
+
+    /// La bulle « standalone » supprime les spacers d'alignement de row et hug
+    /// sa largeur (fixedSize horizontal) — le platter système colle à la bulle.
+    func test_bubbleStandalone_dropsRowSpacers_andHugs() throws {
+        let src = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertTrue(
+            src.contains("if isMe && !standalone { Spacer(minLength: 50) }") &&
+            src.contains("if !isMe && !standalone { Spacer(minLength: 50) }"),
+            "Les spacers d'alignement de row doivent être coupés en mode standalone."
+        )
+        XCTAssertTrue(
+            src.contains(".fixedSize(horizontal: standalone, vertical: false)"),
+            "Standalone doit hugger la largeur (fixedSize horizontal) — wrap conservé via le cap."
+        )
+    }
+
+    // MARK: - Destructif message : suppression média + signalement confirmés
+
+    /// Suppression d'un attachement via « Plus… » : modale de validation
+    /// obligatoire, jamais de suppression directe (feedback device 2026-07-14).
+    func test_media_requestsConfirmation_neverDeletesDirectly() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        XCTAssertTrue(
+            src.contains("showDeleteMediaConfirm = true"),
+            "Le pellet .media doit armer la confirmation (showDeleteMediaConfirm)."
+        )
+        XCTAssertTrue(
+            src.contains(".confirmationDialog(") &&
+            src.contains("isPresented: $showDeleteMediaConfirm"),
+            "MessageMoreSheet doit présenter une modale de confirmation avant toute action média."
+        )
+        guard let branchStart = src.range(of: "else if item == .media {"),
+              let branchEnd = src.range(of: "} else {", range: branchStart.upperBound..<src.endIndex) else {
+            return XCTFail("Branche de tap .media introuvable dans handleMoreItemTap.")
+        }
+        let branch = String(src[branchStart.upperBound..<branchEnd.lowerBound])
+        XCTAssertFalse(
+            branch.contains("onDeleteMedia?()"),
+            "La suppression directe depuis la branche .media (sans confirmation) est bannie."
+        )
+    }
+
+    /// Sous-menu média (§B design 2026-08-11) : Enregistrer / Transférer /
+    /// Supprimer — Supprimer seul destructif, et EN DERNIER (convention HIG).
+    func test_media_confirmDialog_offersSaveForwardDelete_deleteIsLastAndOnlyDestructive() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+
+        XCTAssertTrue(dialog.contains("onSaveMedia?()"), "Le bouton Enregistrer doit appeler onSaveMedia?().")
+        XCTAssertTrue(dialog.contains("onForward?()"), "Le bouton Transférer doit appeler onForward?() (réutilisé, pas de nouveau paramètre).")
+        XCTAssertTrue(dialog.contains("onDeleteMedia?()"), "Le bouton Supprimer doit appeler onDeleteMedia?().")
+        XCTAssertEqual(
+            dialog.components(separatedBy: "role: .destructive").count - 1, 1,
+            "Un seul bouton (Supprimer) doit porter role: .destructive."
+        )
+
+        guard let lastButtonRange = dialog.range(of: "Button(", options: .backwards) else {
+            return XCTFail("Aucun bouton trouvé dans le dialog.")
+        }
+        let lastButton = String(dialog[lastButtonRange.lowerBound...])
+        XCTAssertTrue(
+            lastButton.contains("role: .destructive") && lastButton.contains("onDeleteMedia?()"),
+            "Supprimer doit être le DERNIER bouton du dialog et le seul destructif (convention HIG)."
+        )
+    }
+
+    /// Le bouton Enregistrer du sous-menu média suit la même règle SSOT que
+    /// l'action primaire `.saveMedia` (`MessageActionResolver.saveableAttachmentCount
+    /// == 1`, `MessageActionResolver.swift:69`) : EXACTEMENT UN attachment
+    /// enregistrable. Un message localisation-only (0) ou multi-attachments (>1)
+    /// doit masquer le bouton — jamais l'afficher pour n'en enregistrer qu'un
+    /// silencieusement (ConversationView.swift `onSaveMedia` ne prend que
+    /// `attachments.first(where:)`).
+    func test_media_confirmDialog_hidesSaveButton_whenSaveableAttachmentCountIsNotExactlyOne() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        guard let dialogStart = src.range(of: "isPresented: $showDeleteMediaConfirm"),
+              let dialogEnd = src.range(of: "Button(String(localized: \"common.cancel\"", range: dialogStart.upperBound..<src.endIndex) else {
+            return XCTFail("confirmationDialog du sous-menu média introuvable.")
+        }
+        let dialog = String(src[dialogStart.upperBound..<dialogEnd.lowerBound])
+        guard let saveRange = dialog.range(of: "onSaveMedia?()") else {
+            return XCTFail("Bouton Enregistrer introuvable.")
+        }
+        let beforeSave = String(dialog[dialog.startIndex..<saveRange.lowerBound])
+        XCTAssertTrue(
+            beforeSave.contains("message.attachments.filter({ $0.type != .location }).count == 1"),
+            "Le bouton Enregistrer doit être conditionné à EXACTEMENT UN attachment non-location (même règle que saveableAttachmentCount == 1) — absent, pas inerte, pour 0 ou plusieurs."
+        )
+    }
+
+    /// Signalement d'un message : modale de validation avant l'envoi ;
+    /// `onReport` n'est appelé QUE depuis le bouton destructif de la modale.
+    func test_report_requestsConfirmation_beforeSubmit() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift")
+        XCTAssertTrue(
+            src.contains("showReportConfirm = true"),
+            "Le bouton d'envoi doit armer la confirmation (showReportConfirm)."
+        )
+        XCTAssertTrue(
+            src.contains(".confirmationDialog(") &&
+            src.contains("isPresented: $showReportConfirm"),
+            "MessageReportDetailView doit présenter une modale de confirmation de signalement."
+        )
+        let calls = src.components(separatedBy: "onReport?(").count - 1
+        XCTAssertEqual(
+            calls, 1,
+            "onReport ne doit être appelé qu'une fois — depuis le bouton destructif de la modale."
+        )
+    }
 }

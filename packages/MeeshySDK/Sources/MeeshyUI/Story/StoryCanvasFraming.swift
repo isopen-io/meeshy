@@ -13,9 +13,10 @@ public nonisolated enum StoryCanvasFraming {
     /// Alignement vertical de la carte DANS la région libre quand elle ne la
     /// remplit pas (contrainte largeur active). `.center` = historique ;
     /// `.top` = flush sous le header, le mou entier en bas (directive user
-    /// 2026-07-04 : « la story se place directement en bas de la date
-    /// d'expiration — l'espace entre les deux est trop grand »).
-    public enum VerticalAlignment: Equatable, Sendable { case center, top }
+    /// 2026-07-04) ; `.bottom` = collée juste au-dessus du sheet, le mou entier
+    /// en haut — une carte PAYSAGE (courte) reste ainsi au ras du sheet et
+    /// « remonte » avec lui quand il grandit (directive user 2026-07-20).
+    public enum VerticalAlignment: Equatable, Sendable { case center, top, bottom }
 
     public struct Input: Equatable, Sendable {
         public let viewport: CGSize
@@ -62,8 +63,20 @@ public nonisolated enum StoryCanvasFraming {
     /// sheet). Remplace la spec 2026-06-02 « identique pour tous les outils,
     /// dessin inclus ». Le paramètre est conservé pour documenter la table de
     /// vérité (testée par `StoryCanvasFramingTests.test_isCarded_truthTable`).
-    public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool) -> Bool {
-        bandPresent || textActive
+    ///
+    /// Timeline (2026-07-14) : forcée via `ComposerControlsLayer`'s override
+    /// pendant que `bandStateMachine.state` lui-même reste `.hidden` (le band
+    /// panel est présenté sans passer par le state machine) — `timelineActive`
+    /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
+    /// Default `false` keeps pre-existing call sites source-compatible.
+    /// L'édition texte court-circuite tout : le canvas reste plein écran, les
+    /// contrôles flottent par-dessus. Ce n'est pas un terme de la disjonction
+    /// mais une sortie anticipée — quand l'éditeur s'ouvre depuis la tuile
+    /// Texte, la band n'est pas `.hidden` (elle est seulement masquée et
+    /// non-interactive), et `bandPresent` seul relancerait le carding.
+    public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
+        guard !textActive else { return false }
+        return bandPresent || timelineActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.
@@ -107,6 +120,7 @@ public nonisolated enum StoryCanvasFraming {
             switch input.verticalAlignment {
             case .center: return regionTop + regionHeight / 2
             case .top:    return regionTop + scaledHeight / 2
+            case .bottom: return regionBottom - scaledHeight / 2
             }
         }()
         let offsetY = cardCenterY - input.viewport.height / 2

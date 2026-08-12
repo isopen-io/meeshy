@@ -360,6 +360,26 @@ nonisolated enum CallReliabilityPolicy {
         secondsInAttempt >= budgetSeconds ? .retry : .waiting
     }
 
+    /// Exponential backoff before the next ICE-restart reconnect attempt,
+    /// jittered around the deterministic base. A shared network event (a cell
+    /// tower handoff, a regional TURN outage) puts every affected call through
+    /// this same formula on the same schedule — without jitter they'd all
+    /// re-hit the TURN allocation endpoint in lockstep, the exact thundering
+    /// herd jitter exists to prevent. `unitRandom` must be in `[0, 1)`; callers
+    /// pass `Double.random(in: 0..<1)` in production and a fixed value in
+    /// tests so the result stays deterministic and testable.
+    static func reconnectBackoffSeconds(
+        attempt: Int,
+        unitRandom: Double,
+        cap: TimeInterval = 4.0,
+        jitterFraction: Double = 0.15
+    ) -> TimeInterval {
+        guard attempt > 1 else { return 0.0 }
+        let base = min(pow(2.0, Double(attempt - 1)), cap)
+        let jitter = base * jitterFraction * (unitRandom * 2 - 1)
+        return max(0.0, base + jitter)
+    }
+
     /// Reconnection-trigger arbitration. Reconnection is requested from several
     /// independent sources: NWPathMonitor edges (path lost / restored / interface
     /// handoff), the PC-state delegate, the watchdogs, and the ICE-restart
@@ -422,9 +442,13 @@ nonisolated enum CallReliabilityPolicy {
 
     /// Seconds after quality-monitor start during which the BWE signal is
     /// ignored: GCC ramps from its conservative kick-off estimate (~300 kbps)
-    /// and converges in ~5-10 s on a healthy path — reading the ramp as
-    /// .poor flags a perfectly good call.
-    static let bweWarmupSeconds: TimeInterval = 15
+    /// and, on a high-RTT intercontinental path (Africa↔Asia, 250-450 ms), needs
+    /// ~20-30 s to converge toward true capacity — its additive-increase step is
+    /// per-RTT, so a longer round-trip means a slower ramp. Reading the still-
+    /// climbing estimate as .fair/.poor flagged a perfectly good call mid-call;
+    /// 30 s outlasts a realistic convergence window before min(heuristic, bwe)
+    /// is allowed to constrain the level.
+    static let bweWarmupSeconds: TimeInterval = 30
 
     /// Merge policy for the two quality signals (RTT/loss heuristic vs TWCC
     /// GCC bandwidth estimate). The BWE ladder is calibrated against VIDEO
@@ -572,17 +596,22 @@ nonisolated enum CallReliabilityPolicy {
     }
 
     /// Whether the platform's CallKit stack can actually drive a call.
-    /// Two environments must run calls entirely in-app instead:
+    /// Three cases must run calls entirely in-app instead:
     /// - iOS-app-on-Mac: `reportNewIncomingCall` fails (error 3) and
     ///   `provider:didActivate:` never fires — CallKit half-succeeds then
     ///   leaves a stuck "call in progress".
     /// - Simulator: `provider:didActivate:` never fires either, and
     ///   callservicesd autonomously sends `CXEndCallAction` ~3s after an
     ///   outgoing start, killing the call while still `.ringing`.
-    /// Both take the `[AUDIO_FALLBACK]` self-activation path in
+    /// - China region (Guideline 5 / MIIT): Apple requires CallKit inactive
+    ///   in China. VoIPPushManager never registers for PushKit VoIP there
+    ///   (the OS-enforced source of forced CallKit activation), so this gate
+    ///   only needs to cover the foreground socket-delivered path — see
+    ///   VoIPPushManager.shouldRegisterVoIPPush for the background half.
+    /// All three take the `[AUDIO_FALLBACK]` self-activation path in
     /// `transitionToConnected`.
-    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool) -> Bool {
-        !isiOSAppOnMac && !isSimulator
+    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool, isChinaRegion: Bool) -> Bool {
+        !isiOSAppOnMac && !isSimulator && !isChinaRegion
     }
 
     /// Whether the call UI must render the video layout. True as soon as ANY
@@ -838,6 +867,17 @@ protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data)
+    /// C3 — la session de capture caméra locale a été interrompue par le système
+    /// (ou l'interruption a pris fin). C'est le SEUL fait qui prouve que la
+    /// caméra ne délivre plus : passer en arrière-plan ne l'éteint pas quand un
+    /// `AVPictureInPictureController` est actif et que la session porte
+    /// `isMultitaskingCameraAccessEnabled`.
+    func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool)
+}
+
+extension WebRTCClientDelegate {
+    // Optionnelle : seul `WebRTCService` relaie l'interruption de capture.
+    func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool) {}
 }
 
 // MARK: - Call End Reason
@@ -893,6 +933,17 @@ enum CallDisplayMode: Sendable {
 /// mis à jour au relâchement du drag de repositionnement.
 enum BubbleHorizontalEdge: Sendable { case leading, trailing }
 
+/// Palier de taille du PiP quand la bulle est repliée (`.bubble` displayMode)
+/// — cercle par défaut, agrandi par pincement jusqu'à `.large`. Ordre des
+/// cas = ordre d'agrandissement, `rawValue` sert directement d'axe de
+/// progression continue dans `CallBubbleGestureResolver`.
+enum CallBubbleSizeTier: Int, Sendable, CaseIterable {
+    case circle = 0
+    case small = 1
+    case medium = 2
+    case large = 3
+}
+
 // MARK: - Quality Thresholds
 
 /// Pure namespace of immutable configuration constants. Declared `nonisolated`
@@ -907,25 +958,38 @@ nonisolated enum QualityThresholds {
     /// RTT at or below this value → good audio quality (default bitrate). Above → min bitrate.
     static let goodRTT: Double = 250
     /// RTT above this value → critical video tier (severe congestion).
-    static let poorRTT: Double = 500
+    /// 800 ms round-trip ≈ 400 ms one-way, the ITU-T G.114 conversational
+    /// acceptability limit. Below it a distant intercontinental link
+    /// (Africa↔Asia backbone alone is 155-221 ms RTT before any last mile —
+    /// WACS 155, 2Africa 158, ACC-1 221) stays 'poor', not 'critical'. The
+    /// prior 500 ms boundary flagged healthy long-haul mobile calls as critical.
+    static let poorRTT: Double = 800
 
     static let excellentPacketLoss: Double = 0.01
     static let goodPacketLoss: Double = 0.05
     static let poorPacketLoss: Double = 0.10
 
     // MARK: Video quality tier boundaries (used by VideoQualityLevel.from(rtt:packetLoss:))
-    // Note: excellentRTT (100), poorRTT (500), excellentPacketLoss (0.01),
-    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are shared across both
-    // audio and video classification; the two intermediate video boundaries below
-    // are video-specific.
+    // Note: excellentRTT (100), poorRTT (800), excellentPacketLoss (0.01),
+    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are also referenced by the
+    // video ladder; the two intermediate video boundaries below are video-specific.
+    //
+    // The RTT ladder is calibrated round-trip against ITU-T G.114 one-way targets
+    // (RTT ≈ 2× one-way) and REAL long-haul baselines, NOT a domestic wired link:
+    // an Africa↔Asia submarine backbone is already 155-221 ms RTT before the
+    // mobile last mile, so a healthy intercontinental call routinely sits at
+    // 250-450 ms. The prior boundaries (fair >200, poor >300) painted those calls
+    // orange/red at 00:06. Packet loss — the true congestion signal — keeps its
+    // tighter bands (see below). Web mirror: apps/web/hooks/use-call-quality.ts.
 
-    /// RTT boundary between good and fair video quality tiers.
+    /// RTT boundary between good and fair video quality tiers (~150 ms one-way).
     /// Above this → at most .fair; at or below → may be .good or .excellent.
-    static let videoFairRTT: Double = 200
+    static let videoFairRTT: Double = 300
 
-    /// RTT boundary between fair and poor video quality tiers.
+    /// RTT boundary between fair and poor video quality tiers (~250 ms one-way).
+    /// Sized to keep an Africa↔Asia backbone hop + a mobile last mile in 'fair'.
     /// Above this → at most .poor; at or below → may be .fair or better.
-    static let videoPoorRTT: Double = 300
+    static let videoPoorRTT: Double = 500
 
     /// Packet-loss boundary between fair and poor video quality.
     /// Above this → at most .poor; at or below → may be .fair or better.

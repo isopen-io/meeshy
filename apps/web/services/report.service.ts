@@ -84,6 +84,46 @@ class ReportService {
 
     return response.data?.data as Report;
   }
+
+  /**
+   * Signaler un post
+   */
+  async reportPost(postId: string, reportType: string, reason: string): Promise<Report> {
+    const reportData: CreateReportDTO = {
+      reportedType: 'post',
+      reportedEntityId: postId,
+      reportType,
+      reason
+    };
+
+    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+
+    if (response.data && (response.data as any).success) {
+      return (response.data as any).data;
+    }
+
+    return response.data?.data as Report;
+  }
+
+  /**
+   * Signaler une story
+   */
+  async reportStory(storyId: string, reportType: string, reason: string): Promise<Report> {
+    const reportData: CreateReportDTO = {
+      reportedType: 'story',
+      reportedEntityId: storyId,
+      reportType,
+      reason
+    };
+
+    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+
+    if (response.data && (response.data as any).success) {
+      return (response.data as any).data;
+    }
+
+    return response.data?.data as Report;
+  }
 }
 
 // Instance singleton

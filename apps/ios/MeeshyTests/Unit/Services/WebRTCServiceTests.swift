@@ -314,10 +314,10 @@ final class WebRTCServiceTests: XCTestCase {
 
         // webRTCClient(_:didChangeConnectionState:) is nonisolated and applies
         // the new state on a hopped @MainActor Task — yield until it drains.
-        var observed = await sut.connectionState
+        var observed = sut.connectionState
         for _ in 0..<100 where observed != .connected {
             await Task.yield()
-            observed = await sut.connectionState
+            observed = sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
     }
@@ -1026,8 +1026,12 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 
     func test_switchCamera_chainsOntoPreviousTask() throws {
         let src = try webRTCServiceSource()
-        guard let body = body(of: "func switchCamera()", in: src) else {
-            XCTFail("switchCamera() not found"); return
+        // Ancre sur le nom + la parenthèse ouvrante, pas la liste de paramètres
+        // complète : `switchCamera()` a depuis gagné un `completion:` optionnel,
+        // ce qui cassait ce garde de source sur un simple changement de
+        // signature sans rapport avec le comportement testé ci-dessous.
+        guard let body = body(of: "func switchCamera(", in: src) else {
+            XCTFail("switchCamera(...) not found"); return
         }
         XCTAssertTrue(
             body.contains("switchCameraTask"),
@@ -1042,7 +1046,10 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 
     func test_switchToCamera_chainsOntoPreviousTask() throws {
         let src = try webRTCServiceSource()
-        guard let body = body(of: "func switchToCamera(uniqueID: String)", in: src) else {
+        // Ancre sur le nom + la parenthèse ouvrante, pas la liste de paramètres
+        // complète : `switchToCamera(uniqueID:)` a depuis gagné un `completion:`
+        // optionnel (même rationale que `switchCamera()` ci-dessus).
+        guard let body = body(of: "func switchToCamera(", in: src) else {
             XCTFail("switchToCamera(uniqueID:) not found"); return
         }
         XCTAssertTrue(

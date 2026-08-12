@@ -1,7 +1,20 @@
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostAuthor } from '@meeshy/shared/types/post';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
+
+// Résolution du bloc auteur affiché d'une story — SOURCE UNIQUE.
+// Délègue le nom à `getUserDisplayName` (displayName non-vide > username >
+// fallback) plutôt qu'un `??` brut qui laissait passer un displayName vide ou
+// blanc et rendait un libellé de bulle vide. L'avatar vide (`''`) est normalisé
+// en `undefined` pour ne jamais émettre un `<img src="">`.
+function toDisplayAuthor(author?: PostAuthor | null): { name: string; avatar?: string } {
+  return {
+    name: getUserDisplayName(author, 'Unknown'),
+    avatar: author?.avatar || undefined,
+  };
+}
 
 // ============================================================================
 // Shared StoryEffects shape (used by StoryViewer)
@@ -110,6 +123,8 @@ function parseMediaObjects(value: unknown): StoryMediaObjectData[] | undefined {
       rotation: typeof r.rotation === 'number' ? r.rotation : 0,
       isBackground: r.isBackground === true,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
+      // Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+      sourceStart: typeof r.sourceStart === 'number' ? r.sourceStart : undefined,
     });
   }
   return result.length > 0 ? result : undefined;
@@ -130,6 +145,16 @@ function parseAudioObjects(value: unknown): StoryAudioObjectData[] | undefined {
       volume: typeof r.volume === 'number' ? r.volume : 1,
       isBackground: r.isBackground === true,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
+      // Fenêtre TIMELINE : quand la piste joue. Elle n'était pas lue du tout,
+      // donc aucune fenêtre temporelle audio n'atteignait le lecteur web.
+      startTime: typeof r.startTime === 'number' ? r.startTime : undefined,
+      duration: typeof r.duration === 'number' ? r.duration : undefined,
+      // Booléen STRICT : le blob vient du réseau, une chaîne « yes » n'est pas
+      // une boucle.
+      loop: r.loop === true ? true : undefined,
+      // Fenêtre de SOURCE : où l'on entre dans le fichier.
+      sourceStart: typeof r.sourceStart === 'number' ? r.sourceStart : undefined,
+      intrinsicDuration: typeof r.intrinsicDuration === 'number' ? r.intrinsicDuration : undefined,
     });
   }
   return result.length > 0 ? result : undefined;
@@ -147,10 +172,7 @@ export function postToStoryItem(
   const author = post.author;
   return {
     id: post.id,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     thumbnailUrl: post.media?.[0]?.thumbnailUrl ?? post.media?.[0]?.fileUrl ?? undefined,
     hasUnviewed: !viewedIds.has(post.id),
     isOwn: post.authorId === currentUserId,
@@ -175,10 +197,7 @@ export function groupToStoryItem(
   const author = first.author;
   return {
     id: first.authorId,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     thumbnailUrl: first.media?.[0]?.thumbnailUrl ?? first.media?.[0]?.fileUrl ?? undefined,
     hasUnviewed: group.some((post) => !viewedIds.has(post.id)),
     isOwn: first.authorId === currentUserId,
@@ -244,22 +263,37 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
     ? DEFAULT_STATIC_DURATION_S + (totalWords - LONG_TEXT_THRESHOLD_WORDS) * LONG_TEXT_SECONDS_PER_WORD
     : DEFAULT_STATIC_DURATION_S;
 
-  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S);
+  // MIROIR EXACT de `StoryEffects.contentDerivedDuration`
+  // (packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1323-1337).
+  // Trois termes, dans cet ordre. Toute divergence se voit à la lecture : la
+  // slide se coupe avant la fin d'un média, ou s'étire au-delà.
 
-  // Background media looped up to the target (or its natural duration if longer).
+  // 1. La plus longue FENÊTRE, tous types confondus. `startTime + duration` et
+  //    non `duration` seule : une vidéo de 4 s posée à 10 s finit à 14 s. Et
+  //    les fenêtres AUDIO comptent autant que les médias — elles n'entraient
+  //    dans aucun terme jusqu'ici.
+  const windowEnd = (o: Record<string, unknown>): number | undefined => {
+    const d = positiveNumber(o.duration);
+    if (d === undefined) return undefined;
+    return (positiveNumber(o.startTime) ?? 0) + d;
+  };
+  const longestData = [...mediaObjects, ...audioObjects]
+    .map(windowEnd)
+    .filter((v): v is number => v !== undefined)
+    .reduce((a, b) => Math.max(a, b), 0);
+
+  // 2. La cible inclut la plus longue fenêtre — sans elle, l'arrondi de boucle
+  //    ci-dessous se calcule sur une cible trop basse.
+  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S, longestData);
+
+  // 3. Le fond boucle jusqu'à couvrir la cible, en répétitions ENTIÈRES.
   const bgResult = rawMediaDur === undefined
     ? target
     : rawMediaDur >= target
       ? rawMediaDur
       : Math.ceil(target / rawMediaDur) * rawMediaDur;
 
-  // Foreground (non-bg) videos: the slide must at least cover their natural length.
-  const fgMediaMax = mediaObjects
-    .filter((m) => m.isBackground !== true)
-    .map((m) => positiveNumber(m.duration) ?? 0)
-    .reduce((a, b) => Math.max(a, b), 0);
-
-  return Math.round(Math.max(bgResult, fgMediaMax) * 1000);
+  return Math.round(Math.max(bgResult, longestData) * 1000);
 }
 
 export function postToStoryData(post: Post): StoryData {
@@ -311,10 +345,7 @@ export function postToStoryData(post: Post): StoryData {
   return {
     id: post.id,
     authorId: post.authorId,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     content: post.content ?? undefined,
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,

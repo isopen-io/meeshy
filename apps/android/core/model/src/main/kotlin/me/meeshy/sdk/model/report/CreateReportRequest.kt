@@ -45,11 +45,40 @@ public object ReportRequestBuilder {
      * [details] is [sanitizeDetails]-normalised: trimmed, blank → `null` (a whitespace-only note
      * is a no-op, never an empty string on the wire), and capped at [MAX_DETAILS_LENGTH].
      */
-    public fun forUser(userId: String, reason: ReportReason, details: String?): CreateReportRequest? {
-        val id = userId.trim()
+    public fun forUser(userId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("user", userId, reason, details)
+
+    /**
+     * Builds a message-report body, or `null` when [messageId] is blank (nothing to report — inert).
+     * [details] is [sanitizeDetails]-normalised exactly as for [forUser].
+     */
+    public fun forMessage(messageId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("message", messageId, reason, details)
+
+    /**
+     * Builds a post-report body — le schema gateway (`admin/reports.ts`) accepte
+     * `'post'` au meme titre que `'user'`/`'message'`. Memes gardes que [forUser].
+     */
+    public fun forPost(postId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("post", postId, reason, details)
+
+    /**
+     * Builds a story-report body (`'story'` cote gateway). Une story EST un post en
+     * base, mais le type wire distinct garde le triage moderation lisible.
+     */
+    public fun forStory(storyId: String, reason: ReportReason, details: String?): CreateReportRequest? =
+        build("story", storyId, reason, details)
+
+    private fun build(
+        reportedType: String,
+        entityId: String,
+        reason: ReportReason,
+        details: String?,
+    ): CreateReportRequest? {
+        val id = entityId.trim()
         if (id.isEmpty()) return null
         return CreateReportRequest(
-            reportedType = "user",
+            reportedType = reportedType,
             reportedEntityId = id,
             reportType = reason.wireValue,
             reason = sanitizeDetails(details),

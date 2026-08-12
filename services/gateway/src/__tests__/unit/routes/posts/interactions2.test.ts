@@ -118,6 +118,20 @@ function makePrisma() {
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`). Pas un
+      // repost (`isQuote:false, repostOfId:null`) — `resolveInteractionTarget`
+      // (tâche 9) renvoie donc directement ce post, `id` compris : la
+      // redirection repost simple → racine est couverte séparément dans
+      // `interactions-audience.test.ts`.
+      findFirst: jest.fn<any>().mockResolvedValue({
+        id: POST_ID, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        isQuote: false, repostOfId: null, originalRepostOfId: null,
+      }),
+      // Résolution repostOfId/originalRepostOfId pour le crédit de racine du
+      // batch d'impressions (chantier reposts cohérents, tâche 1) — par
+      // défaut aucun repost dans le batch. L'unitaire replie sa résolution
+      // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   } as any;
 }

@@ -82,6 +82,16 @@ async function buildApp(opts: {
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
+  // Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
+  // (voir routes/voice/translation.ts). Ce double reproduit le comportement
+  // réel de `createUnifiedAuthMiddleware({ requireAuth: true })` : 401
+  // immédiat si aucune identité vérifiée n'a été posée sur `request.user`.
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!req.user?.userId) {
+      reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+  });
+
   app.addHook('preHandler', async (req) => {
     (req as any).user = { userId: USER_ID, role: 'user' };
   });
@@ -322,6 +332,13 @@ async function buildAppWithMultipart(opts: {
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 5 } });
+
+  // Voir commentaire équivalent dans buildApp() ci-dessus.
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!req.user?.userId) {
+      reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+  });
 
   // @fastify/multipart leaves request.body = null; AJV would reject "body must be object".
   // Fix it in preValidation so AJV sees {} and the handler runs normally.

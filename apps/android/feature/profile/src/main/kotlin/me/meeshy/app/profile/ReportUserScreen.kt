@@ -194,6 +194,9 @@ private fun reasonLabel(reason: ReportReason): String = stringResource(
         ReportReason.HARASSMENT -> R.string.report_reason_harassment
         ReportReason.INAPPROPRIATE -> R.string.report_reason_inappropriate
         ReportReason.IMPERSONATION -> R.string.report_reason_impersonation
-        ReportReason.OTHER -> R.string.report_reason_other
+        // VIOLENCE / HATE_SPEECH are message-only reasons — never in the user-report
+        // `ReportReason.ordered` list, so these arms are unreachable here and exist only to keep
+        // the `when` exhaustive after the enum was widened for the report-a-message flow.
+        ReportReason.OTHER, ReportReason.VIOLENCE, ReportReason.HATE_SPEECH -> R.string.report_reason_other
     },
 )

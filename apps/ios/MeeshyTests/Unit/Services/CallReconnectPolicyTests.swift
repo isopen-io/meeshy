@@ -50,6 +50,89 @@ final class ReconnectTriggerPolicyTests: XCTestCase {
     }
 }
 
+// MARK: - Reconnect backoff jitter
+
+/// A deterministic exponential backoff means every call affected by the same
+/// shared network event (cell-tower handoff, a regional TURN outage) re-hits
+/// the TURN allocation endpoint on the exact same schedule — the thundering
+/// herd jitter exists to avoid. `unitRandom` is injected so the jittered
+/// output stays deterministic and testable.
+@MainActor
+final class ReconnectBackoffPolicyTests: XCTestCase {
+
+    func test_reconnectBackoffSeconds_firstAttempt_isZero_regardlessOfRandom() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 1, unitRandom: 0.0),
+            0.0
+        )
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 1, unitRandom: 0.999),
+            0.0
+        )
+    }
+
+    func test_reconnectBackoffSeconds_midpointRandom_matchesUnjitteredBase() {
+        // unitRandom == 0.5 is the jitter midpoint — no perturbation applied.
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 2, unitRandom: 0.5),
+            2.0,
+            accuracy: 0.0001
+        )
+    }
+
+    func test_reconnectBackoffSeconds_maxRandom_addsPositiveJitter() {
+        // base = min(2^1, 4) = 2.0; unitRandom = 1.0 maps to the formula's
+        // +jitterFraction extreme: jitter = 2.0 * 0.15 * (2*1 - 1) = 0.3.
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 2, unitRandom: 1.0),
+            2.3,
+            accuracy: 0.0001
+        )
+    }
+
+    func test_reconnectBackoffSeconds_minRandom_subtractsNegativeJitter() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 2, unitRandom: 0.0),
+            1.7,
+            accuracy: 0.0001
+        )
+    }
+
+    func test_reconnectBackoffSeconds_beyondCap_baseClampsBeforeJitter() {
+        // 2^4 = 16, clamped to the 4.0s cap before jitter is applied.
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 5, unitRandom: 0.5),
+            4.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 5, unitRandom: 1.0),
+            4.6,
+            accuracy: 0.0001
+        )
+    }
+
+    func test_reconnectBackoffSeconds_neverNegative() {
+        XCTAssertGreaterThanOrEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(attempt: 2, unitRandom: 0.0, jitterFraction: 5.0),
+            0.0
+        )
+    }
+
+    func test_reconnectBackoffSeconds_customCapAndJitter_areHonored() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.reconnectBackoffSeconds(
+                attempt: 3,
+                unitRandom: 1.0,
+                cap: 10.0,
+                jitterFraction: 0.5
+            ),
+            4.0 * 1.5,
+            accuracy: 0.0001
+        )
+    }
+}
+
 // MARK: - TURN refresh delay
 
 /// A degenerate TTL from the gateway must clamp to the minimum refresh cadence,
@@ -321,19 +404,39 @@ final class StuckMutedFallbackPolicyTests: XCTestCase {
 final class PlatformCallKitPolicyTests: XCTestCase {
     func test_platformUsesCallKit_physicalDevice_returnsTrue() {
         XCTAssertTrue(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: false, isSimulator: false
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: false
         ))
     }
 
     func test_platformUsesCallKit_iosAppOnMac_returnsFalse() {
         XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: true, isSimulator: false
+            isiOSAppOnMac: true, isSimulator: false, isChinaRegion: false
         ))
     }
 
     func test_platformUsesCallKit_simulator_returnsFalse() {
         XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: false, isSimulator: true
+            isiOSAppOnMac: false, isSimulator: true, isChinaRegion: false
+        ))
+    }
+
+    // Guideline 5 (MIIT) — CallKit must be inactive in China even on a
+    // physical, non-simulator device.
+    func test_platformUsesCallKit_chinaRegion_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: true
+        ))
+    }
+
+    func test_platformUsesCallKit_chinaRegionButAlsoSimulator_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: true, isChinaRegion: true
+        ))
+    }
+
+    func test_platformUsesCallKit_nonChinaRegion_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: false
         ))
     }
 }

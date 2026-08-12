@@ -85,4 +85,49 @@ class ReportRepositoryTest {
         assertThat(result).isNull()
         coVerify(exactly = 0) { api.create(any()) }
     }
+
+    @Test
+    fun `reportMessage delivers a message-typed request and returns success`() = runTest {
+        val api = mockk<ReportApi>()
+        val captured = slot<CreateReportRequest>()
+        coEvery { api.create(capture(captured)) } returns ApiResponse(success = true, data = ReportAck(id = "r2"))
+
+        val result = repo(sessionWith("me"), api).reportMessage("m7", ReportReason.HATE_SPEECH, "  a slur  ")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(captured.captured.reportedType).isEqualTo("message")
+        assertThat(captured.captured.reportedEntityId).isEqualTo("m7")
+        assertThat(captured.captured.reportType).isEqualTo("hate_speech")
+        assertThat(captured.captured.reason).isEqualTo("a slur")
+    }
+
+    @Test
+    fun `reportMessage surfaces a network failure`() = runTest {
+        val api = mockk<ReportApi>()
+        coEvery { api.create(any()) } returns ApiResponse(success = false, error = "boom")
+
+        val result = repo(sessionWith("me"), api).reportMessage("m7", ReportReason.VIOLENCE, null)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun `reportMessage is inert with no active session`() = runTest {
+        val api = mockk<ReportApi>(relaxed = true)
+
+        val result = repo(sessionWith(null), api).reportMessage("m7", ReportReason.SPAM, "x")
+
+        assertThat(result).isNull()
+        coVerify(exactly = 0) { api.create(any()) }
+    }
+
+    @Test
+    fun `reportMessage is inert when the message id is blank`() = runTest {
+        val api = mockk<ReportApi>(relaxed = true)
+
+        val result = repo(sessionWith("me"), api).reportMessage("   ", ReportReason.SPAM, "x")
+
+        assertThat(result).isNull()
+        coVerify(exactly = 0) { api.create(any()) }
+    }
 }

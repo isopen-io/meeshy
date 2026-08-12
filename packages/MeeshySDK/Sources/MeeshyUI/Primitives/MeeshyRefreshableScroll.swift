@@ -187,7 +187,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
         // Petite fenetre ou l'utilisateur voit que c'est fini avant
         // que l'indicator se replie. Aligne avec l'experience originale
         // de la liste de conversations (350ms).
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        try? await Task.sleep(for: .seconds(0.4))
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             pullPhase = .idle
         }

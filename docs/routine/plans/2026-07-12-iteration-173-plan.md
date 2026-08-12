@@ -1,47 +1,51 @@
-# Iteration 173 — Plan : durcir `parseMessageLinks` contre les chevauchements
+# Iteration 173 — Plan d'implémentation (2026-07-12)
 
-## Objectifs
-1. Éliminer les parts chevauchantes/dupliquées quand une URL contient un
-   segment `m+<token>` (violation de l'invariant de reconstruction F91).
-2. Exprimer la priorité réelle (URL ⊃ mshy interne) par une résolution
-   d'intervalles, pas par une égalité d'index fragile.
-3. Résoudre l'erreur TS pré-existante du même fichier sans élargir le périmètre.
+## Objectives
+Empêcher `CallManager.handleCallEnded` d'empiler une offre « Réessayer »
+(`pendingRetry`) sur la sonnerie entrante promue quand l'appel ACTIF tombe
+(raison transitoire) alors qu'un appel est en attente (call-waiting busy-path).
 
-## Modules affectés
-- `apps/web/lib/utils/link-parser.ts` (implémentation).
-- `apps/web/__tests__/lib/link-parser.test.ts` (couverture régression).
+## Affected modules
+- `apps/web/components/video-call/CallManager.tsx` (prod, `handleCallEnded`).
+- `apps/web/__tests__/components/video-call/CallManager.callWaiting.test.tsx`
+  (2 tests + `clearCallRetry()` dans `beforeEach`).
 
-## Phases
-- [x] **P1 — RED** : 5 tests de chevauchement (chemin + query + reconstruction
-      + intervalles disjoints + m+ autonome hors URL). Confirmés rouges sur le
-      code d'origine, 14 existants verts.
-- [x] **P2 — GREEN** : collecte unifiée des candidats + tri (début ↑, span ↓,
-      priorité) + balayage glouton `start >= coveredEnd`. Suppression du
-      dédoublonnage exact-index et du `sort` redondant.
-- [x] **P3 — Tech-debt** : `createTrackingLink` → `trackingLink?: { token: string }`.
-- [x] **P4 — Validation** : jest lib (34 suites), preprocessContent (8),
-      `tsc --noEmit` (0 erreur link-parser).
+## Implementation phases
+1. **RED** — 2 tests call-waiting : promotion sur end (existant, vert) +
+   suppression du retry sur end transitoire pendant attente (échec : `pendingRetry`
+   posé). → 1 échec.
+2. **GREEN** — garde `!waitingCall &&` sur le bloc `isRetryableCallFailure`. → vert.
+3. **REFACTOR** — aucun (garde minimale, commentaire explicatif ajouté).
 
-## Dépendances
-Aucune (fonction pure, aucun changement de contrat public : signature et types
-de `ParsedLink` inchangés).
+## Dependencies
+Aucune. Isolé au composant web `CallManager` + son test. Aucun changement
+gateway/shared/SDK/iOS.
 
-## Risques & rollback
-- Risque : régression sur un cas non-chevauchant. Mitigé par les 14 tests
-  existants + 826 tests de `__tests__/lib/` restés verts.
-- Rollback : `git revert` du commit (fichier + test isolés).
+## Estimated risks
+Très faibles. Le chemin retry hors call-waiting est inchangé (garde `false` quand
+`waitingCall` est `null`) — couvert par `CallManager.callEndedRetry.test.tsx`.
 
-## Critères de validation
-- [x] 5 nouveaux tests rouges avant / verts après.
-- [x] Zéro régression sur les suites lib + consommateur.
-- [x] Aucune nouvelle erreur `tsc`.
-- [x] Invariant F91 (concat des `content` == message ; intervalles disjoints
-      croissants) vérifié par assertion pour le cas chevauchant.
+## Rollback strategy
+Revert du commit unique. Aucun état persisté impacté.
 
-## Statut : COMPLET
+## Validation criteria
+- [x] RED : le test retry-suppression échoue avant le fix
+      (`pendingRetry = {conversationId:'conv-active', type:'video'}`).
+- [x] GREEN : 8/8 call-waiting + 8/8 callEndedRetry verts après le fix.
+- [x] `__tests__/components/video-call/` : 11 suites / 49 tests verts.
+- [x] `tsc --noEmit` : aucune nouvelle erreur (baseline pristine identique).
 
-## Améliorations futures
-- Envisager d'exposer la résolution gloutonne d'intervalles comme util partagé
-  si d'autres parseurs (mentions, hashtags) apparaissent.
-- Candidats tech-debt tracés hors périmètre : `getTranslationFromJSON`
-  (casse-insensible, iter-130), `sanitizeFileName` overlong (F69).
+## Completion status
+**COMPLETE** — implémenté, testé (RED→GREEN), documenté. Prêt à pousser sur
+`claude/brave-archimedes-a3glpl`.
+
+## Progress tracking
+- Analyse : `docs/routine/analyses/2026-07-12-iteration-173-analyse.md`.
+- Commit unique regroupant prod + test + docs routine.
+
+## Future improvements
+- **iOS parité** : vérifier que `CallManager` iOS (busy-path
+  `endCurrentAndAnswerPending` + retry) n'a pas la même interaction retry↔promotion
+  (non testable ici, pas de toolchain Swift). À auditer lors d'une itération iOS.
+- **P1 backlog device-log** (`tasks/2026-07-12-device-log-priorities.md`) : #5/#6/#8
+  restent iOS-side (batcher engagement, chunk presence) — hors périmètre TS.

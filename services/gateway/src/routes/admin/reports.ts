@@ -13,7 +13,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Schemas de validation Zod
 const createReportSchema = z.object({
-  reportedType: z.enum(['message', 'user', 'conversation', 'community']),
+  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound']),
   reportedEntityId: z.string().min(1, 'ID de l\'entite requis'),
   reporterId: z.string().optional(),
   reporterName: z.string().optional(),
@@ -150,7 +150,9 @@ export async function reportRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const limit = parseInt(query.limit) || 10;
+      // Clamp via the shared helper: floors to 1, caps at 100 (never leaks an
+      // unbounded client `limit` into the DB query), and treats `limit=0` as 1.
+      const { limit } = validatePagination('0', query.limit, { defaultLimit: 10, maxLimit: 100 });
 
       const reports = await reportService.getRecentReports(limit);
 

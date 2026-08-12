@@ -60,7 +60,7 @@ final class AttachmentUploader: AttachmentUploading {
         }
 
         let decoded = try JSONDecoder().decode(UploadResponse.self, from: responseData)
-        guard let urlString = decoded.data.attachments.first?.url,
+        guard let urlString = decoded.data.attachments.first?.fileUrl,
               let avatarURL = URL(string: urlString) else {
             throw APIError.noData
         }
@@ -102,5 +102,10 @@ final class AttachmentUploader: AttachmentUploading {
         let data: UploadData
     }
     private struct UploadData: Decodable { let attachments: [UploadedAttachment] }
-    private struct UploadedAttachment: Decodable { let url: String }
+    // The gateway's `messageAttachmentSchema` (packages/shared/types/api-schemas.ts)
+    // serializes the accessible URL under `fileUrl` — there is no `url` key on
+    // this response. Requiring `url` here made `JSONDecoder().decode(UploadResponse.self, ...)`
+    // above throw `DecodingError.keyNotFound` on every single avatar upload,
+    // before the code ever reached the `.noData` guard below.
+    private struct UploadedAttachment: Decodable { let fileUrl: String }
 }

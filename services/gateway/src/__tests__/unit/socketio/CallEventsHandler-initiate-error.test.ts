@@ -283,6 +283,69 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Audit gateway (2026-07-28) — the ack's `error` field must be the
+  // documented `{code, message}` object (packages/shared/types/video-call.ts
+  // `CallInitiateAck`), never a bare string reached via `as unknown as`.
+  // -------------------------------------------------------------------------
+
+  describe('ack.error is always a {code, message} object, never a bare string', () => {
+    it('acks {code: NOT_AUTHENTICATED, message} when userId is undefined', async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => undefined);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        success: false,
+        error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' }
+      });
+    });
+
+    it('acks {code: NOT_A_PARTICIPANT, message} when resolveParticipantId returns null', async () => {
+      const prisma = {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+      } as unknown as PrismaClient;
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        success: false,
+        error: { code: 'NOT_A_PARTICIPANT', message: 'You are not a participant in this conversation' }
+      });
+    });
+
+    it('acks {code: CALL_ALREADY_ACTIVE, message} preserving the CODE:message split from a thrown Error', async () => {
+      mockInitiateCall.mockRejectedValue(new Error('CALL_ALREADY_ACTIVE: A call is already active'));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'CALL_ALREADY_ACTIVE', message: 'A call is already active' }
+        })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // call:initiate happy path — covers callerName and offline push branches
   // -------------------------------------------------------------------------
 
@@ -496,6 +559,309 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
       // No offline member → sendToUser must not be called
       expect(mockSendToUser).not.toHaveBeenCalled();
       expect(mockInitiateCall).toHaveBeenCalled();
+    });
+
+    // Guideline 5 (MIIT) — CallKit must be inactive in China. iOS never
+    // registers PushKit VoIP for China-region devices, so the gateway must
+    // route those callees' incoming-call push through 'apns' instead of
+    // 'voip' — same payload, no CallKit involved.
+    it('routes the offline push via types: [\'apns\'] when the callee\'s deviceCountry is CN', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-cn';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'CN',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['apns'] })
+      );
+    });
+
+    it('routes the offline push via types: [\'voip\'] when the callee\'s deviceCountry is not CN (unchanged behavior)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-fr';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'FR',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['voip'] })
+      );
+    });
+
+    it('routes the offline push via types: [\'voip\'] when deviceCountry is null (conservative default)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-nocountry';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: null,
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['voip'] })
+      );
+    });
+
+    it('preserves the exact same payload (title/body/callId/data) regardless of the routing type', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-payload-check';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'CN',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          types: ['apns'],
+          bypassDnd: true,
+          payload: expect.objectContaining({
+            title: 'Alice Smith is calling you',
+            body: 'Audio call',
+            callId: CALL_ID,
+            data: expect.objectContaining({
+              type: 'call',
+              callId: CALL_ID,
+              conversationId: CONV_ID,
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // GW6(b) — no active voip token → standard APNs alert fallback (Mac,
+  // expired PushKit token). The alert reuses the SAME payload (data.type
+  // 'call' + callId + iceServers + isVideo) so tapping it routes through the
+  // existing `.incomingCallAlert` navigation on iOS.
+  // -------------------------------------------------------------------------
+
+  describe('GW6(b) — alert fallback when callee has no active voip token', () => {
+    function makePrismaWithVoipTokens(offlineMemberId: string, voipUserIds: string[]) {
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).pushToken = {
+        findMany: jest.fn<any>().mockResolvedValue(voipUserIds.map(userId => ({ userId }))),
+      };
+      return prisma;
+    }
+
+    it('falls back to a standard apns alert when the callee has no active voip token', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-no-voip-token';
+      const prisma = makePrismaWithVoipTokens(offlineMemberId, []);
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          types: ['apns'],
+          payload: expect.objectContaining({
+            callId: CALL_ID,
+            data: expect.objectContaining({
+              type: 'call',
+              callId: CALL_ID,
+              conversationId: CONV_ID,
+              isVideo: 'false',
+              iceServers: expect.any(String),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('keeps the voip push type when the callee has an active voip token', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-with-voip-token';
+      const prisma = makePrismaWithVoipTokens(offlineMemberId, [offlineMemberId]);
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          types: ['voip'],
+        })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // GW6(c) — stale-foreground guard: a socket that claims appForeground=true
+  // but whose last inbound packet is older than the staleness window is a
+  // zombie (app crashed without emitting presence:app-state=false). It must
+  // NOT suppress the VoIP push — the client dedups by callId anyway.
+  // -------------------------------------------------------------------------
+
+  describe('GW6(c) — stale appForeground socket still gets the call push', () => {
+    function makeIoWithMemberSocket(socketData: Record<string, unknown>) {
+      const memberSocket = { id: 'member-socket-1', emit: jest.fn<any>(), data: socketData };
+      const fetchSockets = jest.fn<any>().mockResolvedValue([memberSocket]);
+      const io = {
+        to: jest.fn<any>().mockReturnValue({ emit: jest.fn<any>() }),
+        in: jest.fn<any>().mockReturnValue({ fetchSockets }),
+      };
+      return { io, memberSocket };
+    }
+
+    it('sends the call push when appForeground=true but the socket is stale (>30s)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const memberId = 'user-zombie-foreground';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: memberId }]),
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIoWithMemberSocket({
+        appForeground: true,
+        lastSeenAt: Date.now() - 60_000,
+      });
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: memberId })
+      );
+    });
+
+    it('does NOT push when appForeground=true and the socket is fresh (in-app UI rings)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const memberId = 'user-live-foreground';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: memberId }]),
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIoWithMemberSocket({
+        appForeground: true,
+        lastSeenAt: Date.now() - 1_000,
+      });
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).not.toHaveBeenCalled();
     });
   });
 });

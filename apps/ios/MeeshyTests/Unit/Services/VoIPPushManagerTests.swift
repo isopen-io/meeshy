@@ -440,4 +440,132 @@ final class VoIPPushManagerTests: XCTestCase {
             cooldown: 300)
         XCTAssertFalse(skip, "past the cooldown, force a fresh cycle (reactivation net)")
     }
+
+    // MARK: - Guideline 5 (MIIT) — shouldRegisterVoIPPush (China CallKit compliance)
+
+    func test_shouldRegisterVoIPPush_iPhoneNonChina_returnsTrue() {
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "FR")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iPhoneChina_returnsFalse() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "CN"),
+            "PushKit VoIP must never be registered for China-region devices — Apple forces " +
+            "reportNewIncomingCall (CallKit) on every VoIP push with no per-push opt-out."
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iosAppOnMac_returnsFalse_regardlessOfRegion() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "FR")
+        )
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "CN")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_nilRegion_returnsTrue() {
+        // Conservative default: an indeterminate region (simulator, region
+        // unavailable) must not silently disable VoIP push outside China.
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: nil)
+        )
+    }
+
+    // MARK: - G4c — POST failure queues the token for retry
+
+    private final class MockVoIPTokenRegistrar: VoIPTokenRegistering {
+        /// FIFO of per-call results, falling back to `defaultResult`.
+        var results: [Result<Void, Error>] = []
+        var defaultResult: Result<Void, Error> = .success(())
+        private(set) var registerCallCount = 0
+        private(set) var lastBody: RegisterDeviceTokenRequest?
+
+        func register(_ body: RegisterDeviceTokenRequest) async throws {
+            registerCallCount += 1
+            lastBody = body
+            let result = results.isEmpty ? defaultResult : results.removeFirst()
+            try result.get()
+        }
+    }
+
+    private struct TestError: Error {}
+
+    private func makeRetrySUT(
+        registrar: MockVoIPTokenRegistrar,
+        authTokenAvailable: Bool = true
+    ) -> (sut: VoIPPushManager, store: MockVoIPTokenStore) {
+        let store = MockVoIPTokenStore()
+        let sut = VoIPPushManager(
+            tokenStore: store,
+            registrar: registrar,
+            authTokenAvailable: { authTokenAvailable }
+        )
+        return (sut, store)
+    }
+
+    func test_registerTokenWithBackend_networkFailure_queuesTokenForRetry() async {
+        let registrar = MockVoIPTokenRegistrar()
+        registrar.defaultResult = .failure(TestError())
+        let (sut, store) = makeRetrySUT(registrar: registrar)
+
+        await sut.debug_registerTokenWithBackend("tokX")
+
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(sut.debug_pendingTokenToRegister, "tokX",
+                       "A failed POST must park the token for a later retry, not drop it")
+        XCTAssertNil(sut.debug_lastRegisteredRecord,
+                     "A failed POST must not arm the cooldown")
+        XCTAssertNil(store.snapshot(),
+                     "A failed POST must not persist the token as registered")
+    }
+
+    func test_retryPendingTokenRegistration_afterFailure_retriesAndClearsPending() async {
+        let registrar = MockVoIPTokenRegistrar()
+        registrar.results = [.failure(TestError()), .success(())]
+        let (sut, _) = makeRetrySUT(registrar: registrar)
+
+        await sut.debug_registerTokenWithBackend("tokY")
+        XCTAssertEqual(sut.debug_pendingTokenToRegister, "tokY")
+
+        await sut.retryPendingTokenRegistration()
+
+        XCTAssertEqual(registrar.registerCallCount, 2)
+        XCTAssertNil(sut.debug_pendingTokenToRegister,
+                     "A successful retry must clear the parked token")
+        XCTAssertEqual(sut.debug_lastRegisteredRecord?.token, "tokY")
+    }
+
+    func test_retryPendingTokenRegistration_noPendingToken_doesNothing() async {
+        let registrar = MockVoIPTokenRegistrar()
+        let (sut, _) = makeRetrySUT(registrar: registrar)
+
+        await sut.retryPendingTokenRegistration()
+
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_registerTokenWithBackend_successWithinCooldown_skipsSecondPost() async {
+        let registrar = MockVoIPTokenRegistrar()
+        let (sut, _) = makeRetrySUT(registrar: registrar)
+
+        await sut.debug_registerTokenWithBackend("tokZ")
+        await sut.debug_registerTokenWithBackend("tokZ")
+
+        XCTAssertEqual(registrar.registerCallCount, 1,
+                       "Same token inside the cooldown window must not re-POST")
+        XCTAssertNil(sut.debug_pendingTokenToRegister)
+    }
+
+    func test_registerTokenWithBackend_noAuthToken_queuesWithoutPosting() async {
+        let registrar = MockVoIPTokenRegistrar()
+        let (sut, _) = makeRetrySUT(registrar: registrar, authTokenAvailable: false)
+
+        await sut.debug_registerTokenWithBackend("tokPreLogin")
+
+        XCTAssertEqual(registrar.registerCallCount, 0)
+        XCTAssertEqual(sut.debug_pendingTokenToRegister, "tokPreLogin")
+    }
 }

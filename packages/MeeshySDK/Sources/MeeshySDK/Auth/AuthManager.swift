@@ -7,7 +7,7 @@ import os
 /// Immutable capture of the three profile-editable fields, returned by
 /// `AuthManaging.applyLocalProfileChanges` and consumed by
 /// `restoreLocalProfileSnapshot` for optimistic-rollback flows.
-public struct ProfileSnapshot: Sendable, Equatable {
+public struct ProfileSnapshot: Sendable, Equatable, Codable {
     public let displayName: String?
     public let bio: String?
     public let avatarUrl: String?
@@ -66,6 +66,13 @@ public protocol AuthManaging: AnyObject {
     /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
     /// `.exhausted` for the corresponding `updateProfile` row.
     func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
+
+    /// Reflects a confirmed `voicePublic` change onto `currentUser` (in-memory
+    /// publish + keychain persist) after a successful `PATCH /users/me`. Without
+    /// it, a screen that re-derives its toggle from `currentUser.voicePublic`
+    /// (e.g. VoiceProfileManageViewModel.loadProfile) would restore the stale
+    /// value on reopen.
+    func applyLocalVoicePublicChange(_ isPublic: Bool)
 }
 
 // MARK: - Implementation
@@ -96,6 +103,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// direct socket-reconnect chain has existed since the initial
     /// implementation. The publisher pins the contract for future readers.
     public let tokenDidRotate = PassthroughSubject<Void, Never>()
+    /// startup-03 — émis quand la session est invalidée PAR LE SERVEUR
+    /// (`requireReauthentication`), jamais sur un logout volontaire. Permet
+    /// aux hooks de purge de distinguer les deux chemins (ex. signaler la
+    /// perte de messages en attente d'envoi).
+    public let sessionInvalidated = PassthroughSubject<Void, Never>()
 
     // MARK: - Protocol Publisher
 
@@ -105,7 +117,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Private
 
-    private let keychain: any KeychainStoring
+    /// Var (not `let`) so `@testable` test targets can substitute an
+    /// in-memory `KeychainStoring` on `AuthManager.shared` — the real
+    /// `KeychainManager` is not entitled inside the SPM xctest host, which
+    /// otherwise silently no-ops every save/load and makes any test that
+    /// drives a full `applySession` → `refreshSession` round trip
+    /// unrunnable. Mirrors the existing `authService` injection seam below.
+    internal var keychain: any KeychainStoring
     private let userDefaults: UserDefaults
     private let groupDefaults: UserDefaults?
 
@@ -116,6 +134,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
+
+    /// Throttle gate for `refreshCurrentUserProfile()` — foreground transitions
+    /// can fire in quick succession (Control Center, app-switcher peek); this
+    /// keeps each one from re-hitting `/auth/me`.
+    private var lastProfileRefreshAt: Date?
+
+    #if DEBUG
+    /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
+    /// les tests puissent l'attendre. Voir `cancelPendingTokenRefreshForTesting`.
+    private var unauthorizedRefreshTask: Task<Void, Never>?
+    #endif
 
     // Legacy global keys kept only for one-time migration
     private let legacyTokenKey = "meeshy_auth_token"
@@ -141,6 +170,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
     private func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
     private func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
+    private func pendingProfileKey(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
 
     // MARK: - Active user
 
@@ -251,7 +281,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -277,7 +312,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -299,7 +339,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -318,7 +363,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -339,7 +389,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -358,7 +413,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             try await authService.requestPasswordReset(email: email)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -378,6 +438,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // jamais laisser de bodies REST (conversations, messages) d'un compte
         // au repos sur disque, quel que soit le chemin de logout emprunté.
         APIClient.shared.clearHTTPCache()
+        // outbox-02 — même règle pour la file settings : elle persiste
+        // endpoint+corps verbatim sans scoping userId et son flush rejoue
+        // sous le token de la session COURANTE — sans purge, un PATCH
+        // /users/me du compte A s'appliquerait au profil du compte B (même
+        // contrat de perte assumée que StoryPublishQueue E9). Avant le guard
+        // pour couvrir aussi le chemin sans session active.
+        await SettingsActionQueue.shared.clearAll()
+        // sync-04 — les watermarks de delta-sync (lastSyncTimestamp /
+        // lastCleanupDate / lastFullReconcileAt) sont per-user en UserDefaults
+        // globaux : sans reset, le compte suivant hérite du checkpoint de la
+        // session sortante et un delta déclenché avant son premier fullSync
+        // persiste une liste PARTIELLE comme fraîche. Avant le guard, même
+        // patron que les purges ci-dessus.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -391,10 +465,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // pas les credentials de la session morte.
         SessionSnapshotStore.wipe()
 
+        // D5.hygiene — capture the token BEFORE any wipe. The retry Task
+        // below is scheduled concurrently with the wipe steps further down
+        // (`APIClient.shared.authToken = nil`); reading the ambient token
+        // lazily at send-time was a race that frequently lost, sending every
+        // retry attempt with no Authorization header at all — the gateway
+        // could never tell which session to kill server-side.
+        let outgoingToken = APIClient.shared.authToken
+
         // D5 — server logout in background (best-effort, bounded retries).
         // Le quiesce local ne dépend pas du serveur : si le réseau échoue,
         // le gateway tuera la session paresseusement au prochain request.
-        Task { await self.performServerLogoutWithRetries() }
+        if let outgoingToken {
+            Task { await self.performServerLogoutWithRetries(token: outgoingToken) }
+        } else {
+            Logger.auth.warning("logout(): no authToken snapshot available — skipping server-side logout call")
+        }
 
         // P1 quiesce — stop accepting new mutations BEFORE purging stores.
         // Sans ça, un `message:new` arrivant pendant le purge pourrait
@@ -419,6 +505,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         StoryDraftStore.shared.clear()
         await StoryPublishQueue.shared.clearAll()
         await ConversationStore.shared.reset()
+        // stores-10 — les catégories du compte sortant (RAM + snapshot widget)
+        // ne doivent pas survivre au logout.
+        await UserCategoryStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
         // A5 — le curseur de séquence est per-user : le remettre à zéro évite
@@ -430,6 +519,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         activeUserId = nil
@@ -459,18 +549,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// failures are tolerated — the worst case is the gateway sees the
     /// next request, fails token verification, and lazily kills the
     /// session.
-    private func performServerLogoutWithRetries() async {
+    private func performServerLogoutWithRetries(token: String) async {
         let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
         for delay in delays {
             if delay > 0 {
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try await Task.sleep(for: .seconds(delay))
                 } catch {
                     return // Task cancelled
                 }
             }
             do {
-                try await authService.logoutThrowing()
+                try await authService.logoutThrowing(token: token)
                 return
             } catch {
                 Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
@@ -486,12 +576,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         if activeUserId == userId {
             activeUserId = nil
             currentUser = nil
             isAuthenticated = false
+            pendingOptimisticProfile = nil
             APIClient.shared.authToken = nil
         }
     }
@@ -530,6 +622,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
             }
         }
 
+        // U3-cont'd — reload any optimistic-profile guard left pending by a
+        // kill+relaunch BEFORE the background revalidation Task below can
+        // run. Without this, a process restart silently drops the in-memory
+        // guard and the /auth/me revalidation clobbers the just-hydrated
+        // (correct) optimistic bio/displayName/avatar with the stale
+        // pre-edit server value while the updateProfile outbox row is still
+        // in flight.
+        pendingOptimisticProfile = loadPendingProfileFromKeychain(userId: userId)
+
         APIClient.shared.authToken = token
         isAuthenticated = true
         warmSessionScopedCaches()
@@ -540,17 +641,24 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
         //
-        // Skip while offline: this is `await`ed and gates the splash (the only
-        // network call on the cold-start critical path). Offline it cannot
-        // succeed and would hang the splash for the full URLSession timeout
-        // (30-60s) behind a launch the cache could already serve. No API call
-        // can race in offline anyway, so deferring the refresh to the next
-        // reconnect / 401 is safe. Online behaviour is unchanged.
+        // P1 — detached (fire-and-forget), NOT awaited on the cold-start
+        // critical path. `NetworkMonitor.isOnline` only rules out FULLY
+        // offline; a degraded-but-"online" network (weak signal, captive
+        // portal) can still hang behind the full URLSession timeout (60s)
+        // with the cached session/list already ready to show — a cold start
+        // was observed holding the splash for tens of seconds this way.
+        // Detaching means a slow refresh can never hold the splash hostage:
+        // `applySession` still lands whenever the network eventually
+        // answers, and any API call racing in behind an unrefreshed-but-
+        // still-valid token succeeds normally (APIClient's own reactive
+        // 401-refresh covers the case where it doesn't).
         if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
-            do {
-                _ = try await refreshSession(force: false)
-            } catch {
-                Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+            Task { [weak self] in
+                do {
+                    _ = try await self?.refreshSession(force: false)
+                } catch {
+                    Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
 
@@ -559,13 +667,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // can sign in again — the saved account is preserved, just the
         // password (or biometric) is needed.
         Task { [weak self] in
+            guard let self else { return }
             do {
-                let user = try await AuthService.shared.me()
-                self?.updateUserAfterRevalidation(user, userId: userId)
+                // P2 hygiene — go through the injected `authService` seam
+                // (not the bare `AuthService.shared` singleton) so tests that
+                // substitute a mock on `AuthManager.shared.authService` can
+                // actually observe/stub this background revalidation call.
+                let user = try await self.authService.me()
+                self.updateUserAfterRevalidation(user, userId: userId)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    self?.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId)
                 case .network, .server, .message, .media, .forbidden, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break
@@ -576,24 +689,64 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
     }
 
+    /// Revalidates `currentUser` against `/auth/me` on scene foreground so a
+    /// profile edit made from another device (avatar, displayName…) reaches
+    /// this device without waiting for a cold start. Throttled to once per
+    /// 60s and a no-op when not authenticated. Shares the exact error
+    /// semantics of the `checkExistingSession` background revalidation: a
+    /// dead account (`isActive == false`) or an auth failure surfaces
+    /// re-authentication, any other error is transient and leaves the
+    /// session untouched.
+    public func refreshCurrentUserProfile() async {
+        guard isAuthenticated, let userId = activeUserId else { return }
+        if let lastProfileRefreshAt, Date().timeIntervalSince(lastProfileRefreshAt) < 60 {
+            return
+        }
+        lastProfileRefreshAt = Date()
+
+        do {
+            let user = try await authService.me()
+            updateUserAfterRevalidation(user, userId: userId)
+        } catch let error as MeeshyError {
+            switch error {
+            case .auth:
+                requireReauthentication(userId: userId)
+            case .network, .server, .message, .media, .forbidden, .unknown:
+                // Transient — keep session, retry on next foreground / launch.
+                break
+            }
+        } catch {
+            // Cancellation / unknown — preserve session.
+        }
+    }
+
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard activeUserId != nil else {
-            // No active user at all — nothing to refresh, no state to clear.
+        guard isAuthenticated else {
+            // No active session — nothing to refresh.
             return
         }
 
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
-        Task { [weak self] in
+        let backgroundRefresh = Task { [weak self] in
             do {
                 _ = try await self?.refreshSession(force: true)
             } catch {
                 Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+        #if DEBUG
+        // Retenue UNIQUEMENT pour que les tests puissent attendre cette tâche.
+        // Sans référence, elle est inatteignable : au moment où un `tearDown`
+        // veut la neutraliser, elle n'a souvent pas encore atteint
+        // `refreshSession`, donc `tokenRefreshTask` est toujours `nil` et il
+        // n'y a rien à annuler. Elle démarre ensuite, et son appel atterrit sur
+        // le stub du test suivant. Voir `cancelPendingTokenRefreshForTesting`.
+        unauthorizedRefreshTask = backgroundRefresh
+        #endif
     }
 
     // MARK: - Internal session helpers
@@ -655,7 +808,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // pending guard is nil (cleared on logout), so this is a no-op.
         let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
         currentUser = resolved.user
-        if resolved.clearedPending { pendingOptimisticProfile = nil }
+        if resolved.clearedPending {
+            pendingOptimisticProfile = nil
+            clearPendingProfileFromKeychain(userId: userId)
+        }
         isAuthenticated = true
         // Hydrate session-scoped caches not carried by the auth payload (block
         // list). Skip on token rotation — already warm.
@@ -684,11 +840,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// to false so the UI can prompt for re-login. The saved account is
     /// preserved — the user just needs to enter their password again.
     private func requireReauthentication(userId: String) {
+        // startup-03 — signal AVANT tout flip pour que le hook outbox
+        // (DependencyContainer) distingue une session invalidée par le
+        // serveur d'un logout volontaire (qui n'émet jamais ce signal).
+        sessionInvalidated.send(())
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = nil
         currentUser = nil
+        // sync-04 — ce chemin ne passe PAS par logout() mais son flip
+        // isAuthenticated purge quand même les caches (container + app) :
+        // sans ce reset, la ré-auth du MÊME compte hérite d'un checkpoint
+        // pointant après des données purgées = delta partiel servi comme frais.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         isAuthenticated = false
         APIClient.shared.authToken = nil
     }
@@ -705,6 +870,45 @@ public final class AuthManager: ObservableObject, AuthManaging {
         } catch {
             Logger.auth.error("Failed to save user to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// U3-cont'd — `pendingOptimisticProfile` guards a revalidation/refresh
+    /// response from clobbering an in-flight optimistic edit, but was
+    /// in-memory only: a kill+relaunch while the `updateProfile` outbox row
+    /// was still unconfirmed dropped the guard, so the next cold start's
+    /// `/auth/me` revalidation clobbered the correctly keychain-hydrated
+    /// optimistic profile with the stale pre-edit server value (no version/
+    /// timestamp compare recovers from that). Persisting the guard itself —
+    /// not just the optimistic user — closes that window: `checkExistingSession`
+    /// reloads it before the revalidation Task can run.
+    private func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
+        do {
+            let encoded = try JSONEncoder().encode(snapshot)
+            guard let jsonString = String(data: encoded, encoding: .utf8) else {
+                Logger.auth.error("Failed to convert pending profile guard to UTF8 string for userId \(userId, privacy: .public)")
+                return
+            }
+            try keychain.save(jsonString, forKey: pendingProfileKey(for: userId), account: nil)
+        } catch {
+            Logger.auth.error("Failed to persist pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func loadPendingProfileFromKeychain(userId: String) -> ProfileSnapshot? {
+        guard let jsonString = keychain.load(forKey: pendingProfileKey(for: userId), account: nil),
+              let data = jsonString.data(using: .utf8) else { return nil }
+        do {
+            return try JSONDecoder().decode(ProfileSnapshot.self, from: data)
+        } catch {
+            // Snapshot écrit par une version antérieure de `ProfileSnapshot` :
+            // traité comme « aucun profil en attente ».
+            Logger.auth.error("Failed to decode pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private func clearPendingProfileFromKeychain(userId: String) {
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
     }
 
     private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
@@ -749,7 +953,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // server already reflects the edit).
         let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
         self.currentUser = resolved.user
-        if resolved.clearedPending { pendingOptimisticProfile = nil }
+        if resolved.clearedPending {
+            pendingOptimisticProfile = nil
+            clearPendingProfileFromKeychain(userId: userId)
+        }
         self.updateSavedAccountActivity(from: user)
     }
 
@@ -962,10 +1169,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentUser = updated
         // U3 — remember the optimistic profile so a revalidation/refresh can't
         // clobber it, and persist to the keychain so it survives a cold start
-        // (cold-start hydration reads currentUser from the keychain).
-        pendingOptimisticProfile = ProfileSnapshot(
+        // (cold-start hydration reads currentUser from the keychain). The
+        // guard itself is ALSO persisted (not just the optimistic user) —
+        // see `savePendingProfileToKeychain` — so a kill+relaunch before the
+        // outbox row confirms still protects the edit from the boot-time
+        // `/auth/me` revalidation.
+        let pending = ProfileSnapshot(
             displayName: updated.displayName, bio: updated.bio, avatarUrl: updated.avatar)
+        pendingOptimisticProfile = pending
         saveUserToKeychain(updated, userId: updated.id)
+        savePendingProfileToKeychain(pending, userId: updated.id)
         return snapshot
     }
 
@@ -980,6 +1193,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — the optimistic edit was rolled back; drop the guard + persist.
         pendingOptimisticProfile = nil
         saveUserToKeychain(reverted, userId: reverted.id)
+        clearPendingProfileFromKeychain(userId: reverted.id)
+    }
+
+    public func applyLocalVoicePublicChange(_ isPublic: Bool) {
+        guard let user = currentUser else { return }
+        let updated = user.withProfileChanges(voicePublic: isPublic)
+        currentUser = updated
+        // The change is already server-confirmed (called after PATCH /users/me),
+        // so it doesn't join the optimistic guard — just persist for cold start.
+        saveUserToKeychain(updated, userId: updated.id)
     }
 
     /// U3 — merge any in-flight optimistic profile onto a freshly-fetched server
@@ -1004,4 +1227,44 @@ public final class AuthManager: ObservableObject, AuthManaging {
             false
         )
     }
+
+    #if DEBUG
+    /// Test-only seam: cancels and clears any in-flight `tokenRefreshTask`.
+    /// `handleUnauthorized()` fires a detached, fire-and-forget `Task` on
+    /// every 401 (e.g. from unrelated background activity — E2EE bundle
+    /// upload, story prefetch — hitting the stubbed `authService` while a
+    /// test runs) that sets `tokenRefreshTask` and isn't awaited by that
+    /// test. `refreshSession(force:)`'s `if let task = tokenRefreshTask {
+    /// return try await task.value }` serialization guard then makes the
+    /// NEXT test's own `refreshSession` call transparently await that
+    /// unrelated leftover task instead of evaluating its own state —
+    /// surfacing as a flaky, order-dependent failure in whichever test
+    /// happens to run right after one that triggered a 401. Call from
+    /// `setUp()` for hermetic test isolation.
+    ///
+    /// **Annuler ne suffit pas, il faut attendre.** `Task.cancel()` est
+    /// coopératif : une tâche déjà entrée dans `authService.refreshToken(…)`
+    /// va jusqu'au bout de son appel. Elle atterrit alors sur le stub du test
+    /// SUIVANT — installé entre-temps par son `setUp()` — et en incrémente le
+    /// compteur d'appels. Le test suivant voit un appel qu'il n'a pas fait.
+    ///
+    /// En attendant la valeur de la tâche, cette fonction garantit qu'aucun
+    /// appel de la tâche annulée ne peut plus survenir après son retour.
+    /// `try?` avale le `CancellationError` attendu, qui est ici le cas normal.
+    func cancelPendingTokenRefreshForTesting() async {
+        // L'ordre compte. La tâche d'arrière-plan de `handleUnauthorized()` est
+        // celle qui APPELLE `refreshSession` : tant qu'elle n'a pas démarré,
+        // `tokenRefreshTask` est encore `nil`. La vider d'abord ne servirait à
+        // rien — c'est l'autre qui la remplirait ensuite, contre le stub du
+        // test suivant.
+        let background = unauthorizedRefreshTask
+        unauthorizedRefreshTask = nil
+        await background?.value
+
+        let pending = tokenRefreshTask
+        tokenRefreshTask = nil
+        pending?.cancel()
+        _ = try? await pending?.value
+    }
+    #endif
 }

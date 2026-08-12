@@ -22,10 +22,10 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
 
     var accessibilityLabel: String {
         switch self {
-        case .tool:      return "Pinceau"
-        case .color:     return "Couleur du trait"
-        case .thickness: return "Épaisseur du trait"
-        case .smoothing: return "Lissage du trait"
+        case .tool:      return String(localized: "story.drawEdit.tool.tool", defaultValue: "Pinceau", bundle: .module)
+        case .color:     return String(localized: "story.drawEdit.tool.color", defaultValue: "Couleur du trait", bundle: .module)
+        case .thickness: return String(localized: "story.drawEdit.tool.thickness", defaultValue: "Épaisseur du trait", bundle: .module)
+        case .smoothing: return String(localized: "story.drawEdit.tool.smoothing", defaultValue: "Lissage du trait", bundle: .module)
         }
     }
 }

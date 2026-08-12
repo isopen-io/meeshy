@@ -72,9 +72,52 @@ class ReportRequestBuilderTest {
     }
 
     @Test
+    fun `forMessage builds a message report with the reason wire token`() {
+        val request = ReportRequestBuilder.forMessage("m1", ReportReason.HATE_SPEECH, "  slur  ")
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.reportedType).isEqualTo("message")
+        assertThat(request.reportedEntityId).isEqualTo("m1")
+        assertThat(request.reportType).isEqualTo("hate_speech")
+        assertThat(request.reason).isEqualTo("slur")
+    }
+
+    @Test
+    fun `forMessage returns null on a blank id`() {
+        assertThat(ReportRequestBuilder.forMessage("", ReportReason.SPAM, "x")).isNull()
+        assertThat(ReportRequestBuilder.forMessage("   ", ReportReason.SPAM, "x")).isNull()
+    }
+
+    @Test
+    fun `forMessage trims the surrounding whitespace off the id`() {
+        assertThat(ReportRequestBuilder.forMessage("  m1  ", ReportReason.VIOLENCE, null)!!.reportedEntityId)
+            .isEqualTo("m1")
+    }
+
+    @Test
+    fun `forMessage drops blank details to null and caps over-long ones`() {
+        assertThat(ReportRequestBuilder.forMessage("m1", ReportReason.OTHER, "   ")!!.reason).isNull()
+        val long = "z".repeat(ReportRequestBuilder.MAX_DETAILS_LENGTH + 40)
+        assertThat(ReportRequestBuilder.forMessage("m1", ReportReason.OTHER, long)!!.reason)
+            .hasLength(ReportRequestBuilder.MAX_DETAILS_LENGTH)
+    }
+
+    @Test
     fun `sanitizeDetails caps a whitespace-padded over-long note after trimming`() {
         // Leading/trailing spaces are trimmed first, THEN the 500-cap applies to the core text.
         val padded = "   " + "c".repeat(ReportRequestBuilder.MAX_DETAILS_LENGTH + 10) + "   "
         assertThat(ReportRequestBuilder.sanitizeDetails(padded)).hasLength(ReportRequestBuilder.MAX_DETAILS_LENGTH)
+    }
+
+    // Le gateway accepte 'post' et 'story' dans le meme schema que 'user'/'message' :
+    // les builders portent le type wire exact, avec les memes gardes d'inertie.
+    @Test
+    fun `forPost and forStory carry their wire types and share the blank-id guard`() {
+        assertThat(ReportRequestBuilder.forPost("p1", ReportReason.SPAM, null)!!.reportedType)
+            .isEqualTo("post")
+        assertThat(ReportRequestBuilder.forStory("s1", ReportReason.SPAM, null)!!.reportedType)
+            .isEqualTo("story")
+        assertThat(ReportRequestBuilder.forPost("   ", ReportReason.SPAM, null)).isNull()
+        assertThat(ReportRequestBuilder.forStory("", ReportReason.SPAM, null)).isNull()
     }
 }

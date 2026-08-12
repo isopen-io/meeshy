@@ -54,6 +54,43 @@ extension ConversationListView {
             )
         }
 
+        // Rechercher dans la conversation — MÊME chemin que le bouton
+        // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
+        // arme `pendingOpenSearch` puis ouvre la conversation, qui consomme le
+        // flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
+        // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
+        Button {
+            HapticFeedback.light()
+            router.pendingOpenSearch = true
+            onSelect(conversation)
+        } label: {
+            Label(
+                String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
+                systemImage: "magnifyingglass"
+            )
+        }
+
+        // Appeler — DM uniquement (participant résolu). MÊME chemin que le
+        // bouton « Appeler » de l'aperçu custom (`onCall` → CallManager, audio).
+        if conversation.type == .direct, let calleeId = conversation.participantUserId {
+            Button {
+                HapticFeedback.medium()
+                Task {
+                    await CallManager.shared.requestPermissionsThenStartCall(
+                        conversationId: conversation.id,
+                        userId: calleeId,
+                        displayName: conversation.name,
+                        isVideo: false
+                    )
+                }
+            } label: {
+                Label(
+                    String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
+                    systemImage: "phone.fill"
+                )
+            }
+        }
+
         Divider()
 
         // Marquer lu / non lu
@@ -408,12 +445,14 @@ extension ConversationListView {
                         onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
                             dismissContextMenu()
                             if let uid = conversation.participantUserId {
-                                CallManager.shared.startCall(
-                                    conversationId: conversation.id,
-                                    userId: uid,
-                                    displayName: conversation.name,
-                                    isVideo: false
-                                )
+                                Task {
+                                    await CallManager.shared.requestPermissionsThenStartCall(
+                                        conversationId: conversation.id,
+                                        userId: uid,
+                                        displayName: conversation.name,
+                                        isVideo: false
+                                    )
+                                }
                             }
                         } : nil,
                         onSearch: {
@@ -934,6 +973,10 @@ struct ConversationListHeaderOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Volet latéral iPad : chip Feed + 4 actions laissent ~110 pt
+                    // au titre, qui tronquait en « Mee. » — rétrécir plutôt.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
                     .accessibilityAddTraits(.isHeader)
             },
             trailing: {
@@ -981,11 +1024,15 @@ struct ConversationListHeaderOverlay: View {
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
-                                    Text("\(min(iPadNotificationCount, 99))")
-                                        .font(.system(size: 9, weight: .bold))
+                                    Text(NotificationBadge.displayed(iPadNotificationCount))
+                                        .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                         .foregroundColor(.white)
-                                        .frame(width: 16, height: 16)
-                                        .background(Circle().fill(MeeshyColors.error))
+                                        .lineLimit(1)
+                                        // Capsule et non cercle figé : « 99+ » doit
+                                        // s'afficher entier, pas être rogné.
+                                        .padding(.horizontal, 5)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(Capsule().fill(MeeshyColors.error))
                                         .offset(x: 6, y: -6)
                                 }
                             }

@@ -62,7 +62,7 @@ conversation sync engine, story draft persistence, theme/color generation, hot-p
 - `protocol LocationServiceProviding: Sendable` — 4 Combine `PassthroughSubject` publishers (`locationShared`, `liveLocationStarted/Updated/Stopped`) + `shareLocation`, `startLiveLocation`, `updateLiveLocation`, `stopLiveLocation`.
 - `final class LocationService` singleton; delegates emits to `MessageSocketManager.shared`.
 
-**Key behaviors:** Builds typed payloads (`LocationSharePayload`, `LiveLocationStart/Update Payload`) and emits over the message socket. NOTE: the publishers are declared but the service does not itself wire socket listeners — `MessageSocketManager` owns the inbound publishers; this is a thin façade.
+**Key behaviors:** Builds typed payloads (`LiveLocationStart/Update Payload`) and emits over the message socket. Static location sharing (`LocationSharePayload`/`shareLocation`/`locationShared`) was retired end-to-end (commit `c07d4648d`) — only live location survives. NOTE: the publishers are declared but the service does not itself wire socket listeners — `MessageSocketManager` owns the inbound publishers; this is a thin façade.
 
 **Android port:** Kotlin object/class with `SharedFlow` publishers; emit through the message socket wrapper. Payloads as `@Serializable`. Fuse with `FusedLocationProviderClient` for actual GPS capture.
 

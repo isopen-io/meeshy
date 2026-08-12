@@ -6,10 +6,16 @@ storage_mode("git")
 
 type("appstore")
 
+# me.meeshy.app.share-extension ajouté 2026-07-28 en même temps que le
+# ré-embarquement du target MeeshyShareExtension dans l'app (project.yml).
 app_identifier([
   "me.meeshy.app",
   "me.meeshy.app.notification-service",
-  "me.meeshy.app.widgets"
+  "me.meeshy.app.widgets",
+  "me.meeshy.app.share-extension"
 ])
 
-team_id(ENV["FASTLANE_TEAM_ID"] || "D72UK7R5RE")
+# Team ID pinned to D72UK7R5RE since 2026-07-28 — see the header block in
+# Appfile for the full list of sites carrying this value. An empty ENV var
+# (unset GitHub secret) falls back to the default: "" is truthy in Ruby.
+team_id([ENV["FASTLANE_TEAM_ID"], "D72UK7R5RE"].map { |v| v.to_s.strip }.find { |v| !v.empty? })

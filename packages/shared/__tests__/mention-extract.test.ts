@@ -1,5 +1,11 @@
 // packages/shared/__tests__/mention-extract.test.ts
-import { extractMentions, mentionsToLinks, isValidMentionUsername, isValidMentionQuery } from '../types/mention';
+import {
+  extractMentions,
+  mentionsToLinks,
+  isValidMentionUsername,
+  isValidMentionQuery,
+  detectMentionAtCursor,
+} from '../types/mention';
 
 describe('extractMentions (types/mention)', () => {
   it('extrait un username classique', () => {
@@ -84,6 +90,69 @@ describe('mentionsToLinks', () => {
   it("linkifie une vraie mention mais laisse intact le fragment d'e-mail voisin", () => {
     expect(mentionsToLinks('cc @alice et bob@alice.com', '/u/{username}', ['alice']))
       .toBe('cc [@alice](/u/alice) et bob@alice.com');
+  });
+});
+
+describe('detectMentionAtCursor', () => {
+  it('détecte une mention fraîche dès la frappe de `@`', () => {
+    expect(detectMentionAtCursor('hello @', 7)).toEqual({
+      start: 6,
+      end: 7,
+      query: '',
+      hasMention: true,
+    });
+  });
+
+  it('détecte une mention partielle sous le curseur', () => {
+    expect(detectMentionAtCursor('hi @ali', 7)).toEqual({
+      start: 3,
+      end: 7,
+      query: 'ali',
+      hasMention: true,
+    });
+  });
+
+  it('détecte une mention en tout début de contenu', () => {
+    expect(detectMentionAtCursor('@bob', 4)).toEqual({
+      start: 0,
+      end: 4,
+      query: 'bob',
+      hasMention: true,
+    });
+  });
+
+  it('retourne null quand un espace sépare le `@` du curseur', () => {
+    expect(detectMentionAtCursor('hi @ bob', 8)).toBeNull();
+  });
+
+  it('retourne null pour un contenu vide ou un curseur négatif', () => {
+    expect(detectMentionAtCursor('', 0)).toBeNull();
+    expect(detectMentionAtCursor('hi @bob', -1)).toBeNull();
+  });
+
+  it("ignore un `@` collé après un mot (adresse e-mail) — parité SSOT parseMentions/extractMentions", () => {
+    // `@` précédé d'un caractère de nom = fragment d'adresse e-mail, PAS une mention.
+    // Même frontière gauche NAME_BOUNDARY_LEFT que extractMentions/hasMentions/mentionsToLinks.
+    // Sans ce garde, le composer d'ÉDITION (EditMessageView) ouvrait l'autocomplete sur un e-mail
+    // là où le composer d'ENVOI (useMentions) le supprimait déjà — divergence observable.
+    expect(detectMentionAtCursor('write to bob@alice', 18)).toBeNull();
+    expect(detectMentionAtCursor('contact@marie', 13)).toBeNull();
+  });
+
+  it("ignore un `@` collé après une lettre accentuée/non-latine", () => {
+    expect(detectMentionAtCursor('André@atabeth', 13)).toBeNull();
+    expect(detectMentionAtCursor('écris à Владимир@mail', 21)).toBeNull();
+  });
+
+  it("détecte une vraie mention même lorsqu'un fragment d'e-mail précède", () => {
+    // Le dernier `@` (cursor) est une vraie mention ; le `@` de l'e-mail est ignoré en amont.
+    const content = 'mail bob@alice.com puis @cla';
+    expect(detectMentionAtCursor(content, content.length)).toEqual({
+      start: 24,
+      end: content.length,
+      query: 'cla',
+      hasMention: true,
+    });
   });
 });
 
