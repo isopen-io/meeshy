@@ -650,6 +650,85 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.cursorPagination.nextCursor).toBe('aaaaaaaaaaaaaaaaaaaaaaa2');
   });
 
+  // ── Forward-watermark (`after`) cursor contract ────────────────────────────
+  // `after` is the local-first gap-backfill mode (iOS `MessageService.listAfter`
+  // → `ConversationViewModel.syncMissedMessages`). It pages FORWARD, ascending,
+  // resumed by the client's `createdAt` high-water mark — NOT by the `before`
+  // message-id cursor the other modes use. The cursor meta must say so.
+  describe('after-mode cursor meta', () => {
+    const AFTER = '2026-08-01T00:00:00.000Z';
+
+    it('fetches limit+1 rows so hasMore is measured, not guessed', async () => {
+      prisma.message.findMany.mockResolvedValue([]);
+      mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+      await getMessagesHandler()(makeRequest({ query: { after: AFTER, limit: '2' } }), makeReply());
+      const call = prisma.message.findMany.mock.calls
+        .map((c: any[]) => c[0])
+        .find((a: any) => a && a.select && typeof a.take === 'number');
+      expect(call.take).toBe(3);
+    });
+
+    it('reports hasMore=false on an exactly-full final page', async () => {
+      // The page fills `limit` exactly and nothing follows it. Sizing the read
+      // to `limit` made a full page indistinguishable from a truncated one, so
+      // the server claimed more and the client burned a round trip proving it
+      // wrong. With the probe row, a full page that returns no probe is final.
+      prisma.message.findMany.mockResolvedValue([
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa1' }),
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa2' }),
+      ]);
+      mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+      const reply = makeReply();
+      await getMessagesHandler()(makeRequest({ query: { after: AFTER, limit: '2' } }), reply);
+      expect(reply._body.data).toHaveLength(2);
+      expect(reply._body.cursorPagination.hasMore).toBe(false);
+    });
+
+    it('trims the probe row and reports hasMore=true when one follows', async () => {
+      prisma.message.findMany.mockResolvedValue([
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa1' }),
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa2' }),
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa3' }),
+      ]);
+      mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+      const reply = makeReply();
+      await getMessagesHandler()(makeRequest({ query: { after: AFTER, limit: '2' } }), reply);
+      expect(reply._body.data).toHaveLength(2);
+      expect(reply._body.data.map((m: any) => m.id)).toEqual([
+        'aaaaaaaaaaaaaaaaaaaaaaa1',
+        'aaaaaaaaaaaaaaaaaaaaaaa2',
+      ]);
+      expect(reply._body.cursorPagination.hasMore).toBe(true);
+    });
+
+    it('returns nextCursor=null — a forward page has no `before` continuation', async () => {
+      // The page is ASCENDING, so its last row is the NEWEST one. Handing that
+      // id back under a field documented as "pass as `before`" pointed the
+      // client at everything OLDER than the page it just consumed: a client
+      // that followed the cursor generically would re-read the whole history
+      // and never advance. The forward continuation is the `after` watermark,
+      // which the client already holds.
+      prisma.message.findMany.mockResolvedValue([
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa1' }),
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa2' }),
+        makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa3' }),
+      ]);
+      mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+      const reply = makeReply();
+      await getMessagesHandler()(makeRequest({ query: { after: AFTER, limit: '2' } }), reply);
+      expect(reply._body.cursorPagination.nextCursor).toBeNull();
+    });
+
+    it('leaves the offset `pagination` block out (cursor read, no COUNT)', async () => {
+      prisma.message.findMany.mockResolvedValue([makeMessage()]);
+      mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+      const reply = makeReply();
+      await getMessagesHandler()(makeRequest({ query: { after: AFTER, limit: '2' } }), reply);
+      expect(reply._body.pagination).toBeUndefined();
+      expect(prisma.message.count).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns messages with mapped fields for authenticated user', async () => {
     const msg = makeMessage();
     prisma.message.findMany.mockResolvedValue([msg]);

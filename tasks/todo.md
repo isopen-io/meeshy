@@ -1,3 +1,198 @@
+# Tête instruite pour le cycle 100 — le curseur qui pointait dans le mauvais SENS
+
+*Le cycle 99 a porté la méthode du cycle 98 (« un CURSEUR est une promesse de couverture ») de
+`/sync`, endpoint pilote SANS consommateur, vers le seul chemin de rattrapage local-first qui en a
+un en production : `GET /conversations/:id/messages?after=`. Le défaut y était d'une autre nature —
+non pas un curseur trop AVANCÉ, mais un curseur qui pointait dans le SENS INVERSE de la page qu'il
+prétendait continuer.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 99 ajoute — le quatrième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 trouve le quatrième :
+>
+> **Un champ de pagination PARTAGÉ entre plusieurs modes de lecture porte le contrat du mode
+> qui l'a créé — et le ment à tous les autres.**
+>
+> `cursorPagination.nextCursor` a été écrit pour le mode BACKWARD (`before`), et sa description
+> le dit : *« Message id to pass as `before` for the next page »*. Le mode FORWARD (`after`,
+> ajouté plus tard pour le rattrapage local-first) réutilise la même structure de réponse — et
+> hérite donc du champ, rempli par le même `messages[messages.length - 1].id`. Sauf que sa page
+> est ASCENDANTE : sa dernière ligne est la PLUS RÉCENTE. Le curseur rendu pointait donc vers
+> *tout ce qui est plus ANCIEN que la page qu'on vient de consommer* — l'exact opposé de ce
+> qu'il promettait. Un client qui suit le curseur génériquement (le geste évident quand on lit
+> la description du champ) relit l'historique en boucle sans jamais avancer.
+>
+> **La méthode qui en découle :** pour chaque champ de méta-pagination, énumérer les MODES de
+> lecture qui traversent la même construction de réponse, et vérifier que la sémantique du champ
+> tient dans CHACUN. Un mode ajouté après coup n'a presque jamais fait relire les champs qu'il
+> hérite. Ici, trois modes (`before`, `around`, `after`) partagent un unique bloc `cursorPagination`
+> et un unique `take` : le troisième arrivé était faux sur les deux.
+
+## Livré au cycle 99 — `GET /conversations/:id/messages` : le mode `after` dit enfin la vérité
+
+Le mode forward-watermark est le chemin de rattrapage de trou local-first. Consommateur RÉEL et
+vivant, contrairement à `/sync` : `MessageService.listAfter` (SDK) →
+`ConversationViewModel.syncMissedMessages` (`apps/ios/…`, appelé par `ConversationSocketHandler` à
+chaque reconnexion socket). Deux défauts, fermés ensemble
+(`services/gateway/src/routes/conversations/messages.ts`) :
+
+1. **`nextCursor` pointait à l'envers.** Détaillé dans la leçon ci-dessus. Rendu `null` en mode
+   `after` : ce mode reprend sur le watermark `createdAt` que le client détient déjà, il n'existe
+   AUCUNE continuation `before` à publier, et en annoncer une était le mensonge. La description du
+   champ dans le schéma de réponse le dit désormais explicitement, par mode.
+2. **`hasMore` était DEVINÉ, pas mesuré.** Les modes `before` et `around` lisent `limit + 1` lignes
+   — la ligne SONDE — pour trancher. Le mode `after` lisait `limit` et inférait
+   `messages.length === limit`, qui ne distingue pas une page pleine FINALE d'une page tronquée :
+   tout rattrapage tombant pile sur la frontière annonçait « il y a la suite » et coûtait au client
+   un aller-retour pour prouver le contraire. `after` lit désormais `limit + 1` comme ses deux
+   voisins, la sonde est retirée des DEUX tableaux (`messages` ET `mappedMessages` — le second est
+   celui que le client reçoit ; ne trimmer que le premier avait déjà livré `limit+1` lignes par le
+   passé, cf. le commentaire conservé), et `hasMore` devient exact.
+
+Tests : 5 (`messages-routes.test.ts`, nouveau `describe` « after-mode cursor meta »), **RED prouvé
+sur 4** ; la 5e ancre le comportement CONSERVÉ (le mode `after` reste une lecture curseur — aucun
+bloc `pagination` offset, aucun `COUNT`). Gate : suite `messages-routes` 206/206,
+`tsc --noEmit` gateway propre, suite gateway complète verte.
+
+**Portée honnête.** Le défaut 1 est LATENT : le seul client du mode `after` aujourd'hui (iOS)
+n'utilise pas `nextCursor` — il tient son propre watermark `createdAt` et s'arrête sur
+`page.count < pageSize`. Sa valeur est la même que celle invoquée au cycle 98 : le contrat est
+corrigé AVANT que le prochain client (web, Android) ne se règle dessus, et la description du champ
+n'invite plus au geste faux. Le défaut 2 était en revanche ACTIF — un aller-retour HTTP gaspillé
+par rattrapage tombant sur la frontière, à chaque reconnexion socket concernée.
+
+**Nettoyage annexe, sans contrat** : `callParticipantSchema` était importé dans
+`services/gateway/src/routes/calls.ts` et n'y était **jamais utilisé** (une seule occurrence dans
+tout le fichier : la ligne d'import). Retiré.
+
+## Ce que le cycle 99 a INSTRUIT sans le livrer — `CallParticipant.connectionQuality` (item 2 du cycle 99)
+
+Le cycle 98 signalait « aucun écrivain, trois lecteurs ». Le cycle 99 a **fini l'instruction** et le
+dossier est désormais complet — mais l'exécution demande une capacité que la routine n'a pas ici
+(voir le pourquoi plus bas). **Tout ce qui suit est vérifié dépôt entier :**
+
+**QUATRE déclarations du même champ, mutuellement incompatibles :**
+
+| Site | Forme déclarée |
+|---|---|
+| `packages/shared/prisma/schema.prisma:1866` | `Json?` — commentaire `{ latency, packetLoss, bandwidth }` |
+| `packages/shared/types/video-call.ts:126` | `ConnectionQuality` = `{ latency, packetLoss, bandwidth, jitter? }` |
+| `packages/shared/utils/validation.ts:1744` (`CallParticipantSchemas.full`) | `z.number().nullable().optional()` |
+| `packages/shared/types/api-schemas.ts:2314` (`callParticipantSchema`) | `{ type: 'number', 0-100 }` |
+
+**ZÉRO écrivain** : aucun des 12 sites `callParticipant.{create,update,updateMany}` du gateway ne
+met `connectionQuality` dans son `data`. **TROIS lecteurs**, tous des émissions socket
+(`CallEventsHandler.ts:1903`, `:2030`, `:2385`), qui envoient donc `connectionQuality: null` à tout
+client, toujours — sous un double cast `as unknown as ConnectionQuality | null` qui masque le fait
+que la forme Json n'a jamais été validée. **ZÉRO consommateur** : les trois clients calculent leur
+qualité LOCALEMENT depuis leur propre pile WebRTC (iOS `CallManager.connectionQuality:
+PeerConnectionState` ; Android `CallViewModel` ← `ConnectionQuality.from(sample.level())` ; web
+`call-store.connectionQuality: ConnectionQualityLevel`). Aucun décodeur client ne lit le champ
+serveur.
+
+**Les deux déclarations de schéma sont elles-mêmes MORTES**, et pas seulement sur ce champ :
+`CallParticipantSchemas` (Zod) n'a **aucune référence** dans tout le dépôt ; `callParticipantSchema`
+(OpenAPI) n'avait que l'import inutilisé retiré ci-dessus. Toutes deux déclarent en outre `status`,
+`duration`, `isMuted`, `isVideoOff` — **aucun de ces quatre champs n'existe sur le modèle Prisma**
+(qui porte `isAudioEnabled`, `isVideoEnabled`, `leftAt`, et ni `status` ni `duration`). Ce ne sont
+pas des contrats périmés sur un champ : ce sont deux descriptions entières d'une entité qui n'a
+jamais existé sous cette forme.
+
+**Trancher RETIRER, pas CÂBLER — et voici l'argument, à ne pas rejouer :** le signal par
+participant existe déjà et circule EN TEMPS RÉEL. `call:quality-report` porte `rtt`, `packetLoss`,
+`level` par participant, et le handler résout déjà le `participantId` ; sur dégradation soutenue il
+émet `call:quality-alert` **par participant** aux pairs (`socket.to(ROOMS.call(...))`). Persister le
+même signal coûterait jusqu'à **30 écritures/min/participant** (plafond
+`SOCKET_RATE_LIMITS.CALL_QUALITY_REPORT`) sur le chemin chaud de l'appel, dans une ligne que
+personne ne lit. La qualité de connexion est une donnée ÉPHÉMÈRE : sa place est le canal transitoire
+qui existe, pas une colonne.
+
+**Ce que le cycle 100 doit exécuter, en un seul passage :** retirer `connectionQuality` du modèle
+Prisma `CallParticipant` (MongoDB — aucune migration, aucune donnée à perdre puisque rien ne l'a
+jamais écrit), du type partagé `CallParticipant`, et des trois émissions de `CallEventsHandler`
+(avec l'import `ConnectionQuality` s'il devient orphelin). Traiter `CallParticipantSchemas` et
+`callParticipantSchema` comme un lot séparé — ils sortent entiers, pas champ par champ.
+
+**Pourquoi le cycle 99 ne l'a pas fait :** la suppression touche `packages/shared`, donc la surface
+de compilation de `apps/web` et du SDK. Or `tsc --noEmit` sur `apps/web` rend déjà 1 224
+diagnostics pré-existants (tous dans `__tests__/**`) — **le signal y est éteint**, et aucune
+toolchain Swift n'existe ici. Retirer un champ de type partagé sans pouvoir prouver qu'aucun client
+ne casse aurait été un pari, pas un correctif. Le champ étant `optional` et sans aucun lecteur
+identifié, le risque est très probablement nul — mais « très probablement » n'est pas la barre.
+**Faire ce lot depuis un contexte qui compile web + iOS**, ou après assainissement du signal `tsc`
+côté web.
+
+## Constat annexe du cycle 99, non traité
+
+Le mode `around` lit lui aussi `limit + 1` (`take`) mais **ne retire jamais** de ligne sonde. Ce
+n'est PAS un défaut aujourd'hui : `around` filtre par `whereClause.id = { in: allIds }` où `allIds`
+vaut au plus `2 × floor(limit/2) + 1 ≤ limit`, donc le `+1` du `take` ne mord jamais. Vérifié avant
+d'écrire quoi que ce soit — noté ici pour qu'un futur cycle qui élargirait la fenêtre `around`
+sache que le trim ne le couvre pas.
+
+## Ce qui reste ouvert des cycles précédents (inchangé au cycle 99)
+
+- **Item 1 (rétention des posts supprimés) : toujours à poser à un humain, pas à réessayer.** Le
+  cycle 98 a refusé, le refus est motivé (geste irréversible hors dépôt ; `N` est une décision
+  produit ; la question repost-simple-d'un-post-permanent n'est pas tranchée). Le cycle 99 ne l'a
+  pas rouvert et confirme le refus. Voir la tête du cycle 99 pour le détail.
+- **L'index MongoDB `expiresAt_ephemeral_partial` n'est toujours pas appliqué** (cycle 92) —
+  COLLSCAN par minute sur `Message`. Demande un accès de déploiement que la routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : aucune toolchain Swift ici, inchangé des
+  cycles 86 à 99.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91) : les `push` passent, le
+  `push --delete` non. Purger depuis un contexte qui a le droit (`tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). Non reproduit aux cycles 88 à 99.
+- Les constats non instruits des cycles 93 à 95 (`maxViewOnceCount: null` ambigu, passif de
+  `scheduleViewOnceBurn`, `.forward` non masqué sur vue unique, `copyForwardedAttachments` qui
+  partage l'octet, `MessageAttachment.isViewOnce` sans écrivain, veine « événement socket manqué »,
+  1 224 diagnostics `tsc` sur `apps/web`) : inchangés.
+
+## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
+
+| Cible | Exécutable ici ? | Note |
+|---|---|---|
+| suites Swift / iOS | ✗ | aucune toolchain |
+| build web (Next.js) | ⚠ | dépend du réseau Google Fonts (cf. cycle 88) ; `tsc` web = signal éteint |
+| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
+
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
+interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+**Ordre exact, re-vérifié au cycle 99** (sans lui, `tsc --noEmit` rend un faux positif
+`Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
+
+```bash
+bun install --ignore-scripts
+cd packages/shared && npx prisma generate --generator client && bun run build
+cd services/gateway && npx tsc --noEmit && bun run test
+```
+
+**Piège d'outillage relevé au cycle 99** : `bun run test -- --testPathPattern=…` est REFUSÉ par le
+Jest du dépôt (« Option "testPathPattern" was replaced by "--testPathPatterns" »). Utiliser
+`--testPathPatterns` (au pluriel).
+
+---
+
 # Tête instruite pour le cycle 99 — le cycle 98 a REFUSÉ l'item 1 et fermé un trou que personne ne surveillait
 
 *Le cycle 98 devait livrer la passe de rétention des posts supprimés (item 1 de la tête du cycle

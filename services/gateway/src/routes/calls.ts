@@ -31,7 +31,6 @@ import {
 import {
   callSessionSchema,
   callSessionMinimalSchema,
-  callParticipantSchema,
   startCallRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
