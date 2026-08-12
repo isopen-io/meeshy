@@ -23,18 +23,7 @@
       }
     },
     "status": {
-      "connecting": "Conectando...",
-      "starting": "Iniciando...",
-      "reconnecting": "Reconectando...",
-      "failed": "Error de conexión",
-      "disconnected": "Desconectado",
-      "connected": "Conectado",
-      "quality": {
-        "excellent": "Excelente",
-        "good": "Buena",
-        "poor": "Conexión deficiente",
-        "offline": "Sin conexión"
-      }
+      "connecting": "Conectando..."
     },
     "controls": {
       "controls": "Controles de llamada",

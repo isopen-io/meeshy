@@ -40,7 +40,6 @@ components/video-calls/
 ├── VideoCallInterface.tsx       # Main call UI component
 ├── VideoStream.tsx              # Video element wrapper
 ├── CallControls.tsx             # Control buttons (mobile-optimized)
-├── CallStatusIndicator.tsx      # Connection quality & status
 ├── CallErrorBoundary.tsx        # Error boundary component
 ├── PermissionRequest.tsx        # Permission request UI
 ├── hooks/
@@ -112,21 +111,12 @@ interface CallControlsProps {
 }
 ```
 
-### CallStatusIndicator
-Shows real-time call status:
-- Connection quality (visual icon + label)
-- Participant name
-- Connecting/reconnecting states
-
-**Props:**
-```typescript
-interface CallStatusIndicatorProps {
-  connectionState: RTCPeerConnectionState;
-  callDuration?: number;
-  participantName?: string;
-  connectionQuality?: 'excellent' | 'good' | 'poor' | 'offline';
-}
-```
+There is intentionally no `CallStatusIndicator` in this directory: it duplicated
+`CallQualityOverlay`'s connection-quality badge (from a less accurate local
+`getQualityFromState()` instead of real `qualityStats`) and `VideoStream`'s own
+participant-name label, while rendering at the exact same `absolute top-4 right-4`
+position as `CallQualityOverlay` — two overlapping clusters on screen. Removed
+(see `tasks/calls-fonctionnel-todo.md`, wave 117).
 
 ## Custom Hooks
 

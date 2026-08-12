@@ -157,6 +157,19 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByTestId('call-duration')).toBeInTheDocument();
   });
 
+  // Vague 117: CallStatusIndicator used to render its own connection-quality
+  // badge + participant-name label at the exact same `absolute top-4 right-4`
+  // position as CallQualityOverlay's ConnectionQualityBadge — two overlapping
+  // clusters stacked on screen the moment the connection degraded or stats
+  // were opened. Its participant name ("Unknown" fallback, hardcoded — never
+  // even run through t()) duplicated the label VideoStream already renders on
+  // the video tile itself. Removed outright; this guards the overlap from
+  // returning.
+  it('does not render the removed CallStatusIndicator (duplicate quality cluster)', () => {
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+  });
+
   // --- Vague 110 (2026-08-12): the visible clock must anchor on answeredAt,
   // never startedAt (ring delay bleeding into "call duration") -------------
 

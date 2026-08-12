@@ -23,7 +23,6 @@ import { useCallDuration } from '@/hooks/use-call-duration';
 import { useDraggable } from '@/hooks/use-draggable';
 import { VideoStream } from './VideoStream';
 import { CallControls } from './CallControls';
-import { CallStatusIndicator } from './CallStatusIndicator';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { CallQualityOverlay } from './CallQualityOverlay';
 import { CallCaptionsOverlay } from './CallCaptionsOverlay';
@@ -649,13 +648,6 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
-      {/* Status Indicator */}
-      <CallStatusIndicator
-        connectionState={connectionState}
-        callDuration={callDuration}
-        participantName={remoteParticipant?.username || 'Unknown'}
-      />
-
       {/* Connection quality + discreet survival pill + remote-peer alerts */}
       <CallQualityOverlay
         stats={qualityStats}
