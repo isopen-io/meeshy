@@ -189,6 +189,15 @@ extension StoryCanvasUIView {
         }
         backgroundLayer.slidePlayheadSeconds = playheadSeconds
         backgroundLayer.isMuted = effectiveAudioMuted
+        // Volume du fond : valeur d'ouverture, résolue depuis le modèle. Le
+        // suivi dans le temps (automation, ducking) est réappliqué à chaque
+        // tick par `applyVolumeAutomation` — ici on garantit simplement que
+        // le réglage de l'auteur atteint le player dès le premier rendu.
+        if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
+            backgroundLayer.volume = StoryVolumeResolver.effectiveVolume(
+                base: bg.volume, keyframes: bg.keyframes, at: 0
+            )
+        }
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
         // slide (élément supprimé) — libère les AVPlayer associés.
@@ -197,6 +206,11 @@ extension StoryCanvasUIView {
             slide.effects.textObjects.forEach { keepIds.insert($0.id) }
             (slide.effects.mediaObjects ?? []).forEach { keepIds.insert($0.id) }
             (slide.effects.stickerObjects ?? []).forEach { keepIds.insert($0.id) }
+            // Les pastilles de lieu passent par le MÊME cache (cf. `collectItems`) :
+            // les omettre ici évinçait leur calque à chaque tick — mesure de texte,
+            // rendu du SF Symbol et `UIGraphicsImageRenderer` re-exécutés jusqu'à
+            // 120 Hz en `.edit`, exactement le régime que ce cache évite.
+            slide.locationObjects.forEach { keepIds.insert($0.id) }
             cacheForRender.prune(keepIds: keepIds)
         }
 
@@ -209,6 +223,15 @@ extension StoryCanvasUIView {
         // Composer live preview : (re)démarre la lecture/boucle des vidéos en
         // `.edit` sur des layers fraîchement reconstruits. No-op hors composer.
         applyEditPlayback()
+        // Éditeur sonore : re-stampe les volumes du MODÈLE sur le mixer déjà
+        // configuré. Le reconfigure est gaté sur la composition
+        // (`slideAudioRevision`) et l'`.edit` n'a pas de display-link — sans
+        // cette poussée, muter une piste (chip canvas, panneau Son, timeline)
+        // laissait la boucle du composer jouer l'ancien niveau. Idempotent :
+        // le mixer ignore une écriture identique.
+        if mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive {
+            applyAudioMixerVolumes(at: Float(currentTime.seconds))
+        }
     }
 
     /// Trace un cadre autour des médias foreground (images / vidéos non-bg).

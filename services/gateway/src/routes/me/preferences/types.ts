@@ -54,24 +54,6 @@ export interface UpdateNotificationPreferencesDTO {
 }
 
 // ============================================================================
-// ENCRYPTION PREFERENCES TYPES
-// ============================================================================
-
-export type EncryptionPreference = 'disabled' | 'optional' | 'always';
-
-export interface EncryptionPreferencesDTO {
-  encryptionPreference: EncryptionPreference;
-  hasSignalKeys: boolean;
-  signalRegistrationId: number | null;
-  signalPreKeyBundleVersion: number | null;
-  lastKeyRotation: Date | null;
-}
-
-export interface UpdateEncryptionPreferenceDTO {
-  encryptionPreference: EncryptionPreference;
-}
-
-// ============================================================================
 // THEME PREFERENCES TYPES
 // ============================================================================
 

@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Scroll Indicators, Typing & Attach Options
 extension ConversationView {
@@ -38,47 +39,72 @@ extension ConversationView {
             unreadAttachmentIsAudio: unreadAttachment?.type == .audio,
             unreadAttachmentDetail: unreadAttachmentDetail,
             unreadAttachmentSymbol: unreadAttachmentSymbol,
-            isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
+            isAudioPlaying: scrollButtonAudioIsPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
+            unreadCallSymbol: unreadCallSymbol,
+            unreadCallTint: unreadCallTint,
             onScrollToBottom: {
                 HapticFeedback.light()
                 scrollState.scrollToBottomTrigger += 1
+                // Demander le bas, c'est déclarer le regarder : l'accusé part
+                // avec le défilement, pas une seconde après.
+                scrollState.flushSeenTrigger += 1
                 scrollState.unreadBadgeCount = 0
                 viewModel.lastUnreadMessage = nil
             },
             onPlayAudio: {
                 HapticFeedback.light()
-                if scrollButtonAudioPlayer.isPlaying {
-                    scrollButtonAudioPlayer.stop()
-                } else if let fileUrl = unreadAttachment?.fileUrl {
-                    scrollButtonAudioPlayer.play(urlString: fileUrl)
+                guard let att = unreadAttachment, att.type == .audio else { return }
+                let coordinator = ConversationAudioCoordinator.sharedForTesting
+                if coordinator.isActive(attachmentId: att.id) {
+                    coordinator.togglePlayPause()
+                } else {
+                    viewModel.playAudio(attachmentId: att.id)
                 }
             }
         )
         .accessibilityLabel(scrollToBottomAccessibilityLabel)
+        .onReceive(scrollButtonAudioStatePublisher) { context, playing in
+            updateScrollButtonAudioIsPlaying(context: context, playing: playing)
+        }
+        .adaptiveOnChange(of: unreadAttachment?.id) { _, _ in
+            let coordinator = ConversationAudioCoordinator.sharedForTesting
+            updateScrollButtonAudioIsPlaying(context: coordinator.activeContext, playing: coordinator.isPlaying)
+        }
+    }
+
+    func updateScrollButtonAudioIsPlaying(context: ActiveAudioContext?, playing: Bool) {
+        let id = unreadAttachment?.id
+        let newValue = playing && id != nil && context?.attachmentId == id
+        if scrollButtonAudioIsPlaying != newValue { scrollButtonAudioIsPlaying = newValue }
     }
 
     private var scrollToBottomAccessibilityLabel: String {
+        let action = String(localized: "conversation.scroll-to-bottom.a11y",
+                            defaultValue: "Défiler vers le bas", bundle: .main)
         if scrollState.unreadBadgeCount > 0 {
-            return "\(scrollState.unreadBadgeCount) messages non lus, defiler vers le bas"
+            let unread = String(format: String(localized: "conversation.scroll-to-bottom.a11y-unread",
+                                defaultValue: "%d messages non lus", bundle: .main),
+                                scrollState.unreadBadgeCount)
+            return "\(unread), \(action)"
         }
         if hasTypingIndicator {
-            return "\(typingLabel), defiler vers le bas"
+            return "\(typingLabel), \(action)"
         }
-        return "Defiler vers le bas"
+        return action
     }
 
     var unreadAttachmentTypeLabel: String? {
         guard let att = unreadAttachment else { return nil }
         switch att.type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return "Audio"
-        case .file: return "Fichier"
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return String(localized: "attachment.label.file", defaultValue: "File", bundle: .main)
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 
@@ -93,6 +119,49 @@ extension ConversationView {
         case .file: return "doc.fill"
         case .location: return "mappin.circle.fill"
         }
+    }
+
+    /// SF Symbol + hex tint for the last unread message when it's a call
+    /// notice (`CallSummaryMetadata`, no `MessageAttachment` involved — a
+    /// call system message never has one). Reads `isLive` BEFORE `outcome`
+    /// (a live message's outcome is a neutral placeholder), mirroring the
+    /// SSOT `CallNoticePresentation.isLive`/`.tint`
+    /// (`Bubble/BubbleCallNoticeView.swift:265-274`) WITHOUT re-decoding
+    /// `message.metadata` — `callSummary` is already decoded on the model.
+    ///
+    /// Tint diverges from `CallNoticePresentation.tint` on two states, both
+    /// deliberate: live returns `nil` (the whole pill is already accent-tinted
+    /// via `.adaptiveGlass(tint:)`; an accent glyph on accent glass would be
+    /// invisible — the glyph falls back to `contentColor`'s WCAG black/white
+    /// choice instead), and `.completed` returns `nil`/`nil` (a finished call
+    /// isn't a pending action worth flagging on the scroll button). A
+    /// "cancelled" call (`.missed` + `isCancelled(viewerIsInitiator:)`) stays
+    /// on the same error hex as a plain "missed" call — same visual family,
+    /// no dedicated branch needed.
+    static func unreadCallIndicator(for summary: CallSummaryMetadata?) -> (symbol: String?, tint: String?) {
+        guard let summary else { return (nil, nil) }
+        let glyph = summary.callType == .video ? "video.fill" : "phone.fill"
+        if summary.isLive {
+            return (glyph, nil)
+        }
+        switch summary.outcome {
+        case .missed, .rejected:
+            return (glyph, MeeshyColors.errorHex)
+        case .failed:
+            return (glyph, MeeshyColors.warningHex)
+        case .completed:
+            return (nil, nil)
+        }
+    }
+
+    /// SF Symbol half of `unreadCallIndicator` for the scroll-to-bottom button.
+    var unreadCallSymbol: String? {
+        Self.unreadCallIndicator(for: viewModel.lastUnreadMessage?.callSummary).symbol
+    }
+
+    /// Hex tint half of `unreadCallIndicator` for the scroll-to-bottom button.
+    var unreadCallTint: String? {
+        Self.unreadCallIndicator(for: viewModel.lastUnreadMessage?.callSummary).tint
     }
 
     /// Formatted media detail of the last unread attachment shown after its
@@ -122,9 +191,9 @@ extension ConversationView {
     var typingLabel: String {
         let names = typingObserver.typingUsernames
         switch names.count {
-        case 1: return "\(names[0]) écrit"
-        case 2: return "\(names[0]) et \(names[1]) écrivent"
-        default: return "\(names.count) personnes écrivent"
+        case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
+        case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
+        default: return String(localized: "typing.several", bundle: .main)
         }
     }
 

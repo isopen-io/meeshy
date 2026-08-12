@@ -52,6 +52,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     case createComment
     case deleteComment
     case toggleLikeComment
+    /// Point 7 — consommation d'un média (écoute, visionnage, ouverture,
+    /// enregistrement). Volontairement NON coalescé : chaque rapport porte
+    /// une trace différente, voir `ReportAttachmentStatusPayload`.
+    case reportAttachmentStatus
 }
 
 extension OutboxKind {
@@ -63,9 +67,20 @@ extension OutboxKind {
     /// contenu de la conversation est malgré tout synchronisé. Le compter
     /// ferait croire à l'utilisateur qu'une synchro est en cours alors que
     /// tout est à jour — c'est précisément le bandeau « bloqué » observé.
+    /// `reportAttachmentStatus` relève de la même logique : personne n'attend
+    /// qu'un rapport d'écoute parte pour considérer sa conversation à jour.
+    /// `markStoryViewed` est le troisième de la famille : « vu » binaire,
+    /// idempotent côté gateway (P2002 no-op), coalescé par storyId et sans
+    /// destination de navigation (`OutboxUIItem.Source.unknown` → le tap sur la
+    /// pastille ne mène nulle part). Le compter rendait la pastille PERMANENTE
+    /// dès qu'un « vu » épuisait son budget de tentatives : `.exhausted` est
+    /// explicitement surfacé (T14b), l'auto-masquage après 3 cycles a été
+    /// retiré (2026-05-27) et la rétention GC est de 7 jours au boot — d'où le
+    /// « Vues story non synchronisées 7/7 » figé en tête d'écran, sans aucun
+    /// geste pour l'écarter.
     public var countsTowardSyncIndicator: Bool {
         switch self {
-        case .markAsRead:
+        case .markAsRead, .reportAttachmentStatus, .markStoryViewed:
             return false
         default:
             return true

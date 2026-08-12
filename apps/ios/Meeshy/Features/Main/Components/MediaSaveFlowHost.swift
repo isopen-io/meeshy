@@ -60,7 +60,7 @@ struct MediaSaveFlowModifier: ViewModifier {
                 get: { coordinator.shareURL.map(StagedFile.init(url:)) },
                 set: { staged in if staged == nil { coordinator.shareURL = nil } }
             )) { staged in
-                MediaShareSheet(url: staged.url)
+                ShareSheet(activityItems: [staged.url])
                     .ignoresSafeArea()
             }
             .adaptiveOnChange(of: coordinator.lastOutcome) { _, outcome in
@@ -169,17 +169,6 @@ private struct DocumentExportPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Share sheet
-
-/// Share sheet présentée DANS une `.sheet` SwiftUI (jamais en popover nu —
-/// le crash iPad historique de l'ancien chemin audio venait d'un
-/// `UIActivityViewController` sans ancre popover).
-private struct MediaShareSheet: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
+// Le partage passe par `ShareSheet` (`ConversationMediaViews.swift`), pont
+// unique vers `UIActivityViewController` : ce fichier en portait une copie
+// strictement identique à un paramètre près.

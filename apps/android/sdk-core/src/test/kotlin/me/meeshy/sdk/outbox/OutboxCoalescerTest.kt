@@ -71,6 +71,50 @@ class OutboxCoalescerTest {
     }
 
     @Test
+    fun `mark-unread then mark-read of the same conversation annihilates the mark-unread`() {
+        val markUnread = row("mu1", OutboxKind.MARK_UNREAD, "c1")
+        val markRead = row("rr1", OutboxKind.READ_RECEIPT, "c1")
+
+        assertThat(OutboxCoalescer.decide(markRead, listOf(markUnread)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("mu1")))
+    }
+
+    @Test
+    fun `mark-read then mark-unread of the same conversation annihilates the mark-read`() {
+        val markRead = row("rr1", OutboxKind.READ_RECEIPT, "c1")
+        val markUnread = row("mu1", OutboxKind.MARK_UNREAD, "c1")
+
+        assertThat(OutboxCoalescer.decide(markUnread, listOf(markRead)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("rr1")))
+    }
+
+    @Test
+    fun `a repeated mark-unread of the same conversation keeps the latest`() {
+        val first = row("mu1", OutboxKind.MARK_UNREAD, "c1")
+        val second = row("mu2", OutboxKind.MARK_UNREAD, "c1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("mu1"), second))
+    }
+
+    @Test
+    fun `a first mark-unread of a conversation is enqueued`() {
+        val markUnread = row("mu1", OutboxKind.MARK_UNREAD, "c1")
+
+        assertThat(OutboxCoalescer.decide(markUnread, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(markUnread))
+    }
+
+    @Test
+    fun `marking a different conversation unread is not coalesced`() {
+        val readC1 = row("rr1", OutboxKind.READ_RECEIPT, "c1")
+        val unreadC2 = row("mu2", OutboxKind.MARK_UNREAD, "c2")
+
+        assertThat(OutboxCoalescer.decide(unreadC2, listOf(readC1)))
+            .isEqualTo(CoalesceDecision.Enqueue(unreadC2))
+    }
+
+    @Test
     fun `a different target is not coalesced`() {
         val editM1 = row("e1", OutboxKind.EDIT_MESSAGE, "m1")
         val editM2 = row("e2", OutboxKind.EDIT_MESSAGE, "m2")

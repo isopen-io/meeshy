@@ -97,6 +97,12 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
+            // Dépôt (Files / Finder) et collage d'URL `file://` résolus par la
+            // barre : chaque `.file` est DÉJÀ copié dans notre conteneur, cette
+            // surface en devient propriétaire et route vers ses pipelines
+            // existants (déclaré avant `accentColor` → doit apparaître ici pour
+            // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
+            onIngest: { items in handleComposerIngest(items) },
             accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             // Hide file/photo attachments in the notification preview composer
@@ -125,7 +131,8 @@ extension ConversationView {
                 : nil,
             customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
                                         || !composerState.preparingAttachments.isEmpty
-                                        || composerState.isLoadingMedia)
+                                        || composerState.isLoadingMedia
+                                        || composerState.pendingPlace != nil)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
             isEditMode: composerState.editingMessageId != nil,
@@ -148,7 +155,10 @@ extension ConversationView {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
+            // sans lui le bouton d'envoi reste inactif pour un message
+            // « lieu seul », que les gardes acceptent pourtant désormais.
+            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording || composerState.pendingPlace != nil,
             // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
             // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
             // bouton d'envoi serait mort ~22s par message en réseau dégradé
@@ -219,8 +229,8 @@ extension ConversationView {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: accentColor) { place in
+                handleLocationSelection(place)
             }
         }
         .sheet(isPresented: $composerState.showContactPicker) {
@@ -504,7 +514,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la reponse", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -753,6 +763,9 @@ extension ConversationView {
                 }
                 ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
+                }
+                if let place = composerState.pendingPlace {
+                    pendingPlaceTile(place)
                 }
             }
             .padding(.horizontal, 12)
@@ -1013,6 +1026,50 @@ extension ConversationView {
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
+        }
+    }
+
+    /// Tuile d'aperçu du lieu en attente d'envoi — même gabarit 56×56 que
+    /// `attachmentPreviewTile`, mais pour un `SharedPlace` : depuis la Task
+    /// 11/12 il ne vit plus dans `pendingAttachments`, donc sans cette tuile
+    /// dédiée le choix d'un lieu ne produirait plus aucun retour visuel dans
+    /// le composer (régression que l'ancien `MessageAttachment.location`
+    /// couvrait par accident).
+    private func pendingPlaceTile(_ place: SharedPlace) -> some View {
+        let label = place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
+        return VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                locationTileFallback()
+
+                Button {
+                    removePendingPlace()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(label)", bundle: .main))
+                .offset(x: 5, y: -5)
+            }
+
+            Text(label)
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    private func removePendingPlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.pendingPlace = nil
         }
     }
 

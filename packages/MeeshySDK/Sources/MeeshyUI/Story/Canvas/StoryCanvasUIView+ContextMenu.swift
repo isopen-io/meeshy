@@ -19,6 +19,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         let kind: CanvasItemKind = {
             if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
             if slide.effects.stickerObjects?.contains(where: { $0.id == id }) == true { return .sticker }
+            if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
             return .media
         }()
 
@@ -215,6 +216,16 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             slide.effects.stickerObjects = stickers
             duplicatedNewId = newId
             duplicatedKind = .sticker
+        } else if let idx = slide.locationObjects.firstIndex(where: { $0.id == id }) {
+            var copy = slide.locationObjects[idx]
+            let newId = UUID().uuidString
+            copy.id = newId
+            copy.x += 0.05
+            copy.y += 0.05
+            copy.zIndex = nextTopZ()
+            slide.locationObjects.append(copy)
+            duplicatedNewId = newId
+            duplicatedKind = .location
         }
         onItemModified?(slide)
         if let newId = duplicatedNewId, let kind = duplicatedKind {
@@ -246,6 +257,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         slide.effects.mediaObjects?.removeAll { $0.id == id }
         slide.effects.textObjects.removeAll { $0.id == id }
         slide.effects.stickerObjects?.removeAll { $0.id == id }
+        slide.locationObjects.removeAll { $0.id == id }
         onItemModified?(slide)
     }
 }

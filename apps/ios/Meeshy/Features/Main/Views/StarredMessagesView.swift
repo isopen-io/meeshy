@@ -9,7 +9,14 @@ import MeeshyUI
 struct StarredMessagesView: View {
     @StateObject private var store = StarredMessagesStore.shared
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var theme: ThemeManager
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
     var body: some View {
@@ -65,31 +72,26 @@ struct StarredMessagesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.circle")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .accessibilityHidden(true)
-            Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
-                .font(MeeshyFont.relative(13))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
+        AdaptiveContentUnavailableView(
+            String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
+            systemImage: "star.circle",
+            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
+        )
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {
         // Delegate to Router's existing highlight-in-conversation flow so the
         // starred row behaves exactly like a tapped notification / search hit.
+        // Le highlight est SCOPÉ à la conversation cible, et la notification
+        // est observée par RootView/iPadRootView (elle était sans observateur —
+        // tap étoilé = no-op silencieux + highlight qui fuitait ailleurs).
         router.pendingHighlightMessageId = snapshot.id
+        router.pendingHighlightConversationId = snapshot.conversationId
         NotificationCenter.default.post(
-            name: Notification.Name("navigateToConversationById"),
+            name: .meeshyNavigateToConversation,
             object: snapshot.conversationId
         )
-        dismiss()
+        back()
     }
 }
 

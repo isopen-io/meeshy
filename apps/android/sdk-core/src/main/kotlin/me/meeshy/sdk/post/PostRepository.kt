@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.net.ApiError
@@ -237,6 +238,7 @@ class PostRepository @Inject constructor(
         originalLanguage: String? = null,
         mobileTranscription: MobileTranscriptionPayload? = null,
         repostOfId: String? = null,
+        location: SharedPlace? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.create(
@@ -251,6 +253,7 @@ class PostRepository @Inject constructor(
                     originalLanguage = originalLanguage,
                     mobileTranscription = mobileTranscription,
                     repostOfId = repostOfId,
+                    location = location,
                 ),
             )
         }

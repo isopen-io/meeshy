@@ -86,7 +86,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
             NotificationChannel(
-                CHANNEL_CALLS,
+                NotificationChannelIds.CHANNEL_CALLS,
                 getString(R.string.call_channel_name),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
@@ -111,7 +111,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
         // Les canaux sont IMMUABLES après création : les installs existantes
         // gardaient l'ancien canal muet — on le supprime pour que le nouveau
         // (id v2) porte la sonnerie partout.
-        manager.deleteNotificationChannel(LEGACY_CHANNEL_CALLS)
+        manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS)
 
         val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -159,7 +159,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .setName(push.displayName)
             .setImportant(true)
             .build()
-        val notification = NotificationCompat.Builder(this, CHANNEL_CALLS)
+        val notification = NotificationCompat.Builder(this, NotificationChannelIds.CHANNEL_CALLS)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
             .setContentTitle(push.title ?: push.displayName)
             .setContentText(push.body ?: fallbackBody)
@@ -179,7 +179,11 @@ class MeeshyFcmService : FirebaseMessagingService() {
     }
 
     private fun showNotification(title: String, body: String, conversationId: String?) {
-        val channelId = CHANNEL_MESSAGES
+        // The channel is created eagerly at process start
+        // (NotificationChannelInstaller, MeeshyApplication.onCreate) — this
+        // idempotent call is a defensive belt-and-suspenders only, kept so a
+        // foreground-received push never depends on that ordering.
+        val channelId = NotificationChannelIds.CHANNEL_MESSAGES
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         manager.createNotificationChannel(
@@ -212,10 +216,6 @@ class MeeshyFcmService : FirebaseMessagingService() {
     }
 
     companion object {
-        const val CHANNEL_MESSAGES = "meeshy_messages"
-        /** v2 : les canaux sont immuables — le v1 (muet, sans sonnerie) est supprimé au passage. */
-        const val CHANNEL_CALLS = "meeshy_calls_v2"
-        const val LEGACY_CHANNEL_CALLS = "meeshy_calls"
         const val EXTRA_CALL_ID = "callId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALLER_NAME = "callerName"

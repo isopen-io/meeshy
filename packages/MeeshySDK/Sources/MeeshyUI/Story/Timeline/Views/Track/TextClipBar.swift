@@ -26,7 +26,6 @@ public struct TextClipBar: View, Equatable {
     public let laneHeight: CGFloat
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
-    public let onLongPress: () -> Void
     public let onMoveDelta: (CGFloat) -> Void
     /// Fired when the move drag ends so the caller can commit the move as
     /// an undoable command and clear the in-flight drag state. Without this
@@ -45,7 +44,6 @@ public struct TextClipBar: View, Equatable {
         geometry: TimelineGeometry, laneHeight: CGFloat,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
-        onLongPress: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
         onMoveEnded: @escaping () -> Void = {},
         onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
@@ -57,7 +55,7 @@ public struct TextClipBar: View, Equatable {
         self.isDark = isDark; self.geometry = geometry
         self.laneHeight = laneHeight
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
-        self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
+        self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
         self.onTrimStartDelta = onTrimStartDelta
         self.onTrimEndDelta = onTrimEndDelta
@@ -91,7 +89,7 @@ public struct TextClipBar: View, Equatable {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
             }
-            if isSelected, !isLocked {
+            if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
                                 onTrimEndDelta: onTrimEndDelta)
@@ -101,14 +99,16 @@ public struct TextClipBar: View, Equatable {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .offset(x: geometry.x(for: startTime))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture { onTap() }
-        .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
-        .gesture(
+        // Même composition que VideoClipBar : le drag en haute priorité AVANT
+        // les taps, sans long-press. En basse priorité il cédait au ScrollView
+        // horizontal, et le long-press à 0,4 s avalait le glissement lent.
+        .highPriorityGesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { v in if !isLocked { onMoveDelta(v.translation.width) } }
                 .onEnded { _ in if !isLocked { onMoveEnded() } }
         )
+        .onTapGesture(count: 2) { onDoubleTap() }
+        .onTapGesture { onTap() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityValue(String(

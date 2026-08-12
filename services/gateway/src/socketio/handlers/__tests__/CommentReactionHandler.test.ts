@@ -49,7 +49,19 @@ jest.mock('../../../utils/socket-rate-limiter', () => {
 });
 
 jest.mock('../../../services/posts/postVisibility', () => ({
+  // Module d'ACL entièrement doublé : ces suites portent sur le protocole du
+  // handler (ACK, broadcast, idempotence, erreurs), pas sur l'audience — celle-ci
+  // est couverte, avec le vrai module, par `src/__tests__/unit/socketio/*`.
   canUserViewPost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+  canUserInteractWithPost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+  canUserConsumePost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+  loadPostAcl: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+    authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+  }),
+  loadCommentPostAcl: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+    postId: 'post-1',
+    post: { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] },
+  }),
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');
@@ -71,12 +83,22 @@ function makeSocket(id = SOCKET_ID): Socket {
   } as unknown as Socket;
 }
 
+/**
+ * Audience déclarée PUBLIC par défaut : réagir à un commentaire consulte
+ * désormais la visibilité du post PORTANT ce commentaire (`loadCommentPostAcl`).
+ * Les surcharges par test sont fusionnées DANS `post` / `postComment` plutôt
+ * qu'à la place, pour qu'une surcharge de contenu n'efface pas la tranche ACL.
+ */
 function makePrisma(overrides: Record<string, any> = {}): PrismaClient {
-  return {
+  const base = {
     postComment: {
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'comment-author-1',
         content: 'Great post!',
+      }),
+      findFirst: jest.fn<any>().mockResolvedValue({
+        postId: POST_ID,
+        post: { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] },
       }),
     },
     post: {
@@ -84,8 +106,18 @@ function makePrisma(overrides: Record<string, any> = {}): PrismaClient {
         type: 'POST',
         author: { displayName: 'Post Author', username: 'postauthor' },
       }),
+      findFirst: jest.fn<any>().mockResolvedValue({
+        authorId: 'author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+      }),
     },
+  };
+  return {
+    ...base,
     ...overrides,
+    post: { ...base.post, ...(overrides['post'] ?? {}) },
+    postComment: { ...base.postComment, ...(overrides['postComment'] ?? {}) },
   } as unknown as PrismaClient;
 }
 

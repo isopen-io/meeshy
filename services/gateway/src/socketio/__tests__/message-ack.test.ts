@@ -1,93 +1,103 @@
 /**
- * Tests for message:send ack callback behavior
+ * Tests for the `message:send` ACK + `message:new` broadcast shaping contract
+ * (Phase 4 §6.2).
+ *
+ * These exercise the REAL production helpers imported from
+ * `utils/message-ack-shaping` — the same functions `MessageHandler` calls — so
+ * a regression in the ack/broadcast data-flow (e.g. dropping the
+ * `clientMessageId` echo, or leaking it into the peers' broadcast) fails here.
  *
  * Verifies:
- * - Ack returns clientMessageId when provided
- * - Ack returns the saved message data
- * - clientMessageId is NOT included in message:new broadcast
- * - Backward compatible: works without clientMessageId
+ * - ACK echoes the server `messageId` (renamed from `id`)
+ * - ACK echoes `clientMessageId` when provided, omits it otherwise
+ * - ACK normalizes a `Date` `createdAt` to an ISO string, passes a string through
+ * - `clientMessageId` is stripped from the peers' `message:new` broadcast
+ * - stripping never mutates the sender's own payload
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
+import {
+  buildMessageAckData,
+  stripClientMessageId,
+} from '../utils/message-ack-shaping';
 
-type AckCallback = (response: {
-  success: boolean;
-  data?: { messageId: string; clientMessageId?: string; message?: any };
-  error?: string;
-}) => void;
+describe('buildMessageAckData (message:send ack)', () => {
+  it('renames the server id to messageId and echoes clientMessageId when provided', () => {
+    const data = buildMessageAckData({ id: 'server-msg-123', clientMessageId: 'client-temp-abc' });
 
-type BroadcastPayload = Record<string, unknown>;
-
-/**
- * Simulates the ack callback extraction logic from MeeshySocketIOManager.
- * This tests the data-flow contract, not the full socket lifecycle.
- */
-function buildAckResponse(
-  savedMessageId: string,
-  clientMessageId: string | undefined
-): { success: boolean; data: { messageId: string; clientMessageId?: string } } {
-  const response: { success: boolean; data: { messageId: string; clientMessageId?: string } } = {
-    success: true,
-    data: { messageId: savedMessageId },
-  };
-  if (clientMessageId) {
-    response.data.clientMessageId = clientMessageId;
-  }
-  return response;
-}
-
-function buildBroadcastPayload(message: Record<string, unknown>): BroadcastPayload {
-  const { clientMessageId: _removed, ...broadcastMessage } = message;
-  return broadcastMessage;
-}
-
-describe('message:send ack callback', () => {
-  it('returns clientMessageId in ack when provided in payload', () => {
-    const response = buildAckResponse('server-msg-123', 'client-temp-abc');
-
-    expect(response.success).toBe(true);
-    expect(response.data.messageId).toBe('server-msg-123');
-    expect(response.data.clientMessageId).toBe('client-temp-abc');
+    expect(data.messageId).toBe('server-msg-123');
+    expect(data.clientMessageId).toBe('client-temp-abc');
   });
 
-  it('omits clientMessageId from ack when not provided in payload', () => {
-    const response = buildAckResponse('server-msg-456', undefined);
+  it('omits clientMessageId when not provided', () => {
+    const data = buildMessageAckData({ id: 'server-msg-456' });
 
-    expect(response.success).toBe(true);
-    expect(response.data.messageId).toBe('server-msg-456');
-    expect(response.data.clientMessageId).toBeUndefined();
+    expect(data.messageId).toBe('server-msg-456');
+    expect(data).not.toHaveProperty('clientMessageId');
   });
 
-  it('does NOT include clientMessageId in broadcast payload', () => {
-    const fullMessage = {
+  it('normalizes a Date createdAt to an ISO string', () => {
+    const when = new Date('2026-07-28T12:00:00.000Z');
+    const data = buildMessageAckData({ id: 'server-msg-789', createdAt: when });
+
+    expect(data.createdAt).toBe('2026-07-28T12:00:00.000Z');
+  });
+
+  it('passes a string createdAt through unchanged', () => {
+    const data = buildMessageAckData({ id: 'server-msg-789', createdAt: '2026-07-28T12:00:00.000Z' });
+
+    expect(data.createdAt).toBe('2026-07-28T12:00:00.000Z');
+  });
+
+  it('omits createdAt when not provided', () => {
+    const data = buildMessageAckData({ id: 'server-msg-000' });
+
+    expect(data).not.toHaveProperty('createdAt');
+  });
+});
+
+describe('stripClientMessageId (message:new broadcast to peers)', () => {
+  it('removes clientMessageId while keeping every other field', () => {
+    const senderPayload = {
       id: 'server-msg-789',
       content: 'Hello world',
       senderId: 'user-1',
       conversationId: 'conv-1',
       clientMessageId: 'client-temp-xyz',
-      createdAt: new Date().toISOString(),
+      createdAt: '2026-07-28T12:00:00.000Z',
     };
 
-    const broadcast = buildBroadcastPayload(fullMessage);
+    const broadcast = stripClientMessageId(senderPayload);
 
     expect(broadcast.id).toBe('server-msg-789');
     expect(broadcast.content).toBe('Hello world');
+    expect(broadcast.senderId).toBe('user-1');
+    expect(broadcast.conversationId).toBe('conv-1');
     expect(broadcast).not.toHaveProperty('clientMessageId');
   });
 
-  it('broadcast payload is unchanged when no clientMessageId exists', () => {
-    const fullMessage = {
+  it('is a no-op strip when no clientMessageId exists', () => {
+    const senderPayload = {
       id: 'server-msg-000',
       content: 'No client ID',
       senderId: 'user-2',
       conversationId: 'conv-2',
-      createdAt: new Date().toISOString(),
     };
 
-    const broadcast = buildBroadcastPayload(fullMessage);
+    const broadcast = stripClientMessageId(senderPayload);
 
-    expect(broadcast.id).toBe('server-msg-000');
-    expect(broadcast.content).toBe('No client ID');
+    expect(broadcast).toEqual(senderPayload);
     expect(broadcast).not.toHaveProperty('clientMessageId');
+  });
+
+  it('does not mutate the sender payload (sender keeps its cid-aware copy)', () => {
+    const senderPayload = {
+      id: 'server-msg-789',
+      clientMessageId: 'client-temp-xyz',
+    };
+
+    stripClientMessageId(senderPayload);
+
+    expect(senderPayload.clientMessageId).toBe('client-temp-xyz');
   });
 });
