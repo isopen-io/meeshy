@@ -311,10 +311,14 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             let targetLanguage: String
             let force: Bool?
         }
+        // Payload `{ requested: Bool, targetLanguage: String }` — typé a
+        // minima : le résultat utile arrive par le socket
+        // comment:translation-updated, pas par cette réponse.
+        struct TranslateCommentResponse: Decodable {
+            let requested: Bool?
+        }
         let body = TranslateCommentRequest(targetLanguage: targetLanguage, force: force ? true : nil)
-        // SimpleAPIResponse : le payload (`{ requested, targetLanguage }`) ne
-        // nous sert pas — le résultat utile arrive par le socket.
-        let _: SimpleAPIResponse = try await api.post(
+        let _: APIResponse<TranslateCommentResponse> = try await api.post(
             endpoint: "/posts/\(postId)/comments/\(commentId)/translate", body: body
         )
     }
