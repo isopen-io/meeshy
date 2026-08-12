@@ -528,14 +528,15 @@ describe('StatusService', () => {
     });
 
     it('recomputes cacheSize across all three throttle caches (incl. onlineEnsureCache)', () => {
-      (service as any).activityCache.set('u1', Date.now());
-      (service as any).connectionCache.set('u2', Date.now());
-      (service as any).onlineEnsureCache.set('u3', Date.now());
+      const sut = makeSut();
+      (sut as any).activityCache.set('u1', Date.now());
+      (sut as any).connectionCache.set('u2', Date.now());
+      (sut as any).onlineEnsureCache.set('u3', Date.now());
 
-      service.resetMetrics();
+      sut.resetMetrics();
 
       // cacheSize must reflect the live size of ALL three caches, not just two.
-      expect(service.getMetrics().cacheSize).toBe(3);
+      expect(sut.getMetrics().cacheSize).toBe(3);
     });
   });
 
