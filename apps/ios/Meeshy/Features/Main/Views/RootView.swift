@@ -776,9 +776,9 @@ struct RootView: View {
         // ViewModifier ci-dessus.
         .modifier(CallPresentationLayer())
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
-        // single-label "Synchronisation..." pill) via .safeAreaInset on the
-        // NavigationStack root. Same emplacement, same chrome dimensions —
-        // see ConnectionBanner.syncingPill / SyncPillContent.
+        // single-label "Synchronisation..." pill) via the single
+        // `.overlay(alignment: .top)` mount point above. Same chrome
+        // dimensions — see ConnectionBanner.syncingPill / SyncPillContent.
         // B4 — Mini audio player floats above the tab bar. Mounted HERE
         // (not in `AdaptiveRootView`) so the tap-body handler can reach
         // the `router` via the local `@StateObject` — `AdaptiveRootView`
