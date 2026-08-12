@@ -179,5 +179,6 @@ struct BookmarksView: View {
             subtitle: String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts et les réels que vous enregistrez apparaîtront ici", bundle: .main)
         )
         .padding(.top, 80)
+        .accessibilityElement(children: .combine)
     }
 }
