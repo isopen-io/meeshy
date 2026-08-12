@@ -66,6 +66,12 @@ describe('parseAgentAdminEvent', () => {
 function makeSubscriber() {
   const handlers: Record<string, ((...args: any[]) => void)[]> = {};
   return {
+    // `connect()` explicite, ajouté au produit depuis : le subscriber est créé
+    // en `lazyConnect` + `enableOfflineQueue: false`, et un `subscribe()` émis
+    // avant l'établissement du stream est REJETÉ (« Stream isn't writeable ») —
+    // le relay ne recevait alors plus rien. Sans ce stub, les 6 témoins de ce
+    // fichier tombaient sur `subscriber.connect is not a function`.
+    connect: jest.fn<any>().mockResolvedValue(undefined),
     subscribe: jest.fn<any>().mockResolvedValue(undefined),
     unsubscribe: jest.fn<any>().mockResolvedValue(undefined),
     quit: jest.fn<any>().mockResolvedValue(undefined),
