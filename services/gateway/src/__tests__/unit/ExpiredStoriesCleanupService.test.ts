@@ -27,14 +27,19 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
     post: {
       updateMany: jest.fn(async () => ({ count: 0 })),
       findMany: jest.fn(async (args: any) => {
+        // `repostOfId` D'ABORD : depuis le cycle 97 la requête des reposts porte
+        // ELLE AUSSI un `type: { in: [...] }` (seuls les reposts éphémères sont
+        // emportés par leur source ; un repost permanent est autoporteur et
+        // survit). Tester le type en premier ferait rendre la fournée de
+        // statuts à la question des reposts.
+        if (args.where?.repostOfId) {
+          return opts.repostIds.map((id) => ({ id }));
+        }
         // Le balayage interroge une LISTE de types éphémères (`{ in: [...] }`),
         // pas le scalaire `'STORY'` : un double qui n'accepte que le scalaire
         // rendrait une liste vide et ferait passer la passe pour un no-op.
         if (Array.isArray(args.where?.type?.in)) {
           return opts.storyIds.map((id) => ({ id }));
-        }
-        if (args.where?.repostOfId) {
-          return opts.repostIds.map((id) => ({ id }));
         }
         return [];
       }),
