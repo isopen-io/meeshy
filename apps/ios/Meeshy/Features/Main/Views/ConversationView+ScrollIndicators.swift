@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Scroll Indicators, Typing & Attach Options
 extension ConversationView {
@@ -43,6 +44,8 @@ extension ConversationView {
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
+            unreadCallSymbol: unreadCallSymbol,
+            unreadCallTint: unreadCallTint,
             onScrollToBottom: {
                 HapticFeedback.light()
                 scrollState.scrollToBottomTrigger += 1
@@ -116,6 +119,49 @@ extension ConversationView {
         case .file: return "doc.fill"
         case .location: return "mappin.circle.fill"
         }
+    }
+
+    /// SF Symbol + hex tint for the last unread message when it's a call
+    /// notice (`CallSummaryMetadata`, no `MessageAttachment` involved — a
+    /// call system message never has one). Reads `isLive` BEFORE `outcome`
+    /// (a live message's outcome is a neutral placeholder), mirroring the
+    /// SSOT `CallNoticePresentation.isLive`/`.tint`
+    /// (`Bubble/BubbleCallNoticeView.swift:265-274`) WITHOUT re-decoding
+    /// `message.metadata` — `callSummary` is already decoded on the model.
+    ///
+    /// Tint diverges from `CallNoticePresentation.tint` on two states, both
+    /// deliberate: live returns `nil` (the whole pill is already accent-tinted
+    /// via `.adaptiveGlass(tint:)`; an accent glyph on accent glass would be
+    /// invisible — the glyph falls back to `contentColor`'s WCAG black/white
+    /// choice instead), and `.completed` returns `nil`/`nil` (a finished call
+    /// isn't a pending action worth flagging on the scroll button). A
+    /// "cancelled" call (`.missed` + `isCancelled(viewerIsInitiator:)`) stays
+    /// on the same error hex as a plain "missed" call — same visual family,
+    /// no dedicated branch needed.
+    static func unreadCallIndicator(for summary: CallSummaryMetadata?) -> (symbol: String?, tint: String?) {
+        guard let summary else { return (nil, nil) }
+        let glyph = summary.callType == .video ? "video.fill" : "phone.fill"
+        if summary.isLive {
+            return (glyph, nil)
+        }
+        switch summary.outcome {
+        case .missed, .rejected:
+            return (glyph, MeeshyColors.errorHex)
+        case .failed:
+            return (glyph, MeeshyColors.warningHex)
+        case .completed:
+            return (nil, nil)
+        }
+    }
+
+    /// SF Symbol half of `unreadCallIndicator` for the scroll-to-bottom button.
+    var unreadCallSymbol: String? {
+        Self.unreadCallIndicator(for: viewModel.lastUnreadMessage?.callSummary).symbol
+    }
+
+    /// Hex tint half of `unreadCallIndicator` for the scroll-to-bottom button.
+    var unreadCallTint: String? {
+        Self.unreadCallIndicator(for: viewModel.lastUnreadMessage?.callSummary).tint
     }
 
     /// Formatted media detail of the last unread attachment shown after its

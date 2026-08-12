@@ -212,11 +212,15 @@ du travail : ne jamais déclarer 100 % sans preuve reproductible.
    test purement dus à un `origin/main` périmé pendant le test, pas au diff lui-même). Puis commit
    factuel `fix(ios/...)` ou `refactor(ios/...)`, push, PR. **N'assume pas que le workflow
    « iOS Tests » (`ios-tests.yml`) est le bon gate** — il ne se déclenche que sur push vers `dev`,
-   jamais sur une PR. **N'assume pas non plus qu'un diff `apps/ios`-only échappe au monorepo** :
-   `ci.yml` n'a pas de filtre de chemin et tourne sa matrice complète (gateway/web/shared/
-   translator/audio/voice, ~15-20 min) sur TOUTE PR quel que soit le diff — seul `packages/
-   MeeshySDK`-only en est dispensé (remplacé par `sdk-tests`/`sdk-tests.yml`). Ne devine jamais la
-   liste des checks : `gh pr checks <n>` te montre ceux réellement attachés à la PR. Laisse tourner
+   jamais sur une PR. **N'assume pas non plus qu'un diff `apps/ios`-only ou `packages/MeeshySDK`-only
+   échappe au monorepo** : `ci.yml` n'a pas de filtre de chemin et tourne sa matrice complète
+   (gateway/web/shared/translator/audio/voice, ~15-20 min) sur TOUTE PR quel que soit le diff — PR
+   #2868 (diff `packages/MeeshySDK`-only, 2026-08-12) l'a confirmé : les 16 checks de `ci.yml` se
+   sont TOUS déclenchés en plus de `sdk-tests`/`sdk-tests.yml`, contrairement à ce que cette section
+   affirmait avant cette date (« seul MeeshySDK-only en est dispensé » était faux — corrigé après
+   RE-PROUVE). Ne devine jamais la liste des checks : `gh pr checks <n>` te montre ceux réellement
+   attachés à la PR — attends-toi systématiquement à la matrice complète, jamais à un sous-ensemble
+   supposé. Laisse tourner
    ces checks-là, squash-merge seulement si tout est vert + gates locaux verts + rebase propre sur
    `main`. Jamais `--amend`, jamais de secret committé.
 7. **Mettre à jour `tasks/ios-debt-routine-progress.md`** — coche l'item (hash de commit + preuve

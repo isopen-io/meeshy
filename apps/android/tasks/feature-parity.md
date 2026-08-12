@@ -1682,6 +1682,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
+- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+      `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
+      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
+      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
+      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
+      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
+      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
+      `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
+      preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
+      the presence-lookup key. `ConversationListViewModel.observePresence()` (mirrors
+      `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
+      `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
+      `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
+      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
+      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
+      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
+      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
+      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
+      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
+      direct-type gate and the snapshot merge.
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
@@ -2819,7 +2840,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       inbound server truth); `ChatViewModel` collects the flow, conversation-scoped. +37 tests
       (18 `AttachmentAudioTranslationMergeTest`, 2 `AudioTranslationEventTest` decode-contract, 8
       `BubbleContentBuilderTest`, 4 repo, 2 VM, +3 wiring). Diff = `apps/android` only.
-- [ ] Ad-hoc blocking text translation
+- [x] Ad-hoc blocking text translation — **stale checkbox, RE-PROUVEN 2026-08-11**: already fully
+      shipped. iOS's own `/translate-blocking` on-demand mechanism (`MessageLanguageDetailView.
+      translateTo`, `TranslationService.shared.translate(messageId:)` — passing `messageId` routes
+      the gateway into its "retranslation" branch, which persists AND broadcasts via
+      `message:translation`) has a direct Android counterpart:
+      `ChatViewModel.onExplorerRetranslate(messageId, code)` → `requestOnDemandTranslation` →
+      `MessageRepository.requestTranslation(messageId, targetLanguage)` — a real, synchronous
+      (`suspend fun`) REST call (`translationApi.translate(...)`) that persists the result,
+      exactly mirroring the "blocking" semantics. Wired from `MessageDetailExplorer`'s per-language
+      retranslate affordance in the same long-press → "Explore languages" sheet root `CLAUDE.md`
+      documents as the sole translation-exploration entry point. Fully tested: 7
+      `MessageRepositoryTest` cases (success, translator failure, unknown/deleted message, blank
+      target, blank result ignored, idempotent-on-match) + ~10 `ChatViewModelTest` cases (success,
+      failure, in-flight double-tap guard, unknown-message no-op, blank-target no-op). No code
+      change needed this run — just the checkbox.
 - [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
       (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
       `originalLanguage = user.systemLanguage ?: "fr"` — doubly wrong: it ignored the Prisme
@@ -4414,6 +4449,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       other 3 tabs, not a regression (iOS itself has no live-update wiring into this specific row either,
       only through re-render on the shared `statusViewModel`'s own `@Published` updates when SwiftUI
       happens to re-evaluate the row).
+      **Presence dot now updates LIVE (2026-08-11, slice `presence-live-contacts-overlay`)** — a
+      DIFFERENT gap than the mood-emoji one just above: the three-state online/away/offline dot
+      shipped by `presence-away-indicator` (2026-07-04) read `FriendRequestUser.isOnline`/
+      `lastActiveAt` off the roster's last full `/friends` fetch only, frozen until the next reload
+      — unlike mood, this one already HAD a live wire target ready to use: `MessageSocketManager`
+      already listened for `user:status`/`presence:snapshot` (both real, gateway-emitted events —
+      confirmed via `SERVER_EVENTS.USER_STATUS`/`_broadcastUserStatus` in
+      `MeeshySocketIOManager.ts`), just with zero consumers anywhere in the app. **A genuine
+      correctness bug found and fixed en route**: `UserStatusEvent`/`PresenceSnapshotEvent`
+      (`:core:model`) didn't even match the real payload shape (`status`/`lastSeenAt`/flat
+      `onlineUserIds: List<String>` vs. the gateway's actual `isOnline`/`lastActiveAt`/`username` /
+      `{users: [...]}`) — so even wiring a consumer to the OLD shape would have silently decoded
+      every live frame to blank defaults. Fixed both DTOs against the shared TS type
+      (`packages/shared/types/socketio-events.ts`), then wired `ContactsListViewModel.
+      observePresence()` (mirrors the existing `observeFriendshipCache()` pattern) to overlay live
+      updates via new pure `PresenceOverlay.applyStatus`/`.applySnapshot` (`:feature:contacts`).
+      +15 tests (4 `UserStatusEventTest` decode-contract, 6 `PresenceOverlayTest`, 3 new
+      `ContactsListViewModelTest`). Mutation-proven on the filter/decode branches. Conversation-
+      participant presence (a separate, still-open gap noted in the Home-screen widgets item
+      above) can now reuse this same corrected wire in a future slice.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the

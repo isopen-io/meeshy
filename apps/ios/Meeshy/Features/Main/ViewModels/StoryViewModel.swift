@@ -109,6 +109,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// (Partager button stayed hidden on PUBLIC stories until this).
     static let storiesCacheKey = "recent_tray_v2"
 
+    /// Taille de page demandée au tray. `GET /posts/feed/stories` plafonne
+    /// `limit` à 50 côté serveur : annoncer davantage ne rend pas une ligne de
+    /// plus et désarme le repli heuristique (leçon du cycle 79, où un
+    /// `limit=500` face à un plafond de 100 avait rendu la garde inatteignable).
+    static let trayPageLimit = 50
+
+    /// Plafond de pages drainées en une passe — 300 stories, très au-delà d'un
+    /// cercle réel. Il borne le coût d'une fenêtre anormale et, surtout, d'un
+    /// serveur qui annoncerait `hasMore` à tort : sans lui, la boucle ne
+    /// s'arrêterait jamais.
+    static let maxTrayPagesPerPass = 6
+
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var showStoryComposer = false
@@ -317,7 +329,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 Task { @MainActor in
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    try? await Task.sleep(for: .seconds(2))
                     // TOUTES les entrées en échec repartent — la file les
                     // sérialise (une seule monte à la fois) et la revendication
                     // atomique empêche toute course avec le drain de queue.
@@ -439,6 +451,78 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         isLoading = false
     }
 
+    /// Résultat d'une passe de tray, pages recollées.
+    struct DrainedStoryPages {
+        let posts: [APIPost]
+        let deletedStoryIds: Set<String>
+        /// Le serveur a plafonné ses tombstones : des disparitions manquent, et
+        /// elles n'ont AUCUN curseur de reprise.
+        let tombstonesTruncated: Bool
+    }
+
+    enum StoryTrayPageError: Error {
+        /// Une page a répondu `success: false` — indiscernable d'une panne, donc
+        /// traitée comme telle plutôt que recollée en silence.
+        case unsuccessfulPage
+    }
+
+    /// Suit `pagination.nextCursor` tant que le serveur annonce `hasMore`.
+    ///
+    /// La page est FILTRÉE par `updatedAt` mais ORDONNÉE par `(createdAt, id)`,
+    /// et son curseur porte sur ce même couple : paginer parcourt donc la
+    /// fenêtre EXACTEMENT, sans saut ni doublon. C'est ce qui distingue ce cas
+    /// de celui des conversations (cycle 79), où escalader vers un fetch complet
+    /// était le seul recours — ici le fetch complet emprunte la MÊME route
+    /// plafonnée à 50 : il ne rattraperait rien.
+    ///
+    /// Avant ce drain, `hasMore`/`nextCursor` n'avaient AUCUN lecteur dans tout
+    /// le dépôt : le tray était silencieusement coupé à 50 stories pour tout le
+    /// monde, delta comme fetch complet.
+    private func drainStoryPages(updatedSince: Date?) async throws -> DrainedStoryPages {
+        var posts: [APIPost] = []
+        var deletedStoryIds = Set<String>()
+        var tombstonesTruncated = false
+        var cursor: String?
+
+        for _ in 0..<Self.maxTrayPagesPerPass {
+            let response = try await storyService.list(
+                cursor: cursor,
+                limit: Self.trayPageLimit,
+                updatedSince: updatedSince
+            )
+            guard response.success else { throw StoryTrayPageError.unsuccessfulPage }
+
+            posts.append(contentsOf: response.data)
+            deletedStoryIds.formUnion(response.meta?.deletedStoryIds ?? [])
+            // Les tombstones voyagent page par page : la troncature vue sur
+            // N'IMPORTE laquelle vaut pour la passe entière.
+            tombstonesTruncated = tombstonesTruncated || (response.meta?.deletedStoryIdsTruncated ?? false)
+
+            // Un `nextCursor` vide avec `hasMore: true` serait une page suivante
+            // qu'on ne sait pas demander : on s'arrête plutôt que de rejouer la
+            // même page indéfiniment.
+            guard response.pagination?.hasMore == true,
+                  let next = response.pagination?.nextCursor,
+                  !next.isEmpty else {
+                return DrainedStoryPages(
+                    posts: posts,
+                    deletedStoryIds: deletedStoryIds,
+                    tombstonesTruncated: tombstonesTruncated
+                )
+            }
+            cursor = next
+        }
+
+        Logger.messages.error(
+            "[StoryVM] Tray drain stopped at the \(Self.maxTrayPagesPerPass, privacy: .public)-page cap while the server still announced more"
+        )
+        return DrainedStoryPages(
+            posts: posts,
+            deletedStoryIds: deletedStoryIds,
+            tombstonesTruncated: tombstonesTruncated
+        )
+    }
+
     func fetchStoriesFromNetwork(deltaSince: Date? = nil) async {
         // R8 inc.1 — refetch silencieux DELTA : quand le cache fournit un
         // curseur (max updatedAt), on ne demande que les stories créées ou
@@ -448,9 +532,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // historique ci-dessous (résilience > économie).
         if let deltaSince {
             do {
-                let response = try await storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)
-                if response.success {
-                    let deltaGroups = response.data.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+                let drained = try await drainStoryPages(updatedSince: deltaSince)
+                // Tombstones plafonnés : la purge qu'on tient est INCOMPLÈTE, et
+                // aucun curseur ne permet de réclamer la suite. Le seul geste qui
+                // fasse sortir les fantômes restants est le remplacement du tray
+                // par un fetch complet — on tombe donc volontairement dessus au
+                // lieu de fusionner une couverture qu'on sait trouée. C'est
+                // l'inverse du geste de la page tronquée juste au-dessus, qui se
+                // rattrape, elle, en paginant.
+                if drained.tombstonesTruncated {
+                    Logger.messages.error("[StoryVM] Server truncated its story tombstones — escalating to a full tray fetch")
+                } else {
+                    let deltaGroups = drained.posts.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
                     if !deltaGroups.isEmpty {
                         insertOrMergeStoryGroups(deltaGroups, replacingExisting: true)
                     }
@@ -460,7 +553,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     // une suppression survenue app fermée ou hors-ligne. Appelé
                     // même sur un delta vide : une réponse sans aucune story
                     // peut très bien ne porter QUE des disparitions.
-                    purgeDeadStories(deletedIds: Set(response.meta?.deletedStoryIds ?? []))
+                    purgeDeadStories(deletedIds: drained.deletedStoryIds)
                     if !deltaGroups.isEmpty {
                         prefetchAllStoryMedia(storyGroups)
                         renderMissingReceiverCovers()
@@ -479,62 +572,64 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let pendingBeforeFetch = currentPendingStoryItems()
 
         do {
-            let response = try await storyService.list(cursor: nil, limit: 50)
+            // Drainé lui aussi : ce chemin est celui qui REMPLACE le tray, donc
+            // une page tronquée n'y laisse pas seulement un trou — elle EFFACE
+            // les stories coupées de l'état affiché, et le cache qu'on sauve
+            // juste après grave la troncature.
+            let drained = try await drainStoryPages(updatedSince: nil)
 
-            if response.success {
-                var groups = response.data.toStoryGroups()
+            var groups = drained.posts.toStoryGroups()
 
-                // Preserve locally-viewed state for stories the API hasn't synced yet.
-                // Garde raffinée : une édition de CONTENU postérieure à la vue
-                // locale (reset d'engagement serveur) fait céder la monotonie —
-                // sauf pour ses PROPRES stories, dont l'état « vu » est
-                // client-only par construction (recordView exclut l'auteur).
-                let locallyViewed = buildLocallyViewedMap()
-                let selfId = AuthManager.shared.currentUser?.id
-                if !locallyViewed.isEmpty {
-                    groups = groups.map { group in
-                        let isOwnGroup = group.id == selfId
-                        let merged = group.stories.map { story in
-                            guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
-                            guard isOwnGroup || Self.shouldKeepLocalViewed(
-                                localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
-                                contentEditedAt: story.contentEditedAt
-                            ) else { return story }
-                            var copy = story; copy.isViewed = true; return copy
-                        }
-                        return group.with(stories: merged)
+            // Preserve locally-viewed state for stories the API hasn't synced yet.
+            // Garde raffinée : une édition de CONTENU postérieure à la vue
+            // locale (reset d'engagement serveur) fait céder la monotonie —
+            // sauf pour ses PROPRES stories, dont l'état « vu » est
+            // client-only par construction (recordView exclut l'auteur).
+            let locallyViewed = buildLocallyViewedMap()
+            let selfId = AuthManager.shared.currentUser?.id
+            if !locallyViewed.isEmpty {
+                groups = groups.map { group in
+                    let isOwnGroup = group.id == selfId
+                    let merged = group.stories.map { story in
+                        guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
+                        guard isOwnGroup || Self.shouldKeepLocalViewed(
+                            localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
+                            contentEditedAt: story.contentEditedAt
+                        ) else { return story }
+                        var copy = story; copy.isViewed = true; return copy
                     }
+                    return group.with(stories: merged)
                 }
-
-                storyGroups = groups
-
-                // Ré-injecte les stories optimistes hors-ligne encore en attente
-                // (le serveur ne les renvoie pas). Dédupliqué par id : si le
-                // serveur a déjà la version publiée, elle a un autre id et la
-                // réconciliation a déjà retiré le pending — pas de doublon.
-                if !pendingBeforeFetch.isEmpty, let user = AuthManager.shared.currentUser {
-                    let authorName = user.displayName ?? user.username
-                    for item in pendingBeforeFetch {
-                        insertOrAppendStoryItem(
-                            item,
-                            authorId: user.id,
-                            authorName: authorName,
-                            authorAvatar: user.avatar
-                        )
-                    }
-                }
-
-                // Tri unifié (ma story d'abord > non-vues > récence), identique au
-                // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
-                // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
-                // au chargement réseau/cold-start — incohérent avec le tri appliqué
-                // par les events socket (2026-06-01). On sauve la version triée pour
-                // que les chemins .fresh/.stale servent déjà le bon ordre.
-                sortStoryGroupsInPlace()
-                try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
-                prefetchAllStoryMedia(storyGroups)
-                renderMissingReceiverCovers()
             }
+
+            storyGroups = groups
+
+            // Ré-injecte les stories optimistes hors-ligne encore en attente
+            // (le serveur ne les renvoie pas). Dédupliqué par id : si le
+            // serveur a déjà la version publiée, elle a un autre id et la
+            // réconciliation a déjà retiré le pending — pas de doublon.
+            if !pendingBeforeFetch.isEmpty, let user = AuthManager.shared.currentUser {
+                let authorName = user.displayName ?? user.username
+                for item in pendingBeforeFetch {
+                    insertOrAppendStoryItem(
+                        item,
+                        authorId: user.id,
+                        authorName: authorName,
+                        authorAvatar: user.avatar
+                    )
+                }
+            }
+
+            // Tri unifié (ma story d'abord > non-vues > récence), identique au
+            // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
+            // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
+            // au chargement réseau/cold-start — incohérent avec le tri appliqué
+            // par les events socket (2026-06-01). On sauve la version triée pour
+            // que les chemins .fresh/.stale servent déjà le bon ordre.
+            sortStoryGroupsInPlace()
+            try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+            prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
@@ -1743,12 +1838,24 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.cleanupUploadTempFiles(upload)
                 // E5 — l'upload online a abouti : retirer l'intent write-ahead
                 // (queue + dossier médias), sinon le boot suivant re-publierait.
+                //
+                // Le retrait de l'intent est AWAITÉ, pas détaché : détaché, il
+                // courait contre la fin de cette tâche et contre la déclaration
+                // de succès à l'UI juste en dessous. Perdre cette course laisse
+                // l'intent au drain de boot, qui RE-PUBLIE une story déjà en
+                // ligne. Même geste que le chemin de drain hors-ligne
+                // (`executeQueuedPublish`), qui l'awaite déjà.
+                //
+                // Le ménage disque, lui, reste détaché : `removeOfflineQueue-
+                // MediaDirectory` est de l'IO synchrone `nonisolated`, et cette
+                // tâche est isolée MainActor. Aucun boot ne dépend de ce dossier
+                // une fois l'intent parti.
                 let finished = self.activeUploads.first(where: { $0.id == id })
                 if let queueId = finished?.queueId {
                     let tempId = finished?.queueTempStoryId
-                    Task.detached {
-                        await StoryPublishQueue.shared.dequeue(queueId)
-                        if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
+                    await StoryPublishQueue.shared.dequeue(queueId)
+                    if let tempId {
+                        Task.detached { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
                 }
                 // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul

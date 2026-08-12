@@ -166,7 +166,7 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    explicitement relevé à iOS 17+ dans une décision future et séparée. Retiré du backlog actif —
    ne plus re-proposer sans qu'une nouvelle décision utilisateur relève le plancher.
 
-7. **[OUVERT — nécessite une décomposition, PAS un mécanique direct — trouvé 2026-08-11]**
+7. **[PARTIELLEMENT FAIT — sous-lot SDK-side livré 2026-08-12, PR #2868, `2762362b0`]**
    `UIScreen.main` deprecated (iOS 16+, remplaçant : `@Environment(\.displayScale)` pour
    `.scale` en contexte View, la fenêtre active pour `.bounds`). **25 fichiers matchent le grep,
    mais l'écrasante majorité N'EST PAS un vrai gap** — triage complet effectué avant de conclure
@@ -194,18 +194,54 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
      exige une `View`/`ViewModifier` réelle), `VideoFilmstrip.swift` (utilitaire
      `AVAssetImageGenerator`, hors `View`), `AudioWaveform.swift` (traitement de waveform hors
      `View`).
-   - **Usage réel en contexte `View` — candidats les plus probables pour un futur slice mécanique,
-     PAS vérifiés en détail ce run (contexte exact body-vs-helper à confirmer avant de coder)** :
-     `ConversationMediaGalleryView.swift:251`, `Bubble/BubbleStandardLayout.swift:612`,
-     `Bubble/BubbleStandardLayout+Media.swift:548`, `SkeletonView.swift` (3 occurrences),
-     `LanguagePickerSheet.swift` (2 occurrences), `ImageViewerView.swift:50`,
-     `StoryComposerView+Canvas.swift:908` (déjà un repli `?? UIScreen.main.bounds.height`, même
-     forme que `DeviceLayout.windowSize` — pourrait n'être qu'un simple swap vers cette SSOT déjà
-     existante plutôt qu'un `@Environment`).
-   Prochain run qui reprend cet item : NE PAS re-grep à l'aveugle — partir de la dernière liste
-   (View-context, non vérifiée) ci-dessus, confirmer pour chacune que l'usage vit bien dans une
-   méthode d'instance `View`/`ViewModifier` (pas un `static func`), puis scoper un premier
-   sous-slice mécanique sur ce sous-ensemble confirmé seulement.
+   - **Vérifiés ce run et confirmés budget de décodage — NE PAS TOUCHER (même famille que la
+     contrainte MainActor/CALayer ci-dessus, raisonnement différent)** :
+     `ConversationMediaGalleryView.swift:251` et `Bubble/BubbleStandardLayout.swift:612`
+     (`targetPx = bounds.width * scale`, budget max de pixels à décoder — sur-décoder est invisible,
+     sous-décoder ne l'est pas, et la fenêtre peut grandir jusqu'à l'écran sous Stage Manager après
+     le choix de la variante ; commentaire explicite ligne 612 de `BubbleStandardLayout.swift`) ;
+     `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift:377`
+     (`max(width, height) * scale`, même raisonnement, trouvé pendant le triage SDK de ce run —
+     n'était pas dans le grep original côté `apps/ios`).
+   - **[LIVRÉ 2026-08-12, PR #2868]** Sous-ensemble SDK-side confirmé être des contraintes de
+     LAYOUT (pas des budgets de décodage — `.frame(maxWidth:/maxHeight:)` ou largeur de skeleton,
+     jamais un calcul de pixels cible) : `packages/MeeshySDK/Sources/MeeshyUI/Primitives/
+     SkeletonView.swift` (3 occurrences), `LanguagePickerSheet.swift` (2 occurrences),
+     `Media/ImageViewerView.swift:50` (confirmé via son seul call site,
+     `.frame(maxWidth: maxWidth, maxHeight: maxHeight)` — pas un budget), `Story/
+     StoryComposerView+Canvas.swift.composerScreenHeight` (déjà un repli `?? UIScreen.main.bounds
+     .height`, converti en simple délégation à la SSOT). Le SDK ne pouvant pas dépendre de
+     `DeviceLayout` (target app), nouveau type SDK-local `WindowMetrics.windowSize`
+     (`Sources/MeeshyUI/Utilities/WindowMetrics.swift`) — même algorithme (scène active par
+     `activationState`, jamais `.first` sur le `Set` non ordonné `connectedScenes`). Bonus :
+     `composerScreenHeight` choisissait la scène par `.first` — la conversion corrige aussi ce
+     défaut (même classe de bug que le fix app-side `DeviceLayout`), pas seulement un DRY. Garde de
+     source dédiée `WindowMetricsSourceGuardTests.swift` (miroir SDK de `WindowMetricsSSOTTests`
+     app-side), mutation-prouvée localement (un site remis à `UIScreen.main.bounds` → exactement ce
+     test échoue). Vérifié : suite `MeeshyUITests` complète verte, `./apps/ios/meeshy.sh build`
+     vert, CI PR #2868 verte (17 checks — cf. correction de doc au §Livrer de ce fichier prompt :
+     un diff `packages/MeeshySDK`-only déclenche en réalité TOUTE la matrice `ci.yml`, pas
+     seulement `sdk-tests`).
+   - **Reste ouvert, différé** : `Bubble/BubbleStandardLayout+Media.swift:548` (app,
+     `UIScreen.main.scale` seul — PAS `.bounds`, donc hors scope de ce sous-lot ; candidat propre
+     pour `@Environment(\.displayScale)` mais nécessite de vérifier si `BubbleGridImageView` a déjà
+     accès à un `@Environment` dans son contexte body, pas fait ce run).
+   Prochain run qui reprend cet item : traiter `BubbleStandardLayout+Media.swift:548` seul —
+   c'est la dernière pièce du groupe "candidats View confirmés" du run précédent, scope différent
+   des swaps `WindowMetrics` (nécessite `@Environment`, pas une simple substitution).
+
+**[NOUVEAU FINDING, 2026-08-12, PAS CORRIGÉ CE RUN]** `StoryComposerView+Canvas.swift:1440`
+(`safeAreaBottomInset`) partage le même défaut que corrigeait `composerScreenHeight` avant ce
+run — la scène est choisie par `.compactMap { $0 as? UIWindowScene }.first`, PAS par
+`activationState == .foregroundActive`, donc potentiellement une scène en arrière-plan sous
+multi-fenêtre. Ce n'est PAS un usage `UIScreen.main` (donc hors scope de l'item 7 tel que titré) —
+c'est la MÊME classe de bug que celle que `DeviceLayout`/`WindowMetrics` résolvent, mais sur
+`safeAreaInsets.bottom` plutôt que `windowSize`. `WindowMetrics` (nouvellement créé) n'expose pour
+l'instant que `windowSize` — lui ajouter `safeAreaBottom` réglerait ce site en un remplacement
+mécanique, mais aussi `MeeshyImageEditorView.swift:118-120` et `MeeshyVideoEditorView.swift:45-47`
+qui dupliquent le même pattern hors contexte `.first` non ordonné pour `safeAreaInsets`. Candidat
+pour un futur item 8 dédié (extension de `WindowMetrics`), pas un mécanique à enchaîner dans ce
+run.
 
 Le backlog sera réapprovisionné (grep `print(`, `DispatchQueue.main.async`, `#file\b`,
 `.system(size:` restants + dernières entrées de `tasks/lessons.md`) quand les items ouverts
@@ -798,4 +834,74 @@ suivi). Pas de branche `claude/apps/ios/*` créée, pas de PR, pas de CI.
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-uiscreen-main-audit-triage`
   (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`, cf. §Choix de
   la lane — même commit que cette mise à jour de `tasks/ios-debt-routine-progress.md`, les deux
+  fichiers vivant hors `apps/android/`/`apps/ios/`).
+
+### 2026-08-12 — Run #7 (reprise de l'item 7, sous-lot SDK-side livré)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5
+last_run=conversation-list-live-presence` — règle d'alternance (streak ≥ 5) déclenchée, bascule
+vers `IOS_DETTE`. Scan de reprise (Étape 0 point 5) : aucune branche `claude/apps/ios/*` ni
+`claude/apps/android/*` ouverte en attente — pas de run interrompu à terminer.
+
+**Reprise exacte du point de départ laissé par le run précédent** : re-vérifié individuellement
+chacun des 7 candidats "contexte `View`, non vérifiés" de l'item 7 plutôt que de re-grep à
+l'aveugle. Résultat du tri fichier par fichier :
+- `ConversationMediaGalleryView.swift:251` et `BubbleStandardLayout.swift:612` : lecture du code
+  réel confirme un calcul `targetPx = bounds.width * scale` — budget de décodage, pas du layout.
+  Reclassés dans le groupe "NE PAS TOUCHER" (ils y étaient déjà implicitement via le test app-side
+  `WindowMetricsSSOTTests.test_displayMeasurements_areConfinedToTheDeliberateSites`, lu pendant ce
+  run — il les liste déjà en exceptions délibérées).
+- `BubbleStandardLayout+Media.swift:548` : usage `UIScreen.main.scale` seul (pas `.bounds`) —
+  candidat `@Environment(\.displayScale)`, mais différé (scope différent des swaps `WindowMetrics`,
+  nécessite de vérifier l'accès `@Environment` dans le contexte body de `BubbleGridImageView`).
+- `SkeletonView.swift` (3×), `LanguagePickerSheet.swift` (2×), `ImageViewerView.swift:50` (1×,
+  confirmé via son unique call site `.frame(maxWidth: maxWidth, maxHeight: maxHeight)` — une
+  contrainte de layout, pas un budget), `StoryComposerView+Canvas.swift.composerScreenHeight` (1×) :
+  confirmés être des contraintes de LAYOUT — candidats sûrs.
+
+**Obstacle découvert et résolu avant de coder** : ces 4 fichiers vivent tous sous
+`packages/MeeshySDK/Sources/MeeshyUI/`, mais `DeviceLayout` (la SSOT `windowSize` app-side) vit
+dans `apps/ios/Meeshy/Core/` — le SDK ne peut pas en dépendre (mauvais sens de dépendance). Plutôt
+que dupliquer l'algorithme une 4e fois (le SDK en avait déjà 3 copies non convergées :
+`StoryComposerView+Canvas.swift` ×2, `MeeshyImageEditorView.swift`, `MeeshyVideoEditorView.swift`),
+créé un type SDK-local unique `WindowMetrics.windowSize`
+(`Sources/MeeshyUI/Utilities/WindowMetrics.swift`) — miroir exact de l'algorithme `DeviceLayout`
+(scène active par `activationState == .foregroundActive`, jamais `.first` sur `connectedScenes`).
+Câblé les 4 fichiers dessus. Bonus non cherché : `composerScreenHeight` choisissait la scène par
+`.first` sur un `Set` non ordonné — la conversion vers `WindowMetrics` corrige aussi ce défaut
+(même classe de bug que le fix app-side d'origine), pas seulement une déduplication.
+
+**TDD** : garde de source `WindowMetricsSourceGuardTests.swift` écrite avant les 4 substitutions
+(miroir SDK de `NavigationViewDeprecatedAPISourceGuardTests`/`WindowMetricsSSOTTests` app-side,
+assertion en ÉGALITÉ contre un ensemble délibéré `{WindowMetrics.swift, CachedAsyncImage.swift}` —
+`CachedAsyncImage.swift` trouvé pendant ce triage, budget de décodage `max(width,height)*scale`,
+absent du grep original côté `apps/ios` car jamais audité côté SDK avant ce run). Rouge avant les
+substitutions (détectait `SkeletonView.swift`/`LanguagePickerSheet.swift`/`ImageViewerView.swift`/
+`StoryComposerView+Canvas.swift` en trop), vert après.
+
+**Mutation-proof** : `SkeletonView.swift` remis temporairement à `UIScreen.main.bounds.width`
+(copie de secours, jamais `git checkout --`) → exactement `test_meeshyUI_confinesDisplayBounds...`
+échoue, les 3 autres tests de la garde restent verts. Restauré, re-vérifié vert.
+
+**Vérifié** : `xcodebuild test -scheme MeeshySDK-Package -only-testing:MeeshyUITests` (suite
+complète) vert ; `./apps/ios/meeshy.sh build` vert (93s).
+
+**Livré** : PR #2868 (`claude/apps/ios/debt-windowmetrics-sdk-migration`), squash-mergée
+(`2762362b0`). CI : 17 checks, tous verts — **découverte en cours de route** : un diff
+`packages/MeeshySDK`-only déclenche en réalité TOUTE la matrice `ci.yml` (gateway/web/shared/
+translator/audio/voice), pas seulement `sdk-tests`/`sdk-tests.yml` comme l'affirmait
+`tasks/android-parity-ios-debt-agent-prompt.md` §Livrer — section corrigée dans ce même run
+(commit direct, avec ce fichier).
+
+**Reste ouvert dans le backlog** (voir item 7 mis à jour ci-dessus, section Backlog) :
+`BubbleStandardLayout+Media.swift:548` (différé, `@Environment(\.displayScale)`) et un NOUVEAU
+finding hors scope `UIScreen.main` — `StoryComposerView+Canvas.swift:1440` (`safeAreaBottomInset`)
+partage le même défaut `.first` sur `Set` non ordonné que corrigeait `composerScreenHeight` avant
+ce run, plus `MeeshyImageEditorView.swift`/`MeeshyVideoEditorView.swift` qui dupliquent le même
+pattern pour `safeAreaInsets` — candidat pour un futur item 8 (extension de `WindowMetrics` avec
+`safeAreaBottom`), pas traité ce run.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-windowmetrics-sdk-migration`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main` — même commit que
+  cette mise à jour et la correction de `tasks/android-parity-ios-debt-agent-prompt.md`, les trois
   fichiers vivant hors `apps/android/`/`apps/ios/`).

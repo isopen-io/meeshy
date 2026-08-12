@@ -196,11 +196,6 @@ export const postsService = {
     return unwrap(response);
   },
 
-  async getStories(): Promise<{ success: boolean; data: Post[] }> {
-    const response = await apiService.get<{ success: boolean; data: Post[] }>('/posts/feed/stories');
-    return unwrap(response);
-  },
-
   async getStatuses(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed/statuses${buildQuery(filters)}`);
     return unwrap(response);

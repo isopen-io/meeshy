@@ -23,7 +23,7 @@ import {
   createConversationRequestSchema,
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
@@ -892,13 +892,16 @@ export function registerCoreRoutes(
                 userId
               ));
 
-      // Calculer le unreadCount pour l'utilisateur courant
+      // Calculer le unreadCount pour l'utilisateur courant.
+      // `resolveCallerParticipant` et pas un `where: { userId }` ecrit a la main :
+      // pour un invite de lien partage, `authContext.userId` PORTE un
+      // `Participant.id` (branche anonyme d'`UnifiedAuthService`), donc la clause
+      // manuelle comparait un id de participant a la colonne `userId` et ne
+      // matchait rien. Le compteur retombait silencieusement a 0 — et ce 0
+      // ecrasait ensuite le badge que le socket venait de pousser juste.
       let unreadCount = 0;
       try {
-        const participant = await prisma.participant.findFirst({
-          where: { conversationId, userId, isActive: true },
-          select: { id: true },
-        });
+        const participant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
         if (participant) {
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(prisma);

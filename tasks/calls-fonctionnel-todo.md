@@ -6999,3 +6999,363 @@ Reconduit tel quel (rien de plus trouvé côté iOS au-delà du fix ci-dessus) :
 `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
 string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
 ce sandbox.
+
+## Vague 108 — `VideoFiltersPanel.activePreset` ne se restaurait pas depuis `filterConfig` à la réouverture du panneau (iOS) (2026-08-11)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche `claude/upbeat-dirac-c7hnbb`
+strictement à jour avec `origin/main` au démarrage (`2c141a004`, qui contient déjà la Vague 106+107 —
+PR #2859 mergée), 0 commit d'avance/retard, aucune PR ouverte de cette routine. Candidat pris
+directement dans le « Reste ouvert » loggé par la Vague 107 plutôt que ré-auditer à froid — c'était
+l'unique candidat explicitement réservé pour cette vague.
+
+- **Root cause confirmée par lecture directe** (`VideoFiltersPanel.swift`) : `activePreset` était un
+  `@State private var activePreset: VideoFilterPreset? = .natural` — initialisé une seule fois à la
+  création de la View, jamais re-dérivé. `.onAppear` re-hydrate bien `filterConfig` depuis
+  `callManager.videoFilters.config` (la config persistée du call en cours), mais `activePreset` n'était
+  touché nulle part dans ce bloc. Toute réouverture du panneau après avoir choisi un preset non-natural
+  (`.warm`/`.cool`/`.vivid`/`.muted`) restaurait donc correctement le filtre réellement appliqué
+  (`filterConfig`, donc le rendu vidéo live était toujours juste) mais réaffichait le chip « Naturel »
+  en surbrillance — un mensonge visuel pur, sans perte de fonction (cf. constat déjà posé par la Vague
+  107 qui avait laissé ce candidat de côté). Le même défaut de source unique aurait aussi laissé un chip
+  preset en surbrillance après que l'utilisateur ait manuellement dérivé la colorimétrie via un slider
+  de `VideoFilterControlView` (`$filterConfig` bindé directement, sans jamais passer par `presetChip`) —
+  un second symptôme du même bug de fond, non mentionné par la Vague 107 mais couvert par le même fix.
+- **Fix** : `activePreset` n'est plus un `@State` séparé mais une **propriété calculée** dérivée de
+  `filterConfig` à chaque rendu (`VideoFilterPreset.matching(filterConfig)`), source unique — élimine la
+  classe de bug entière plutôt que rapiécer le seul site `.onAppear`. Nouvelle fonction pure
+  `VideoFilterPreset.matching(_:)` (`VideoFilterPipeline.swift`) : reverse-lookup comparant uniquement
+  les 6 champs colorimétriques (`temperature`/`tint`/`brightness`/`contrast`/`saturation`/`exposure`)
+  contre chaque preset — jamais `isEnabled` (le bouton « Reset » pose la colorimétrie de `.natural` mais
+  repasse `isEnabled` à `false`, et doit quand même résoudre `.natural`) ni les deux champs avancés
+  (`presetChip` propage déjà volontairement le `backgroundBlurEnabled`/`skinSmoothingEnabled` du
+  06/appelant à travers un changement de preset — orthogonaux au preset colorimétrique actif). Retourne
+  `nil` si aucun preset ne matche (slider dérivé à la main) — absence légitime de sélection, pas un bug.
+  Les deux anciennes affectations manuelles (`activePreset = .natural` dans Reset, `activePreset = preset`
+  dans `presetChip`) sont supprimées : la dérivation automatique produit exactement le même résultat
+  puisque les deux sites posent `filterConfig` avec la colorimétrie exacte du preset visé.
+- **Tests** (ajoutés, pas exécutables dans ce sandbox Linux — cf. Vérification) : 5 nouveaux cas dans
+  `VideoFilterPipelineTests.swift` (`VideoFilterPresetTests`) — `matching()` retrouve chaque preset
+  depuis sa propre config, ignore `isEnabled` (cas Reset), ignore les champs avancés (cas presetChip),
+  retourne `nil` sur une colorimétrie dérivée à la main, et résout `.natural` depuis
+  `VideoFilterConfig.default` (comportement par défaut inchangé, panneau jamais touché).
+- **Vérification** : build/tests iOS **non exécutables dans ce sandbox** (conteneur Linux, aucun Xcode
+  — cf. `apps/ios/CLAUDE.md`). Relecture ligne à ligne des 2 fichiers de prod touchés + comptage
+  d'accolades avant/après (équilibré : 78/78 `VideoFilterPipeline.swift`, 31/31 `VideoFiltersPanel.swift`,
+  37/37 sur le fichier de tests). Les 2 sites de test source-scan existants
+  (`VideoFiltersPanelAccessibilityTests`, `CallViewObservedObjectInjectionTests`) référencent des
+  littéraux inchangés par ce diff — vérifiés non affectés par lecture. Vérification réelle déléguée à la
+  CI GitHub Actions (macOS, job « iOS Tests ») au push — PR suivie jusqu'au vert avant merge.
+- **Portée volontairement non étendue** : aucun nouveau candidat frais audité ce cycle (le backlog
+  « Reste ouvert » de la Vague 107 ne portait que ce seul item réservé) — cf. liste reconduite ci-dessous
+  pour la Vague 109.
+
+### Reste ouvert
+
+Le backlog iOS laissé par la Vague 107 est maintenant **vide** — son unique candidat réservé a été
+traité (Vague 108 ci-dessus). Reconduit tel quel (aucun audit frais mandaté ce cycle, portée limitée à
+un candidat par audit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; `removeParticipant()` web (Vague 91, non-régression) ;
+`call:force-leave`/`call:check-active` en string literals hors du type-map partagé (cosmétique) ;
+toolchains iOS/Android hors d'atteinte dans ce sandbox. **Candidat sérieux pour la Vague 109** : un
+audit frais (gateway ou iOS) reste à mandater au prochain cycle — aucun nouveau candidat concret n'a
+été identifié cette fois-ci au-delà du fix ci-dessus.
+
+## Vague 109 — `translateAndEmitSegment` résolvait la langue cible des sous-titres d'appel via `systemLanguage` seul, contournant le Prisme Linguistique (gateway) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche
+`claude/upbeat-dirac-l6bxcd` strictement à jour avec `origin/main` au démarrage (`fc27724ff`, qui
+contient déjà la Vague 108 — PR #2859 mergée), 0 commit d'avance/retard, aucune PR ouverte de cette
+routine (une seule PR ouverte au repo, `#2870`, sans rapport — stories). Un audit frais (agent
+Explore, lecture readonly) a été mandaté avec la liste condensée des items déjà triés/fixés
+(Vagues 63-108) pour proposer un candidat neuf.
+
+- **Root cause confirmée par lecture directe** (`CallEventsHandler.ts`, `translateAndEmitSegment`,
+  chemin `CALL_EVENTS.TRANSCRIPTION_SEGMENT` qui pousse les sous-titres traduits en temps réel pendant
+  un appel) : le `select` Prisma ne lisait que `user.systemLanguage`, et la résolution de langue cible
+  par participant faisait `(p.participant.user?.systemLanguage as string | undefined) ?? 'fr'` —
+  contournant entièrement `resolveUserLanguage()`, qu'`apps/ios/../services/gateway/CLAUDE.md` impose
+  pourtant comme règle dure (« ALWAYS use `resolveUserLanguage()` … NEVER reimplement the priority
+  order locally »), et qu'`import { resolveUserLanguage } from '@meeshy/shared/…'` était déjà présent
+  en tête de fichier — utilisé 1200 lignes plus haut par `resolveNotificationLangs` (poussé de la
+  Vague… antérieure, non renumérotée ici) pour le tout autre problème du push d'appel entrant, mais
+  jamais consulté par ce site-ci. Un participant d'appel dont `systemLanguage` est vide (état ordinaire
+  : utilisateur n'ayant configuré qu'une langue régionale, une destination personnalisée, ou reposant
+  sur sa seule locale appareil) recevait donc ses sous-titres traduits en français quelle que soit sa
+  préférence réelle — seule feature du produit à violer le Prisme, toutes les fonctions sœurs du
+  même fichier (push d'appel entrant, notification, résolution auth) le respectant déjà.
+- **Fix** : `select` étendu à `regionalLanguage`/`customDestinationLanguage`/`deviceLocale` ; la
+  résolution par participant appelle désormais `resolveUserLanguage(user, { deviceLocale })`, même
+  patron exact que `resolveNotificationLangs` dans le même fichier.
+- **Tests** (TDD, RED confirmé en exécutant réellement le nouveau cas AVANT le fix — `translateText`
+  jamais appelé du tout dans ce scénario particulier, le participant sans `systemLanguage` retombant
+  sur `'fr'` qui égale la langue source du segment donc filtré par le garde anti-langue-identique,
+  pire que le comportement attendu, pas seulement "mauvaise langue") : nouveau cas dans
+  `CallEventsHandler-transcription-translation.test.ts` — auditeur `systemLanguage: null,
+  regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: 'en-US'`, attend
+  `translateText(..., 'es', ...)`, jamais `'fr'`. GREEN après le fix. Sweep complet
+  `--testPathPatterns="[Cc]all"` — **48 suites / 1123 tests verts**, 0 régression. `npx tsc --noEmit` :
+  **0 erreur**. `bun run test:coverage` (sweep complet, pas seulement calls) — **653 suites / 16 463
+  tests verts**, 0 échec.
+- **Portée volontairement non étendue** : `resolveUserLanguagesOrdered` (variante multi-langues
+  ordonnée du même resolver, utilisée ailleurs pour construire des bandes de drapeaux) n'a pas été
+  substituée ici — un seul segment ne cible qu'une langue par auditeur, la variante simple suffit et
+  reste au plus près du patron `resolveNotificationLangs` déjà en place dans ce fichier.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox. **Candidat pour la Vague 110** : un audit frais (gateway ou iOS) reste à mandater au
+prochain cycle.
+
+## Vague 110 — le chrono d'appel du CALLER comptait la durée de sonnerie comme temps de conversation (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche
+`claude/upbeat-dirac-njc6x6` remise à `origin/main` (`d368e989`, qui contient déjà la Vague 109 —
+PR #2871 mergée par cette même session avant de démarrer ce cycle), aucune autre PR ouverte de cette
+routine. Un audit frais (agent Explore, lecture readonly) a été mandaté avec la liste condensée des
+items déjà triés/fixés (Vagues 63-109) pour proposer un candidat neuf ; gateway lu en entier
+(`CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`, `TURNCredentialService.ts`,
+`call-push-mirroring.ts`) sans rien trouver de nouveau — la stack gateway calls est désormais très
+densément auditée. Le candidat retenu vient du client web, jamais touché par les 109 cycles
+précédents.
+
+- **Root cause confirmée par lecture directe** (`apps/web/hooks/conversations/use-video-call.ts:207-215`,
+  surfaçant via `apps/web/components/video-calls/VideoCallInterface.tsx:73-75` et
+  `apps/web/components/video-call/CallManager.tsx`) : `startCall()` (le CALLER) stampe
+  `currentCall.startedAt = new Date()` à l'instant où l'ack `call:initiate` réussit — c'est-à-dire
+  quand le téléphone du destinataire commence à sonner, pas quand il décroche.
+  `CallManager.tsx` monte `VideoCallInterface` dès que `isInCall && currentCall` (aucune garde sur
+  `status`), et `VideoCallInterface` injectait ce même `startedAt` directement dans
+  `useCallDuration()`, dont le résultat (`CallInfoOverlay`) s'affiche sans condition. Le champ partagé
+  `CallSession.answeredAt` (`packages/shared/types/video-call.ts:81`) existe précisément pour éviter
+  ça — c'est ce sur quoi le gateway ancre déjà `duration` côté serveur pour les appels terminés
+  (Vagues 25/27/30/105/106) — mais n'était référencé **nulle part** sous `apps/web` (`rg answeredAt`
+  ne remonte que gateway/iOS/Android/shared, jamais web).
+  Scénario concret : l'appelant compose, le téléphone du destinataire sonne 12s avant décroché. Le
+  chrono à l'écran de l'appelant affiche déjà « 0:12 » à l'instant même où l'appel se connecte, et
+  chaque seconde suivante hérite de ce décalage pour toute la durée de l'appel — exactement la classe
+  de bug déjà corrigée côté serveur à plusieurs reprises, jamais adressée côté chrono client. Le côté
+  CALLEE n'a pas ce défaut (`acceptOrJoinCall`, `CallManager.tsx`, stampe déjà `startedAt` au moment
+  précis de l'acceptation) — asymétrie confirmée par lecture des deux chemins.
+- **Fix** : le champ `answeredAt`, déjà défini dans `CallSession` et déjà lu nulle part côté web, est
+  maintenant écrit aux deux points où un appel devient réellement actif, et lu à l'unique endroit qui
+  alimente le chrono visible :
+  - `CallManager.tsx`, `handleParticipantJoined` (CALLER — `call:participant-joined`, le premier
+    participant qui rejoint un appel encore `'initiated'` EST le décroché) : ajoute
+    `answeredAt: new Date()` au même `setCurrentCall` qui bascule `status` vers `'active'`, sous la
+    même garde `status === 'initiated'` — un second/troisième participant rejoignant un appel de
+    groupe déjà actif ne réécrit jamais `answeredAt`.
+  - `CallManager.tsx`, `acceptOrJoinCall` (CALLEE) : ajoute `answeredAt` (même valeur que `startedAt`,
+    le décroché EST l'instant présent pour ce côté).
+  - `VideoCallInterface.tsx` : `useCallDuration(currentCall?.startedAt)` →
+    `useCallDuration(currentCall?.answeredAt)`. Avant décroché, `answeredAt` est `undefined` →
+    `useCallDuration` (déjà correct, jamais modifié) affiche `0:00` ; le chrono ne démarre qu'au
+    décroché réel, avec la bonne origine.
+- **Tests** (TDD, RED confirmé en exécutant réellement les 5 nouveaux cas AVANT le fix — tous rouges
+  avec le message d'assertion attendu, jamais un skip silencieux) :
+  - `CallManager.answeredAt.test.tsx` (nouveau) : CALLEE — `acceptOrJoinCall` stampe
+    `answeredAt` (instance `Date`) au décroché ; CALLER — `answeredAt` reste `undefined` tant que
+    `status === 'initiated'`, puis devient une `Date` à `call:participant-joined` ; un second
+    participant rejoignant un appel de groupe déjà `'active'` ne réécrit PAS `answeredAt` (égalité
+    stricte avec la valeur capturée au premier join).
+  - `VideoCallInterface.test.tsx` (2 nouveaux cas) : `answeredAt` non défini + `startedAt` vieux de
+    12s → chrono affiche `0:00` (pas `0:12`) ; `answeredAt` vieux de 5s + `startedAt` vieux de 17s →
+    chrono affiche `0:05` (pas `0:17`).
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **49 suites / 418 tests verts**, 0 régression.
+  - `npx tsc --noEmit` : 1224 erreurs pré-existantes, **identiques bit pour bit avec et sans ce diff**
+    (vérifié par `git stash` des deux fichiers de prod touchés puis nouveau run — même compte exact,
+    aucune ligne citée dans les deux fichiers modifiés) ; le sandbox n'avait pas
+    `packages/shared/dist` généré avant ce cycle (prérequis CLAUDE.md `npx prisma generate` +
+    `bun run build`), désormais fait, sans changer ce compte — bruit de configuration sandbox
+    préexistant, aucun rapport avec ce diff.
+- **Portée volontairement non étendue** : la branche `isInitiator` de `CallManager.tsx`
+  (`setCurrentCall` vers la ligne 292, `status: 'initiated'`) reste inchangée — un commentaire déjà en
+  place dans `use-video-call.ts` confirme cette branche **inatteignable** côté web (le gateway ne
+  réémet jamais `call:initiated` vers le socket de l'initiateur lui-même) ; y ajouter `answeredAt`
+  n'aurait aucune valeur de test et sort du scope. Le runner-up de l'audit (`handleParticipantJoined`
+  bascule `status` vers `'active'` sur un simple early-join, potentiellement avant un vrai décroché —
+  trouvaille déjà notée Vague 104 côté gateway pour un problème distinct) n'est pas traité ici : il
+  concerne la SÉMANTIQUE du statut `'active'`, pas l'ancre du chrono, et mériterait son propre cycle
+  d'investigation dédié plutôt qu'un fix couplé à celui-ci.
+
+## Vague 111 — le bouton haut-parleur du web ne mutait/démutait jamais aucun audio (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, `origin/main` strictement à
+jour avec `HEAD` de la branche dédiée au démarrage (`00c6665c`, qui contient déjà la Vague 110 — PR
+mergée), 0 commit d'avance/retard, aucune PR ouverte de cette routine. Candidat repris directement du
+runner-up laissé en tête de la Vague 110 (confiance moindre annoncée là-bas — vérifié ici avant fix).
+
+- **Root cause confirmée par lecture directe** : `CallControls.tsx` (`handleSpeakerToggle`) ne
+  faisait que basculer un `useState` **local au composant** — jamais lu par personne. Aucune des deux
+  surfaces qui jouent réellement l'audio distant (`VideoCallInterface.tsx`, `<VideoStream>` plein
+  écran du participant principal ; `DraggableParticipantOverlay.tsx`, `<VideoStream>` des tuiles
+  secondaires) ne recevait de prop dérivée de cet état — les deux codaient en dur `muted={false}`.
+  `rg setSinkId` sur tout `apps/web` : **zéro résultat**. Le bouton changeait d'icône
+  (`Volume2`/`VolumeX`) et de libellé (« Désactiver le haut-parleur » / « Activer ») sans qu'aucun
+  `<video>` ne change de volume — 100% cosmétique, sur toute la stack web, quel que soit le nombre de
+  participants. Confirme et clôt le runner-up laissé ouvert par la Vague 110 : ce n'est pas une
+  limitation navigateur (aucune tentative de `setSinkId`/routage n'existait pour buter dessus), c'est
+  un câblage jamais fait.
+- **Fix** : `speakerEnabled` devient un état du CONTAINER (`VideoCallInterface`, seul propriétaire des
+  éléments `<video>` qui jouent l'audio distant), jamais synchronisé au socket (contrairement à
+  `controls.audioEnabled`/`videoEnabled` — c'est un choix de lecture 100% local, sans signification
+  pour les autres participants). `CallControls` redevient un composant strictement contrôlé — plus de
+  `useState` interne, `speakerEnabled`/`onToggleSpeaker` en props, même patron que
+  `audioEnabled`/`onToggleAudio`. `!speakerEnabled` est propagé comme `muted` sur les DEUX surfaces
+  (plein écran + `DraggableParticipantOverlay`, qui gagne une nouvelle prop `muted` réexportée vers
+  son propre `<VideoStream>`).
+- **Tests** (TDD, RED confirmé en exécutant réellement les 7 nouveaux cas AVANT le fix — le composant
+  contrôlé n'existait pas encore, `speakerEnabled`/`onToggleSpeaker` non consommés) :
+  - `CallControls.test.tsx` (2 nouveaux cas) : le clic invoque `onToggleSpeaker` et NE change PAS son
+    propre libellé (preuve que l'état n'est plus géré en interne) ; `speakerEnabled=false` affiche le
+    libellé call-to-action inverse.
+  - `VideoCallInterface.test.tsx` (3 nouveaux cas, + mock `VideoStream` étendu pour capturer `muted`
+    et `isLocal` — nécessaire pour distinguer la tuile locale, toujours mute, de la tuile distante) :
+    audio distant audible par défaut ; le clic sur le bouton mute la tuile plein écran ; un second
+    clic redémute.
+  - `DraggableParticipantOverlay.test.tsx` (2 nouveaux cas) : non-mute par défaut, propage
+    `muted=true` reçu du parent vers son `<VideoStream>` interne.
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **49 suites / 425 tests verts**, 0 régression.
+  - `npx tsc --noEmit` : diff ligne-à-ligne AVANT/APRÈS (`git stash`) — **même 1757 erreurs
+    pré-existantes, caractère pour caractère**, seuls les numéros de ligne des fichiers touchés
+    décalent des lignes ajoutées ; aucune nouvelle erreur.
+  - `eslint`/`next lint` : **non exécutables dans ce sandbox** (config circulaire pré-existante,
+    `TypeError: Converting circular structure to JSON` sur le plugin `react`, reproductible sur un
+    fichier non touché par ce diff — limitation d'environnement, pas un signal sur ce changement).
+- **Portée volontairement non étendue** : le libellé produit reste « haut-parleur » (calqué sur le
+  vocabulaire mobile CallKit) alors que le web n'a pas de dichotomie haut-parleur/écouteur — la
+  sémantique retenue ici est « l'audio distant est-il audible localement », qui correspond exactement
+  au texte affiché (« Désactiver/Activer le haut-parleur ») sans changer les clés i18n existantes
+  (4 langues, `speakerOn(Label)`/`speakerOff(Label)`). Une vraie sélection de périphérique de sortie
+  (`navigator.mediaDevices.enumerateDevices` + `HTMLMediaElement.setSinkId`, limité aux navigateurs
+  Chromium desktop) reste un candidat séparé et plus ambitieux, hors scope d'un fix ciblé sur le
+  symptôme rapporté (le bouton ne fait rien).
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, cf. ci-dessus). **Candidats
+pour la Vague 112** (runners-up de la Vague 110, non traités, confiance moindre — à vérifier avant
+fix) :
+- `handleParticipantJoined` bascule `status` vers `'active'` sur le premier `call:participant-joined`,
+  qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché (cf. Vague 104 côté
+  gateway pour le même symptôme sur un chemin différent).
+- `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
+  — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
+  sévérité, probablement pas suffisant pour son propre cycle isolément.
+
+## Vague 112 — le bandeau « appel en cours, rejoindre » (web) ne pouvait jamais s'afficher pour personne (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`. Au démarrage, DEUX PRs
+ouvertes de cette routine visaient la MÊME Vague 111 en parallèle (collision entre deux sessions,
+cf. leçon 132 dans `tasks/lessons.md`) : #2877 (`setSinkId`, routage réel de périphérique de sortie
+audio) et #2881 (mute/unmute des éléments `<video>`). Arbitrage effectué avant de commencer ce cycle :
+**#2881 mergée**, #2877 fermée en doublon — les icônes/labels du bouton (`Volume2`/`VolumeX`,
+« Désactiver le haut-parleur ») encodent déjà « l'audio distant est-il audible », pas « quel
+périphérique de sortie » ; le fix `setSinkId` ciblait par ailleurs `audioOutputDevices[1]` de façon
+explicitement arbitraire (son propre texte : « pas nécessairement un haut-parleur ») et masquait le
+bouton entier sur Safari/poste mono-périphérique — régression UX plus large que le no-op qu'il
+corrigeait. Branche `claude/upbeat-dirac-ax0ee9` ensuite remise à `origin/main` (`374733ce`, qui
+contient #2881), 0 commit d'avance/retard, plus aucune PR ouverte de cette routine. Audit frais (agent
+Explore, lecture readonly) mandaté avec la liste condensée des items déjà triés/fixés (Vagues 63-111).
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/conversations/header/use-call-banner.ts`,
+  consommé par `ConversationHeader.tsx`, rendu via `OngoingCallBanner`) : `hasActiveCall` exigeait
+  `currentCall && isInCall` — c'est-à-dire que le spectateur devait **déjà être dans l'appel** avant
+  que le bandeau « rejoindre » ne puisse s'afficher. Or `currentCall`/`isInCall` (`useCallStore`) ne
+  décrivent JAMAIS un appel dont le spectateur ne fait pas encore partie : les quatre sites d'écriture
+  de `setCurrentCall` (`CallManager.handleIncomingCall` pour l'initiateur, `acceptOrJoinCall`,
+  `handleParticipantJoined`, `use-video-call.ts`'s `startCall`) posent `isInCall: true` dans le même
+  souffle — vérifié exhaustivement, aucun site n'écrit l'un sans l'autre. `currentCall && !isInCall`
+  était donc un état **inatteignable par construction**, pas seulement une condition mal ordonnée : le
+  bandeau ne s'affichait dans AUCUN des deux seuls états possibles (spectateur pas dans l'appel →
+  `currentCall` reste `null` pour lui, jamais posé ; spectateur dans l'appel → `VideoCallInterface`
+  plein écran (`fixed inset-0 z-50`) couvre déjà tout, le bandeau du header n'a plus lieu d'être). Un
+  membre de conversation qui rate l'incoming-call initial (hors-ligne au démarrage de l'appel, ou
+  reload de page en cours d'appel) n'a alors AUCUN moyen de découvrir/rejoindre un appel de groupe déjà
+  en cours — le seul équivalent fonctionnel existant, le bouton « Rejoindre » de `CallSystemMessage`
+  (bulle `call-live`), est explicitement restreint aux conversations `direct` (`canJoin = isLive &&
+  conversationType === 'direct' && !isAnonymous`) : pour un groupe, ce bandeau était la SEULE voie
+  prévue, et elle était morte.
+  De plus, même dans l'état inatteignable, `handleJoinCall` appelait `onStartCall()` — qui démarre un
+  NOUVEL appel plutôt que de rejoindre l'existant — au lieu du chemin `requestJoin` déjà câblé et
+  testé pour ce cas exact (bulle `call-live` → `useCallStore.requestJoin` → `CallManager`, revalidation
+  REST avant tout accès média).
+- **Fix** : `useCallBanner` source désormais « y a-t-il un appel actif dans cette conversation » via
+  `GET /conversations/:id/active-call` (`callsService.getActiveCall`, déjà utilisé par le chemin de
+  jonction de la bulle `call-live` — même contrat, même endpoint, aucune nouvelle route), pollé
+  (`refetchInterval` 15s, React Query — sous la limite de rate-limit documentée 10/min) via une
+  nouvelle query key `queryKeys.calls.active(conversationId)`. `hasActiveCall` devient : appel actif
+  pour cette conversation, statut non terminal (`CALL_TERMINAL_STATUSES`), ET spectateur PAS dans
+  l'appel (`!isInCall`, lu du store réel, seule dépendance restante à `useCallStore`) — condition
+  maintenant atteignable dans son seul cas d'usage réel. `handleJoinCall` appelle `requestJoin({
+  callId, conversationId, callType })`, `callType` dérivé du type réel de l'appel
+  (`participants.some(p => p.isVideoEnabled)`) plutôt que d'un callback de démarrage. Le paramètre
+  `onStartCall` — mal employé, jamais nécessaire pour « rejoindre » — est retiré de la signature du
+  hook ; `ConversationHeader.tsx` ne le passe plus qu'à son usage légitime (bouton d'appel du header,
+  inchangé). `callDuration` s'ancre sur `answeredAt ?? startedAt` (même correction que la Vague 110,
+  jamais appliquée à ce hook faute d'accès à `answeredAt` avant ce cycle — le champ existait déjà sur
+  `CallSession`, simplement non lu ici).
+- **Tests** (TDD, RED confirmé en rejouant réellement les 18 nouveaux cas contre l'ANCIENNE implémentation
+  via `git stash` — 14/18 rouges avec les messages d'assertion attendus, les 4 restants passant par
+  coïncidence structurelle sans exercer le comportement visé) : suite `use-call-banner.test.tsx`
+  entièrement réécrite (source de données changée, wrapper `QueryClientProvider` + mock
+  `calls.service`, patron repris de `use-statuses.test.tsx`) — plus d'accès actif/inatteignable,
+  isolation par `isInCall`, filtrage conversation/statut terminal, ancrage `answeredAt`/`startedAt`,
+  `handleJoinCall` pose bien un `requestJoin` typé vidéo/audio selon les participants et jamais quand
+  `activeCall` est absent, `handleDismissCallBanner` masque par id d'appel. `ConversationHeader.test.tsx`
+  (30 tests, découvert HORS du sweep `--testPathPatterns="[Cc]all"` car son nom ne contient pas
+  « call » — repéré en grep dédié des appelants de `useCallBanner`, pas par le sweep) mockait
+  `useCallStore` avec un `mockReturnValue` ignorant tout sélecteur, incompatible avec les nouveaux
+  appels `useCallStore(s => s.isInCall)` : remplacé par un mock direct de `useCallBanner` (déjà
+  entièrement testé par ailleurs, et `OngoingCallBanner` y était déjà mocké en boîte noire) — les 2 cas
+  « Call Banner » reconfigurés sur le contrat du hook plutôt que sur `useCallStore`. Sweep complet
+  `--testPathPatterns="[Cc]all|ConversationHeader"` — **50 suites / 452 tests verts**, 0 régression.
+  `npx tsc --noEmit` : diff ligne-à-ligne AVANT/APRÈS (`git stash` des 4 fichiers de prod + test
+  modifiés) — **1757 erreurs pré-existantes identiques**, seul un ordre d'union TS non-déterministe
+  entre deux runs successifs (déjà documenté Vague 110/111) diffère, aucune ligne dans les fichiers
+  touchés. `eslint` : indisponible dans ce sandbox (même erreur de config circulaire pré-existante que
+  les vagues précédentes, plugin `react`).
+- **Portée volontairement non étendue** : le nouveau poll REST n'est pas gardé par un flag anonyme —
+  un spectateur en session `X-Session-Token` recevra un 401/403 répété toutes les 15s tant que le
+  header d'une conversation reste monté (dégradation gracieuse déjà gérée : `response.success ?
+  ... : null`, bandeau simplement jamais affiché, aucune erreur visible), au lieu d'un guard explicite
+  `!isAnonymous` qui aurait nécessité de faire remonter ce flag jusqu'à `ConversationHeader` (absent de
+  ses props aujourd'hui). Requêtes gaspillées mais sans impact fonctionnel ni de rate-limit (usage
+  normal : un seul header monté à la fois). Un vrai sélecteur multi-périphériques audio (setSinkId)
+  reste également un candidat séparé, cf. Vague 111.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111) ; guard
+`!isAnonymous` sur le poll `active-call` du bandeau (cf. ci-dessus). **Candidats pour la Vague 113**
+(runners-up de la Vague 110, non traités, confiance moindre — à vérifier avant fix) :
+- `handleParticipantJoined` bascule `status` vers `'active'` sur le premier `call:participant-joined`,
+  qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché (cf. Vague 104 côté
+  gateway pour le même symptôme sur un chemin différent).
+- `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
+  — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
+  sévérité, probablement pas suffisant pour son propre cycle isolément.

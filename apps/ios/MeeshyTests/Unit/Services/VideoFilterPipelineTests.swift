@@ -115,6 +115,59 @@ final class VideoFilterPresetTests: XCTestCase {
         XCTAssertTrue(config.backgroundBlurEnabled)
         XCTAssertTrue(config.skinSmoothingEnabled)
     }
+
+    // MARK: - matching(_:) — reverse lookup used to restore `activePreset`
+    //
+    // Regression guard for Vague 108: `VideoFiltersPanel.activePreset` used
+    // to be a `@State` seeded to `.natural` and never re-derived from the
+    // persisted `filterConfig` on panel reopen — a config restored to
+    // `.warm` (or any non-natural preset) still highlighted the "Natural"
+    // chip. `matching(_:)` is the pure lookup the panel now derives
+    // `activePreset` from on every render, eliminating the staleness class
+    // entirely rather than patching the one `.onAppear` call site.
+
+    func test_matching_eachPresetsOwnConfig_returnsItself() {
+        for preset in VideoFilterPreset.allCases {
+            XCTAssertEqual(VideoFilterPreset.matching(preset.config), preset)
+        }
+    }
+
+    func test_matching_ignoresIsEnabled() {
+        // The "Reset" affordance sets `.natural`'s colorimetry but flips
+        // `isEnabled` back to `false` — must still resolve to `.natural`.
+        var config = VideoFilterPreset.natural.config
+        config.isEnabled = false
+        XCTAssertEqual(VideoFilterPreset.matching(config), .natural)
+    }
+
+    func test_matching_ignoresAdvancedFilterFields() {
+        // presetChip carries the caller's own backgroundBlur/skinSmoothing
+        // state across a preset switch — those fields must never affect
+        // which preset is recognized as active.
+        var config = VideoFilterPreset.warm.config
+        config.backgroundBlurEnabled = true
+        config.backgroundBlurRadius = 18
+        config.skinSmoothingEnabled = true
+        config.skinSmoothingIntensity = 0.9
+        XCTAssertEqual(VideoFilterPreset.matching(config), .warm)
+    }
+
+    func test_matching_handTunedColorimetry_returnsNil() {
+        // A user dragging a slider in VideoFilterControlView produces
+        // colorimetry that (generically) matches no preset — a legitimate
+        // "no preset selected" state, not a bug.
+        var config = VideoFilterPreset.warm.config
+        config.brightness = 0.4123
+        XCTAssertNil(VideoFilterPreset.matching(config))
+    }
+
+    func test_matching_untouchedDefaultConfig_returnsNatural() {
+        // VideoFilterConfig.default shares its colorimetry with `.natural`
+        // (isEnabled aside, which matching() ignores) — a freshly-opened
+        // panel that never touched a preset still highlights "Natural",
+        // matching the pre-Vague-108 default chip selection.
+        XCTAssertEqual(VideoFilterPreset.matching(.default), .natural)
+    }
 }
 
 // MARK: - VideoFilterPipeline Tests

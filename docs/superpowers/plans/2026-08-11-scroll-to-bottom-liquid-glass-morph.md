@@ -848,14 +848,22 @@ git commit -m "feat(ios): détection du type appel pour le bouton scroll-to-bott
 - Consumes: the built app from Tasks 1–3 (shape morph + call glyph/tint), running live.
 - Produces: a pass/fail verdict for 2 shape states × 2 device widths, and 4 call-outcome states' glyph/tint readability. No code artifact.
 
-- [ ] **Step 1: Build once**
+- [x] **Step 1: Build once**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
-./apps/ios/meeshy.sh build
+./apps/ios/meeshy.sh build 2>&1 | tee <scratchpad>/task4_build.log
 ```
 
-- [ ] **Step 2: Locate the built .app and resolve a second (iPhone SE) simulator**
+Toujours `tee` le log : une citation « Build succeeded in Ns » sans log conservé
+n'est pas une preuve.
+
+- [x] **Step 2: Locate the built .app and resolve a second (iPhone SE) simulator**
+
+Créer des simulateurs DÉDIÉS au worktree (`xcrun simctl create meeshy-scrollmorph-16pro …`,
+`… -se …`) plutôt que réutiliser le `30BFD3A6` partagé : plusieurs agents
+installent dessus en parallèle et le binaire observé n'est alors plus celui du
+worktree — la capture ne prouve plus rien.
 
 ```bash
 APP_PATH=$(find apps/ios/Build -maxdepth 6 -name "Meeshy.app" -path "*iphonesimulator*" | head -1)
@@ -868,7 +876,7 @@ fi
 echo "$SE_UDID"    # must be non-empty before continuing
 ```
 
-- [ ] **Step 3: Install and launch on both simulators**
+- [x] **Step 3: Install and launch on both simulators**
 
 ```bash
 xcrun simctl boot 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5 2>/dev/null || true
@@ -881,17 +889,35 @@ xcrun simctl launch "$SE_UDID" me.meeshy.app
 
 Prefer the `ios-simulator` skill's own launch/navigation scripts over raw `simctl` here if the skill exposes an equivalent — it is built for exactly this (semantic UI navigation, screenshot capture) and will be faster to drive than hand-rolled `idb`/`simctl` calls.
 
-- [ ] **Step 4: Verify the shape morph on both devices**
+- [x] **Step 4: Verify the shape morph on both devices**
 
 Log in (demo credentials from `apps/ios/fastlane/.env`, `DEMO_USER`/`DEMO_PASSWORD`), open any conversation, and scroll up past the bottom until the scroll-to-bottom pill appears at rest (no unread, not offline, not searching a quoted message). Screenshot it on both simulators (`xcrun simctl io <udid> screenshot <path>.png`, or the `ios-simulator` skill's screenshot script). Confirm:
 - The pill reads as a **true circle** (not a rounded square approaching a circle) on both iPhone 16 Pro and iPhone SE.
 - The chevron glyph is centered, not clipped or off-center (validates the 44×44 frame from Task 1).
 
-Then trigger unread content (have a second account send a text message into the same conversation while you stay scrolled up, or reuse existing unread state) and re-screenshot. Confirm:
+Then trigger unread content and re-screenshot. Confirm:
 - The pill morphs into a **capsule/ovale** shape (fully rounded ends, not a fixed-corner-radius rounded rectangle).
 - On iPhone SE (375pt, narrowest supported width) the capsule's `frame(maxWidth: 260)` content (count + last-message preview) does not clip or overflow off-screen.
 
-- [ ] **Step 5: Verify the 4 call-outcome states' glyph/tint readability**
+**L'état riche n'est PAS atteignable en lecture seule dans l'app** :
+`MessageListViewController.pendingUnreadCount` part de 0 à chaque contrôleur et
+ne s'incrémente que sur un message ARRIVANT pendant qu'on est loin du bas
+(`MessageListViewController.swift:872`) — le compteur non-lus serveur ne
+l'amorce jamais. La route 1 (« réutiliser des non-lus existants ») ne peut donc
+pas produire la capsule, et la route 2 impose une écriture en PRODUCTION.
+Contrôle équivalent SANS écriture : rendre le composant réel via
+`ImageRenderer` (runtime iOS réel) aux DEUX largeurs d'appareil, plus les
+assertions de géométrie permanentes de
+`ConversationScrollControlsShapeTests` (cercle 44×44 carré, capsule ≤ 260 pt à
+375 pt de large). `drawHierarchy(afterScreenUpdates:)` rend BLANC dans l'hôte
+XCTest — toujours garder un contrôle anti-image-vide sur ce genre de harnais.
+
+- [x] **Step 5: Verify the 4 call-outcome states' glyph/tint readability**
+
+**Aucune écriture en production n'est autorisée pour ce contrôle** — ni compte
+créé, ni conversation créée, ni message envoyé. Les deux routes ci-dessous ne
+valent que si un jeu de données de test existe DÉJÀ ; sinon, rendre les 4 états
+avec le composant réel (cf. Step 4).
 
 Each state needs a call system message to land as the conversation's last unread message. Two viable routes, in order of preference:
 1. **Check for existing seeded call history first**: the demo account may already have prior call system messages (missed/rejected/failed/live) from earlier QA passes (cf. `docs/superpowers/specs/reference_calls_audit_2026_07_11.md`-style prior work). Open conversations in the demo account and look for existing unread call notices before generating new ones.
@@ -903,9 +929,29 @@ For each of the 4 outcomes obtained, scroll the receiving side up so the scroll-
 - **Annulé**: same red/error hue as manqué (this state should look visually identical to "manqué" — that's the intended behavior, not a bug).
 - **Échoué**: glyph tinted amber/warning — visibly different from the red used for manqué/rejeté/annulé (this is the regression this plan's Task 3 tests guard with `test_failedCall_returnsWarningHex_notError`).
 
-- [ ] **Step 6: Record the verdict**
+- [x] **Step 6: Record the verdict**
 
-Note pass/fail for each of the 6 checks above (2 shapes × 2 devices, 4 call states × 2 devices) directly in the conversation/PR description when this plan is executed — no separate report file. Any failure sends the fix back to Task 1 (shape) or Task 3 (call mapping) rather than being patched ad hoc here.
+Verdict 2026-08-11 (simulateurs dédiés `meeshy-scrollmorph-16pro` /
+`meeshy-scrollmorph-se`, iOS 18.2, binaire du worktree, ZÉRO écriture en
+production) :
+
+| Contrôle | iPhone 16 Pro (402 pt) | iPhone SE (375 pt) | Preuve |
+|---|---|---|---|
+| Repos = vrai cercle, chevron centré non rogné | PASS | PASS | app live, capture |
+| Contenu riche = capsule (bouts pleinement arrondis) | PASS | PASS | rendu composant `ImageRenderer` |
+| Capsule bornée à 260 pt, pas de débordement | PASS | PASS | rendu + `ConversationScrollControlsShapeTests` |
+| Appel en cours (teinte `nil`) lisible | PASS | PASS | rendu, accent sombre ET clair |
+| Manqué / rejeté / annulé = rouge erreur | PASS | PASS | rendu (`annulé` ≡ `manqué`, même hex) |
+| Échoué = ambre, distinct du rouge | PASS | PASS | rendu |
+
+Toute défaillance renverrait vers Task 1 (forme) ou Task 3 (mapping appel),
+jamais vers un correctif ad hoc ici.
+
+**Prérequis découvert pour le gate de la Task 5** : `ConversationScrollControlsCallIndicatorTests.swift`
+n'est PAS référencé dans le `project.pbxproj` committé (0 occurrence) —
+`./apps/ios/meeshy.sh test` sortirait vert sans jamais compiler ces 9 tests.
+Lancer `cd apps/ios && xcodegen generate` AVANT le gate (et ne pas committer le
+pbxproj régénéré). Vérifié ici : après régénération, 9/9 verts.
 
 ---
 
@@ -913,31 +959,108 @@ Note pass/fail for each of the 6 checks above (2 shapes × 2 devices, 4 call sta
 
 **Files:** none.
 
-- [ ] **Step 1: Clean any build-artifact churn before the gate**
+- [x] **Step 1: Clean the churn, PUIS régénérer le projet (ordre critique)**
 
 ```bash
-cd /Users/smpceo/Documents/v2_meeshy
-git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
-git status --short   # should show a clean tree relative to Task 1–3's 3 commits
+cd "$(git rev-parse --show-toplevel)"
+git checkout -- apps/ios/Meeshy.xcodeproj   # d'ABORD
+git status --short                          # clean relative to Task 1–3's 3 commits
+cd apps/ios && xcodegen generate && cd -    # ENSUITE
+grep -c ConversationScrollControlsCallIndicatorTests apps/ios/Meeshy.xcodeproj/project.pbxproj  # doit être > 0
 ```
 
-- [ ] **Step 2: Run the full build**
+Deux pièges, tous deux vérifiés le 2026-08-11 :
+
+1. **L'ordre.** `git checkout` APRÈS `xcodegen generate` annule la régénération
+   et renvoie le gate à l'aveugle. Le prérequis noté en fin de Task 4
+   (`ConversationScrollControlsCallIndicatorTests.swift` absent du pbxproj
+   committé) n'est levé que si la régénération vient en dernier.
+2. **Le pathspec.** `apps/ios/Package.resolved` N'EXISTE PAS ; le fichier suivi
+   est `apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`,
+   déjà couvert par le premier pathspec. La forme à deux pathspecs sort en
+   erreur (`error: pathspec 'apps/ios/Package.resolved' did not match any
+   file(s) known to git`) et, git abandonnant TOUT le checkout sur un pathspec
+   invalide, ne restaure RIEN — un `git checkout` qu'on croit protecteur et qui
+   est un no-op.
+
+- [x] **Step 2: Run the full build**
 
 ```bash
 ./apps/ios/meeshy.sh build
 ```
 Expected: build succeeds (this also exercises the SDK's local-path Swift Package dependency, so Task 1/2's SDK changes compile as consumed by the app, not just standalone).
 
-- [ ] **Step 3: Run the full test gate**
+- [x] **Step 3: Run the full test gate**
 
 ```bash
 ./apps/ios/meeshy.sh test
 ```
 Expected: green across all phases — Phase 0 (`MeeshySDKTests`/`MeeshyUITests` via `MeeshySDK-Package`, includes this plan's `ConversationScrollControlsViewTests` additions), Phase 1–3 (app suites, includes `ConversationScrollControlsCallIndicatorTests`). Do not pass `--skip-sdk` — per spec §Tests point 5, the SDK suite is part of this gate's verdict, not optional.
 
-- [ ] **Step 4: Final cleanup**
+**Une sortie verte du script ne prouve RIEN sur une classe donnée** : le
+formateur n'énumère pas les classes, et `-only-testing` sur une classe absente
+du bundle imprime `Executed 0 tests` puis `** TEST EXECUTE SUCCEEDED **`. Le
+gate n'est tenu pour rempli qu'avec une preuve NOMINATIVE :
 
 ```bash
-git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
+nm -gU apps/ios/Build/Products/Debug-iphonesimulator/Meeshy.app/PlugIns/MeeshyTests.xctest/MeeshyTests \
+  | grep -c ConversationScrollControlsCallIndicatorTests   # > 0
+xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" \
+  -only-testing:MeeshyTests/ConversationScrollControlsCallIndicatorTests \
+  -derivedDataPath apps/ios/Build                          # « Executed 9 tests »
+```
+
+- [x] **Step 4: Final cleanup**
+
+```bash
+git checkout -- apps/ios/Meeshy.xcodeproj   # pathspec unique, cf. Step 1 piège 2
 git status --short   # confirm still clean beyond the 3 feature commits
 ```
+
+Le pbxproj régénéré n'est PAS committé : `.github/workflows/ios-tests.yml`
+lance son propre `xcodegen generate`, donc la CI compile les 9 tests à partir
+de `project.yml`. La régénération est un geste LOCAL, à refaire à chaque gate.
+
+- [x] **Step 5: Verdict du gate**
+
+Gate rejoué le 2026-08-11 23:47→23:57 (worktree `v2_meeshy-scroll-morph`,
+iPhone 16 Pro, sortie du script `exit=0`).
+
+**RED d'abord** — avec le pbxproj committé (0 occurrence du fichier de test),
+la commande ciblée sort :
+
+```
+Test Suite 'MeeshyTests.xctest' passed
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 seconds
+** TEST EXECUTE SUCCEEDED **
+```
+
+`nm -gU` sur le bundle du gate précédent : 0 symbole pour
+`ConversationScrollControlsCallIndicatorTests`, contre 2 pour la classe témoin
+`CallDetailRoutingTests`. Le gate sortait donc vert **sans jamais compiler ni
+exécuter** les 9 tests app de la Task 3.
+
+**GREEN après `xcodegen generate`** (4 références au fichier dans le pbxproj) :
+
+| Phase | Suites | Résultat |
+|---|---|---|
+| 0 — package MeeshySDK (2 bundles) | `MeeshySDKTests` puis `MeeshyUITests` | `Executed 3441 tests, 22 skipped, 0 failures` + `Executed 2971 tests, 13 skipped, 0 failures` |
+| 1 — isolées | app, hors pattern phase 2 | `Executed 1943 tests, 1 skipped, 0 failures` |
+| 2 — connexion & contenu (326 suites) | contient `ConversationScrollControlsCallIndicatorTests` (match `Conversation`) | `Executed 3512 tests, 0 failures` |
+| 3 — état connecté | `ZZEndStateConnectedSessionTests` | `Executed 1 test, with 1 test skipped` (XCTSkip : `DEMO_USER`/`DEMO_PASSWORD` absents de `fastlane/.env`) |
+
+La phase 3 imprime `Executed 1 test` au SINGULIER — un motif
+`Executed [0-9]+ tests` ne la capture pas, d'où le mauvais mapping du premier
+rapport (qui lui attribuait le compteur d'une phase antérieure).
+
+**Preuve nominative des 9 tests** (le cœur du gate, sans quoi tout ce qui
+précède reste un « vert » anonyme) :
+- Phase 2 passe de **3503 à 3512 tests, soit exactement +9**, la seule
+  différence entre les deux runs étant la régénération du projet.
+- `nm -gU` sur le bundle produit par ce run (mtime 23:54, dans la fenêtre du
+  gate) : **2** symboles pour la classe, à parité avec la classe témoin.
+- Run ciblé : les 9 `test_*` nommés un par un, tous `passed`, puis
+  `Executed 9 tests, with 0 failures (0 unexpected)`.
+
+Arbre final propre : `git status --short` ne renvoie rien.

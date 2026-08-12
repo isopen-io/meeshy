@@ -48,6 +48,28 @@ public enum SyncWatermark {
         Swift.max(previous, receivedUpdatedAt.max() ?? previous)
     }
 
+    /// Curseur à persister après UNE page delta, `pageMayHaveMore` disant si la
+    /// fenêtre `updatedSince` contenait plus de lignes que la page n'en a rendues.
+    ///
+    /// Une page qui laisse du reste n'a pas rendu toute la fenêtre. Avancer le
+    /// curseur au max des `updatedAt` REÇUS reviendrait à affirmer une couverture
+    /// qu'elle ne démontre pas — et comme la borne serveur est STRICTE (`gt`),
+    /// les lignes partageant la milliseconde de coupure ne reviendraient plus
+    /// jamais.
+    ///
+    /// Le curseur reste donc où il est, et l'appelant escalade vers la vérité
+    /// serveur complète. L'ORDRE compte : c'est parce que le curseur n'a pas
+    /// bougé qu'une escalade ÉCHOUÉE (offline, panne) laisse la fenêtre entière
+    /// rejouable au prochain delta au lieu d'un trou définitif.
+    static func advancedAfterDeltaPage(
+        previous: Date,
+        receivedUpdatedAt: [Date],
+        pageMayHaveMore: Bool
+    ) -> Date {
+        guard !pageMayHaveMore else { return previous }
+        return advanced(previous: previous, receivedUpdatedAt: receivedUpdatedAt)
+    }
+
     /// AUTHORITATIVE watermark after a full sync. A full fetch is the ground
     /// truth for every conversation, so the cursor is SET to the newest server
     /// `updatedAt` returned — deliberately ignoring `previous` so a stale

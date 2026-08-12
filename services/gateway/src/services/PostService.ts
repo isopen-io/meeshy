@@ -600,9 +600,20 @@ export class PostService {
     // (single source of truth). Without these, the detail always rendered
     // « non liké / non bookmarké / non reposté » even when the post was
     // liked, saved or reposted (absent field → SDK decodes `?? false`).
+    //
+    // Repost simple → racine (chantier reposts cohérents & watermark, tâche
+    // 9) : `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false`
+    // reflètent l'état de l'utilisateur sur sa RACINE (`originalRepostOfId ??
+    // repostOfId`), jamais sur le repost lui-même — un repost simple n'a pas
+    // de vie sociale propre. Une citation garde son propre état. Bookmark et
+    // `isRepostedByMe` restent ceux du post AFFICHÉ, inchangés.
+    const reactionRootId = (!post.isQuote && post.repostOfId)
+      ? (post.originalRepostOfId ?? post.repostOfId)
+      : post.id;
+
     const [userReactions, viewerBookmark, viewerRepostCount] = await Promise.all([
       this.prisma.postReaction.findMany({
-        where: { userId: viewerUserId, postId: post.id },
+        where: { userId: viewerUserId, postId: reactionRootId },
         select: { postId: true, emoji: true },
       }),
       this.prisma.postBookmark.findFirst({

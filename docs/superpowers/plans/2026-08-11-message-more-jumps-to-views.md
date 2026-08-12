@@ -13,7 +13,8 @@
 - iOS 16.0+ ; Swift 6 ; aucune nouvelle dépendance externe.
 - Décisions produit côté `apps/ios/` (SDK purity) — ce chantier est 100% app-side (`ConversationView.swift`, deux sites d'action `.more`), rien à toucher côté SDK. `UserPreferencesManager.shared.privacy.showReadReceipts` (SDK, `packages/MeeshySDK/Sources/MeeshySDK/Services/UserPreferencesManager.swift` + `PreferenceModels.swift:166`) est consommé en lecture seule, exactement comme le font déjà `ConversationView.swift:1847` et `MessageOverlayMenu.swift:163` — aucune modification SDK requise.
 - **Collision de fichier avec un AUTRE chantier** (`attachment-media-action-menu`, spec `docs/superpowers/specs/2026-08-11-attachment-media-action-menu-design.md`) : les deux modifient `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift`. Zones disjointes (ce plan : ~1807-1810 + ~1976-1982 ; l'autre : le bloc `MessageMoreSheet(...)` ~728-772), mais **ne JAMAIS exécuter ce plan en parallèle de l'autre dans deux worktrees sans rebase** — merger l'un avant l'autre, ou rebaser avant de committer le second.
-- NE JAMAIS committer le churn `project.pbxproj`/`Meeshy.xcscheme`/`Package.resolved` : `git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved` avant chaque commit.
+- NE JAMAIS committer le **churn** `project.pbxproj`/`Meeshy.xcscheme`/`Package.resolved` (réordonnancements, UUID régénérés, build number réécrit) : `git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved` avant chaque commit — **SAUF l'ajout de référence d'un fichier source NEUF**, qui est requis et doit être committé. Le projet énumère ses sources explicitement (aucun `PBXFileSystemSynchronizedRootGroup`) et `meeshy.sh` ne lance JAMAIS `xcodegen` : un fichier de test non enregistré n'est pas compilé, ses classes n'existent pas dans `MeeshyTests.xctest`, et `-only-testing` sur une classe inexistante ne fait PAS échouer xcodebuild — le plan naît mort, gate vert (incident 2026-08-11 : `MessageMoreJumpsToViewsGuardTests`, deux commits, 0 symbole dans le bundle). Procédure pour un fichier neuf : `(cd apps/ios && xcodegen generate)`, puis vérifier que le diff pbxproj se limite aux 4 lignes de référence du nouveau fichier (`git diff apps/ios/Meeshy.xcodeproj/project.pbxproj | grep -E "^[+-][^+-]"` → exactement 4 `+`, 0 `-`), et committer CE diff. Si d'autres lignes apparaissent, ne pas committer le fichier en bloc — restaurer et ré-appliquer chirurgicalement les 4 lignes.
+- **Preuve d'exécution d'un test** : la présence d'une classe dans le manifeste `-only-testing` (construit en grepant les SOURCES par `discover_test_classes()` de `meeshy.sh`) n'en est PAS une. Font foi : `nm -a apps/ios/Build/Products/Debug-iphonesimulator/Meeshy.app/PlugIns/MeeshyTests.xctest/MeeshyTests | grep -c <Classe>` > 0, ou une ligne `Test Case '-[MeeshyTests.<Classe> …]' passed/failed` dans la sortie. Depuis le 2026-08-11, `meeshy.sh test` fait lui-même échouer le gate sur toute classe déclarée en source mais absente du bundle.
 - Tests app : simulateur iPhone 16 Pro UDID `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5`. `-only-testing` sélectionne des CLASSES, pas des fichiers.
 - Commits : convention `fix(ios):` en français, SANS trailer Co-Authored-By.
 - Commande de build/test complète : `./apps/ios/meeshy.sh test` (gate final uniquement — trop lent par tâche).
@@ -127,16 +128,22 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Enregistrer le fichier neuf, puis vérifier l'échec**
+
+Le fichier vient d'être créé : il n'existe dans AUCUNE cible tant que le pbxproj ne le référence pas (cf. Global Constraints). Enregistrer d'abord, sinon la phase RED ci-dessous est un faux rouge (erreur de sélection, pas d'assertion).
 
 ```bash
+(cd apps/ios && xcodegen generate)
+git diff apps/ios/Meeshy.xcodeproj/project.pbxproj | grep -E "^[+-][^+-]"   # attendu : 4 lignes "+", 0 "-"
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build -quiet
+nm -a apps/ios/Build/Products/Debug-iphonesimulator/Meeshy.app/PlugIns/MeeshyTests.xctest/MeeshyTests \
+  | grep -c MessageMoreJumpsToViewsGuardTests    # attendu : > 0 — sinon la classe n'est PAS compilée
 xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" \
-  -only-testing:MeeshyTests/MessageMoreJumpsToViewsGuardTests -derivedDataPath apps/ios/Build -quiet
+  -only-testing:MeeshyTests/MessageMoreJumpsToViewsGuardTests -derivedDataPath apps/ios/Build
 ```
-Expected: FAIL — both `XCTAssertFalse` and `XCTAssertTrue` fail, because the current closure body is still `overlayState.moreSheetInitialItem = nil`.
+Expected: `Executed 1 test, with 2 failures` — `XCTAssertFalse` et `XCTAssertTrue` échouent avec leurs messages, parce que le corps de la closure est encore `overlayState.moreSheetInitialItem = nil`. Un run qui n'imprime aucune ligne `Test Case '-[MeeshyTests.MessageMoreJumpsToViewsGuardTests …]'` n'est PAS un rouge valable : la classe n'est pas dans le bundle, revenir à `xcodegen generate`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -166,10 +173,14 @@ Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
+`Package.resolved` et le scheme sont du churn : on les jette. Le pbxproj, LUI, porte l'enregistrement du fichier de test neuf (Step 2) — on le committe après avoir vérifié que son diff se limite aux 4 lignes de référence.
+
 ```bash
-git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
+git checkout -- apps/ios/Package.resolved apps/ios/Meeshy.xcodeproj/xcshareddata
+git diff apps/ios/Meeshy.xcodeproj/project.pbxproj | grep -E "^[+-][^+-]"   # 4 "+" nommant le fichier neuf, 0 "-"
 git add apps/ios/Meeshy/Features/Main/Views/ConversationView.swift \
-        apps/ios/MeeshyTests/Unit/Views/MessageMoreJumpsToViewsGuardTests.swift
+        apps/ios/MeeshyTests/Unit/Views/MessageMoreJumpsToViewsGuardTests.swift \
+        apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "$(cat <<'EOF'
 fix(ios): "Plus…" ouvre directement "Vues" (overlay appui-long)
 EOF
@@ -286,6 +297,8 @@ Expected: PASS — all 3 methods of `MessageMoreJumpsToViewsGuardTests` green.
 
 - [ ] **Step 5: Commit**
 
+Le fichier de test est déjà enregistré (Task 1 Step 2) : ici le pbxproj ne doit plus bouger du tout, tout diff sur lui est du churn.
+
 ```bash
 git checkout -- apps/ios/Meeshy.xcodeproj apps/ios/Package.resolved
 git add apps/ios/Meeshy/Features/Main/Views/ConversationView.swift \
@@ -311,8 +324,9 @@ EOF
 ```bash
 ./apps/ios/meeshy.sh test
 ```
-Expected: exit code 0. All phases green (phase0 SDK, phase1 isolated, phase2 content/connexion, phase3 connected-session), including:
-- `MessageMoreJumpsToViewsGuardTests` (new, this plan) — 3/3 green.
+Expected: exit code 0 — un run interrompu (timeout d'outil, phase non démarrée) n'est PAS un résultat : relancer jusqu'à obtenir le code de sortie réel. All phases green (phase0 SDK, phase1 isolated, phase2 content/connexion, phase3 connected-session), including:
+- la ligne `Garde d'orphelins : toutes les classes de test sont dans le bundle compilé` (sinon une classe déclarée en source n'est pas compilée — cf. Global Constraints).
+- `MessageMoreJumpsToViewsGuardTests` (new, this plan) — 3/3 green, avec leurs lignes `Test Case … passed` visibles dans la sortie de la phase 2.
 - `CallDetailRoutingTests` and `ConversationMenuSystemDesignGuardTests` (same-file precedents, non-regression) — green.
 - `MessageActionResolverTests` (untouched by this plan — `MessageActionResolver.swift` was not modified) — green, including `test_moreSections_sharing_offersViews` / `test_moreSections_optedOut_hidesViews` / `test_moreSections_optedOut_keepsTheOtherInfoEntries`.
 
