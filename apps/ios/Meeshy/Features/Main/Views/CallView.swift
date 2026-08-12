@@ -845,6 +845,14 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
+                    // Without an explicit label the combined capsule announces a
+                    // context-free "1:23" (the signal glyph is invisible on a
+                    // healthy link) — VoiceOver users can't tell it is the call
+                    // timer. Static label + dynamic value mirror the video badge
+                    // (and FloatingCallPillView 211i): the label reads once, the
+                    // timer updates via .accessibilityValue under .updatesFrequently.
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -852,7 +860,14 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+            // previously announced a bare "0:34" with no context. Signal state is
+            // already surfaced by the separate statusPill row here (unlike the video
+            // badge), so this label carries only call-duration context — no double
+            // announcement. Reuses the existing `call.duration.a11y.label` key.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -911,8 +926,17 @@ struct CallView: View {
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundColor(durationColor)
+                        // Same context-free-timer fix as audioCallLayout: this
+                        // caption-mode header has no status-pill row, so the
+                        // labelled value is the only place the timer gains meaning.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
                 }
-                .accessibilityElement(children: .combine)
+                // Same naked-readout fix as audioCallLayout — captions-active
+                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.formattedDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1225,7 +1249,8 @@ struct CallView: View {
                         HStack(spacing: 8) {
                             pipFrameButton(
                                 icon: "arrow.triangle.2.circlepath.camera.fill",
-                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main),
+                                hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
                             ) {
                                 callManager.switchCamera()
                             }
@@ -1462,6 +1487,10 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+                    // Final call-total duration: same naked-readout fix, static
+                    // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
 
             if callManager.canRetryCall {
@@ -1477,7 +1506,7 @@ struct CallView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Capsule().fill(Color.green))
+                    .background(Capsule().fill(MeeshyColors.success))
                 }
                 .padding(.top, 8)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
@@ -1491,8 +1520,12 @@ struct CallView: View {
 
     private var hasActiveEffects: Bool {
         // Voice effects are no longer settable from the UI (dead pipeline,
-        // entry removed) — only video filters light this up.
-        callManager.videoFilters.config.isEnabled
+        // entry removed) — only video filters light this up. `isEnabled`
+        // alone misses background blur/skin smoothing enabled without ever
+        // picking a colorimetry preset — same root cause as the pipeline's
+        // own gate (VideoFilterPipeline.process), mirrored here.
+        let config = callManager.videoFilters.config
+        return config.isEnabled || config.hasAdvancedFilters
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1501,21 +1534,6 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
-    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
-    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
-    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
-    private struct PiPSourceAnchor: UIViewRepresentable {
-        func makeUIView(context: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .clear
-            view.isUserInteractionEnabled = false
-            return view
-        }
-        func updateUIView(_ uiView: UIView, context: Context) {
-            CallManager.shared.attachSystemPiP(sourceView: uiView)
-        }
-    }
-
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
@@ -1540,6 +1558,7 @@ struct CallView: View {
                 isActive: callManager.isMuted,
                 caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
                 label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+                hint: String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main),
                 isToggle: true
             ) {
                 callManager.toggleMute()
@@ -1555,6 +1574,7 @@ struct CallView: View {
                     isActive: callManager.isSpeaker,
                     caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
                     label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main),
+                    hint: String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main),
                     isToggle: true
                 ) {
                     callManager.toggleSpeaker()

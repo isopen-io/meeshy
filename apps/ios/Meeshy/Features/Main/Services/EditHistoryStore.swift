@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// One revision in the edit history of a message. `content` is the value
 /// BEFORE the edit that replaced it, and `editedAt` is when that replacement
@@ -48,7 +49,7 @@ final class EditHistoryStore: @unchecked Sendable {
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         if let data = userDefaults.data(forKey: storageKey),
-           let decoded = try? JSONDecoder.iso8601.decode([String: [EditRevision]].self, from: data) {
+           let decoded = JSONDecoder.iso8601.decodeOrLog([String: [EditRevision]].self, from: data, field: "edit history", logger: Logger.editHistory) {
             self.cache = decoded
         } else {
             self.cache = [:]
@@ -102,7 +103,7 @@ final class EditHistoryStore: @unchecked Sendable {
     // MARK: - Persistence
 
     private func persist(snapshot: [String: [EditRevision]]) {
-        guard let data = try? encoder.encode(snapshot) else { return }
+        guard let data = encoder.encodeOrLog(snapshot, field: "edit history", logger: Logger.editHistory) else { return }
         defaults.set(data, forKey: storageKey)
     }
 }
@@ -113,4 +114,10 @@ private extension JSONDecoder {
         d.dateDecodingStrategy = .iso8601
         return d
     }()
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let editHistory = Logger(subsystem: "me.meeshy.app", category: "edit-history")
 }

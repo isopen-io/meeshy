@@ -23,6 +23,17 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 
+    /**
+     * The newest [limit] rows for a conversation, most-recent first — a
+     * cache-only "peek" read (hard-press preview card) that never loads a
+     * conversation's full history into memory.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public suspend fun recentForConversation(conversationId: String, limit: Int): List<MessageEntity>
+
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
 

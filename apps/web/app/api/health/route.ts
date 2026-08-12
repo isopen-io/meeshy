@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveBuildInfo } from '@meeshy/shared/utils/build-info';
 
 export async function GET() {
   try {
@@ -7,6 +8,11 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       service: 'meeshy-web',
       version: process.env.npm_package_version || '1.0.0',
+      // Identifie le code réellement servi. Sans lui, savoir si un correctif
+      // est en production imposait un `docker inspect` sur l'hôte, ou une
+      // corrélation entre l'uptime du container et l'horodatage des tags
+      // `sha-<short>` du registre.
+      build: resolveBuildInfo(),
       environment: process.env.NODE_ENV || 'development',
       uptime: process.uptime(),
       memory: process.memoryUsage(),

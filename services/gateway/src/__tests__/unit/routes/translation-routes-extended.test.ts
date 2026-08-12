@@ -90,11 +90,18 @@ async function buildApp(opts: BuildOpts = {}): Promise<FastifyInstance> {
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  if (userId !== null) {
-    app.addHook('preHandler', async (req) => {
-      (req as any).user = { userId };
-    });
-  }
+  // Reproduit `createUnifiedAuthMiddleware({ requireAuth: true })` : 401
+  // immédiat sans jeton, sinon peuple `request.user.userId` (compat legacy —
+  // voir middleware/auth.ts:489-517). Les routes /translate-blocking et /test
+  // exigent désormais ce `preHandler` (cf. faille CWE-862 corrigée : la
+  // vérification d'appartenance était sautée quand `request.user` restait
+  // `undefined`).
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (userId === null) {
+      return reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+    }
+    req.user = { userId };
+  });
 
   app.decorate('prisma', {
     message: { findUnique: jest.fn<any>().mockResolvedValue(messageFindResult) },
@@ -325,16 +332,23 @@ describe('POST /translate-blocking — message_id path — translation found (li
     await app.close();
   });
 
-  it('skips access check when no userId (line 343 false branch)', async () => {
+  // SECURITY REGRESSION: cette scénario était auparavant nommé "skips access
+  // check when no userId" et attendait un 200 — il documentait la faille
+  // (CWE-862) plutôt que de la détecter : sans authentification, l'ancienne
+  // garde `if (userId) { ... }` était sautée et la retraduction passait. Le
+  // `preHandler` d'authentification ajouté sur la route intercepte désormais
+  // la requête avant même d'atteindre ce code — la ligne 343 n'est plus
+  // jamais évaluée sans identité.
+  it('rejects with 401 before reaching the access check when there is no authenticated user', async () => {
     const app = await buildApp({
       userId: null,
       messageFindResult: makeMessage({ originalLanguage: null }),
     });
-    const res = await injectWithFakeTimers(app, {
+    const res = await app.inject({
       method: 'POST', url: '/translate-blocking',
       payload: { message_id: MSG_ID, target_language: 'fr' },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
     await app.close();
   });
 });

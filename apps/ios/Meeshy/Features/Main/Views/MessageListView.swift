@@ -301,15 +301,20 @@ struct MessageMenuPreviewContainer<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var naturalSize: CGSize = .zero
 
-    /// Plafond de hauteur de l'aperçu — 62 % de l'écran, comme l'overlay custom
-    /// (`MessageOverlayMenu.maxPreviewHeight`), pour laisser respirer la rangée
-    /// d'emojis + le menu au-dessus/dessous.
-    private var maxHeight: CGFloat { UIScreen.main.bounds.height * 0.62 }
+    /// Plafond de hauteur de l'aperçu — 62 % de la **fenêtre** de l'app, pour
+    /// laisser respirer la rangée d'emojis + le menu au-dessus/dessous. Mesuré
+    /// sur la fenêtre et non sur l'écran physique : en Split View, Slide Over
+    /// ou Stage Manager, l'app n'occupe qu'une fraction de l'écran, et un
+    /// plafond dérivé de l'écran cesse alors de plafonner quoi que ce soit.
+    /// (L'overlay custom `MessageOverlayMenu` poursuit le même but avec un
+    /// plafond FIXE de 320 pt : il met à l'échelle une frame déjà capturée,
+    /// pas une taille naturelle — mécanisme distinct, pas une valeur jumelle.)
+    private var maxHeight: CGFloat { DeviceLayout.windowSize.height * 0.62 }
 
     private var fitScale: CGFloat {
         guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }
         // Plancher 0.5 : au-delà, un média très haut resterait lisible plutôt
-        // que de rétrécir à l'infini (même garde-fou que l'overlay custom).
+        // que de rétrécir à l'infini (l'overlay custom pose le sien à 0.55).
         return max(0.5, maxHeight / naturalSize.height)
     }
 
@@ -360,6 +365,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (counter) so the bridge detects each distinct request.
     var scrollToMessageId: String? = nil
     var scrollToMessageTrigger: Int = 0
+    /// Incrémenté par le parent aux instants où le lecteur DÉCLARE regarder le
+    /// bas : ouverture de l'écran, bouton « dernier message », départ en
+    /// arrière-plan. Le pont déclenche alors `flushSeenNow()`, qui signale ce
+    /// qui est affiché sans attendre le seuil de présence.
+    var flushSeenTrigger: Int = 0
     /// True while the ViewModel is searching for a quoted message on the server.
     /// Drives the slow continuous scroll on the underlying UICollectionView.
     var isSearchingQuotedMessage: Bool = false
@@ -373,6 +383,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
+    /// compter comme lus. Voir
+    /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var onMessagesSeen: (([String]) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
@@ -391,6 +405,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
     /// long-press custom → overlay reste alors le chemin).
     var nativeMessageMenu: ((Message) -> AnyView)? = nil
+    /// id de la bulle présentée dans l'overlay custom d'appui long — la
+    /// cellule live correspondante est masquée (opacity 0) le temps de
+    /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
+    var overlaidMessageId: String? = nil
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
@@ -432,6 +450,7 @@ struct MessageListView: UIViewControllerRepresentable {
     class Coordinator {
         var lastScrollToBottomTrigger: Int = 0
         var lastScrollToMessageTrigger: Int = 0
+        var lastFlushSeenTrigger: Int = 0
         var wasSearchingQuotedMessage: Bool = false
     }
 
@@ -453,12 +472,14 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -487,6 +508,10 @@ struct MessageListView: UIViewControllerRepresentable {
             context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
             vc.scrollToBottom(animated: true)
         }
+        if flushSeenTrigger != context.coordinator.lastFlushSeenTrigger {
+            context.coordinator.lastFlushSeenTrigger = flushSeenTrigger
+            vc.flushSeenNow()
+        }
         // If the trigger changed, FAST scroll to the requested message
         // (this fires after jumpToQuotedMessage loaded the target from server).
         if scrollToMessageTrigger != context.coordinator.lastScrollToMessageTrigger {
@@ -507,12 +532,14 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -538,5 +565,9 @@ struct MessageListView: UIViewControllerRepresentable {
     // été déclenché par le chemin de dismiss emprunté.
     static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
         vc.stopSlowScroll()
+        // Fermer la conversation ne doit pas perdre une lecture déjà acquise :
+        // `deinit` ne peut pas s'en charger, il n'est pas isolé au MainActor.
+        vc.flushSeenMessages()
+        vc.stopSeenTracking()
     }
 }

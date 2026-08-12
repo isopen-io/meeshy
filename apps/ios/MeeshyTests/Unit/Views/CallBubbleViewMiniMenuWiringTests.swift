@@ -48,4 +48,46 @@ final class CallBubbleViewMiniMenuWiringTests: XCTestCase {
         let body = try body(of: "private var hangupButton", upTo: "\n    // MARK:", in: source)
         XCTAssertTrue(body.contains("callManager.endCall()"))
     }
+
+    func test_hangupButton_hasAccessibilityHint() throws {
+        let source = try callBubbleViewSource()
+        let body = try body(of: "private var hangupButton", upTo: "\n    // MARK:", in: source)
+        XCTAssertTrue(
+            body.contains(".accessibilityHint("),
+            "The mini-menu's hang-up button must carry an accessibility hint — " +
+            "FloatingCallPillView's hangupButton already has one (call.end.hint); " +
+            "this bubble variant must not regress behind it for VoiceOver users."
+        )
+    }
+
+    func test_dismissLayer_isRemoved() throws {
+        let source = try callBubbleViewSource()
+        XCTAssertFalse(
+            source.contains("dismissLayer"),
+            "The full-screen dismissLayer must be gone — while it existed, ANY tap " +
+            "anywhere on screen while the mini-menu was open was swallowed just to " +
+            "close the menu, blocking interaction with the rest of the app."
+        )
+    }
+
+    func test_tapOnBubble_whenMenuRevealed_closesMenuInstead() throws {
+        let source = try callBubbleViewSource()
+        guard let range = source.range(of: ".onTapGesture {") else {
+            XCTFail(".onTapGesture not found in CallBubbleView.swift"); return
+        }
+        let end = source.range(of: ".accessibilityElement(children: .contain)", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("closeMenu()"),
+            "Tapping the bubble while the mini-menu is open must close it (retap-to-dismiss) " +
+            "now that the full-screen dismissLayer is gone — otherwise there is no way to " +
+            "close the menu short of waiting 3s or hitting a button."
+        )
+        XCTAssertFalse(
+            body.contains("guard !isMenuRevealed else { return }"),
+            "The old no-op guard must be replaced — a tap while the menu is open must " +
+            "actively close it, not do nothing."
+        )
+    }
 }

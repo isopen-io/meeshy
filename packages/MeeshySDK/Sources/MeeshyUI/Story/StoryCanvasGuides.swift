@@ -97,7 +97,7 @@ struct SafeZoneOverlay: View {
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
 
-                Text("Safe area")
+                Text(String(localized: "story.canvas.safe_area", defaultValue: "Zone sûre", bundle: .module))
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -181,7 +181,7 @@ struct OutOfBoundsWarningOverlay: View {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10, weight: .bold))
-                    Text("Hors zone visible")
+                    Text(String(localized: "story.canvas.out_of_bounds", defaultValue: "Hors zone visible", bundle: .module))
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(.white)

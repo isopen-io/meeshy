@@ -1,13 +1,39 @@
 # Appfile for Meeshy iOS
 # Uses App Store Connect API Key (not Apple ID) for CI/CD
+#
+# ─── Apple Developer Team ID — SOURCE OF TRUTH ───────────────────────────────
+# CHANGED 2026-07-28: D72UK7R5RE is now the one and only Team ID the iOS
+# publishing pipeline may use. Every previously configured team is retired —
+# never reintroduce another value, and never leave a placeholder behind
+# (`itc_team_id` still carried the literal "YOUR_TEAM_ID" until this date,
+# which broke App Store Connect team resolution whenever FASTLANE_ITC_TEAM_ID
+# was unset).
+#
+# The value is hardcoded in the sites below — they must change together:
+#   apps/ios/fastlane/Appfile                    (this file)
+#   apps/ios/fastlane/Matchfile                  (match certs/profiles)
+#   apps/ios/fastlane/ExportOptions.plist        (teamID — used by CI export)
+#   apps/ios/fastlane/Fastfile                   (build_production xcargs)
+#   apps/ios/project.yml                         (DEVELOPMENT_TEAM — XcodeGen truth)
+#   apps/ios/meeshy.sh                           (DEVELOPMENT_TEAM default)
+#   .github/workflows/ios-release.yml            (xcodebuild archive)
+#   .github/workflows/ios-fastlane-release.yml   (FASTLANE_TEAM_ID fallback)
+#   infrastructure/docker/compose/docker-compose.prod.yml (APNS_TEAM_ID — same
+#     Apple team, consumed by the gateway for push notifications)
+# Meeshy.xcodeproj/project.pbxproj carries it too, but it is GENERATED from
+# project.yml by XcodeGen — never hand-edit it.
 
 app_identifier("me.meeshy.app")
 
+# ENV wins over the default, but an ENV var injected EMPTY (a GitHub secret
+# that is not set expands to "") must fall back to the hardcoded team: "" is
+# truthy in Ruby, so `ENV[...] || "D72UK7R5RE"` would sign with a blank team.
+
 # Team ID (Apple Developer Portal)
-team_id(ENV["FASTLANE_TEAM_ID"] || "D72UK7R5RE")
+team_id([ENV["FASTLANE_TEAM_ID"], "D72UK7R5RE"].map { |v| v.to_s.strip }.find { |v| !v.empty? })
 
 # App Store Connect Team ID
-itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"] || ENV["FASTLANE_TEAM_ID"] || "YOUR_TEAM_ID")
+itc_team_id([ENV["FASTLANE_ITC_TEAM_ID"], ENV["FASTLANE_TEAM_ID"], "D72UK7R5RE"].map { |v| v.to_s.strip }.find { |v| !v.empty? })
 
 # Per-lane bundle IDs
 for_platform :ios do

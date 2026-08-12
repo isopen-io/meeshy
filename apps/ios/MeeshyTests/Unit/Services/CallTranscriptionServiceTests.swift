@@ -180,6 +180,82 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
     }
 
+    // MARK: - Stale-Callback-After-Redial Guard
+
+    func test_applyRecognitionResult_whenCallIdDoesNotMatchActiveCall_dropsStaleResult() {
+        // Simulates a recognition result from a PREVIOUS call landing after
+        // the user hung up and redialed — the Task.detached hop between
+        // handleRecognizerCallback (capture time) and applyRecognitionResult
+        // (apply time) gives no ordering guarantee once a new
+        // startTranscribing races ahead of an old call's in-flight callback.
+        // Without the callId guard this would leak "Stale" into the NEW
+        // call's live captions and persisted transcript.
+        let (sut, socket) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.setCallIdForTesting("call-new")
+
+        sut.applyRecognitionResult(
+            text: "Stale", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: true, confidence: 0.9, language: "fr", capturedAt: Date(),
+            callId: "call-old"
+        )
+
+        XCTAssertTrue(sut.segments.isEmpty)
+        XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
+    }
+
+    func test_applyRecognitionResult_whenCallHasEnded_dropsStaleResult() {
+        // stopTranscribing() nils out callId — a result from the just-ended
+        // call landing afterward (before any new call starts) must be
+        // dropped too, not just the redial-race case above.
+        let (sut, socket) = makeSUT()
+        sut.setTranscribingForTesting(true)
+
+        sut.applyRecognitionResult(
+            text: "Stale", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: true, confidence: 0.9, language: "fr", capturedAt: Date(),
+            callId: "call-old"
+        )
+
+        XCTAssertTrue(sut.segments.isEmpty)
+        XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
+    }
+
+    func test_applyRecognitionResult_whenCallIdMatchesActiveCall_isApplied() {
+        // isFinal: false (with isShowingOverlay true to clear the display
+        // guard) deliberately avoids the isFinal branch, which calls
+        // rotateRecognitionRequest → reinstallTap → a real
+        // AVAudioEngine.inputNode.installTap — unavailable in the unit test
+        // host (same constraint documented on setTranscribingForTesting and
+        // the capturedAt test above).
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = true
+        sut.setCallIdForTesting("call-1")
+
+        sut.applyRecognitionResult(
+            text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: false, confidence: 0.9, language: "fr", capturedAt: Date(),
+            callId: "call-1"
+        )
+
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour")
+    }
+
+    func test_applyRecognitionError_whenCallIdDoesNotMatchActiveCall_dropsStaleError() {
+        // Same race as the result guard above, but for the error path: a
+        // recognizer failure from a call that has since ended/redialed must
+        // not stop the NEW call's transcription or clobber its lastError.
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.setCallIdForTesting("call-new")
+
+        sut.applyRecognitionError(.recognizerUnavailable(language: "fr"), callId: "call-old")
+
+        XCTAssertTrue(sut.isTranscribing)
+        XCTAssertNil(sut.lastError)
+    }
+
     // MARK: - Recognizer Error Path
 
     func test_applyRecognitionError_whileTranscribing_stopsTranscribingAndSurfacesError() {

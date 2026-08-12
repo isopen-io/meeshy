@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.core.datastore"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26

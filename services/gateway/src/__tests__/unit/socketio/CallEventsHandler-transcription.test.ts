@@ -8,7 +8,8 @@
  *    source text was a real translation).
  * 2. Non-participants MUST receive a NOT_A_PARTICIPANT error; no segment
  *    is relayed.
- * 3. Ended calls MUST silently ignore segments (no relay, no error).
+ * 3. Terminal calls (ended, missed, rejected, failed) MUST silently ignore
+ *    segments (no relay, no error) — not just literal 'ended'.
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
@@ -282,34 +283,41 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     });
   });
 
-  describe('ended call: segment silently dropped', () => {
-    let roomEmit: jest.MockedFunction<any>;
-    let directEmit: jest.MockedFunction<any>;
+  describe.each(['ended', 'missed', 'rejected', 'failed'])(
+    'terminal call (status=%s): segment silently dropped',
+    (status) => {
+      let roomEmit: jest.MockedFunction<any>;
+      let directEmit: jest.MockedFunction<any>;
 
-    beforeEach(async () => {
-      // Sender IS an active participant, but the call has ended → the handler
-      // reaches the status check and silently drops the segment (no relay, no error).
-      const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'ended', metadata: null }),
+      beforeEach(async () => {
+        // Sender IS an active participant, but the call is terminal → the
+        // handler reaches the status check and silently drops the segment
+        // (no relay, no error) — regardless of WHICH terminal status it
+        // resolved to. A lagging socket still joined to the call room after
+        // the call ended via missed/rejected/failed (not just the literal
+        // 'ended' path) must not have its segment relayed or ZMQ-translated.
+        const prisma = makePrisma({
+          callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status, metadata: null }),
+        });
+        const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
+        roomEmit = r;
+        directEmit = d;
+
+        const handler = new CallEventsHandler(prisma, makeCallService());
+        handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+        await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
       });
-      const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
-      roomEmit = r;
-      directEmit = d;
 
-      const handler = new CallEventsHandler(prisma, makeCallService());
-      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      it('does NOT relay the segment', () => {
+        expect(roomEmit).not.toHaveBeenCalled();
+      });
 
-      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
-    });
-
-    it('does NOT relay the segment', () => {
-      expect(roomEmit).not.toHaveBeenCalled();
-    });
-
-    it('does NOT emit an error (silent drop for ended calls)', () => {
-      expect(directEmit).not.toHaveBeenCalled();
-    });
-  });
+      it('does NOT emit an error (silent drop for terminal calls)', () => {
+        expect(directEmit).not.toHaveBeenCalled();
+      });
+    }
+  );
 
   describe('anonymous socket: no userId', () => {
     let roomEmit: jest.MockedFunction<any>;

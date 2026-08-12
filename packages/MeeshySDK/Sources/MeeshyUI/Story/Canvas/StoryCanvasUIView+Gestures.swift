@@ -116,6 +116,7 @@ extension StoryCanvasUIView {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
         return nil
     }
 
@@ -489,6 +490,23 @@ extension StoryCanvasUIView {
             layer.position = renderPosition(x: sticker.x, y: sticker.y)
             let rotation = CGFloat(sticker.rotation * .pi / 180)
             layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
+            CATransaction.commit()
+        } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
+            // La pastille position rasterise son scale dans `bounds` au
+            // configure (StoryLocationLayer mesure le badge à fontSize ×
+            // scale) — même contrainte que le texte : le modèle était bien
+            // muté par updatePosition/updateScale/updateRotation mais la
+            // layer restait FIGÉE pendant tout le geste et téléportait au
+            // rebuild `.ended` (constat user 2026-07-30 « le sticker de
+            // position ne bouge pas »). Ratio transitoire par-dessus la
+            // rotation ; le rebuild de fin de geste re-rasterise NET.
+            let bakedScale = (layer as? StoryLocationLayer)?.locationObject?.scale ?? location.scale
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.position = renderPosition(x: location.x, y: location.y)
+            layer.transform = Self.liveTextGestureTransform(rotationDegrees: location.rotation,
+                                                            modelScale: location.scale,
+                                                            bakedScale: bakedScale)
             CATransaction.commit()
         }
     }

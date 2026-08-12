@@ -1,5 +1,8 @@
 import Foundation
 import GRDB
+import os
+
+private let convStateOutboxLog = Logger(subsystem: "com.meeshy.sdk", category: "conversation-state-outbox")
 
 // MARK: - Public types
 
@@ -118,15 +121,24 @@ public actor ConversationStateOutbox {
     }
 
     private static func makeQueue(path: String) -> DatabaseQueue {
-        if let disk = try? DatabaseQueue(path: path) {
-            try? Self.createSchema(in: disk)
-            return disk
+        let queue: DatabaseQueue
+        do {
+            queue = try DatabaseQueue(path: path)
+        } catch {
+            // Bascule mémoire : les mutations d'état ne survivront pas au kill.
+            convStateOutboxLog.error("On-disk state outbox unavailable, falling back to memory (pending mutations lost on relaunch): \(error.localizedDescription, privacy: .public)")
+            do {
+                queue = try DatabaseQueue()
+            } catch {
+                fatalError("[ConversationStateOutbox] Cannot create in-memory GRDB queue — out of memory: \(error)")
+            }
         }
-        guard let fallback = try? DatabaseQueue() else {
-            fatalError("[ConversationStateOutbox] Cannot create in-memory GRDB queue — out of memory")
+        do {
+            try Self.createSchema(in: queue)
+        } catch {
+            convStateOutboxLog.fault("State outbox schema creation failed — every subsequent query will fail: \(error.localizedDescription, privacy: .public)")
         }
-        try? Self.createSchema(in: fallback)
-        return fallback
+        return queue
     }
 
     private static func createSchema(in db: DatabaseQueue) throws {
@@ -163,9 +175,17 @@ public actor ConversationStateOutbox {
     private static func hydrateFromDisk(
         db: DatabaseQueue
     ) -> (pending: [UUID: OutboxTask], index: [CoalescingKey: UUID]) {
-        let rows: [Row] = (try? db.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM conversation_outbox_tasks")
-        }) ?? []
+        let rows: [Row]
+        do {
+            rows = try db.read { db in
+                try Row.fetchAll(db, sql: "SELECT * FROM conversation_outbox_tasks")
+            }
+        } catch {
+            // Aucune mutation restaurée : l'UI optimiste sera réconciliée au
+            // prochain refresh de liste, mais les actions en attente sont perdues.
+            convStateOutboxLog.error("State outbox hydration failed, pending mutations not restored: \(error.localizedDescription, privacy: .public)")
+            rows = []
+        }
 
         var pending: [UUID: OutboxTask] = [:]
         var index: [CoalescingKey: UUID] = [:]
@@ -176,11 +196,17 @@ public actor ConversationStateOutbox {
                 // JSON — drop it; the upstream optimistic UI will need to
                 // be reconciled on the next list refresh.
                 if let idStr: String = row["id"], let uuid = UUID(uuidString: idStr) {
-                    _ = try? db.write { db in
-                        try db.execute(
-                            sql: "DELETE FROM conversation_outbox_tasks WHERE id = ?",
-                            arguments: [uuid.uuidString]
-                        )
+                    do {
+                        _ = try db.write { db in
+                            try db.execute(
+                                sql: "DELETE FROM conversation_outbox_tasks WHERE id = ?",
+                                arguments: [uuid.uuidString]
+                            )
+                        }
+                    } catch {
+                        // La ligne illisible reste en base et sera re-rejetée
+                        // à chaque démarrage.
+                        convStateOutboxLog.error("Undecodable row \(uuid.uuidString, privacy: .public) could not be purged, it will be re-read every boot: \(error.localizedDescription, privacy: .public)")
                     }
                 }
                 continue
@@ -238,6 +264,22 @@ public actor ConversationStateOutbox {
 
     public func allPending() -> [OutboxTask] {
         Array(pending.values).sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// outbox-03 — purge de logout (miroir de `EngagementOutbox.purgeAll`).
+    /// Sans elle, les rows réhydratées au boot suivant sont flushées
+    /// `force: true` sous le token du compte suivant — y compris les
+    /// mutations destructives `.leave`/`.deleteForUser`.
+    public func purgeAll() {
+        pending.removeAll()
+        indexByCoalescingKey.removeAll()
+        do {
+            try db.write { db in
+                try db.execute(sql: "DELETE FROM conversation_outbox_tasks")
+            }
+        } catch {
+            convStateOutboxLog.error("purgeAll failed, conversation outbox rows retained: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func markCompleted(_ id: UUID) {
@@ -319,42 +361,63 @@ public actor ConversationStateOutbox {
 
     private func upsertRow(_ task: OutboxTask) {
         guard let json = encodeMutation(task.mutation) else { return }
-        try? db.write { db in
-            try db.execute(
-                sql: """
-                INSERT OR REPLACE INTO conversation_outbox_tasks
-                  (id, conv_id, mutation_json, created_at, attempts, next_retry_at, schema_version, coalescing_key)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    task.id.uuidString,
-                    task.convId,
-                    json,
-                    task.createdAt.timeIntervalSince1970,
-                    task.attempts,
-                    task.nextRetryAt?.timeIntervalSince1970,
-                    task.schemaVersion,
-                    task.coalescingKey,
-                ]
-            )
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: """
+                    INSERT OR REPLACE INTO conversation_outbox_tasks
+                      (id, conv_id, mutation_json, created_at, attempts, next_retry_at, schema_version, coalescing_key)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    arguments: [
+                        task.id.uuidString,
+                        task.convId,
+                        json,
+                        task.createdAt.timeIntervalSince1970,
+                        task.attempts,
+                        task.nextRetryAt?.timeIntervalSince1970,
+                        task.schemaVersion,
+                        task.coalescingKey,
+                    ]
+                )
+            }
+        } catch {
+            // La mutation reste optimiste en mémoire mais n'est pas durable :
+            // un kill de l'app la perd sans qu'elle ait atteint le serveur.
+            convStateOutboxLog.error("Task \(task.id.uuidString, privacy: .public) not persisted, it will not survive a relaunch: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private func deleteRow(id: UUID) {
-        try? db.write { db in
-            try db.execute(
-                sql: "DELETE FROM conversation_outbox_tasks WHERE id = ?",
-                arguments: [id.uuidString]
-            )
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: "DELETE FROM conversation_outbox_tasks WHERE id = ?",
+                    arguments: [id.uuidString]
+                )
+            }
+        } catch {
+            // La tâche est terminée en mémoire mais persiste sur disque : elle
+            // sera rejouée au prochain démarrage.
+            convStateOutboxLog.error("Completed task \(id.uuidString, privacy: .public) not deleted, it will replay on next boot: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private func encodeMutation(_ mutation: UserStateMutation) -> String? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(mutation),
-              let str = String(data: data, encoding: .utf8) else { return nil }
-        return str
+        do {
+            let data = try encoder.encode(mutation)
+            guard let str = String(data: data, encoding: .utf8) else {
+                convStateOutboxLog.error("Encoded mutation is not valid UTF-8, task dropped")
+                return nil
+            }
+            return str
+        } catch {
+            // La mutation ne sera jamais persistée ni rejouée.
+            convStateOutboxLog.error("Mutation encode failed, task dropped: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private static func decodeRow(_ row: Row) -> OutboxTask? {
@@ -374,7 +437,9 @@ public actor ConversationStateOutbox {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let data = mutationJSON.data(using: .utf8),
-              let mutation = try? decoder.decode(UserStateMutation.self, from: data)
+              let mutation = decoder.decodeOrLog(UserStateMutation.self, from: data,
+                                                 field: "conversation state mutation",
+                                                 logger: convStateOutboxLog)
         else { return nil }
 
         let nextRetryRaw: Double? = row["next_retry_at"]

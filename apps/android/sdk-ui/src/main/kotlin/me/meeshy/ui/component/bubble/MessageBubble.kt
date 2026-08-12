@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
@@ -1078,6 +1079,12 @@ private fun DeliveryStatusIcon(
         DeliveryStatus.Pending -> Icon(
             imageVector = Icons.Filled.Schedule,
             contentDescription = stringResource(R.string.bubble_status_pending),
+            tint = onColor.copy(alpha = 0.5f),
+            modifier = Modifier.size(16.dp),
+        )
+        DeliveryStatus.QueuedOffline -> Icon(
+            imageVector = Icons.Filled.HourglassEmpty,
+            contentDescription = stringResource(R.string.bubble_status_queued),
             tint = onColor.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),
         )

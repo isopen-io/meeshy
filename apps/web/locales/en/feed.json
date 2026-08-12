@@ -23,6 +23,10 @@
   "newPostsOther": "{count} new posts",
   "empty": "No posts yet. Be the first to share something!",
   "unknownAuthor": "Unknown",
+  "hashtag": {
+    "empty": "No posts with this hashtag yet",
+    "trending": "Trending"
+  },
   "time": {
     "now": "Just now",
     "minutes": "{count}min ago",

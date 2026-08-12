@@ -56,7 +56,7 @@ struct ContactCardView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }

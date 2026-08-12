@@ -161,6 +161,38 @@ describe('sendMessageSchema', () => {
     if (result.success) expect(result.data.originalLanguage).toBe('en');
   });
 
+  it('canonicalizes a region-tagged originalLanguage at the write boundary', () => {
+    // Clients emit the raw platform locale (iOS `fr_FR`, web `fr-FR`, `en-US`).
+    // Persisting it verbatim mirrors iteration 218's MessagingService bug on the
+    // anonymous/registered share-link message-create paths. The schema is the
+    // single write boundary for both those `prisma.message.create` sites, so it
+    // must canonicalize via the `normalizeLanguageCode` SSOT before persistence.
+    const cases: ReadonlyArray<[string, string]> = [
+      ['fr-FR', 'fr'],
+      ['fr_FR', 'fr'],
+      ['FR', 'fr'],
+      ['en-US', 'en'],
+      ['zh-Hant-HK', 'zh'],
+    ];
+    cases.forEach(([raw, canonical]) => {
+      const result = sendMessageSchema.safeParse(makeValidMessage({ originalLanguage: raw }));
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.originalLanguage).toBe(canonical);
+    });
+  });
+
+  it('preserves an irreducible originalLanguage verbatim (no data loss)', () => {
+    // ISO 639-3 codes supported by Meeshy without a 639-1 equivalent (`bas`)
+    // and unknown codes are irreducible: `normalizeLanguageCode` returns
+    // undefined, so the `?? raw` fallback keeps them unchanged — identical to
+    // iteration 218's claim-path behavior, zero data loss.
+    ['bas', 'xx'].forEach((raw) => {
+      const result = sendMessageSchema.safeParse(makeValidMessage({ originalLanguage: raw }));
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.originalLanguage).toBe(raw);
+    });
+  });
+
   it('rejects missing clientMessageId', () => {
     expect(sendMessageSchema.safeParse({ content: 'Hi' }).success).toBe(false);
   });

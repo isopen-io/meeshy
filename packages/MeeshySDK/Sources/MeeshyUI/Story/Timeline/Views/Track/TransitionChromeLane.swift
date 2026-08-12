@@ -6,7 +6,7 @@ import MeeshySDK
 /// Timeline editor previously gave zero indication these would play, even
 /// though `OpeningEffectChips` (above the canvas, not part of the Timeline)
 /// lets the user configure them. Both badges are sized to the same fixed
-/// `StoryRenderer.slideTransitionDuration` (0.5s) every effect actually
+/// `StoryRenderer.slideTransitionDuration` (1.2s) every effect actually
 /// animates over — not editable here; tap-to-edit stays out of scope for
 /// this pass (design doc 2026-07-18) to avoid duplicating
 /// `OpeningEffectChips`' UI.

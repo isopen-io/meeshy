@@ -17,9 +17,27 @@ struct StatusBubbleOverlay: View {
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
 
-    private var screenHeight: CGFloat { UIScreen.main.bounds.height }
-    private var screenWidth: CGFloat { UIScreen.main.bounds.width }
-    private var showAbove: Bool { anchorPoint.y > screenHeight * 0.45 }
+    /// Décisions de layout pures — extraites pour être directement testables
+    /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
+    /// Idiome : `StoryViewerView+Content.reactionRollbackTarget`.
+    ///
+    /// Les deux mesurent le **conteneur** dans lequel la bulle est posée, jamais
+    /// `UIScreen.main.bounds`. `.withStatusBubble()` est appliqué sur ~15 surfaces
+    /// dont plusieurs feuilles (`FeedCommentsSheet`, `ConversationInfoSheet`,
+    /// `ForwardPickerSheet`, `SharePickerView`…) : leurs bornes sont bien plus
+    /// petites que l'écran physique — davantage encore dans une form sheet iPad,
+    /// une colonne de split view, un Slide Over ou une fenêtre Stage Manager.
+    /// La bulle est clippée par ce conteneur, donc c'est lui qui décide.
+    nonisolated static func bubbleWidth(containerWidth: CGFloat) -> CGFloat {
+        min(250, max(0, containerWidth - 48))
+    }
+
+    /// La bulle bascule au-dessus de son ancre dès que celle-ci occupe la moitié
+    /// basse du conteneur : c'est de ce côté-là qu'il reste de la place. Le seuil
+    /// se mesure sur le conteneur — `anchorY` y est déjà exprimé, l'écran non.
+    nonisolated static func flipsAbove(anchorY: CGFloat, containerHeight: CGFloat) -> Bool {
+        anchorY > containerHeight * 0.45
+    }
 
     var body: some View {
         GeometryReader { parentGeo in
@@ -29,7 +47,8 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 48, 250)
+            let bubbleW = Self.bubbleWidth(containerWidth: bounds.width)
+            let showAbove = Self.flipsAbove(anchorY: anchor.y, containerHeight: bounds.height)
             // Décalé à droite de l'avatar : bord gauche de la bulle à anchor.x + 12
             let bubbleX = min(anchor.x + 12 + bubbleW / 2, bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
@@ -119,26 +138,13 @@ struct StatusBubbleOverlay: View {
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    audioPlayerRow(urlString: audioUrl)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let content = status.content, !content.isEmpty {
-                        Text(content)
-                            .font(MeeshyFont.relative(13))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                    Text(status.timeAgo)
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
+                audioPlayerRow(urlString: audioUrl)
+            } else if let content = status.content, !content.isEmpty {
+                Text(content)
+                    .font(MeeshyFont.relative(13))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // "via @username" for republished statuses
@@ -148,20 +154,35 @@ struct StatusBubbleOverlay: View {
                     .foregroundColor(theme.textMuted)
             }
 
-            // Republish button (only for other users' statuses)
             if onRepublish != nil {
                 Divider().opacity(0.3)
-                Button {
-                    dismiss()
-                    onRepublish?(status)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(11))
-                        Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .medium))
+            }
+
+            // Ancienneté + « Republier » (autres statuts uniquement) sur une seule ligne
+            // basse séparée par un point médian — libère toute la largeur de la bulle
+            // pour le texte de l'humeur au lieu de le partager avec le timestamp.
+            HStack(spacing: 4) {
+                Text(status.timeAgo)
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                if onRepublish != nil {
+                    Text("·")
+                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+
+                    Button {
+                        dismiss()
+                        onRepublish?(status)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(MeeshyFont.relative(11))
+                            Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.indigo400)
                     }
-                    .foregroundColor(MeeshyColors.indigo400)
                 }
             }
         }
