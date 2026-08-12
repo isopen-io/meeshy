@@ -1838,12 +1838,24 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.cleanupUploadTempFiles(upload)
                 // E5 — l'upload online a abouti : retirer l'intent write-ahead
                 // (queue + dossier médias), sinon le boot suivant re-publierait.
+                //
+                // Le retrait de l'intent est AWAITÉ, pas détaché : détaché, il
+                // courait contre la fin de cette tâche et contre la déclaration
+                // de succès à l'UI juste en dessous. Perdre cette course laisse
+                // l'intent au drain de boot, qui RE-PUBLIE une story déjà en
+                // ligne. Même geste que le chemin de drain hors-ligne
+                // (`executeQueuedPublish`), qui l'awaite déjà.
+                //
+                // Le ménage disque, lui, reste détaché : `removeOfflineQueue-
+                // MediaDirectory` est de l'IO synchrone `nonisolated`, et cette
+                // tâche est isolée MainActor. Aucun boot ne dépend de ce dossier
+                // une fois l'intent parti.
                 let finished = self.activeUploads.first(where: { $0.id == id })
                 if let queueId = finished?.queueId {
                     let tempId = finished?.queueTempStoryId
-                    Task.detached {
-                        await StoryPublishQueue.shared.dequeue(queueId)
-                        if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
+                    await StoryPublishQueue.shared.dequeue(queueId)
+                    if let tempId {
+                        Task.detached { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
                 }
                 // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul
