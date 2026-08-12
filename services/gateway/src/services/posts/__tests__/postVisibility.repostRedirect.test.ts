@@ -32,6 +32,11 @@ type FakePost = {
   isQuote: boolean;
   repostOfId: string | null;
   originalRepostOfId: string | null;
+  /** Absent par défaut dans les fixtures existantes — équivaut à un post
+   *  PERMANENT (POST/REEL) pour `isEphemeralPostType`, jamais à STORY/STATUS. */
+  type?: string;
+  /** Absent par défaut — une racine non explicitement supprimée reste vivante. */
+  deletedAt?: Date | null;
 };
 
 const makePost = (overrides: Partial<FakePost> = {}): FakePost => ({
@@ -150,6 +155,65 @@ describe('resolveInteractionTarget', () => {
 
     expect(target?.id).toBe(ROOT_ID);
   });
+
+  /**
+   * Review task-9, critique #1 : un repost SIMPLE dont la racine est une
+   * STORY/STATUS ne redirige JAMAIS — le repost porte son propre instantané
+   * (média/audio/storyEffects dupliqués à la création, car la source
+   * éphémère expire puis est nettoyée par `ExpiredStoriesCleanupService`) et
+   * garde donc SA PROPRE vie sociale.
+   */
+  describe('exclusion des racines éphémères (STORY/STATUS)', () => {
+    it('keeps a story-sourced repost interactable on itself, never redirecting to the STORY root', async () => {
+      const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID });
+      const root = makePost({ id: ROOT_ID, type: 'STORY' });
+      const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+      const target = await resolveInteractionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+      expect(target?.id).toBe(REPOST_ID);
+    });
+
+    it('keeps a status-sourced repost interactable on itself, never redirecting to the STATUS root', async () => {
+      const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID });
+      const root = makePost({ id: ROOT_ID, type: 'STATUS' });
+      const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+      const target = await resolveInteractionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+      expect(target?.id).toBe(REPOST_ID);
+    });
+
+    it('keeps a story-sourced repost interactable even after the root has been soft-deleted (ExpiredStoriesCleanupService)', async () => {
+      const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID });
+      const root = makePost({ id: ROOT_ID, type: 'STORY', deletedAt: new Date() });
+      const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+      const target = await resolveInteractionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+      expect(target?.id).toBe(REPOST_ID);
+    });
+
+    it('still redirects to a PERMANENT (POST) root — the exclusion is type-specific, not a general deletion bypass', async () => {
+      const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID });
+      const root = makePost({ id: ROOT_ID, type: 'POST' });
+      const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+      const target = await resolveInteractionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+      expect(target?.id).toBe(ROOT_ID);
+    });
+
+    it('still refuses (returns null) when a PERMANENT root has been soft-deleted — the deletedAt bypass never applies to non-ephemeral roots', async () => {
+      const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID });
+      const root = makePost({ id: ROOT_ID, type: 'REEL', deletedAt: new Date() });
+      const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+      const target = await resolveInteractionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+      expect(target).toBeNull();
+    });
+  });
 });
 
 describe('resolveConsumptionTarget', () => {
@@ -186,5 +250,15 @@ describe('resolveConsumptionTarget', () => {
     const target = await resolveConsumptionTarget(prisma as any, REPOST_ID, undefined);
 
     expect(target).toBeNull();
+  });
+
+  it('excludes an ephemeral (STORY) root from the CONSUMPTION redirect too (review task-9, critique #1)', async () => {
+    const repost = makePost({ id: REPOST_ID, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID, visibility: PostVisibility.PUBLIC });
+    const root = makePost({ id: ROOT_ID, type: 'STORY', visibility: PostVisibility.PUBLIC });
+    const prisma = makePrisma({ [REPOST_ID]: repost, [ROOT_ID]: root });
+
+    const target = await resolveConsumptionTarget(prisma as any, REPOST_ID, VIEWER_ID);
+
+    expect(target?.id).toBe(REPOST_ID);
   });
 });
