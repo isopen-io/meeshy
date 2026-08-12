@@ -1504,17 +1504,28 @@ export class CallEventsHandler {
         participant: {
           select: {
             userId: true,
-            user: { select: { systemLanguage: true } }
+            user: {
+              select: {
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true,
+                deviceLocale: true
+              }
+            }
           }
         }
       }
     });
 
+    // Prisme-first (systemLanguage > regionalLanguage > customDestinationLanguage
+    // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
+    // Reading only `systemLanguage` here used to strand any listener who
+    // configured a regional/custom language instead into a hardcoded 'fr'.
     const targetLanguages: string[] = [
       ...new Set<string>(
         activeParticipants
           .filter(p => p.participant.userId !== speakerUserId)
-          .map(p => (p.participant.user?.systemLanguage as string | undefined) ?? 'fr')
+          .map(p => resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined }))
           .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
       )
     ];
