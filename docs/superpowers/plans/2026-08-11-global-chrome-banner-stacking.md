@@ -982,6 +982,8 @@ Expected: Build succeeded.
 
 Vérification manuelle obligatoire (pas de test automatisé réaliste pour « ce flux precis affiche la bannière ») : lancer le flux invité (lien de session anonyme) sur simulateur, confirmer que la bannière de statut de connexion apparaît toujours dans `ConversationView` — c'est la seule couverture de ce flux, régresser ici la fait disparaître silencieusement.
 
+> Note (2026-08-12) : Step 4 coché sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; build et vérification manuelle du flux invité reportés en CI macOS et sur simulateur. **Point de décision du Step 3 (dernier paragraphe) toujours en suspens** : le flux invité lit l'`@EnvironmentObject conversationListViewModel` non-optionnel dans le bloc bannière gaté `true`, alors que le `fullScreenCover` invité de `MeeshyApp.swift` n'injecte que `authManager`/`deepLinkRouter` → crash possible au premier rendu invité. Si le run du flux invité crashe (`Fatal error: No ObservableObject of type ConversationListViewModel found`), appliquer le fallback local prévu : lecture optionnelle sûre pour ce seul call site — trivial, `ConnectionBanner.init` accepte déjà `ConversationListViewModel?`.
+
 - [x] **Step 5: Commit**
 
 ```bash
