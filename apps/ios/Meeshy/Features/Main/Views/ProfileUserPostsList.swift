@@ -117,6 +117,12 @@ struct ProfileUserPostsList: View {
     @State private var shareableLink: ShareableLink?
     /// Poste (ou réel) en édition via le menu « … » — parité avec `FeedView`.
     @State private var editingPost: FeedPost?
+    /// Poste/réel dont les commentaires sont présentés en feuille — hoisté au
+    /// niveau LISTE (parité `FeedView.reelCommentsPost`). La sheet interne de
+    /// `FeedPostCard` entrait en concurrence avec les feuilles empilées du
+    /// profil : le bouton commentaire ne répondait plus, et celui d'un réel
+    /// fermait carrément la feuille de profil (openReel).
+    @State private var commentingPost: FeedPost?
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
 
@@ -180,6 +186,11 @@ struct ProfileUserPostsList: View {
             ShareSheet(activityItems: [link.url])
                 .presentationDetents([.medium, .large])
         }
+        .sheet(item: $commentingPost) { post in
+            // Même feuille de commentaires que le feed — le bouton commentaire
+            // d'un poste OU d'un réel du profil commente sans quitter le profil.
+            CommentsSheetView(post: post, accentColor: post.authorColor)
+        }
         .sheet(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
@@ -226,7 +237,13 @@ struct ProfileUserPostsList: View {
             onTapMedia: { openReel(post) },
             onTapGlyph: { openPost(post) },
             onLike: { id in Task { await viewModel.toggleLike(id) } },
-            onComment: { _ in openReel(post) },
+            onComment: { _ in
+                // Feuille de commentaires DIRECTE (parité FeedView) — avant, le
+                // bouton commentaire ouvrait le viewer immersif en FERMANT la
+                // feuille de profil : perçu comme « la barre d'action ne marche pas ».
+                HapticFeedback.medium()
+                commentingPost = post
+            },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
@@ -253,6 +270,7 @@ struct ProfileUserPostsList: View {
             displayBookmarkCount: viewModel.bookmarkCount(post),
             displayShareCount: viewModel.shareCount(post),
             isReposted: viewModel.isReposted(post),
+            onOpenComments: { commentingPost = post },
             onLike: { id in Task { await viewModel.toggleLike(id) } },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
             onQuote: { _ in openPost(post) },

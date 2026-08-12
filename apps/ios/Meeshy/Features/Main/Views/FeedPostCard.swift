@@ -31,6 +31,12 @@ struct FeedPostCard: View {
     /// True while a share request is in-flight (mint short link).
     var isShareInFlight: Bool = false
     var onToggleComments: (() -> Void)? = nil
+    /// Hoiste la présentation de la feuille de commentaires chez l'HÔTE. La
+    /// carte empile déjà plusieurs `.sheet`/`.fullScreenCover` sur sa propre
+    /// vue : présentée à l'intérieur d'une feuille (profil), la sheet interne
+    /// entre en concurrence et le bouton commentaire ne répond plus. Quand ce
+    /// callback est fourni, le bouton délègue au lieu de présenter localement.
+    var onOpenComments: (() -> Void)? = nil
     var onLike: ((String) -> Void)? = nil
     var onRepost: ((String) -> Void)? = nil
     var onQuote: ((String) -> Void)? = nil
@@ -950,7 +956,11 @@ struct FeedPostCard: View {
 
             // Comment
             Button {
-                showCommentsSheet = true
+                if let onOpenComments {
+                    onOpenComments()
+                } else {
+                    showCommentsSheet = true
+                }
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: 6) {

@@ -547,6 +547,13 @@ struct ReelFeedCard: View, Equatable {
                 }
             }
         }
+        // Cible tactile 44×44 (HIG) : le glyphe fait 18 pt et la zone de hit se
+        // limitait au tracé — un tap à côté n'était pas absorbé par le Button et
+        // descendait au `.onTapGesture` du ZStack parent (`onTapMedia`), qui
+        // ouvrait le viewer / fermait la feuille de profil. Même correctif que
+        // les 5 boutons de `FeedPostCard.actionsBar`.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
         .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), displayLikeCount))
@@ -567,6 +574,10 @@ struct ReelFeedCard: View, Equatable {
                 }
             }
         }
+        // Cible tactile 44×44 (HIG) — même correctif que `likeButton` ci-dessus :
+        // sans elle, un tap approximatif tombait dans le geste parent.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
         .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
