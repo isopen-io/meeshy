@@ -123,6 +123,18 @@ public struct SocketCommentAddedData: Decodable, Sendable {
     public let postId: String
     public let comment: APIPostComment
     public let commentCount: Int
+    /// cmid du POST créateur, ré-émis par le gateway dans l'écho — permet à
+    /// l'ÉMETTEUR de remplacer sa ligne optimiste (insérée sous cet id local)
+    /// au lieu d'en insérer une seconde sous l'id serveur. `nil` quand le
+    /// créateur n'a pas envoyé de `X-Client-Mutation-Id`.
+    public let clientMutationId: String?
+
+    public init(postId: String, comment: APIPostComment, commentCount: Int, clientMutationId: String? = nil) {
+        self.postId = postId
+        self.comment = comment
+        self.commentCount = commentCount
+        self.clientMutationId = clientMutationId
+    }
 }
 
 public struct SocketCommentDeletedData: Decodable, Sendable {

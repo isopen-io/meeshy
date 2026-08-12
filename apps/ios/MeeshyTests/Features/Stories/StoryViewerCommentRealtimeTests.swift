@@ -143,4 +143,51 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
         XCTAssertEqual(result.repliesMap["parent-1"]?.map(\.id), ["reply-real"],
             "The temp_ reply must be replaced by the real one in place, not appended alongside it")
     }
+
+    // MARK: - Réconciliation par cmid (clé primaire, robuste à la normalisation serveur)
+
+    func test_applyingStoryCommentAdded_cmidEcho_reconcilesEvenWhenServerNormalizedContent() {
+        // Le twin-match par contenu ne tenait pas quand le serveur normalise le
+        // texte (sanitize) : le cmid ré-émis par le gateway matche l'id exact de
+        // la ligne optimiste, indépendamment du contenu.
+        let cmid = "cmid_2f8a1c3e-1111-4222-8333-444455556666"
+        let comments = [makeComment(id: cmid, author: "Bob", authorId: "u2", content: "Texte <b>brut</b>")]
+        let realEcho = makeComment(id: "comment-real", author: "Bob", authorId: "u2", content: "Texte brut")
+
+        let result = StoryViewerView.applyingStoryCommentAdded(
+            comment: realEcho, clientMutationId: cmid, expandedThreads: [], comments: comments, repliesMap: [:]
+        )
+
+        XCTAssertEqual(result.comments.map(\.id), ["comment-real"],
+            "l'écho porteur du cmid remplace la ligne optimiste keyée cmid, même à contenu normalisé")
+    }
+
+    func test_applyingStoryCommentAdded_cmidEchoReply_reconcilesWithoutDoubleCountingParent() {
+        let cmid = "cmid_2f8a1c3e-7777-4888-8999-000011112222"
+        let comments = [makeComment(id: "parent-1", author: "Alice", authorId: "u1", content: "Root", replies: 1)]
+        let repliesMap = ["parent-1": [makeComment(id: cmid, author: "Bob", authorId: "u2", content: "Rép <i>stylée</i>", parentId: "parent-1")]]
+        let realEcho = makeComment(id: "reply-real", author: "Bob", authorId: "u2", content: "Rép stylée", parentId: "parent-1")
+
+        let result = StoryViewerView.applyingStoryCommentAdded(
+            comment: realEcho, clientMutationId: cmid, expandedThreads: ["parent-1"], comments: comments, repliesMap: repliesMap
+        )
+
+        XCTAssertEqual(result.comments.first?.replies, 1,
+            "le compteur du parent ne doit pas être ré-incrémenté par l'écho de notre propre réponse")
+        XCTAssertEqual(result.repliesMap["parent-1"]?.map(\.id), ["reply-real"])
+    }
+
+    func test_applyingStoryCommentAdded_foreignCmid_doesNotSwallowThirdPartyComment() {
+        // Un cmid qui ne matche aucune ligne locale (commentaire d'un autre
+        // appareil/utilisateur) doit laisser l'insertion normale se faire.
+        let comments = [makeComment(id: "existing", author: "Alice", authorId: "u1", content: "First!")]
+        let incoming = makeComment(id: "comment-new", author: "Bob", authorId: "u2", content: "Yo")
+
+        let result = StoryViewerView.applyingStoryCommentAdded(
+            comment: incoming, clientMutationId: "cmid_aaaa1111-2222-4333-8444-555566667777",
+            expandedThreads: [], comments: comments, repliesMap: [:]
+        )
+
+        XCTAssertEqual(result.comments.map(\.id), ["existing", "comment-new"])
+    }
 }

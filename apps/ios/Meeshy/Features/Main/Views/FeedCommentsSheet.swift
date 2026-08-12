@@ -556,9 +556,12 @@ struct CommentsSheetView: View {
                 media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
             // The echoed event for OUR own just-sent comment: replace the optimistic
-            // placeholder (same author + content) in place instead of duplicating it.
+            // placeholder in place instead of duplicating it. Primary key: the
+            // cmid echoed by the gateway matches the optimistic row id exactly.
+            // Fallback: legacy tmp_ rows matched by author + content + parent.
             func isTwin(_ c: FeedComment) -> Bool {
-                c.id.hasPrefix("tmp_")
+                if let cmid = data.clientMutationId, c.id == cmid { return true }
+                return c.id.hasPrefix("tmp_")
                     && c.authorId == feedComment.authorId
                     && c.content == feedComment.content
                     && c.parentId == parentId
@@ -1523,7 +1526,12 @@ struct CommentsSheetView: View {
         // display) IMMEDIATELY — reply under its parent, else top-level — without
         // waiting for the network. The confirmed server row reconciles it (REST
         // response OR the `comment:added` socket event); a failure rolls it back.
-        let tempId = "tmp_\(UUID().uuidString)"
+        // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
+        // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
+        // revient dans l'écho `comment:added` pour une réconciliation par id
+        // exacte — le twin-match par contenu ne tenait pas quand le serveur
+        // normalise le texte (sanitize).
+        let tempId = ClientMutationId.generate()
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: tempId,
@@ -1566,7 +1574,7 @@ struct CommentsSheetView: View {
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
-                    originalLanguage: lang, location: place
+                    originalLanguage: lang, location: place, clientMutationId: tempId
                 )
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1604,18 +1612,23 @@ struct CommentsSheetView: View {
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: like those two call sites, `CreateCommentPayload` doesn't
-                // carry `effectFlags`/`attachmentIds` yet (SDK schema gap) — a
-                // blur/sticker effect or attached media on a comment sent while
-                // offline is dropped on replay; the comment text itself survives.
+                // NOTE: `CreateCommentPayload` carries `effectFlags` but not
+                // `attachmentIds` (SDK schema gap) — attached media on a comment
+                // sent while offline is dropped on replay; the comment text and
+                // its visual effects survive.
                 do {
-                    let cmid = ClientMutationId.generate()
+                    // MÊME cmid que la tentative REST : si le POST a abouti côté
+                    // serveur mais que sa réponse s'est perdue, le rejeu outbox
+                    // est dédoublonné par le MutationLog au lieu de créer un
+                    // second commentaire.
+                    let cmid = tempId
                     let payload = CreateCommentPayload(
                         clientMutationId: cmid,
                         postId: post.id,
                         parentCommentId: parentId,
                         content: trimmed,
-                        location: place
+                        location: place,
+                        effectFlags: effectFlags
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)

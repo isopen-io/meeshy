@@ -740,6 +740,94 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.post?.commentCount, initialCount)
     }
 
+    // MARK: - comment:added echo reconciliation (anti-doublon)
+
+    /// L'écho de NOTRE propre envoi porte le cmid ré-émis par le gateway : il
+    /// doit REMPLACER la ligne optimiste (id local = cmid) au lieu d'en insérer
+    /// une seconde sous l'id serveur — c'était le doublon visible « pendant un
+    /// temps » après chaque publication de commentaire depuis le détail.
+    func test_commentAdded_withCmid_replacesOptimisticTopLevelRow() async {
+        let queue = MockOfflineQueue()
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, offlineQueue: queue, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        await sut.sendComment("Hello")
+        guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
+            return XCTFail("no createComment enqueue")
+        }
+        XCTAssertEqual(sut.comments.count, 1, "ligne optimiste posée")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","clientMutationId":"\(cmid)","comment":{"id":"srv-1","content":"Hello","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"me","username":"me"}},"commentCount":1}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1, "l'écho remplace la ligne optimiste — jamais de doublon")
+        XCTAssertEqual(sut.comments.first?.id, "srv-1")
+    }
+
+    /// Même contrat pour une réponse : réconciliation en place dans le fil ET
+    /// pas de second incrément du compteur du parent (déjà bumpé à l'insertion
+    /// optimiste de sendReply).
+    func test_commentAdded_withCmid_replacesOptimisticReply_withoutDoubleCountingParent() async {
+        let queue = MockOfflineQueue()
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, offlineQueue: queue, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+        guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
+            return XCTFail("no createComment enqueue")
+        }
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 1, "réponse optimiste posée")
+        XCTAssertEqual(sut.comments.first?.replies, 1, "compteur du parent bumpé par l'optimiste")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","clientMutationId":"\(cmid)","comment":{"id":"srv-r1","content":"Coucou","parentId":"c1","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"me","username":"me"}},"commentCount":2}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 1, "l'écho remplace la réponse optimiste — pas de doublon")
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.id, "srv-r1")
+        XCTAssertEqual(sut.comments.first?.replies, 1,
+                       "le compteur du parent ne doit PAS être ré-incrémenté par l'écho de notre propre réponse")
+    }
+
+    /// Sans cmid (client legacy), le commentaire d'un TIERS s'insère
+    /// normalement — la réconciliation ne doit pas gober les vrais nouveaux.
+    func test_commentAdded_withoutCmid_insertsThirdPartyComment() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        let echo: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","comment":{"id":"c-other","content":"Salut","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"other","username":"other"}},"commentCount":1}
+        """)
+        socket.commentAdded.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1)
+        XCTAssertEqual(sut.comments.first?.id, "c-other")
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

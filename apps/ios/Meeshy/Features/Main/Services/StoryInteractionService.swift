@@ -73,7 +73,8 @@ final class StoryInteractionService {
         parentId: String? = nil,
         attachmentIds: [String]? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        clientMutationId: String? = nil
     ) async throws {
         let body = StoryCommentBody(
             content: content,
@@ -85,10 +86,23 @@ final class StoryInteractionService {
             location: location
         )
         do {
-            let _: APIResponse<AnyCodable> = try await api.post(
-                endpoint: "/posts/\(storyId)/comments",
-                body: body
-            )
+            // Le cmid (header `X-Client-Mutation-Id`) fait dédoublonner les
+            // rejeux côté gateway et revient dans l'écho `comment:added` pour
+            // la réconciliation de la ligne optimiste de l'émetteur.
+            if let clientMutationId, !clientMutationId.isEmpty {
+                let _: APIResponse<AnyCodable> = try await api.requestWithHeaders(
+                    endpoint: "/posts/\(storyId)/comments",
+                    method: "POST",
+                    body: try JSONEncoder().encode(body),
+                    queryItems: nil,
+                    headers: ["X-Client-Mutation-Id": clientMutationId]
+                )
+            } else {
+                let _: APIResponse<AnyCodable> = try await api.post(
+                    endpoint: "/posts/\(storyId)/comments",
+                    body: body
+                )
+            }
         } catch {
             Self.logger.error("Failed to post comment on story \(storyId, privacy: .public): \(error.localizedDescription)")
             throw error

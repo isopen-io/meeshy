@@ -1175,7 +1175,14 @@ class FeedViewModel: ObservableObject {
                     currentUserReactions: data.comment.currentUserReactions,
                     location: data.comment.location
                 )
-                if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
+                // Écho de NOTRE propre envoi : la ligne optimiste a été insérée
+                // sous l'id local `cmid` (sendComment) — la remplacer en place,
+                // sinon l'écho (id serveur ≠ cmid) passait la dédup par id et
+                // insérait un doublon visible jusqu'au prochain refresh.
+                if let cmid = data.clientMutationId,
+                   let optimisticIdx = self.posts[index].comments.firstIndex(where: { $0.id == cmid }) {
+                    self.posts[index].comments[optimisticIdx] = feedComment
+                } else if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
                     self.posts[index].comments.insert(feedComment, at: 0)
                 }
                 self.posts[index].commentCount = data.commentCount

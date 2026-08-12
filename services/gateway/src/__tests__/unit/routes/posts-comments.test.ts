@@ -99,7 +99,7 @@ const COMMENT_ID = '507f1f77bcf86cd799439033';
 
 // ─── buildApp ────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, withCmidDecoration = false } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -138,6 +138,17 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
     },
   };
   app.decorate('prisma', prisma);
+
+  if (withCmidDecoration) {
+    // Miroir du middleware `clientMutationId` (non enregistré dans ce
+    // harnais) : décore la requête depuis le header, comme en production.
+    app.addHook('onRequest', async (req) => {
+      const raw = req.headers['x-client-mutation-id'];
+      if (typeof raw === 'string' && raw.length > 0) {
+        (req as any).clientMutationId = raw;
+      }
+    });
+  }
 
   registerCommentRoutes(app, prisma as any, requiredAuth);
   await app.ready();
@@ -255,6 +266,51 @@ describe('POST /posts/:postId/comments — success', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+  });
+});
+
+describe('POST /posts/:postId/comments — broadcast carries clientMutationId', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp({ withCmidDecoration: true });
+    // La room de broadcast n'est résolue que si le post existe.
+    ((app as any).prisma.post.findUnique as jest.Mock<any>).mockResolvedValue({
+      authorId: 'author-1',
+      commentCount: 4,
+      type: 'post',
+      content: 'p',
+      createdAt: new Date(),
+      expiresAt: null,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('echoes the request cmid in the comment:added payload so the sender can reconcile its optimistic row', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      headers: { 'x-client-mutation-id': 'cmid-test-1234' },
+      payload: { content: 'Test comment' },
+    });
+    expect(res.statusCode).toBe(201);
+    const broadcast = (app as any).socialEvents.broadcastCommentAdded as jest.Mock<any>;
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    expect((broadcast.mock.calls[0][0] as any).clientMutationId).toBe('cmid-test-1234');
+  });
+
+  it('omits clientMutationId from the payload when the request carries none', async () => {
+    const broadcast = (app as any).socialEvents.broadcastCommentAdded as jest.Mock<any>;
+    broadcast.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Test comment' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    expect((broadcast.mock.calls[0][0] as any).clientMutationId).toBeUndefined();
   });
 });
 

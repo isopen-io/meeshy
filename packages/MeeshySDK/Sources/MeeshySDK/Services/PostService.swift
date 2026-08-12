@@ -57,6 +57,12 @@ public protocol PostServiceProviding: Sendable {
     /// existants (mocks) restent valides via le défaut ci-dessous, qui ignore
     /// simplement `location` s'il n'est pas surchargé.
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment
+    /// Variante complète ET idempotente — envoie `clientMutationId` en header
+    /// `X-Client-Mutation-Id` pour que le gateway dédoublonne les rejeux et
+    /// ré-émette le cmid dans l'écho `comment:added` (réconciliation de la
+    /// ligne optimiste par l'émetteur). Requirement séparée pour que les
+    /// conformeurs existants restent valides via le défaut ci-dessous.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment
     /// Idempotent text-only variant — sends `clientMutationId` as the
     /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
     /// recorded result instead of duplicating the comment on retry (offline
@@ -136,6 +142,17 @@ public extension PostServiceProviding {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
                              attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
     }
+
+    /// Défaut de la variante complète idempotente : ignore le cmid et retombe
+    /// sur la variante complète — les mocks existants restent valides tant
+    /// qu'ils n'ont pas besoin d'observer le cmid.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: location)
+    }
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -208,10 +225,31 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: location, clientMutationId: nil)
+    }
+
+    /// Surcharge porteuse du cmid : envoyé en header `X-Client-Mutation-Id`,
+    /// le gateway dédoublonne les rejeux (MutationLog) et ré-émet le cmid dans
+    /// l'écho `comment:added` pour la réconciliation optimiste de l'émetteur.
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
                                         attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage, location: location)
-        let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+        guard let clientMutationId, !clientMutationId.isEmpty else {
+            let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+            return response.data
+        }
+        let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
+            endpoint: "/posts/\(postId)/comments",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": clientMutationId]
+        )
         return response.data
     }
 

@@ -960,8 +960,13 @@ extension StoryViewerView {
         let currentUser = AuthManager.shared.currentUser
         let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let authorId: String = currentUser?.id ?? ""
+        // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
+        // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
+        // revient dans l'écho `comment:added` pour une réconciliation par id
+        // exacte (le twin-match par contenu ne tenait pas quand le serveur
+        // normalise le texte).
         let optimisticComment = FeedComment(
-            id: "temp_\(UUID().uuidString)",
+            id: ClientMutationId.generate(),
             author: authorName,
             authorId: authorId,
             authorUsername: currentUser?.username,
@@ -1019,7 +1024,8 @@ extension StoryViewerView {
                     parentId: parentId,
                     attachmentIds: attachmentIds,
                     mobileTranscription: pendingMedia?.mobileTranscription,
-                    location: location
+                    location: location,
+                    clientMutationId: tempCommentId
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -1031,11 +1037,13 @@ extension StoryViewerView {
                 // `comment:added` déjà câblé quand le rejeu aboutit.
                 //
                 // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
-                // porte ni `effectFlags` ni `attachmentIds` (lacune du schéma
-                // SDK). Un effet de flou ou un média joint à un commentaire
-                // envoyé hors-ligne est perdu au rejeu ; le TEXTE, lui, survit.
+                // porte pas `attachmentIds` (lacune du schéma SDK). Un média
+                // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
+                // le TEXTE et ses effets visuels, eux, survivent.
                 do {
-                    let cmid = ClientMutationId.generate()
+                    // MÊME cmid que la tentative REST : un POST abouti dont la
+                    // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
+                    let cmid = tempCommentId
                     try await OfflineQueue.shared.enqueue(
                         .createComment,
                         payload: CreateCommentPayload(
@@ -1043,7 +1051,8 @@ extension StoryViewerView {
                             postId: story.id,
                             parentCommentId: parentId,
                             content: text,
-                            location: location
+                            location: location,
+                            effectFlags: effectFlags
                         ),
                         conversationId: story.id
                     )
@@ -2200,6 +2209,7 @@ extension StoryViewerView {
 
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
+            clientMutationId: data.clientMutationId,
             expandedThreads: storyCommentExpandedThreads,
             comments: storyComments,
             repliesMap: storyCommentRepliesMap
@@ -2222,6 +2232,7 @@ extension StoryViewerView {
     /// equivalent case.
     nonisolated static func applyingStoryCommentAdded(
         comment: FeedComment,
+        clientMutationId: String? = nil,
         expandedThreads: Set<String>,
         comments: [FeedComment],
         repliesMap: [String: [FeedComment]]
@@ -2229,8 +2240,13 @@ extension StoryViewerView {
         var comments = comments
         var repliesMap = repliesMap
 
+        // Clé primaire : le cmid ré-émis par le gateway matche exactement l'id
+        // de la ligne optimiste. Repli : les lignes `temp_` héritées, matchées
+        // par auteur + contenu + parent (fragile quand le serveur normalise le
+        // texte — d'où le cmid).
         func isTwin(_ c: FeedComment) -> Bool {
-            c.id.hasPrefix("temp_")
+            if let clientMutationId, c.id == clientMutationId { return true }
+            return c.id.hasPrefix("temp_")
                 && c.authorId == comment.authorId
                 && c.content == comment.content
                 && c.parentId == comment.parentId

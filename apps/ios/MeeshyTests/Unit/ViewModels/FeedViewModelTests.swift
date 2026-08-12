@@ -1378,6 +1378,37 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// L'écho de NOTRE propre envoi porte le cmid ré-émis par le gateway : il
+    /// doit REMPLACER la ligne optimiste (id local = cmid) au lieu d'en insérer
+    /// une seconde sous l'id serveur — c'était le doublon visible « pendant un
+    /// temps » après chaque publication de commentaire.
+    func test_socketCommentAdded_withCmid_reconcilesOptimisticRowInsteadOfDuplicating() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, socket, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 0)]))
+        await sut.loadFeed(forceRefresh: true)
+        sut.subscribeToSocketEvents()
+
+        await sut.sendComment(postId: "p1", content: "Hello")
+        guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
+            return XCTFail("no createComment enqueue")
+        }
+        XCTAssertEqual(sut.posts[0].comments.count, 1, "ligne optimiste posée")
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"p1","clientMutationId":"\(cmid)","comment":{"id":"srv-1","content":"Hello","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"me","username":"me"}},"commentCount":1}
+        """)
+        socket.commentAdded.send(commentData)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts[0].comments.count, 1,
+                       "l'écho remplace la ligne optimiste — jamais de doublon")
+        XCTAssertEqual(sut.posts[0].comments.first?.id, "srv-1",
+                       "la ligne affichée porte l'id serveur après réconciliation")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     func test_socketCommentDeleted_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "comment-del-post", commentCount: 5)]))

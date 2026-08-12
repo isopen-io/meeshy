@@ -299,6 +299,13 @@ export interface CommentAddedEventData {
   readonly postId: string;
   readonly comment: PostComment;
   readonly commentCount: number;
+  /**
+   * cmid du POST créateur (header `X-Client-Mutation-Id`), ré-émis dans
+   * l'écho pour que l'ÉMETTEUR réconcilie sa ligne optimiste (insérée sous
+   * cet id local) au lieu d'en insérer une seconde sous l'id serveur.
+   * Absent pour les clients legacy qui n'envoient pas de cmid.
+   */
+  readonly clientMutationId?: string;
 }
 
 export interface CommentDeletedEventData {

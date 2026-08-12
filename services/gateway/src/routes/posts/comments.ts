@@ -222,6 +222,9 @@ export function registerCommentRoutes(
           postId: targetPostId,
           comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
           commentCount: post.commentCount,
+          // L'écho porte le cmid du créateur : l'émetteur remplace sa ligne
+          // optimiste (id local = cmid) au lieu d'en insérer un doublon.
+          clientMutationId: request.clientMutationId,
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: broadcast comment added failed'));
       }
 
