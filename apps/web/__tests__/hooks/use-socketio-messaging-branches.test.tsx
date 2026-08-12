@@ -131,6 +131,53 @@ afterEach(() => {
 
 describe('useSocketIOMessaging – branch gap coverage', () => {
 
+  // ── ÉTAPE 1A: mount-time connection kick ──────────────────────────────────
+
+  describe('mount-time reconnect (ÉTAPE 1A)', () => {
+    it('does NOT tear down a healthy socket when a second consumer mounts', async () => {
+      // `reconnect()` n'est pas un « connecte si besoin » : c'est
+      // `disconnect()` + reconnexion différée par backoff (1-2,5 s au premier
+      // essai). Cinq composants montent ce hook — ouvrir un profil coupait donc
+      // une connexion parfaitement saine. Même garde que l'étape 1C.
+      mockGetAuthToken.mockReturnValue('tok-123');
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: true,
+        hasSocket: true,
+        isConnecting: false,
+      });
+
+      renderHook(() => useSocketIOMessaging());
+
+      expect(mockReconnect).not.toHaveBeenCalled();
+    });
+
+    it('does NOT reconnect on mount while a connection is already in flight', async () => {
+      mockGetAuthToken.mockReturnValue('tok-123');
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: false,
+        hasSocket: true,
+        isConnecting: true,
+      });
+
+      renderHook(() => useSocketIOMessaging());
+
+      expect(mockReconnect).not.toHaveBeenCalled();
+    });
+
+    it('DOES connect on mount when there is no live socket', async () => {
+      mockGetAuthToken.mockReturnValue('tok-123');
+      mockGetConnectionDiagnostics.mockReturnValue({
+        isConnected: false,
+        hasSocket: false,
+        isConnecting: false,
+      });
+
+      renderHook(() => useSocketIOMessaging());
+
+      expect(mockReconnect).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── Lines 79-84: tryReconnectIfTokensAvailable inside setTimeout ──────────
 
   describe('tryReconnectIfTokensAvailable (1500ms timeout)', () => {
