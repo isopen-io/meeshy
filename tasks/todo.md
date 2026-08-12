@@ -74,6 +74,16 @@ Les deux se traitent au même endroit (`ExpiredMessagesCleanupService._burn`) et
 chacun leur test. Vérifier d'abord ce que la relocation lit encore : effacer un `metadata`
 qu'un AUTRE message référence serait pire que de le laisser.
 
+**Le transfert est la troisième sortie, et elle n'est fermée par rien.** Transférer un message
+éphémère crée une ligne `Message` INDÉPENDANTE (`forwardedFromId` ne pointe que vers l'origine)
+qui ne porte ni `expiresAt` ni le drapeau `EPHEMERAL` : la copie survit à la destruction de
+l'original, en clair, sans échéance. Ce n'est pas un bug du balayage — c'est une décision
+produit qui n'a jamais été prise. WhatsApp et Signal interdisent le transfert d'un contenu à
+vue unique ; le point de décision ici serait `MessageProcessor.saveMessage` (propager
+`expiresAt`/`ephemeralDuration` depuis la source) ou l'admission de transfert (le refuser).
+À VÉRIFIER avant d'écrire : la citation (`replyToId`) n'a PAS ce défaut — le parent détruit
+rend une citation vide, ce qui est le comportement voulu.
+
 ### 3. La veine « événement socket manqué », toujours ouverte
 
 Inchangée depuis le cycle 92 et toujours non instruite :
