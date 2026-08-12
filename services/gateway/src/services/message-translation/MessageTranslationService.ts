@@ -101,7 +101,11 @@ export class MessageTranslationService extends EventEmitter {
   // Borné par TTL (balayé par le timer existant) + plafond FIFO.
   private readonly latestRetranslationTask = new Map<string, { taskId: string; ts: number }>();
   private readonly RETRANSLATION_TASK_TTL_MS = 3_600_000; // 1h ≫ round-trip ZMQ (timeout 5s)
-  private static readonly RETRANSLATION_TASK_MAX = 5000;
+  // Une entrée par (message, langue) : le plafond doit couvrir autant de MESSAGES
+  // qu'avant la mise à l'échelle par langue, sinon l'éviction FIFO se met à
+  // désarmer le garde sur des messages encore récents (une entrée évincée se lit
+  // « jamais retraduit », donc « jamais périmé »). ~20k entrées ≈ 2 Mo.
+  private static readonly RETRANSLATION_TASK_MAX = 20_000;
 
   constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
