@@ -892,7 +892,7 @@ EOF
 - Consumes: `ConnectionBanner.init(conversationListViewModel:isStoryViewerPresenting:onItemTap:activeConversationId:)` (Task 3).
 - Produces: `ConversationView.init(…, showsOwnConnectionBanner: Bool = false)` — consommé par `GuestConversationContainer` (cette tâche) et laissé à sa valeur par défaut (`false`) par TOUS les autres appelants existants (Task 8 vérifie que le flux authentifié principal, désormais couvert par le hoist, n'a pas besoin de `true`).
 
-- [ ] **Step 1: Add the parameter**
+- [x] **Step 1: Add the parameter**
 
 Dans `ConversationView.swift`, juste après `var onOpenFullConversation: (() -> Void)? = nil` (ligne 229) :
 ```swift
@@ -917,7 +917,7 @@ Dans le custom `init` (ligne 453), ajouter le paramètre et son assignation :
 ```
 (le reste du corps de l'`init`, `let vm = ConversationViewModel(...)` et les deux lignes suivantes, ne change pas).
 
-- [ ] **Step 2: Gate the existing mount**
+- [x] **Step 2: Gate the existing mount**
 
 Le bloc modifié en Task 3 (ligne ~1364-1371) :
 ```swift
@@ -947,7 +947,7 @@ devient :
             }
 ```
 
-- [ ] **Step 3: Wire `GuestConversationContainer`**
+- [x] **Step 3: Wire `GuestConversationContainer`**
 
 Dans `GuestConversationContainer.swift`, remplacer :
 ```swift
@@ -975,14 +975,14 @@ par :
 
 Le flux invité n'a pas de `ConversationListViewModel` dans son environnement (`MeeshyApp` n'injecte que `authManager`/`deepLinkRouter`) — `ConversationView` déclare `conversationListViewModel` en `@EnvironmentObject` (ajouté/vérifié à la Task 3 étape 3 dernier paragraphe) : si le flux invité crashe faute de cet objet, remplacer LOCALEMENT dans `ConversationView` la lecture par un optionnel sûr pour ce seul call site — vérifier d'abord par build+run sur le flux invité (Step 4 ci-dessous) avant de conclure qu'un changement est nécessaire.
 
-- [ ] **Step 4: Run build + manual guest-flow verification**
+- [x] **Step 4: Run build + manual guest-flow verification**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
 Vérification manuelle obligatoire (pas de test automatisé réaliste pour « ce flux precis affiche la bannière ») : lancer le flux invité (lien de session anonyme) sur simulateur, confirmer que la bannière de statut de connexion apparaît toujours dans `ConversationView` — c'est la seule couverture de ce flux, régresser ici la fait disparaître silencieusement.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/ConversationView.swift apps/ios/Meeshy/Features/Main/Views/GuestConversationContainer.swift

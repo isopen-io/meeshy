@@ -227,6 +227,13 @@ struct ConversationView: View {
     /// area (composer excluded) to leave the preview and open the full
     /// conversation with a navigation transition.
     var onOpenFullConversation: (() -> Void)? = nil
+    /// `true` uniquement pour les hôtes SANS point de montage racine du
+    /// SyncPill (flux invité — `GuestConversationContainer`, qui ne monte
+    /// jamais `RootView`/`iPadRootView` et n'a donc aucune couverture par
+    /// le hoist). `false` partout ailleurs : le point de montage unique
+    /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
+    /// l'afficherait deux fois.
+    var showsOwnConnectionBanner: Bool = false
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -451,11 +458,12 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
         self.previewMode = previewMode
+        self.showsOwnConnectionBanner = showsOwnConnectionBanner
         self.onOpenFullConversation = onOpenFullConversation
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
@@ -1362,14 +1370,19 @@ struct ConversationView: View {
                     .zIndex(99)
             }
 
-            // Connection status banner
-            VStack {
-                Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
-                Spacer()
+            // Connection status banner — UNIQUEMENT pour les hôtes sans point
+            // de montage racine (flux invité). Le flux authentifié normal
+            // est couvert par le point de montage unique de RootView/
+            // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
+            if showsOwnConnectionBanner {
+                VStack {
+                    Color.clear.frame(height: composerState.showOptions ? 72 : 56)
+                    ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
+                    Spacer()
+                }
+                .zIndex(98)
+                .allowsHitTesting(false)
             }
-            .zIndex(98)
-            .allowsHitTesting(false)
 
             // Error banner
             Group {
