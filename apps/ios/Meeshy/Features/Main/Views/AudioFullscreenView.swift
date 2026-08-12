@@ -23,6 +23,24 @@ struct AudioFullscreenSource: Identifiable {
     /// Renseigné uniquement en conversation — permet de scroller vers le
     /// message d'origine à la fermeture. `nil` pour feed/commentaire/réel/post.
     let messageId: String?
+    /// Id "session" utilisé par le coordinator (`playThroughCoordinator`,
+    /// `attachmentFinishedPublisher`) pour reconnaître deux lectures comme
+    /// faisant partie du même ensemble. En conversation : la vraie
+    /// `Conversation.id`. Standalone (feed/commentaire/post) : l'id de
+    /// l'ENTITÉ PORTEUSE (commentId / post.id / repost.id) — repris tel quel
+    /// du `QueuedAudio.conversationId` que le `CoordinatedAudioPlayer` inline
+    /// de la même surface utilise déjà, pour que l'ouverture plein écran de
+    /// cette entité soit vue comme la MÊME session (pas de reset de file/
+    /// carte Now Playing). `nil` uniquement pour un plein écran sans session
+    /// inline connue à faire correspondre (ex. réels, non wirés à ce jour) —
+    /// jamais un simple oubli de câblage sur une surface qui, elle, a un id
+    /// porteur disponible.
+    let conversationId: String?
+    /// Nom affiché par la carte Now Playing (conversation, sinon auteur).
+    let nowPlayingContextName: String
+    /// File « à suivre » fournie par la conversation (vocaux non écoutés
+    /// après celui-ci) ; nil pour les surfaces standalone.
+    let queueTailProvider: (() -> [QueuedAudio])?
 
     var authorName: String { author.displayName ?? author.username }
     var authorAvatarURL: String? { author.avatarURL }
@@ -36,7 +54,10 @@ struct AudioFullscreenSource: Identifiable {
          caption: String,
          author: ProfileSheetUser,
          createdAt: Date,
-         messageId: String? = nil) {
+         messageId: String? = nil,
+         conversationId: String? = nil,
+         nowPlayingContextName: String? = nil,
+         queueTailProvider: (() -> [QueuedAudio])? = nil) {
         self.id = id
         self.attachment = attachment
         self.transcription = transcription
@@ -46,10 +67,21 @@ struct AudioFullscreenSource: Identifiable {
         self.author = author
         self.createdAt = createdAt
         self.messageId = messageId
+        self.conversationId = conversationId
+        self.nowPlayingContextName = nowPlayingContextName ?? (author.displayName ?? author.username)
+        self.queueTailProvider = queueTailProvider
     }
 
     /// Chemin conversation : dérive l'auteur et les métadonnées du `Message`.
-    init(from item: ConversationViewModel.AudioItem) {
+    /// `conversationId` est dérivé de `item.message.conversationId` — déjà
+    /// disponible sans dépendre du ViewModel — pour que la fermeture-sur-
+    /// suppression et le filtrage des événements de fin de lecture
+    /// (`ConversationAudioCoordinator` / `ConversationViewModel`) fonctionnent
+    /// même quand l'appelant ne passe pas explicitement ce paramètre.
+    init(from item: ConversationViewModel.AudioItem,
+         conversationId: String? = nil,
+         nowPlayingContextName: String? = nil,
+         queueTailProvider: (() -> [QueuedAudio])? = nil) {
         self.init(
             id: item.id,
             attachment: item.attachment,
@@ -59,7 +91,26 @@ struct AudioFullscreenSource: Identifiable {
             caption: item.message.content,
             author: ProfileSheetUser.from(message: item.message),
             createdAt: item.message.createdAt,
-            messageId: item.message.id
+            messageId: item.message.id,
+            conversationId: conversationId ?? item.message.conversationId,
+            nowPlayingContextName: nowPlayingContextName,
+            queueTailProvider: queueTailProvider
+        )
+    }
+
+    /// Mappe cette source vers le `QueuedAudio` que le coordinator attend pour
+    /// piloter la piste ACTIVE (`urlString` porte la variante de langue
+    /// choisie ; les autres champs restent ceux de la source).
+    func queuedAudio(urlString: String) -> QueuedAudio {
+        QueuedAudio(
+            attachmentId: attachment.id,
+            messageId: messageId ?? attachment.id,
+            conversationId: conversationId ?? "",
+            fileUrl: urlString,
+            durationMs: attachment.duration ?? 0,
+            senderName: authorName,
+            senderAvatarURL: authorAvatarURL,
+            receivedAt: createdAt
         )
     }
 }
@@ -194,10 +245,40 @@ private struct AudioFullscreenPage: View {
     var onDismiss: () -> Void
     var onDismissToMessage: ((String) -> Void)?
 
-    @StateObject private var player = AudioPlaybackManager()
+    /// Moteur du coordinator — le plein écran n'a PLUS de moteur propre :
+    /// la lecture continue à la fermeture (mini-player) et la carte système
+    /// suit. Le repli ne sert qu'aux previews sans coordinator actif.
+    @ObservedObject private var player: AudioPlaybackManager
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
+
+    init(item: AudioFullscreenSource,
+         contactColor: String,
+         mentionDisplayNames: [String: String] = [:],
+         isActive: Bool,
+         pageIndex: Int,
+         totalPages: Int,
+         moodEmojiProvider: ((String) -> String?)? = nil,
+         moodTapProvider: ((String) -> ((CGPoint) -> Void)?)? = nil,
+         onDismiss: @escaping () -> Void,
+         onDismissToMessage: ((String) -> Void)? = nil) {
+        self.item = item
+        self.contactColor = contactColor
+        self.mentionDisplayNames = mentionDisplayNames
+        self.isActive = isActive
+        self.pageIndex = pageIndex
+        self.totalPages = totalPages
+        self.moodEmojiProvider = moodEmojiProvider
+        self.moodTapProvider = moodTapProvider
+        self.onDismiss = onDismiss
+        self.onDismissToMessage = onDismissToMessage
+        self._player = ObservedObject(
+            wrappedValue: ConversationAudioCoordinator.sharedForTesting.engineForBubble
+                ?? AudioPlaybackManager(registerWithCoordinator: false)
+        )
+    }
+
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
     @State private var selectedLanguage: String = "orig"
@@ -329,7 +410,9 @@ private struct AudioFullscreenPage: View {
                     captionText,
                     fontSize: 13,
                     color: .white.opacity(0.8),
-                    mentionColor: MeeshyColors.indigo400,
+                    // Overlay plein écran TOUJOURS sombre → variantes dark figées.
+                    mentionColor: MeeshyColors.mentionColor(isDark: true),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: accent,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
@@ -370,16 +453,16 @@ private struct AudioFullscreenPage: View {
         }
         .onAppear { if isActive { startPlayback() } }
         .adaptiveOnChange(of: isActive) { _, active in
+            // Le changement de page appelle `startPlayback()` de la NOUVELLE
+            // page active, qui re-file le coordinator — aucun arrêt explicite
+            // n'est nécessaire ici (le coordinator est partagé, pas cette page).
             if active {
                 startPlayback()
-            } else {
-                player.stop()
             }
         }
-        .onDisappear {
-            player.stop()
-            player.unregisterFromCoordinator()
-        }
+        // Pas de `.onDisappear` : fermer le plein écran laisse la lecture
+        // continuer (mini-player + carte système) — le moteur est
+        // coordinator-owned, plus cette page (ni stop, ni unregister ici).
         .sheet(isPresented: $showTranslationSheet) {
             // LA feuille de traduction des messages (couleurs par langue +
             // boutons Traduire / retraduire), réutilisée pour l'audio :
@@ -457,9 +540,40 @@ private struct AudioFullscreenPage: View {
     }
 
     private func startPlayback() {
-        player.attachmentId = attachment.id
-        player.play(urlString: currentAudioUrl)
+        playThroughCoordinator(urlString: currentAudioUrl)
         loadWaveform()
+    }
+
+    /// Route toute lecture démarrée depuis le plein écran vers le coordinator
+    /// partagé : si l'attachment est déjà la piste active, seule l'URL change
+    /// (variante de langue) — contexte et file survivent. Si une AUTRE page
+    /// de la MÊME conversation est déjà en session (swipe entre pages du
+    /// pager), `playKeepingQueue` bascule la tête sans rouvrir de session —
+    /// sinon `coordinator.play(tail: [])` écraserait la file de conversation
+    /// et le titre de la carte système basculerait sur le nom de l'auteur.
+    /// Sinon (pas de session active, ou conversation différente), démarre une
+    /// nouvelle session coordinator avec la file « à suivre » de la source
+    /// (vide pour les surfaces standalone).
+    private func playThroughCoordinator(urlString: String) {
+        let coordinator = ConversationAudioCoordinator.sharedForTesting
+        if coordinator.isActive(attachmentId: attachment.id) {
+            if urlString != player.currentUrl {
+                coordinator.playVariant(urlString: urlString)
+            }
+            return
+        }
+        let queued = item.queuedAudio(urlString: urlString)
+        if let activeConv = coordinator.activeContext?.conversationId,
+           !queued.conversationId.isEmpty, activeConv == queued.conversationId {
+            coordinator.playKeepingQueue(queued)
+            return
+        }
+        coordinator.play(
+            current: queued,
+            tail: item.queueTailProvider?() ?? [],
+            conversationName: item.nowPlayingContextName,
+            conversationArtworkURL: item.authorAvatarURL
+        )
     }
 
     // MARK: - Top Bar
@@ -690,7 +804,7 @@ private struct AudioFullscreenPage: View {
                 if player.isPlaying || player.progress > 0 {
                     player.togglePlayPause()
                 } else {
-                    player.play(urlString: currentAudioUrl)
+                    playThroughCoordinator(urlString: currentAudioUrl)
                 }
                 HapticFeedback.light()
             } label: {
@@ -722,6 +836,11 @@ private struct AudioFullscreenPage: View {
                     .foregroundColor(.white)
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
+
+            AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
+                .frame(width: 44, height: 44)
+                .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
+                    defaultValue: "Diffuser sur un appareil", bundle: .main))
         }
     }
 
@@ -983,9 +1102,9 @@ private struct AudioFullscreenPage: View {
             selectedLanguage = code
         }
         if code == "orig" {
-            player.play(urlString: attachment.fileUrl)
+            playThroughCoordinator(urlString: attachment.fileUrl)
         } else if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            player.play(urlString: audio.url)
+            playThroughCoordinator(urlString: audio.url)
         }
         loadWaveform()
         HapticFeedback.light()
@@ -1091,12 +1210,17 @@ extension AudioFullscreenSource {
     /// Construit une source plein écran depuis un média audio de feed
     /// (commentaire, post, réel). La transcription et les versions traduites
     /// (Prisme) proviennent du `FeedMedia` ; l'auteur et les métadonnées du
-    /// post/commentaire porteur.
+    /// post/commentaire porteur. `conversationId` : id de l'entité porteuse
+    /// (commentId/post.id/repost.id) quand l'appelant a déjà un
+    /// `CoordinatedAudioPlayer` inline pour ce même audio — voir
+    /// `AudioFullscreenSource.conversationId`. `nil` pour un appelant sans
+    /// session inline connue (ex. réels, non wirés à ce jour).
     static func fromFeed(media: FeedMedia,
                          author: ProfileSheetUser,
                          originalLanguage: String?,
                          caption: String,
-                         createdAt: Date) -> AudioFullscreenSource {
+                         createdAt: Date,
+                         conversationId: String? = nil) -> AudioFullscreenSource {
         AudioFullscreenSource(
             id: media.id,
             attachment: media.toMessageAttachment(),
@@ -1106,7 +1230,8 @@ extension AudioFullscreenSource {
             caption: caption,
             author: author,
             createdAt: createdAt,
-            messageId: nil
+            messageId: nil,
+            conversationId: conversationId
         )
     }
 }

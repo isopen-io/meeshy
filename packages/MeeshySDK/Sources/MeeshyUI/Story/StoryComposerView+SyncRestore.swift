@@ -72,6 +72,10 @@ extension StoryComposerView {
         // `dismiss()` de la vue app) : le remettre à plat ici garantit qu'il ne
         // survit pas à un reset, quel que soit celui qui a fermé en dernier.
         showCameraCapture = false
+        // Porte différée des chips de la feuille recorder : un reset pendant
+        // qu'un follow-up est en attente ne doit pas rouvrir une sheet fantôme
+        // à la prochaine fermeture de la feuille.
+        recorderFollowUp = nil
     }
 
     func restoreCanvas(from slide: StorySlide) {
@@ -207,13 +211,38 @@ extension StoryComposerView {
     func persistDraft() {
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: slidesStampedWithThumbHash(),
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
         persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
+            draftId: viewModel.draftId,
             images: viewModel.loadedImages,
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
         )
+    }
+
+    /// Slides estampillées de leur `thumbHash` composite — fond, texte, média,
+    /// dessin et stickers, exactement le même producteur qu'à la publication
+    /// (`StorySlideRenderer.computeThumbHash`).
+    ///
+    /// Le hash n'était composé qu'au publish : un brouillon n'en avait donc
+    /// aucun, et la carte de « Mes stories » n'avait littéralement rien à
+    /// peindre. Le poser dès le PREMIER enregistrement donne au brouillon la
+    /// même vignette que la story qu'il deviendra (directive user 2026-08-01).
+    func slidesStampedWithThumbHash() -> [StorySlide] {
+        viewModel.slides.map { slide in
+            var stamped = slide
+            stamped.effects.thumbHash = StorySlideRenderer.computeThumbHash(
+                slide: slide,
+                bgImage: viewModel.slideImages[slide.id],
+                loadedImages: viewModel.loadedImages)
+            return stamped
+        }
     }
 
     /// E4 inc.2 — l'historique undo/redo accompagne chaque persistance du
@@ -221,7 +250,7 @@ extension StoryComposerView {
     /// le blob reflète toujours le DERNIER état, jamais un historique périmé.
     func persistCommandHistory() {
         guard let blob = viewModel.commandHistoryBlobForPersistence() else { return }
-        StoryDraftStore.shared.saveCommandHistoryBlob(blob)
+        StoryDraftStore.shared.saveCommandHistoryBlob(blob, draftId: viewModel.draftId)
     }
 
     func saveDraft() {
@@ -234,9 +263,11 @@ extension StoryComposerView {
     /// background, qui portaient jusqu'ici deux listes de gardes voisines mais
     /// pas identiques.
     ///
-    /// Les cinq termes, et pourquoi chacun ferme le magasin :
-    /// - **édition d'une story publiée** : un brouillon semé là serait restauré
-    ///   plus tard comme une NOUVELLE story (perte du lien `editingPostId`) ;
+    /// Les quatre termes, et pourquoi chacun ferme le magasin (le terme
+    /// « édition d'une story publiée » a été RETIRÉ le 2026-08-02 : le
+    /// brouillon persiste désormais `editingPostId`, sa réouverture rouvre le
+    /// mode édition — la prémisse « restauré comme une NOUVELLE story » ne
+    /// tient plus, et une story mise en édition doit revenir en brouillon) :
     /// - **offre de reprise POSÉE** (`isBannerVisible`) : `StoryDraftStore` n'a
     ///   qu'UN slot et l'utilisateur a les slides proposées sous les yeux —
     ///   écrire ferait mentir « Reprendre ». Le bandeau RANGÉ, en revanche,
@@ -256,14 +287,12 @@ extension StoryComposerView {
     /// Les écritures EXPLICITES (« Sauvegarder » à la sortie) ne passent PAS
     /// par ce gate : l'utilisateur les demande, elles ont le droit d'écraser.
     nonisolated static func mayOverwriteStoredDraft(
-        isEditingExistingStory: Bool,
         draftResume: DraftResumeState,
         isAutosaveSuspended: Bool,
         composerHasContent: Bool,
         didHandOffPublish: Bool
     ) -> Bool {
-        !isEditingExistingStory
-            && !draftResume.isBannerVisible
+        !draftResume.isBannerVisible
             && !isAutosaveSuspended
             && composerHasContent
             && !didHandOffPublish
@@ -280,13 +309,15 @@ extension StoryComposerView {
     }
 
     /// Application du gate à l'état vivant de la vue — un seul lieu de lecture
-    /// des cinq termes, pour les deux autosaves.
+    /// des quatre termes, pour les deux autosaves. Le terme de contenu est élargi
+    /// à l'audio : le store SAIT le retenir (rabattement `mergeEffects` à
+    /// chaque sync) — sans lui, une session audio-seule n'écrivait jamais rien
+    /// et un crash ou un passage en background perdait la composition.
     var mayOverwriteStoredDraft: Bool {
         Self.mayOverwriteStoredDraft(
-            isEditingExistingStory: isEditingExistingStory,
             draftResume: draftResume,
             isAutosaveSuspended: draftAutosaveSuspended,
-            composerHasContent: composerHasContent,
+            composerHasContent: composerHasContent || composerCarriesAudio,
             didHandOffPublish: didHandOffPublish
         )
     }
@@ -299,6 +330,19 @@ extension StoryComposerView {
                                      videos: [String: URL],
                                      audios: [String: URL]) -> Set<String> {
         Set(images.keys).union(videos.keys).union(audios.keys)
+    }
+
+    /// Pure: renders the first slide's pixel-perfect cover and JPEG-encodes it, or `nil`
+    /// if rendering fails. Extracted so the autosave hook's cache-write can be unit tested
+    /// without a live `StoryComposerView`/`ViewModel` harness.
+    @MainActor
+    static func draftCoverJPEG(firstSlide: StorySlide,
+                               loadedImages: [String: UIImage],
+                               bgImage: UIImage?,
+                               size: CGSize) -> Data? {
+        StoryStaticSnapshot.render(slide: firstSlide, loadedImages: loadedImages,
+                                   bgImage: bgImage, size: size)?
+            .jpegData(compressionQuality: 0.85)
     }
 
     /// E1 — autosave débouncé post-mutation (`viewModel.autosaveTrigger`) :
@@ -317,25 +361,48 @@ extension StoryComposerView {
         guard mayOverwriteStoredDraft else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        let stampedSlides = slidesStampedWithThumbHash()
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: stampedSlides,
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        // Cover composite local-first (même pipeline pixel-parfait que la publication) —
+        // « première slide dans l'ordre », même convention que l'ancienne heuristique
+        // brute qu'elle remplace côté My Stories > Drafts.
+        if let firstSlide = stampedSlides.first,
+           let jpeg = Self.draftCoverJPEG(firstSlide: firstSlide,
+                                          loadedImages: viewModel.loadedImages,
+                                          bgImage: viewModel.slideImages[firstSlide.id],
+                                          size: StoryCoverCacheKey.renderSize) {
+            let draftId = viewModel.draftId
+            Task {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverCacheKey.key(for: draftId))
+            }
+        }
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
                                              audios: viewModel.loadedAudioURLs)
         guard keys != lastAutosavedMediaKeys else { return }
         lastAutosavedMediaKeys = keys
         StoryDraftStore.shared.saveMedia(
+            draftId: viewModel.draftId,
             images: viewModel.loadedImages,
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
         )
     }
 
-    /// Gate de purge des brouillons fantômes — délègue entièrement à
-    /// `composerHasContent` (Problème 1, `StoryComposerView+Publication.swift`) :
+    /// Gate de purge des brouillons fantômes — `composerHasContent` (Problème 1,
+    /// `StoryComposerView+Publication.swift`) élargi de l'audio persisté :
     /// un brouillon dont le SEUL contenu est un fond (auto-appliqué à
     /// l'ouverture ou choisi explicitement dans le panneau Fond) ne mérite pas
-    /// la carte de reprise. Les 3 paramètres globaux de `composerHasContent`
+    /// la carte de reprise, mais « fond + musique » est du travail — le juger
+    /// fantôme le faisait purger par `clearPhantomDraftsOnly` à la première
+    /// fermeture venue. Les 3 paramètres globaux de `composerHasContent`
     /// sont figés à `false` : ce gate évalue un draft encore désérialisé, pas
     /// l'état vivant d'un ViewModel — seuls les champs PAR SLIDE comptent ici.
     static func shouldOfferDraftResume(slides: [StorySlide], slideImageIds: Set<String>) -> Bool {
@@ -345,7 +412,7 @@ extension StoryComposerView {
             hasStickerObjects: false,
             hasDrawingData: false,
             hasDrawingStrokes: false
-        )
+        ) || slidesCarryAudio(slides)
     }
 
     /// Câblage LÉGER de `slideImageIds` via `loadMediaReferences()` — PAS
@@ -355,10 +422,11 @@ extension StoryComposerView {
     /// de la carte — violation du principe Cache-First (« No spinner when cache
     /// has data »). Un `fileExists` par ligne suffit à évaluer la PRÉSENCE d'une
     /// image ; le décodage réel du cover reste différé et async.
-    static func storedSlideImageIds(_ slides: [StorySlide], store: StoryDraftStore) -> Set<String> {
-        let imageRefs = store.loadMediaReferences().filter { $0.mediaType == "image" }
+    static func storedSlideImageIds(_ slides: [StorySlide], store: StoryDraftStore, draftId: String) -> Set<String> {
+        let imageRefs = store.loadMediaReferences(draftId: draftId).filter { $0.mediaType == "image" }
+        let slideIds = slides.map(\.id)
         return Set(
-            slides.map(\.id).filter { id in
+            slideIds.filter { (id: String) -> Bool in
                 imageRefs.contains { $0.elementId == id || $0.elementId == "slide-bg-\(id)" }
             }
         )
@@ -374,12 +442,17 @@ extension StoryComposerView {
     /// `checkForDraft()` : sans le repli legacy `UserDefaults`, la protection
     /// dépendrait de la version de l'app qui a écrit le brouillon.
     static func storedDraftIsRestorable(store: StoryDraftStore, defaults: UserDefaults) -> Bool {
-        if let stored = store.load() {
+        // Multi-brouillons : la question devient « au moins UN brouillon
+        // serait-il proposé à la prochaine ouverture ? » — même prédicat que
+        // `checkForDraft()`, appliqué à chaque brouillon du magasin.
+        let anyRestorable = store.listDrafts().contains { summary in
+            guard let stored = store.load(draftId: summary.id) else { return false }
             return shouldOfferDraftResume(
                 slides: stored.slides,
-                slideImageIds: storedSlideImageIds(stored.slides, store: store)
+                slideImageIds: storedSlideImageIds(stored.slides, store: store, draftId: summary.id)
             )
         }
+        if anyRestorable { return true }
         guard let data = defaults.data(forKey: StoryComposerDraft.userDefaultsKey),
               let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else {
             return false
@@ -412,13 +485,28 @@ extension StoryComposerView {
     }
 
     func checkForDraft() {
-        if let stored = StoryDraftStore.shared.load() {
-            let slideImageIds = Self.storedSlideImageIds(stored.slides, store: .shared)
+        if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
+            // Câblage LÉGER `slideImageIds` via `loadMediaReferences()` — PAS
+            // `loadMedia()` : ce dernier décode chaque bitmap
+            // (`Data(contentsOf:)` + `UIImage(data:)`) de façon SYNCHRONE, un
+            // coût disque+CPU non borné qui bloquerait le thread principal
+            // dans `.onAppear`, avant même l'affichage de la carte — violation
+            // du principe Cache-First (« No spinner when cache has data »).
+            // `loadMediaReferences()` ne fait qu'un `fileExists` par ligne :
+            // suffisant pour évaluer PRÉSENCE d'image, le décodage réel du
+            // cover restant dans la `Task` async ci-dessous, inchangée.
+            let imageRefs = StoryDraftStore.shared.loadMediaReferences(draftId: viewModel.draftId)
+                .filter { $0.mediaType == "image" }
+            let slideImageIds = Set(
+                stored.slides.map(\.id).filter { id in
+                    imageRefs.contains { $0.elementId == id || $0.elementId == "slide-bg-\(id)" }
+                }
+            )
 
             guard Self.shouldOfferDraftResume(slides: stored.slides, slideImageIds: slideImageIds) else {
                 // Brouillon fantôme (fond seul) : purge silencieuse, jamais
                 // de carte — auto-migrant pour tout draft déjà sur disque.
-                clearAllDrafts()
+                clearCurrentDraft()
                 return
             }
 
@@ -432,7 +520,7 @@ extension StoryComposerView {
             // références légères.
             Task { @MainActor in
                 guard let first = stored.slides.first else { return }
-                let media = StoryDraftStore.shared.loadMedia()
+                let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
                 let bg = media.images[first.id] ?? media.images["slide-bg-\(first.id)"]
                 // La résolution vient du bandeau, seul à connaître son slot
                 // (`DraftResumeCard.coverSize`, 40×68) : le composer rendait
@@ -459,38 +547,94 @@ extension StoryComposerView {
     }
 
     /// Reprendre un brouillon écrase la visibilité injectée à l'init (rang 2 de
-    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais
-    /// JAMAIS avec un mode qui exige une liste d'utilisateurs :
-    /// `StoryDraftStore.save(slides:visibility:)` ne persiste pas
-    /// `visibilityUserIds`, donc restaurer « Seulement… » rouvrirait un
-    /// sélecteur vide et publierait vers personne. Même règle que le magasin de
-    /// préférences app-side ; reprendre n'est pas publier, la préférence
+    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais un
+    /// mode qui exige une liste d'utilisateurs (« Seulement…/Sauf… ») ne
+    /// survit QU'ACCOMPAGNÉ de sa liste persistée : sans elle, le restaurer
+    /// rouvrirait un sélecteur vide et publierait vers personne, d'où le repli
+    /// vers le défaut produit. Reprendre n'est pas publier, la préférence
     /// mémorisée n'est donc pas réécrite ici.
-    static func restorableVisibility(_ stored: String) -> String {
-        guard let mode = PostVisibility(rawValue: stored), !mode.requiresUserSelection else {
+    static func restorableVisibility(_ stored: String, userIds: [String] = []) -> String {
+        guard let mode = PostVisibility(rawValue: stored) else {
+            return PostVisibility.friends.rawValue
+        }
+        guard !mode.requiresUserSelection || !userIds.isEmpty else {
             return PostVisibility.friends.rawValue
         }
         return stored
     }
 
+    /// B1 (2026-08-02) — copies de SESSION des médias restaurés.
+    ///
+    /// Les URLs remises par `loadMedia` pointent DANS
+    /// `meeshy_draft_media/<draftId>/`, le répertoire que `clearCurrentDraft()`
+    /// supprime au hand-off de publication. Or le write-ahead de la file
+    /// (app-side) court dans une `Task` qui ne démarre qu'APRÈS le retour
+    /// synchrone de `publishAllSlides()` : publier un brouillon repris
+    /// détruisait donc les fichiers AVANT leur copie — story amputée ET
+    /// brouillon perdu. Le composer ne verse dans le ViewModel que des copies
+    /// hors du magasin (clone APFS, quasi gratuit) : détruire le brouillon ne
+    /// peut plus toucher ce que le hand-off a reçu. Une copie qui échoue
+    /// retombe sur l'URL d'origine — pas pire qu'avant, et le média reste
+    /// éditable dans la session.
+    static func sessionSafeMediaURLs(_ urls: [String: URL],
+                                     sessionDirectory: URL,
+                                     fileManager: FileManager = .default) -> [String: URL] {
+        guard !urls.isEmpty else { return urls }
+        do {
+            try fileManager.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
+        } catch {
+            return urls
+        }
+        return urls.mapValues { source in
+            let destination = sessionDirectory.appendingPathComponent(source.lastPathComponent)
+            try? fileManager.removeItem(at: destination)
+            do {
+                try fileManager.copyItem(at: source, to: destination)
+                return destination
+            } catch {
+                return source
+            }
+        }
+    }
+
+    /// Sous tmp/ : la durée de vie attendue est celle de la session de
+    /// composition, l'OS fait le ménage — comme les fichiers temp des médias
+    /// fraîchement importés.
+    static func sessionMediaDirectory(for draftId: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy_draft_session", isDirectory: true)
+            .appendingPathComponent(draftId, isDirectory: true)
+    }
+
     func restoreDraft() {
-        if let stored = StoryDraftStore.shared.load() {
+        if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
-            visibility = Self.restorableVisibility(stored.visibility)
+            visibility = Self.restorableVisibility(stored.visibility, userIds: stored.visibilityUserIds)
+            // L'audience et la langue revivent avec le brouillon. Les ids sont
+            // posés même après un repli de mode : `publishAllSlides` ne les
+            // transmet que pour un mode à sélection, et repasser sur
+            // « Seulement… » retrouve la liste choisie à l'époque.
+            visibilityUserIds = stored.visibilityUserIds
+            if let storedLanguage = stored.originalLanguage {
+                storyLanguage = storedLanguage
+            }
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
-            viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob())
-            let media = StoryDraftStore.shared.loadMedia()
-            viewModel.loadedImages.merge(media.images) { _, new in new }
-            viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
-            viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
+            viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
+            let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
+            let sessionDir = Self.sessionMediaDirectory(for: viewModel.draftId)
+            viewModel.mergeRestoredMedia(
+                images: media.images,
+                videoURLs: Self.sessionSafeMediaURLs(media.videoURLs, sessionDirectory: sessionDir),
+                audioURLs: Self.sessionSafeMediaURLs(media.audioURLs, sessionDirectory: sessionDir)
+            )
 
             // Surface lost media (file purged by OS, deleted via Files app, etc.)
             // explicitly to the user via an alert. The DB rows are also purged
             // so the next restore doesn't repeat the warning.
             if !media.lostElementIds.isEmpty {
-                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds)
+                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds, draftId: viewModel.draftId)
                 lostMediaCount = media.lostElementIds.count
             }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
@@ -508,8 +652,95 @@ extension StoryComposerView {
         viewModel.seedHistory()
     }
 
-    func clearAllDrafts() {
-        StoryDraftStore.shared.clear()
+    /// Efface le brouillon DE CETTE SESSION — publication réussie, abandon
+    /// explicite, ou composer refermé vide.
+    ///
+    /// Appelait `StoryDraftStore.clear()`, qui vidait toute la table. Anodin
+    /// tant qu'il n'existait qu'un brouillon ; depuis le multi-brouillon
+    /// (spec 2026-08-01) publier UNE story effacerait TOUS les autres
+    /// brouillons de l'utilisateur. `clear()` ne sert plus qu'à la déconnexion.
+    func clearCurrentDraft() {
+        StoryDraftStore.shared.delete(draftId: viewModel.draftId)
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
+    /// Gel du brouillon au hand-off de publication (directive 2026-08-02) :
+    /// la story ne QUITTE plus le brouillon au tap « Publier » — `accepted`
+    /// signifie seulement « accepté en file ». Le brouillon est (re)persisté
+    /// LÉGER (JSON seulement : slides estampillées + audience + langue + lien
+    /// d'édition — jamais `saveMedia`, trop lourd pour le chemin synchrone C3 ;
+    /// les copies de médias restent celles du dernier autosave, et l'échec
+    /// permanent les réécrit de toute façon depuis l'item de file), puis
+    /// marqué `pendingPublishAt` : gelé, il n'apparaît plus dans les reprises
+    /// tant que la file travaille. Seul le SUCCÈS serveur confirmé le
+    /// supprimera ; l'échec permanent le rendra éditable avec son erreur.
+    /// Le slot legacy UserDefaults est absorbé au passage — même destin que
+    /// dans l'ancien `clearCurrentDraft`, mais son contenu vit désormais dans
+    /// le brouillon gelé.
+    func freezeCurrentDraftForPublish() {
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: slidesStampedWithThumbHash(),
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
+        persistCommandHistory()
+        StoryDraftStore.shared.markPendingPublish(draftId: viewModel.draftId)
+        UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
+    /// Ce que l'ouverture du composer fait du système de brouillons — décision
+    /// PURE, un seul lieu pour les trois modes de session.
+    nonisolated enum ComposerOpeningDraftAction: Equatable, Sendable {
+        /// Entrée en édition FRAÎCHE d'une story publiée : le canvas est
+        /// hydraté depuis la story serveur. Le système de brouillons n'est
+        /// plus éteint pour autant (2026-08-02) : les autosaves qui suivent
+        /// portent `editingPostId`, et le brouillon d'édition ainsi semé
+        /// rouvre le mode édition à la reprise (session ADOPTÉE).
+        case hydratedByEditMode
+        /// Brouillon CHOISI (`adoptDraft`) : restauration directe, jamais de
+        /// bandeau — l'utilisateur vient de trancher, une double invite ferait
+        /// douter du tap (et son « Recommencer » détruirait le brouillon
+        /// qu'il venait précisément de désigner).
+        case restoreAdoptedDraft
+        /// Session vierge : découverte PASSIVE d'un brouillon éventuel, offre
+        /// par bandeau (`checkForDraft`).
+        case offerDraftResume
+    }
+
+    nonisolated static func openingDraftAction(
+        isEditingExistingStory: Bool,
+        isAdoptedDraftSession: Bool
+    ) -> ComposerOpeningDraftAction {
+        // L'ADOPTION prime (2026-08-02, point c) : un brouillon portant
+        // `editingPostId` rouvre le mode édition en session adoptée — c'est
+        // le brouillon choisi qui doit revivre, pas l'hydratation serveur
+        // qui écraserait le travail repris. Une entrée en édition FRAÎCHE
+        // (« Modifier », jamais adoptée) reste hydratée depuis la story.
+        if isAdoptedDraftSession { return .restoreAdoptedDraft }
+        return isEditingExistingStory ? .hydratedByEditMode : .offerDraftResume
+    }
+
+    /// Ce que « Recommencer » détruit — décision PURE. Une session ADOPTÉE ne
+    /// possède pas le brouillon qu'elle a chargé : elle s'en détache (id neuf,
+    /// le brouillon reste en magasin). Une session vierge jette le brouillon
+    /// qu'elle proposait — le libellé « Recommencer » DIT cette destruction.
+    nonisolated enum ComposerDraftDiscardAction: Equatable, Sendable {
+        case detachFromAdoptedDraft
+        case deleteCurrentDraft
+    }
+
+    nonisolated static func draftDiscardAction(isAdoptedDraftSession: Bool) -> ComposerDraftDiscardAction {
+        isAdoptedDraftSession ? .detachFromAdoptedDraft : .deleteCurrentDraft
+    }
+
+    /// Applicateur unique de la décision « Recommencer » sur l'état vivant.
+    func discardOfferedDraft() {
+        switch Self.draftDiscardAction(isAdoptedDraftSession: viewModel.isAdoptedDraftSession) {
+        case .detachFromAdoptedDraft:
+            viewModel.detachFromAdoptedDraft()
+        case .deleteCurrentDraft:
+            clearCurrentDraft()
+        }
     }
 }

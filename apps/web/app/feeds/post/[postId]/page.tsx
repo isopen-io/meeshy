@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -10,7 +12,6 @@ import {
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
   useDeletePostMutation,
-  useSharePostMutation,
   useUpdatePostMutation,
   useRepostMutation,
   useTranslatePostMutation,
@@ -33,9 +34,10 @@ import { Skeleton } from '@/components/v2/Skeleton';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
+import { reportService } from '@/services/report.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
 import { isHeartLikedByMe } from '@/lib/reactions';
-import { copyToClipboard } from '@/lib/clipboard';
+import { shareLink } from '@/lib/share-utils';
 
 /**
  * Post detail page (v1 canonical path).
@@ -47,6 +49,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const postId = params.postId as string;
   const toastCtx = useToast();
   const showToast = useCallback(
@@ -81,7 +84,6 @@ export default function PostDetailPage() {
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const deleteMutation = useDeletePostMutation();
-  const shareMutation = useSharePostMutation();
   const updateMutation = useUpdatePostMutation();
   const repostMutation = useRepostMutation();
   const translateMutation = useTranslatePostMutation();
@@ -103,10 +105,15 @@ export default function PostDetailPage() {
     if (!postId) return;
     if (isAuthenticated) {
       postsService.viewPost(postId).catch(() => {});
+      // Consommer les notifications du post (nouveau post, commentaires,
+      // réactions — portée serveur `context.postId`). `viewPost` ne marque
+      // qu'à la PREMIÈRE vue : une notification arrivée après resterait non
+      // lue à vie sans cet appel dédié.
+      markScopeNotificationsRead(queryClient, { kind: 'post', postId });
     } else {
       recordAnonymousView(postId, getOrCreateWebSessionKey());
     }
-  }, [postId, isAuthenticated]);
+  }, [postId, isAuthenticated, queryClient]);
 
   if (postQuery.isLoading) {
     return (
@@ -137,12 +144,21 @@ export default function PostDetailPage() {
   const isAuthor = post.authorId === currentUser?.id;
 
   const handleShare = async () => {
-    const { success } = await copyToClipboard(`${window.location.origin}/feeds/post/${post.id}`);
-    if (success) {
-      shareMutation.mutate({ postId: post.id });
-      showToast('Link copied!', 'success');
+    const localUrl = `${window.location.origin}/feeds/post/${post.id}`;
+    const title = post.author?.displayName ?? post.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+    try {
+      const { shortUrl } = await postsService.sharePost(post.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, post.content ?? '');
+      if (shared) {
+        showToast('Shared!', 'success');
+      } else if (!hasNativeShare) {
+        showToast('Link copied!', 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
+    } catch {
+      showToast("Couldn't share the post.", 'error');
     }
-    /* else: clipboard denied / unavailable — silent */
   };
 
   const handleDeletePost = () => {
@@ -180,6 +196,14 @@ export default function PostDetailPage() {
         onError: () => showToast('Failed to repost', 'error'),
       },
     );
+  };
+
+  const handleReportPost = () => {
+    if (!window.confirm('Report this post?')) return;
+    reportService
+      .reportPost(post.id, 'inappropriate', '')
+      .then(() => showToast('Post reported', 'success'))
+      .catch(() => showToast("Couldn't report the post.", 'error'));
   };
 
   const handleQuote = (content: string) => {
@@ -240,7 +264,13 @@ export default function PostDetailPage() {
             onRepost={() => setRepostModalOpen(true)}
             onEdit={isAuthor ? handleEdit : undefined}
             onDelete={isAuthor ? handleDeletePost : undefined}
+            onReport={isAuthor ? undefined : handleReportPost}
             onTranslate={() => translateMutation.mutate({ postId: post.id, targetLanguage: userLanguage })}
+            onDownloadMedia={(mediaId) => postsService.recordMediaDownloads(post.id, [mediaId], 'detail')}
+            onDownloadRepostMedia={(mediaId) => {
+              if (post.repostOf?.id) postsService.recordMediaDownloads(post.repostOf.id, [mediaId], 'detail');
+            }}
+            onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
             onSubmitComment={(content, parentId) =>
               createCommentMutation.mutate({ postId: post.id, content, parentId })
             }

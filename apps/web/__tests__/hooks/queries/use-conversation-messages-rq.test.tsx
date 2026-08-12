@@ -647,11 +647,52 @@ describe('useConversationMessagesRQ', () => {
         50,
         null,
         undefined,
-        new Date('2024-01-03T00:00:00.000Z').toISOString()
+        new Date('2024-01-02T23:59:59.999Z').toISOString()
       );
 
       await waitFor(() => {
         expect(result.current.messages.map((m) => m.id)).toEqual(['new-1', 'old-1', 'old-2']);
+      });
+    });
+
+    // `after` is a STRICT `createdAt >` filter server-side. Two messages can
+    // share a millisecond; if the client cached one of them and asked for
+    // `> that instant`, its twin would never be returned by any catch-up and
+    // stayed lost until a cold reload. Asking from one millisecond earlier makes
+    // the window inclusive — the id-based dedup below already absorbs the
+    // boundary message coming back.
+    it('asks from one millisecond before the watermark so same-millisecond twins are not lost', async () => {
+      const cached = [createMockMessage('old-1', 'newest cached', new Date('2024-01-03T00:00:00.000Z'))];
+      const twin = createMockMessage('twin-1', 'same millisecond, missed', new Date('2024-01-03T00:00:00.000Z'));
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      seedCache(queryClient, cached);
+
+      mockGetMessages.mockResolvedValueOnce({ messages: cached, hasMore: false, total: 1 });
+      mockGetMessages.mockResolvedValue({ messages: [cached[0], twin], hasMore: false, total: 2 });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      });
+
+      await triggerFocusCatchUp();
+
+      expect(mockGetMessages).toHaveBeenLastCalledWith(
+        'conv-1',
+        1,
+        50,
+        null,
+        undefined,
+        new Date('2024-01-02T23:59:59.999Z').toISOString()
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toEqual(['twin-1', 'old-1']);
       });
     });
 
@@ -751,13 +792,13 @@ describe('useConversationMessagesRQ', () => {
       });
 
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        2, 'conv-1', 1, 50, null, undefined, new Date('2024-01-01T00:00:00.000Z').toISOString()
+        2, 'conv-1', 1, 50, null, undefined, new Date('2023-12-31T23:59:59.999Z').toISOString()
       );
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        3, 'conv-1', 1, 50, null, undefined, new Date('2024-01-02T00:00:00.000Z').toISOString()
+        3, 'conv-1', 1, 50, null, undefined, new Date('2024-01-01T23:59:59.999Z').toISOString()
       );
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        4, 'conv-1', 1, 50, null, undefined, new Date('2024-01-03T00:00:00.000Z').toISOString()
+        4, 'conv-1', 1, 50, null, undefined, new Date('2024-01-02T23:59:59.999Z').toISOString()
       );
 
       await waitFor(() => {
@@ -839,7 +880,7 @@ describe('useConversationMessagesRQ', () => {
 
       // Four focus transitions coalesce into a single catch-up read.
       expect(mockGetMessages).toHaveBeenCalledTimes(1);
-      expect(mockGetMessages.mock.calls[0][5]).toBe(new Date('2024-01-01T00:00:00.000Z').toISOString());
+      expect(mockGetMessages.mock.calls[0][5]).toBe(new Date('2023-12-31T23:59:59.999Z').toISOString());
     });
 
     it('does not start a second catch-up while one is already in flight', async () => {
@@ -876,6 +917,132 @@ describe('useConversationMessagesRQ', () => {
       });
 
       expect(mockGetMessages).toHaveBeenCalledTimes(2);
+    });
+
+    // An optimistic message is stamped with the CLIENT clock at compose time and
+    // is not server state. Letting it set the `after` watermark makes the
+    // catch-up ask for messages newer than "now on this device" and silently
+    // skips everything peers sent during the disconnection — the exact window
+    // the catch-up exists to cover, since composing while offline is what puts
+    // an optimistic message in the cache in the first place.
+    it('ignores optimistic messages when computing the catch-up watermark', async () => {
+      const serverNewest = createMockMessage('old-1', 'newest server', new Date('2024-01-03T00:00:00.000Z'));
+      const pending = {
+        ...createMockMessage('cid_pending', 'typed while offline', new Date('2024-06-01T00:00:00.000Z')),
+        _tempId: 'cid_pending',
+        _localStatus: 'failed' as const,
+        _sendPayload: {},
+      } as unknown as Message;
+      const missed = createMockMessage('new-1', 'sent by a peer during the gap', new Date('2024-01-04T00:00:00.000Z'));
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      seedCache(queryClient, [pending, serverNewest]);
+
+      mockGetMessages.mockResolvedValueOnce({ messages: [serverNewest], hasMore: false, total: 1 });
+      mockGetMessages.mockResolvedValue({ messages: [missed], hasMore: false, total: 1 });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      });
+
+      await triggerFocusCatchUp();
+
+      expect(mockGetMessages).toHaveBeenLastCalledWith(
+        'conv-1',
+        1,
+        50,
+        null,
+        undefined,
+        new Date('2024-01-02T23:59:59.999Z').toISOString()
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('new-1');
+      });
+    });
+
+    // Cache holding nothing but optimistic messages has no server watermark to
+    // read forward from. Returning early would leave the conversation frozen on
+    // its local-only content, so fall back to the full (non-destructive) read.
+    it('falls back to a full refetch when the cache holds only optimistic messages', async () => {
+      const pending = {
+        ...createMockMessage('cid_only', 'first message, sent offline', new Date('2024-06-01T00:00:00.000Z')),
+        _tempId: 'cid_only',
+        _localStatus: 'sending' as const,
+        _sendPayload: {},
+      } as unknown as Message;
+      const serverMessage = createMockMessage('srv-1', 'peer message', new Date('2024-01-04T00:00:00.000Z'));
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      seedCache(queryClient, [pending]);
+
+      // The mount read finds nothing yet, so the cache stays optimistic-only;
+      // the peer message only lands on the catch-up read.
+      mockGetMessages.mockResolvedValueOnce({ messages: [], hasMore: false, total: 0 });
+      mockGetMessages.mockResolvedValue({ messages: [serverMessage], hasMore: false, total: 1 });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      });
+
+      await triggerFocusCatchUp();
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(2);
+      });
+      // A full page read, never a watermark read anchored on the client clock.
+      expect(mockGetMessages.mock.calls.every((call) => call[5] === undefined)).toBe(true);
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('srv-1');
+      });
+    });
+
+    // The send ACK is exactly what a disconnection drops. Without reconciling on
+    // `clientMessageId`, the catch-up prepends the server copy next to the
+    // still-pending optimistic one and the sender sees their own message twice.
+    it('replaces the optimistic message its server copy confirms instead of duplicating it', async () => {
+      const serverNewest = createMockMessage('old-1', 'newest server', new Date('2024-01-03T00:00:00.000Z'));
+      const pending = {
+        ...createMockMessage('cid_acked', 'sent, ACK lost', new Date('2024-01-03T12:00:00.000Z')),
+        _tempId: 'cid_acked',
+        _localStatus: 'sending' as const,
+        _sendPayload: {},
+      } as unknown as Message;
+      const confirmed = {
+        ...createMockMessage('srv-acked', 'sent, ACK lost', new Date('2024-01-03T12:00:01.000Z')),
+        clientMessageId: 'cid_acked',
+      } as unknown as Message;
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      seedCache(queryClient, [pending, serverNewest]);
+
+      mockGetMessages.mockResolvedValueOnce({ messages: [serverNewest], hasMore: false, total: 1 });
+      mockGetMessages.mockResolvedValue({ messages: [confirmed], hasMore: false, total: 1 });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      });
+
+      await triggerFocusCatchUp();
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toEqual(['srv-acked', 'old-1']);
+      });
     });
   });
 

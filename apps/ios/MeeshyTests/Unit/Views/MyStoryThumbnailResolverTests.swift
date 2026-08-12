@@ -28,4 +28,19 @@ final class MyStoryThumbnailResolverTests: XCTestCase {
         let result = MyStoryThumbnailResolver.resolve(thumbHash: nil, remoteURL: "")
         XCTAssertEqual(result, .placeholder)
     }
+
+    func test_localCoverPath_prefersRenderedComposite_overLegacyFallback() {
+        let result = MyStoryThumbnailResolver.localCoverPath(renderedCover: "/a", legacyFallback: "/b")
+        XCTAssertEqual(result, "/a")
+    }
+
+    func test_localCoverPath_fallsBackToLegacy_whenNoRenderedComposite() {
+        let result = MyStoryThumbnailResolver.localCoverPath(renderedCover: nil, legacyFallback: "/b")
+        XCTAssertEqual(result, "/b")
+    }
+
+    func test_localCoverPath_nilWhenNeitherAvailable() {
+        let result = MyStoryThumbnailResolver.localCoverPath(renderedCover: nil, legacyFallback: nil)
+        XCTAssertNil(result)
+    }
 }

@@ -106,4 +106,42 @@ final class SyncWatermarkTests: XCTestCase {
         let fallback = past.addingTimeInterval(7)
         XCTAssertEqual(SyncWatermark.fromFullSync(receivedUpdatedAt: [], fallback: fallback), fallback)
     }
+
+    // MARK: - Page delta tronquée (cycle 79)
+
+    /// Une page qui laisse du reste n'a pas rendu toute la fenêtre. Avancer le
+    /// curseur au max des `updatedAt` reçus affirmerait une couverture non
+    /// démontrée — et comme la borne serveur est STRICTE (`gt`), les lignes
+    /// partageant la milliseconde de coupure ne reviendraient plus jamais. Le
+    /// curseur reste où il est.
+    func test_advancedAfterDeltaPage_serverHasMore_leavesCursorInPlace() {
+        let prev = past
+        let received = [past.addingTimeInterval(10), past.addingTimeInterval(20)]
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: prev, receivedUpdatedAt: received, pageMayHaveMore: true),
+            prev,
+            "une page qui laisse du reste ne prouve pas sa complétude — le curseur ne doit pas l'enjamber"
+        )
+    }
+
+    /// Le pendant : une page sans reste a rendu toute la fenêtre, le curseur
+    /// avance normalement (même règle que `advanced`).
+    func test_advancedAfterDeltaPage_completePage_advancesToServerMax() {
+        let serverMax = past.addingTimeInterval(20)
+        let received = [past.addingTimeInterval(10), serverMax]
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: past, receivedUpdatedAt: received, pageMayHaveMore: false),
+            serverMax
+        )
+    }
+
+    /// Non-régression : sur une page complète la règle hérite de `advanced`,
+    /// donc elle ne régresse jamais sous `previous`.
+    func test_advancedAfterDeltaPage_completePage_neverRegressesBelowPrevious() {
+        let prev = past.addingTimeInterval(100)
+        XCTAssertEqual(
+            SyncWatermark.advancedAfterDeltaPage(previous: prev, receivedUpdatedAt: [past], pageMayHaveMore: false),
+            prev
+        )
+    }
 }

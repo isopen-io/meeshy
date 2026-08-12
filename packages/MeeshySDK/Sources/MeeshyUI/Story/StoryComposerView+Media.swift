@@ -8,6 +8,16 @@ import MeeshySDK
 
 // MARK: - StoryComposerView + Media
 
+/// Sources d'audio alternatives proposées DANS la feuille d'enregistrement
+/// (directive user 2026-08-02) : le panneau Son ouvre cette feuille
+/// directement sur une slide vierge (`ComposerToolPanelHost.audioPanel`),
+/// donc l'import Fichiers et la bibliothèque de sons doivent rester
+/// joignables depuis elle.
+nonisolated enum StoryRecorderFollowUp: Equatable {
+    case audioFiles
+    case soundLibrary
+}
+
 extension StoryComposerView {
     // Sheets and full-screen covers are extracted here to keep `body` small
     // enough for the SwiftUI type-checker to handle within its time budget.
@@ -42,12 +52,30 @@ extension StoryComposerView {
                 onCancel: { mediaAudioEditorItem = nil }
             )
         }
-        .sheet(isPresented: $showVoiceRecorderSheet) {
+        .sheet(isPresented: $showVoiceRecorderSheet, onDismiss: {
+            // Séquencement sheet → sheet : la porte demandée par une chip ne
+            // s'ouvre qu'APRÈS le démontage de la feuille recorder — levée
+            // pendant qu'elle est encore présentée, la présentation se perd.
+            let doors = Self.recorderFollowUpDoors(recorderFollowUp)
+            recorderFollowUp = nil
+            if doors.audioFiles { showAudioDocumentPicker = true }
+            if doors.soundLibrary { showSoundLibrary = true }
+        }) {
             NavigationStack {
-                StoryVoiceRecorder { recordedURL, language in
-                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL, language: language)
-                    showVoiceRecorderSheet = false
-                }
+                StoryVoiceRecorder(
+                    onImportAudioFile: {
+                        recorderFollowUp = .audioFiles
+                        showVoiceRecorderSheet = false
+                    },
+                    onOpenSoundLibrary: {
+                        recorderFollowUp = .soundLibrary
+                        showVoiceRecorderSheet = false
+                    },
+                    onRecordComplete: { recordedURL, language in
+                        mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL, language: language)
+                        showVoiceRecorderSheet = false
+                    }
+                )
                 .navigationTitle(String(localized: "story.composer.recordVocal", defaultValue: "Enregistrer un vocal", bundle: .module))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -400,6 +428,17 @@ extension StoryComposerView {
     ) -> PresentedCameraCapture? {
         guard isRequested, let provider else { return nil }
         return PresentedCameraCapture(provider: provider)
+    }
+
+    /// Quelle porte ouvrir après la fermeture de la feuille d'enregistrement.
+    ///
+    /// Pure et testable — une seule porte par follow-up, aucune sur un dismiss
+    /// ordinaire (annulation, vocal terminé) : deux sheets levées ensemble sur
+    /// le même hôte se voleraient la présentation.
+    nonisolated static func recorderFollowUpDoors(
+        _ followUp: StoryRecorderFollowUp?
+    ) -> (audioFiles: Bool, soundLibrary: Bool) {
+        (followUp == .audioFiles, followUp == .soundLibrary)
     }
 
     /// S5 — pose un média venu de la CAMÉRA ou de la dernière photo de la

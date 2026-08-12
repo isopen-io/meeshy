@@ -12,7 +12,7 @@ import {
 import jwt from 'jsonwebtoken';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
-import { uploaderIdOrNull } from '../../services/posts/mediaOwnership';
+import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
@@ -78,6 +78,21 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       } else if (sessionToken) {
         userId = String(sessionToken);
         isAnonymous = true;
+      }
+
+      // PHASE 3 (2026-08-02) — un upload destiné à PostMedia sans uploadeur
+      // identifiable est REFUSÉ avant le premier octet. Le laisser passer
+      // créait un média que l'égalité stricte du claim rend irréclamable à
+      // vie : un orphelin garanti (constaté en prod le 2026-07-31, jeton
+      // indécodable → `2026/07/anonymous/…`, 0 octet, jamais purgé). Les
+      // pièces jointes de MESSAGE (participants anonymes compris) ne passent
+      // pas par ce contexte et restent inchangées.
+      if (isPostMediaUploadContext(upload.metadata?.uploadcontext)
+          && postMediaUploaderOrNull({ userId, isAnonymous }) === null) {
+        throw {
+          status_code: 403,
+          body: 'Post media upload requires an identifiable registered account\n',
+        };
       }
 
       const mimeType = upload.metadata?.filetype || 'application/octet-stream';
@@ -187,23 +202,27 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
       // d'upload/transcription/traduction que les posts. Le média est créé en
       // pending (postId=null, commentId=null) puis lié au commentaire à sa création.
-      const isPostMedia = uploadContext === 'post' || uploadContext === 'story'
-        || uploadContext === 'status' || uploadContext === 'comment';
+      const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
         // Propriétaire de l'upload — la seule chose qui empêchera un tiers de
-        // revendiquer ce média en devinant son id. `null` quand l'identité
-        // n'est pas un utilisateur enregistré (jeton de session anonyme, ou
-        // repli `'anonymous'`) : y écrire ces valeurs créerait un propriétaire
-        // fourre-tout sous lequel N comptes se revendiqueraient mutuellement.
-        const uploaderId = uploaderIdOrNull(userId);
+        // revendiquer ce média en devinant son id.
+        const uploaderId = postMediaUploaderOrNull({ userId, isAnonymous });
         if (!uploaderId) {
-          // On ne REFUSE pas en phase 1 — les routes de post et de commentaire
-          // exigent déjà `requiredAuth`, donc ce cas devrait être vide. Cette
-          // trace sert à le VÉRIFIER avant que la phase 2 ne le rende bloquant.
-          logger.warn(`[TUS] PostMedia sans uploadeur identifiable (context=${uploadContext}, userId=${userId})`);
+          // PHASE 3 — BLOQUANT. `onUploadCreate` rejette déjà ce cas avant le
+          // premier octet ; n'atteignent cette branche que les uploads créés
+          // AVANT le déploiement et finis après. Créer la ligne produirait un
+          // média irréclamable à vie (égalité stricte du claim) : on détruit
+          // la copie déjà posée et on refuse.
+          await fs.unlink(destPath).catch((err) =>
+            logger.debug('[TUS] Ownerless post media cleanup failed', { destPath, err }));
+          logger.error(`[TUS] PostMedia sans uploadeur identifiable REFUSÉ (context=${uploadContext}, userId=${userId})`);
+          throw {
+            status_code: 403,
+            body: 'Post media upload requires an identifiable registered account\n',
+          };
         }
         const postMedia = await prisma.postMedia.create({
           data: {
@@ -292,12 +311,22 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     (_request: any, _payload: any, done: (err: null) => void) => done(null)
   );
 
-  fastify.all('/api/v1/uploads', (req, reply) => {
-    tusServer.handle(req.raw, reply.raw);
+  const TUS_METHODS = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+
+  fastify.route({
+    method: [...TUS_METHODS],
+    url: '/api/v1/uploads',
+    handler: (req, reply) => {
+      tusServer.handle(req.raw, reply.raw);
+    },
   });
 
-  fastify.all('/api/v1/uploads/*', (req, reply) => {
-    tusServer.handle(req.raw, reply.raw);
+  fastify.route({
+    method: [...TUS_METHODS],
+    url: '/api/v1/uploads/*',
+    handler: (req, reply) => {
+      tusServer.handle(req.raw, reply.raw);
+    },
   });
 
   logger.info('[TUS] Resumable upload routes registered at /api/v1/uploads/*');

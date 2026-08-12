@@ -116,4 +116,39 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
             "transcriptionDataChannel."
         )
     }
+
+    // RTCDataChannelDelegate callbacks fire from the same WebRTC-internal thread as
+    // RTCPeerConnectionDelegate and are subject to the identical staleness hazard: a data
+    // channel torn down by `disconnect()` can still deliver a queued callback after a new
+    // call has opened a fresh `transcriptionDataChannel`. The consequence is more severe
+    // here than for the peer-connection callbacks above — `dataChannel(_:didReceiveMessageWith:)`
+    // forwards `{"type":"bye"}` in-band hangups all the way to
+    // `CallManager.webRTCService(_:didReceiveTranscriptionData:)`, which reads
+    // `currentCallId` (the NEW call's id) and ends it. An unguarded stale "bye" from the
+    // PREVIOUS call's peer would therefore hang up the wrong, active call.
+
+    func test_dataChannelDidChangeState_guardsOnOriginatingDataChannelIdentity() {
+        guard let fn = body(
+            from: "nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel)",
+            to: "nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer)"
+        ) else { return }
+        XCTAssertTrue(
+            fn.contains("guard let self, dataChannel === self.transcriptionDataChannel else { return }"),
+            "a stale state notification from a torn-down call's data channel must not start/stop " +
+            "the keep-alive ping owned by the NEW call's transcriptionDataChannel."
+        )
+    }
+
+    func test_didReceiveMessage_guardsOnOriginatingDataChannelIdentity() {
+        guard let fn = body(
+            from: "nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer)",
+            to: "}\n}\n\n#else"
+        ) else { return }
+        XCTAssertTrue(
+            fn.contains("guard let self, dataChannel === self.transcriptionDataChannel else { return }"),
+            "a stale in-band message (notably a \"bye\" hangup) from a torn-down call's data " +
+            "channel must not be forwarded as if it belonged to the call now in progress — it " +
+            "would otherwise hang up the wrong, active call."
+        )
+    }
 }

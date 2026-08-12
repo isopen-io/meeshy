@@ -27,6 +27,9 @@ const mockHandleNewMessage = jest.fn();
 const mockUpdateOnNewMessage = jest.fn();
 const mockFindExistingTrackingLink = jest.fn();
 const mockCreateTrackingLink = jest.fn();
+const mockProcessExplicitLinksInContent = jest.fn(
+  async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+);
 const mockExtractMentions = jest.fn();
 const mockResolveUsernames = jest.fn();
 const mockValidateMentionPermissions = jest.fn();
@@ -48,11 +51,28 @@ jest.mock('../../../services/ConversationStatsService', () => ({
   }
 }));
 
+// Les COMPTEURS de conversation (distincts des statistiques de langue
+// ci-dessus). Seul le singleton est doublé : `resolveAttachmentType` et
+// `statsAuthorKey` restent les vrais, sans quoi ces tests prouveraient la
+// cohérence du double et non celle du système.
+const mockOnNewMessage: any = jest.fn(async () => undefined);
+jest.mock('../../../services/ConversationMessageStatsService', () => ({
+  ...(jest.requireActual('../../../services/ConversationMessageStatsService') as object),
+  conversationMessageStatsService: {
+    onNewMessage: (...a: any[]) => mockOnNewMessage(...a)
+  }
+}));
+
 // Mock TrackingLinkService
+// `processExplicitLinksInContent` porte désormais l'algorithme `[[url]]` /
+// `<url>` en UN seul exemplaire ; l'envoi le traverse au lieu d'appeler
+// lui-même `findExistingTrackingLink` / `createTrackingLink`. Le double garde
+// ces deux-là (d'autres chemins les utilisent) et gagne le point d'entrée réel.
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: mockFindExistingTrackingLink,
     createTrackingLink: mockCreateTrackingLink,
+    processExplicitLinksInContent: mockProcessExplicitLinksInContent,
     collectContentTrackingLinks: jest.fn(async () => [])
   }))
 }));
@@ -289,6 +309,37 @@ describe('MessagingService', () => {
       expect(response.success).toBe(true);
       expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
       expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('resolves early-dedup senderId to the User id, matching the non-dedup path', async () => {
+      // `createSuccessResponse` normalises `senderId` (Participant.id → User.id)
+      // because clients compare `senderId` against their own `userId`. The
+      // early-dedup path must honour that contract too, exactly like the
+      // concurrent P2002 dedup path (MessageProcessor.saveMessage) and the
+      // fresh-send path — otherwise a sequential retry would resolve to the raw
+      // Participant.id. The mock models a real projection: the `sender` relation
+      // is only returned when the query actually requests the include.
+      const baseExisting = {
+        ...createMockMessage(),
+        translations: [{ language: 'fr', content: 'bonjour' }]
+      };
+      mockPrisma.message.findFirst.mockImplementationOnce((args: any) =>
+        Promise.resolve(
+          args?.include?.sender
+            ? { ...baseExisting, sender: { id: testParticipantId, userId: testUserId } }
+            : baseExisting
+        )
+      );
+
+      const response = await service.handleMessage(
+        { ...validRequest, clientMessageId: 'cmid-retry-sender' },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
+      expect((response.data as { senderId?: string }).senderId).toBe(testUserId);
+      expect((response.data as { senderId?: string }).senderId).not.toBe(testParticipantId);
     });
 
     it('should return error for invalid request (empty content)', async () => {
@@ -1440,6 +1491,43 @@ describe('MessagingService', () => {
         data: { messageId: testMessageId }
       });
     });
+
+    // LE témoin du cycle. `handleMessage` est l'entrée COMMUNE du socket et de
+    // `POST /conversations/:id/messages` — le chemin PRIMAIRE d'iOS. Le
+    // comptage ne vivait que dans le handler socket : tout message parti par
+    // REST n'était jamais compté, pendant que sa suppression décrémentait, et
+    // les compteurs passaient sous zéro sans qu'aucun recalcul périodique ne
+    // les relève. Ce test échoue sur le code d'avant : `onNewMessage` n'y était
+    // pas appelé du tout depuis cette classe.
+    it('crédite les compteurs de la conversation, quel que soit le tuyau', async () => {
+      mockOnNewMessage.mockClear();
+
+      await service.handleMessage(
+        {
+          conversationId: testConversationId,
+          content: 'une légende',
+          attachmentIds
+        } as MessageRequest,
+        testParticipantId
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockOnNewMessage).toHaveBeenCalledTimes(1);
+      const [, conversationId, authorKey, content, attachmentTokens] = mockOnNewMessage.mock.calls[0];
+      expect(conversationId).toBe(testConversationId);
+      // Crédité sous l'UTILISATEUR, pas sous son `Participant` — la clé de
+      // `recompute()`, donc celle qui sera débitée à la suppression.
+      expect(authorKey).toBe(testUserId);
+      // Le contenu compté est celui qui est PERSISTÉ, pas celui de la requête.
+      // C'est ce que relit `recompute()`, l'autorité — et la différence n'est
+      // pas cosmétique : un message chiffré stocke `''`, si bien que compter la
+      // requête ferait diverger l'incrément de son propre recalcul.
+      expect(content).toBe('Test message content');
+      // Les pièces jointes vues ici sont celles de l'ÉTAPE 4 bis (rafraîchies
+      // après le lien). Lire le snapshot de `message.create` rendrait `[]` et
+      // les compteurs image/audio ne monteraient jamais.
+      expect(attachmentTokens).toEqual(['image', 'audio']);
+    });
   });
 });
 
@@ -1548,8 +1636,14 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    // The tracking link service should have been called to find/create
-    expect(mockFindExistingTrackingLink).toHaveBeenCalled();
+    // Le contenu passe par le traitement des liens explicites — c'est LUI qui
+    // trouve ou crée le lien. L'assertion portait sur `findExistingTrackingLink`,
+    // une étape INTERNE de l'algorithme que l'envoi recopiait ; il ne la recopie
+    // plus, et un test qui nomme les pas d'un algorithme se casse dès qu'on le
+    // range ailleurs.
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ content, conversationId: testConversationId })
+    );
   });
 
   it('should process angle bracket <url> tracking links', async () => {
@@ -1583,7 +1677,9 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    expect(mockFindExistingTrackingLink).toHaveBeenCalled();
+    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
+      expect.objectContaining({ content, conversationId: testConversationId })
+    );
   });
 
   it('should handle tracking link creation errors gracefully', async () => {
@@ -1866,7 +1962,8 @@ describe('MessagingService - Edge Cases', () => {
       conversation: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
+        updateMany: jest.fn()
       },
       participant: {
         findUnique: jest.fn(),
@@ -2412,6 +2509,32 @@ describe('MessagingService - Edge Cases', () => {
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
 
       expect(response.success).toBe(true);
+    });
+
+    it('flips firstMessageSentAt when it is currently null, without touching the unconditional lastMessageAt bump', async () => {
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockPrisma.conversation.updateMany.mockResolvedValue({ count: 1 });
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello' },
+        testParticipantId
+      );
+
+      // Flush background promises — mêmes 3 `await Promise.resolve()` que le
+      // test voisin « logs error and still returns success when
+      // updateConversation fails », runPostSaveSideEffects étant fire-and-forget.
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { lastMessageAt: expect.any(Date) } })
+      );
+      expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: testConversationId, firstMessageSentAt: null }),
+          data: expect.objectContaining({ firstMessageSentAt: expect.any(Date) }),
+        })
+      );
     });
   });
 

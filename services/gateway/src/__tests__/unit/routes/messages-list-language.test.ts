@@ -28,7 +28,11 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 const mockCanAccessConversation = jest.fn();
+// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
+// et interroge le double Prisma de ce fichier : un mock de module complet le
+// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 

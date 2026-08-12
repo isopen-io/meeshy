@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { makeChainableIO } from '../../helpers/chainable-io';
 
 // ─── Module mocks (must be hoisted before imports) ───────────────────────────
 
@@ -116,10 +117,17 @@ function createMockPrisma() {
     conversation: {
       findFirst: jest.fn<any>(),
       update: jest.fn<any>().mockResolvedValue({}),
+      // registerDeleteForMeRoutes' creator branch queries this to determine
+      // isEmptyDirect (see routes/conversations/delete-for-me.ts) — default
+      // to "not empty" so the pre-existing successor-transfer scenarios below
+      // are unaffected. Pre-merge fix 2026-08-10 switched this from
+      // `findUnique` + JS negation to a `count` guard (Prisma-Mongo
+      // absent-vs-null trap).
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     participant: {
       findFirst: jest.fn<any>(),
-      findMany: jest.fn<any>(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
     },
@@ -129,16 +137,12 @@ function createMockPrisma() {
   } as any;
 }
 
+// `.to()` doit CHAÎNER : bannissement et levée passent désormais par
+// `emitToConversationParticipants`, qui écrit `io.to(fil).to(perso…).emit()`
+// pour ne livrer qu'une copie par socket. Un double dont `.to()` rend `{ emit }`
+// sans `.to` plante au second maillon.
 function createMockIO(extraSockets: any[] = []) {
-  const mockEmit = jest.fn<any>();
-  const mockLeave = jest.fn<any>();
-  const sockets = extraSockets.length > 0 ? extraSockets : [{ leave: mockLeave }];
-  return {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue(sockets) }),
-    _emit: mockEmit,
-    _leave: mockLeave,
-  };
+  return makeChainableIO(extraSockets.length > 0 ? { sockets: extraSockets } : {});
 }
 
 function wireIO(fastify: ReturnType<typeof createMockFastify>, io?: any) {

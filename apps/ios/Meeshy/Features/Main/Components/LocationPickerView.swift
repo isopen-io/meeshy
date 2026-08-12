@@ -6,7 +6,35 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Soulèvement du pin
+
+/// Géométrie du pin central pendant le déplacement de la carte.
+///
+/// Valeurs pures, sans SwiftUI : la règle « de combien il monte et de combien
+/// l'ombre rétrécit » est testable sans rendre quoi que ce soit.
+///
+/// L'ombre est ce qui fait lire le mouvement. Un pin qui grossit seul se lit
+/// comme un zoom ; c'est l'ombre qui rétrécit et pâlit sous lui qui le fait
+/// décoller.
+nonisolated enum MapPinLift {
+    struct Style: Equatable {
+        let scale: Double
+        /// Négatif = vers le haut de l'écran.
+        let yOffset: Double
+        let shadowScale: Double
+        let shadowOpacity: Double
+    }
+
+    static func style(lifted: Bool) -> Style {
+        lifted
+            ? Style(scale: 2.0, yOffset: -18, shadowScale: 0.55, shadowOpacity: 0.18)
+            : Style(scale: 1.0, yOffset: 0, shadowScale: 1.0, shadowOpacity: 0.38)
+    }
+}
+
 struct LocationPickerView: View {
+    /// Couleur PRIMAIRE de la conversation — les appelants passent
+    /// `conversation.accentColor`, qui est `colorPalette.primary`.
     let accentColor: String
     /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
     /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
@@ -14,24 +42,88 @@ struct LocationPickerView: View {
     /// sites, dont un littéral `{ coordinate, _ in }`.
     let onSelect: (SharedPlace) -> Void
     @Environment(\.dismiss) private var dismiss
-    private var theme: ThemeManager { ThemeManager.shared }
+    // Plus de référence à `ThemeManager.shared` : tout ce que cette vue pose
+    // est soit une couleur de conversation, soit une couleur sémantique qui
+    // s'adapte au matériau. Une vue posée sur une carte n'a pas à lire un
+    // singleton global de thème.
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
+    @ObservedObject private var preferencesStore = LocationSharingPreferencesStore.shared
     @State private var searchText = ""
     @State private var mapTarget: MapTarget?
     @State private var didCenterOnUser = false
+    @State private var isShowingSettings = false
+    /// Vrai tant que la caméra bouge — pilote le soulèvement du pin.
+    @State private var isMapMoving = false
+
+    /// Couleur d'ACCENT de la conversation, dérivée du primaire par la formule
+    /// officielle du SDK. `DynamicColorGenerator.colorFor(context:)` calcule
+    /// `accent = shiftHue(primary, -30°)` et n'applique jamais
+    /// `saturationBoost` aux hex — cette dérivation reproduit donc
+    /// `conversation.colorPalette.accent` à l'identique, sans imposer un
+    /// nouveau paramètre aux sept sites d'appel.
+    ///
+    /// STOCKÉE, pas calculée : `hueShiftedHex` construit deux `UIColor` et un
+    /// `Scanner` à chaque appel, et le body en fait huit usages (pin, dégradé
+    /// du CTA, badge, deux boutons flottants, icônes de résultats). En
+    /// propriété calculée, chaque re-rendu déclenché par un déplacement de
+    /// carte refaisait tout ce travail.
+    private let secondaryAccent: String
+
+    /// Le couple primaire/accent RENDU LISIBLE sur la carte.
+    ///
+    /// `colorFor(context:)` mélange trois couleurs de palette ; sur certaines
+    /// combinaisons le résultat est terne (vérifié au simulateur : une
+    /// conversation directe rend un bleu-gris à 30 % de saturation). Posé sur
+    /// une carte claire, un glyphe de cette teinte se lit mal — et depuis que
+    /// les styles satellite et hybride existent, le fond peut être n'importe
+    /// quoi. `adaptedColor` plafonne la luminosité à 0,60 en clair et la
+    /// plancher à 0,70 en sombre tout en gardant la teinte : l'identité de la
+    /// conversation reste, le contraste devient garanti.
+    private struct OnMapColors { let primary: String; let accent: String }
+    private let onMapLight: OnMapColors
+    private let onMapDark: OnMapColors
+    private var onMap: OnMapColors { isDark ? onMapDark : onMapLight }
+
+    init(accentColor: String, onSelect: @escaping (SharedPlace) -> Void) {
+        let accent = DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
+        self.accentColor = accentColor
+        self.secondaryAccent = accent
+        // Les deux variantes sont calculées ICI, une fois : les résoudre dans
+        // `body` ferait quatre conversions UIColor à chaque déplacement de
+        // carte.
+        self.onMapLight = OnMapColors(
+            primary: DynamicColorGenerator.adaptedColor(accentColor, for: .light),
+            accent: DynamicColorGenerator.adaptedColor(accent, for: .light)
+        )
+        self.onMapDark = OnMapColors(
+            primary: DynamicColorGenerator.adaptedColor(accentColor, for: .dark),
+            accent: DynamicColorGenerator.adaptedColor(accent, for: .dark)
+        )
+        self.onSelect = onSelect
+    }
+
+    private var precision: LocationPrecision { preferencesStore.preferences.precision }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 mapView
 
+                centerPin
+
                 VStack(spacing: 0) {
                     searchBar
                     if viewModel.isLocationRefused {
                         locationDeniedBanner
                     }
+                    // DANS le flux, sous la barre — pas en calque séparé avec un
+                    // décalage deviné. Une constante aurait dû anticiper la
+                    // hauteur de la barre, qui grandit avec le Dynamic Type :
+                    // aux tailles d'accessibilité elle serait repassée
+                    // par-dessus la colonne, c'est-à-dire le bug d'origine.
+                    floatingControls
                     Spacer()
                     bottomCard
                 }
@@ -47,6 +139,9 @@ struct LocationPickerView: View {
                         .font(MeeshyFont.relative(16, weight: .bold))
                         .accessibilityAddTraits(.isHeader)
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                LocationSharingSettingsSheet(accentColor: accentColor)
             }
             .onAppear { viewModel.requestPermission() }
             .onReceive(viewModel.userLocationUpdates) { loc in
@@ -99,20 +194,138 @@ struct LocationPickerView: View {
     private var mapView: some View {
         AdaptiveInteractiveMap(
             target: mapTarget,
-            annotationCoordinate: viewModel.selectedCoordinate,
+            // Plus d'annotation : le pin est une SURCOUCHE d'écran, posée au
+            // centre par le ZStack. Ancré à une coordonnée, il voyageait avec
+            // la carte pendant le déplacement — il quittait le centre puis y
+            // resautait au relâchement, quand `selectedCoordinate` rattrapait.
+            // Un pin qui dérive ne peut pas se soulever de façon lisible : le
+            // motif des sélecteurs de carte est une carte qui glisse SOUS un
+            // pin fixe.
+            annotationCoordinate: nil,
+            style: preferencesStore.preferences.mapStyle,
+            // Les contrôles système se rendent en haut-trailing, SOUS la barre
+            // de recherche flottante — c'est exactement là que le bouton de
+            // recentrage devenait inatteignable. On pose les nôtres.
+            defaultControls: false,
             onRegionChange: { center in
                 viewModel.updateSelectedLocation(center)
+            },
+            onInteractionChange: { moving in
+                // Garde d'écriture UNIQUE par geste : `.continuous` tire
+                // plusieurs fois par seconde, et republier `true` à chaque
+                // trame re-rendrait la carte en boucle.
+                guard isMapMoving != moving else { return }
+                isMapMoving = moving
             }
         ) {
-            // Fixed: MapKit annotation marker anchored to a coordinate — system-pin
-            // chrome rendered at a fixed screen size, not reading text. Scaling it
-            // with Dynamic Type would detach it from the point it marks (74i/86i).
-            Image(systemName: "mappin.circle.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
-                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
+            EmptyView()
         }
         .ignoresSafeArea(edges: .bottom)
+    }
+
+    // MARK: - Pin central
+
+    /// Le pin que la carte glisse dessous. Il se soulève au premier signe de
+    /// mouvement et se repose quand la caméra s'arrête.
+    ///
+    /// Non interactif (`allowsHitTesting(false)`) : il occupe le centre de
+    /// l'écran, exactement là où l'utilisateur pose le doigt pour déplacer la
+    /// carte — capter ce toucher rendrait la carte impossible à bouger par son
+    /// milieu.
+    private var centerPin: some View {
+        let lift = MapPinLift.style(lifted: isMapMoving)
+        // ZStack, PAS VStack : empilés verticalement, c'est la PAIRE
+        // pin + ombre qui se retrouve centrée, donc le pin lui-même flotte
+        // au-dessus du centre réel de la carte — il désignerait un point
+        // différent de celui que `onRegionChange` rapporte. Ici le pin est à
+        // l'exact centre au repos et l'ombre est décalée sous lui.
+        return ZStack {
+            Ellipse()
+                .fill(Color.black.opacity(lift.shadowOpacity))
+                .frame(width: 14, height: 5)
+                .scaleEffect(lift.shadowScale)
+                .blur(radius: 1)
+                .offset(y: 22)
+
+            Image(systemName: "mappin.circle.fill")
+                // Chrome de carte à taille d'écran fixe, pas du texte à lire :
+                // le mettre à l'échelle du Dynamic Type le décrocherait du
+                // point qu'il marque (doctrine 74i/86i).
+                .font(.system(size: 36))
+                .foregroundStyle(Color(hex: onMap.primary), Color(hex: onMap.accent).opacity(0.35))
+                .shadow(color: Color(hex: onMap.accent).opacity(0.45), radius: 6, y: 3)
+                .scaleEffect(lift.scale)
+                .offset(y: lift.yOffset)
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: isMapMoving)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Contrôles flottants
+
+    /// Colonne trailing posée SOUS la barre de recherche, dans le flux du
+    /// `VStack` — donc toujours dégagée, quelle que soit la hauteur qu'atteint
+    /// la barre. Elle s'efface quand des résultats s'affichent : la liste a
+    /// alors la priorité visuelle, et c'est le seul recouvrement accepté.
+    private var floatingControls: some View {
+        VStack(spacing: 10) {
+            controlButton(
+                icon: "info.circle",
+                label: String(localized: "location.settings.open", defaultValue: "Réglages de partage de position", bundle: .main)
+            ) {
+                isShowingSettings = true
+            }
+
+            controlButton(
+                icon: "location.fill",
+                label: String(localized: "location.recenter", defaultValue: "Recentrer sur ma position", bundle: .main)
+            ) {
+                viewModel.centerOnUser()
+                if let loc = viewModel.userLocation {
+                    mapTarget = MapTarget(center: loc, latitudinalMeters: 500, longitudinalMeters: 500)
+                }
+            }
+        }
+        .padding(.trailing, 16)
+        .padding(.top, 12)
+        // Cadre pleine largeur pour ancrer la colonne à droite. La zone vide à
+        // gauche ne capte rien (aucun fond, aucun `contentShape`), la carte
+        // reste donc déplaçable dessous — même patron que la barre de recherche
+        // juste au-dessus.
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .opacity(viewModel.searchResults.isEmpty ? 1 : 0)
+        .allowsHitTesting(viewModel.searchResults.isEmpty)
+        .animation(.easeInOut(duration: 0.18), value: viewModel.searchResults.isEmpty)
+    }
+
+    private func controlButton(
+        icon: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            Image(systemName: icon)
+                // Chrome de carte ancré à une taille d'écran fixe, pas du texte
+                // à lire : le mettre à l'échelle du Dynamic Type le décrocherait
+                // de la grille de contrôles (doctrine 86i).
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Color(hex: onMap.accent))
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle())
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                // Cible tactile Apple HIG (44 pt) sans grossir le disque
+                // visible (40 pt). L'ORDRE compte : `frame` d'abord, puis
+                // `contentShape` — l'inverse découperait la zone tactile sur
+                // le disque de 40 et la cible resterait sous-dimensionnée.
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .accessibilityLabel(label)
     }
 
     // MARK: - Search Bar
@@ -121,7 +334,7 @@ struct LocationPickerView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
             TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
@@ -137,7 +350,7 @@ struct LocationPickerView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(14))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundColor(.secondary)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Clear search", bundle: .main))
             }
@@ -194,21 +407,26 @@ struct LocationPickerView: View {
                             // a scalable font would overflow the frame (doctrine 86i).
                             // Decorative — the place name carries the meaning.
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
+                            // Accent ADAPTÉ et couleurs sémantiques : cette
+                            // liste flotte sur le même verre que la carte du
+                            // bas, au-dessus d'un fond de carte devenu
+                            // imprévisible avec les styles satellite et
+                            // hybride. Les tokens de thème y disparaissaient.
+                            .foregroundColor(Color(hex: onMap.accent))
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color(hex: accentColor).opacity(0.1)))
+                            .background(Circle().fill(Color(hex: onMap.accent).opacity(0.14)))
                             .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
                                 .font(MeeshyFont.relative(13, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundColor(.primary)
                                 .lineLimit(1)
 
                             if let subtitle = item.placemark.title {
                                 Text(subtitle)
                                     .font(MeeshyFont.relative(11))
-                                    .foregroundColor(theme.textSecondary)
+                                    .foregroundColor(.secondary)
                                     .lineLimit(1)
                             }
                         }
@@ -241,10 +459,17 @@ struct LocationPickerView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    if let address = viewModel.addressString {
-                        Text(address)
+                    // Couleurs SÉMANTIQUES, pas les tokens du thème : cette
+                    // carte est du verre posé sur la carte, dont le fond est
+                    // devenu imprévisible avec les styles satellite et hybride.
+                    // `theme.textMuted` (indigo à 40 %) disparaissait sur une
+                    // imagerie satellite sombre. `.primary`/`.secondary`
+                    // s'adaptent à la vibrance du matériau — c'est déjà ce que
+                    // fait `LocationFullscreenView` sur sa propre carte du bas.
+                    if let title = displayedTitle {
+                        Text(title)
                             .font(MeeshyFont.relative(13, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundColor(.primary)
                             .lineLimit(2)
                     } else if viewModel.isGeocoding {
                         HStack(spacing: 6) {
@@ -252,18 +477,43 @@ struct LocationPickerView: View {
                                 .scaleEffect(0.7)
                             Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
                                 .font(MeeshyFont.relative(12))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundColor(.secondary)
                         }
                     } else {
                         Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
                             .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundColor(.secondary)
                     }
 
-                    if let coord = viewModel.selectedCoordinate {
-                        Text(String(format: "%.5f, %.5f", coord.latitude, coord.longitude))
-                            .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
-                            .foregroundColor(theme.textMuted)
+                    if let place = displayedPlace {
+                        HStack(spacing: 6) {
+                            // Une paire de coordonnées est une valeur ATOMIQUE :
+                            // coupée en plusieurs lignes elle devient illisible.
+                            // Vérifié au simulateur en taille accessibilité XXXL
+                            // (2026-08-10) : « 20.00000, −0.00000 » se cassait
+                            // sur QUATRE lignes et faisait doubler la carte.
+                            // Elle rétrécit donc au lieu de passer à la ligne, et
+                            // sa croissance est plafonnée — le reste de la carte
+                            // continue de suivre le Dynamic Type normalement.
+                            Text(formattedCoordinates(of: place))
+                                .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                            Text(verbatim: "·")
+                                .font(MeeshyFont.relative(10))
+                                .foregroundColor(.secondary)
+                            Text(LocationSharingLabels.precisionBadge(precision))
+                                .font(MeeshyFont.relative(10, weight: .semibold))
+                                .foregroundColor(Color(hex: onMap.accent))
+                                .lineLimit(1)
+                        }
+                        // Plafond de croissance sur CETTE ligne seulement : une
+                        // lecture technique n'a pas besoin d'atteindre les
+                        // tailles accessibilité pour rester exploitable, alors
+                        // que le titre du lieu juste au-dessus, lui, doit
+                        // continuer de grossir.
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     }
                 }
 
@@ -273,65 +523,38 @@ struct LocationPickerView: View {
             // as a single element instead of three disjoint fragments.
             .accessibilityElement(children: .combine)
 
-            HStack(spacing: 12) {
-                Button {
-                    viewModel.centerOnUser()
-                    if let loc = viewModel.userLocation {
-                        mapTarget = MapTarget(
-                            center: loc, latitudinalMeters: 500, longitudinalMeters: 500
+            Button {
+                guard let place = displayedPlace else { return }
+                Logger(subsystem: "me.meeshy.app", category: "location")
+                    .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
+                onSelect(place)
+                HapticFeedback.success()
+                dismiss()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(MeeshyFont.relative(14, weight: .bold))
+                    Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            // Le dégradé de la CONVERSATION : primaire vers
+                            // accent, pas primaire vers lui-même atténué.
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryAccent)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
                         )
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "location.circle.fill")
-                            .font(MeeshyFont.relative(14))
-                        Text(String(localized: "location.my-position", defaultValue: "Ma position", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: accentColor))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(hex: accentColor).opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                }
-
-                Button {
-                    guard let place = viewModel.selectedPlace else { return }
-                    Logger(subsystem: "me.meeshy.app", category: "location")
-                        .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public)")
-                    onSelect(place)
-                    HapticFeedback.success()
-                    dismiss()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                            .font(MeeshyFont.relative(14, weight: .bold))
-                        Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
-                            .font(MeeshyFont.relative(13, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.8)],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
-                    )
-                }
-                .disabled(viewModel.selectedCoordinate == nil)
-                .opacity(viewModel.selectedCoordinate == nil ? 0.5 : 1)
+                        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
+                )
             }
+            .disabled(displayedPlace == nil)
+            .opacity(displayedPlace == nil ? 0.5 : 1)
         }
         .padding(16)
         // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
@@ -341,6 +564,29 @@ struct LocationPickerView: View {
         .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
+    }
+
+    /// Ce qui PARTIRA, précision appliquée. La carte du bas montre exactement
+    /// ce que le destinataire recevra — pas une valeur brute qui serait
+    /// dégradée en silence au moment du tap.
+    private var displayedPlace: SharedPlace? {
+        viewModel.sharedPlace(at: precision)
+    }
+
+    /// Nom ET adresse, dédupliqués. Ne montrer que l'adresse perdrait le nom du
+    /// quartier aux niveaux grossiers (« Gros-Caillou » disparaîtrait derrière
+    /// « Paris, France ») ; ne montrer que le nom perdrait l'adresse complète
+    /// au niveau exact.
+    private var displayedTitle: String? {
+        guard let place = displayedPlace else { return nil }
+        return LocationSharingLabels.placeTitle(name: place.name, address: place.address)
+    }
+
+    /// Le nombre de décimales suit le niveau : afficher `20.00000` pour une
+    /// valeur arrondie au degré près suggérerait une précision disparue.
+    private func formattedCoordinates(of place: SharedPlace) -> String {
+        let places = precision.decimalPlaces ?? 5
+        return String(format: "%.\(places)f, %.\(places)f", place.latitude, place.longitude)
     }
 }
 
@@ -378,6 +624,11 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     var selectedName: String? { willSet { objectWillChange.send() } }
     /// Catégorie MapKit du POI (`MKPointOfInterestCategory.rawValue`).
     var selectedCategory: String? { willSet { objectWillChange.send() } }
+    /// Composants du `CLPlacemark` conservés SÉPARÉMENT. `addressString` les
+    /// aplatit pour l'affichage ; la dégradation de précision a besoin de
+    /// choisir entre quartier, ville et région, ce qu'une chaîne jointe rend
+    /// impossible.
+    var selectedCoarseNames: PlaceCoarseNames = .empty { willSet { objectWillChange.send() } }
     var isGeocoding = false { willSet { objectWillChange.send() } }
     var searchResults: [MKMapItem] = [] { willSet { objectWillChange.send() } }
     var userLocation: CLLocationCoordinate2D? {
@@ -409,6 +660,14 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         guard let coordinate = selectedCoordinate else { return nil }
         return SharedPlace(latitude: coordinate.latitude, longitude: coordinate.longitude,
                            name: selectedName, address: addressString, category: selectedCategory)
+    }
+
+    /// Le lieu tel qu'il PARTIRA, précision appliquée. `selectedPlace` reste
+    /// brut : conserver le brut permet de changer de précision sans
+    /// re-géocoder.
+    func sharedPlace(at precision: LocationPrecision) -> SharedPlace? {
+        guard let place = selectedPlace else { return nil }
+        return precision.coarsen(place, names: selectedCoarseNames)
     }
 
     private let manager = CLLocationManager()
@@ -490,6 +749,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // ouvert ici l'aurait rouvert en trois exemplaires.
         if selectedName != nil { selectedName = nil }
         if selectedCategory != nil { selectedCategory = nil }
+        if selectedCoarseNames != .empty { selectedCoarseNames = .empty }
         geocodeTask?.cancel()
         // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
         // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit
@@ -509,15 +769,26 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
-            let address = placemarks?.first.map { placemark in
-                let parts = [placemark.name, placemark.thoroughfare, placemark.locality, placemark.country]
+            let placemark = placemarks?.first
+            let address = placemark.map { mark in
+                let parts = [mark.name, mark.thoroughfare, mark.locality, mark.country]
                     .compactMap { $0 }
                 return parts.reduce(into: [String]()) { acc, part in
                     if !acc.contains(part) { acc.append(part) }
                 }.joined(separator: ", ")
             }
+            // Composants captés dans le MÊME callback — la dégradation de
+            // précision en a besoin séparés, et une seconde requête de
+            // géocodage pour les obtenir serait gratuite.
+            let names = PlaceCoarseNames(
+                subLocality: placemark?.subLocality,
+                locality: placemark?.locality,
+                administrativeArea: placemark?.administrativeArea,
+                country: placemark?.country
+            )
             Task { @MainActor [weak self] in
                 self?.isGeocoding = false
+                self?.selectedCoarseNames = names
                 if let address { self?.addressString = address }
             }
         }

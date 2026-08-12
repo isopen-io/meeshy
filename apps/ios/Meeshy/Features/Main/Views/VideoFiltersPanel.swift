@@ -10,7 +10,15 @@ struct VideoFiltersPanel: View {
     // CallBubbleView and CallParticipantVisual; this panel was missed.
     @ObservedObject var callManager: CallManager
     @State private var filterConfig = VideoFilterConfig()
-    @State private var activePreset: VideoFilterPreset? = .natural
+
+    // Derived, not stored: a separate `@State` here could drift from
+    // `filterConfig` (e.g. stale on panel reopen, or left pointing at a
+    // preset the user has since hand-tuned away from via `VideoFilterControlView`'s
+    // sliders). Deriving it every render from the single source of truth
+    // (`filterConfig`) makes that whole class of staleness impossible.
+    private var activePreset: VideoFilterPreset? {
+        VideoFilterPreset.matching(filterConfig)
+    }
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
@@ -52,7 +60,6 @@ struct VideoFiltersPanel: View {
                 Button {
                     filterConfig = VideoFilterPreset.natural.config
                     filterConfig.isEnabled = false
-                    activePreset = .natural
                 } label: {
                     Text(String(localized: "video.filter.reset", defaultValue: "Reset", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
@@ -78,7 +85,6 @@ struct VideoFiltersPanel: View {
     private func presetChip(_ preset: VideoFilterPreset) -> some View {
         let isActive = activePreset == preset
         return Button {
-            activePreset = preset
             var config = preset.config
             config.backgroundBlurEnabled = filterConfig.backgroundBlurEnabled
             config.backgroundBlurRadius = filterConfig.backgroundBlurRadius

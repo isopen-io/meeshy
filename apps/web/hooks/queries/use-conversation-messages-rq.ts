@@ -57,6 +57,12 @@ export interface ConversationMessagesRQReturn {
 
 const CATCH_UP_PAGE_LIMIT = 50;
 const CATCH_UP_MAX_PAGES = 5;
+// The server reads `after` as a STRICT `createdAt >` filter. Two messages can
+// land in the same millisecond, so anchoring exactly on the newest cached
+// timestamp would make a twin unreachable by every future catch-up. Reaching
+// back one millisecond turns the window inclusive; the id-based dedup already
+// discards the boundary message when it comes back.
+const WATERMARK_INCLUSIVE_MARGIN_MS = 1;
 const FOCUS_CATCH_UP_DEBOUNCE_MS = 1_000;
 
 // Instance du service anonyme (créée à la demande)
@@ -593,13 +599,35 @@ export function useConversationMessagesRQ(
         return t > max ? t : max;
       }, 0);
 
-    let watermarkMs = newestCreatedAtMs(cached.pages.flatMap(p => p.messages));
-    if (watermarkMs === 0) return;
+    // The watermark is a SERVER clock reading. An optimistic message is stamped
+    // with the local clock at compose time, so including it would ask for
+    // messages newer than "now on this device" and silently skip everything
+    // peers sent during the gap — and composing while disconnected is exactly
+    // what puts an optimistic message in the cache when the catch-up runs.
+    const serverConfirmed = (messages: Message[]): Message[] =>
+      messages.filter(m => !isOptimisticMessage(m));
+
+    let watermarkMs = newestCreatedAtMs(serverConfirmed(cached.pages.flatMap(p => p.messages)));
+
+    if (watermarkMs === 0) {
+      // Nothing server-confirmed to read forward from (a conversation whose only
+      // content was composed offline). The full read is the sole catch-up left,
+      // and `mergePendingLocalMessages` keeps the pending sends alive through it.
+      syncInFlightRef.current = true;
+      try {
+        await refetch();
+      } catch {
+        // Silent — socket events will carry new messages going forward
+      } finally {
+        syncInFlightRef.current = false;
+      }
+      return;
+    }
 
     syncInFlightRef.current = true;
     try {
       for (let iteration = 0; iteration < CATCH_UP_MAX_PAGES; iteration++) {
-        const after = new Date(watermarkMs).toISOString();
+        const after = new Date(watermarkMs - WATERMARK_INCLUSIVE_MARGIN_MS).toISOString();
         const result = await conversationsService.getMessages(
           conversationId, 1, CATCH_UP_PAGE_LIMIT, null, undefined, after
         );
@@ -611,16 +639,34 @@ export function useConversationMessagesRQ(
 
         const cachedIds = new Set(current.pages.flatMap(p => p.messages.map(m => m.id)));
         const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
-        if (genuinelyNew.length > 0) {
+
+        // A dropped send ACK is precisely what a disconnection loses. The server
+        // copy carries the `clientMessageId` we generated, so it must REPLACE the
+        // still-pending optimistic entry instead of sitting next to it — otherwise
+        // the sender sees their own message twice until the next cold load.
+        const confirmedClientIds = new Set(
+          missed.map(clientMessageIdOf).filter((id): id is string => !!id)
+        );
+        const reconcilesPending = current.pages.some(page =>
+          page.messages.some(m => isOptimisticMessage(m) && confirmedClientIds.has(m._tempId))
+        );
+
+        if (genuinelyNew.length > 0 || reconcilesPending) {
           queryClient.setQueryData(queryKey, (old: typeof data) => {
             if (!old) return old;
             return {
               ...old,
-              pages: old.pages.map((page, i) =>
-                i === 0
-                  ? { ...page, messages: [...genuinelyNew, ...page.messages] }
-                  : page
-              ),
+              pages: old.pages.map((page, i) => {
+                const kept = reconcilesPending
+                  ? page.messages.filter(
+                      m => !(isOptimisticMessage(m) && confirmedClientIds.has(m._tempId))
+                    )
+                  : page.messages;
+                const untouched = kept.length === page.messages.length;
+                if (i !== 0) return untouched ? page : { ...page, messages: kept };
+                if (untouched && genuinelyNew.length === 0) return page;
+                return { ...page, messages: [...genuinelyNew, ...kept] };
+              }),
             };
           });
         }

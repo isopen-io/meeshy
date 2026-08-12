@@ -18,6 +18,7 @@ import {
 } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize';
+import { isHttpUrl } from '@meeshy/shared/utils/validation';
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -821,12 +822,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
       }
 
-      if (body.originalUrl) {
-        try {
-          new URL(body.originalUrl);
-        } catch {
-          return sendBadRequest(reply, 'URL invalide');
-        }
+      // `new URL()` ne fait que parser : `javascript:` et `data:` passaient,
+      // et l'édition rouvrait donc le vecteur que la création interdit.
+      if (body.originalUrl && !isHttpUrl(body.originalUrl)) {
+        return sendBadRequest(reply, 'URL invalide : http(s) uniquement');
       }
 
       const updatedLink = await trackingLinkService.updateTrackingLink({

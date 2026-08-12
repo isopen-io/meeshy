@@ -25,12 +25,27 @@ function buildPrisma(overrides: Record<string, unknown> = {}) {
       deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
     },
     postMedia: { deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }) },
+    // La désactivation des liens de partage gouverne désormais la passe, au
+    // même titre que le retrait des notifications : sans ce double elle rejette
+    // et RIEN n'est détruit (comportement voulu — un lien laissé actif sur un
+    // post détruit n'est plus rattrapable par aucune passe).
+    trackingLink: {
+      updateMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
     soundUsage: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([{ soundId: 'sound-a' }]),
       deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 1 }),
       count: jest.fn<() => Promise<number>>().mockResolvedValue(4),
     },
     sound: { update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}) },
+    // Le retrait des notifications précède TOUTE destruction et gouverne la
+    // passe : sans ces deux doubles il rejette, et la libération des usages —
+    // ce que cette suite mesure — n'est jamais atteinte.
+    $runCommandRaw: jest.fn<(command: unknown) => Promise<unknown>>()
+      .mockResolvedValue({ cursor: { firstBatch: [] } }),
+    notification: {
+      deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
 }

@@ -17,6 +17,10 @@ data class RegisterRequest(
     val lastName: String? = null,
     val systemLanguage: String? = null,
     val regionalLanguage: String? = null,
+    /** E.164 (dial code + national digits, e.g. `"+33612345678"`), or `null` when skipped/empty. */
+    val phoneNumber: String? = null,
+    /** The selected dial-code country's ISO 3166-1 alpha-2, or `null` alongside [phoneNumber]. */
+    val phoneCountryCode: String? = null,
 )
 
 /** Payload of `POST /auth/login` and `POST /auth/register` responses. */

@@ -94,12 +94,12 @@ final class OutboxKindCodableTests: XCTestCase {
         let p = MarkAsReadPayload(
             clientMutationId: "cmid_x",
             conversationId: "c1",
-            upToMessageId: "m1"
+            messageIds: ["m1"]
         )
         let d = try roundTrip(p)
         XCTAssertEqual(d.clientMutationId, "cmid_x")
         XCTAssertEqual(d.conversationId, "c1")
-        XCTAssertEqual(d.upToMessageId, "m1")
+        XCTAssertEqual(d.messageIds, ["m1"])
     }
 
     func test_sendFriendRequest_roundTrips() throws {

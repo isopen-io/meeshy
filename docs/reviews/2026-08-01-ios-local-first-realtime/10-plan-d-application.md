@@ -46,66 +46,66 @@ Perte de données ou fuite cross-compte actives. Aucune dépendance entre eux ni
 
 Ferme le reste du thème « logout = état vierge ». Ordonné : sync-04 d'abord (il conditionne aussi sync-11, lot 6).
 
-- [ ] **sync-04** (P1/S/f04) — `ConversationSyncEngine.resetSyncCheckpoints()` (3 clés UserDefaults) appelé depuis `logout()` **et** `requireReauthentication` (trou de couverture identifié par startup-02).
-- [ ] **startup-03** (P2/S/f08) — `requireReauthentication` : signal `sessionInvalidated` + toast « X messages non envoyés annulés » AVANT la purge — **la purge reste inconditionnelle** (invariant anti fuite cross-compte Q3) ; la rétention par userId est un lot séparé hors périmètre (deps : grdb-01 ; coordination non bloquante avec stores-05).
-- [ ] **cache-07** (P2/S/f01) — `UserDisplayNameCache.shared.clear()` dans `CacheCoordinator.reset()` (couvre logout ET switch).
-- [ ] **stores-10** (P2/M/f05) — `UserCategoryStore` : reset au logout + volet CRUD optimiste (chantier séparé dans la fiche).
-- [ ] **outbox-11** (P3/S/f02) — Purges logout : impressions (UserDefaults standard) + PendingStatusQueue (deps : appgroup-01 pour `pending_mark_read`).
-- [ ] **media-08** (P3/S/f09) — Purger `MediaConsumptionStore` + checkpoints TUS au logout.
-- [ ] **startup-08** (P3/S/f08) — Annuler les BGTasks au logout + garde d'auth dans les handlers (deps : sync-04).
-- [ ] **net-09** (P3/S/f06) — `authToken`/`anonymousSessionToken` : isolation (fenêtre cross-compte au switch).
+- [x] **sync-04** (P1/S/f04) — `ConversationSyncEngine.resetSyncCheckpoints()` (3 clés UserDefaults) appelé depuis `logout()` **et** `requireReauthentication` (trou de couverture identifié par startup-02).
+- [x] **startup-03** (P2/S/f08) — `requireReauthentication` : signal `sessionInvalidated` + toast « X messages non envoyés annulés » AVANT la purge — **la purge reste inconditionnelle** (invariant anti fuite cross-compte Q3) ; la rétention par userId est un lot séparé hors périmètre (deps : grdb-01 ; coordination non bloquante avec stores-05).
+- [x] **cache-07** (P2/S/f01) — `UserDisplayNameCache.shared.clear()` dans `CacheCoordinator.reset()` (couvre logout ET switch).
+- [x] **stores-10** (P2/M/f05) — `UserCategoryStore` : reset au logout + volet CRUD optimiste (chantier séparé dans la fiche).
+- [x] **outbox-11** (P3/S/f02) — Purges logout : impressions (UserDefaults standard) + PendingStatusQueue (deps : appgroup-01 pour `pending_mark_read`).
+- [x] **media-08** (P3/S/f09) — Purger `MediaConsumptionStore` + checkpoints TUS au logout.
+- [x] **startup-08** (P3/S/f08) — Annuler les BGTasks au logout + garde d'auth dans les handlers (deps : sync-04).
+- [x] **net-09** (P3/S/f06) — `authToken`/`anonymousSessionToken` : isolation (fenêtre cross-compte au switch).
 
 ## Lot 2 — Fenêtres de perte au kill/background
 
 Ordre imposé : cache-02 avant cache-01 (le sort de `persistTranslationCaches` conditionne la boucle de `flushAll`).
 
-- [ ] **cache-02** (P1/S/f01) — Supprimer le full-rewrite `persistTranslationCaches` (persistance déjà incrémentale) + GC 24 h dans `loadTranslationCaches`.
-- [ ] **cache-01** (P1/S/f01) — `allGRDBStores` (27 stores) partagé par `flushAll`/`dirtyCountForTest`/`evictUnderMemoryPressure` (absorbe startup-06).
-- [ ] **cache-05** (P2/S/f01) — `flushDirtyKeyForEviction(key)` dans la branche `.expired` de `load(for:)`.
-- [ ] **cache-06** (P2/S/f01) — Ne plus vider le trio traduction sous memory warning (deps : cache-02).
-- [ ] **grdb-05** (P2/S/f01) — Vacuum/optimize déplacés sous le `beginBackgroundTask` du `BackgroundTransitionCoordinator`.
-- [ ] **grdb-04** (P2/S/f01) — Bump `changeVersion` dans les `updateAll` des réconciliateurs.
-- [ ] **grdb-02** (P2/S/f01) — Réparer `purgeOldMessages` (mauvaise base + mauvaise colonne + cascade + do/catch loggé).
-- [ ] **grdb-09** (P3/S/f01) — Étendre `deleteAll(conversationId:)` aux tables enfants (deps : grdb-02).
-- [ ] **grdb-08** (P3/S/f01) — Supprimer le code mort (GRDBModels, saveTranscription/Audio, MediaSnapshotStore) + réutiliser `dependencies.messagePersistence` pour la rétention (absorbe startup-09 ; deps : grdb-02).
+- [x] **cache-02** (P1/S/f01) — Supprimer le full-rewrite `persistTranslationCaches` (persistance déjà incrémentale) + GC 24 h dans `loadTranslationCaches`.
+- [x] **cache-01** (P1/S/f01) — `allGRDBStores` (27 stores) partagé par `flushAll`/`dirtyCountForTest`/`evictUnderMemoryPressure` (absorbe startup-06).
+- [x] **cache-05** (P2/S/f01) — `flushDirtyKeyForEviction(key)` dans la branche `.expired` de `load(for:)`.
+- [x] **cache-06** (P2/S/f01) — Ne plus vider le trio traduction sous memory warning (deps : cache-02).
+- [x] **grdb-05** (P2/S/f01) — Vacuum/optimize déplacés sous le `beginBackgroundTask` du `BackgroundTransitionCoordinator`.
+- [x] **grdb-04** (P2/S/f01) — Bump `changeVersion` dans les `updateAll` des réconciliateurs.
+- [x] **grdb-02** (P2/S/f01) — Réparer `purgeOldMessages` (mauvaise base + mauvaise colonne + cascade + do/catch loggé).
+- [x] **grdb-09** (P3/S/f01) — Étendre `deleteAll(conversationId:)` aux tables enfants (deps : grdb-02).
+- [x] **grdb-08** (P3/S/f01) — Supprimer le code mort (GRDBModels, saveTranscription/Audio, MediaSnapshotStore) + réutiliser `dependencies.messagePersistence` pour la rétention (absorbe startup-09 ; deps : grdb-02).
 
 ## Lot 3 — Lecture offline vraie
 
 Le cœur doctrine « jamais d'écran vide si le disque a une donnée ».
 
-- [ ] **cache-04** (P1/M/f01) — Branche `.expired` de `CacheFirstLoader` : peindre `loadIgnoringExpiry` en `.cachedStale` avant fetch ; `store.save` hors du `do` du fetch. *(Absorbe vm-expired-recovery-01 — les 7 écrans hand-rolled sont listés dans la fiche.)*
-- [ ] **cache-08** (P2/M/f01) — `FriendshipCache` : seed depuis les stores GRDB avant le round-trip réseau (deps : cache-04).
-- [ ] **vm-conv-expired-metadata-01** (P3/S/f05) — Hydrater métadonnées audio/traductions aussi dans la branche `.expired/.empty` de `loadMessages`.
-- [ ] **cache-03** (P1/M/f01) — Trim directionnel : étape A immédiate (`prefix(100)` dans `debouncedCacheSave`) ; étape B `trimDirection` dans `CachePolicy` (absorbe stores-04).
-- [ ] **stores-08** (P2/M/f05) — Saves locaux qui rajeunissent `lastFetchedAt` : introduire `savePreservingFreshness` (mécanisme `flushKeyToL2`) et basculer les 9 sites de mutation locale + fix du chemin L1-miss d'`update()` (deps : aucune — l'option `mergeUpdate`, qui aurait dépendu de cache-03, est rejetée par la fiche).
-- [ ] **vm-bookmarks-pagination-01** (P2/S/f05) — Pagination bookmarks : séparer « premier rendu cache » de « page suivante réseau ».
-- [ ] **vm-search-localname-01** (P3/S/f05) — Titre des résultats messages : résoudre le nom local (cache conversations) au lieu de l'ObjectId.
+- [x] **cache-04** (P1/M/f01) — Branche `.expired` de `CacheFirstLoader` : peindre `loadIgnoringExpiry` en `.cachedStale` avant fetch ; `store.save` hors du `do` du fetch. *(Absorbe vm-expired-recovery-01 — les 7 écrans hand-rolled sont listés dans la fiche.)*
+- [x] **cache-08** (P2/M/f01) — `FriendshipCache` : seed depuis les stores GRDB avant le round-trip réseau (deps : cache-04).
+- [x] **vm-conv-expired-metadata-01** (P3/S/f05) — Hydrater métadonnées audio/traductions aussi dans la branche `.expired/.empty` de `loadMessages`.
+- [x] **cache-03** (P1/M/f01) — Trim directionnel : étape A immédiate (`prefix(100)` dans `debouncedCacheSave`) ; étape B `trimDirection` dans `CachePolicy` (absorbe stores-04).
+- [x] **stores-08** (P2/M/f05) — Saves locaux qui rajeunissent `lastFetchedAt` : introduire `savePreservingFreshness` (mécanisme `flushKeyToL2`) et basculer les 9 sites de mutation locale + fix du chemin L1-miss d'`update()` (deps : aucune — l'option `mergeUpdate`, qui aurait dépendu de cache-03, est rejetée par la fiche).
+- [x] **vm-bookmarks-pagination-01** (P2/S/f05) — Pagination bookmarks : séparer « premier rendu cache » de « page suivante réseau ».
+- [x] **vm-search-localname-01** (P3/S/f05) — Titre des résultats messages : résoudre le nom local (cache conversations) au lieu de l'ObjectId.
 
 ## Lot 4 — Écritures optimistes sans clobber
 
-- [ ] **grdb-03** (P1/M/f01) — Garde anti-clobber outbox dans `FeedPersistenceActor.insertPosts` + `reapplyPendingLikes` côté mémoire (deps : grdb-01).
-- [ ] **outbox-05** (P1/M/f02) — Coalescing `markAsRead` : fusionner (union des `messageIds`) au lieu de latest-wins.
-- [ ] **stores-06** (P2/S/f05) — Persister en L2 les mutations optimistes de prefs (pin/mute/archive/read) au moment où elles s'appliquent.
-- [ ] **stores-09** (P2/S/f05) — Like optimiste write-through vers toutes les clés du cache (réutiliser `patchEverywhere`) (deps : stores-02, lot 5, pour le volet temps réel).
-- [ ] **stores-07** (P2/M/f05) — Étendre `patchEverywhere` : commentCount, bookmark, suppression de post.
-- [ ] **grdb-06** (P2/S/f01) — Upsert `TranslationRecord` sur la clé métier `(messageLocalId, targetLanguage)`.
-- [ ] **grdb-07** (P3/S/f01) — Hydratation des traductions de ses propres messages (filtre localId **et** serverId).
-- [ ] **vm-postdetail-reply-outbox-01** (P2/M/f05) — `sendReply` via l'outbox comme `sendComment` (ajout `effectFlags` au payload).
-- [ ] **outbox-06** (P2/S/f02) — `OutboxFlusher.flush()` : boucler tant qu'il reste des pending au-delà des 50.
+- [x] **grdb-03** (P1/M/f01) — Garde anti-clobber outbox dans `FeedPersistenceActor.insertPosts` + `reapplyPendingLikes` côté mémoire (deps : grdb-01).
+- [x] **outbox-05** (P1/M/f02) — Coalescing `markAsRead` : fusionner (union des `messageIds`) au lieu de latest-wins.
+- [x] **stores-06** (P2/S/f05) — Persister en L2 les mutations optimistes de prefs (pin/mute/archive/read) au moment où elles s'appliquent.
+- [x] **stores-09** (P2/S/f05) — Like optimiste write-through vers toutes les clés du cache (réutiliser `patchEverywhere`) (deps : stores-02, lot 5, pour le volet temps réel).
+- [x] **stores-07** (P2/M/f05) — Étendre `patchEverywhere` : commentCount, bookmark, suppression de post.
+- [x] **grdb-06** (P2/S/f01) — Upsert `TranslationRecord` sur la clé métier `(messageLocalId, targetLanguage)`.
+- [x] **grdb-07** (P3/S/f01) — Hydratation des traductions de ses propres messages (filtre localId **et** serverId).
+- [x] **vm-postdetail-reply-outbox-01** (P2/M/f05) — `sendReply` via l'outbox comme `sendComment` (ajout `effectFlags` au payload).
+- [x] **outbox-06** (P2/S/f02) — `OutboxFlusher.flush()` : boucler tant qu'il reste des pending au-delà des 50.
 
 ## Lot 5 — Temps réel social vivant
 
 Ordre imposé : stores-02 → rts-01 (le re-subscribe conditionne le refetch au retour).
 
-- [ ] **stores-02** (P1/S/f05) — Ré-émettre `feed:subscribe` à chaque retour sur le feed (socket déjà connecté).
-- [ ] **rts-01** (P1/S/f03) — Retour sur le feed : flag `hasSubscribedOnce` → `loadFeed(forceRefresh:)` au ré-armement des sinks + `subscribeFeed()`. **NE PAS lever la garde `posts.isEmpty` du `.task`** — mécanisme alternatif explicitement rejeté par la fiche (étape 6 : la branche `.fresh` reverterait les mutations socket) (absorbe vm-feed-revalidate-01 ; deps : stores-02).
-- [ ] **rts-02** (P1/S/f03) — Brancher le rattrapage stories au `didReconnect` social (l'infra delta+tombstones existe).
-- [ ] **vm-reconnect-stories-detail-01** (P2/S/f05) — Backfill au reconnect pour le détail de post (le volet tray stories est absorbé par rts-02).
-- [ ] **stores-12** (P3/S/f05) — Les 4 sinks feed muets déclenchent `debouncedCacheSave` (absorbe rts-05, désormais doublon rattaché — fichier 03 §Doublons).
-- [ ] **outbox-04** (P1/M/f02) — `flushNow()` après chaque enqueue social (like/post/commentaire en ligne partent immédiatement).
-- [ ] **stores-05** (P1/M/f05) — **Décision d'architecture** pipeline feed GRDB write-only : activer le lecteur OU retirer le pipeline (la fiche instruit les deux options ; absorbe vm-feed-grdb-dead-01). À trancher AVANT stores-03 et vm-feed-actions-rest-01.
-- [ ] **stores-03** (P2/S/f05) — `FeedSocketHandler` : `isLikedByMe` seulement si l'acteur est l'utilisateur courant (deps : stores-05 — si le pipeline est supprimé, cet écart disparaît).
-- [ ] **gwcontract-07** 🔧 (P2/S/f06) — Émettre `post:updated`/`post:deleted` vers la post room (viewers non-amis).
+- [x] **stores-02** (P1/S/f05) — Ré-émettre `feed:subscribe` à chaque retour sur le feed (socket déjà connecté).
+- [x] **rts-01** (P1/S/f03) — Retour sur le feed : flag `hasSubscribedOnce` → `loadFeed(forceRefresh:)` au ré-armement des sinks + `subscribeFeed()`. **NE PAS lever la garde `posts.isEmpty` du `.task`** — mécanisme alternatif explicitement rejeté par la fiche (étape 6 : la branche `.fresh` reverterait les mutations socket) (absorbe vm-feed-revalidate-01 ; deps : stores-02).
+- [x] **rts-02** (P1/S/f03) — Brancher le rattrapage stories au `didReconnect` social (l'infra delta+tombstones existe).
+- [x] **vm-reconnect-stories-detail-01** (P2/S/f05) — Backfill au reconnect pour le détail de post (le volet tray stories est absorbé par rts-02).
+- [x] **stores-12** (P3/S/f05) — Les 4 sinks feed muets déclenchent `debouncedCacheSave` (absorbe rts-05, désormais doublon rattaché — fichier 03 §Doublons).
+- [x] **outbox-04** (P1/M/f02) — `flushNow()` après chaque enqueue social (like/post/commentaire en ligne partent immédiatement).
+- [x] **stores-05** (P1/M/f05) — **Décision d'architecture** pipeline feed GRDB write-only : activer le lecteur OU retirer le pipeline (la fiche instruit les deux options ; absorbe vm-feed-grdb-dead-01). À trancher AVANT stores-03 et vm-feed-actions-rest-01.
+- [x] **stores-03** (P2/S/f05) — `FeedSocketHandler` : `isLikedByMe` seulement si l'acteur est l'utilisateur courant (deps : stores-05 — si le pipeline est supprimé, cet écart disparaît).
+- [x] **gwcontract-07** 🔧 (P2/S/f06) — Émettre `post:updated`/`post:deleted` vers la post room (viewers non-amis).
 
 ## Lot 6 — Rattrapage complet des messages (le grand chantier client+serveur)
 

@@ -179,6 +179,46 @@ describe('MessageTranslationService — _safeZmqHandler error isolation', () => 
     expect(unhandledError).toBeNull();
   });
 
+  it('should NOT throw synchronously when a storyTextObjectTranslationCompleted downstream listener throws', async () => {
+    // The story-text-object forward re-emits on the service itself, whose sole
+    // consumer (MeeshySocketIOManager) is async + try/catch wrapped. A defective
+    // *synchronous* downstream listener would otherwise propagate straight out of
+    // the ZMQ dispatch loop as an uncaught exception (EventEmitter.emit() re-throws
+    // synchronous listener errors). The _safeZmqHandler wrapper must absorb it.
+    translationService.on('storyTextObjectTranslationCompleted', () => {
+      throw new Error('injected downstream failure');
+    });
+
+    expect(() => {
+      mockZmqClient.emit('storyTextObjectTranslationCompleted', {
+        postId: 'post-safe-1',
+        textObjectIndex: 0,
+        translations: { fr: 'Bonjour' }
+      });
+    }).not.toThrow();
+
+    await flushAsync();
+
+    expect(unhandledError).toBeNull();
+  });
+
+  it('should still forward storyTextObjectTranslationCompleted to service consumers', done => {
+    translationService.on('storyTextObjectTranslationCompleted', event => {
+      expect(event).toMatchObject({
+        postId: 'post-safe-2',
+        textObjectIndex: 1,
+        translations: { es: 'Hola' }
+      });
+      done();
+    });
+
+    mockZmqClient.emit('storyTextObjectTranslationCompleted', {
+      postId: 'post-safe-2',
+      textObjectIndex: 1,
+      translations: { es: 'Hola' }
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Happy-path: wrapper does not break working handlers
   // -------------------------------------------------------------------------

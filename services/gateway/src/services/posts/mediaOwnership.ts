@@ -51,6 +51,32 @@ export function uploaderIdFromFilePath(filePath: string | null | undefined): str
 }
 
 /**
+ * Contextes d'upload TUS qui produisent un `PostMedia` (par opposition aux
+ * pièces jointes de message). Définition UNIQUE partagée par `onUploadCreate`
+ * (rejet avant le premier octet) et `onUploadFinish` (choix de la table) —
+ * le handler portait la liste en dur au seul site de finish.
+ */
+export function isPostMediaUploadContext(context: unknown): boolean {
+  return context === 'post' || context === 'story'
+    || context === 'status' || context === 'comment';
+}
+
+/**
+ * Propriétaire d'un futur `PostMedia`, ou `null`.
+ *
+ * Une session ANONYME ne produit jamais de propriétaire — même si son jeton
+ * matchait par hasard la forme d'un ObjectId, l'écrire ferait comparer un
+ * jeton à un id utilisateur dans l'égalité stricte du claim : au mieux un
+ * média irréclamable, au pire l'alias involontaire d'un vrai compte.
+ */
+export function postMediaUploaderOrNull(
+  identity: { userId: string | null | undefined; isAnonymous: boolean }
+): string | null {
+  if (identity.isAnonymous) return null;
+  return uploaderIdOrNull(identity.userId);
+}
+
+/**
  * Clause de revendication d'un média encore libre.
  *
  * **PHASE 2 — STRICTE (2026-07-31).** Le média doit appartenir à celui qui le

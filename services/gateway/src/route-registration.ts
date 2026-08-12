@@ -28,6 +28,7 @@ import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { logger } from './gateway-logger';
+import { resolveBuildInfo } from '@meeshy/shared/utils/build-info';
 
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
@@ -121,6 +122,11 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
           timestamp: new Date().toISOString(),
           environment: process.env.NODE_ENV || 'development',
           version: '1.0.0',
+          // Identifie le code réellement en cours d'exécution. Sans lui, savoir
+          // si un correctif est en production imposait un `docker inspect` sur
+          // l'hôte, ou une corrélation entre l'uptime du container et
+          // l'horodatage des tags `sha-<short>` du registre.
+          build: resolveBuildInfo(),
           services: {
             database: { status: 'up', userCount },
             translation: { status: translationHealthy ? 'up' : 'down' },
@@ -145,6 +151,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       return {
         name: 'Meeshy Translation Gateway',
         version: '1.0.0',
+        build: resolveBuildInfo(),
         environment: process.env.NODE_ENV || 'development',
         architecture: {
           frontend: 'WebSocket + REST API',

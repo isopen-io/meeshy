@@ -40,6 +40,12 @@ class FeedViewModel: ObservableObject {
     private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// rts-01 — distingue le PREMIER armement de `subscribeToSocketEvents()`
+    /// (la vue appelle déjà `loadFeed()` dans son `.task` si `posts.isEmpty`,
+    /// pas de fetch redondant) d'un RÉ-armement après
+    /// `unsubscribeFromSocketEvents()` (room quittée ET sinks désarmés hors
+    /// écran — sans refetch explicite, rien ne rattrape le trou).
+    private var hasSubscribedOnce = false
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
     /// duplicate calls triggered by repeated cell .onAppear events.
     private var prefetchingComments: Set<String> = []
@@ -175,6 +181,14 @@ class FeedViewModel: ObservableObject {
                 // than the server head so server-side deletions within the
                 // fetched range still take effect.
                 posts = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
+                // grdb-03 (volet mémoire) — réappliquer les likes encore en
+                // attente d'outbox par-dessus le snapshot serveur périmé.
+                if let persistence = feedPersistence {
+                    let pendingLikes = await persistence.pendingLikeFlags()
+                    if !pendingLikes.isEmpty {
+                        posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
+                    }
+                }
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 prefetchMedia(around: 0)
@@ -216,6 +230,19 @@ class FeedViewModel: ObservableObject {
     /// newer than the newest fetched post AND absent from the fetched set are
     /// preserved, so server-side deletions inside the fetched range still
     /// apply. Pure + static so it is unit-testable without a live ViewModel.
+    /// grdb-03 — réapplique les likes encore PENDING en outbox par-dessus un
+    /// snapshot serveur périmé (le cœur ne se dé-remplit pas sous les yeux de
+    /// l'utilisateur ; le compteur suit, jamais négatif). Pure, testable.
+    static func reapplyPendingLikes(posts: [FeedPost], pendingLikes: [String: Bool]) -> [FeedPost] {
+        posts.map { post in
+            guard let liked = pendingLikes[post.id], post.isLiked != liked else { return post }
+            var patched = post
+            patched.isLiked = liked
+            patched.likes = max(0, post.likes + (liked ? 1 : -1))
+            return patched
+        }
+    }
+
     static func mergePreservingRealtimeHead(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
         guard let newestFetched = fetched.first else { return fetched }
         let fetchedIds = Set(fetched.map(\.id))
@@ -281,7 +308,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
         } catch {
-            // Silently fail on load more -- user can scroll again
+            // stores-05 (option A — lecteur GRDB activé) : pagination offline.
+            // Relire la suite du feed depuis feed_posts locale au lieu
+            // d'échouer en silence — le mapping PostRecord→FeedPost partage la
+            // résolution Prisme du chemin réseau ; dédup par id, l'ordre
+            // createdAt desc du store prolonge la timeline affichée.
+            if let feedStore {
+                if feedStore.posts.isEmpty { await feedStore.loadInitial() }
+                _ = await feedStore.loadOlder()
+                let preferred = preferredLanguages
+                let mapped = feedStore.posts.map { $0.toFeedPost(preferredLanguages: preferred) }
+                let existingIds = Set(posts.map(\.id))
+                posts.append(contentsOf: mapped.filter { !existingIds.contains($0.id) })
+            }
         }
 
         isLoadingMore = false
@@ -386,6 +425,16 @@ class FeedViewModel: ObservableObject {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
 
+            // stores-09 — patch every cache key holding this post (detail key,
+            // bookmarks…), not just "main-feed" via debouncedCacheSave.
+            let newLikes = posts[index].likes
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                    $0.isLiked = liked
+                    $0.likes = newLikes
+                }
+            }
+
             // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
                 let count = posts[index].likes
@@ -415,6 +464,12 @@ class FeedViewModel: ObservableObject {
         revert.isLiked = isLiked
         revert.likes = likes
         posts[i] = revert
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+        }
         debouncedCacheSave()
     }
 
@@ -468,7 +523,7 @@ class FeedViewModel: ObservableObject {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(updated, for: bookmarksKey)
         }
         FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Added to bookmarks", bundle: .main))
 
@@ -479,7 +534,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(snapshot, for: bookmarksKey)
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Error saving bookmark", bundle: .main))
         }
     }
@@ -942,14 +997,25 @@ class FeedViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
-        // Ré-arme le bridge de persistance GRDB désarmé par
-        // `unsubscribeFromSocketEvents` à l'onDisappear : il restait sinon
-        // désarmé en permanence après le premier aller-retour sur le feed
-        // (le `arm()` initial n'était fait que dans le bloc one-shot
-        // `feedStore == nil` du setup). `arm()` est idempotent.
-        feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
+        let isRearm = hasSubscribedOnce
+        hasSubscribedOnce = true
         socialSocket.connect()
+        // stores-02 — connect() est un no-op si le socket est déjà connecté :
+        // le handler .connect (seul émetteur de feed:subscribe) ne rejoue pas,
+        // et la room feed quittée par unsubscribeFromSocketEvents() n'était
+        // jamais rejointe. Émission idempotente (rejoindre une room déjà
+        // jointe = no-op) ; socket pas encore prêt → l'emit est perdu mais
+        // rejoué par le handler .connect.
+        socialSocket.subscribeFeed()
+        if isRearm {
+            // rts-01 — même chemin que le sink didReconnect ci-dessous, pour
+            // l'aller-retour d'écran SANS coupure réseau (didReconnect ne
+            // couvre que le flap) : gardé par isFeedLoadInProgress, silencieux
+            // (showLoading: posts.isEmpty), et mergePreservingRealtimeHead
+            // protège les posts insérés par un sink pendant le vol.
+            Task { await self.loadFeed(forceRefresh: true) }
+        }
 
         // --- didReconnect → backfill du feed ---
         // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
@@ -1113,6 +1179,7 @@ class FeedViewModel: ObservableObject {
                     self.posts[index].comments.insert(feedComment, at: 0)
                 }
                 self.posts[index].commentCount = data.commentCount
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1122,6 +1189,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].commentCount = data.commentCount
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1135,18 +1203,25 @@ class FeedViewModel: ObservableObject {
                     translationModel: data.translation.translationModel,
                     confidenceScore: data.translation.confidenceScore
                 )
+                let langs = self.preferredLanguages
+                let language = data.language
                 // Batch mutations into a single array assignment
                 var post = self.posts[index]
-                var translations = post.translations ?? [:]
-                translations[data.language] = translation
-                post.translations = translations
-                let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if post.translatedContent == nil {
-                        post.translatedContent = data.translation.text
+                Self.applyPostTranslation(translation, language: language,
+                                          preferredLanguages: langs, to: &post)
+                self.posts[index] = post
+                // Un post vit sous PLUSIEURS clés (main-feed, sa clé détail,
+                // bookmarks, pager reels) : `debouncedCacheSave` ne réécrit que
+                // « main-feed », donc la traduction n'existait que là et
+                // repartait de zéro dès qu'une autre surface servait le post.
+                let postId = data.postId
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                        Self.applyPostTranslation(translation, language: language,
+                                                  preferredLanguages: langs, to: &$0)
                     }
                 }
-                self.posts[index] = post
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1154,24 +1229,76 @@ class FeedViewModel: ObservableObject {
         socialSocket.commentTranslationUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (data: SocketCommentTranslationUpdatedData) in
-                guard let self,
-                      let postIndex = self.posts.firstIndex(where: { $0.id == data.postId }),
-                      let commentIndex = self.posts[postIndex].comments.firstIndex(where: { $0.id == data.commentId })
+                guard let self, let postIndex = self.posts.firstIndex(where: { $0.id == data.postId })
                 else { return }
                 let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if self.posts[postIndex].comments[commentIndex].translatedContent == nil {
-                        self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
+                let language = data.language
+                let commentId = data.commentId
+                let text = data.translation.text
+                var post = self.posts[postIndex]
+                let changed = Self.applyCommentTranslation(
+                    text, commentId: commentId, language: language,
+                    preferredLanguages: langs, to: &post
+                )
+                guard changed else { return }
+                self.posts[postIndex] = post
+                let postId = data.postId
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                        _ = Self.applyCommentTranslation(
+                            text, commentId: commentId, language: language,
+                            preferredLanguages: langs, to: &$0
+                        )
                     }
                 }
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
     }
 
+    /// Règle unique de pose d'une traduction de post — appliquée à l'exemplaire
+    /// en mémoire ET à chaque exemplaire en cache. `translatedContent` n'est
+    /// posé que si la langue est préférée et qu'aucune traduction n'est déjà
+    /// affichée (une traduction plus prioritaire ne doit pas être écrasée).
+    nonisolated static func applyPostTranslation(
+        _ translation: PostTranslation,
+        language: String,
+        preferredLanguages: [String],
+        to post: inout FeedPost
+    ) {
+        var translations = post.translations ?? [:]
+        translations[language] = translation
+        post.translations = translations
+        guard post.translatedContent == nil,
+              preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame })
+        else { return }
+        post.translatedContent = translation.text
+    }
+
+    /// Idem pour un commentaire. Retourne `false` quand rien ne change — le
+    /// sink s'en sert pour ne pas réécrire le cache pour rien.
+    nonisolated static func applyCommentTranslation(
+        _ text: String,
+        commentId: String,
+        language: String,
+        preferredLanguages: [String],
+        to post: inout FeedPost
+    ) -> Bool {
+        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }),
+              let index = post.comments.firstIndex(where: { $0.id == commentId }),
+              post.comments[index].translatedContent == nil
+        else { return false }
+        post.comments[index].translatedContent = text
+        return true
+    }
+
+    /// Coupe les sinks d'UI du feed. Le pont de persistance GRDB
+    /// (`FeedSocketHandler`) N'EST PAS désarmé ici : il est armé une fois pour
+    /// toutes au niveau app (`RootView`), parce que la persistance disque ne
+    /// doit dépendre d'aucun écran monté.
     func unsubscribeFromSocketEvents() {
         socketCancellables.removeAll()
         socialSocket.unsubscribeFeed()
-        feedSocketHandler?.disarm()
     }
 
     // MARK: - Media Prefetch
@@ -1264,7 +1391,12 @@ class FeedViewModel: ObservableObject {
         cacheSaveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+            // cache-03 étape A — GRDBCacheStore.save() trimme par suffix(max)
+            // (garde les items les PLUS ANCIENS) alors que `posts` est
+            // newest-first : sans ce prefix(100), au-delà de 100 posts
+            // accumulés le cold start sert la tranche la plus vieille en
+            // .fresh. Miroir de ProfileUserPostsList.
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }

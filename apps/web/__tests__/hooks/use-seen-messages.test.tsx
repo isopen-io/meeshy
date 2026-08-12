@@ -54,6 +54,22 @@ function makeBubble(messageId: string): HTMLElement {
   return el;
 }
 
+/**
+ * Forme RÉELLE insérée par la liste : `messages-display.tsx` enveloppe chaque
+ * `BubbleMessage` dans un `<div key={message.id}>` (branche virtualisée comme
+ * branche simple), et c'est CE wrapper — sans `id` — que React insère. La bulle
+ * porteuse de `id="message-…"` n'est qu'un descendant.
+ */
+function makeRow(...messageIds: string[]): { row: HTMLElement; bubbles: HTMLElement[] } {
+  const row = document.createElement('div');
+  const bubbles = messageIds.map((id) => {
+    const bubble = makeBubble(id);
+    row.appendChild(bubble);
+    return bubble;
+  });
+  return { row, bubbles };
+}
+
 function setup(
   container: HTMLElement,
   conversationId: string | null = 'conv-1',
@@ -123,6 +139,66 @@ describe('useSeenMessages', () => {
     });
 
     expect(observedTargets.has(bubble)).toBe(false);
+  });
+
+  it('observes a bubble the virtualizer mounted inside its row wrapper', () => {
+    // Le nœud inséré est le wrapper, pas la bulle : ne regarder que le nœud
+    // lui-même laisse chaque message arrivé APRÈS le montage sans observer —
+    // donc jamais rapporté comme lu.
+    setup(container);
+    const { row, bubbles } = makeRow(B);
+    container.appendChild(row);
+
+    act(() => {
+      mutationCallback?.([{ addedNodes: [row] as unknown as NodeList, removedNodes: [] as unknown as NodeList }]);
+    });
+
+    expect(observedTargets.has(bubbles[0])).toBe(true);
+  });
+
+  it('observes every bubble of an inserted subtree', () => {
+    setup(container);
+    const { row, bubbles } = makeRow(A, B);
+    container.appendChild(row);
+
+    act(() => {
+      mutationCallback?.([{ addedNodes: [row] as unknown as NodeList, removedNodes: [] as unknown as NodeList }]);
+    });
+
+    expect(bubbles.every(bubble => observedTargets.has(bubble))).toBe(true);
+  });
+
+  it('stops observing a bubble whose row wrapper the virtualizer unmounted', () => {
+    const { row, bubbles } = makeRow(A);
+    container.appendChild(row);
+    setup(container);
+
+    act(() => {
+      mutationCallback?.([{ addedNodes: [] as unknown as NodeList, removedNodes: [row] as unknown as NodeList }]);
+    });
+
+    expect(observedTargets.has(bubbles[0])).toBe(false);
+  });
+
+  it('does not report a message whose row wrapper left the DOM before the dwell threshold', () => {
+    // Sortir du DOM vaut disparition. Sans la descente dans le sous-arbre
+    // retiré, la bulle reste « visible » pour l'accumulateur et finit déclarée
+    // lue alors qu'elle a quitté l'écran — exactement ce que ce hook existe
+    // pour empêcher.
+    const { row, bubbles } = makeRow(A);
+    container.appendChild(row);
+    const { unmount } = setup(container);
+
+    act(() => { intersectionCallback?.([{ target: bubbles[0], isIntersecting: true }]); });
+    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      row.remove();
+      mutationCallback?.([{ addedNodes: [] as unknown as NodeList, removedNodes: [row] as unknown as NodeList }]);
+    });
+    act(() => { jest.advanceTimersByTime(5000); });
+
+    expect(mockMarkAsRead).not.toHaveBeenCalled();
+    unmount();
   });
 
   it('joint la version linguistique réellement affichée à chaque message vu', () => {

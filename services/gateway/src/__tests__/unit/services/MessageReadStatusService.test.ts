@@ -315,6 +315,44 @@ describe('MessageReadStatusService', () => {
       expect(count).toBe(0);
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
+
+    // Régression Prisme lecture-exacte. En mode exact le curseur s'arrête au
+    // préfixe contigu : `lastReadMessageId` pointe le dernier message RÉELLEMENT
+    // lu, alors que `lastReadAt` vaut `now` (l'horloge murale de l'ouverture,
+    // postérieure à TOUS les messages déjà en base). Plancher le compteur sur
+    // `lastReadAt` compterait `createdAt > now` = 0 non-lu — « ouvrir marque tout
+    // lu », exactement le bug que le lot lecture-exacte élimine. Le plancher DOIT
+    // être la position CHRONOLOGIQUE du curseur (`lastReadMessageCreatedAt`) pour
+    // que « le badge reste haut » (design lecture-exacte §3).
+    it('floors the count on the cursor position (lastReadMessageCreatedAt), not the wall-clock lastReadAt', async () => {
+      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z'); // position : dernier message lu
+      const lastReadAt = new Date('2026-05-21T18:00:00Z');               // horloge de l'ouverture
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-exact',
+        participantId: testParticipantId,
+        conversationId: testConversationId,
+        unreadCount: 0,
+        lastReadAt,
+        lastReadMessageCreatedAt,
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId,
+        joinedAt: new Date('2026-04-01T00:00:00Z'),
+      });
+      mockPrisma.message.count.mockResolvedValue(197);
+
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
+
+      expect(count).toBe(197);
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: lastReadMessageCreatedAt },
+        },
+      });
+    });
   });
 
   // ==============================================
@@ -356,6 +394,35 @@ describe('MessageReadStatusService', () => {
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
       expect(result.get(conversationIds[2])).toBe(0);
+    });
+
+    // Même régression que getUnreadCount, sur le chemin batch de la liste de
+    // conversations : le plancher est la position chronologique du curseur, pas
+    // l'horloge murale `lastReadAt`. Sinon le badge de chaque conversation
+    // ouverte en préfixe partiel tombe à 0.
+    it('floors the batch count on the cursor position (lastReadMessageCreatedAt), not lastReadAt', async () => {
+      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z');
+      const lastReadAt = new Date('2026-05-21T18:00:00Z');
+      const joinedAt = new Date('2026-04-01');
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
+        { participantId: testParticipantId, lastReadAt, lastReadMessageCreatedAt },
+      ]);
+      mockPrisma.message.count.mockResolvedValueOnce(4);
+
+      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
+
+      expect(result.get(conversationIds[0])).toBe(4);
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: conversationIds[0],
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: lastReadMessageCreatedAt },
+        },
+      });
     });
 
     it('should return map of zeros on database error', async () => {
@@ -3900,6 +3967,33 @@ describe('MessageReadStatusService', () => {
       expect(result.get('p2')).toBe(1);
       expect(mockPrisma.message.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
+    });
+
+    // Régression Prisme lecture-exacte sur le chemin le plus chaud
+    // (`_updateUnreadCounts` à CHAQUE `message:new`). Le curseur exact s'arrête au
+    // préfixe contigu — position 10:00 — mais `lastReadAt` vaut 18:00 (ouverture).
+    // Deux messages d'autrui existent à 11:00 et 12:00, tous deux ANTÉRIEURS à
+    // `lastReadAt`. Plancher sur `lastReadAt` → 0 (badge effacé à tort) ; plancher
+    // sur la position chronologique → 2 (le badge reste haut).
+    it('floors each participant on the cursor position (lastReadMessageCreatedAt), not the wall-clock lastReadAt', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          lastReadAt: new Date('2024-01-01T18:00:00Z'),
+          lastReadMessageCreatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+      ]);
+      mockCandidates([
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [{ id: 'p1', joinedAt: new Date('2024-01-01T00:00:00Z') }],
+        testConversationId
+      );
+
+      expect(result.get('p1')).toBe(2);
     });
 
     it("excludes each participant's OWN messages, counting everyone else's (incl. the message sender)", async () => {

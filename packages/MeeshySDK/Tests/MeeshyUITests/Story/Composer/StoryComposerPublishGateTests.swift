@@ -158,21 +158,22 @@ final class StoryComposerPublishGateTests: XCTestCase {
     func test_handleDismiss_audioOnlyComposition_asksBeforeQuitting() {
         XCTAssertEqual(
             StoryComposerView.exitPrompt(hasContent: false, carriesAudio: true),
-            .confirm(offersSave: false),
+            .confirm(offersSave: true),
             "Ce que le bouton Publier accepte comme story, la sortie doit le protéger."
         )
     }
 
-    /// …mais la feuille ne peut pas PROMETTRE ce que le brouillon ne sait pas
-    /// tenir : `StoryDraftStore` persiste les slides et leurs médias, jamais la
-    /// sélection audio vivante (`selectedAudioId` est un `@State` de la vue,
-    /// rabattu sur `effects.backgroundAudioId` au seul hand-off de publication).
-    /// Proposer « Sauvegarder » ici rendrait un brouillon muet — un mensonge d'un
-    /// tap. Reste « Quitter » (destructif) et « Annuler ».
-    func test_exitDialog_audioOnly_hidesTheSaveAction() {
-        XCTAssertFalse(
+    /// La feuille peut promettre ce que le brouillon SAIT tenir : la prémisse
+    /// « rabattu au seul hand-off de publication » est caduque depuis que
+    /// `persistDraft()` passe par `syncCurrentSlideEffects()` → `mergeEffects`
+    /// (copie intégrale, `backgroundAudioId` compris, écrite dans la slide via
+    /// le proxy `currentEffects`) et que `restoreCanvas` re-sème
+    /// `selectedAudioId` depuis les effets restaurés. Sans « Sauvegarder »,
+    /// la seule issue d'une session audio-seule était DESTRUCTIVE.
+    func test_exitDialog_audioOnly_offersTheSaveAction() {
+        XCTAssertTrue(
             StoryComposerView.exitPrompt(hasContent: false, carriesAudio: true).offersSave,
-            "Un brouillon sauvegardé ici reviendrait sans sa musique : il n'y a rien à sauvegarder."
+            "Le store retient l'audio rabattu (mergeEffects) et la reprise le restaure — la feuille doit l'offrir."
         )
     }
 
@@ -193,6 +194,38 @@ final class StoryComposerPublishGateTests: XCTestCase {
     }
 
     // MARK: - Gardes de source
+
+    /// L'autosave doit compter l'audio comme travail persistable : sans lui,
+    /// une session audio-seule n'écrit jamais rien et « Sauvegarder » depuis la
+    /// feuille de sortie resterait la SEULE écriture — un crash ou un passage
+    /// en background perdrait la composition.
+    func test_theAutosaveGateCountsAudioAsPersistableWork() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "var mayOverwriteStoredDraft:", in: code))
+
+        XCTAssertTrue(
+            body.contains("composerHasContent || composerCarriesAudio"),
+            "Le gate d'autosave doit élargir le terme de contenu à l'audio — le store sait le retenir."
+        )
+    }
+
+    /// Directive 2026-08-02 (point c) : une story mise en ÉDITION revient en
+    /// brouillon. Le terme `isEditingExistingStory` qui éteignait l'autosave
+    /// en édition a été retiré — le brouillon d'édition porte `editingPostId`
+    /// et sa réouverture rouvre le mode édition, la prémisse « restauré comme
+    /// une NOUVELLE story » ne tient plus. Cette garde interdit la
+    /// réintroduction du terme.
+    func test_theAutosaveGateNoLongerShutsOffForEditSessions() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "var mayOverwriteStoredDraft:", in: code))
+
+        XCTAssertFalse(
+            body.contains("isEditingExistingStory"),
+            "L'édition autosauvegarde comme toute session : son brouillon porte editingPostId."
+        )
+    }
 
     /// Le gate ne vaut que s'il est POSÉ. Ancré sur le corps de `publishButton`
     /// et sur lui seul : compter `.disabled(` dans le fichier entier dirait la

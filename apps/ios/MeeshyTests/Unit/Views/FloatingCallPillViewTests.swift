@@ -242,6 +242,55 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_muteButton_hasAccessibilityHint() throws {
+        // Audit fix: mute/speaker only had .accessibilityLabel + toggle trait —
+        // unlike hangupButton, VoiceOver users got no indication of what muting
+        // means for the other party from the label alone.
+        let source = try pillSource()
+        guard let range = source.range(of: "private var muteButton") else {
+            XCTFail("FloatingCallPillView must define muteButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.mute.hint"),
+            "The mute button must carry an accessibility hint, sharing the call.control.mute.hint " +
+            "key already used by CallView's mute control so both call surfaces read identically."
+        )
+    }
+
+    func test_speakerButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var speakerButton") else {
+            XCTFail("FloatingCallPillView must define speakerButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.speaker.hint"),
+            "The speaker button must carry an accessibility hint, sharing the call.control.speaker.hint " +
+            "key already used by CallView's speaker control so both call surfaces read identically."
+        )
+    }
+
+    func test_collapseToBubble_resetsSizeTierToCircle() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private func collapseToBubble(exitTranslation: CGFloat) {") else {
+            XCTFail("collapseToBubble not found in FloatingCallPillView.swift"); return
+        }
+        let end = source.range(of: "\n    // MARK: - Actions", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("callManager.bubbleSizeTier = .circle"),
+            "collapseToBubble must reset bubbleSizeTier to .circle — the only entry point " +
+            "into .bubble mode, so a PiP left enlarged in a previous session must not " +
+            "reappear already expanded."
+        )
+    }
+
     func test_pillContent_hasContainerAccessibilityLabel() throws {
         let source = try pillSource()
         XCTAssertTrue(
@@ -280,12 +329,13 @@ final class FloatingCallPillViewTests: XCTestCase {
 
     func test_muteButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var muteButton") else {
+        // Corps équilibré, pas une fenêtre de 1 000 caractères :
+        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // trop — et la garde virait au rouge sur du code parfaitement juste.
+        guard let vicinity = DeclarationBodyScanner.body(containing: "private var muteButton", in: source) else {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
             "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
@@ -296,12 +346,13 @@ final class FloatingCallPillViewTests: XCTestCase {
 
     func test_speakerButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var speakerButton") else {
+        // Corps équilibré, pas une fenêtre de 1 000 caractères :
+        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // trop — et la garde virait au rouge sur du code parfaitement juste.
+        guard let vicinity = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
             "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
@@ -379,6 +430,45 @@ final class CallParticipantVisualTests: XCTestCase {
             src.contains("UserService.shared.getProfileById"),
             "CallParticipantVisual must NOT hit the network for the profile — CallView " +
             "already refreshes and re-feeds the cache; this component serves cached data only."
+        )
+    }
+
+    func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
+            "The circular convenience initializer must stay so existing call sites " +
+            "(pill 44pt, bubble circle tier) keep compiling unchanged."
+        )
+        XCTAssertTrue(
+            src.contains("self.cornerRadius = diameter / 2"),
+            "The circular initializer must derive cornerRadius from the diameter so " +
+            "RoundedRectangle(cornerRadius:) renders a perfect circle, matching the " +
+            "previous Circle()-clipped behavior exactly."
+        )
+    }
+
+    func test_clipsWithRoundedRectangle_notFixedCircle() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"),
+            "The video clip shape must be a RoundedRectangle driven by the instance's " +
+            "cornerRadius (not a fixed Circle()) so CallBubbleView's rectangle PiP tiers " +
+            "can reuse this component."
+        )
+        XCTAssertFalse(
+            src.contains(".clipShape(Circle())"),
+            "The fixed Circle() clip must be gone — it can no longer represent the " +
+            "rectangle PiP tiers."
+        )
+    }
+
+    func test_avatarFallback_sizedFromSmallerDimension() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("size: min(width, height)"),
+            "The avatar fallback must size itself from the smaller dimension so it never " +
+            "stretches out of its circular aspect at a rectangle PiP tier."
         )
     }
 }

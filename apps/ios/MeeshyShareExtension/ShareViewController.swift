@@ -72,22 +72,29 @@ class ShareViewController: UIViewController {
     /// arbitraire, et plusieurs pièces jointes peuvent répondre en parallèle.
     private final class ExtractionBox: @unchecked Sendable {
         private let lock = NSLock()
-        private var text: String?
-        private var url: URL?
+        // `nonisolated(unsafe)` : mutated only under `lock`, from `offer`/
+        // `snapshot` below — the lock IS the synchronization the compiler
+        // can't see across actor isolation.
+        nonisolated(unsafe) private var text: String?
+        nonisolated(unsafe) private var url: URL?
 
-        func offer(text value: String?) {
+        // `nonisolated` : called from `loadItem`'s completion, which runs on
+        // an arbitrary queue (same rationale as `asURL`/`asText` below). The
+        // `NSLock` is this type's own synchronization — it doesn't need (and
+        // must not wait for) the main actor.
+        nonisolated func offer(text value: String?) {
             guard let value, !value.isEmpty else { return }
             lock.lock(); defer { lock.unlock() }
             if text == nil { text = value }
         }
 
-        func offer(url value: URL?) {
+        nonisolated func offer(url value: URL?) {
             guard let value else { return }
             lock.lock(); defer { lock.unlock() }
             if url == nil { url = value }
         }
 
-        var snapshot: (text: String?, url: URL?) {
+        nonisolated var snapshot: (text: String?, url: URL?) {
             lock.lock(); defer { lock.unlock() }
             return (text, url)
         }

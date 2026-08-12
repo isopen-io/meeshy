@@ -34,7 +34,6 @@ public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String
-    public let upToMessageId: String
 
     /// Identifiants SERVEUR des messages réellement affichés.
     ///
@@ -78,7 +77,6 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public init(
         clientMutationId: String,
         conversationId: String,
-        upToMessageId: String,
         messageIds: [String]? = nil,
         language: String? = nil,
         messageLanguages: [String: String]? = nil,
@@ -86,7 +84,6 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
-        self.upToMessageId = upToMessageId
         self.messageIds = messageIds
         self.language = language
         self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages
@@ -370,19 +367,24 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// commentaires — porté ici pour que le chemin durable (offline queue)
     /// transporte la position exactement comme le chemin direct.
     public let location: SharedPlace?
+    /// Effets visuels du commentaire (bitmask) — porté par le chemin durable
+    /// pour ne pas être perdu à l'enfilement, comme le chemin direct le porte.
+    public let effectFlags: Int?
 
     public init(
         clientMutationId: String,
         postId: String,
         parentCommentId: String?,
         content: String,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        effectFlags: Int? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.parentCommentId = parentCommentId
         self.content = content
         self.location = location
+        self.effectFlags = effectFlags
     }
 }
 

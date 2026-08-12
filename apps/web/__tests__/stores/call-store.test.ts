@@ -419,6 +419,40 @@ describe('CallStore', () => {
         expect(state.remoteStreams.get('participant-1')).toBe(stream1);
         expect(state.remoteStreams.get('participant-2')).toBe(stream2);
       });
+
+      it('should stop tracks of the previous stream when replacing it for the same participant', () => {
+        // Mirrors renegotiation (ICE restart, mid-call A/V switch): the RTCPeerConnection's
+        // ontrack handler calls addRemoteStream(participantId, event.streams[0]) again with a
+        // new MediaStream carrying the new tracks. Without this guard the old stream's tracks
+        // are never stopped — a leaked capture/decode pipeline for the lifetime of the call.
+        const oldStream = new MockMediaStream() as unknown as MediaStream;
+        const oldTrack = new MockMediaStreamTrack('video');
+        (oldStream as any).tracks.push(oldTrack);
+
+        const newStream = new MockMediaStream() as unknown as MediaStream;
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', oldStream);
+          useCallStore.getState().addRemoteStream('participant-1', newStream);
+        });
+
+        expect(oldTrack.stopped).toBe(true);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(newStream);
+      });
+
+      it('should not stop tracks when the same stream is reported again for the same participant', () => {
+        const stream = new MockMediaStream() as unknown as MediaStream;
+        const track = new MockMediaStreamTrack('video');
+        (stream as any).tracks.push(track);
+
+        act(() => {
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+          useCallStore.getState().addRemoteStream('participant-1', stream);
+        });
+
+        expect(track.stopped).toBe(false);
+        expect(useCallStore.getState().remoteStreams.get('participant-1')).toBe(stream);
+      });
     });
 
     describe('removeRemoteStream', () => {
@@ -711,29 +745,6 @@ describe('CallStore', () => {
     });
   });
 
-  describe('setReconnecting', () => {
-    it('should set isReconnecting=true and store attempt number when attempt > 0', () => {
-      act(() => {
-        useCallStore.getState().setReconnecting(3);
-      });
-
-      const state = useCallStore.getState();
-      expect(state.isReconnecting).toBe(true);
-      expect(state.reconnectAttempt).toBe(3);
-    });
-
-    it('should set isReconnecting=false when attempt is 0', () => {
-      act(() => {
-        useCallStore.getState().setReconnecting(2);
-        useCallStore.getState().setReconnecting(0);
-      });
-
-      const state = useCallStore.getState();
-      expect(state.isReconnecting).toBe(false);
-      expect(state.reconnectAttempt).toBe(0);
-    });
-  });
-
   describe('setConnectionQuality', () => {
     it('should store the given connection quality level', () => {
       act(() => {
@@ -750,24 +761,6 @@ describe('CallStore', () => {
       });
 
       expect(useCallStore.getState().connectionQuality).toBe('poor');
-    });
-  });
-
-  describe('setCallEndReason', () => {
-    it('should store the call end reason', () => {
-      act(() => {
-        useCallStore.getState().setCallEndReason('completed');
-      });
-
-      expect(useCallStore.getState().callEndReason).toBe('completed');
-    });
-
-    it('should store rejected reason', () => {
-      act(() => {
-        useCallStore.getState().setCallEndReason('rejected');
-      });
-
-      expect(useCallStore.getState().callEndReason).toBe('rejected');
     });
   });
 
@@ -1062,9 +1055,7 @@ describe('CallStore', () => {
     it('should reset extended state fields to their defaults', () => {
       act(() => {
         useCallStore.getState().setIceServers([{ urls: 'stun:stun.example.com' }]);
-        useCallStore.getState().setReconnecting(5);
         useCallStore.getState().setConnectionQuality('poor');
-        useCallStore.getState().setCallEndReason('rejected');
       });
 
       act(() => {
@@ -1073,10 +1064,7 @@ describe('CallStore', () => {
 
       const state = useCallStore.getState();
       expect(state.iceServers).toBeNull();
-      expect(state.isReconnecting).toBe(false);
-      expect(state.reconnectAttempt).toBe(0);
       expect(state.connectionQuality).toBeNull();
-      expect(state.callEndReason).toBeNull();
     });
   });
 

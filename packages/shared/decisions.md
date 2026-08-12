@@ -83,3 +83,10 @@
 **Decision**: `{ success: boolean, data?: T, error?: string, code?: ErrorCode, pagination?: PaginationMeta }`
 **Alternatives rejet**: Formats diffrents par endpoint (incohrent), erreurs lances (pas de type safety)
 **Cons**: Lgrement plus verbeux (toujours unwrapper `.data`)
+
+## 2026-08: Mention - keye sur User, pas sur Participant
+**Statut**: Accept
+**Contexte**: `Mention.mentionedParticipantId` tait DCLARE comme une relation vers `Participant` alors que tous ses crivains et lecteurs (`MentionService.createMentions`, `getRecentMentionsForUser`, l'mission `mention:created`, le filtre anti-auto-notification de `createMentionNotificationsBatch`) y mettaient un `User.id`. Consquences: `getMentionsForMessage` joignait un espace d'identifiants que la colonne n'a jamais contenu et rendait `[]` pour tout message, `onDelete: Cascade` ne se dclenchait jamais, et les lignes rcrites par `migrate-to-participant-model.ts` taient invisibles depuis l'inbox.
+**Decision**: `mentionedUserId String @map("mentionedParticipantId")` + relation `mentionedUser User`, aligne sur ses deux jumeaux `CommentMention` et `PostMention`. Le `@map` conserve le nom PHYSIQUE de la colonne: le renommage est un renommage de type, pas de donnes. `scripts/migrations/repair-mention-user-ids.ts` reconvertit les lignes restes en `Participant.id`.
+**Alternatives rejet**: Converger vers `Participant` (imposerait une jointure  chaque lecture de l'inbox, qui est transverse aux conversations; et une cascade qui effacerait l'historique des mentions au retrait d'un membre — une mention nomme une personne, pas une adhsion). Renommer physiquement la colonne (migration de donnes sur toutes les lignes, sans gain).
+**Cons**: Le nom physique de la colonne ne correspond plus  son nom logique — le `@map` et ce document portent l'explication.

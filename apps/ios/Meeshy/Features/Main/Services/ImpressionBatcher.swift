@@ -33,6 +33,9 @@ final class ImpressionBatcher: ObservableObject {
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
 
+    /// outbox-11 — préfixe partagé des clés de persistance (une par surface).
+    static let storageKeyPrefix = "meeshy.impressions.pending."
+
     private let source: String
     private let postService: PostServiceProviding
     private let flushDelay: TimeInterval
@@ -57,7 +60,7 @@ final class ImpressionBatcher: ObservableObject {
         self.postService = postService
         self.flushDelay = flushDelay
         self.defaults = defaults
-        self.storageKey = "meeshy.impressions.pending.\(source)"
+        self.storageKey = Self.storageKeyPrefix + source
         self.pending = defaults.stringArray(forKey: storageKey) ?? []
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
@@ -112,6 +115,17 @@ final class ImpressionBatcher: ObservableObject {
 
     private func persist() {
         defaults.set(pending, forKey: storageKey)
+    }
+
+    // MARK: - Logout purge (outbox-11)
+
+    /// Les lots d'impressions persistés (UserDefaults standard, clés sans
+    /// userId) sont rejoués dès l'init de chaque surface : sans purge au
+    /// logout, les impressions du compte A partent sous le token du compte B.
+    static func purgeAllPendingImpressions(in defaults: UserDefaults = .standard) {
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(storageKeyPrefix) }
+            .forEach { defaults.removeObject(forKey: $0) }
     }
 
     private func subscribeToAppLifecycle() {

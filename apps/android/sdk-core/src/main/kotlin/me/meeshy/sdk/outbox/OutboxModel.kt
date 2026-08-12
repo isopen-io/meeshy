@@ -10,6 +10,7 @@ public enum class OutboxKind {
     ADD_REACTION,
     REMOVE_REACTION,
     READ_RECEIPT,
+    MARK_UNREAD,
     UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
@@ -92,7 +93,10 @@ public object OutboxLaneMap {
         OutboxKind.REMOVE_REACTION,
         -> OutboxLaneAssignment.Shared(OutboxLanes.REACTION)
 
-        OutboxKind.READ_RECEIPT -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.READ_RECEIPT,
+        OutboxKind.MARK_UNREAD,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+
         OutboxKind.UPDATE_CONVERSATION_PREFS ->
             OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS)
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
@@ -184,6 +188,22 @@ public object OutboxDependencies {
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
 @kotlinx.serialization.Serializable
 public data class ReactionPayload(val emoji: String)
+
+/**
+ * Payload of an `UPLOAD_MEDIA` outbox row. [uploadContext] is the TUS
+ * `uploadcontext` wire string (`me.meeshy.sdk.model.media.TusUploadContext.wire`,
+ * e.g. `"story"`) the item was durably queued under, or `null` for a legacy
+ * `MessageAttachment` upload (chat attachments — `POST /attachments/upload`, the
+ * only path before TUS existed). Kept as a plain `String` rather than the enum
+ * itself so a row enqueued by a newer app build with a context value an OLDER
+ * build (mid-rollout, same device) doesn't know about still decodes — the drain
+ * sender treats an unrecognised string the same as `null` (legacy path), never a
+ * crash. An empty/blank row payload (every row enqueued before this field
+ * existed) also decodes as "no context" — see `OutboxFlushWorker`'s `UPLOAD_MEDIA`
+ * sender.
+ */
+@kotlinx.serialization.Serializable
+public data class MediaUploadPayload(val uploadContext: String? = null)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`

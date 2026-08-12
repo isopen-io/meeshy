@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import MeeshySDK
 
 // MARK: - Map target (version-neutral bridge type)
 
@@ -111,7 +112,10 @@ nonisolated public enum CoordinateEquivalence {
 public struct AdaptiveInteractiveMap<PinContent: View>: View {
     private let target: MapTarget?
     private let annotationCoordinate: CLLocationCoordinate2D?
+    private let style: SharedMapStyle
+    private let defaultControls: Bool
     private let onRegionChange: (CLLocationCoordinate2D) -> Void
+    private let onInteractionChange: ((Bool) -> Void)?
     private let pin: () -> PinContent
 
     /// - Parameters:
@@ -120,17 +124,44 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
     ///     callers that want auto-centering on the user must set `target`
     ///     once a location fix arrives.
     ///   - annotationCoordinate: coordinate of the single pin, or `nil`.
+    ///   - onInteractionChange: `true` while the camera is moving, `false`
+    ///     once it settles. Lets a caller animate its own chrome (a centre pin
+    ///     lifting off the map, for instance) without the map owning that
+    ///     behaviour.
+    ///
+    ///     It NEVER writes the camera state — that feedback loop is the
+    ///     documented freeze on `AdaptiveMapInitialRegion`. Callers must guard
+    ///     their own state write so a continuous stream of `true` produces a
+    ///     single update per gesture.
+    ///
+    ///     iOS 16 does not call it: `Map(coordinateRegion:)` reports movement
+    ///     continuously with no settle signal, so a pin lifted there would
+    ///     never come back down. The chrome simply stays at rest, like
+    ///     `.mapStyle` staying standard.
+    ///   - style: map rendering. No effect on iOS 16 (`.mapStyle` is iOS 17+):
+    ///     callers exposing a style picker must gate it behind
+    ///     `Platform.isIOS17OrLater`.
+    ///   - defaultControls: renders `MapUserLocationButton` + `MapCompass`.
+    ///     Pass `false` when the caller lays out its own controls — the system
+    ///     ones anchor top-trailing and slide under any floating bar living
+    ///     there.
     ///   - onRegionChange: called with the map center after the camera moves.
     ///   - pin: builds the pin view.
     public init(
         target: MapTarget?,
         annotationCoordinate: CLLocationCoordinate2D?,
+        style: SharedMapStyle = .standard,
+        defaultControls: Bool = true,
         onRegionChange: @escaping (CLLocationCoordinate2D) -> Void,
+        onInteractionChange: ((Bool) -> Void)? = nil,
         @ViewBuilder pin: @escaping () -> PinContent
     ) {
         self.target = target
         self.annotationCoordinate = annotationCoordinate
+        self.style = style
+        self.defaultControls = defaultControls
         self.onRegionChange = onRegionChange
+        self.onInteractionChange = onInteractionChange
         self.pin = pin
     }
 
@@ -139,7 +170,10 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
             ModernInteractiveMap(
                 target: target,
                 annotationCoordinate: annotationCoordinate,
+                style: style,
+                defaultControls: defaultControls,
                 onRegionChange: onRegionChange,
+                onInteractionChange: onInteractionChange,
                 pin: pin
             )
         } else {
@@ -159,7 +193,10 @@ public struct AdaptiveInteractiveMap<PinContent: View>: View {
 private struct ModernInteractiveMap<PinContent: View>: View {
     private let target: MapTarget?
     private let annotationCoordinate: CLLocationCoordinate2D?
+    private let style: SharedMapStyle
+    private let defaultControls: Bool
     private let onRegionChange: (CLLocationCoordinate2D) -> Void
+    private let onInteractionChange: ((Bool) -> Void)?
     private let pin: () -> PinContent
 
     @State private var position: MapCameraPosition
@@ -167,12 +204,18 @@ private struct ModernInteractiveMap<PinContent: View>: View {
     init(
         target: MapTarget?,
         annotationCoordinate: CLLocationCoordinate2D?,
+        style: SharedMapStyle,
+        defaultControls: Bool,
         onRegionChange: @escaping (CLLocationCoordinate2D) -> Void,
+        onInteractionChange: ((Bool) -> Void)?,
         @ViewBuilder pin: @escaping () -> PinContent
     ) {
         self.target = target
         self.annotationCoordinate = annotationCoordinate
+        self.style = style
+        self.defaultControls = defaultControls
         self.onRegionChange = onRegionChange
+        self.onInteractionChange = onInteractionChange
         self.pin = pin
         self._position = State(initialValue: .region(AdaptiveMapInitialRegion.resolve(for: target)))
     }
@@ -183,15 +226,36 @@ private struct ModernInteractiveMap<PinContent: View>: View {
                 Annotation("", coordinate: annotationCoordinate) { pin() }
             }
         }
+        // `.mapStyle` is a RENDERING modifier: it touches neither `position`
+        // nor `region`, so it does not open the synchronous re-entrancy path
+        // documented on `AdaptiveMapInitialRegion`.
+        .mapStyle(resolvedStyle)
+        // `.continuous` ne sert QU'À signaler « ça bouge » — il n'écrit
+        // jamais `position`, donc il n'ouvre pas la boucle de ré-entrance
+        // documentée sur `AdaptiveMapInitialRegion`.
+        .onMapCameraChange(frequency: .continuous) { _ in
+            onInteractionChange?(true)
+        }
         .onMapCameraChange(frequency: .onEnd) { context in
+            onInteractionChange?(false)
             onRegionChange(context.camera.centerCoordinate)
         }
         .mapControls {
-            MapUserLocationButton()
-            MapCompass()
+            if defaultControls {
+                MapUserLocationButton()
+                MapCompass()
+            }
         }
         .onChange(of: target) { _, newTarget in
             if let newTarget { position = .region(newTarget.region) }
+        }
+    }
+
+    private var resolvedStyle: MapStyle {
+        switch style {
+        case .standard: return .standard
+        case .hybrid:   return .hybrid
+        case .imagery:  return .imagery
         }
     }
 }

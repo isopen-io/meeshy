@@ -32,18 +32,33 @@ export interface AuthHandlerDependencies {
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
   /**
-   * Callback fourni par MeeshySocketIOManager pour déléguer à
-   * `CallEventsHandler.notifyExternalParticipantLeave` (leaveCall + broadcast
-   * participant-left/call-ended + summary + room eviction) le nettoyage d'une
-   * participation d'appel active pour un utilisateur anonyme qui se déconnecte.
-   * Si absent (ex. tests unitaires), le nettoyage retombe sur un simple
-   * `callService.leaveCall` sans broadcast — la session DB reste correcte mais
-   * l'autre participant n'apprend le départ qu'au GC (~120s).
+   * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
+   * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
+   * `io` and `CallEventsHandler`), curried down to
+   * `CallEventsHandler.broadcastParticipantLeftResult`. Optional so unit tests
+   * constructing AuthHandler directly don't need to stub Socket.IO — leaveCall
+   * itself still runs unconditionally either way, only the broadcast fanout is
+   * skipped when absent.
    */
-  notifyParticipantLeftOnDisconnect?: (
-    participation: DisconnectParticipation,
-    userId: string
-  ) => Promise<void>;
+  broadcastCallParticipantLeft?: (opts: {
+    leftSession: Awaited<ReturnType<CallService['leaveCall']>>;
+    participation: DisconnectParticipation;
+    userId: string;
+  }) => Promise<void>;
+  /**
+   * CALL-RESILIENCE — force-cleanup fallback when `leaveCall` rejects for one
+   * of the participations below, curried down to
+   * `CallEventsHandler.forceCleanupParticipationAfterLeaveFailure`. The
+   * registered-user path already had this fallback (a failed leave stamps
+   * `leftAt` directly and force-ends the session); this anonymous path only
+   * logged, so a guest whose leave hit a DB error stayed a zombie participant
+   * until the ~120s GC. Optional, same rationale as the callback above.
+   */
+  forceCleanupCallParticipant?: (opts: {
+    participation: DisconnectParticipation;
+    userId: string;
+    leaveError: unknown;
+  }) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -55,10 +70,8 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
-  private notifyParticipantLeftOnDisconnect?: (
-    participation: DisconnectParticipation,
-    userId: string
-  ) => Promise<void>;
+  private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
+  private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -69,7 +82,8 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
-    this.notifyParticipantLeftOnDisconnect = deps.notifyParticipantLeftOnDisconnect;
+    this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
+    this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -395,9 +409,7 @@ export class AuthHandler {
             participant: { id: userIdOrToken }
           },
           include: {
-            // `mode`/`conversationId`/`status` are what notifyParticipantLeftOnDisconnect's
-            // broadcast needs (call-room emit + call:ended fanout target).
-            callSession: { select: { mode: true, conversationId: true, status: true } }
+            callSession: true
           }
         });
 
@@ -412,33 +424,47 @@ export class AuthHandler {
 
         for (const participation of activeParticipations) {
           try {
-            if (this.notifyParticipantLeftOnDisconnect) {
-              // Vague 44 — delegates to CallEventsHandler.notifyExternalParticipantLeave,
-              // which calls leaveCall (with the same connectionLost hint below) AND
-              // broadcasts participant-left/call-ended + posts the summary + evicts the
-              // call room. Without this, an anonymous participant's disconnect updated
-              // the DB but left the remote peer's UI "in call" until CallCleanupService's
-              // ~120s GC swept the orphaned session.
-              await this.notifyParticipantLeftOnDisconnect(
-                participation as unknown as DisconnectParticipation,
-                userIdOrToken
-              );
-            } else {
-              await this.callService.leaveCall({
-                callId: participation.callSessionId,
-                userId: userIdOrToken,
-                participantId: participation.participantId,
-                // CALL-RESILIENCE (Vague 43) — this loop only ever runs on socket
-                // `disconnect` (see the comment above), never a deliberate
-                // call:leave/call:end. Mirrors CallEventsHandler
-                // .leaveParticipationAndBroadcast's identical Vague 42 fix: without
-                // this hint, leaveCall() defaults to endReason 'completed',
-                // misrecording an involuntary drop as a normal hangup.
-                endReasonHint: CallEndReason.connectionLost
-              });
-            }
+            const leftSession = await this.callService.leaveCall({
+              callId: participation.callSessionId,
+              userId: userIdOrToken,
+              participantId: participation.participantId,
+              // CALL-RESILIENCE (Vague 43) — this loop only ever runs on socket
+              // `disconnect` (see the comment above), never a deliberate
+              // call:leave/call:end. Mirrors CallEventsHandler
+              // .leaveParticipationAndBroadcast's identical Vague 42 fix: without
+              // this hint, leaveCall() defaults to endReason 'completed',
+              // misrecording an involuntary drop as a normal hangup.
+              endReasonHint: CallEndReason.connectionLost
+            });
+            // CALL-RESILIENCE (Vague 44) — leaveCall alone never told the other
+            // party the guest left: this loop is the only cleanup path for
+            // anonymous participants (CallEventsHandler's own disconnect flow
+            // is keyed on participant.userId, always null here), and it never
+            // broadcast PARTICIPANT_LEFT/call:ended, leaving the other side's
+            // UI "in call" until CallCleanupService's ~120s GC.
+            await this.broadcastCallParticipantLeft?.({
+              leftSession,
+              participation: participation as unknown as DisconnectParticipation,
+              userId: userIdOrToken
+            });
           } catch (error) {
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
+            // Parity with the registered-user path: a rejected leaveCall used
+            // to leave this participation open until the ~120s GC. The
+            // fallback itself never rejects, but a missing/failing injection
+            // must not abort the loop over the remaining participations.
+            try {
+              await this.forceCleanupCallParticipant?.({
+                participation: participation as unknown as DisconnectParticipation,
+                userId: userIdOrToken,
+                leaveError: error
+              });
+            } catch (forceError) {
+              logger.error('force cleanup failed after leaveCall error on disconnect', {
+                callId: participation.callSessionId,
+                error: forceError
+              });
+            }
           }
         }
       } catch (error) {

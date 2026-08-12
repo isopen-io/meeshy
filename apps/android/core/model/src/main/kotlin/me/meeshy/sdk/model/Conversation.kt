@@ -81,3 +81,10 @@ data class CreateConversationRequest(
     val title: String? = null,
     val participantIds: List<String>,
 )
+
+/**
+ * Total unread-message count across a conversation list — the single source of
+ * truth for both the in-app dashboard preview (`DashboardScreen.dashboardUnreadTotal`)
+ * and the home-screen widget's unread badge, so the two surfaces can never drift.
+ */
+fun List<ApiConversation>.totalUnreadCount(): Int = sumOf { it.unreadCount }

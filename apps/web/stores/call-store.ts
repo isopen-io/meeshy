@@ -15,7 +15,6 @@ import type {
   CallParticipant,
   CallControls,
   CallState,
-  CallEndReason,
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
@@ -56,10 +55,7 @@ export type PendingCallRetryMap = Record<string, PendingCallRetry>;
 
 interface CallStoreState extends CallState {
   // Extended state
-  callEndReason: CallEndReason | null;
-  reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
-  isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
   /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
   pendingRetry: PendingCallRetryMap;
@@ -105,14 +101,8 @@ interface CallStoreState extends CallState {
   startHeartbeat: (callId: string) => void;
   stopHeartbeat: () => void;
 
-  // Actions: Reconnection
-  setReconnecting: (attempt: number) => void;
-
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
-
-  // Actions: End reason
-  setCallEndReason: (reason: CallEndReason) => void;
 
   // Actions: Join an ongoing call from its live message bubble
   requestJoin: (request: JoinCallRequest) => void;
@@ -180,10 +170,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  callEndReason: null,
-  reconnectAttempt: 0,
   connectionQuality: null,
-  isReconnecting: false,
   iceServers: null,
   joinRequest: null,
   pendingRetry: {},
@@ -304,6 +291,15 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
+
+    // Stop the previous stream's tracks if this participant's stream is being
+    // replaced (renegotiation / ICE restart / mid-call A/V switch re-fires
+    // ontrack with a new MediaStream) — mirrors setLocalStream's guard above.
+    const previousStream = remoteStreams.get(participantId);
+    if (previousStream && previousStream !== stream) {
+      previousStream.getTracks().forEach((track) => track.stop());
+    }
+
     const newStreams = new Map(remoteStreams);
     newStreams.set(participantId, stream);
     set({ remoteStreams: newStreams });
@@ -480,25 +476,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  // ===== RECONNECTION =====
-
-  setReconnecting: (attempt) => {
-    set({
-      isReconnecting: attempt > 0,
-      reconnectAttempt: attempt,
-    });
-  },
-
   // ===== CONNECTION QUALITY =====
 
   setConnectionQuality: (quality) => {
     set({ connectionQuality: quality });
-  },
-
-  // ===== END REASON =====
-
-  setCallEndReason: (reason) => {
-    set({ callEndReason: reason });
   },
 
   // ===== JOIN FROM LIVE CALL BUBBLE =====
@@ -569,10 +550,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      callEndReason: null,
-      reconnectAttempt: 0,
       connectionQuality: null,
-      isReconnecting: false,
       iceServers: null,
       joinRequest: null,
       pendingRetry: survivingRetry,

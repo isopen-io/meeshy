@@ -2,7 +2,7 @@ import Foundation
 
 /// C5 — quelle publication les surfaces d'avatar mettent-elles en avant quand
 /// plusieurs sont empilées ? Décision UX produit, pure et testable seule (même
-/// patron que `MyStoriesEmptyStateResolver`).
+/// patron que `MyStoriesTabResolver`).
 enum StoryUploadPresentation {
 
     struct Surfaced {

@@ -104,7 +104,8 @@ extension StoryComposerView {
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(
                 viewModel: viewModel,
-                onControlsTopYChange: { measuredTextToolbarTopY = $0 }
+                onControlsTopYChange: { measuredTextToolbarTopY = $0 },
+                onTopBarBottomYChange: { measuredTextTopBarBottomY = $0 }
             )
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
@@ -900,11 +901,12 @@ extension StoryComposerView {
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
     /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
+    /// Délègue à `WindowMetrics`, le SSOT du module : l'implémentation locale
+    /// choisissait la scène par `.first` sur un `Set` non ordonné (donc
+    /// potentiellement une scène en arrière-plan), quand `WindowMetrics` la
+    /// résout par `activationState == .foregroundActive`.
     var composerScreenHeight: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
-            ?? UIScreen.main.bounds.height
+        WindowMetrics.windowSize.height
     }
 
     /// Liseré pointillé du bord du canvas, visible uniquement quand le fond ne
@@ -1002,10 +1004,11 @@ extension StoryComposerView {
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
             },
-            // Plafond de l'édition texte : le canvas garde la dernière ligne
-            // au-dessus des chips de l'outil, quitte à faire déborder un texte
-            // long par le HAUT de l'écran (user 2026-07-30).
+            // Bornes de la ZONE d'édition texte : le canvas y centre le bloc
+            // édité et l'y borne en hauteur, un texte plus long défilant à
+            // l'intérieur (spec 2026-08-01).
             inlineEditFloorGlobalY: measuredTextToolbarTopY,
+            inlineEditCeilingGlobalY: measuredTextTopBarBottomY,
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
             },
@@ -1179,8 +1182,10 @@ extension StoryComposerView {
                         },
                         onToggleMute: {
                             HapticFeedback.light()
+                            // Un-bouton : mute → volume 0 (niveau mémorisé),
+                            // unmute → restaure le niveau quitté (pas 1.0 forcé).
                             var obj = binding.wrappedValue
-                            obj.volume = obj.volume > 0 ? 0 : 1
+                            obj.toggleMute()
                             binding.wrappedValue = obj
                         }
                     )
@@ -1201,8 +1206,71 @@ extension StoryComposerView {
                 ForEach(foregroundVideoBindings, id: \.wrappedValue.id) { binding in
                     videoMuteButton(for: binding, canvasSize: geo.size)
                 }
+                // La vidéo de FOND — le cas le plus courant, et le seul qui
+                // n'avait aucune affordance : `foregroundVideoBindings` filtre
+                // sur `isBackground == false`. Son volume était pourtant bien
+                // lu au rendu (`StoryCanvasUIView+Rendering`).
+                if let bg = backgroundVideoBinding {
+                    backgroundVideoMuteButton(for: bg, canvasSize: geo.size)
+                }
             }
         }
+    }
+
+    /// Bouton de coupure du son de la vidéo de fond.
+    ///
+    /// Le fond couvre tout le canvas : sa position ne dérive pas du modèle
+    /// comme celle d'un clip d'avant-plan, elle est ancrée au coin HAUT-GAUCHE
+    /// — la colonne de boutons flottants est alignée en bas, et les boutons
+    /// par-clip suivent chacun leur propre média.
+    ///
+    /// Mêmes icône, geste et clés de localisation que `videoMuteButton` : un
+    /// contrôle visuellement différent pour la même action serait une
+    /// régression d'apprentissage, et aucune clé neuve n'est à traduire.
+    func backgroundVideoMuteButton(for binding: Binding<StoryMediaObject>,
+                                   canvasSize: CGSize) -> some View {
+        let muted = binding.wrappedValue.volume <= 0
+        let inset: CGFloat = 18
+        return Button {
+            HapticFeedback.light()
+            var obj = binding.wrappedValue
+            obj.toggleMute()
+            binding.wrappedValue = obj
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .position(x: inset + 15, y: inset + 15)
+        .accessibilityLabel(muted
+            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))
+    }
+
+    /// Binding vers la vidéo de FOND, s'il y en a une. Optionnel et non
+    /// tableau — cf. `backgroundVideoIndex(in:)`.
+    var backgroundVideoBinding: Binding<StoryMediaObject>? {
+        let medias = viewModel.currentEffects.mediaObjects ?? []
+        guard let idx = Self.backgroundVideoIndex(in: medias) else { return nil }
+        let snapshot = medias[idx]
+        return Binding<StoryMediaObject>(
+            get: {
+                let list = viewModel.currentEffects.mediaObjects ?? []
+                return list.indices.contains(idx) ? list[idx] : snapshot
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                guard var list = effects.mediaObjects,
+                      list.indices.contains(idx) else { return }
+                list[idx] = newValue
+                effects.mediaObjects = list
+                viewModel.currentEffects = effects
+            }
+        )
     }
 
     func videoMuteButton(for binding: Binding<StoryMediaObject>,
@@ -1224,8 +1292,9 @@ extension StoryComposerView {
 
         return Button {
             HapticFeedback.light()
+            // Un-bouton : mémento de restauration (cf. StoryVolumeCarrying).
             var obj = binding.wrappedValue
-            obj.volume = obj.volume > 0 ? 0 : 1
+            obj.toggleMute()
             binding.wrappedValue = obj
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -1245,6 +1314,17 @@ extension StoryComposerView {
     /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind
     /// `.video`) de la slide courante — pour le bouton mute. Écrit en retour
     /// dans `viewModel.currentEffects`, ce qui resync la slide et l'aperçu.
+    /// Index de la vidéo de FOND, s'il y en a une.
+    ///
+    /// Pure et statique : la décision se teste sans monter la vue (même patron
+    /// que `presentedCameraCapture(isRequested:provider:)`). Rend le PREMIER
+    /// fond vidéo et non un tableau — le modèle ne contraint pas l'unicité du
+    /// fond, et deux bindings poseraient deux boutons superposés au même coin
+    /// du canvas.
+    nonisolated static func backgroundVideoIndex(in medias: [StoryMediaObject]) -> Int? {
+        medias.firstIndex { $0.isBackground && $0.kind == .video }
+    }
+
     var foregroundVideoBindings: [Binding<StoryMediaObject>] {
         let medias = viewModel.currentEffects.mediaObjects ?? []
         return medias.enumerated().compactMap { idx, obj -> Binding<StoryMediaObject>? in

@@ -20,6 +20,7 @@ import {
   callSummaryClientMessageId
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import {
   buildCallHistoryItem,
   type CallHistoryItem,
@@ -230,6 +231,12 @@ export class CallService {
     | ((callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void)
     | null = null;
 
+  // Wired in server.ts to CallEventsHandler.invalidateSignalSession. Bridges
+  // this service's own GC sweeps (which write `CallParticipant.leftAt`) into
+  // that handler's documented invariant: every path writing `leftAt` must
+  // evict its 2s `call:signal` session cache entry. Mirrors callEndedBroadcaster.
+  private signalCacheInvalidator: ((callId: string) => void) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     // CALL-RESILIENCE (item H bug class, re-opened by the 2026-07-06 P0 fix)
@@ -270,6 +277,49 @@ export class CallService {
   }
 
   /**
+   * Bug — initiateCall's own GC sweeps (phantom stale participations, zombie
+   * active call) force-end a CallSession through `notifyReapedCall` alone,
+   * which only reaches `postCallSummaryForTerminatedCall` (chat bubble
+   * fix-up). Unlike every OTHER terminal path (endCall, leaveCall, GC's
+   * `forceEndCall`, REST end/leave via `broadcastCallEndedIfTerminal`), it
+   * never reached `callEndedBroadcaster` — the other participant never
+   * received `call:ended` and their WebRTC/CallKit UI hung indefinitely.
+   * Because the sweep already wrote `status: ended`, `CallCleanupService`'s
+   * own status-filtered GC queries never see the row again either, so no
+   * later broadcast rescues it. Fire-and-forget, mirrors `notifyReapedCall`.
+   */
+  private notifyReapedCallEnded(
+    callId: string,
+    conversationId: string | undefined,
+    duration: number
+  ): void {
+    this.notifyReapedCall(callId);
+    this.invalidateSignalCache(callId);
+
+    const broadcaster = this.callEndedBroadcaster;
+    if (!broadcaster) {
+      return;
+    }
+
+    const endedEvent: CallEndedEvent = {
+      callId,
+      duration,
+      // No specific ender — mirrors CallCleanupService.forceEndCall's own
+      // GC broadcast, which likewise has no acting user for this callId.
+      endedBy: undefined as unknown as string,
+      reason: CallEndReason.garbageCollected
+    };
+
+    try {
+      Promise.resolve(broadcaster(callId, conversationId, endedEvent)).catch((error) => {
+        logger.warn('call-ended broadcaster failed (reaped call)', { callId, error });
+      });
+    } catch (error) {
+      logger.warn('call-ended broadcaster failed synchronously (reaped call)', { callId, error });
+    }
+  }
+
+  /**
    * P0 (bulles « Appel … en cours » orphelines) — finalise le message live
    * après une transition terminale déclenchée par un appelant qui ne poste PAS
    * le summary lui-même. Les handlers socket `call:end` / `call:leave` le
@@ -297,6 +347,28 @@ export class CallService {
     callback: (callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void
   ): void {
     this.callEndedBroadcaster = callback;
+  }
+
+  /** Register the callback bridging this service's GC sweeps to CallEventsHandler's signal-session cache eviction. */
+  setSignalCacheInvalidationCallback(callback: (callId: string) => void): void {
+    this.signalCacheInvalidator = callback;
+  }
+
+  /**
+   * Bug (parité socket, sibling de broadcastCallEndedIfTerminal) — les routes
+   * REST `DELETE /calls/:id` (end) et `.../participants/:pid` (leave)
+   * appellent endCall()/leaveCall() (qui écrivent `CallParticipant.leftAt`)
+   * mais n'invalidaient jamais le cache de session `call:signal` de
+   * `CallEventsHandler` (TTL 2s). Contrairement aux handlers socket
+   * `call:end`/`call:leave`/`call:force-leave`, qui appellent tous
+   * `invalidateSignalSession` juste après un `leaveCall()`/`endCall()`
+   * réussi — inconditionnellement, PAS seulement quand l'appel devient
+   * terminal (un leave de groupe qui continue écrit quand même `leftAt` pour
+   * le partant). Public pour que les routes REST puissent l'appeler
+   * directement, symétrique à `broadcastCallEndedIfTerminal`.
+   */
+  invalidateSignalCache(callId: string): void {
+    this.signalCacheInvalidator?.(callId);
   }
 
   /**
@@ -783,7 +855,18 @@ export class CallService {
     if (TERMINAL_STATUSES.includes(newStatus)) {
       const now = new Date();
       updateData.endedAt = now;
-      updateData.duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
+      // Audit Vague 105 — anchor duration on `answeredAt` (talk time), not
+      // `startedAt` (ring+talk time), mirroring the other 7 terminal writers
+      // in this file (endCall/leaveCall/forceEndOrphanedCallSession/the
+      // idempotent leaveCall branch/the phantom-cleanup and zombie sweeps in
+      // CallCleanupService/markCallAsMissed — Vague 25/27/30). This writer is
+      // currently unreachable with a terminal `newStatus` (grep confirms no
+      // caller passes one today), but the next caller/refactor that does
+      // would otherwise resurrect the "Manqué · N:NN" phantom duration bug
+      // those Vagues fixed everywhere else.
+      updateData.duration = call.answeredAt
+        ? Math.floor((now.getTime() - call.answeredAt.getTime()) / 1000)
+        : 0;
       if (endReason) {
         updateData.endReason = endReason;
       }
@@ -951,6 +1034,9 @@ export class CallService {
         // already fixed for the GC tiers, reproduced here via a different
         // caller (CallService.initiateCall's own phantom sweep).
         const answeredAt = staleSession?.answeredAt ? new Date(staleSession.answeredAt) : null;
+        const staleDuration = answeredAt
+          ? Math.max(0, Math.floor((now.getTime() - answeredAt.getTime()) / 1000))
+          : 0;
         try {
           await this.prisma.$transaction(async (tx) => {
             await tx.callParticipant.updateMany({
@@ -962,9 +1048,7 @@ export class CallService {
               data: {
                 status: CallStatus.ended,
                 endedAt: now,
-                duration: answeredAt
-                  ? Math.max(0, Math.floor((now.getTime() - answeredAt.getTime()) / 1000))
-                  : 0,
+                duration: staleDuration,
                 endReason: CallEndReason.garbageCollected,
                 // Terminal write protocol: every terminal writer MUST bump `version`
                 // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
@@ -977,7 +1061,7 @@ export class CallService {
           this.clearHeartbeats(staleCallId);
           this.clearRingingTimeout(staleCallId);
           await this.releaseActiveCallClaim(staleSession?.conversationId ?? conversationId, staleCallId);
-          this.notifyReapedCall(staleCallId);
+          this.notifyReapedCallEnded(staleCallId, staleSession?.conversationId ?? conversationId, staleDuration);
         } catch (cleanupErr) {
           logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
         }
@@ -1039,7 +1123,7 @@ export class CallService {
         this.clearHeartbeats(activeCall.id);
         this.clearRingingTimeout(activeCall.id);
         await this.releaseActiveCallClaim(conversationId, activeCall.id);
-        this.notifyReapedCall(activeCall.id);
+        this.notifyReapedCallEnded(activeCall.id, conversationId, duration);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {
@@ -1986,11 +2070,29 @@ export class CallService {
       }
     }
 
+    // Resolve, for each call the current user did NOT initiate, whether they
+    // have their own `CallParticipant` row — i.e. they actually joined this
+    // specific call, as opposed to merely being a conversation member. A P2P
+    // call is capped at 2 active participants; a 3rd group member whose
+    // auto-early-join lost that race never gets a row, and must never be
+    // shown "incoming" just because the call's shared `answeredAt` was set by
+    // one of the two real participants. See `deriveCallDirection`.
+    const nonOutgoingCallIds = page.filter((r) => r.initiatorId !== userId).map((r) => r.id);
+    const participatedCallIds = new Set<string>();
+    if (nonOutgoingCallIds.length > 0) {
+      const myParticipations = await this.prisma.callParticipant.findMany({
+        where: { callSessionId: { in: nonOutgoingCallIds }, participant: { userId } },
+        select: { callSessionId: true }
+      });
+      for (const p of myParticipations) participatedCallIds.add(p.callSessionId);
+    }
+
     const items = page.map((row) =>
       buildCallHistoryItem(
         row as CallHistoryRow,
         userId,
-        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null
+        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null,
+        participatedCallIds.has(row.id)
       )
     );
 
@@ -2157,9 +2259,11 @@ export class CallService {
   /**
    * Shared terminal cleanup for a call resolved to `missed` — stamps any
    * still-open participant rows so `call:signal` stops relaying between them,
-   * clears in-memory heartbeat/ringing-timer state, and releases the
-   * conversation's active-call claim. Safe to call more than once: every
-   * write here is scoped/idempotent.
+   * clears in-memory heartbeat/ringing-timer state, releases the
+   * conversation's active-call claim, and invalidates the `call:signal`
+   * session cache (doc invariant in `CallEventsHandler.invalidateSignalSession`:
+   * every path writing `CallParticipant.leftAt` must evict the entry). Safe
+   * to call more than once: every write here is scoped/idempotent.
    */
   private async finalizeMissedCallCleanup(conversationId: string, callId: string): Promise<void> {
     await this.prisma.callParticipant.updateMany({
@@ -2172,6 +2276,7 @@ export class CallService {
     this.clearHeartbeats(callId);
     this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(conversationId, callId);
+    this.invalidateSignalCache(callId);
   }
 
   /**
@@ -2279,12 +2384,22 @@ export class CallService {
     if (Object.keys(data).length === 0) {
       return;
     }
-    await this.prisma.callSession.update({ where: { id: callId }, data }).catch((error) => {
-      logger.warn('Failed to persist call stats', {
-        callId,
-        error: error instanceof Error ? error.message : String(error)
+    // Scope the write to the exact (bytesSent, bytesReceived) snapshot read
+    // above via `updateMany`'s `where`, not a plain `update`. Two participants
+    // (or a duplicate/out-of-order report from the same one) can call this
+    // concurrently; without this guard, whichever `update()` commits last wins
+    // outright — even carrying a SMALLER total — silently corrupting the
+    // "data spent" figure with a lost update. If the row changed underneath
+    // us, `count` is 0 and this report is dropped: acceptable for best-effort
+    // telemetry, and the next report recomputes against a fresher snapshot.
+    await this.prisma.callSession
+      .updateMany({ where: { id: callId, bytesSent: current.bytesSent, bytesReceived: current.bytesReceived }, data })
+      .catch((error) => {
+        logger.warn('Failed to persist call stats', {
+          callId,
+          error: error instanceof Error ? error.message : String(error)
+        });
       });
-    });
   }
 
   /**
@@ -2443,7 +2558,8 @@ export class CallService {
           messageType: 'system',
           messageSource: 'system',
           metadata: (callMetadata ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
-          clientMessageId: callSummaryClientMessageId(call.id)
+          clientMessageId: callSummaryClientMessageId(call.id),
+          ...LIVE_MESSAGE_MARK
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
       });
@@ -2533,7 +2649,8 @@ export class CallService {
           messageType: 'system',
           messageSource: 'system',
           metadata: callMetadata as unknown as Prisma.InputJsonValue,
-          clientMessageId: callSummaryClientMessageId(call.id)
+          clientMessageId: callSummaryClientMessageId(call.id),
+          ...LIVE_MESSAGE_MARK
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
       });

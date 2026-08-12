@@ -754,6 +754,20 @@ public extension FeedPost {
         return list.first(where: { $0.type == .image })
     }
 
+    /// Média à afficher en FOND d'une surface réel : la vidéo si le post en
+    /// porte une, sinon la première image. `nil` quand aucun visuel n'existe —
+    /// l'appelant rend alors son propre fond (dégradé audio, couleur d'accent).
+    ///
+    /// Distinct de `primaryReelDisplayMedia`, qui désigne le média JOUÉ et
+    /// préfère l'audio à l'image. Les confondre ferait taire un réel audio
+    /// portant une image de couverture : son `kind` basculerait sur
+    /// `.imageOnly` et l'autoplay ne le prendrait plus.
+    var reelBackgroundMedia: FeedMedia? {
+        let list = reelDisplayMedia
+        if let video = list.first(where: { $0.type == .video }) { return video }
+        return list.first(where: { $0.type == .image })
+    }
+
     /// Filters a feed page down to the reels, preserving order. Seeds the reel
     /// pager from the already-loaded feed.
     static func reels(from posts: [FeedPost]) -> [FeedPost] {
@@ -763,45 +777,69 @@ public extension FeedPost {
 
 // MARK: - Reel Composition (creation-time classification)
 
-/// Decides, at creation time, whether a new post should default to a `REEL`.
-/// This is the front-end rule the product asks for: any post carrying media
-/// (a video, one or more images, audio alone or with images) becomes a reel by
-/// default; the author can override to a plain `POST` to keep it out of the
-/// reels surface. Pure and stateless so it is testable and shared by every
-/// composer path.
+/// Decides, at creation time, whether a post's composition qualifies it as a
+/// `REEL`. Règle produit (directive user 2026-08-02, étendue par la directive
+/// durée minimale) : un post n'est un réel que s'il porte UNE VIDÉO (>= 3s),
+/// UN AUDIO (>= 3s), ou AU MOINS DEUX IMAGES. Une image seule, un document ou
+/// un lieu restent un post de base ; une vidéo/audio de moins de 3 secondes
+/// (ou de durée inconnue) ne qualifie jamais à elle seule — les images ne sont
+/// JAMAIS soumises à cette condition de durée. L'auteur peut toujours forcer
+/// un `POST` (toggle Réel⇄Post) ; il ne peut jamais forcer un `REEL` non
+/// qualifiant. Pure and stateless so it is testable and shared by every
+/// composer path — miroir exact du prédicat gateway
+/// (`services/gateway/src/services/posts/reelComposition.ts`).
 public enum ReelComposition {
-    /// `true` when a post with these media kinds should default to a reel.
-    /// Documents and locations never qualify.
-    public static func suggestsReel(mediaKinds: [FeedMediaType]) -> Bool {
-        mediaKinds.contains { $0 == .image || $0 == .video || $0 == .audio }
+    /// Plancher de durée (ms) pour qu'une vidéo ou un audio qualifie seul —
+    /// miroir de `MIN_QUALIFYING_DURATION_MS` côté gateway.
+    public static let minQualifyingDurationMs = 3000
+
+    /// `true` when a post with these media kinds qualifies as a reel: a video
+    /// or audio of at least `minQualifyingDurationMs`, or at least two images.
+    /// Documents and locations never qualify — and neither does a single
+    /// image or a video/audio whose duration is too short or unknown.
+    public static func qualifiesAsReel(mediaKinds: [(kind: FeedMediaType, durationMs: Int?)]) -> Bool {
+        let hasQualifyingVideo = mediaKinds.contains { $0.kind == .video && meetsMinDuration($0.durationMs) }
+        let hasQualifyingAudio = mediaKinds.contains { $0.kind == .audio && meetsMinDuration($0.durationMs) }
+        // Pas de `count(where:)` : stdlib 6.0 (iOS 18+), le SDK cible iOS 16.
+        let imageCount = mediaKinds.lazy.filter { $0.kind == .image }.count
+        return hasQualifyingVideo || hasQualifyingAudio || imageCount >= 2
+    }
+
+    private static func meetsMinDuration(_ durationMs: Int?) -> Bool {
+        guard let durationMs else { return false }
+        return durationMs >= minQualifyingDurationMs
     }
 
     /// MIME-type convenience for the composer, which holds attachments as MIME
-    /// strings rather than `FeedMediaType`. Only image/video/audio qualify —
-    /// a document-only or location-only post stays a plain POST.
-    public static func suggestsReel(mimeTypes: [String]) -> Bool {
-        mediaKinds(forMimeTypes: mimeTypes).contains { $0 == .image || $0 == .video || $0 == .audio }
+    /// strings rather than `FeedMediaType`. Same rule: video (>=3s) || audio
+    /// (>=3s) || >= 2 images. `durationsMs` aligns by index with `mimeTypes`;
+    /// an index missing from `durationsMs` (including the default `[]`) is
+    /// treated as an unknown duration — non-qualifying for that video/audio
+    /// entry, but never blocks the other entries (e.g. the >= 2 images rule).
+    public static func qualifiesAsReel(mimeTypes: [String], durationsMs: [Int?] = []) -> Bool {
+        qualifiesAsReel(mediaKinds: mediaKinds(forMimeTypes: mimeTypes, durationsMs: durationsMs))
     }
 
-    private static func mediaKinds(forMimeTypes mimeTypes: [String]) -> [FeedMediaType] {
-        mimeTypes.compactMap { mime in
+    private static func mediaKinds(forMimeTypes mimeTypes: [String], durationsMs: [Int?]) -> [(kind: FeedMediaType, durationMs: Int?)] {
+        mimeTypes.enumerated().compactMap { index, mime in
             let m = mime.lowercased()
-            if m.hasPrefix("image/") { return .image }
-            if m.hasPrefix("video/") { return .video }
-            if m.hasPrefix("audio/") { return .audio }
+            let durationMs = index < durationsMs.count ? durationsMs[index] : nil
+            if m.hasPrefix("image/") { return (kind: .image, durationMs: durationMs) }
+            if m.hasPrefix("video/") { return (kind: .video, durationMs: durationMs) }
+            if m.hasPrefix("audio/") { return (kind: .audio, durationMs: durationMs) }
             return nil
         }
     }
 
-    /// The default `PostType` for a new post: `REEL` when it carries reel media
-    /// and the author hasn't forced a plain post, otherwise `POST`.
-    public static func defaultType(mediaKinds: [FeedMediaType], forcePlainPost: Bool = false) -> PostType {
-        (!forcePlainPost && suggestsReel(mediaKinds: mediaKinds)) ? .reel : .post
+    /// The default `PostType` for a new post: `REEL` when its composition
+    /// qualifies and the author hasn't forced a plain post, otherwise `POST`.
+    public static func defaultType(mediaKinds: [(kind: FeedMediaType, durationMs: Int?)], forcePlainPost: Bool = false) -> PostType {
+        (!forcePlainPost && qualifiesAsReel(mediaKinds: mediaKinds)) ? .reel : .post
     }
 
     /// MIME-type convenience overload of `defaultType`.
-    public static func defaultType(mimeTypes: [String], forcePlainPost: Bool = false) -> PostType {
-        (!forcePlainPost && suggestsReel(mimeTypes: mimeTypes)) ? .reel : .post
+    public static func defaultType(mimeTypes: [String], durationsMs: [Int?] = [], forcePlainPost: Bool = false) -> PostType {
+        (!forcePlainPost && qualifiesAsReel(mimeTypes: mimeTypes, durationsMs: durationsMs)) ? .reel : .post
     }
 }
 

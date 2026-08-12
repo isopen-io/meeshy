@@ -130,8 +130,20 @@ public struct APIResponseMeta: Decodable, Sendable {
     /// ou hors-ligne, aucun replay) apprend qu'il doit purger son cache.
     public let deletedStoryIds: [String]?
 
-    public init(deletedStoryIds: [String]? = nil) {
+    /// `deletedStoryIds` a débordé son plafond serveur : des disparitions plus
+    /// anciennes n'ont PAS été rendues.
+    ///
+    /// Les tombstones n'ont aucun curseur de reprise — il n'y a donc pas de
+    /// « page suivante » de disparitions à demander. Le seul recours est un
+    /// fetch complet, dont le remplacement du tray purge les fantômes.
+    ///
+    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
+    /// de troncature », c'est-à-dire exactement le comportement d'avant.
+    public let deletedStoryIdsTruncated: Bool?
+
+    public init(deletedStoryIds: [String]? = nil, deletedStoryIdsTruncated: Bool? = nil) {
         self.deletedStoryIds = deletedStoryIds
+        self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
     }
 }
 
@@ -372,8 +384,39 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }.value
     }
 
-    public var authToken: String?
-    public var anonymousSessionToken: String?
+    // net-09 — les deux tokens étaient des vars nues sur une classe
+    // @unchecked Sendable : data race lecture header / écriture refresh, et
+    // paire mixte observable au switch (13 paires déchirées mesurées par le
+    // test de stress sur l'implémentation non verrouillée). Un seul verrou
+    // pour la PAIRE : les getters/setters existants restent source-compatibles
+    // (protocole APIClientProviding inchangé), setTokens/currentTokens
+    // offrent la lecture/écriture atomique du couple. Prior art du pattern :
+    // CallManager.isCallActiveFlag.
+    private let tokenLock = OSAllocatedUnfairLock<(auth: String?, anon: String?)>(initialState: (nil, nil))
+
+    public var authToken: String? {
+        get { tokenLock.withLock { $0.auth } }
+        set { tokenLock.withLock { $0.auth = newValue } }
+    }
+
+    public var anonymousSessionToken: String? {
+        get { tokenLock.withLock { $0.anon } }
+        set { tokenLock.withLock { $0.anon = newValue } }
+    }
+
+    /// Écriture atomique de la paire — à préférer aux deux setters séparés
+    /// quand les deux tokens changent ensemble (switch de compte).
+    public func setTokens(auth: String?, anonymous: String?) {
+        tokenLock.withLock { pair in
+            pair.auth = auth
+            pair.anon = anonymous
+        }
+    }
+
+    /// Lecture atomique de la paire — jamais un mélange de deux écritures.
+    public func currentTokens() -> (auth: String?, anon: String?) {
+        tokenLock.withLock { $0 }
+    }
 
     private init() {
         let config = URLSessionConfiguration.default

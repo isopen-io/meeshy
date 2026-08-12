@@ -126,7 +126,11 @@ struct CommentAttachmentsTray: View {
 /// mêmes building blocks que les médias de post/message :
 /// - image  → `ProgressiveCachedImage` + plein écran `ConversationMediaGalleryView`
 /// - vidéo  → `MeeshyVideoPlayer(.inline)` + expand plein écran
-/// - audio  → `AudioPlayerView(.feedPost)` avec transcription + variantes TTS (Prisme)
+/// - audio  → `CoordinatedAudioPlayer` → `AudioPlayerView(.feedPost)` avec
+///            transcription + variantes TTS (Prisme) ; le routeur bascule sur
+///            le moteur du `ConversationAudioCoordinator` partagé (carte Now
+///            Playing, lecture background) dès que cet audio devient la tête
+///            de file — miroir standalone d'`AudioBubbleRouter`
 ///
 /// Le commentaire ne porte QU'UN SEUL média (cf. backend `commentId` FK sur PostMedia).
 /// Orchestration cache → policy → downloader déléguée aux resolvers app-side
@@ -134,6 +138,10 @@ struct CommentAttachmentsTray: View {
 struct CommentMediaView: View {
     let media: FeedMedia
     let accentColor: String
+    /// Id du commentaire porteur — entité utilisée comme `messageId`/
+    /// `conversationId` de la `QueuedAudio` routée vers le coordinator
+    /// (carte Now Playing) pour un média audio.
+    let commentId: String
     /// Infos auteur pour le label expéditeur du viewer plein écran (parité
     /// conversation : avatar + nom + date au-dessus du média).
     let authorName: String
@@ -233,21 +241,45 @@ struct CommentMediaView: View {
     private var audioView: some View {
         let attachment = media.toMessageAttachment()
         return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            AudioPlayerView(
-                attachment: attachment,
-                context: .feedPost,
-                accentColor: accentColor,
-                transcription: media.transcription,
-                translatedAudios: media.translatedAudios,
-                onFullscreen: {
-                    audioFullscreen = .fromFeed(
-                        media: media, author: author,
-                        originalLanguage: nil, caption: "", createdAt: sentAt
+            CoordinatedAudioPlayer(
+                attachmentId: attachment.id,
+                nowPlayingName: authorName,
+                nowPlayingArtworkURL: authorAvatarURL,
+                makeQueuedAudio: {
+                    QueuedAudio(
+                        attachmentId: attachment.id,
+                        messageId: commentId,
+                        conversationId: commentId,
+                        fileUrl: attachment.fileUrl,
+                        durationMs: attachment.duration ?? 0,
+                        senderName: authorName,
+                        senderAvatarURL: authorAvatarURL,
+                        receivedAt: sentAt
                     )
-                },
-                availability: availability,
-                onDownload: onDownload
-            )
+                }
+            ) { external, onPlay in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .feedPost,
+                    accentColor: accentColor,
+                    transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        audioFullscreen = .fromFeed(
+                            media: media, author: author,
+                            originalLanguage: nil, caption: "", createdAt: sentAt,
+                            // Même id que `makeQueuedAudio` ci-dessus (F2) :
+                            // le plein écran de CE commentaire doit être vu
+                            // comme la même session coordinator.
+                            conversationId: commentId
+                        )
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    externalPlayer: external,
+                    onPlayRequest: onPlay
+                )
+            }
         }
         .frame(maxWidth: 320)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))

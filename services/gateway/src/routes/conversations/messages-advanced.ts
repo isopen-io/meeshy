@@ -5,7 +5,6 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -16,9 +15,24 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
+import {
+  reconcileEditedLinks,
+  mergeTrackingLinksIntoMetadata,
+} from '../../services/messaging/messageLinks';
+import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../../services/messaging/messageEditContent';
+import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
-import { emitConversationPreviewUpdate } from '../../socketio/emitConversationPreviewUpdate';
+import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
 import type {
   ConversationParams,
   EditMessageBody
@@ -108,13 +122,22 @@ export function registerMessagesAdvancedRoutes(
       }
 
       const { id, messageId } = request.params;
-      const { content, originalLanguage: claimedLanguage = 'fr' } = bodyResult.data;
+      const { content, originalLanguage: claimedLanguage } = bodyResult.data;
       // Canonicalise the client-claimed locale at the write boundary. This REST
       // edit path re-persists `originalLanguage` from the request body (unlike
       // the socket edit path, which reuses the already-canonical stored value),
       // so a raw platform locale (`fr-FR`, `en_US`) would otherwise fragment the
       // stored value + the retranslation source. Irreducible codes kept verbatim.
-      const originalLanguage = normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
+      //
+      // Le champ est OPTIONNEL, et il l'était déjà avec un défaut `'fr'` : une
+      // omission RÉÉTIQUETAIT donc le message en français — en base ET comme
+      // langue source de la retraduction. Cette route est la seule des quatre
+      // entrées d'édition à écrire cette colonne, parce qu'elle est la seule
+      // servie par une vue qui porte un sélecteur de langue ; l'omettre veut
+      // dire « je n'affirme rien sur la langue », pas « c'est du français ».
+      const claimedCanonicalLanguage = claimedLanguage === undefined
+        ? undefined
+        : normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -133,7 +156,7 @@ export function registerMessagesAdvancedRoutes(
         },
         include: {
           sender: {
-            select: { id: true, userId: true, role: true }
+            select: { id: true, userId: true }
           },
           attachments: { select: { id: true } }
         }
@@ -143,89 +166,92 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      // Vérifier la restriction temporelle (24 heures max pour les utilisateurs normaux)
-      const isAuthor = existingMessage.sender?.userId === userId;
-      const messageAge = Date.now() - new Date(existingMessage.createdAt).getTime();
-      const twentyFourHoursInMs = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). C'est cette route qui portait la règle la plus
+      // complète — fenêtre de 24h pour l'auteur, privilège de rôle GLOBAL,
+      // modérateur membre actif admis sur le message d'autrui — et c'est donc
+      // elle que l'unité partagée reprend. Les trois autres entrées n'en
+      // tenaient qu'une partie chacune, et pas la même.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: existingMessage.sender?.userId,
+          conversationId,
+          createdAt: existingMessage.createdAt,
+        },
+        onError: (err) => logger.error('Edit - admission lookup failed', err),
+      });
 
-      if (isAuthor && messageAge > twentyFourHoursInMs) {
-        // Vérifier si l'utilisateur a des privilèges spéciaux
-        const userRole = existingMessage.sender.role;
-        const hasSpecialPrivileges = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
-
-        if (!hasSpecialPrivileges) {
-          return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');
-        }
+      if (isEditRefused(admission)) {
+        return admission.reason === 'edit-window-expired'
+          ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
+          : sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
       }
 
-      // Vérifier les permissions : l'auteur peut modifier, ou les modérateurs/admins/créateurs
-      let canModify = isAuthor;
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`) : le
+      // contenu vide n'est admis que si une pièce jointe porte le message
+      // (retrait de légende). La règle vivait ici dépliée, en trois exemplaires
+      // sur les quatre transports — dont un qui ne l'avait pas du tout.
+      const editedContent = admitEditedContent({
+        content,
+        hasAttachments: (existingMessage.attachments?.length ?? 0) > 0,
+      });
 
-      if (!canModify) {
-        // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: userId,
-            isActive: true
-          },
-          include: {
-            user: {
-              select: { role: true }
-            }
-          }
-        });
-
-        if (membership) {
-          const userRole = membership.user.role;
-          canModify = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
-        }
+      if (isEditedContentRefused(editedContent)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
       }
 
-      if (!canModify) {
-        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
-      }
+      // Ce que ce message doit à ses LIENS, après édition. La réécriture
+      // `[[url]]` / `<url>` → `m+<token>` vivait ici, dépliée — donc absente du
+      // chemin socket, qui est pourtant le transport d'édition PRIMAIRE et
+      // écrivait le texte brut. Et la seconde moitié, le mapping des URLs
+      // BRUTES (`metadata.trackingLinks`), n'était recomposée par AUCUN
+      // transport : elle n'existait qu'à la création. Les deux sont désormais
+      // soudées dans une unité que tous les écrivains appellent.
+      const editedLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId },
+        content: editedContent.content,
+        editorUserId: userId,
+        onError: (err) => logger.error('Error processing tracking links in edit', err),
+      });
+      const processedContent = editedLinks.processedContent;
 
-      // Validation du contenu : le contenu vide n'est autorisé que si le
-      // message porte des pièces jointes (suppression de légende). Parité avec
-      // le chemin socket (MessageHandler.handleMessageEdit).
-      const hasAttachments = existingMessage.attachments && existingMessage.attachments.length > 0;
-      if ((!content || content.trim().length === 0) && !hasAttachments) {
-        return sendBadRequest(reply, 'Message content cannot be empty');
-      }
+      // `metadata` est un blob PARTAGÉ (`postReplyTo`, `location`) : fusion, pas
+      // affectation. Et il n'est réécrit que si la réconciliation a établi
+      // quelque chose — y compris l'ensemble vide, qui dit « ce texte ne porte
+      // plus d'URL ». Sur panne, la base garde le mapping qu'elle avait.
+      const nextMetadata = editedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(existingMessage.metadata, editedLinks.trackingLinks) }
+        : {};
 
-      // ÉTAPE: Traiter les liens [[url]] et <url> AVANT de sauvegarder le message
-      let processedContent = content.trim();
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
-
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
-        const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
-          content: content.trim(),
-          conversationId: conversationId,
-          messageId: messageId,
-          createdBy: userId
-        });
-        processedContent = contentWithLinks;
-        logger.info(`Edit - Processed content after links processedContent=${processedContent}`);
-
-        if (trackingLinks.length > 0) {
-          logger.info(`✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
-        }
-      } catch (linkError) {
-        logger.error('Error processing tracking links in edit', linkError);
-        // Continue with unprocessed content if tracking links fail
-      }
-
-      // Mettre à jour le message avec le contenu traité
+      // Mettre à jour le message avec le contenu traité.
+      // Garde de concurrence optimiste, jumelle de celle que portent déjà les
+      // trois autres transports d'édition (socket `message:edit`,
+      // `PUT /messages/:messageId`, `PATCH /messages/:messageId`) : une
+      // suppression concurrente entre la lecture ci-dessus et cette écriture
+      // ferait sinon RESSUSCITER la ligne avec un contenu neuf — un `update`
+      // par id réussit quel que soit `deletedAt` — et `message:edited`
+      // partirait vers des clients qui l'ont déjà retirée. Prisma lève P2025
+      // quand rien ne matche : traduit en 404 plus bas, pas en 500.
+      // `translations: null` appartient à CETTE écriture : un nouveau contenu
+      // périme ses traductions à l'instant où il est écrit. L'invalidation
+      // vivait plus bas, dans le bloc de retraduction — donc APRÈS la capture
+      // de `updatedMessage`, qui compose la réponse HTTP ET la charge
+      // `message:edited`. Les deux emportaient la traduction du texte d'AVANT,
+      // et le Prisme Linguistique fait que la plupart des lecteurs ne voient
+      // QUE celle-là : ils relisaient l'ancien message, présenté comme la
+      // traduction du nouveau.
       const updatedMessage = await prisma.message.update({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         data: {
           content: processedContent,
-          originalLanguage,
+          ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          translations: null,
+          ...nextMetadata
         },
         include: {
           sender: {
@@ -275,181 +301,87 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      logger.info('===== POST MESSAGE UPDATE - BEFORE MENTIONS =====');
-      logger.info(`Message updated successfully, ID messageId=${messageId}`);
-      // ÉTAPE: Traitement des mentions @username lors de l'édition
-      logger.info('===== STARTING MENTION PROCESSING BLOCK =====');
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const mentionService = fastify.mentionService;
-        logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
-
-        if (mentionService) {
-          logger.info(`Edit - Processing mentions for edited message messageId=${messageId}`);
-
-          // Supprimer les anciennes mentions
-          await prisma.mention.deleteMany({
-            where: { messageId: messageId }
-          });
-
-          // Extraire les nouvelles mentions du contenu traité (avec tracking links déjà remplacés)
-          const mentionedUsernames = mentionService.extractMentions(processedContent);
-          logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
-          logger.info('Edit - Mentions extracted:', mentionedUsernames);
-          logger.info(`Edit - Number of mentions: ${mentionedUsernames.length}`);
-
-          if (mentionedUsernames.length > 0) {
-            // Résoudre les usernames en utilisateurs réels
-            const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            logger.info(`UserMap size: ${userMap.size}`);
-            const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
-
-            if (mentionedUserIds.length > 0) {
-              // Valider les permissions de mention
-              const validationResult = await mentionService.validateMentionPermissions(
-                conversationId,
-                mentionedUserIds,
-                userId
-              );
-              logger.info(`Validation result: isValid=${validationResult.isValid}, validUserIdsCount=${validationResult.validUserIds.length}`);
-
-              if (validationResult.validUserIds.length > 0) {
-                // Créer les nouvelles entrées de mention
-                await mentionService.createMentions(
-                  messageId,
-                  validationResult.validUserIds
-                );
-
-                // Extraire les usernames validés
-                const validatedUsernames = Array.from(userMap.entries())
-                  .filter(([_, user]) => validationResult.validUserIds.includes(user.id))
-                  .map(([username, _]) => username);
-
-                logger.info('Mise à jour avec validatedMentions:', validatedUsernames);
-
-                // Mettre à jour le message avec les usernames validés
-                await prisma.message.update({
-                  where: { id: messageId },
-                  data: { validatedMentions: validatedUsernames }
-                });
-
-                // IMPORTANT: Mettre à jour l'objet en mémoire
-                updatedMessage.validatedMentions = validatedUsernames;
-
-                logger.info(`✅ ${validationResult.validUserIds.length} mention(s) mise(s) à jour`);
-                logger.info(`updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
-
-                // Déclencher les notifications de mention pour les utilisateurs mentionnés
-                const notificationService = fastify.notificationService;
-                if (notificationService) {
-                  try {
-                    const [sender, conversationInfo] = await Promise.all([
-                      prisma.user.findUnique({
-                        where: { id: userId },
-                        select: { username: true, avatar: true }
-                      }),
-                      prisma.conversation.findUnique({
-                        where: { id: conversationId },
-                        select: {
-                          title: true,
-                          type: true,
-                          participants: { where: { isActive: true }, select: { userId: true } }
-                        }
-                      })
-                    ]);
-
-                    if (sender && conversationInfo) {
-                      const memberIds = conversationInfo.participants.map((m: { userId: string | null }) => m.userId).filter(Boolean);
-
-                        // PERFORMANCE: Créer toutes les notifications de mention en batch
-                        const count = await notificationService.createMentionNotificationsBatch(
-                          validationResult.validUserIds,
-                          {
-                            senderId: userId,
-                            senderUsername: sender.username,
-                            senderAvatar: sender.avatar || undefined,
-                            messageContent: processedContent,
-                            conversationId,
-                            messageId
-                          },
-                          memberIds
-                        );
-                        logger.info(`📩 ${count} notifications de mention créées en batch`);
-                    }
-                  } catch (notifError) {
-                    logger.error('Erreur notifications mentions', notifError);
-                  }
-                }
-              }
-            } else {
-              logger.info('Aucun utilisateur trouvé pour les mentions');
-              // Mettre à jour avec un tableau vide
-              await prisma.message.update({
-                where: { id: messageId },
-                data: { validatedMentions: [] }
-              });
-              updatedMessage.validatedMentions = [];
-            }
-          } else {
-            logger.info('Aucune mention dans le message édité');
-            // Mettre à jour avec un tableau vide
-            await prisma.message.update({
-              where: { id: messageId },
-              data: { validatedMentions: [] }
-            });
-            updatedMessage.validatedMentions = [];
-          }
-        } else {
-          logger.warn('Edit - MentionService NOT AVAILABLE - mentions will not be processed!');
-          // Clear mentions if service not available
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { validatedMentions: [] }
-          });
-          updatedMessage.validatedMentions = [];
-        }
-      } catch (mentionError) {
-        logger.error('Edit - Error processing mentions', mentionError);
-        logger.error('Edit - Stack trace', mentionError.stack);
-        // Ne pas faire échouer l'édition si les mentions échouent
-        // Clear mentions on error to avoid stale data
-        try {
-          await prisma.message.update({
-            where: { id: messageId },
-            data: { validatedMentions: [] }
-          });
-          updatedMessage.validatedMentions = [];
-        } catch (e) {
-          logger.error('Edit - Error clearing mentions', e);
-        }
+      // Ce que ce message doit à ceux qu'il NOMME, après édition : le lot de
+      // mentions doit être RECOMPOSÉ, pas complété. Le corps vivait ici, en
+      // double du chemin de création — et il extrayait moins bien : handles
+      // bruts seulement, là où la création résout aussi `@Display Name`.
+      // Éditer un message contenant `@John Doe` détruisait donc la mention que
+      // la création avait validée. Deux extracteurs pour un même champ ne
+      // peuvent pas rester d'accord ; il n'y en a plus qu'un.
+      //
+      // La notification, elle, ne concerne QUE les ENTRANTS : les destinataires
+      // du premier envoi ont déjà été prévenus, et renotifier l'ensemble
+      // complet ferait de dix corrections de frappe dix pushes pour quelqu'un
+      // déjà nommé. Elle vivait ici, dépliée — donc absente du chemin socket,
+      // qui ne réconciliait rien du tout ; elle est désormais soudée à la
+      // réconciliation, dont elle consomme le seul produit non consommé.
+      const editedMentions = await reconcileEditedMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
+        message: {
+          id: messageId,
+          conversationId,
+          senderId: existingMessage.senderId,
+          expiresAt: existingMessage.expiresAt,
+        },
+        content: processedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Edit - Error processing mentions', err)
+      });
+      // Recopier `validatedUsernames` SANS ce garde-fou rejouerait dans la
+      // réponse et dans la diffusion socket l'effacement que l'unité vient
+      // d'empêcher en base : quand elle n'a rien pu établir, `updatedMessage`
+      // porte déjà la valeur persistée, qui est la bonne.
+      if (editedMentions.reconciled) {
+        updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
       }
+
+      // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL. La diffusion
+      // qui suit ne fan qu'à `conversation:<id>` : quelqu'un que cette édition
+      // vient de nommer n'y est pas forcément. Cette route est la forme
+      // CONVERSATION-scopée de l'édition ; le client iOS, lui, emploie
+      // `PUT /messages/:messageId` (`routes/messages.ts`) — que les cycles
+      // précédents ont désigné ici par erreur, et qui a reçu le même câblage.
+      emitMentionCreated({
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId,
+        editorUserId: userId,
+        content: processedContent,
+        timestamp: updatedMessage.editedAt ?? new Date(),
+        onError: (err) => logger.error('Edit - mention:created fanout failed', err),
+      });
 
       // Déclencher la retraduction automatique du message modifié
       try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions en base ET dans le cache mémoire LRU avant
-        // de lancer la retraduction — sinon _processRetranslationAsync peut
-        // servir l'ancien résultat caché au lieu de calculer le nouveau.
-        await prisma.message.update({
-          where: { id: messageId },
-          data: { translations: null }
-        });
-        translationService.invalidateCacheForMessage(messageId);
+        // L'invalidation de `translations` en base n'est plus faite ici : elle
+        // appartient à l'écriture du contenu, plus haut, et la refaire après la
+        // capture de `updatedMessage` rouvrirait la fenêtre que cette écriture
+        // vient de fermer. La purge du cache mémoire LRU, elle, vit dans
+        // `_processRetranslationAsync`, en tête, pour les QUATRE transports.
 
-        // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
+        // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links).
+        // La langue source est celle qui vient d'être ÉCRITE — donc la valeur
+        // stockée quand le corps n'en revendiquait aucune. Repartir d'un `'fr'`
+        // par défaut ferait traduire un texte anglais comme du français.
         const messageForRetranslation = {
           id: messageId,
           content: processedContent,
-          originalLanguage: originalLanguage,
+          originalLanguage: claimedCanonicalLanguage ?? existingMessage.originalLanguage,
           conversationId: conversationId,
           senderId: existingMessage.senderId
         };
 
-        // Déclencher la retraduction via la méthode privée existante
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        // Entrée PUBLIQUE du service, comme sur le handler socket. Le `as any`
+        // qui vivait ici visait `_processRetranslationAsync`, la méthode privée
+        // que `retranslateMessageAsync` se contente d'exposer : deux vocabulaires
+        // pour un même geste, dont un qui perçait l'encapsulation.
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
         logger.info(`Edit - Retranslation queued for message ${messageId}`);
 
       } catch (translationError) {
@@ -464,15 +396,24 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
-      conversationMessageStatsService.onMessageEdited(
-        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '', processedContent
-      ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
+      // Cet ajustement ne vivait qu'ICI, sur un transport parmi quatre. La
+      // liste vit désormais dans `applyMessageEditEffects`.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId,
+        senderId: existingMessage.senderId,
+        senderUserId: existingMessage.sender?.userId ?? null,
+        previousContent: existingMessage.content,
+        content: processedContent,
+      });
 
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
       // `translations` est stocké en MongoDB sous forme d'objet (clé = langue) mais le contrat API attend
       // un tableau (`[APITextTranslation]` côté iOS) : sans cette transformation, iOS échoue au décodage
-      // avec "Type mismatch for type Array<Any> at path data.translations". La retraduction qui suit
-      // invalide `translations` en base, donc le payload renvoyé reflète cet état : `[]`.
+      // avec "Type mismatch for type Array<Any> at path data.translations". L'écriture du contenu a déjà
+      // invalidé `translations`, donc `updatedMessage` — son produit — porte bien `null`, et le payload
+      // reflète cet état : `[]`. Cette phrase désignait auparavant la retraduction qui SUIT, qui invalidait
+      // trop tard pour la charge déjà composée.
       const messageResponse = {
         ...updatedMessage,
         conversationId,
@@ -486,29 +427,29 @@ export function registerMessagesAdvancedRoutes(
 
       logger.info(`Edit - Response includes ${(updatedMessage.validatedMentions || []).length} validated mentions`);
 
-      // Diffuser la mise à jour via Socket.IO
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = ROOMS.conversation(conversationId);
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
-          logger.info(`Edit - Broadcasted message:edited to room ${room}`);
-          // Refresh the last-message preview for list-screen participants —
-          // parity with the WS edit path and broadcastNewMessage.
-          await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), conversationId, userId,
-            (err) => logger.warn('conversation preview fanout (advanced edit) failed', err as Error)
-          );
-        }
-      } catch (socketError) {
-        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
-        // Ne pas faire échouer l'édition si la diffusion échoue
-      }
+      // Diffuser la mise à jour via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId,
+        payload: messageResponse as unknown as Record<string, unknown>,
+        onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
+      });
 
       return sendSuccess(reply, messageResponse);
 
     } catch (error) {
+      // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
+      // été supprimé entre la lecture et l'écriture. Ce n'est pas une panne, et
+      // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
+      // Même traduction que sur le sibling `PATCH /messages/:messageId`.
+      if ((error as { code?: string })?.code === 'P2025') {
+        return sendNotFound(reply, 'Message not found');
+      }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
     }
@@ -583,30 +524,22 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      // Vérifier les permissions : l'auteur peut supprimer, ou les modérateurs/admins/créateurs
-      const isAuthor = existingMessage.sender?.userId === userId;
-      let canDelete = isAuthor;
-
-      if (!canDelete) {
-        // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: userId,
-            isActive: true
-          },
-          include: {
-            user: {
-              select: { role: true }
-            }
-          }
-        });
-
-        if (membership) {
-          const userRole = membership.user.role;
-          canDelete = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
-        }
-      }
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
+      // Cette copie-ci lisait `membership.user.role` — le rôle GLOBAL — alors
+      // que le commentaire qu'elle portait annonçait « les modérateurs/admins de
+      // CETTE conversation ». Un admin de conversation qui n'est qu'un `USER`
+      // global supprimait donc depuis Android et depuis le composer web, et
+      // recevait 403 ici : c'est-à-dire depuis iOS et depuis la vue web, les
+      // deux clients qui passent par cette route.
+      const { admitted: canDelete } = await admitMessageDelete({
+        prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: existingMessage.sender?.userId,
+          conversationId,
+        },
+        onError: (err) => logger.error('[CONVERSATIONS] delete admission read failed', err),
+      });
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
@@ -638,17 +571,27 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      conversationMessageStatsService.onMessageDeleted(
-        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '',
-        (existingMessage.attachments ?? []).map(a => {
-          const mime = a.mimeType ?? '';
-          if (mime.startsWith('image/')) return 'image';
-          if (mime.startsWith('audio/')) return 'audio';
-          if (mime.startsWith('video/')) return 'video';
-          return 'file';
-        }),
-        existingMessage.messageType || 'text'
-      ).catch(err => logger.error('[MESSAGES] Stats delete update error:', err));
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. Cette route ne
+      // recalculait PAS `lastMessageAt`, alors que les deux autres chemins de
+      // suppression le faisaient mot pour mot : supprimer le dernier message
+      // depuis iOS ou depuis la vue web — les deux clients qui passent par ici
+      // — laissait la liste des conversations triée sur un message devenu
+      // invisible. La liste vit désormais dans `applyMessageRemovalEffects`.
+      // Le décompte des compteurs a rejoint cette même unité. Il ne vivait
+      // qu'ICI, alors que le COMPTAGE ne vivait que dans le handler socket :
+      // un message envoyé par REST puis supprimé depuis iOS décrémentait un
+      // compteur qu'il n'avait jamais incrémenté.
+      await applyMessageRemovalEffects(prisma, {
+        id: messageId,
+        conversationId,
+        senderId: existingMessage.senderId,
+        senderUserId: existingMessage.sender?.userId ?? null,
+        messageType: existingMessage.messageType,
+        attachmentMimeTypes: (existingMessage.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: existingMessage.content,
+        metadata: existingMessage.metadata,
+      });
 
       // Invalider et recalculer les stats
       const stats = await conversationStatsService.getOrCompute(
@@ -657,28 +600,18 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
-      // Diffuser la suppression via Socket.IO
-      try {
-        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = ROOMS.conversation(conversationId);
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
-            messageId,
-            conversationId
-          });
-          // Refresh the last-message preview for list-screen participants:
-          // deleting the latest message changes their row, which
-          // MESSAGE_DELETED (conversation room only) never tells them.
-          await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), conversationId, userId,
-            (err) => logger.warn('conversation preview fanout (advanced delete) failed', err as Error)
-          );
-        }
-      } catch (socketError) {
-        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
-        // Ne pas faire échouer la suppression si la diffusion échoue
-      }
+      // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId,
+        actorUserId: userId,
+        eventType: 'deleted',
+        messageId,
+        payload: { messageId, conversationId },
+        onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
+      });
 
       return sendSuccess(reply, { messageId, deleted: true, meta: { conversationStats: stats } });
 
@@ -706,11 +639,18 @@ export function registerMessagesAdvancedRoutes(
           messageId: { type: 'string', description: 'Message ID to edit' }
         }
       },
+      // `minLength: 1` a vécu ici, et se trompait dans les deux sens : trois
+      // espaces le satisfont (le message partait VIDÉ, voir `admitEditedContent`)
+      // tandis que la chaîne vide LÉGITIME — celle qui retire la légende d'un
+      // message à pièce jointe — était refusée au transport ANDROID seul.
+      // La vacuité se décide APRÈS `trim` et en connaissant les pièces jointes ;
+      // le schéma ne garde donc que le plafond, en parité avec
+      // `EditMessageBodySchema`.
       body: {
         type: 'object',
         required: ['content'],
         properties: {
-          content: { type: 'string', description: 'Updated message content', minLength: 1 }
+          content: { type: 'string', description: 'Updated message content', maxLength: 10000 }
         }
       },
       response: {
@@ -742,9 +682,14 @@ export function registerMessagesAdvancedRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      // Vérifier que le message existe et appartient à l'utilisateur
+      // `deletedAt: null` manquait ici : ce transport lisait — puis réécrivait —
+      // un message SUPPRIMÉ. Un `update` par id réussit quel que soit
+      // `deletedAt`, donc la ligne ressuscitait avec un contenu neuf, un
+      // `message:edited` partait vers des clients qui l'avaient déjà retirée, et
+      // l'API répondait succès. Les trois autres entrées gardaient déjà leur
+      // lecture ; celle-ci était la dernière sans garde.
       const message = await prisma.message.findFirst({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         include: {
           sender: {
             select: { userId: true }
@@ -758,7 +703,10 @@ export function registerMessagesAdvancedRoutes(
                 }
               }
             }
-          }
+          },
+          // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
+          // pièce jointe qui autorise un texte vide (retrait de légende).
+          attachments: { select: { id: true } }
         }
       });
 
@@ -766,36 +714,84 @@ export function registerMessagesAdvancedRoutes(
         return sendNotFound(reply, 'Message introuvable');
       }
 
-      // Vérifier que l'utilisateur est l'auteur du message
-      if (message.sender?.userId !== userId) {
-        return sendForbidden(reply, 'Vous ne pouvez modifier que vos propres messages');
-      }
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). Cette entrée n'imposait AUCUNE fenêtre de 24h
+      // et n'admettait aucun modérateur, là où la route conversation-scopée fait
+      // les deux — pour le même geste, sur le même message.
+      //
+      // L'appartenance à la conversation n'est plus vérifiée pour l'AUTEUR : les
+      // trois autres entrées tiennent l'authorship pour suffisant, et rendre la
+      // règle commune plus stricte que les trois transports vivants serait une
+      // restriction neuve déguisée en unification. « Un auteur qui a quitté la
+      // conversation peut-il encore éditer ? » est une question produit à
+      // trancher pour les quatre à la fois, pas en passant sur celle-ci.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        },
+        onError: (err) => logger.error('Patch edit - admission lookup failed', err),
+      });
 
-      // Vérifier que l'utilisateur est membre de la conversation
-      // Pour la conversation globale "meeshy", l'accès est autorisé
-      if (message.conversation.identifier !== "meeshy") {
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: message.conversationId,
-            userId: userId,
-            isActive: true
-          }
-        });
-
-        if (!membership) {
-          return sendForbidden(reply, 'Unauthorized access to this conversation');
+      if (isEditRefused(admission)) {
+        if (admission.reason === 'edit-window-expired') {
+          return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');
         }
+        return admission.reason === 'not-a-member'
+          ? sendForbidden(reply, 'Unauthorized access to this conversation')
+          : sendForbidden(reply, 'Vous ne pouvez modifier que vos propres messages');
       }
+
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`), désormais
+      // énoncé une seule fois pour les quatre transports. Cette entrée était la
+      // seule SANS garde : trois espaces suffisaient à vider un message, et un
+      // `message:edited` vide partait vers toute la conversation par-dessus le
+      // texte déjà écrasé.
+      const editedContent = admitEditedContent({
+        content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(editedContent)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
+      }
+
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, comme sur les deux autres transports d'édition. Ce PATCH est
+      // celui du client ANDROID (`OutboxFlushWorker`, lane `EDIT_MESSAGE`) : il
+      // écrivait les crochets en dur, pour toujours, là où le même texte ENVOYÉ
+      // produit un lien.
+      const patchedLinks = await reconcileEditedLinks({
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId: message.conversationId },
+        content: editedContent.content,
+        editorUserId: userId,
+        onError: (err) => logger.error('Error processing tracking links in patch edit', err),
+      });
+      const processedContent = patchedLinks.processedContent;
+      const patchedMetadata = patchedLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, patchedLinks.trackingLinks) }
+        : {};
 
       // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
       // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
+      // Garde de concurrence optimiste, jumelle de celle du sibling
+      // `PUT /messages/:messageId` : une suppression concurrente entre la
+      // lecture et cette écriture ferait sinon ressusciter la ligne. Prisma
+      // accepte un filtre non-unique aux côtés de l'id et lève P2025 quand rien
+      // ne matche — traduit en 404 plus bas, pas en 500.
+      const editedAt = new Date();
       const updatedMessage = await prisma.message.update({
-        where: { id: messageId },
+        where: { id: messageId, deletedAt: null },
         data: {
-          content: content.trim(),
+          content: processedContent,
           isEdited: true,
-          editedAt: new Date(),
-          translations: null
+          editedAt,
+          translations: null,
+          ...patchedMetadata
         },
         include: {
           sender: {
@@ -811,19 +807,71 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs. Même unité que les trois autres transports.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: message.content,
+        content: processedContent,
+      });
+
+      // Ce que cette édition doit aux gens qu'elle NOMME. Même unité que le
+      // sibling PUT et que le chemin socket : le lot est RECOMPOSÉ, et seuls
+      // les ENTRANTS sont notifiés. Ce transport ne touchait aucune mention —
+      // éditer « salut @alice » en « salut @bob » depuis le web laissait Alice
+      // mentionnée et ne nommait jamais Bob.
+      const editedMentions = await reconcileEditedMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
+        message: {
+          id: messageId,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          expiresAt: message.expiresAt,
+        },
+        content: processedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Patch edit - Error processing mentions', err)
+      });
+      // Même garde que le sibling PUT : quand la réconciliation n'a RIEN pu
+      // établir, la valeur persistée que porte `updatedMessage` est la bonne,
+      // et un `[]` recopié effacerait un surlignage vivant.
+      if (editedMentions.reconciled) {
+        (updatedMessage as { validatedMentions?: string[] }).validatedMentions = [...editedMentions.validatedUsernames];
+      }
+
+      // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
+      // diffusion qui suit ne fan qu'à `conversation:<id>`.
+      emitMentionCreated({
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: processedContent,
+        timestamp: editedAt,
+        onError: (err) => logger.error('Patch edit - mention:created fanout failed', err),
+      });
+
       // Déclencher la retraduction automatique du message modifié (parité avec le sibling PUT)
       try {
         const translationService = fastify.translationService;
 
         const messageForRetranslation = {
           id: messageId,
-          content: content.trim(),
+          content: processedContent,
           originalLanguage: message.originalLanguage,
           conversationId: message.conversationId,
           senderId: message.senderId
         };
 
-        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+        // Entrée PUBLIQUE du service (voir le sibling PUT) : `retranslateMessageAsync`
+        // expose `_processRetranslationAsync`, que ce `as any` atteignait de force.
+        await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
       } catch (translationError) {
         logger.error('Erreur lors de la retraduction', translationError);
         // Ne pas faire échouer l'édition si la retraduction échoue
@@ -838,27 +886,28 @@ export function registerMessagesAdvancedRoutes(
         )
       };
 
-      // Diffuser la mise à jour via Socket.IO (parité avec le sibling PUT)
-      try {
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = ROOMS.conversation(message.conversationId);
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
-          // Refresh the last-message preview for list-screen participants —
-          // parity with the WS edit path and broadcastNewMessage.
-          await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId, userId,
-            (err) => logger.warn('conversation preview fanout (advanced edit alt) failed', err as Error)
-          );
-        }
-      } catch (socketError) {
-        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
-        // Ne pas faire échouer l'édition si la diffusion échoue
-      }
+      // Diffuser la mise à jour via Socket.IO (parité avec le sibling PUT :
+      // room + aperçu de liste + file de livraison hors ligne)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId,
+        payload: messageResponse as unknown as Record<string, unknown>,
+        onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
+      });
 
       return sendSuccess(reply, messageResponse);
 
     } catch (error) {
+      // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
+      // été supprimé entre la lecture et l'écriture. Ce n'est pas une panne, et
+      // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
+      if ((error as { code?: string })?.code === 'P2025') {
+        return sendNotFound(reply, 'Message introuvable');
+      }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
     }
@@ -1114,26 +1163,43 @@ export function registerMessagesAdvancedRoutes(
           'add',
           currentParticipant.id,
           conversationId,
+          userId,
         );
 
         if (socketIOHandler) {
-          const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOHandler.getManager()?.getIO();
-          if (io) {
-            // Swap 1-réaction-par-user : l'ancien emoji part avant que le
-            // nouveau arrive (agrégations recalculées par event).
-            for (const removedEmoji of addResult.replacedEmojis) {
-              const removeEvent = await reactionService.createUpdateEvent(
-                messageId,
-                removedEmoji,
-                'remove',
-                currentParticipant.id,
-                conversationId,
-              );
-              io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
-            }
-            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+          const manager = socketIOHandler.getManager?.();
+          // Swap 1-réaction-par-user : l'ancien emoji part avant que le
+          // nouveau arrive (agrégations recalculées par event).
+          for (const removedEmoji of addResult.replacedEmojis) {
+            const removeEvent = await reactionService.createUpdateEvent(
+              messageId,
+              removedEmoji,
+              'remove',
+              currentParticipant.id,
+              conversationId,
+              userId,
+            );
+            await broadcastReactionMutation({
+              manager,
+              conversationId,
+              actorParticipantId: currentParticipant.id,
+              eventType: 'reaction-removed',
+              messageId,
+              emoji: removedEmoji,
+              payload: removeEvent as unknown as Record<string, unknown>,
+              onError: (error) => logger.warn('[REACTION-REST] swap-removal broadcast failed', error),
+            });
           }
+          await broadcastReactionMutation({
+            manager,
+            conversationId,
+            actorParticipantId: currentParticipant.id,
+            eventType: 'reaction-added',
+            messageId,
+            emoji,
+            payload: updateEvent as unknown as Record<string, unknown>,
+            onError: (error) => logger.warn('[REACTION-REST] broadcast failed', error),
+          });
         }
       } catch (socketError) {
         logger.warn('[REACTION-REST] Error broadcasting reaction via Socket.IO', socketError);
@@ -1272,14 +1338,20 @@ export function registerMessagesAdvancedRoutes(
           'remove',
           currentParticipant.id,
           conversationId,
+          userId,
         );
 
         if (socketIOHandler) {
-          const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOHandler.getManager()?.getIO();
-          if (io) {
-            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
-          }
+          await broadcastReactionMutation({
+            manager: socketIOHandler.getManager?.(),
+            conversationId,
+            actorParticipantId: currentParticipant.id,
+            eventType: 'reaction-removed',
+            messageId,
+            emoji,
+            payload: updateEvent as unknown as Record<string, unknown>,
+            onError: (error) => logger.warn('[REACTION-REST] removal broadcast failed', error),
+          });
         }
       } catch (socketError) {
         logger.warn('[REACTION-REST] Error broadcasting reaction removal via Socket.IO', socketError);

@@ -1147,6 +1147,53 @@ do_release_andp() {
     return "$rc"
 }
 
+# ─── Signature des frameworks embarqués (ITMS-90035) ─────────────────────────
+# À l'action `archive`, la signature automatique signe les XCFrameworks binaires
+# embarqués (FirebaseAnalytics, GoogleAppMeasurement, GoogleAdsOnDeviceConversion,
+# GoogleAppMeasurementIdentitySupport, WebRTC) avec l'identité de DÉVELOPPEMENT.
+# `-exportArchive` les re-signe ensuite en Distribution, mais ce « replacing
+# existing signature » laisse des métadonnées résiduelles que l'analyseur d'App
+# Store Connect rejette : ITMS-90035 « Invalid Signature — Code failed to satisfy
+# specified code requirement(s) ».
+#
+# Le strip DOIT donc courir entre l'archive et l'export, sur TOUS les chemins.
+# `meeshy.sh` ne l'appelait sur aucun des deux siens : `archive` et `distribute`
+# produisaient des IPA rejetés à l'upload, alors que le build lui-même passait.
+strip_embedded_signatures() {
+    local archive_path="$1"
+    local strip_script="./ci_scripts/ci_post_xcodebuild.sh"
+
+    if [ ! -x "$strip_script" ]; then
+        err "Strip script introuvable ou non exécutable: $strip_script"
+        err "Sans lui, l'IPA sera rejeté par App Store Connect (ITMS-90035)."
+        exit 1
+    fi
+
+    log "Stripping embedded framework signatures (ITMS-90035 guard)..."
+    CI_XCODEBUILD_ACTION=archive CI_ARCHIVE_PATH="$archive_path" "$strip_script"
+    ok "Embedded framework signatures stripped"
+}
+
+# Vérifie l'IPA/app EXPORTÉ : chaque framework embarqué doit porter une signature
+# de distribution valide. C'est le seul contrôle qui juge le produit livré plutôt
+# que le câblage du pipeline — un strip oublié y devient rouge localement au lieu
+# de revenir par courriel d'Apple deux jours plus tard.
+verify_embedded_signatures() {
+    local bundle_path="$1"
+    local verify_script="./ci_scripts/verify_embedded_signatures.sh"
+
+    if [ ! -x "$verify_script" ]; then
+        err "Verification script introuvable ou non exécutable: $verify_script"
+        exit 1
+    fi
+
+    log "Verifying embedded framework signatures..."
+    if ! "$verify_script" "$bundle_path"; then
+        err "Signature verification FAILED — ne pas uploader cet IPA."
+        exit 1
+    fi
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1182,6 +1229,8 @@ do_archive() {
     fi
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # Export IPA
     log "Exporting IPA (method: $EXPORT_METHOD)..."
     local export_opts="$DERIVED_DATA/$archive_config/ExportOptions.plist"
@@ -1213,6 +1262,8 @@ EOXML
         err "IPA export failed"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1341,6 +1392,8 @@ do_distribute() {
     rm -f "$archive_log"
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # ── Export IPA ──
     log "Exporting IPA (method: $dist_method)..."
     local export_opts="$DERIVED_DATA/Distribution/ExportOptions.plist"
@@ -1383,6 +1436,8 @@ EOXML
         err "IPA file not found after export"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1442,6 +1497,50 @@ discover_test_classes() {
         | sort -u
 }
 
+# `discover_test_classes` lit les SOURCES, jamais le produit du build. Le projet
+# énumère ses fichiers explicitement (aucun PBXFileSystemSynchronizedRootGroup) :
+# un test créé sans être enregistré dans project.pbxproj entre quand même dans le
+# manifeste `-only-testing` alors qu'il n'est PAS compilé. xcodebuild ne dit rien
+# d'une classe sélectionnée qui n'existe pas, et le gate reste VERT avec des
+# tests morts (2026-08-11 : MessageMoreJumpsToViewsGuardTests, deux commits,
+# 0 symbole dans le bundle, 3 gardes promises jamais exécutées).
+#
+# Seule la présence du SYMBOLE dans MeeshyTests.xctest fait foi — on la vérifie
+# ici, après le build, et un orphelin rend le gate ROUGE. Remède côté dépôt :
+# `(cd apps/ios && xcodegen generate)`, puis committer les 4 lignes ajoutées au
+# pbxproj (référence légitime d'un fichier neuf, pas du churn).
+verify_test_classes_are_compiled() {
+    local binary="$DERIVED_DATA/Products/Debug-iphonesimulator/$APP_NAME.app/PlugIns/MeeshyTests.xctest/MeeshyTests"
+    if [ ! -f "$binary" ]; then
+        warn "Bundle de tests introuvable ($binary) — garde d'orphelins sautée"
+        return 0
+    fi
+
+    local declared_file compiled_file orphans
+    declared_file=$(mktemp) && compiled_file=$(mktemp)
+    discover_test_classes > "$declared_file"
+    if [ ! -s "$declared_file" ]; then
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    nm -a "$binary" 2>/dev/null | grep -oF -f "$declared_file" | sort -u > "$compiled_file" || true
+    if [ ! -s "$compiled_file" ]; then
+        warn "Aucun symbole de classe de test lisible dans $binary — garde d'orphelins sautée"
+        rm -f "$declared_file" "$compiled_file"
+        return 0
+    fi
+
+    orphans=$(grep -vxF -f "$compiled_file" "$declared_file" || true)
+    rm -f "$declared_file" "$compiled_file"
+    [ -z "$orphans" ] && return 0
+
+    err "Classes de test ABSENTES du bundle compilé (non enregistrées dans $PROJECT) :"
+    printf '  • %s\n' $orphans
+    err "Leurs tests ne s'exécutent jamais. Corriger : (cd apps/ios && xcodegen generate) puis committer l'ajout de référence."
+    return 1
+}
+
 xcpretty_or_cat() {
     if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
 }
@@ -1491,6 +1590,11 @@ do_test() {
     log "Building for testing..."
     xcodebuild build-for-testing "${common_flags[@]}" \
         2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Le manifeste des phases 1/2 sort des sources : on le confronte au bundle
+    # compilé AVANT de lui faire confiance (cf. verify_test_classes_are_compiled).
+    local porphan=0
+    verify_test_classes_are_compiled || porphan=$?
 
     # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
     local phase1_skip=() phase2_only=() cls
@@ -1543,6 +1647,7 @@ do_test() {
         -only-testing:MeeshyTests/$END_STATE_SUITE \
         2>&1 | xcpretty_or_cat || p3=$?
 
+    [ "$porphan" -eq 0 ] && ok "Garde d'orphelins : toutes les classes de test sont dans le bundle compilé" || err "Garde d'orphelins : des classes de test ne sont PAS compilées (détail ci-dessus)"
     [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
@@ -1577,7 +1682,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────

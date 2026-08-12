@@ -222,6 +222,11 @@ struct CommentsSheetView: View {
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
     @State private var composerIsFocused: Bool = false
+    /// Vrai si C'EST CETTE FEUILLE qui a déclaré le post actif (présentation
+    /// depuis le feed). Depuis un hôte qui l'avait déjà déclaré (viewer de
+    /// réels), la feuille ne revendique rien et ne relâche rien à sa
+    /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
+    @State private var claimedActivePost: Bool = false
     @State private var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -505,6 +510,16 @@ struct CommentsSheetView: View {
         .modifier(TranslucentSheetBackground())
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)
+            // Les commentaires du post sont CONSOMMÉS : marque lues les
+            // notifications du post (portée serveur `context.postId`, qui
+            // couvre commentaires et réactions) et déclare le post actif —
+            // les notifications arrivant pendant la lecture naissent
+            // consommées. Cette feuille est présentée depuis le FEED et les
+            // RÉELS sans passer par PostDetailView : c'était le seul chemin
+            // où une notification de commentaire n'était jamais consommée.
+            // Idempotent quand l'hôte (réel) a déjà déclaré ce post actif.
+            claimedActivePost = NotificationToastManager.shared.activePostId != post.id
+            NotificationToastManager.shared.onPostOpened(post.id)
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
             seedLikedIds(from: comments)
@@ -515,6 +530,13 @@ struct CommentsSheetView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
+            // Ne relâcher QUE ce que la feuille a revendiqué : présentée
+            // depuis le viewer de réels (post déjà actif), elle ne doit pas
+            // effacer l'état du réel encore affiché derrière — quel que soit
+            // l'ordre onDismiss/onDisappear que SwiftUI choisit.
+            if claimedActivePost {
+                NotificationToastManager.shared.onPostClosed(post.id)
+            }
         }
         .onReceive(
             SocialSocketManager.shared.commentAdded
@@ -996,9 +1018,16 @@ struct CommentsSheetView: View {
                 }
             }
 
-            Text(post.displayContent)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(theme.textSecondary)
+            MessageTextRenderer.render(
+                post.displayContent,
+                fontSize: 15,
+                color: theme.textSecondary,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                accentColor: Color(hex: accentColor),
+                usesRelativeFont: true
+            )
+                .tint(Color(hex: accentColor))
                 .lineLimit(3)
 
             HStack(spacing: 16) {
@@ -1043,9 +1072,16 @@ struct CommentsSheetView: View {
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
-                Text(reply.displayContent)
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(
+                    reply.displayContent,
+                    fontSize: 12,
+                    color: theme.textSecondary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                    accentColor: Color(hex: reply.authorColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: reply.authorColor))
                     .lineLimit(1)
             }
 
@@ -1887,9 +1923,20 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHidden(true)
                 }
 
-                Text(effectiveCommentContent)
-                    .font(MeeshyFont.relative(contentFont))
-                    .foregroundColor(theme.textPrimary)
+                // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
+                // `#hashtag` soient teintés comme partout ailleurs.
+                // `usesRelativeFont` conserve le scaling Dynamic Type du
+                // `MeeshyFont.relative(contentFont)` d'origine.
+                MessageTextRenderer.render(
+                    effectiveCommentContent,
+                    fontSize: contentFont,
+                    color: theme.textPrimary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                    accentColor: Color(hex: accentColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: accentColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
                     .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
@@ -1909,6 +1956,7 @@ struct CommentRowView: View, Equatable {
                     CommentMediaView(
                         media: media,
                         accentColor: accentColor,
+                        commentId: comment.id,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

@@ -47,6 +47,16 @@ public final class StoryTextLayer: CATextLayer {
     /// forme (hors queue de bulle / bulles de pensée).
     private var pathGlyphFrame: CGRect?
 
+    /// Réserve d'encre (render-space, Panne 2 2026-08) entre le cadre de
+    /// référence (`pathGlyphFrame`/`bounds`, qui l'embarquent déjà — cf.
+    /// `contentWidth` dans `configure`) et la sous-calque de glyphes qui pose
+    /// RÉELLEMENT le texte visible. `0` tant qu'aucun glyphe ne déborde son
+    /// avance typographique (la quasi-totalité des styles) : dans ce cas les
+    /// glyphes restent peints directement par la calque elle-même pour les
+    /// fonds `.none`/`.solid` sans forme path-based (aucune sous-calque
+    /// ajoutée, comportement historique inchangé).
+    private var inkOverhangRenderPad: CGFloat = 0
+
     /// Densité de rasterisation de CE rendu. À l'écran c'est celle de l'appareil ;
     /// à l'export c'est 1.0 — le buffer de sortie est déjà en pixels de design
     /// (1080×1920), rasteriser à 3× y coûte 9× la surface pour rien. Les
@@ -165,9 +175,58 @@ public final class StoryTextLayer: CATextLayer {
         ).size
         let scaleFactor = max(geometry.scaleFactor, 0.0001)
         let inkPad = Self.maxInkOverhangPerSide(of: designAttr, wrappedTo: maxDesignWidth)
+        inkOverhangRenderPad = geometry.render(inkPad)
+        // Largeur de WRAP effective — SANS le pad d'encre. C'est (au pad
+        // historique `hPad`/`oGlyphWidth` près) la largeur à laquelle le
+        // calque qui pose RÉELLEMENT les glyphes wrappe son texte : le parent
+        // lui-même pour la quasi-totalité des styles (`inkPad` ≈ 0), ou la
+        // sous-calque de glyphes que `applyBackgroundStyle` inset de `inkPad`
+        // par rapport à `bounds`/`pathGlyphFrame` dès que `inkPad > 0`
+        // (Panne 2 2026-08). Injecter `inkPad` dans la largeur de WRAP
+        // ÉLARGIRAIT au contraire la boîte que CoreText remplit de VRAIS
+        // glyphes au lieu de la laisser vide en marge — CoreText re-remplit
+        // alors les lignes différemment de la mesure (repro 2026-08 :
+        // jusqu'à 28pt hors-bounds à gauche en Zapfino, `textStyle: "curve"`/
+        // `"calligraphy"` — les deux seuls styles à réserve d'encre assez
+        // large pour changer le nombre de lignes du re-wrap).
+        let wrapWidth = max(designSize.width, renderedNeed.width / scaleFactor)
+        // Largeur de CONTENU finale — celle qui deviendra `glyphRect.width`
+        // dans `frameMetrics` (identique pour TOUTES les formes, cf.
+        // `frameMetrics` ci-dessous) et donc la largeur de la BOÎTE (le cadre
+        // de référence ci-dessus, PAS la largeur de wrap réelle : la boîte ne
+        // fait qu'AJOUTER du padding par-dessus — `inkPad`, `hPad`,
+        // `oGlyphWidth`, bosses de nuage… — jamais en retirer).
+        let contentWidth = wrapWidth + inkPad * 2
+        // CoreText est le moteur qui peint RÉELLEMENT les glyphes du
+        // `CATextLayer` — `boundingRect` (TextKit) ci-dessus SOUS-ESTIME la
+        // hauteur d'une ligne qui se termine par des emojis Apple Color : leur
+        // ascent/descent dépasse celui de la police du texte, et
+        // `.usesFontLeading` ne le compte pas comme CoreText le fait
+        // réellement à la pose (repro prod 2026-08 : texte 4 lignes, la 4ᵉ
+        // ligne agglomère tout le texte restant faute de hauteur, rognée en
+        // silence par le centrage). `CTFramesetterSuggestFrameSizeWithConstraints`
+        // lui-même SOUS-ESTIME encore quand la DERNIÈRE ligne wrappée est
+        // composée UNIQUEMENT d'emoji, posée avec une police de base à fort
+        // descent (SavoyeLetPlain, Zapfino…) : `CATextLayer` réserve AU MOINS
+        // le descent de sa police de base pour CHAQUE ligne, y compris
+        // celle-ci — `coreTextRequiredHeight` reconstruit donc un vrai
+        // `CTFrame` et somme `ascent + max(descent, descent police de base) +
+        // leading` par ligne (repro 2026-08 : 234.00pt calculés par l'ancienne
+        // formule, 242.18pt réellement posés par CATextLayer, bounds à
+        // 240.08pt → rognage des 2 dernières lignes agglomérées). On mesure à
+        // `wrapWidth` — la largeur de wrap RÉELLE (Panne 2 ci-dessus), jamais
+        // `contentWidth` qui inclut l'encre — en design-espace ET à l'échelle
+        // rendue (même robustesse optique que `designSize`/`renderedNeed`
+        // ci-dessus), et le MAX final couvre les quatre mesures.
+        let coreTextDesignHeight = Self.coreTextRequiredHeight(
+            of: designAttr, wrappedTo: wrapWidth, baseFont: designFont as CTFont)
+        let coreTextRenderedHeight = Self.coreTextRequiredHeight(
+            of: renderedProbe, wrappedTo: wrapWidth * scaleFactor, baseFont: renderedProbeFont as CTFont
+        ) / scaleFactor
         let effectiveDesignSize = CGSize(
-            width: max(designSize.width, renderedNeed.width / scaleFactor) + inkPad * 2,
-            height: max(designSize.height, renderedNeed.height / scaleFactor)
+            width: contentWidth,
+            height: max(designSize.height, renderedNeed.height / scaleFactor,
+                        coreTextDesignHeight, coreTextRenderedHeight)
         )
         let metrics = Self.frameMetrics(shape: frameShape,
                                         isFramed: isFramed,
@@ -279,6 +338,20 @@ public final class StoryTextLayer: CATextLayer {
         backgroundColor = nil
         cornerRadius = 0
 
+        // Frame (render-space) où les VRAIS glyphes doivent être peints —
+        // insetée de la réserve d'encre (`inkOverhangRenderPad`, Panne 2
+        // 2026-08) par rapport au cadre de référence (`pathGlyphFrame` pour
+        // les formes path-based, `bounds` sinon), qui l'embarque déjà
+        // (`contentWidth` dans `configure`). Sans cet inset, `CATextLayer`
+        // (`isWrapped = true` — le calque wrappe son `string` à SA largeur)
+        // remplirait la réserve de VRAIS glyphes au lieu de la laisser vide
+        // en marge, consommant la réserve avec un wrap différent de la
+        // mesure. Inset nul (`inkOverhangRenderPad == 0`, la quasi-totalité
+        // des styles) ⇒ no-op, cadre de référence inchangé.
+        func glyphPaintFrame(_ reference: CGRect) -> CGRect {
+            reference.insetBy(dx: inkOverhangRenderPad, dy: 0)
+        }
+
         switch style {
         case .none:
             // Boîte en LISERÉ SEUL : il n'y a rien à remplir, mais il y a bien
@@ -294,7 +367,15 @@ public final class StoryTextLayer: CATextLayer {
                 shape.contentsScale = renderScale
                 addSublayer(shape)
                 backgroundFillLayer = shape
-                installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
+                installGlyphSublayer(frame: glyphPaintFrame(pathGlyphFrame ?? bounds))
+                return
+            }
+            // Texte nu, sans boîte : les glyphes peignent directement `self`
+            // (chemin historique, inchangé) SAUF si une réserve d'encre
+            // existe — auquel cas elle doit rester vide de VRAIS glyphes
+            // (Panne 2), d'où la même sous-calque insetée que les autres fonds.
+            if inkOverhangRenderPad > 0 {
+                installGlyphSublayer(frame: glyphPaintFrame(bounds))
             }
             return
 
@@ -315,7 +396,7 @@ public final class StoryTextLayer: CATextLayer {
                 shape.contentsScale = renderScale
                 addSublayer(shape)
                 backgroundFillLayer = shape
-                installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
+                installGlyphSublayer(frame: glyphPaintFrame(pathGlyphFrame ?? bounds))
                 return
             }
             // Fond solide posé sur le `backgroundColor` de la calque ELLE-MÊME
@@ -328,6 +409,12 @@ public final class StoryTextLayer: CATextLayer {
             // que si `masksToBounds == true`).
             backgroundColor = fillColor.cgColor
             cornerRadius = frameCornerRadius(height: bounds.height)
+            // Même réserve d'encre que le cas `.none` nu ci-dessus : le fond
+            // vit sur `backgroundColor` (inchangé), seuls les glyphes migrent
+            // en sous-calque insetée quand `inkOverhangRenderPad > 0`.
+            if inkOverhangRenderPad > 0 {
+                installGlyphSublayer(frame: glyphPaintFrame(bounds))
+            }
 
         case .glass(let radius):
             let backdrop = StoryGlassBackdropLayer()
@@ -359,7 +446,7 @@ public final class StoryTextLayer: CATextLayer {
             // au-dessus, `zPosition` 0 > -1), et les glyphes propres du parent
             // sont rendus transparents — sinon ils peindraient une 2e fois SOUS
             // le verre, ré-introduisant le « blanc sur black » hors édition.
-            installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
+            installGlyphSublayer(frame: glyphPaintFrame(pathGlyphFrame ?? bounds))
         }
     }
 
@@ -493,6 +580,61 @@ public final class StoryTextLayer: CATextLayer {
             overhang = max(overhang, ink.maxX - typographic, -ink.minX)
         }
         return max(0, ceil(overhang))
+    }
+
+    /// Hauteur EXIGÉE par CoreText — le moteur qui peint réellement le
+    /// contenu d'un `CATextLayer` — pour poser TOUT `attributed` wrappé à
+    /// `maxWidth` sans qu'aucune ligne ne soit agglomérée. `boundingRect`
+    /// (TextKit, utilisé pour `designSize`/`renderedNeed` dans `configure`)
+    /// sous-estime cette hauteur quand une ligne contient des glyphes à
+    /// ascent/descent supérieur à la police du texte — Apple Color Emoji en
+    /// fin de ligne, typiquement — car `.usesFontLeading` ne le compte pas
+    /// comme CoreText le fait à la pose réelle.
+    ///
+    /// `CTFramesetterSuggestFrameSizeWithConstraints` (l'ancienne
+    /// implémentation) SOUS-ESTIME lui-même encore ce calcul dans un cas
+    /// précis : une ligne composée UNIQUEMENT d'emoji (descent Apple Color
+    /// Emoji ≈ 0,3125 em), posée avec une police de base dont le descent est
+    /// PLUS GRAND (ex. SavoyeLetPlain ≈ 0,5 em). `CATextLayer` réserve alors
+    /// AU MOINS le descent de sa police de base MÊME pour cette ligne — ce
+    /// que `CTLineGetTypographicBounds` (et donc `SuggestFrameSize`, qui s'y
+    /// ramène) ignore puisqu'il ne rapporte que le max des runs RÉELLEMENT
+    /// PRÉSENTS sur la ligne (ici, uniquement le run emoji substitué). Sur
+    /// une ligne MIXTE texte+emoji ce n'est pas un problème : `CTLine` a déjà
+    /// pris le max des runs, qui inclut le run texte à fort descent.
+    ///
+    /// On reconstruit donc un vrai `CTFrame` (`CTFramesetterCreateFrame`) à
+    /// `maxWidth`, on récupère ses `CTLine`s, et pour CHAQUE ligne on calcule
+    /// `ascent + max(descent de la ligne, descent de `baseFont`) + leading`,
+    /// puis on somme sur toutes les lignes — exactement le calcul de hauteur
+    /// réel de `CATextLayer` (vérifié à ±0,01pt sur 4 configurations par
+    /// réplication du rendu réel, repro 2026-08). `baseFont` doit être la
+    /// police du texte PRINCIPAL (`designFont`/`renderedFont` selon l'espace
+    /// de mesure appelant) — PAS forcément celle du run de la ligne courante,
+    /// qui peut avoir été substituée (cas emoji).
+    ///
+    /// `nonisolated static` pour être testable sans instancier de calque
+    /// (même pattern que `maxInkOverhangPerSide`).
+    nonisolated static func coreTextRequiredHeight(of attributed: NSAttributedString,
+                                                   wrappedTo maxWidth: CGFloat,
+                                                   baseFont: CTFont) -> CGFloat {
+        guard attributed.length > 0, maxWidth > 0 else { return 0 }
+        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        let path = CGPath(rect: CGRect(x: 0, y: 0, width: maxWidth, height: 1_000_000),
+                          transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter,
+                                             CFRange(location: 0, length: 0), path, nil)
+        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return 0 }
+        let baseDescent = CTFontGetDescent(baseFont)
+        var total: CGFloat = 0
+        for line in lines {
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            var leading: CGFloat = 0
+            _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+            total += ascent + max(descent, baseDescent) + leading
+        }
+        return ceil(total)
     }
 
     nonisolated static func frameMetrics(shape: StoryTextFrameShape,

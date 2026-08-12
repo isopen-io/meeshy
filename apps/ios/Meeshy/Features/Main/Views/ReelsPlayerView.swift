@@ -75,6 +75,10 @@ struct ReelsPlayerView: View {
     /// Opens the author's active story (wired in RootView to the same
     /// `StoryViewerCoordinator` the feed uses). `nil` = no-op.
     var onOpenStory: ((_ userId: String) -> Void)? = nil
+    /// Menu « … » → « Ouvrir » : pousse la page détail du poste (wired in
+    /// RootView to `router.push(.postDetail(_:))`, fermant d'abord le lecteur
+    /// immersif). `nil` = item masqué.
+    var onOpenDetail: ((_ postId: String) -> Void)? = nil
     /// Reports whether the given author currently has an active story, so the
     /// avatar tap can route to the story (else it falls back to the profile).
     /// Backed by `StoryViewModel.hasUnviewedStories` / `storyRingState` in
@@ -83,6 +87,9 @@ struct ReelsPlayerView: View {
 
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
+    /// Réel en édition via le menu « … » du rail d'actions — parité avec le
+    /// menu de `FeedPostCard`/`ReelFeedCard` (même `EditPostSheet`).
+    @State private var editingReel: FeedPost?
     /// Comment target carried into the comments sheet when it auto-opens from a
     /// notification. Cleared when the user opens comments manually so a later tap
     /// never re-scrolls to the old target.
@@ -116,6 +123,15 @@ struct ReelsPlayerView: View {
         .offset(x: max(0, edgeDrag))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
+            // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
+            // commentaires, réactions) ne doivent plus apparaître non lues, et
+            // `activePostId` fait naître consommées celles qui arrivent pendant
+            // le visionnage. Le viewer de réels était la seule surface sans ce
+            // marquage — `POST /posts/:id/view` étant borné à la première vue,
+            // une notification arrivée après restait non lue pour toujours.
+            if let id = viewModel.currentId ?? startId {
+                NotificationToastManager.shared.onPostOpened(id)
+            }
             // Reel comment notification: auto-open the comments sheet on the seed
             // reel and scroll to the targeted comment. Brief delay so the reel is
             // on screen first (the reveal disc settles), then present.
@@ -141,6 +157,10 @@ struct ReelsPlayerView: View {
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
             if newId != nil { HapticFeedback.light() }
+            // Consommation des notifications du réel affiché (voir .task) —
+            // fermeture conditionnelle à l'identité puis ouverture du suivant.
+            if let old { NotificationToastManager.shared.onPostClosed(old) }
+            if let newId { NotificationToastManager.shared.onPostOpened(newId) }
             // Order matters: finalize the PREVIOUS reel's session (real watch-time +
             // heartbeat samples + completed) and `end` it BEFORE `begin` of the next —
             // both in the SAME Task so `begin` never races ahead of the deferred `end`
@@ -155,7 +175,16 @@ struct ReelsPlayerView: View {
                 viewModel.recordView(newId)
             }
         }
-        .sheet(item: $commentsReel) { reel in
+        .sheet(item: $commentsReel, onDismiss: {
+            // La feuille de commentaires relâche `activePostId` à sa fermeture
+            // (elle porte le même id que le réel affiché) : re-déclarer le réel
+            // encore à l'écran pour que les notifications qui arrivent pendant
+            // le visionnage continuent de naître consommées. Le POST serveur
+            // reste coalescé par la fenêtre du manager — pas de re-requête.
+            if let id = viewModel.currentId {
+                NotificationToastManager.shared.onPostOpened(id)
+            }
+        }) { reel in
             CommentsSheetView(
                 post: reel,
                 accentColor: reel.authorColor,
@@ -168,6 +197,20 @@ struct ReelsPlayerView: View {
             // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $editingReel) { reel in
+            EditPostSheet(
+                originalContent: reel.content,
+                originalLanguage: reel.originalLanguage,
+                originalType: reel.type,
+                media: reel.media.map { EditablePostMedia($0) },
+                originalLocation: reel.location,
+                isRepost: reel.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                },
+                onDismiss: { editingReel = nil }
+            )
         }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
@@ -189,6 +232,7 @@ struct ReelsPlayerView: View {
             // d'engagement (watch-time + vue qualifiée) du réel courant.
             viewModel.leaveActivePostRoom()
             finalizeReelSession(for: viewModel.currentId)
+            NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
         }
         .statusBarHidden(true)
@@ -266,6 +310,8 @@ struct ReelsPlayerView: View {
                     commentsReel = reel
                 },
                 onShare: { shareReel(reel) },
+                onEdit: { editingReel = reel },
+                onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
             )
@@ -456,6 +502,12 @@ struct ReelPageView: View {
     @Binding var chromeHidden: Bool
     var onComment: () -> Void
     var onShare: () -> Void
+    /// Menu « … » → ouvre `EditPostSheet` sur ce réel (état possédé par
+    /// `ReelsPlayerView`, le seul habilité à présenter la sheet).
+    var onEdit: () -> Void
+    /// Menu « … » → « Ouvrir » : pousse la page détail du poste. `nil` =
+    /// item masqué (parité avec les autres callbacks optionnels du rail).
+    var onOpenDetail: (() -> Void)? = nil
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -478,6 +530,8 @@ struct ReelPageView: View {
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
     /// page; only the active audio reel ever plays.
     @StateObject private var audioPlayer = AudioPlaybackManager()
+    /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     private var accentColor: String { reel.authorColor }
 
@@ -649,6 +703,7 @@ struct ReelPageView: View {
                 senderName: reel.author
             )
         }
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -810,6 +865,25 @@ struct ReelPageView: View {
         .accessibilityValue("\(count)")
     }
 
+    /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
+    /// et `#hashtag`. Fond TOUJOURS sombre (vidéo plein écran) : on épingle les
+    /// variantes `isDark: true` plutôt que de suivre le thème de l'app — les
+    /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
+    /// Les URLs restent blanches + soulignées (convention plein écran).
+    private var reelDescriptionText: some View {
+        MessageTextRenderer.render(
+            displayedDescription,
+            fontSize: 15,
+            color: .white,
+            mentionColor: MeeshyColors.mentionColor(isDark: true),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
+            accentColor: .white,
+            usesRelativeFont: true
+        )
+        .tint(.white)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var infoOverlay: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -847,10 +921,7 @@ struct ReelPageView: View {
             if audioMedia == nil, !displayedDescription.isEmpty {
                 if descriptionExpanded {
                     ScrollView(.vertical, showsIndicators: true) {
-                        Text(displayedDescription)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .fixedSize(horizontal: false, vertical: true)
+                        reelDescriptionText
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxHeight: 240)
@@ -858,11 +929,8 @@ struct ReelPageView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                     }
                 } else {
-                    Text(displayedDescription)
-                        .font(.subheadline)
-                        .foregroundColor(.white)
+                    reelDescriptionText
                         .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture {
                             withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                         }
@@ -908,8 +976,31 @@ struct ReelPageView: View {
             viewModel: viewModel,
             reel: reel,
             onComment: onComment,
-            onShare: onShare
+            onShare: onShare,
+            onEdit: onEdit,
+            onOpenDetail: onOpenDetail,
+            onSaveMedia: requestSaveMedia
         )
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
+    /// (image/vidéo) — distinct du bouton favori dédié (bookmark) qui, lui,
+    /// enregistre le poste dans l'app. No-op si le réel n'a pas de média.
+    private func requestSaveMedia() {
+        guard let media = reel.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 }
 
@@ -921,6 +1012,17 @@ private struct ReelActionRail: View {
     let reel: FeedPost
     var onComment: () -> Void
     var onShare: () -> Void
+    var onEdit: () -> Void
+    var onOpenDetail: (() -> Void)?
+    /// Menu « … » → déclenche le flux « Enregistrer en local » sur le média
+    /// du réel (coordinateur possédé par `ReelPageView`, seul habilité à
+    /// présenter la sheet de destination).
+    var onSaveMedia: () -> Void
+
+    private var isOwnReel: Bool {
+        guard let me = AuthManager.shared.currentUser?.id else { return false }
+        return me == reel.authorId
+    }
 
     var body: some View {
         VStack(spacing: 22) {
@@ -959,14 +1061,96 @@ private struct ReelActionRail: View {
             )
             .accessibilityLabel(String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main))
 
+            // Icône principale : Republier (Partager reste disponible dans le
+            // menu « … », parité avec `ReelFeedCard.actionsRow`). Repost
+            // append-only (pas d'un-repost) — `participated` reste vrai une
+            // fois posé, comme le feed.
+            let isReposted = viewModel.isReposted(reel.id)
             ReelActionButton(
-                systemName: "arrowshape.turn.up.right.fill",
-                tint: .white,
-                count: nil,
-                action: onShare
+                systemName: "arrow.2.squarepath",
+                outline: "arrow.2.squarepath",
+                tint: isReposted ? MeeshyColors.success : .white,
+                count: viewModel.repostCount(reel),
+                participated: isReposted,
+                accentHex: reel.authorColor,
+                action: { viewModel.repost(reel) }
             )
-            .accessibilityLabel(String(localized: "reels.action.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
+
+            moreOptionsMenu
         }
+    }
+
+    /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard`/`ReelFeedCard`
+    /// (copier/partager/enregistrer/épingler/modifier/supprimer/signaler), parité
+    /// du lecteur plein écran avec les cartes du feed.
+    private var moreOptionsMenu: some View {
+        Menu {
+            if let onOpenDetail {
+                Button {
+                    onOpenDetail()
+                } label: {
+                    Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+                }
+            }
+            Button {
+                UIPasteboard.general.string = reel.content
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+            }
+            Button {
+                onShare()
+            } label: {
+                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            if reel.primaryReelDisplayMedia != nil {
+                Button {
+                    onSaveMedia()
+                } label: {
+                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
+                }
+            }
+            if isOwnReel {
+                Button {
+                    Task { await viewModel.pinPost(reel.id) }
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                }
+                Button {
+                    onEdit()
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    Task { await viewModel.deletePost(reel.id) }
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                }
+            } else {
+                Divider()
+                Button(role: .destructive) {
+                    Task { await viewModel.reportPost(reel.id) }
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                }
+            }
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 48, height: 32)
+            }
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        }
+        .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+        .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
     }
 }
 
@@ -1232,7 +1416,7 @@ private struct ReelVideoView: View {
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
                 // touches.
                 if isActive, ready, isShowingThis, let player {
-                    ReelVideoSurface(player: player, videoGravity: .resizeAspect)
+                    ReelVideoSurface(player: player, videoGravity: .resizeAspect, enablesPip: true)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else if isActive, !ready {
@@ -1337,6 +1521,13 @@ struct ReelVideoSurface: UIViewRepresentable {
     /// WHOLE video is visible, letterboxed over the blurred ambient backdrop
     /// (mirrors the `.fit` image carousel — never a cropped reel).
     var videoGravity: AVLayerVideoGravity = .resizeAspectFill
+    /// Le viewer plein écran opte pour le Picture-in-Picture : quitter l'app
+    /// pendant la lecture bascule le réel en fenêtre PiP (auto-start système)
+    /// au lieu de laisser sa bande-son jouer invisible en arrière-plan ;
+    /// fermer la fenêtre arrête la vidéo. La surface muette du feed
+    /// (`ReelFeedVideoSurface`) reste hors PiP — un autoplay silencieux ne
+    /// doit jamais ouvrir de fenêtre.
+    var enablesPip: Bool = false
 
     func makeUIView(context: Context) -> ReelPlayerLayerView {
         let view = ReelPlayerLayerView()
@@ -1345,6 +1536,9 @@ struct ReelVideoSurface: UIViewRepresentable {
         view.backgroundColor = .clear
         view.playerLayer.player = player
         view.playerLayer.videoGravity = videoGravity
+        if enablesPip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+        }
         return view
     }
 
@@ -1354,6 +1548,12 @@ struct ReelVideoSurface: UIViewRepresentable {
         }
         if view.playerLayer.videoGravity != videoGravity {
             view.playerLayer.videoGravity = videoGravity
+        }
+        if enablesPip {
+            // Idempotent (garde d'identité de layer dans `configurePip`) —
+            // ré-attache après le remount que provoque la chute du masque de
+            // reveal (`ReelsRevealMaskModifier` change de branche d'identité).
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
     }
 

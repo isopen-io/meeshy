@@ -304,6 +304,17 @@ export interface CommentAddedEventData {
 export interface CommentDeletedEventData {
   readonly postId: string;
   readonly commentId: string;
+  /**
+   * Le fil ENTIER retiré — la cible et tous ses descendants — car supprimer un
+   * commentaire soft-delete tout son sous-arbre de réponses côté serveur.
+   * Toujours non vide et toujours préfixé par `commentId` quand il est présent.
+   *
+   * Optionnel pour rester additif : les clients qui ne le lisent pas encore
+   * gardent le comportement d'avant (retirer la seule cible). Un client qui le
+   * lit DOIT se replier sur `[commentId]` quand il est absent — le rejeu
+   * idempotent d'une suppression ne peut plus reconstruire le sous-arbre.
+   */
+  readonly deletedCommentIds?: readonly string[];
   readonly commentCount: number;
 }
 

@@ -99,9 +99,13 @@ fun SettingsScreen(
     onOpenStarred: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
+    onOpenTwoFactor: () -> Unit = {},
+    onOpenAccountContact: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
     onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onOpenActiveSessions: () -> Unit = {},
+    onOpenBlockedUsers: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
@@ -292,12 +296,38 @@ fun SettingsScreen(
                     detail = null,
                     onClick = onOpenChangePassword,
                 )
+                // 2FA restaure (2026-08-11) : le gateway a bien des routes reelles et
+                // testees (services/gateway/src/routes/two-factor.ts, TwoFactorService)
+                // depuis un commit anterieur au retrait — l'hypothese "aucune route
+                // gateway" etait incorrecte. iOS livre deja ce flux (TwoFactorViewModel/
+                // TwoFactorSetupView) ; TwoFactorScreen en est le port Android.
+                SettingsRow(
+                    label = stringResource(R.string.settings_two_factor),
+                    detail = null,
+                    onClick = onOpenTwoFactor,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
+                // Change email / phone (§K) — the gateway's change-email/change-phone routes
+                // (services/gateway/src/routes/users/contact-change.ts) had no UI consumer
+                // anywhere in apps/android until this row; iOS ships the reference flow inline
+                // in SecurityView.
+                SettingsRow(
+                    label = stringResource(R.string.settings_account_contact),
+                    detail = null,
+                    onClick = onOpenAccountContact,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_active_sessions),
+                    detail = null,
+                    onClick = onOpenActiveSessions,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
+                SettingsRow(
+                    label = stringResource(R.string.settings_blocked_users),
+                    detail = null,
+                    onClick = onOpenBlockedUsers,
+                )
             }
 
             SettingsSection(

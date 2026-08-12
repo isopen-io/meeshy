@@ -297,7 +297,8 @@ struct ComposerToolPanelHost: View {
                                 isBackground: viewModel.isBackground(id: audio.id),
                                 onToggleBackground: { viewModel.toggleBackground(id: audio.id) },
                                 onVolumeChanged: { viewModel.setAudioVolume(audioId: audio.id, volume: $0) },
-                                onDelete: { viewModel.deleteElement(id: audio.id) }
+                                onDelete: { viewModel.deleteElement(id: audio.id) },
+                                onToggleMute: { viewModel.toggleAudioMute(id: audio.id) }
                             )
                         }
                     }
@@ -451,6 +452,22 @@ struct ComposerToolPanelHost: View {
 
             // Action buttons — compact icon row
             HStack(spacing: 6) {
+                // Mute un-bouton (vidéos uniquement — une image n'a rien à
+                // couper). Persisté via `volume` (0 = muet) : l'aperçu, le
+                // reader et l'export honorent tous ce réglage.
+                if media.kind == .video {
+                    let muted = media.isMuted
+                    mediaActionBtn(
+                        icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                        color: muted ? .red.opacity(0.85) : actionTint,
+                        tip: muted
+                            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+                            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module)
+                    ) {
+                        viewModel.toggleMediaMute(id: media.id)
+                    }
+                }
+
                 // Toggle front/back
                 mediaActionBtn(
                     icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",

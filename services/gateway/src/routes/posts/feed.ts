@@ -112,7 +112,17 @@ export function registerFeedRoutes(
         // SEUL canal qui lui permet de purger son cache quand il a manqué
         // l'event socket `story:deleted` — app fermée ou hors-ligne. Toujours
         // présent (tableau vide sur un fetch complet, qui écrase déjà tout).
-        meta: { mentionedUsers: storyMentionedUsers, deletedStoryIds: result.deletedIds },
+        //
+        // `deletedStoryIdsTruncated` — la liste ci-dessus est plafonnée et n'a
+        // aucun curseur de reprise. Quand elle déborde, le client ne peut pas
+        // paginer les disparitions manquantes : son seul recours est un fetch
+        // complet, dont le remplacement du tray purge les fantômes. Sans ce
+        // drapeau le plafond se lit comme une couverture complète.
+        meta: {
+          mentionedUsers: storyMentionedUsers,
+          deletedStoryIds: result.deletedIds,
+          deletedStoryIdsTruncated: result.deletedIdsTruncated,
+        },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);

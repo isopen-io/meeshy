@@ -259,17 +259,17 @@ public struct AudioPreferences: Codable, Equatable, Sendable {
 
     public static let defaults = AudioPreferences(
         transcriptionEnabled: true, transcriptionSource: .auto, autoTranscribeIncoming: false,
-        audioTranslationEnabled: false, translatedAudioFormat: .mp3,
-        ttsEnabled: false, ttsVoice: nil, ttsSpeed: 1.0, ttsPitch: 1.0,
+        audioTranslationEnabled: true, translatedAudioFormat: .mp3,
+        ttsEnabled: true, ttsVoice: nil, ttsSpeed: 1.0, ttsPitch: 1.0,
         audioQuality: .high, noiseSuppression: true, echoCancellation: true,
         voiceProfileEnabled: false, voiceCloneQuality: .balanced, extras: [:]
     )
 
     public init(
         transcriptionEnabled: Bool = true, transcriptionSource: TranscriptionSource = .auto,
-        autoTranscribeIncoming: Bool = false, audioTranslationEnabled: Bool = false,
+        autoTranscribeIncoming: Bool = false, audioTranslationEnabled: Bool = true,
         translatedAudioFormat: TranslatedAudioFormat = .mp3,
-        ttsEnabled: Bool = false, ttsVoice: String? = nil, ttsSpeed: Double = 1.0, ttsPitch: Double = 1.0,
+        ttsEnabled: Bool = true, ttsVoice: String? = nil, ttsSpeed: Double = 1.0, ttsPitch: Double = 1.0,
         audioQuality: AudioQuality = .high, noiseSuppression: Bool = true, echoCancellation: Bool = true,
         voiceProfileEnabled: Bool = false, voiceCloneQuality: VoiceCloneQuality = .balanced,
         extras: [String: CodableValue] = [:]

@@ -125,6 +125,39 @@ describe('normalizeLanguageCode', () => {
     expect(normalizeLanguageCode('fr2')).toBeUndefined();
     expect(normalizeLanguageCode('fr!')).toBeUndefined();
   });
+
+  it('reduces deprecated ISO 639-1 aliases to their canonical code', () => {
+    // `iw`/`in`/`ji` are the DEPRECATED ISO 639-1 codes for Hebrew/Indonesian/
+    // Yiddish. The JVM `java.util.Locale.getLanguage()` still normalizes
+    // `he→iw`, `id→in`, `yi→ji` for backward compat, so an Android client (a
+    // Meeshy mirror platform) reporting a Hebrew device locale emits `iw`.
+    // Left verbatim, `iw` matches ZERO `MessageTranslation` rows (keyed `he`)
+    // and the reader silently falls back to the untranslated original —
+    // a direct Prisme Linguistique violation. Same collision class the 3-letter
+    // reduction map already eliminates for `fil`/`swe`.
+    expect(normalizeLanguageCode('iw')).toBe('he');
+    expect(normalizeLanguageCode('in')).toBe('id');
+  });
+
+  it('strips region tag from a deprecated 639-1 alias before reducing', () => {
+    // Android `iw_IL` / `in_ID` device locales.
+    expect(normalizeLanguageCode('iw-IL')).toBe('he');
+    expect(normalizeLanguageCode('IN_ID')).toBe('id');
+  });
+
+  it('rejects a deprecated alias whose canonical target is unsupported', () => {
+    // `ji` → `yi` (Yiddish), but `yi` is not a supported Meeshy target. The
+    // reduced code is re-validated against SUPPORTED_CODES exactly like the
+    // 3-letter path, so it resolves to undefined rather than a verbatim `ji`
+    // (or a `yi` that matches no translation) — the caller applies its fallback.
+    expect(normalizeLanguageCode('ji')).toBeUndefined();
+  });
+
+  it('still returns an unknown non-deprecated 2-letter code verbatim', () => {
+    // Only the three deprecated aliases are remapped; other unknown 2-letter
+    // codes keep their historical verbatim behavior (caller applies fallback).
+    expect(normalizeLanguageCode('zz')).toBe('zz');
+  });
 });
 
 describe('normalizeLanguageForDedup', () => {

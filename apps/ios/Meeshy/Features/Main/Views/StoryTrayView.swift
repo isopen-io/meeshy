@@ -27,7 +27,7 @@ extension View {
         fullScreenCover(item: session) { current in
             StoryComposerView(
                 viewModel: current.composer,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
                     let edit = StoryViewModel.StoryEditContext(
                         postId: current.composer.editingPostId ?? current.story.id,
                         originalMediaIds: current.composer.editingOriginalMediaIds,
@@ -43,7 +43,8 @@ extension View {
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
+                        visibilityUserIds: visibilityUserIds,
+                        draftId: draftId
                     )
                     // Hors-ligne : le composer reste ouvert, rien n'est perdu —
                     // et le `false` remonté relâche son loquet de publication.
@@ -97,7 +98,6 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
-
     var body: some View {
         VStack(spacing: 0) {
             // Cache-first: only show the skeleton row when the carousel
@@ -136,6 +136,11 @@ struct StoryTrayView: View {
                     editingStorySession = StoryEditSession(
                         story: story,
                         composer: StoryComposerViewModel(editing: story))
+                case .resumeDraft(let draftId):
+                    // La reprise passe par le cover racine, via l'UNIQUE
+                    // écrivain (`openComposer(resumingDraftId:)`) : l'id est
+                    // posé AVANT la présentation, garanti par construction.
+                    viewModel.openComposer(resumingDraftId: draftId)
                 }
             }
         )
@@ -206,10 +211,25 @@ struct StoryTrayView: View {
                 ))
             },
             onAddStatus: onAddStatus,
-            onManageStories: { showMyStories = true }
+            onManageStories: { showMyStories = true },
+            onShowProfile: { selectedProfileUser = myProfileUser() }
         )
         // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
         .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
+    }
+
+    /// Résolution du profil « Moi » : le groupe de stories (avatar/couleur à
+    /// jour, comme pour les autres utilisateurs via `StoryRingCell`) l'emporte
+    /// quand il existe ; sinon repli sur `MeeshyUser` — « Voir le profil »
+    /// doit fonctionner même sans aucune story active (directive user
+    /// 2026-08-11).
+    private func myProfileUser() -> ProfileSheetUser? {
+        let currentUser = AuthManager.shared.currentUser
+        let userId = currentUser?.id ?? ""
+        let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        if let myGroup { return .from(storyGroup: myGroup) }
+        guard let currentUser else { return nil }
+        return .from(user: currentUser)
     }
 
     // MARK: - Story Ring
@@ -369,6 +389,7 @@ private struct MyStoryButton: View {
     let onViewMyStory: () -> Void
     var onAddStatus: (() -> Void)?
     var onManageStories: (() -> Void)?
+    var onShowProfile: (() -> Void)?
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
@@ -383,6 +404,10 @@ private struct MyStoryButton: View {
         // aussitôt (`skipUnplayableStoriesIfNeeded`). Cohérent avec le filtre du tray.
         let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
+        // Parité 2026-08-10 : au moins une story, active ou entièrement
+        // expirée — route le tap et le menu contextuel vers la gestion
+        // plutôt que de forcer la création quand tout est expiré.
+        let hasAnyStory = viewModel.hasStories(forUserId: userId)
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
@@ -400,9 +425,11 @@ private struct MyStoryButton: View {
                     onTap: {
                         // Une seule règle, testable, pour le routage ET pour
                         // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
-                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory) {
-                        case .viewMyStory:  onViewMyStory()
-                        case .createStory:  viewModel.showStoryComposer = true
+                        // Supersession 2026-08-02 : le tap ouvre la LISTE —
+                        // les onglets Publiées / Brouillons vivent là.
+                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory, hasAnyStory: hasAnyStory) {
+                        case .manageStories: onManageStories?()
+                        case .createStory:   viewModel.showStoryComposer = true
                         }
                         HapticFeedback.medium()
                     },
@@ -411,11 +438,25 @@ private struct MyStoryButton: View {
                         HapticFeedback.medium()
                     },
                     contextMenuItems: {
-                        // « Voir ma story » a disparu du menu : le TAP y mène
-                        // désormais directement. La gestion, elle, n'a pas
-                        // d'autre porte — elle reste ici.
+                        // Supersession 2026-08-02 : le TAP ouvre la liste de
+                        // gestion (onglets Publiées / Brouillons) — la lecture
+                        // DIRECTE, elle, retrouve sa porte ici.
                         var items: [AvatarContextMenuItem] = []
                         if hasMyStory {
+                            items.append(AvatarContextMenuItem(label: StoryTrayCopy.viewMyStory, icon: "play.circle.fill") {
+                                onViewMyStory()
+                                HapticFeedback.medium()
+                            })
+                        }
+                        // Découplé de `hasMyStory` : un envoi en cours, une
+                        // publication échouée, ou un historique entièrement
+                        // expiré (`hasAnyStory`) n'a produit AUCUNE story
+                        // ACTIVE, et c'est précisément ce travail-là qu'on
+                        // vient gérer.
+                        if !hasMyStory,
+                           hasAnyStory
+                            || !viewModel.activeUploads.isEmpty
+                            || !StoryPublishService.shared.failedItems.isEmpty {
                             items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
@@ -427,6 +468,14 @@ private struct MyStoryButton: View {
                         })
                         items.append(AvatarContextMenuItem(label: StoryTrayCopy.changeMood, icon: "face.smiling.inverse") {
                             onAddStatus?()
+                            HapticFeedback.medium()
+                        })
+                        // Parité avec `StoryRingCell` (les AUTRES utilisateurs) :
+                        // accès à sa PROPRE feuille de profil (posts, bio…)
+                        // depuis le même avatar, sans passer par les
+                        // paramètres. Directive user 2026-08-11.
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") {
+                            onShowProfile?()
                             HapticFeedback.medium()
                         })
                         return items
@@ -442,7 +491,7 @@ private struct MyStoryButton: View {
                 // badge « + » aurait cessé d'être un bouton nommé, alors que
                 // c'est justement l'affordance « composer TOUJOURS ».
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory))
+                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory, hasAnyStory: hasAnyStory))
                 // Fusionné, l'élément héritait du type de ses enfants (une
                 // image) : VoiceOver annonçait une destination sans dire que
                 // c'était actionnable.
@@ -471,9 +520,7 @@ private struct MyStoryButton: View {
                     if let surfaced = StoryUploadPresentation.surfaced(in: viewModel.activeUploads) {
                         StoryUploadOverlay(
                             upload: surfaced.upload,
-                            stackedCount: surfaced.stackedCount,
-                            onRetry: { viewModel.retryUpload(id: surfaced.upload.id) },
-                            onCancel: { viewModel.cancelUpload(id: surfaced.upload.id) }
+                            stackedCount: surfaced.stackedCount
                         )
                     }
                 }
@@ -549,8 +596,6 @@ private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
     /// Publications empilées derrière celle-ci (C5). > 0 → pastille « +N ».
     let stackedCount: Int
-    let onRetry: () -> Void
-    let onCancel: () -> Void
 
     private var isFailed: Bool { upload.phase.isFailed }
 
@@ -627,25 +672,18 @@ private struct StoryUploadOverlay: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11yLabel)
-        .onTapGesture {
-            if isFailed { onRetry() }
-        }
-        .contextMenu {
-            if isFailed {
-                Button { onRetry() } label: {
-                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
-                }
-                Button(role: .destructive) { onCancel() } label: {
-                    Label(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), systemImage: "trash")
-                }
-            }
-        }
-        // While `.uploading`/`.publishing`, this overlay must NOT swallow the
-        // tap/long-press meant for the `MeeshyAvatar` underneath (which opens
-        // "Gérer mes stories" via `onManageStories`) — only `.failed` has a
-        // real gesture to offer here (retry). `allowsHitTesting(false)` makes
-        // the whole overlay click-through so both gestures fall to the avatar.
-        .allowsHitTesting(isFailed)
+        // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
+        // l'avatar dessous (directive user 2026-08-01, postérieure au modèle
+        // tap-retry du 2026-07-31 qu'elle remplace).
+        //
+        // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
+        // et un menu contextuel. En échec — exactement quand l'utilisateur a
+        // besoin d'atteindre son travail — le `/!` avalait donc le tap et
+        // rendait la liste inaccessible. Réessayer et supprimer vivent dans
+        // `MyStoriesView`, sur une ligne qui montre en plus le motif de
+        // l'échec : une pastille de 50 pt n'était pas une surface d'action
+        // défendable.
+        .allowsHitTesting(false)
     }
 }
 
@@ -706,13 +744,21 @@ struct PinnedStoryTrailBand: View {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
-    /// Le groupe de l'utilisateur courant (sa propre story), non expiré.
-    /// Surfacé en tête du band replié pour un accès rapide « voir / revoir ma
-    /// story » depuis le header une fois la grande trail scrollée hors écran.
+    /// Le groupe de l'utilisateur courant (sa propre story). Surfacé en tête
+    /// du band replié pour un accès rapide « voir / gérer mes stories »
+    /// depuis le header une fois la grande trail scrollée hors écran.
+    ///
+    /// Parité 2026-08-10 : NE filtre plus sur `!isFullyExpired()` — un
+    /// historique entièrement expiré est quand même « une story » pour
+    /// l'anneau self : sans lui, il disparaissait purement et simplement du
+    /// band replié, avec son appui long (« Gérer mes stories »), dès que la
+    /// dernière story active expirait. Contrairement à `MyStoryButton` (la
+    /// grande trail), il n'existe ici aucun autre slot de repli pour cette
+    /// cellule — la retirer retire le SEUL accès self de ce band.
     private var ownGroup: StoryGroup? {
         let uid = currentUserId
         guard !uid.isEmpty else { return nil }
-        return viewModel.storyGroups.first { $0.id == uid && !$0.isFullyExpired() }
+        return viewModel.storyGroups.first { $0.id == uid }
     }
 
     private var visibleGroups: [StoryGroup] {
@@ -768,6 +814,8 @@ struct PinnedStoryTrailBand: View {
                             editingStorySession = StoryEditSession(
                                 story: story,
                                 composer: StoryComposerViewModel(editing: story))
+                        case .resumeDraft(let draftId):
+                            viewModel.openComposer(resumingDraftId: draftId)
                         }
                     }
                 )
@@ -792,10 +840,10 @@ struct PinnedStoryTrailBand: View {
                         group: ownGroup,
                         context: .storyTrayCompact,
                         onViewStory: {
-                            // Parité avec la grande trail : le tap ouvre SA
-                            // story, plus la liste de gestion.
-                            storyViewerCoordinator.present(StoryViewerRequest(
-                                id: ownGroup.id, singleGroup: true))
+                            // Parité avec la grande trail (supersession
+                            // 2026-08-02) : le tap ouvre la LISTE de gestion,
+                            // où vivent les onglets Publiées / Brouillons.
+                            showMyStories = true
                         },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) },
                         contextMenuExtras: [

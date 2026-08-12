@@ -16,7 +16,12 @@ import Combine
 /// - `user:preferences-updated` (conversation scope, versioned)
 ///                                 → `ConversationStore.applyRemote`
 /// - `user:preferences-reordered`  → `ConversationStore.applyRemoteReorder`
+/// - `user:updated`                → `ConversationStore.applyUserUpdated`
+///   (profil public d'un contact : nom, avatar, bannière)
 /// - `read-status:updated`         → `ConversationStore.applyReadReceipt`
+/// - `user:updated`                → `ConversationStore.applyUserUpdated`
+///   (profil public d'un CONTACT : nom, avatar, bannière — seule la ligne
+///   d'une conversation directe avec lui bouge)
 /// - `category:created/updated/deleted` + `categories:reordered`
 ///                                 → `UserCategoryStore.applyRemote`
 ///
@@ -60,6 +65,7 @@ public final class ConversationStoreSocketBridge {
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
             userPreferencesReordered: socket.userPreferencesReordered.eraseToAnyPublisher(),
+            userUpdated: socket.userUpdated.eraseToAnyPublisher(),
             readStatusUpdated: socket.readStatusUpdated.eraseToAnyPublisher(),
             categoryCreated: socket.categoryCreated.eraseToAnyPublisher(),
             categoryUpdated: socket.categoryUpdated.eraseToAnyPublisher(),
@@ -76,6 +82,7 @@ public final class ConversationStoreSocketBridge {
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
         userPreferencesReordered: AnyPublisher<UserPreferencesReorderedSocketEvent, Never>,
+        userUpdated: AnyPublisher<UserUpdatedEvent, Never> = Empty().eraseToAnyPublisher(),
         readStatusUpdated: AnyPublisher<ReadStatusUpdateEvent, Never>,
         categoryCreated: AnyPublisher<CategorySocketEvent, Never>,
         categoryUpdated: AnyPublisher<CategorySocketEvent, Never>,
@@ -128,6 +135,10 @@ public final class ConversationStoreSocketBridge {
             Task { await store.applyRemoteReorder(updates) }
         }.store(in: &cancellables)
 
+        userUpdated.sink { event in
+            Task { await store.applyUserUpdated(event) }
+        }.store(in: &cancellables)
+
         categoryCreated.sink { event in
             Task { await categoryStore.applyRemote(.created(event.category)) }
         }.store(in: &cancellables)
@@ -174,6 +185,8 @@ public final class ConversationStoreSocketBridge {
             lastMessageAt: event.lastMessageAt,
             lastMessageId: event.lastMessageId,
             lastMessagePreview: event.lastMessagePreview,
+            lastMessageTranslations: event.lastMessageTranslations,
+            lastMessageOriginalLanguage: event.lastMessageOriginalLanguage,
             title: event.title,
             avatar: event.avatar,
             description: event.description,

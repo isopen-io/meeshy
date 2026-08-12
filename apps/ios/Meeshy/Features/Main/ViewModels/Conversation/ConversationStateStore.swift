@@ -17,10 +17,6 @@ final class ConversationStateStore: ObservableObject {
     /// on an active conversation. A plain stored property serves the readers
     /// without that churn.
     var messages: [Message] = []
-    @Published var isLoadingInitial = false
-    @Published var isLoadingOlder = false
-    @Published var isLoadingNewer = false
-    @Published var isRevalidating = false
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false

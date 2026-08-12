@@ -83,6 +83,10 @@ final class MessageListViewController: UIViewController {
     /// supprimé au profit du démontage explicite.
     fileprivate var seenTimer: Timer?
     fileprivate var lastSeenActivityMs: Int = 0
+    /// Une promotion immédiate a été demandée alors que rien n'était encore
+    /// paru à l'écran. Consommé UNE fois par le réveil suivant — sans quoi une
+    /// conversation vide relancerait la demande quatre fois par seconde.
+    fileprivate var wantsImmediateSeenFlush: Bool = false
     private var pendingReconfigureMessageIds = Set<String>()
     private var reconfigureDebounceTimer: Timer?
 
@@ -278,6 +282,14 @@ final class MessageListViewController: UIViewController {
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
         applySnapshot(animated: false)
+        // `onNewMessagesBadge` only fires on an INCREASE or on the two
+        // explicit scroll-to-bottom reset paths — never on "nothing changed,
+        // still at rest". A stale nonzero value already held by the SwiftUI
+        // `@State` (from before this fresh controller existed) is therefore
+        // never corrected on a settled initial load. `pendingUnreadCount` is
+        // guaranteed 0 here (first `applySnapshot` never increments it), so
+        // this force-syncs the badge to the truth.
+        onNewMessagesBadge?(pendingUnreadCount)
     }
 
     private func configureStickyDayOverlay() {
@@ -523,6 +535,15 @@ final class MessageListViewController: UIViewController {
             // ZStack contenant uniquement le `Color.black` de fond — d'où
             // l'écran noir observé en prod.
             let allAudioItems = vm?.allAudioItems ?? []
+            // Cold-open plein écran audio (F1) : sans lecture déjà active, la
+            // carte Now Playing / l'avance auto doivent porter le même
+            // contexte conversation que `ConversationViewModel.playAudio`
+            // (mini-player / lock screen). `audioQueueTail(after:)` est
+            // réutilisée telle quelle — jamais redéfinie ici.
+            let conversationName = vm?.currentConversationName
+            let audioQueueTailProvider: (String) -> [QueuedAudio] = { [weak self] attachmentId in
+                self?.conversationViewModel?.audioQueueTail(after: attachmentId) ?? []
+            }
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
@@ -667,6 +688,8 @@ final class MessageListViewController: UIViewController {
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },
                         allAudioItems: allAudioItems,
+                        conversationName: conversationName,
+                        audioQueueTailProvider: audioQueueTailProvider,
                         onScrollToMessage: scrollHandler,
                         onCallBack: callBackHandler,
                         onLongPressCallDetail: { callDetailHandler?(messageId) },
@@ -1065,6 +1088,10 @@ final class MessageListViewController: UIViewController {
         if !isCurrentlyNearBottom {
             isCurrentlyNearBottom = true
             onNearBottomChanged?(true)
+            // Même règle qu'un défilement au doigt : arriver au bas signale ce
+            // qui s'y trouve. Le remontage auto d'un message entrant n'entre
+            // pas ici — il ne se produit QUE déjà au bas.
+            flushSeenNow()
         }
         if pendingUnreadCount > 0 {
             pendingUnreadCount = 0
@@ -1278,12 +1305,38 @@ extension MessageListViewController {
 
     /// Vide l'accumulateur et signale ce qui a été acquis.
     ///
-    /// Appelé au démontage et au passage en arrière-plan : fermer une
-    /// conversation ne doit pas perdre une lecture déjà acquise.
+    /// Appelé au démontage : fermer une conversation ne doit pas perdre une
+    /// lecture déjà acquise.
     func flushSeenMessages() {
         let seen = seenAccumulator.drain(at: Self.nowMs())
         guard !seen.isEmpty else { return }
         onMessagesSeen?(seen)
+    }
+
+    /// Signale IMMÉDIATEMENT tout ce qui est à l'écran, seuil de présence
+    /// franchi ou non.
+    ///
+    /// Réservé aux instants où l'utilisateur déclare regarder le bas de la
+    /// conversation : il vient d'y arriver, il l'a demandé, l'écran s'ouvre, ou
+    /// l'app part en arrière-plan. Attendre le repos d'une seconde du réveil
+    /// périodique y ferait traîner l'accusé sans le rendre plus véridique.
+    ///
+    /// Rien en attente signifie que les cellules visées n'ont pas encore paru
+    /// (premier layout d'ouverture, défilement programmatique en cours) : le
+    /// prochain réveil reprend la demande UNE fois, au lieu de la perdre et de
+    /// retomber sur le repos d'une seconde.
+    func flushSeenNow() {
+        guard !drainSeenNow() else { return }
+        wantsImmediateSeenFlush = true
+    }
+
+    private func drainSeenNow() -> Bool {
+        let now = Self.nowMs()
+        lastSeenActivityMs = now
+        let seen = seenAccumulator.promoteAndDrain(at: now)
+        guard !seen.isEmpty else { return false }
+        onMessagesSeen?(seen)
+        return true
     }
 
     static func nowMs() -> Int {
@@ -1292,11 +1345,20 @@ extension MessageListViewController {
 
     /// Réveil périodique : le seuil de présence doit se déclencher même quand
     /// l'utilisateur ne bouge plus et qu'aucun événement de défilement n'arrive.
+    ///
+    /// Mode `.common` : en `.default`, le RunLoop suspend le timer pendant tout
+    /// le suivi tactile, si bien qu'un doigt posé sur la liste gelait le suivi
+    /// de lecture jusqu'au relâchement.
     func startSeenTracking() {
         seenTimer?.invalidate()
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                if self.wantsImmediateSeenFlush {
+                    self.wantsImmediateSeenFlush = false
+                    _ = self.drainSeenNow()
+                    return
+                }
                 let now = Self.nowMs()
                 if self.seenAccumulator.isBatchReady(at: now)
                     || now - self.lastSeenActivityMs >= 1000 {
@@ -1306,6 +1368,7 @@ extension MessageListViewController {
             }
         }
         timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
         seenTimer = timer
     }
 
@@ -1365,6 +1428,12 @@ extension MessageListViewController: UICollectionViewDelegate {
             if nearBottom && pendingUnreadCount > 0 {
                 pendingUnreadCount = 0
                 onNewMessagesBadge?(0)
+            }
+            // Atteindre le bas est une déclaration : ce qui s'y trouve est sous
+            // les yeux du lecteur. L'accusé part maintenant, pas au repos d'une
+            // seconde du réveil périodique.
+            if nearBottom {
+                flushSeenNow()
             }
         }
 

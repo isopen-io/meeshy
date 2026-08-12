@@ -111,9 +111,8 @@ final class StatusBubbleOverlayLayoutTests: XCTestCase {
 
     // MARK: - Verrou de source
 
-    /// Empêche la réintroduction d'une mesure prise sur l'écran physique.
-    func test_overlaySource_neverMeasuresThePhysicalScreen() throws {
-        let source = try String(
+    private func overlaySource() throws -> String {
+        try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
@@ -122,6 +121,11 @@ final class StatusBubbleOverlayLayoutTests: XCTestCase {
                 .appendingPathComponent("Meeshy/Features/Main/Components/StatusBubbleOverlay.swift"),
             encoding: .utf8
         )
+    }
+
+    /// Empêche la réintroduction d'une mesure prise sur l'écran physique.
+    func test_overlaySource_neverMeasuresThePhysicalScreen() throws {
+        let source = try overlaySource()
         let code = source
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
@@ -130,6 +134,44 @@ final class StatusBubbleOverlayLayoutTests: XCTestCase {
         XCTAssertFalse(
             code.contains("UIScreen.main"),
             "La bulle doit se dimensionner et s'orienter d'après son conteneur, pas d'après l'écran physique."
+        )
+    }
+
+    // MARK: - Pied de bulle (ancienneté + republier)
+
+    /// L'ancienneté vivait auparavant en double : une fois dans la branche audio,
+    /// une fois dans la branche texte. La ligne de pied unique doit l'afficher
+    /// une seule fois, quelle que soit la branche de contenu.
+    func test_bubbleContent_timeAgo_appearsExactlyOnce_notDuplicatedPerContentBranch() throws {
+        let source = try overlaySource()
+        let occurrences = source.components(separatedBy: "Text(status.timeAgo)").count - 1
+        XCTAssertEqual(
+            occurrences, 1,
+            "status.timeAgo doit être affiché une seule fois, dans la ligne de pied — pas dupliqué " +
+            "dans les branches audio et texte de bubbleContent."
+        )
+    }
+
+    /// Le bouton Republier doit désormais partager la ligne de pied avec
+    /// l'ancienneté (séparés par un point médian), pas former un bloc
+    /// Divider + bouton pleine largeur autonome.
+    func test_bubbleContent_republish_sitsInlineWithTimeAgo_viaMidDotSeparator() throws {
+        let source = try overlaySource()
+        XCTAssertTrue(
+            source.contains("Text(\"·\")"),
+            "Le pied de bulle doit séparer ancienneté et « Republier » par un point médian, sur la même ligne."
+        )
+    }
+
+    /// Verrou de non-régression : l'ancien bouton pleine largeur (et son
+    /// commentaire) ne doit pas être réintroduit à côté de la nouvelle ligne
+    /// de pied — sinon Republier apparaîtrait deux fois.
+    func test_bubbleContent_oldFullWidthRepublishRow_isGone() throws {
+        let source = try overlaySource()
+        XCTAssertFalse(
+            source.contains("// Republish button (only for other users' statuses)"),
+            "L'ancien commentaire du bouton Republier pleine largeur doit avoir disparu avec sa " +
+            "restructuration en ligne de pied inline."
         )
     }
 }

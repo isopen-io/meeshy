@@ -61,8 +61,11 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    /// Media posts default to a REEL; the author can force a plain POST via the
-    /// composer's Réel⇄Post toggle, keeping it out of the reels surface.
+    /// A QUALIFYING composition (video || audio || >= 2 images —
+    /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
+    /// force a plain POST via the composer's Réel⇄Post toggle. A non-qualifying
+    /// composition (single image, documents) is ALWAYS a POST — the toggle
+    /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
@@ -741,7 +744,8 @@ struct FeedView: View {
     private func reelFeedCardView(for post: FeedPost) -> some View {
         // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
         // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
-        ReelFeedCardContainer(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
             coordinator: reelAutoplay,
             post: post,
             isDark: isDark,
@@ -787,7 +791,19 @@ struct FeedView: View {
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": authorId, "username": post.authorUsername ?? post.author]
                 )
-            }
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
         )
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
@@ -1072,8 +1088,11 @@ struct FeedView: View {
             if viewModel.feedStore == nil {
                 let deps = DependencyContainer.shared
                 let store = FeedStore(persistence: deps.feedPersistence)
-                let socketHandler = FeedSocketHandler(persistence: deps.feedPersistence)
-                viewModel.setupPersistence(store: store, socketHandler: socketHandler, persistence: deps.feedPersistence)
+                viewModel.setupPersistence(
+                    store: store,
+                    socketHandler: deps.feedSocketHandler,
+                    persistence: deps.feedPersistence
+                )
                 store.startObserving(dbPool: deps.dbPool)
                 await store.loadInitial()
             }
@@ -1195,10 +1214,10 @@ struct FeedView: View {
             Task { await impressions.flushNow() }
         }
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, transcription in
+            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
+                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
         }
@@ -1325,9 +1344,18 @@ struct FeedView: View {
                         }
                     }
 
-                    // Réel ⇄ Post toggle — media posts default to a reel; the
-                    // author can force a plain post to keep it out of reels.
-                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                    // Réel ⇄ Post toggle — shown ONLY when the current
+                    // composition qualifies as a reel (video >=3s || audio
+                    // >=3s || >= 2 images). Removing an image (2→1) de-
+                    // qualifies: the toggle disappears and
+                    // `ReelComposition.defaultType` publishes a POST
+                    // regardless of this flag — no 1-image REEL possible, nor
+                    // a video/audio under 3 seconds.
+                    if ReelComposition.qualifiesAsReel(
+                        mimeTypes: pendingAttachments.map(\.mimeType)
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: pendingAttachments.map(\.duration)
+                    ) {
                         Button {
                             composerForcePlainPost.toggle()
                             HapticFeedback.light()
@@ -1542,7 +1570,6 @@ struct FeedView: View {
                     originalContent: post.content,
                     originalLanguage: post.originalLanguage,
                     originalType: post.type,
-                    canBeReel: post.hasMedia,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
                     isRepost: post.repost != nil,

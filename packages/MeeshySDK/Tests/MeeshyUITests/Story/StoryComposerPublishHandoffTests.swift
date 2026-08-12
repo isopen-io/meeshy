@@ -90,25 +90,39 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         )
     }
 
-    func test_publishAllSlides_destroysTheDraftOnlyWhenTheHandoffIsAccepted() throws {
+    /// Directive user 2026-08-02 (SUPPLANTE la spec 2026-08-01) : une story ne
+    /// quitte le brouillon QUE définitivement publiée. `accepted` signifie
+    /// seulement « accepté en file » — le hand-off ne détruit donc PLUS le
+    /// brouillon : il le GÈLE (`freezeCurrentDraftForPublish` → persistance
+    /// légère + `pendingPublishAt`). Seul le succès serveur confirmé supprime
+    /// le brouillon ; l'échec permanent le ramène éditable avec son erreur.
+    func test_publishAllSlides_freezesTheDraftInsteadOfDestroyingIt_onlyWhenAccepted() throws {
         let body = try Self.functionBody(named: "func publishAllSlides()",
                                          in: Self.publicationSourceURL)
+
+        XCTAssertFalse(
+            body.contains("clearCurrentDraft()"),
+            """
+            Le hand-off ne détruit plus le brouillon : « accepté en file » n'est pas \
+            « publié ». La suppression n'appartient qu'aux consommateurs de SUCCÈS serveur.
+            """
+        )
 
         guard let callRange = body.range(of: "onPublishAllInBackground(") else {
             XCTFail("Hand-off introuvable")
             return
         }
-        for destructive in ["clearAllDrafts()", "draftAutosaveSuspended = true"] {
-            guard let range = body.range(of: destructive) else {
-                XCTFail("« \(destructive) » a disparu de publishAllSlides()")
+        for gated in ["freezeCurrentDraftForPublish()", "draftAutosaveSuspended = true"] {
+            guard let range = body.range(of: gated) else {
+                XCTFail("« \(gated) » a disparu de publishAllSlides()")
                 continue
             }
             XCTAssertTrue(
                 callRange.lowerBound < range.lowerBound,
                 """
-                « \(destructive) » s'exécute AVANT de savoir si le hand-off est accepté : \
+                « \(gated) » s'exécute AVANT de savoir si le hand-off est accepté : \
                 sur un refus (édition hors-ligne, surface inerte) le composer reste ouvert \
-                avec son brouillon déjà jeté et son autosave morte pour la session.
+                avec un brouillon gelé à tort et son autosave morte pour la session.
                 """
             )
         }
@@ -155,12 +169,52 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
                 StoryComposerView.restorableVisibility(stored.rawValue),
                 PostVisibility.friends.rawValue,
                 """
-                `StoryDraftStore.save(slides:visibility:)` ne persiste PAS \
-                `visibilityUserIds` : restaurer « \(stored.rawValue) » publierait vers \
+                Sans liste persistée, restaurer « \(stored.rawValue) » publierait vers \
                 une liste VIDE ou rouvrirait un sélecteur à l'ouverture.
                 """
             )
         }
+    }
+
+    func test_restoreDraft_visibilityRequiringUserSelection_survivesWithPersistedIds() {
+        for stored in [PostVisibility.only, .except] {
+            XCTAssertEqual(
+                StoryComposerView.restorableVisibility(stored.rawValue, userIds: ["u1", "u2"]),
+                stored.rawValue,
+                "Le store persiste `visibilityUserIds` : « \(stored.rawValue) » repris avec sa liste survit tel quel"
+            )
+        }
+        XCTAssertEqual(
+            StoryComposerView.restorableVisibility("MODE_INCONNU", userIds: ["u1"]),
+            PostVisibility.friends.rawValue,
+            "Une liste persistée ne sauve pas un mode illisible"
+        )
+    }
+
+    func test_restoreDraft_restoresAudienceIdsAndLanguage() throws {
+        let body = try Self.functionBody(named: "func restoreDraft()", in: Self.syncRestoreSourceURL)
+        XCTAssertTrue(
+            body.contains("visibilityUserIds = stored.visibilityUserIds"),
+            "La liste d'audience du brouillon doit revivre avec lui"
+        )
+        XCTAssertTrue(
+            body.contains("storyLanguage = storedLanguage"),
+            "La langue d'origine du brouillon doit revivre avec lui"
+        )
+    }
+
+    func test_autosave_persistsAudienceAndLanguage() throws {
+        let code = try Self.strippedSource(of: Self.syncRestoreSourceURL)
+        let idsWrites = code.components(separatedBy: "visibilityUserIds: visibilityUserIds").count - 1
+        XCTAssertGreaterThanOrEqual(
+            idsWrites, 2,
+            "Les DEUX écritures de brouillon (persistDraft + autosave débouncé) doivent persister la liste d'audience"
+        )
+        let langWrites = code.components(separatedBy: "originalLanguage: storyLanguage").count - 1
+        XCTAssertGreaterThanOrEqual(
+            langWrites, 2,
+            "Les DEUX écritures de brouillon doivent persister la langue de la story"
+        )
     }
 
     func test_restoreDraft_visibility_overridesInjectedInitialVisibility() throws {
