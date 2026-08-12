@@ -130,6 +130,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Base de départ 168i : `main` HEAD**. Candidats frais VoiceOver-structure : `SupportView`,
 >   `UserStatsView` (états/rangées à grouper), écrans « liste + état vide » restants. Toujours vérifier
 >   l'absence de contention avec les PR iOS ouvertes avant de choisir.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 153i, 2026-07-17)** — piste iOS indépendante (suffixe `i`).
+> - **153i (terminée, branche `claude/laughing-thompson-yl81k3`, base `main` HEAD `14030ae`)** :
+>   Dynamic Type de `TypingIndicatorBubble` (indicateur « X écrit… », dernière cellule du flux de messages,
+>   dans `MessageListViewController.swift`). **1/1** `.font(.system(size: 12, weight: .medium))` →
+>   `MeeshyFont.relative(12, weight: .medium)` : le libellé réel et localisé (`typing.named`/`typing.double`/
+>   `typing.several`) scale désormais sous Dynamic Type. **0 gel** : la bulle est padding-sizée (aucune `.frame`
+>   figée) → grandit proprement ; les 3 points sont des `Circle` décoratifs de 5pt (pas des `.font`). A11y
+>   déjà complète (`.accessibilityElement(children: .combine)` + `.accessibilityLabel(label)`). Standalone :
+>   le libellé n'est pas voisin d'un corps de bulle figé → aucune divergence. 1 fichier, 0 logique, 0 test/clé
+>   i18n neuve. **0 contention** : les PR ouvertes 140i→152i ne touchent pas `MessageListViewController`.
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TypingIndicatorBubble` Dynamic Type SOLDÉ** : ne plus reprendre (unique `.system` migré ; points figés).
+> - **Base de départ 154i : `main` HEAD**. Traîne texte-réel restante : `AudioCarouselView` (compteur
+>   monospaced), `StatusBarView`. **À NE PAS migrer isolément** : `BubbleExpandableText` (« Voir plus ») et
+>   `BubbleStandardLayout` (emoji) — le corps de bulle voisin est figé (`MessageTextRenderer` `.system(15)`),
+>   donc migration = divergence → **gel** tant que le renderer n'est pas traité globalement. `StoryViewerView+Content`
+>   (31 `.system`) reste ⚠️ (i18n + `@State private` cross-file). Sinon **passe state-of-the-art** (VoiceOver).
 > **POINTEUR iOS AUTORITAIRE (mis à jour 216i, 2026-07-26)** — piste iOS (suffixe `i`).
 > - **215i MERGÉE** (PR #2322, squash **`fefe559`** dans `main`). CI **16/16 verte** (`ios-tests` 28 min — la fourchette normale du dépôt est 22–35 min, ne pas conclure au blocage avant 35 min), `mergeable_state: clean`, 0 review bloquante. ⚠️ **La suppression de branche distante échoue via le proxy git** (`git push --delete` → « Everything up-to-date » + disconnect, 4 tentatives avec backoff) : sans effet pratique puisque la branche assignée est **recyclée** (reset sur `main`), donc pas d'accumulation de branches obsolètes — ne pas s'acharner dessus.
 > - **216i (terminée, branche `claude/quirky-curie-vjj2u6`, base `main` HEAD `fefe559`)** : **adoption de `ShareLink` natif** sur les 2 derniers sites de partage à URL **synchrone** — `AffiliateView` (lien de parrainage) et `ShareLinkDetailView` (lien de jointure). Suite directe de 215i, **critère de choix de l'outil désormais explicite** : `ShareLink` exige son item à la construction de la vue ⇒ réservé aux URL **synchrones** ; les liens forgés par appel gateway (**asynchrones**, cas 215i) exigent `.sheet(item:)` + `ShareSheet`. Deux défauts soldés : (A) **scène non déterministe** (défaut B de 215i) — ces 2 sites ancraient pourtant **correctement** le popover iPad, mais résolvaient leur présentateur via `connectedScenes.first` (`Set` **non ordonné** ⇒ scène d'arrière-plan possible en multitâche iPad) : bien ancrer un popover ne sauve rien si la fenêtre est la mauvaise ; (B) **contrôle mort** — sur URL invalide le `guard … else { return }` laissait un bouton **visible, activé et annoncé par VoiceOver** qui ne faisait rien ⇒ désormais affordance **estompée 0.4 + `accessibilityHidden`** (patron `CommunityLinkDetailView`). Dé-duplication : le corps de `actionButton(_:icon:color:action:)` extrait dans **`actionButtonLabel(_:icon:color:)`** (miroir du couple `communityActionButton`/`communityActionButtonLabel`) pour que le `ShareLink` et ses 3 voisins partagent le style ; `presentSheet(_:)` **supprimé** (seul appelant). `ShareLink` porte **`.isButton` nativement** → pas de `.accessibilityAddTraits` (contrairement aux voisins restés `Button`). **2 fichiers prod : +80 / −54 lignes** · **0 clé i18n neuve** (`affiliate.action.share`, `common.share` réutilisées) · 0 couleur / 0 layout. Test neuf `NativeShareLinkAdoptionTests` (5 tests / 13 assertions) : **RED 13/13 contre `main` `fefe559`**, GREEN 13/13. Gate = CI `iOS Tests`.
