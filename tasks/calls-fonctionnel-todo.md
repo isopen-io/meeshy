@@ -7259,3 +7259,103 @@ fix) :
 - `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
   — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
   sévérité, probablement pas suffisant pour son propre cycle isolément.
+
+## Vague 112 — le bandeau « appel en cours, rejoindre » (web) ne pouvait jamais s'afficher pour personne (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`. Au démarrage, DEUX PRs
+ouvertes de cette routine visaient la MÊME Vague 111 en parallèle (collision entre deux sessions,
+cf. leçon 132 dans `tasks/lessons.md`) : #2877 (`setSinkId`, routage réel de périphérique de sortie
+audio) et #2881 (mute/unmute des éléments `<video>`). Arbitrage effectué avant de commencer ce cycle :
+**#2881 mergée**, #2877 fermée en doublon — les icônes/labels du bouton (`Volume2`/`VolumeX`,
+« Désactiver le haut-parleur ») encodent déjà « l'audio distant est-il audible », pas « quel
+périphérique de sortie » ; le fix `setSinkId` ciblait par ailleurs `audioOutputDevices[1]` de façon
+explicitement arbitraire (son propre texte : « pas nécessairement un haut-parleur ») et masquait le
+bouton entier sur Safari/poste mono-périphérique — régression UX plus large que le no-op qu'il
+corrigeait. Branche `claude/upbeat-dirac-ax0ee9` ensuite remise à `origin/main` (`374733ce`, qui
+contient #2881), 0 commit d'avance/retard, plus aucune PR ouverte de cette routine. Audit frais (agent
+Explore, lecture readonly) mandaté avec la liste condensée des items déjà triés/fixés (Vagues 63-111).
+
+- **Root cause confirmée par lecture directe** (`apps/web/components/conversations/header/use-call-banner.ts`,
+  consommé par `ConversationHeader.tsx`, rendu via `OngoingCallBanner`) : `hasActiveCall` exigeait
+  `currentCall && isInCall` — c'est-à-dire que le spectateur devait **déjà être dans l'appel** avant
+  que le bandeau « rejoindre » ne puisse s'afficher. Or `currentCall`/`isInCall` (`useCallStore`) ne
+  décrivent JAMAIS un appel dont le spectateur ne fait pas encore partie : les quatre sites d'écriture
+  de `setCurrentCall` (`CallManager.handleIncomingCall` pour l'initiateur, `acceptOrJoinCall`,
+  `handleParticipantJoined`, `use-video-call.ts`'s `startCall`) posent `isInCall: true` dans le même
+  souffle — vérifié exhaustivement, aucun site n'écrit l'un sans l'autre. `currentCall && !isInCall`
+  était donc un état **inatteignable par construction**, pas seulement une condition mal ordonnée : le
+  bandeau ne s'affichait dans AUCUN des deux seuls états possibles (spectateur pas dans l'appel →
+  `currentCall` reste `null` pour lui, jamais posé ; spectateur dans l'appel → `VideoCallInterface`
+  plein écran (`fixed inset-0 z-50`) couvre déjà tout, le bandeau du header n'a plus lieu d'être). Un
+  membre de conversation qui rate l'incoming-call initial (hors-ligne au démarrage de l'appel, ou
+  reload de page en cours d'appel) n'a alors AUCUN moyen de découvrir/rejoindre un appel de groupe déjà
+  en cours — le seul équivalent fonctionnel existant, le bouton « Rejoindre » de `CallSystemMessage`
+  (bulle `call-live`), est explicitement restreint aux conversations `direct` (`canJoin = isLive &&
+  conversationType === 'direct' && !isAnonymous`) : pour un groupe, ce bandeau était la SEULE voie
+  prévue, et elle était morte.
+  De plus, même dans l'état inatteignable, `handleJoinCall` appelait `onStartCall()` — qui démarre un
+  NOUVEL appel plutôt que de rejoindre l'existant — au lieu du chemin `requestJoin` déjà câblé et
+  testé pour ce cas exact (bulle `call-live` → `useCallStore.requestJoin` → `CallManager`, revalidation
+  REST avant tout accès média).
+- **Fix** : `useCallBanner` source désormais « y a-t-il un appel actif dans cette conversation » via
+  `GET /conversations/:id/active-call` (`callsService.getActiveCall`, déjà utilisé par le chemin de
+  jonction de la bulle `call-live` — même contrat, même endpoint, aucune nouvelle route), pollé
+  (`refetchInterval` 15s, React Query — sous la limite de rate-limit documentée 10/min) via une
+  nouvelle query key `queryKeys.calls.active(conversationId)`. `hasActiveCall` devient : appel actif
+  pour cette conversation, statut non terminal (`CALL_TERMINAL_STATUSES`), ET spectateur PAS dans
+  l'appel (`!isInCall`, lu du store réel, seule dépendance restante à `useCallStore`) — condition
+  maintenant atteignable dans son seul cas d'usage réel. `handleJoinCall` appelle `requestJoin({
+  callId, conversationId, callType })`, `callType` dérivé du type réel de l'appel
+  (`participants.some(p => p.isVideoEnabled)`) plutôt que d'un callback de démarrage. Le paramètre
+  `onStartCall` — mal employé, jamais nécessaire pour « rejoindre » — est retiré de la signature du
+  hook ; `ConversationHeader.tsx` ne le passe plus qu'à son usage légitime (bouton d'appel du header,
+  inchangé). `callDuration` s'ancre sur `answeredAt ?? startedAt` (même correction que la Vague 110,
+  jamais appliquée à ce hook faute d'accès à `answeredAt` avant ce cycle — le champ existait déjà sur
+  `CallSession`, simplement non lu ici).
+- **Tests** (TDD, RED confirmé en rejouant réellement les 18 nouveaux cas contre l'ANCIENNE implémentation
+  via `git stash` — 14/18 rouges avec les messages d'assertion attendus, les 4 restants passant par
+  coïncidence structurelle sans exercer le comportement visé) : suite `use-call-banner.test.tsx`
+  entièrement réécrite (source de données changée, wrapper `QueryClientProvider` + mock
+  `calls.service`, patron repris de `use-statuses.test.tsx`) — plus d'accès actif/inatteignable,
+  isolation par `isInCall`, filtrage conversation/statut terminal, ancrage `answeredAt`/`startedAt`,
+  `handleJoinCall` pose bien un `requestJoin` typé vidéo/audio selon les participants et jamais quand
+  `activeCall` est absent, `handleDismissCallBanner` masque par id d'appel. `ConversationHeader.test.tsx`
+  (30 tests, découvert HORS du sweep `--testPathPatterns="[Cc]all"` car son nom ne contient pas
+  « call » — repéré en grep dédié des appelants de `useCallBanner`, pas par le sweep) mockait
+  `useCallStore` avec un `mockReturnValue` ignorant tout sélecteur, incompatible avec les nouveaux
+  appels `useCallStore(s => s.isInCall)` : remplacé par un mock direct de `useCallBanner` (déjà
+  entièrement testé par ailleurs, et `OngoingCallBanner` y était déjà mocké en boîte noire) — les 2 cas
+  « Call Banner » reconfigurés sur le contrat du hook plutôt que sur `useCallStore`. Sweep complet
+  `--testPathPatterns="[Cc]all|ConversationHeader"` — **50 suites / 452 tests verts**, 0 régression.
+  `npx tsc --noEmit` : diff ligne-à-ligne AVANT/APRÈS (`git stash` des 4 fichiers de prod + test
+  modifiés) — **1757 erreurs pré-existantes identiques**, seul un ordre d'union TS non-déterministe
+  entre deux runs successifs (déjà documenté Vague 110/111) diffère, aucune ligne dans les fichiers
+  touchés. `eslint` : indisponible dans ce sandbox (même erreur de config circulaire pré-existante que
+  les vagues précédentes, plugin `react`).
+- **Portée volontairement non étendue** : le nouveau poll REST n'est pas gardé par un flag anonyme —
+  un spectateur en session `X-Session-Token` recevra un 401/403 répété toutes les 15s tant que le
+  header d'une conversation reste monté (dégradation gracieuse déjà gérée : `response.success ?
+  ... : null`, bandeau simplement jamais affiché, aucune erreur visible), au lieu d'un guard explicite
+  `!isAnonymous` qui aurait nécessité de faire remonter ce flag jusqu'à `ConversationHeader` (absent de
+  ses props aujourd'hui). Requêtes gaspillées mais sans impact fonctionnel ni de rate-limit (usage
+  normal : un seul header monté à la fois). Un vrai sélecteur multi-périphériques audio (setSinkId)
+  reste également un candidat séparé, cf. Vague 111.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111) ; guard
+`!isAnonymous` sur le poll `active-call` du bandeau (cf. ci-dessus). **Candidats pour la Vague 113**
+(runners-up de la Vague 110, non traités, confiance moindre — à vérifier avant fix) :
+- `handleParticipantJoined` bascule `status` vers `'active'` sur le premier `call:participant-joined`,
+  qui peut survenir pendant un early-join/ringing plutôt qu'un vrai décroché (cf. Vague 104 côté
+  gateway pour le même symptôme sur un chemin différent).
+- `CallInfoOverlay`'s `participantCount` lit `currentCall.participants` initialisé à `[]` côté CALLER
+  — affiche brièvement « 0 participant » avant l'arrivée de l'event de join. Cosmétique, faible
+  sévérité, probablement pas suffisant pour son propre cycle isolément.
