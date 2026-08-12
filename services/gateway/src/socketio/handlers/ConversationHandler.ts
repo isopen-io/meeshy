@@ -181,12 +181,10 @@ export class ConversationHandler {
           conversationId: normalizedId,
           userId: participationId
         });
-      }
 
-      // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
-      // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
-      // le chemin anonyme comme le cas courant).
-      if (participationId) {
+        // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
+        // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
+        // le chemin anonyme comme le cas courant).
         try {
           const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
