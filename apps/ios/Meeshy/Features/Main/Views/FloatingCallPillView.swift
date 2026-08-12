@@ -75,12 +75,15 @@ enum CallPillStatus: Equatable {
 
 // MARK: - Floating Call Pill View
 
-/// Bannière d'appel réduite — pleine largeur façon WhatsApp, incrustée au
-/// sommet de TOUTE l'app (overlay RootView). Toucher la bannière revient au
-/// plein écran ; le bouton « agrandir » dédié a été retiré (redondant avec le
-/// tap, retour user 2026-07-04). L'avatar réel du correspondant est résolu
-/// cache-first (Instant App) et l'état de connexion est porté par des glyphes
-/// code couleur, pas par du texte.
+/// Bannière d'appel réduite — pleine largeur façon WhatsApp, montée en
+/// `safeAreaInset(.top)` sur TOUTE l'app (CallPresentationLayer) : le contenu
+/// est repoussé en dessous (jamais de défilement derrière) et le fond remonte
+/// sous la status bar jusqu'au bord haut du viewport (immersif). Toucher la
+/// bannière revient au plein écran ; le bouton « agrandir » dédié a été retiré
+/// (redondant avec le tap, retour user 2026-07-04), les chevrons décoratifs de
+/// bord aussi (retour user 2026-08-12). L'avatar réel du correspondant est
+/// résolu cache-first (Instant App) et l'état de connexion est porté par des
+/// glyphes code couleur, pas par du texte.
 struct FloatingCallPillView: View {
     // Audit P1-16 parity (see CallView.swift) — injected by the caller
     // (RootView/iPadRootView already hold their own @ObservedObject
@@ -147,24 +150,16 @@ struct FloatingCallPillView: View {
                 // passe son seuil WCAG contre les deux arrêts du dégradé.
                 Color.black.opacity(CallBannerContrast.scrimOpacity)
             }
+            // Immersif façon WhatsApp : la bannière vit dans un
+            // safeAreaInset(.top), donc SOUS la status bar — seul son décor
+            // déborde jusqu'au bord haut du viewport, sinon la bande status
+            // bar laisse voir le contenu scrollé derrière la barre. Le layout
+            // du contenu (contrôles, avatar) reste dans la safe area.
+            .ignoresSafeArea(.container, edges: .top)
         )
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
         .simultaneousGesture(collapseDragGesture)
-        .overlay(alignment: .leading) {
-            Image(systemName: "chevron.left")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.35))
-                .padding(.leading, 4)
-                .accessibilityHidden(true)
-        }
-        .overlay(alignment: .trailing) {
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.35))
-                .padding(.trailing, 4)
-                .accessibilityHidden(true)
-        }
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()

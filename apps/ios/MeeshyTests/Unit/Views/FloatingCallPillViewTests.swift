@@ -211,6 +211,49 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    // 2026-08-12 — barre immersive façon WhatsApp : le fond de la bannière
+    // remonte sous la status bar jusqu'au bord haut du viewport. Sans cette
+    // extension, la zone status bar laisse voir le contenu scrollé derrière
+    // (bulles de messages au-dessus de la barre — capture user 2026-08-12).
+    func test_banner_backgroundBleedsIntoTopSafeArea_immersive() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains(".ignoresSafeArea(.container, edges: .top)"),
+            "The banner background must extend under the status bar to the top of the " +
+            "viewport (WhatsApp-style immersive bar) — otherwise scrolled content stays " +
+            "visible in the status-bar strip above the banner."
+        )
+        guard let backgroundRange = source.range(of: ".background("),
+              let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
+            XCTFail("expected pillContent to keep its .background + .offset chain")
+            return
+        }
+        let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
+        XCTAssertTrue(
+            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
+            "ignoresSafeArea must apply to the banner BACKGROUND only (decor bleed), " +
+            "never to the banner content — the controls must stay inside the safe area."
+        )
+    }
+
+    // 2026-08-12 — retrait des chevrons gauche/droite (retour user : inutiles ;
+    // ils violaient aussi la garde RTL qui bannit les symboles nommés par un
+    // côté physique, cf. RightToLeftLayoutGuardTests).
+    func test_banner_edgeChevrons_removed() throws {
+        let source = try pillSource()
+        XCTAssertFalse(
+            source.contains("\"chevron.left\"") || source.contains("\"chevron.right\""),
+            "The decorative edge chevrons must stay removed from the banner — user " +
+            "feedback 2026-08-12 (useless affordance), and physical-side symbol names " +
+            "violate the RTL guard."
+        )
+        XCTAssertFalse(
+            source.contains("\"chevron.backward\"") || source.contains("\"chevron.forward\""),
+            "No replacement edge chevrons either — the swipe-to-collapse gesture is " +
+            "discoverable through the drag itself and the VoiceOver custom action."
+        )
+    }
+
     func test_pillContent_delegatesAvatarToCallParticipantVisual() throws {
         let source = try pillSource()
         XCTAssertTrue(
