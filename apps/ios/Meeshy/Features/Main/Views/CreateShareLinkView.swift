@@ -402,6 +402,9 @@ struct CreateShareLinkView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(.isHeader)
 
             if let subtitle {
                 Text(subtitle)
