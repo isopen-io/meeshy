@@ -7449,6 +7449,74 @@ Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : d
 `removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
 string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce
 sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111) ; guard
-`!isAnonymous` sur le poll `active-call` du bandeau (Vague 112) ; timer 45s no-answer désarmé par un
-early-join iOS sans décroché réel (cf. ci-dessus, nouveau) ; `CallInfoOverlay`'s `participantCount`
-affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).
+`!isAnonymous` sur le poll `active-call` du bandeau (Vague 112) ; `CallInfoOverlay`'s
+`participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).
+
+## Vague 114 — le timer 45s « pas de réponse » du caller était désarmé par le même early-join iOS que Vague 113 avait déjà déplacé (web) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée rebasée en
+fast-forward sur `origin/main` (`c9a6aa2e5`, un commit de version bump non lié, contient déjà la
+Vague 113 — PR #2892 mergée), 0 commit d'avance/retard après rebase, aucune PR ouverte de cette
+routine (vérifié via l'API GitHub — les 4 PR ouvertes du dépôt appartiennent à d'autres routines :
+messaging cycle 91, réintégration a11y iOS, gateway). Repris directement le premier item de la liste
+« Reste ouvert » de la Vague 113, explicitement noté là-bas comme nouveau et non traité — vérifié ici
+avant fix, comme demandé.
+
+- **Root cause confirmée par lecture directe** (`CallManager.tsx`) : `handleParticipantJoined`
+  appelait encore `clearCallTimeout()` inconditionnellement sur CHAQUE `call:participant-joined` — le
+  même événement que la Vague 113 avait déjà requalifié de « room-join, pas décroché » pour le stamp
+  `status`/`answeredAt`, sans jamais toucher à ce second appel resté sur l'ancienne hypothèse. Le
+  timer 45s « pas de réponse » du CALLER (`startCallTimeout`, armé côté initiateur à `call:initiated`)
+  se retrouvait donc désarmé exactement au même instant que le clock visible se mettait à tort à
+  démarrer avant la Vague 113 : dès qu'un callee iOS auto-rejoint la room en sonnant
+  (`joinCallRoomReliably`, cf. Vague 113), et non à son décroché réel. Conséquence pour tout appel
+  web→iOS : un callee iOS qui ne décroche jamais laisse le caller sonner indéfiniment côté client — le
+  seul filet restant est le timeout serveur 60s (`CallService.RINGING_TIMEOUT_MS`), 15s plus tard que
+  la convention documentée (`CALL_TIMEOUT_MS` commentaire, ligne 34-40) et sans le nettoyage
+  local immédiat (reset du store, arrêt de la sonnerie) que le timer client apporte. Confirmé en
+  écrivant d'abord le test contre l'ANCIEN code (RED réel, pas un skip) : `git stash` du fichier de
+  prod, les 3 nouveaux cas exécutés — 1/3 rouge avec le message d'assertion attendu (`leaveEmit`
+  jamais émis), les 2 autres verts par coïncidence structurelle (aucun ne testait le comportement visé
+  seul).
+- **Fix** : le `clearCallTimeout()` quitte `handleParticipantJoined` (qui garde `setIceServers`/
+  `addParticipant`, tous deux corrects et sans rapport). Un nouvel effet réactif, sibling de celui qui
+  arme le timer pour l'initiateur (même fichier, juste au-dessus), clôt le timer dès que
+  `currentCall.status` bascule à `'active'` — le SEUL signal qui représente un décroché réel des DEUX
+  côtés (`useWebRTCP2P`'s `handleAnswer` pour le caller depuis la Vague 113 ; l'accept local du callee
+  dans `acceptOrJoinCall`, qui appelait déjà `clearCallTimeout()` directement en plus, l'effet y est
+  simplement redondant et sans effet — `clearTimeout` sur une ref déjà nulle est un no-op gardé).
+  Aucune modification de `startCallTimeout`/l'armement, aucune modification du chemin de création
+  d'offre WebRTC (toujours piloté par `addParticipant`, inchangé).
+- **Tests** (TDD, RED confirmé ci-dessus AVANT le fix) :
+  - `CallManager.noAnswerEarlyJoin.test.tsx` (nouveau, 3 cas) : le timer 45s reste armé et émet
+    `call:leave` après un `call:participant-joined` qui ne fait JAMAIS basculer `status` à `'active'`
+    (early-join simulé) ; le timer ne se déclenche plus si `status` bascule à `'active'` après ce même
+    early-join (décroché réel simulé via `updateCallStatus('active')`, mirroir de `handleAnswer`) ;
+    l'ajout du participant à `currentCall.participants` reste inchangé (non-régression sur le reste du
+    handler).
+  - Sweep complet `--testPathPatterns="[Cc]all"` — **50 suites / 424 tests verts**, 0 régression.
+  - `npx tsc --noEmit` : diff normalisé (numéros de ligne/colonne neutralisés) AVANT/APRÈS (`git
+    stash` du fichier de prod touché) — **identique caractère pour caractère**, mêmes 1757 erreurs
+    pré-existantes ; aucune n'implique `CallManager.tsx` au-delà de son compte habituel (29 lignes,
+    déjà présentes avant ce diff — casts socket `unknown` legacy, sans rapport).
+  - `eslint`/`next lint` : indisponible dans ce sandbox (même erreur de config circulaire pré-existante
+    que les vagues précédentes, plugin `react`).
+- **Portée volontairement non étendue** : `use-webrtc-p2p.ts`'s `handleAnswer` n'a PAS reçu de miroir
+  symétrique de ce fix — il n'a jamais eu de dépendance au timer 45s (celui-ci vit exclusivement dans
+  `CallManager.tsx`), l'effet réactif ajouté ici couvre déjà les deux côtés via le seul champ partagé
+  (`currentCall.status`). iOS n'a reçu aucune modification (hors d'atteinte de ce sandbox) : comme la
+  Vague 113, c'est la lecture web du signal qui était fausse, pas l'émission iOS — `joinCallRoomReliably`
+  reste inchangé et légitime.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111) ; guard
+`!isAnonymous` sur le poll `active-call` du bandeau (Vague 112) ; `CallInfoOverlay`'s
+`participantCount` affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité).
