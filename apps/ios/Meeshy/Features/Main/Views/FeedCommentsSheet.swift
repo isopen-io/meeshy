@@ -23,6 +23,9 @@ struct ThreadedCommentSection: View {
     /// optimiste + l'appel API. Câblé sur chaque ligne uniquement quand
     /// l'utilisateur courant est l'auteur (`canDelete`).
     var onDeleteComment: ((FeedComment) -> Void)? = nil
+    /// Édite un commentaire (contenu + effets visuels). Même règle
+    /// d'éligibilité que la suppression : auteur uniquement.
+    var onEditComment: ((FeedComment) -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState? = nil
@@ -49,6 +52,15 @@ struct ThreadedCommentSection: View {
               let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
               c.authorId == me else { return nil }
         return { onDeleteComment(c) }
+    }
+
+    /// Même éligibilité que `deleteHandler` : l'item « Modifier » n'apparaît
+    /// que sur les commentaires de l'utilisateur courant.
+    private func editHandler(for c: FeedComment) -> (() -> Void)? {
+        guard let onEditComment,
+              let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
+              c.authorId == me else { return nil }
+        return { onEditComment(c) }
     }
 
     /// Show first 2 replies by default without requiring toggle
@@ -80,6 +92,7 @@ struct ThreadedCommentSection: View {
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),
+                onEditComment: editHandler(for: comment),
                 showSeeReplies: showSeeReplies,
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
@@ -100,6 +113,7 @@ struct ThreadedCommentSection: View {
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
+                        onEditComment: editHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -136,6 +150,7 @@ struct ThreadedCommentSection: View {
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         onDeleteComment: deleteHandler(for: reply),
+                        onEditComment: editHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
@@ -218,6 +233,9 @@ struct CommentsSheetView: View {
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
+    /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
+    /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
+    @State private var editingComment: FeedComment?
     @State private var composerFocusTrigger: Bool = false
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
@@ -375,6 +393,105 @@ struct CommentsSheetView: View {
         }
     }
 
+    // MARK: - Édition de commentaire (auteur)
+
+    /// Bandeau au-dessus du composer pendant une édition — sortie possible
+    /// par la croix (le composer revient en mode création, texte effacé).
+    private var editingBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .font(MeeshyFont.relative(12))
+                .foregroundColor(Color(hex: accentColor))
+            Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+            Spacer()
+            Button {
+                cancelEditComment()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(MeeshyFont.relative(14))
+                    .foregroundColor(theme.textMuted)
+            }
+            .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(theme.inputBackground.opacity(0.6))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Charge le commentaire dans le composer avec TOUT ce que l'édition
+    /// permet : texte + effets visuels (lueur/pulse/…) + flou — mêmes
+    /// capacités que la création (le média existant est conservé tel quel).
+    private func beginEditComment(_ target: FeedComment) {
+        replyingTo = nil
+        editingComment = target
+        composerText = target.content
+        let flags = MessageEffectFlags(rawValue: UInt32(target.effectFlags))
+        commentBlurEnabled = flags.contains(.blurred)
+        commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
+        HapticFeedback.light()
+    }
+
+    private func cancelEditComment() {
+        editingComment = nil
+        composerText = ""
+        commentEffects = .none
+        commentBlurEnabled = false
+    }
+
+    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
+    /// d'insertion — même id), rollback complet si le serveur refuse.
+    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
+    private func submitCommentEdit(_ target: FeedComment, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !target.media.isEmpty else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        let flags = Int(effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0))
+        editingComment = nil
+        commentEffects = .none
+        commentBlurEnabled = false
+        commentAttachments.removeAll()
+        commentPendingPlace = nil
+        mentionController.clearDraft()
+
+        let edited = target.withEditedContent(trimmed, effectFlags: flags)
+        let snapshotComments = liveComments ?? post.comments
+        let snapshotReplies = repliesMap
+        applyCommentEdit(edited)
+        Task {
+            do {
+                _ = try await PostService.shared.updateComment(
+                    postId: post.id, commentId: target.id, content: trimmed, effectFlags: flags
+                )
+            } catch {
+                liveComments = snapshotComments
+                repliesMap = snapshotReplies
+                FeedbackToastManager.shared.showError(
+                    String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
+            }
+        }
+    }
+
+    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
+    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
+    private func applyCommentEdit(_ edited: FeedComment) {
+        if let parentId = edited.parentId {
+            if var existing = repliesMap[parentId], let idx = existing.firstIndex(where: { $0.id == edited.id }) {
+                existing[idx] = edited
+                repliesMap[parentId] = existing
+                return
+            }
+        }
+        var current = liveComments ?? post.comments
+        if let idx = current.firstIndex(where: { $0.id == edited.id }) {
+            current[idx] = edited
+            liveComments = current
+        }
+    }
+
     /// Removes the optimistic `tempId` row (and decrements its parent's reply
     /// count / the sheet's total count) — shared by the synchronous
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
@@ -458,6 +575,9 @@ struct CommentsSheetView: View {
                                     onDeleteComment: { target in
                                         Task { await deleteComment(target) }
                                     },
+                                    onEditComment: { target in
+                                        beginEditComment(target)
+                                    },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
@@ -490,6 +610,9 @@ struct CommentsSheetView: View {
                     } // ScrollViewReader
 
                     VStack(spacing: 0) {
+                        if editingComment != nil {
+                            editingBanner
+                        }
                         if mentionController.activeQuery != nil {
                             MentionSuggestionPanel(
                                 controller: mentionController,
@@ -572,6 +695,15 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
             let parentId = data.comment.parentId
+            // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
+            // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
+            // temps réel rendait SANS ses effets dans cette feuille.
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: data.comment.translations,
+                originalLanguage: data.comment.originalLanguage,
+                preferredLanguages: langs
+            )
             let feedComment = FeedComment(
                 id: data.comment.id, author: data.comment.author.name,
                 authorId: data.comment.author.id,
@@ -580,6 +712,9 @@ struct CommentsSheetView: View {
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                 parentId: parentId,
+                effectFlags: data.comment.effectFlags ?? 0,
+                originalLanguage: data.comment.originalLanguage,
+                translatedContent: translated,
                 currentUserReactions: data.comment.currentUserReactions,
                 media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
@@ -618,6 +753,35 @@ struct CommentsSheetView: View {
                 liveComments = current
             }
             liveCommentCount = data.commentCount
+        }
+        // Édition en temps réel : remplace la ligne EN PLACE (contenu, effets,
+        // traductions régénérées) — idempotent avec l'optimiste local.
+        .onReceive(
+            SocialSocketManager.shared.commentUpdated
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: data.comment.translations,
+                originalLanguage: data.comment.originalLanguage,
+                preferredLanguages: langs
+            )
+            let updated = FeedComment(
+                id: data.comment.id, author: data.comment.author.name,
+                authorId: data.comment.author.id,
+                authorUsername: data.comment.author.username,
+                authorAvatarURL: data.comment.author.avatar,
+                content: data.comment.content, timestamp: data.comment.createdAt,
+                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                parentId: data.comment.parentId,
+                effectFlags: data.comment.effectFlags ?? 0,
+                originalLanguage: data.comment.originalLanguage,
+                translatedContent: translated,
+                currentUserReactions: data.comment.currentUserReactions,
+                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            )
+            applyCommentEdit(updated)
         }
         // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
         // `StoryViewerView.applyCommentReactionEvent`) : l'ancien ±1 ne purgeait
@@ -1527,6 +1691,10 @@ struct CommentsSheetView: View {
     /// restent ignorés (hors périmètre).
     /// Un commentaire média-seul ou lieu-seul (sans texte) est autorisé.
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        if let editing = editingComment {
+            submitCommentEdit(editing, text: text)
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
         let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
@@ -1796,6 +1964,9 @@ struct CommentRowView: View, Equatable {
     /// courant est l'auteur — le parent décide de l'éligibilité. `nil` ⇒ l'item
     /// « Supprimer » n'apparaît pas dans le menu « … ».
     var onDeleteComment: (() -> Void)? = nil
+    /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
+    /// l'utilisateur courant est l'auteur — même règle que la suppression.
+    var onEditComment: (() -> Void)? = nil
     /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
     /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
     /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
@@ -1816,6 +1987,8 @@ struct CommentRowView: View, Equatable {
         // Re-render si l'éligibilité à la suppression change (ex: changement de
         // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
         (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
+        (lhs.onEditComment == nil) == (rhs.onEditComment == nil) &&
+        lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
@@ -1858,7 +2031,7 @@ struct CommentRowView: View, Equatable {
     /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
     /// dont l'utilisateur n'est pas l'auteur.
     private var hasMoreOptions: Bool {
-        canCopyContent || onDeleteComment != nil
+        canCopyContent || onDeleteComment != nil || onEditComment != nil
     }
 
     var body: some View {
@@ -2110,6 +2283,14 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.success()
                                 } label: {
                                     Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+                                }
+                            }
+                            if let onEditComment {
+                                Button {
+                                    HapticFeedback.light()
+                                    onEditComment()
+                                } label: {
+                                    Label(String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                                 }
                             }
                             if let onDeleteComment {

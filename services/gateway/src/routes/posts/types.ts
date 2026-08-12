@@ -353,6 +353,17 @@ export const CreateCommentSchema = z.object({
   { message: 'A comment must have text content or an attached media' },
 );
 
+export const UpdateCommentSchema = z.object({
+  /// Nouveau contenu — mêmes bornes que la création. `undefined` = inchangé.
+  content: z.string().max(2000).optional(),
+  /// Effets visuels (bitmask partagé avec les messages — GLOW/PULSE/…).
+  /// `0` retire tous les effets ; `undefined` = inchangé.
+  effectFlags: z.number().int().min(0).optional(),
+}).refine(
+  (data) => data.content !== undefined || data.effectFlags !== undefined,
+  { message: 'Nothing to update' },
+);
+
 export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),
   content: z.string().max(5000).optional(),

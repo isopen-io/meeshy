@@ -828,6 +828,70 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.comments.first?.id, "c-other")
     }
 
+    // MARK: - Édition de commentaire (PATCH + écho comment:updated)
+
+    /// L'édition remplace la ligne EN PLACE (contenu + effets) et PATCHe le
+    /// serveur ; le contenu modifié invalide la traduction locale (le pipeline
+    /// régénère, l'écho comment:translation-updated re-remplira).
+    func test_updateComment_replacesRowInPlace_andPatchesServer() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant",
+                                   translatedContent: "Before", currentUserReactions: nil)
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 65536)
+
+        XCTAssertEqual(sut.comments.count, 1, "édition = remplacement, jamais d'insertion")
+        XCTAssertEqual(sut.comments.first?.content, "Après")
+        XCTAssertEqual(sut.comments.first?.effectFlags, 65536, "les effets visuels éditent avec le texte")
+        XCTAssertNil(sut.comments.first?.translatedContent,
+                     "la traduction décrivait l'ANCIEN texte — invalidée localement")
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertEqual(mock.lastUpdateCommentContent, "Après")
+        XCTAssertEqual(mock.lastUpdateCommentEffectFlags, 65536)
+    }
+
+    func test_updateComment_serverRejects_rollsBackTheRow() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .failure(NSError(domain: "test", code: 403))
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0)
+
+        XCTAssertEqual(sut.comments.first?.content, "Avant", "refus serveur → rollback complet")
+    }
+
+    /// L'écho `comment:updated` d'un AUTRE appareil remplace la ligne en place.
+    func test_commentUpdatedEcho_replacesRowInPlace() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Avant")]
+
+        let echo: SocketCommentUpdatedData = JSONStub.decode("""
+        {"postId":"p1","comment":{"id":"c1","content":"Après","effectFlags":131072,"createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"alice"}}}
+        """)
+        socket.commentUpdated.send(echo)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.comments.count, 1)
+        XCTAssertEqual(sut.comments.first?.content, "Après")
+        XCTAssertEqual(sut.comments.first?.effectFlags, 131072,
+                       "les effets (pulse) voyagent dans l'écho et rendent dans toutes les vues")
+    }
+
     // MARK: - Réactions de commentaire : agrégat absolu (anti double-compte)
 
     /// L'événement cœur porte l'agrégat ABSOLU : la réconciliation pose

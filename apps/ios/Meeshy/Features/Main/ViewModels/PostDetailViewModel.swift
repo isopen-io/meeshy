@@ -32,6 +32,9 @@ class PostDetailViewModel: ObservableObject {
     // le cœur d'un commentaire restait inerte dans le détail de post).
     @Published var commentLikedIds: Set<String> = []
     @Published var commentLikeDelta: [String: Int] = [:]
+    /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
+    /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
+    @Published var editingComment: FeedComment?
     @Published var commentHeartInFlightIds: Set<String> = []
 
     private var commentCursor: String?
@@ -235,6 +238,7 @@ class PostDetailViewModel: ObservableObject {
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
+                        effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
@@ -389,6 +393,7 @@ class PostDetailViewModel: ObservableObject {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: parentId,
+                    effectFlags: c.effectFlags ?? 0,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
                     media: (c.media ?? []).map { $0.toFeedMedia() },
@@ -812,6 +817,47 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
+    // MARK: - Édition de commentaire (auteur)
+
+    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
+    /// d'insertion — même id), rollback complet si le serveur refuse.
+    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
+    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
+        guard let post else { return }
+        let edited = target.withEditedContent(content, effectFlags: effectFlags)
+        let snapshotComments = comments
+        let snapshotReplies = repliesMap
+        applyCommentUpdated(edited)
+        do {
+            _ = try await postService.updateComment(
+                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
+            )
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            if let parentId = edited.parentId, let replies = repliesMap[parentId] {
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
+            }
+        } catch {
+            comments = snapshotComments
+            repliesMap = snapshotReplies
+            FeedbackToastManager.shared.showError(
+                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
+        }
+    }
+
+    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
+    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
+    func applyCommentUpdated(_ edited: FeedComment) {
+        if let parentId = edited.parentId, var existing = repliesMap[parentId],
+           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
+            existing[idx] = edited
+            repliesMap[parentId] = existing
+            return
+        }
+        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
+            comments[idx] = edited
+        }
+    }
+
     /// Envoi d'un commentaire (top-level OU réponse) portant UN média
     /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
@@ -1073,6 +1119,36 @@ class PostDetailViewModel: ObservableObject {
                         try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)")
                     }
                 }
+            }
+            .store(in: &socketCancellables)
+
+        // Édition en temps réel : remplace la ligne EN PLACE (contenu, effets,
+        // traductions régénérées) — idempotent avec l'optimiste local.
+        socialSocket.commentUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
+                let updated = FeedComment(
+                    id: data.comment.id, author: data.comment.author.name,
+                    authorId: data.comment.author.id,
+                    authorUsername: data.comment.author.username,
+                    authorAvatarURL: data.comment.author.avatar,
+                    content: data.comment.content, timestamp: data.comment.createdAt,
+                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                    parentId: data.comment.parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translated,
+                    currentUserReactions: data.comment.currentUserReactions,
+                    media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+                )
+                self.applyCommentUpdated(updated)
             }
             .store(in: &socketCancellables)
 

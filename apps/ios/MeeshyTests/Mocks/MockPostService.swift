@@ -390,6 +390,20 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         """)
     }
 
+    var updateCommentResult: Result<APIPostComment, Error> = .failure(NSError(domain: "MockPostService", code: 0))
+    var updateCommentCallCount = 0
+    var lastUpdateCommentId: String?
+    var lastUpdateCommentContent: String?
+    var lastUpdateCommentEffectFlags: Int?
+
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+        updateCommentCallCount += 1
+        lastUpdateCommentId = commentId
+        lastUpdateCommentContent = content
+        lastUpdateCommentEffectFlags = effectFlags
+        return try updateCommentResult.get()
+    }
+
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getUserPostsCallCount += 1
         lastGetUserPostsCursor = cursor

@@ -4,7 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
-import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
+import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -385,6 +385,95 @@ export function registerCommentRoutes(
         return sendBadRequest(reply, 'Attached media not found or already linked', { code: 'MEDIA_NOT_AVAILABLE' });
       }
       fastify.log.error(`[POST /posts/:postId/comments] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // PATCH /posts/:postId/comments/:commentId — Edit own comment (content
+  // and/or visual effects). isEdited passe à true ; un contenu modifié purge
+  // les traductions et relance le pipeline (elles décrivaient l'ANCIEN texte).
+  fastify.patch('/posts/:postId/comments/:commentId', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { commentId } = request.params;
+      const parsed = UpdateCommentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+      const sanitizedContent = parsed.data.content !== undefined
+        ? SecuritySanitizer.sanitizeText(parsed.data.content)
+        : undefined;
+
+      // Idempotent via clientMutationId — replays return the same comment.
+      type UpdateResult = NonNullable<Awaited<ReturnType<typeof commentService.updateComment>>>;
+      const comment = await withMutationLog<UpdateResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'updateComment',
+        op: async () => {
+          const c = await commentService.updateComment(commentId, authContext.registeredUser.id, {
+            content: sanitizedContent,
+            effectFlags: parsed.data.effectFlags,
+          });
+          if (!c) throw new Error('COMMENT_NOT_FOUND');
+          return c as UpdateResult & { id: string };
+        },
+        onDuplicate: async (resultId) => {
+          const existing = await prisma.postComment.findUnique({ where: { id: resultId } });
+          return existing ? (existing as unknown as UpdateResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'COMMENT_NOT_FOUND') return null;
+        throw err;
+      });
+
+      if (!comment) {
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
+
+      // Broadcast comment:updated — mêmes rooms et même filtrage de visibilité
+      // que comment:added ; visibilité passée BRUTE (jamais de défaut permissif).
+      const socialEvents = fastify.socialEvents;
+      const post = await fastify.prisma?.post?.findUnique({
+        where: { id: comment.postId },
+        select: { authorId: true, visibility: true, visibilityUserIds: true },
+      });
+      if (socialEvents && post) {
+        socialEvents.broadcastCommentUpdated({
+          postId: comment.postId,
+          comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed'));
+      }
+
+      // Contenu modifié → les traductions stockées ont été purgées par le
+      // service ; relance du pipeline sur le NOUVEAU texte (fire-and-forget,
+      // même chemin que la création).
+      if (comment.contentChanged && sanitizedContent) {
+        try {
+          PostTranslationService.shared.translateComment(
+            comment.id,
+            comment.postId,
+            sanitizedContent,
+            (comment as { originalLanguage?: string | null }).originalLanguage ?? undefined,
+          ).catch((err) => fastify.log.warn({ err }, '[PATCH /posts/:postId/comments/:commentId]: translate comment failed'));
+        } catch {
+          // PostTranslationService not initialized — skip silently
+        }
+      }
+
+      return sendSuccess(reply, hoistCommentLocation(comment as unknown as Record<string, unknown>));
+    } catch (error) {
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return sendForbidden(reply, 'Not authorized to edit this comment', { code: 'FORBIDDEN' });
+      }
+      fastify.log.error(`[PATCH /posts/:postId/comments/:commentId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

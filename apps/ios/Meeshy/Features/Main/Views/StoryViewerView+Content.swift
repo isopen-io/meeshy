@@ -2219,6 +2219,46 @@ extension StoryViewerView {
         storyCommentCount = data.commentCount
     }
 
+    /// Édition en temps réel (`comment:updated`) : remplace la ligne EN PLACE
+    /// dans l'overlay (racine ou réponse) — idempotent par id, aucun compteur
+    /// à toucher. Miroir de `PostDetailViewModel.applyCommentUpdated`.
+    func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
+        guard data.postId == currentStory?.id else { return }
+        let translated = PostDetailViewModel.resolveCommentTranslation(
+            translations: data.comment.translations,
+            originalLanguage: data.comment.originalLanguage,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        let updated = FeedComment(
+            id: data.comment.id,
+            author: data.comment.author.name,
+            authorId: data.comment.author.id,
+            authorUsername: data.comment.author.username,
+            authorAvatarURL: data.comment.author.avatar,
+            content: data.comment.content,
+            timestamp: data.comment.createdAt,
+            likes: data.comment.likeCount ?? 0,
+            replies: data.comment.replyCount ?? 0,
+            parentId: data.comment.parentId,
+            effectFlags: data.comment.effectFlags ?? 0,
+            originalLanguage: data.comment.originalLanguage,
+            translatedContent: translated,
+            currentUserReactions: data.comment.currentUserReactions,
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
+        )
+        if let parentId = updated.parentId,
+           var replies = storyCommentRepliesMap[parentId],
+           let idx = replies.firstIndex(where: { $0.id == updated.id }) {
+            replies[idx] = updated
+            storyCommentRepliesMap[parentId] = replies
+            return
+        }
+        if let idx = storyComments.firstIndex(where: { $0.id == updated.id }) {
+            storyComments[idx] = updated
+        }
+    }
+
     /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
     /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
     /// without constructing a live view (mirrors `rollingBackOptimisticComment`

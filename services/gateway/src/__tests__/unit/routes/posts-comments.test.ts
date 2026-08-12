@@ -21,6 +21,10 @@ const mockAddComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', conte
 const mockLikeComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', authorId: '507f1f77bcf86cd799439011', likeCount: 1, reactionSummary: { '❤️': 1 } });
 const mockUnlikeComment = jest.fn<any>().mockResolvedValue({ id: 'comment-1', authorId: '507f1f77bcf86cd799439011', likeCount: 0, reactionSummary: {} });
 const mockDeleteComment = jest.fn<any>().mockResolvedValue({ success: true });
+const mockUpdateComment = jest.fn<any>().mockResolvedValue({
+  id: 'comment-1', postId: '507f1f77bcf86cd799439022', content: 'Edited', effectFlags: 65536,
+  contentChanged: true, originalLanguage: 'fr', media: [],
+});
 
 jest.mock('../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
@@ -30,6 +34,7 @@ jest.mock('../../../services/PostCommentService', () => ({
     likeComment: (...a: any[]) => mockLikeComment(...a),
     unlikeComment: (...a: any[]) => mockUnlikeComment(...a),
     deleteComment: (...a: any[]) => mockDeleteComment(...a),
+    updateComment: (...a: any[]) => mockUpdateComment(...a),
   })),
 }));
 
@@ -71,6 +76,14 @@ jest.mock('../../../routes/posts/types', () => ({
     safeParse: (data: any) => {
       if (data?.invalid) return { success: false, error: {} };
       return { success: true, data: { content: data?.content ?? 'Test comment', ...data } };
+    },
+  },
+  UpdateCommentSchema: {
+    safeParse: (data: any) => {
+      if (data?.invalid || (data?.content === undefined && data?.effectFlags === undefined)) {
+        return { success: false, error: {} };
+      }
+      return { success: true, data };
     },
   },
   FeedQuerySchema: {
@@ -117,6 +130,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
 
   app.decorate('socialEvents', {
     broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastCommentUpdated: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentLiked: jest.fn<any>().mockReturnValue(undefined),
   } as any);
@@ -383,6 +397,80 @@ describe('POST /posts/:postId/comments — media not available', () => {
 });
 
 // ─── POST /posts/:postId/comments/:commentId/like ────────────────────────────
+
+// ─── PATCH /posts/:postId/comments/:commentId ────────────────────────────────
+
+describe('PATCH /posts/:postId/comments/:commentId — edit own comment', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+    ((app as any).prisma.post.findUnique as jest.Mock<any>).mockResolvedValue({
+      authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 and broadcasts comment:updated with the full comment', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Edited', effectFlags: 65536 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    const broadcast = (app as any).socialEvents.broadcastCommentUpdated as jest.Mock<any>;
+    expect(broadcast).toHaveBeenCalledTimes(1);
+    const payload = broadcast.mock.calls[0][0] as any;
+    expect(payload.postId).toBe(POST_ID);
+    expect(payload.comment.content).toBe('Edited');
+    // Visibilité passée BRUTE du post (jamais un défaut permissif).
+    expect(broadcast.mock.calls[0][2]).toBe('PUBLIC');
+  });
+
+  it('returns 400 when nothing is updated', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 403 when the caller is not the author', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Pirate' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 when the comment does not exist', async () => {
+    mockUpdateComment.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('PATCH /posts/:postId/comments/:commentId — not authenticated', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp({ authenticated: false }); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 401', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'x' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
 
 describe('POST /posts/:postId/comments/:commentId/like — not authenticated', () => {
   let app: FastifyInstance;
