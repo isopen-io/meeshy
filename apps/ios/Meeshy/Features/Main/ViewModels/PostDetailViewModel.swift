@@ -1167,6 +1167,12 @@ class PostDetailViewModel: ObservableObject {
                     media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
                 self.applyCommentUpdated(updated)
+                // Invalidation locale par réécriture (écho d'un autre appareil) :
+                // les autres vues resservent la version éditée depuis le cache.
+                let snapshot = self.comments
+                Task {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                }
             }
             .store(in: &socketCancellables)
 

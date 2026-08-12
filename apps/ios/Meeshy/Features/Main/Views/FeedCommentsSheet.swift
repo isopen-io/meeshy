@@ -472,6 +472,16 @@ struct CommentsSheetView: View {
                 _ = try await PostService.shared.updateComment(
                     postId: post.id, commentId: target.id, content: trimmed, effectFlags: flags
                 )
+                // Invalidation locale par réécriture : la version éditée
+                // remplace la version cachée — les autres vues (détail,
+                // overlay story) la resservent depuis le cache sans refetch.
+                if let parentId = edited.parentId {
+                    if let replies = repliesMap[parentId] {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
+                    }
+                } else if let current = liveComments {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(current, for: "post-\(post.id)")
+                }
             } catch {
                 liveComments = snapshotComments
                 repliesMap = snapshotReplies
@@ -925,7 +935,20 @@ struct CommentsSheetView: View {
         let cacheKey = "post-\(post.id)"
         let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
         switch cached {
-        case .fresh(let full, _), .stale(let full, _):
+        case .fresh(let full, _):
+            // LOCAL-FIRST : un cache FRAIS se sert SANS refetch — changer de
+            // vue (feed → sheet → détail → story) ne recharge pas des
+            // commentaires déjà présents et non modifiés. Le temps réel
+            // (comment:added/updated/deleted/translation-updated) et les
+            // écritures locales maintiennent la fraîcheur ; la modification
+            // invalide le cache par réécriture (savePreservingFreshness).
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: full)
+            seedLikedIds(from: full)
+            // La pagination reste possible : cursor nil = page 1 de recovery
+            // quand l'utilisateur atteint le bas (même contrat que le profil).
+            commentsHasMore = post.commentCount > (liveComments?.count ?? 0)
+            return
+        case .stale(let full, _):
             // Merge (not overwrite): the `await` above may have given an
             // optimistic send or a `comment:added` socket echo enough time
             // to land in `liveComments` first.
@@ -1977,6 +2000,12 @@ struct CommentsSheetView: View {
 
         do {
             try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id)
+            // Invalidation locale par réécriture : sans elle, la version cachée
+            // ressuscitait le commentaire supprimé à la prochaine ouverture
+            // (sheet, détail, overlay story lisent la même clé).
+            if comment.parentId == nil, let current = liveComments {
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(current, for: "post-\(post.id)")
+            }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
         } catch {
             liveComments = previousComments
