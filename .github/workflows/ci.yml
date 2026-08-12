@@ -10,7 +10,8 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, develop]
+    # claude/ios-analysis-corrections-1329ae : temporaire, retiré avant merge
+    branches: [main, dev, develop, claude/ios-analysis-corrections-1329ae]
   pull_request:
     branches: [main, dev, develop]
   workflow_dispatch:
