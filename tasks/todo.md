@@ -1,4 +1,4 @@
-# Tête instruite pour le cycle 87 — l'audit a rendu douze défauts prouvés ; en voici l'ordre
+# Tête instruite pour le cycle 88 — onze défauts prouvés restent, dans cet ordre
 
 *Le cycle 86 a lancé trois audits parallèles (gateway temps réel, web sync, pipeline de traduction)
 et n'a livré qu'UN correctif. Ce n'est pas un manque : les onze autres candidats sont documentés
@@ -6,32 +6,19 @@ ci-dessous avec leur site exact et leur scénario d'échec, prêts à être inst
 re-auditer — vérifier puis corriger.** Chacun a été établi par lecture de source, jamais par
 exécution : la vérification reste due.*
 
-## Priorité 1 — la moitié serveur du correctif du cycle 86
+## Priorité 1 — LIVRÉE au cycle 87 (PR #2880)
 
-`conversation:leave` **ne retracte pas la frappe** côté gateway
-(`ConversationHandler.handleConversationLeave`, `socketio/handlers/ConversationHandler.ts:181`) :
-seul `disconnecting` le fait (`StatusHandler.handleSocketDisconnecting`), et changer de conversation
-ne déconnecte pas le socket. Le cycle 86 a corrigé le symptôme **côté web uniquement** ; iOS et
-Android restent exposés au même indicateur fantôme (jusqu'à 8 s chez les pairs, à chaque changement
-de conversation).
+`conversation:leave` retracte désormais la frappe. Le geste de `handleTypingStop` a été extrait en
+`StatusHandler.retractTypingIn(socket, normalizedId)` — deux entrées, un seul énoncé — et
+`ConversationHandler.handleConversationLeave` l'appelle via une dépendance optionnelle injectée par
+le manager, avec l'id **déjà résolu** (les deux pièges annoncés — le second `findUnique` et l'ordre
+retraction/`leave` — sont tous deux verrouillés par un test). iOS et Android ne produisent plus
+l'indicateur fantôme.
 
-La machinerie existe déjà et n'a pas à être réécrite — `handleTypingStop` fait exactement le bon
-geste : identité tirée de `activeTypers` (donc juste même après un renommage), suppression du verrou
-de throttle, suppression multi-appareils, émission `socket.to(room)`. Deux pièges à ne pas manquer :
-
-1. **Le coût.** `handleTypingStop` valide puis appelle `normalizeConversationId` (un
-   `conversation.findUnique`) AVANT de regarder `activeTypers`. Le brancher naïvement sur
-   `CONVERSATION_LEAVE` ferait payer une seconde résolution à CHAQUE changement de conversation,
-   alors que `handleConversationLeave` normalise déjà. Extraire la partie post-normalisation
-   (`retractTypingIn(socket, normalizedId)`) et l'appeler depuis `handleConversationLeave` avec l'id
-   déjà résolu.
-2. **L'ordre.** Retracter AVANT `socket.leave(room)`. `socket.to(room)` fonctionne dans les deux
-   sens (il vise la room en s'excluant soi-même), mais retracter d'abord garde l'énoncé lisible :
-   « je retire ce que j'ai diffusé, puis je sors ».
-
-Test : `socketio/handlers/__tests__/` a déjà les doubles nécessaires. Affirmer qu'un socket tracké
-comme frappeur émet `typing:stop` sur `conversation:leave`, et qu'un socket non-frappeur n'émet rien
-et ne paie aucune résolution supplémentaire.
+Reste ouvert sur ce thème : `handleSocketDisconnecting` garde sa propre implémentation, parce
+qu'elle boucle sur toutes les conversations d'un socket et diffuse via un `broadcastFn` injecté
+plutôt que via `socket.to`. Les unifier demanderait de réconcilier ces deux modes d'émission — utile,
+non urgent.
 
 ## Priorité 2 — trois défauts d'identité et de compteur, tous testables en jest gateway
 
@@ -115,6 +102,26 @@ et ne paie aucune résolution supplémentaire.
   toujours pas.
 
 ---
+
+# Cycle 87 — Quitter une conversation retracte la frappe (moitié serveur)
+
+Livré et mergé : PR #2880. Détail dans `.changeset/gateway-leave-retracts-typing.md` et dans la
+section « Priorité 1 — LIVRÉE » ci-dessus.
+
+Vérification : RED prouvé (d'abord à la compilation, puis 3 rouges de comportement) ; **5 mutations,
+5 rouges** — retraction jamais appelée, retraction déplacée après `socket.leave`, id brut relayé,
+`try/catch` local retiré, extraction rendue injoignable depuis `typing:stop` (10 rouges sur les
+suites StatusHandler, ce qui prouve que le chemin d'origine passe bien par l'unité extraite). Suite
+gateway complète **654/654 suites, 16 491 tests** (baseline au même commit : 16 486). `tsc` gateway
+0 diagnostic avant comme après. CI verte sur `e5a88697`, `main` mergé à la main sans conflit avant
+le merge.
+
+**Un test du fichier ne discriminait rien, et seule la mutation l'a montré.** Le double de
+`validateSocketEvent` rend un `conversationId` CONSTANT : « id normalisé » et « id brut » y étaient
+indistinguables, et la mutation correspondante a survécu au premier passage. Le test fait désormais
+échoïser son entrée au double. C'est la deuxième fois en deux cycles qu'un double trop complaisant
+laisse passer les deux versions du code (leçon 128) — la mutation reste le seul détecteur fiable.
+
 
 # Cycle 86 — Les indicateurs de saisie du web : morts à la réception, fantômes à l'émission
 
