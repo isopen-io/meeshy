@@ -61,17 +61,28 @@ faux. Le cycle 94 hérite d'une méthode deux fois validée et d'une liste de ch
 
 ## Ce que le cycle 94 doit faire
 
-### 1. Continuer la liste, dans l'ordre où le doute paraît légitime (piste principale)
+### 1. Continuer la liste — mais PAS avec les quatre champs que la tête du cycle 93 nommait
 
-`isViewOnce` a rendu. Restent, non instruits :
+Le cycle 93 a vérifié les quatre candidats que sa propre tête lui donnait pour la suite. **Les
+quatre sont des impasses, et la vérification a coûté cinq minutes de `grep` contre le cycle
+entier qu'aurait coûté de les croire :**
 
-- **`Participant.mutedUntil`** — une sourdine expirée est-elle levée côté serveur, ou seulement
-  affichée levée ? Le test décisif : une notification poussée à un participant dont le
-  `mutedUntil` est passé part-elle ? Si le filtre de notification lit `mutedUntil > now`, la
-  promesse est tenue sans balayage et il n'y a rien à faire — le VÉRIFIER avant d'écrire.
-- **`bannedAt`**, **`pinnedAt`**, **`archivedAt`** : même question, même ordre de vérification.
-- **Élargir hors de `Message`** : la question vaut pour tout champ dont un client déduit un
-  comportement. Les modèles `Story`, `Post` et `Call` n'ont jamais été passés au crible.
+| Champ annoncé | Réalité vérifiée |
+|---|---|
+| `Participant.mutedUntil` | **N'existe pas.** La sourdine est un booléen nu `isMuted` (`UserConversationPreferences`), sans échéance : aucune promesse temporelle à faire respecter |
+| `archivedAt` | **N'existe dans aucun modèle** du schéma |
+| `bannedAt` | **Promesse déjà tenue côté serveur** — `conversationEntryAdmission` la fait respecter à toutes les portes d'entrée, `ConversationHandler` la relit au `join` |
+| `pinnedAt` | Un ÉTAT, pas un cycle de vie : pas d'échéance, donc rien à balayer. Mauvaise forme |
+
+**La leçon de méthode, et elle vaut plus que la liste : une tête de cycle nomme des candidats à
+partir d'un `grep` sur le NOM des champs, pas sur leur sémantique.** Vérifier l'existence ET la
+forme avant d'ouvrir un chantier. Le bon filtre n'est pas « le champ ressemble à une promesse »
+mais **« un client déduit un comportement d'un champ dont AUCUN code serveur ne lit la valeur
+pour agir »**.
+
+La veine reste ouverte, mais il faut la chercher, pas la lire dans une liste : les modèles
+`Story`, `Post` et `Call` n'ont jamais été passés au crible avec cette question. Attention,
+`ExpiredStoriesCleanupService` existe déjà — la famille story/post est partiellement couverte.
 
 ### 2. Le transfert d'un contenu éphémère ou à vue unique — décision produit non prise
 
