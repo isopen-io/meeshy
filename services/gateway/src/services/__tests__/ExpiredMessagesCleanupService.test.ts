@@ -159,15 +159,53 @@ describe('ExpiredMessagesCleanupService', () => {
     expect(args.orderBy).toEqual({ expiresAt: 'asc' });
   });
 
-  it('efface le clair, le chiffré et les traductions, et pose `deletedAt`', async () => {
+  it('efface le clair, le chiffré, les traductions et le payload structuré, et pose `deletedAt`', async () => {
     const { service, prisma } = buildService([messageRow()]);
 
     await service.cleanup();
 
     expect(updateCalls(prisma)[0][0]).toEqual({
       where: { id: 'msg-1' },
-      data: { content: '', encryptedContent: null, translations: null, deletedAt: NOW },
+      data: {
+        content: '',
+        encryptedContent: null,
+        translations: null,
+        metadata: null,
+        deletedAt: NOW,
+      },
     });
+  });
+
+  it('efface `metadata` — les coordonnées d’un lieu partagé y sont EN CLAIR', async () => {
+    // `metadata` n'est pas de la décoration : `MessageProcessor.saveMessage` y
+    // range le lieu partagé (`metadata.location`, stockage en clair assumé) et
+    // l'instantané figé du post cité (`metadata.postReplyTo` — contenu,
+    // vignette, compteurs). Le laisser intact laissait la position GPS d'un
+    // partage éphémère survivre à son échéance, en clair et pour toujours,
+    // alors que le texte du même message était détruit. La destruction a été
+    // ÉCRITE pour fermer la fuite au repos ; elle la laissait ouverte sur le
+    // seul champ où la donnée est la plus sensible.
+    const { service, prisma } = buildService([
+      messageRow({ metadata: { location: { latitude: 48.8566, longitude: 2.3522 } } }),
+    ]);
+
+    await service.cleanup();
+
+    expect(updateCalls(prisma)[0][0].data.metadata).toBeNull();
+  });
+
+  it('capture `metadata` AVANT de l’effacer — les effets de retrait le lisent', async () => {
+    // L'ordre est un invariant, pas une commodité : `applyMessageRemovalEffects`
+    // lit `metadata` pour décompter les compteurs de conversation, et
+    // l'effacement le rend illisible. La copie est prise dans le `select` de la
+    // requête, jamais relue après l'écriture.
+    const { service, prisma } = buildService([messageRow()]);
+
+    await service.cleanup();
+
+    const select = (prisma as unknown as { message: { findMany: jest.Mock } })
+      .message.findMany.mock.calls[0][0] as { select: Record<string, unknown> };
+    expect(select.select.metadata).toBe(true);
   });
 
   it('ne détruit RIEN d’un message que la requête rendrait sans échéance', async () => {

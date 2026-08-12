@@ -5444,3 +5444,62 @@ posé dans un fichier de client ne répare qu'un client, un correctif posé sur 
 les répare tous. **À couverture égale, préférer le site partagé ; à site égal, préférer le type qui
 interdit l'oubli.** Les deux moitiés ci-dessus illustrent chacune une des deux moitiés de cette
 règle, en sens inverse.
+
+---
+
+## Leçon 144 — une promesse à DÉTRUIRE se décide là où l'information est et s'exécute là où elle est déjà écrite (2026-08-12, routine messaging, cycle 93)
+
+Le cycle 93 devait faire respecter `isViewOnce`/`maxViewOnceCount` : le budget de spectateurs était
+compté exactement, `isFullyConsumed` calculé et diffusé, les clients masquaient le média — et rien
+n'effaçait jamais. La tête du cycle posait explicitement la question du chemin : *le balayage, ou
+la consommation elle-même ?*, avec une préférence annoncée pour la seconde (« plus juste, pas de
+fenêtre résiduelle »).
+
+**Les deux réponses étaient fausses prises isolément, et l'énoncé binaire était le piège.**
+
+- La **consommation** est la seule à SAVOIR que le budget vient de s'épuiser. Un balayage devrait
+  recalculer `viewOnceCount >= maxViewOnceCount ?? 1` sur toute la collection, à la minute, pour
+  redécouvrir ce qu'un appel de route venait de lui apprendre.
+- La consommation est aussi la plus mauvaise place pour **EFFACER**. Le client attend
+  `consumeViewOnce` AVANT de révéler la bulle, et le média n'est pas toujours déjà en cache :
+  effacer dans la foulée prend le contenu des mains du destinataire à l'instant précis où il vient
+  de payer sa vue. Personne ne l'aurait vu en relisant le serveur — il fallait aller lire l'ordre
+  d'appel côté iOS.
+
+Le correctif pose une ÉCHÉANCE (`expiresAt = now + grâce`) et laisse le balayage éphémère du cycle
+précédent exécuter. Zéro seconde implémentation de la destruction : fichiers, clair, traductions,
+effets de retrait et annonce `message:deleted` étaient déjà écrits, testés et câblés.
+
+**Règle : quand la promesse est une destruction, séparer DÉCIDER et EXÉCUTER, et chercher
+l'exécutant existant AVANT d'en écrire un second.** Le point de décision est là où l'information
+naît ; le point d'exécution est là où la destruction est déjà correcte. Les relier par un champ que
+les deux connaissent coûte une ligne.
+
+**Corollaire, et c'est lui qui aurait pu faire une régression silencieuse :** quand deux promesses
+écrivent la MÊME échéance, l'écriture ne doit jamais la repousser. Un message à la fois éphémère
+(30 s) et à vue unique aurait vu sa grâce de 5 min écraser son échéance de 30 s — la promesse
+faible annulant la forte, sans qu'aucun test de l'une ou l'autre ne rougisse. Le prédicat
+n'apparie donc que l'absence, le nul et les échéances POSTÉRIEURES ; l'idempotence vient en prime,
+sans qu'aucun appelant ait à s'en souvenir.
+
+## Leçon 145 — « ce n'est pas le contenu » est un motif de mise hors périmètre qui doit être VÉRIFIÉ champ par champ (2026-08-12, routine messaging, cycle 93)
+
+Le cycle 92 avait exclu `metadata` de la destruction éphémère au motif que « ce n'est pas le
+contenu du message », et consigné l'exclusion en dette assumée — la bonne pratique, en apparence :
+nommer ce qu'on ne fait pas plutôt que l'emporter en passant.
+
+Le motif était faux. `MessageProcessor.saveMessage` range dans `metadata.location` les coordonnées
+d'un lieu partagé, **en clair**, et dans `metadata.postReplyTo` l'instantané figé du post cité. Une
+position GPS survivait donc à l'échéance du message qui la portait, en clair et pour toujours,
+pendant que le TEXTE du même message était détruit — exactement la fuite au repos que la passe
+avait été écrite pour fermer, laissée ouverte sur le champ le plus sensible.
+
+Le second « reste nommé » de la même dette (« les lignes de localisation, `MessageLocation` ») **ne
+correspondait à aucun modèle** : la localisation vit dans ce même `metadata`. Les deux dettes
+étaient la même, et se sont fermées d'un `metadata: null`.
+
+**Règle : une dette assumée hérite de la fiabilité de son MOTIF, pas de celle de sa formulation.**
+Un champ fourre-tout (`metadata`, `payload`, `extra`, `data`) n'a pas de contenu par nature — il a
+celui que ses écrivains y mettent. Avant de l'exclure d'un traitement de sécurité, énumérer ses
+ÉCRIVAINS (`grep` sur les affectations, pas sur les lectures) et décider champ par champ. Ici la
+liste tenait en deux entrées et l'une d'elles suffisait à renverser la décision.
