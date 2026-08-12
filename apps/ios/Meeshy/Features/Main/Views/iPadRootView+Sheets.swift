@@ -194,6 +194,18 @@ extension iPadRootView {
                 .environmentObject(conversationViewModel)
                 .environmentObject(storyViewModel)
             }
+            // Point de montage unique du SyncPill sur iPad — miroir exact du
+            // point de montage iPhone (RootView.swift). Réels DÉJÀ isolés
+            // (fullScreenCover ci-dessus, pas un frère de ZStack comme sur
+            // iPhone) : aucune garde reelsPresenter nécessaire ici.
+            .overlay(alignment: .top) {
+                ConnectionBanner(
+                    conversationListViewModel: conversationViewModel,
+                    isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
+                    onItemTap: handleSyncPillTap,
+                    activeConversationId: { activeConversation?.id ?? notificationPreviewConversation?.id }
+                )
+            }
             // Présentation d'appel (cover + PiP + pastille + bulle + bannière
             // call-waiting) extraite dans `CallPresentationLayer` (partagé avec
             // RootView) : découple le churn CallManager de `iPadRootView.body` —

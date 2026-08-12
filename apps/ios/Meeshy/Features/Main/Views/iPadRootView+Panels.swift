@@ -33,7 +33,6 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
         case .communityDetail(let communityId):
             CommunityDetailView(
                 communityId: communityId,
@@ -54,7 +53,6 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
         case .communityCreate:
             CommunityCreateView(
                 onCreated: { community in
@@ -87,7 +85,6 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
                         .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { activeConversation?.id }) }
             .onDisappear {
                 Task { await notificationManager.refreshUnreadCount() }
             }

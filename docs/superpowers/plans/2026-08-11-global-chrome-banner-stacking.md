@@ -1083,11 +1083,11 @@ git commit -m "feat(ios): point de montage unique du SyncPill sur RootView — c
 - Consumes: mêmes que Task 8, côté iPad (`activeConversation?.id` au lieu de `router.currentConversationId`).
 - Produces: rien (terminal sur iPad).
 
-- [ ] **Step 1: Remove the 3 scattered mounts in `iPadRootView+Panels.swift`**
+- [x] **Step 1: Remove the 3 scattered mounts in `iPadRootView+Panels.swift`**
 
 Retirer la ligne `.safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(...) }` (mise à jour Task 3) des 3 cas `.communityList` (ligne ~36), `.communityDetail` (ligne ~57), `.notifications` (ligne ~90) — même principe que Task 8 Step 1.
 
-- [ ] **Step 2: Add the single mount point in `iPadRootView+Sheets.swift`**
+- [x] **Step 2: Add the single mount point in `iPadRootView+Sheets.swift`**
 
 Dans `applyingSheets(_:)`, entre la fermeture du `.fullScreenCover(item: $reelsPresenter.launch)` (ligne ~196) et `.modifier(CallPresentationLayer())` (ligne ~202), insérer :
 
@@ -1107,17 +1107,17 @@ Dans `applyingSheets(_:)`, entre la fermeture du `.fullScreenCover(item: $reelsP
             .modifier(CallPresentationLayer())
 ```
 
-- [ ] **Step 3: Run build**
+- [x] **Step 3: Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 4: Run the existing guard test to confirm it now fails as predicted**
+- [x] **Step 4: Run the existing guard test to confirm it now fails as predicted**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/iPadRightPanelNavigationGuardTests -derivedDataPath apps/ios/Build`
 Expected: FAIL — `test_iPadPanels_connectionBanner_alwaysRoutesTaps` échoue (le littéral `"ConnectionBanner(onItemTap: handleSyncPillTap"` a disparu de `iPadRootView+Panels.swift`, exactement comme prédit en revue §B3). C'est le signal attendu pour passer à l'étape suivante.
 
-- [ ] **Step 5: Rewrite the test to check the new mount point**
+- [x] **Step 5: Rewrite the test to check the new mount point**
 
 Ouvrir `apps/ios/MeeshyTests/Unit/Views/iPadRightPanelNavigationGuardTests.swift`, lire la méthode `source(of:)`/`strippingComments(_:)` existante (lignes ~26-66) pour réutiliser le même helper. Remplacer `test_iPadPanels_connectionBanner_alwaysRoutesTaps` (lignes ~107-117) :
 
@@ -1158,21 +1158,23 @@ par :
 
 (adapter `source(of:)` si sa signature exige un argument différent pour cibler `iPadRootView+Sheets.swift` — même mécanisme que pour `iPadRootView+Panels.swift`, juste un nom de fichier différent).
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/iPadRightPanelNavigationGuardTests -derivedDataPath apps/ios/Build`
 Expected: PASS — les 2 nouveaux tests + le reste de la suite existante (non touché) verts.
 
-- [ ] **Step 7: Manual verification on iPad simulator**
+- [x] **Step 7: Manual verification on iPad simulator**
 
 Lancer sur un simulateur iPad (`./apps/ios/meeshy.sh run --ipad` si supporté par le script, sinon sélectionner l'appareil iPad via `meeshy.sh device`), vérifier que le SyncPill apparaît sur les écrans du panneau droit précédemment non couverts (réglages, profil, contacts, découverte…), et que la couverture des 3 écrans déjà couverts avant (communautés, notifications) persiste.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift apps/ios/Meeshy/Features/Main/Views/iPadRootView+Sheets.swift apps/ios/MeeshyTests/Unit/Views/iPadRightPanelNavigationGuardTests.swift
 git commit -m "feat(ios): point de montage unique du SyncPill sur iPadRootView — couvre tous les écrans iPad"
 ```
+
+> Note (2026-08-12) : Steps 3/4/6/7 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; vérification statique seulement (symboles `conversationViewModel`/`storyViewerCoordinator`/`handleSyncPillTap`/`activeConversation`/`notificationPreviewConversation` présents sur `iPadRootView`, accolades équilibrées, littéral `.modifier(CallPresentationLayer())` préservé pour `CallViewObservedObjectInjectionTests`, plus aucune occurrence `ConnectionBanner(` dans `iPadRootView+Panels.swift`). Build, run des gardes et parcours manuel iPad reportés en CI macOS et sur simulateur.
 
 ---
 
