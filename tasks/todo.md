@@ -90,6 +90,35 @@ liste de présents à un invité de lien. Décision produit, pas correctif.
   (cycle 87). **Non reproduit au cycle 88** : la suite gateway complète est passée 654/654 suites,
   16 504/16 504 tests, sans un seul échec. Reste donc un ordonnancement intermittent, non instruit.
 
+## Fragilité CI relevée au cycle 88 — le build web dépend du réseau Google Fonts
+
+Le job `Build (bun)` de `ci.yml` a échoué une fois sur ce cycle, à l'étape « Build web frontend »,
+avec :
+
+```
+Failed to fetch font file from `https://fonts.gstatic.com/s/roboto/v51/...woff2`  (×3 retries)
+lib/fonts.ts  `next/font` error: Failed to fetch `Roboto` from Google Fonts.
+> Build failed because of webpack errors
+```
+
+**C'est un défaut d'infrastructure, pas de code.** Le run précédent du MÊME code web (`74eee6a1`,
+run 9640) avait passé `Build` vingt minutes plus tôt ; le commit incriminé (`eb7ceb4c`) ne touche
+que du TypeScript gateway et des `.md`. Tous les autres jobs sont verts sur les deux runs.
+
+**Cause structurelle** : `apps/web/lib/fonts.ts` utilise `next/font/google`, qui télécharge les
+fichiers de police **au moment du build**. Chaque build web exige donc un accès sortant à
+`fonts.gstatic.com` — huit familles environ. Une seule indisponibilité réseau côté runner casse le
+build entier, sans rapport avec le diff.
+
+**Piste de correction, non faite ici** (hors périmètre d'un cycle de correctifs temps réel) :
+vendoriser les `.woff2` et passer à `next/font/local`. Le build devient alors hermétique, plus
+rapide, et cesse d'exposer l'adresse des runners à un tiers à chaque build. À chiffrer par qui
+possède la zone build web.
+
+**À savoir en attendant** : la porte `actions: write` étant close pour la routine (cycle 82),
+`rerun_failed_jobs` renvoie `403 Resource not accessible by integration`. Le seul moyen de relancer
+est de pousser un commit.
+
 ## Contraintes d'environnement de la routine (à jour au cycle 88)
 
 Trois zones du dépôt sont **non exécutables** depuis cet environnement — le savoir évite d'y perdre
