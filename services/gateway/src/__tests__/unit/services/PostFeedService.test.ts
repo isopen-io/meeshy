@@ -528,6 +528,51 @@ describe('PostFeedService.getStories', () => {
     expect(result.deletedIdsTruncated).toBe(false);
   });
 
+  // --- Portée des tombstones : la FENÊTRE, pas la page ---------------------
+  //
+  // Le client draine désormais la fenêtre delta page par page
+  // (`StoryViewModel.drainStoryPages`) — jusqu'à 6 requêtes pour une même
+  // fenêtre. La requête de tombstones, elle, ne dépend PAS du curseur : sa
+  // clause est `deletedAt != null AND updatedAt > since`, identique d'une page
+  // à l'autre. La relancer à chaque page referait donc jusqu'à 6 fois la même
+  // lecture de 501 lignes sous filtre de visibilité, pour un résultat que le
+  // client tient déjà depuis la première.
+  //
+  // Elle ne court plus que sur la page qui OUVRE la fenêtre (`cursor` absent).
+  // Le drain client fusionne par union (`formUnion`) et par `||`, jamais par
+  // écrasement : des pages suivantes sans tombstone ne peuvent pas effacer ceux
+  // de la première.
+
+  it('issues no tombstone query on a PAGED delta — they scope the window, not the page', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), 'story-9'),
+    });
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(1);
+    expect(result.deletedIds).toEqual([]);
+    expect(result.deletedIdsTruncated).toBe(false);
+  });
+
+  it('still issues the tombstone query on the page that OPENS the delta window', async () => {
+    // Garde-fou de l'optimisation ci-dessus : couper les tombstones sur la
+    // première page les supprimerait purement et simplement du produit.
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'gone-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(2);
+    expect(result.deletedIds).toEqual(['gone-1']);
+  });
+
   it('skips the postReaction batch query when the stories list is empty', async () => {
     mockPostFindMany.mockResolvedValue([]);
 
