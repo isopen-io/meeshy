@@ -162,6 +162,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
       create: jest.fn<any>().mockResolvedValue({ id: 'token-1' }),
       findUnique: jest.fn<any>().mockResolvedValue(makeToken()),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Consommation atomique des tentatives (garde conditionnelle `< MAX` +
+      // increment) : count 1 = tentative accordée, count 0 = cap atteint.
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     passwordResetToken: {
       create: jest.fn<any>().mockResolvedValue({ id: 'prt-1' }),
@@ -353,11 +356,14 @@ describe('PhonePasswordResetService.verifyIdentity', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when identityAttempts >= 3', async () => {
+  it('returns max_attempts_exceeded when the atomic attempt reservation is refused', async () => {
+    // Le cap n'est plus un `if (attempts >= MAX)` lu puis incrémenté (TOCTOU) :
+    // c'est l'updateMany conditionnel qui tranche — count 0 = cap atteint.
     const prisma = makePrisma();
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeToken({ identityAttempts: 3 })
     );
+    (prisma.phonePasswordResetToken.updateMany as jest.Mock<any>).mockResolvedValue({ count: 0 });
     const sut = makeSut({ prisma });
 
     const result = await sut.verifyIdentity(BASE_IDENTITY);
@@ -475,11 +481,13 @@ describe('PhonePasswordResetService.verifyCode', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when codeAttempts >= 5', async () => {
+  it('returns max_attempts_exceeded when the atomic attempt reservation is refused', async () => {
+    // Même garde atomique que verifyIdentity : count 0 = cap de codes atteint.
     const prisma = makePrisma();
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeCodeReadyToken({ codeAttempts: 5 })
     );
+    (prisma.phonePasswordResetToken.updateMany as jest.Mock<any>).mockResolvedValue({ count: 0 });
     const sut = makeSut({ prisma });
 
     const result = await sut.verifyCode(BASE_CODE);

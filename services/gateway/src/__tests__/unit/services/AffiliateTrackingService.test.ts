@@ -55,6 +55,8 @@ function makePrisma(overrides: {
     affiliateToken: {
       findUnique: jest.fn<any>().mockResolvedValue(affiliateToken),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Réservation atomique des tokens plafonnés (clause `currentUses < maxUses`).
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       findMany: jest.fn<any>().mockResolvedValue(tokens),
     },
     affiliateRelation: {
@@ -70,6 +72,10 @@ function makePrisma(overrides: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: deleteCount }),
     },
     friendRequest: {
+      // La synchronisation vérifie les deux sens avant de créer (pas d'index
+      // unique sur FriendRequest) : null = aucune relation préexistante.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      update: jest.fn<any>().mockResolvedValue({}),
       create: jest.fn<any>().mockResolvedValue({}),
     },
   };
@@ -219,16 +225,40 @@ describe('convertAffiliateVisit', () => {
     );
   });
 
-  it('increments currentUses on the token', async () => {
+  it('increments currentUses atomically on an unlimited token', async () => {
+    // Jamais `currentUses + 1` calculé en JS (perdrait une incrémentation sous
+    // concurrence) : l'écriture est un `{ increment: 1 }` atomique.
     const prisma = makePrisma({ affiliateToken: { ...ACTIVE_TOKEN, currentUses: 3 } });
 
     await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
 
     expect(prisma.affiliateToken.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ currentUses: 4 }),
+        data: expect.objectContaining({ currentUses: { increment: 1 } }),
       })
     );
+  });
+
+  it('reserves a slot atomically on a capped token and rejects when the cap is hit', async () => {
+    // TOCTOU : la réservation passe par updateMany conditionnel
+    // (`currentUses < maxUses`) ; count === 0 = cap atteint dans la fenêtre
+    // de course → rejet AVANT création de la relation.
+    const capped = { ...ACTIVE_TOKEN, maxUses: 5, currentUses: 3 };
+    const prisma = makePrisma({ affiliateToken: capped });
+
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+    expect(prisma.affiliateToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ currentUses: { lt: 5 } }),
+        data: { currentUses: { increment: 1 } },
+      })
+    );
+
+    const racedPrisma = makePrisma({ affiliateToken: capped });
+    racedPrisma.affiliateToken.updateMany.mockResolvedValue({ count: 0 });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(racedPrisma, 'tok', 'user-new');
+    expect(result.success).toBe(false);
+    expect(racedPrisma.affiliateRelation.create).not.toHaveBeenCalled();
   });
 
   it('creates a friendRequest between affiliator and referred user', async () => {

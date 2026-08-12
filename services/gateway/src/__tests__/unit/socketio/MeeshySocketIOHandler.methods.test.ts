@@ -1,6 +1,6 @@
 /**
  * Unit tests for MeeshySocketIOHandler — methods other than broadcastMessage.
- * Covers: getManager, sendNotificationToUser (sent/not-connected/error),
+ * Covers: getManager, broadcastMessage (delegated/no-manager/error),
  * getConnectedUsers (no manager, with manager, error).
  *
  * @jest-environment node
@@ -53,28 +53,25 @@ describe('getManager', () => {
   });
 });
 
-// ─── sendNotificationToUser ───────────────────────────────────────────────────
+// ─── broadcastMessage ─────────────────────────────────────────────────────────
 
-describe('sendNotificationToUser', () => {
+describe('broadcastMessage', () => {
   it('does nothing when the manager is not initialized', async () => {
     const handler = makeHandlerNoManager();
-    await expect(handler.sendNotificationToUser('u-1', { type: 'test' })).resolves.toBeUndefined();
+    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
   });
 
-  it('calls manager.sendToUser with the correct event and payload', async () => {
+  it('delegates to manager.broadcastMessage with the message and conversation id', async () => {
     const { handler, manager } = makeHandler();
-    await handler.sendNotificationToUser('u-42', { type: 'message' });
-    expect(manager.sendToUser).toHaveBeenCalledWith('u-42', expect.any(String), { type: 'message' });
-  });
-
-  it('does not throw when the user is not connected (sendToUser returns false)', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockReturnValue(false) });
-    await expect(handler.sendNotificationToUser('u-offline', {})).resolves.toBeUndefined();
+    await handler.broadcastMessage({ id: 'm-1' }, 'conv-42');
+    expect(manager.broadcastMessage).toHaveBeenCalledWith({ id: 'm-1' }, 'conv-42');
   });
 
   it('catches and swallows errors thrown by the manager', async () => {
-    const { handler } = makeHandler({ sendToUser: jest.fn<any>().mockImplementation(() => { throw new Error('crash'); }) });
-    await expect(handler.sendNotificationToUser('u-1', {})).resolves.toBeUndefined();
+    const { handler } = makeHandler({
+      broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('crash')),
+    });
+    await expect(handler.broadcastMessage({ id: 'm-1' }, 'conv-1')).resolves.toBeUndefined();
   });
 });
 

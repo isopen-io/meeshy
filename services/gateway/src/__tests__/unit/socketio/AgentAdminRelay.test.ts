@@ -66,6 +66,10 @@ describe('parseAgentAdminEvent', () => {
 function makeSubscriber() {
   const handlers: Record<string, ((...args: any[]) => void)[]> = {};
   return {
+    // Le vrai subscriber est créé lazyConnect + enableOfflineQueue:false :
+    // start() appelle connect() AVANT subscribe() (fix prod), le double doit
+    // donc l'exposer.
+    connect: jest.fn<any>().mockResolvedValue(undefined),
     subscribe: jest.fn<any>().mockResolvedValue(undefined),
     unsubscribe: jest.fn<any>().mockResolvedValue(undefined),
     quit: jest.fn<any>().mockResolvedValue(undefined),

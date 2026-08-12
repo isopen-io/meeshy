@@ -11,6 +11,25 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Les effets délégués (retrait de notifications, désactivation des liens
+// trackés, libération des sons) ont leurs propres suites — ici on isole la
+// mécanique de balayage soft/hard du service.
+jest.mock('../../../services/posts/retractPostNotifications', () => ({
+  retractPostNotifications: jest.fn<any>().mockResolvedValue(undefined),
+}));
+jest.mock('../../../services/posts/deactivatePostTrackingLinks', () => ({
+  deactivatePostTrackingLinks: jest.fn<any>().mockResolvedValue(0),
+}));
+jest.mock('../../../services/posts/SoundCaptureService', () => ({
+  SoundCaptureService: jest.fn().mockImplementation(() => ({
+    releasePost: jest.fn<any>().mockResolvedValue(undefined),
+    releasePosts: jest.fn<any>().mockResolvedValue(undefined),
+  })),
+}));
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => undefined,
+}));
+
 import { ExpiredStoriesCleanupService } from '../../../services/ExpiredStoriesCleanupService';
 
 function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: string }[] } = {}) {
@@ -24,7 +43,11 @@ function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: str
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postMedia: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };
@@ -100,12 +123,15 @@ describe('ExpiredStoriesCleanupService', () => {
 
       await service.cleanup();
 
+      // Le balayage couvre TOUS les types éphémères (stories ET statuts), et
+      // `deletedAt` absent se filtre en `{ isSet: false }` sur le connecteur
+      // MongoDB — un scalaire `null` ne matche pas les documents legacy.
       expect(prisma.post.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: 'STORY',
+            type: { in: expect.arrayContaining(['STORY']) },
             expiresAt: { lt: expect.any(Date) },
-            deletedAt: null,
+            deletedAt: { isSet: false },
           }),
         }),
       );

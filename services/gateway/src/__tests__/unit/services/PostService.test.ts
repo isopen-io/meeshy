@@ -193,21 +193,21 @@ describe('deletePost', () => {
     const prisma = makePrisma({ postFindFirst: null });
     const { sut } = makeSut(prisma);
 
-    expect(await sut.deletePost('post-1', 'user-1')).toBeNull();
+    expect(await sut.deletePost('post-1', 'user-1', { actorRole: 'USER' })).toBeNull();
   });
 
   it('throws FORBIDDEN when user is not the author', async () => {
     const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'user-1' }) });
     const { sut } = makeSut(prisma);
 
-    await expect(sut.deletePost('post-1', 'user-other')).rejects.toThrow('FORBIDDEN');
+    await expect(sut.deletePost('post-1', 'user-other', { actorRole: 'USER' })).rejects.toThrow('FORBIDDEN');
   });
 
   it('soft-deletes the post by setting deletedAt', async () => {
     const prisma = makePrisma();
     const { sut } = makeSut(prisma);
 
-    await sut.deletePost('post-1', 'user-1');
+    await sut.deletePost('post-1', 'user-1', { actorRole: 'USER' });
 
     expect(prisma.post.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -221,11 +221,11 @@ describe('deletePost', () => {
     const prisma = makePrisma();
     const { sut } = makeSut(prisma);
 
-    await sut.deletePost('post-1', 'user-1');
+    await sut.deletePost('post-1', 'user-1', { actorRole: 'USER' });
 
     expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { targetId: 'post-1' },
+        where: { targetId: { in: ['post-1'] } },
         data: { isActive: false },
       }),
     );
@@ -236,7 +236,7 @@ describe('deletePost', () => {
     (prisma.trackingLink.updateMany as jest.Mock<any>).mockRejectedValue(new Error('DB error'));
     const { sut } = makeSut(prisma);
 
-    const result = await sut.deletePost('post-1', 'user-1');
+    const result = await sut.deletePost('post-1', 'user-1', { actorRole: 'USER' });
 
     expect(result).toEqual(expect.objectContaining({ id: 'post-1' }));
   });
@@ -793,11 +793,15 @@ describe('getPostInteractions', () => {
   });
 
   it('merges viewer reactions into the interactions response', async () => {
-    const postWithReactions = makePost({
-      reactions: [{ userId: 'viewer-1', emoji: '👏' }],
-    });
+    // Les réactions viennent de la table PostReaction (SSOT), PAS du JSON
+    // legacy `post.reactions` — celui-ci n'est jamais écrit par le chemin socket.
     const view = { user: { id: 'viewer-1', username: 'v', displayName: 'V', avatar: null }, viewedAt: new Date() };
-    const prisma = makePrisma({ postFindFirst: postWithReactions, viewFindMany: [view], viewCount: 1 });
+    const prisma = makePrisma({
+      postFindFirst: makePost(),
+      viewFindMany: [view],
+      viewCount: 1,
+      reactionFindMany: [{ userId: 'viewer-1', emoji: '👏' }],
+    });
     const { sut } = makeSut(prisma);
 
     const result = await sut.getPostInteractions('post-1', 'user-1', 10, 0) as any;
