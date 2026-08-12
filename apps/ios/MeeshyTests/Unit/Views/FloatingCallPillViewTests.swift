@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshyUI
 
 // MARK: - CallPillStatus Unit Tests
 
@@ -481,9 +482,8 @@ final class FloatingCallPillViewTests: XCTestCase {
 
 // 2026-08-12 — retour user : « un dégradé transparent en bas avant d'atteindre
 // l'indigo complet — 6 % en bas de transparent, 20-30 % de dégradé ». Les
-// bandes du fondu sont des valeurs calibrées partagées entre la bannière
-// d'appel (masque du décor indigo) et le scrim status bar de ConversationView
-// (noir plein + mêmes bandes de sortie) — gardées ici contre toute dérive.
+// bandes du fondu sont des valeurs calibrées (masque du décor indigo de la
+// bannière d'appel) — gardées ici contre toute dérive.
 @MainActor
 final class TopBarBottomFadeTests: XCTestCase {
 
@@ -508,10 +508,8 @@ final class TopBarBottomFadeTests: XCTestCase {
 
     func test_majorityOfBar_staysFullyOpaque() {
         // Le fondu ne ronge que le bord bas : plus de la moitié de la hauteur
-        // reste à pleine opacité — côté bannière d'appel c'est le fond indigo
-        // contre lequel CallBannerContrastTests calibre le scrim, côté
-        // conversation c'est la barre noire qui masque le contenu scrollé
-        // derrière la status bar / Dynamic Island.
+        // reste à pleine opacité — le fond indigo de la bannière d'appel,
+        // contre lequel CallBannerContrastTests calibre le scrim.
         XCTAssertGreaterThanOrEqual(TopBarBottomFade.fadeStartLocation, 0.5)
     }
 }
