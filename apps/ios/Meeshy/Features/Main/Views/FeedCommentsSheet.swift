@@ -773,6 +773,16 @@ struct CommentsSheetView: View {
                 if let idx = existing.firstIndex(where: isTwin) {
                     existing[idx] = feedComment                 // reconcile our temp
                     repliesMap[parentId] = existing
+                    // Réécriture du cache avec la ligne RÉCONCILIÉE : un cache
+                    // persisté pendant que la ligne optimiste (cmid) était
+                    // encore là garderait le fantôme pour toujours. Scope
+                    // STRICT à la réconciliation — persister sur l'insertion
+                    // d'un TIERS écraserait un fil de réponses caché plus
+                    // complet quand le fil n'a pas (encore) été chargé ici.
+                    let replies = existing
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
+                    }
                 } else if !existing.contains(where: { $0.id == feedComment.id }) {
                     existing.insert(feedComment, at: 0)
                     repliesMap[parentId] = existing
@@ -782,27 +792,21 @@ struct CommentsSheetView: View {
                         liveComments = current
                     }
                 }
-                // Réécriture du cache réponses avec la ligne RÉCONCILIÉE : sans
-                // elle, un cache persisté pendant que la ligne optimiste (cmid)
-                // était encore là garderait le fantôme pour toujours.
-                let replies = existing
-                Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
-                }
             } else {
                 var current = liveComments ?? post.comments
                 if let idx = current.firstIndex(where: isTwin) {
                     current[idx] = feedComment                  // reconcile our temp
+                    // Même réécriture réconciliée pour le fil top-level (clé
+                    // partagée avec le détail de post et l'overlay story) —
+                    // même scope strict que côté réponses.
+                    let snapshot = current
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(snapshot), for: "post-\(post.id)")
+                    }
                 } else if !current.contains(where: { $0.id == feedComment.id }) {
                     current.insert(feedComment, at: 0)
                 }
                 liveComments = current
-                // Même réécriture pour le fil top-level (clé partagée avec le
-                // détail de post et l'overlay story — local-first inter-vues).
-                let snapshot = current
-                Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(snapshot), for: "post-\(post.id)")
-                }
             }
             liveCommentCount = data.commentCount
         }
