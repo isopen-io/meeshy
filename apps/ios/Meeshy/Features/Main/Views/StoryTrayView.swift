@@ -145,6 +145,10 @@ struct StoryTrayView: View {
             }
         )
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
+        // NOTE : la tuile « Stories » du profil est désormais servie par le
+        // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
+        // un listener ici ne couvrait que les écrans où un tray est monté et
+        // aurait présenté en double depuis chaque instance.
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -313,8 +317,11 @@ struct StoryRingCell: View {
 
                 // Story count dots (multiple stories indicator) — offset scales
                 // with the avatar so it stays pinned to the bottom edge.
-                if group.stories.count > 1 {
-                    storyCountDots(count: group.stories.count, unviewed: group.hasUnviewed)
+                // Compte les stories VIVANTES uniquement : le groupe self garde
+                // ses stories expirées (archive auteur, exemptées de la purge)
+                // — les compter gonflait les points avec des stories éteintes.
+                if group.stories.filter({ !$0.isExpired() }).count > 1 {
+                    storyCountDots(count: group.stories.filter { !$0.isExpired() }.count, unviewed: group.hasUnviewed)
                         .offset(y: context.size * 0.318)
                 }
             }

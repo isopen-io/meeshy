@@ -381,6 +381,50 @@ describe('PostFeedService.getStories', () => {
     expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
+  // ── Mode archive auteur (GET /posts/stories/mine, 2026-08-12) ────────────
+
+  it('archiveOfAuthor: returns ONLY the caller posts, without any expiry filter', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { archiveOfAuthor: true });
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.authorId).toBe('user-1');
+    expect(where.type).toBe('STORY');
+    // Champ ABSENT sur un post vivant : le filtre NOT_DELETED (isSet:false)
+    // est requis, jamais `deletedAt: null`.
+    expect(where.deletedAt).toEqual({ isSet: false });
+    // L'archive lit TOUT l'historique — aucune clause d'expiration : les
+    // stories ne sont plus jamais détruites et l'auteur les garde à vie.
+    expect(JSON.stringify(where)).not.toContain('expiresAt');
+  });
+
+  it('archiveOfAuthor: never applies the visibility fan-out (own posts only)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { archiveOfAuthor: true });
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(JSON.stringify(where)).not.toContain('visibility');
+  });
+
+  it('archiveOfAuthor: paginates with the keyset cursor and reports hasMore', async () => {
+    const stories = Array.from({ length: 3 }, (_, i) => makePost(`arch-${i}`, { type: 'STORY' }));
+    mockPostFindMany.mockResolvedValue(stories);
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { archiveOfAuthor: true, limit: 2 });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBeTruthy();
+    expect(result.deletedIds).toEqual([]);
+  });
+
   it('adds an updatedAt delta filter when updatedSince is provided (G1 delta-sync)', async () => {
     mockPostFindMany.mockResolvedValue([]);
     const since = new Date('2026-07-03T10:00:00Z');

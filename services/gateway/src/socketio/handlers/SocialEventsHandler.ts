@@ -22,6 +22,7 @@ import type {
   StatusReactedEventData,
   StatusUnreactedEventData,
   CommentAddedEventData,
+  CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
@@ -437,6 +438,24 @@ export class SocialEventsHandler {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
+  }
+
+  /**
+   * Édition d'un commentaire (contenu / effets visuels) : le payload porte le
+   * commentaire complet — le client remplace la ligne en place (idempotent
+   * par id, contrairement à l'insertion de `comment:added`). Mêmes rooms et
+   * même filtrage de visibilité que la création — passer `visibility` BRUT du
+   * post, jamais un défaut permissif (cf. R1 du contrat ci-dessus).
+   */
+  async broadcastCommentUpdated(
+    data: CommentUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, data);
   }
 
   async broadcastCommentDeleted(

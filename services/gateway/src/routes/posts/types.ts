@@ -353,6 +353,21 @@ export const CreateCommentSchema = z.object({
   { message: 'A comment must have text content or an attached media' },
 );
 
+export const UpdateCommentSchema = z.object({
+  /// Nouveau contenu — mêmes bornes que la création. `undefined` = inchangé.
+  /// Un contenu blanc n'est accepté QUE pour un commentaire à média (retrait
+  /// de légende) — garde métier dans `PostCommentService.updateComment`.
+  content: z.string().max(2000).optional(),
+  /// Effets visuels (bitmask partagé avec les messages — GLOW/PULSE/…).
+  /// `0` retire tous les effets ; `undefined` = inchangé. Borné à Int32 max :
+  /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
+  /// cette valeur — un flag hors borne casserait les deux côtés.
+  effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
+}).refine(
+  (data) => data.content !== undefined || data.effectFlags !== undefined,
+  { message: 'Nothing to update' },
+);
+
 export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),
   content: z.string().max(5000).optional(),

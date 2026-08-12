@@ -57,6 +57,12 @@ public protocol PostServiceProviding: Sendable {
     /// existants (mocks) restent valides via le défaut ci-dessous, qui ignore
     /// simplement `location` s'il n'est pas surchargé.
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment
+    /// Variante complète ET idempotente — envoie `clientMutationId` en header
+    /// `X-Client-Mutation-Id` pour que le gateway dédoublonne les rejeux et
+    /// ré-émette le cmid dans l'écho `comment:added` (réconciliation de la
+    /// ligne optimiste par l'émetteur). Requirement séparée pour que les
+    /// conformeurs existants restent valides via le défaut ci-dessous.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment
     /// Idempotent text-only variant — sends `clientMutationId` as the
     /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
     /// recorded result instead of duplicating the comment on retry (offline
@@ -67,6 +73,10 @@ public protocol PostServiceProviding: Sendable {
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func deleteComment(postId: String, commentId: String) async throws
+    /// Édition d'un commentaire par son auteur : contenu et/ou effets visuels
+    /// (`effectFlags`, même bitfield que la création — lueur/pulse/…). Une
+    /// requirement séparée avec défaut ci-dessous pour garder les mocks valides.
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
@@ -135,6 +145,25 @@ public extension PostServiceProviding {
     ) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
                              attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
+
+    /// Défaut : les conformeurs existants (mocks) restent valides — un mock qui
+    /// n'observe pas l'édition n'a pas à l'implémenter, et un test qui
+    /// l'exercerait sans surcharge échoue explicitement.
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+        throw NSError(domain: "PostServiceProviding", code: -1,
+                      userInfo: [NSLocalizedDescriptionKey: "updateComment not implemented by this conformer"])
+    }
+
+    /// Défaut de la variante complète idempotente : ignore le cmid et retombe
+    /// sur la variante complète — les mocks existants restent valides tant
+    /// qu'ils n'ont pas besoin d'observer le cmid.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: location)
     }
 }
 
@@ -208,10 +237,31 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: location, clientMutationId: nil)
+    }
+
+    /// Surcharge porteuse du cmid : envoyé en header `X-Client-Mutation-Id`,
+    /// le gateway dédoublonne les rejeux (MutationLog) et ré-émet le cmid dans
+    /// l'écho `comment:added` pour la réconciliation optimiste de l'émetteur.
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
                                         attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage, location: location)
-        let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+        guard let clientMutationId, !clientMutationId.isEmpty else {
+            let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+            return response.data
+        }
+        let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
+            endpoint: "/posts/\(postId)/comments",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": clientMutationId]
+        )
         return response.data
     }
 
@@ -242,6 +292,35 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             headers: ["X-Client-Mutation-Id": clientMutationId]
         )
         return response.data
+    }
+
+    public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+        let body = UpdateCommentRequest(content: content, effectFlags: effectFlags)
+        let response: APIResponse<APIPostComment> = try await api.patch(
+            endpoint: "/posts/\(postId)/comments/\(commentId)", body: body
+        )
+        return response.data
+    }
+
+    /// Traduction d'un commentaire à la demande vers UNE langue (Prisme —
+    /// « Exploration ») : fire-and-forget, le résultat arrive via l'événement
+    /// socket `comment:translation-updated`. Miroir de `requestTranslation`
+    /// (posts) ; `force` rejoue une langue déjà traduite.
+    public func requestCommentTranslation(postId: String, commentId: String, targetLanguage: String, force: Bool = false) async throws {
+        struct TranslateCommentRequest: Encodable {
+            let targetLanguage: String
+            let force: Bool?
+        }
+        // Payload `{ requested: Bool, targetLanguage: String }` — typé a
+        // minima : le résultat utile arrive par le socket
+        // comment:translation-updated, pas par cette réponse.
+        struct TranslateCommentResponse: Decodable {
+            let requested: Bool?
+        }
+        let body = TranslateCommentRequest(targetLanguage: targetLanguage, force: force ? true : nil)
+        let _: APIResponse<TranslateCommentResponse> = try await api.post(
+            endpoint: "/posts/\(postId)/comments/\(commentId)/translate", body: body
+        )
     }
 
     public func likeComment(postId: String, commentId: String) async throws {

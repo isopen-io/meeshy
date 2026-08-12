@@ -22,37 +22,52 @@
  * STATUS = now+1h »).
  */
 export const EPHEMERAL_POST_TTL_HOURS = {
-  STORY: 21,
+  // 20 h de visibilité publique (2026-08-12, était 21 h). Miroirs iOS :
+  // `StoryItem.defaultExpiryInterval`, `StoryModels.swift:toStoryGroups`,
+  // `StoryViewModel.pinDeadline`.
+  STORY: 20,
   STATUS: 1,
 } as const;
 
 export type EphemeralPostType = keyof typeof EPHEMERAL_POST_TTL_HOURS;
 
 /**
- * Combien de temps un contenu éphémère PÉRIMÉ reste lisible par son AUTEUR.
- *
- * `getStories` renvoie à un auteur ses propres stories expirées pendant cette
- * fenêtre, pour que « Mes stories » puisse les archiver (la vignette voilée) —
- * sans quoi un pull-to-refresh écraserait le cache du client avec une réponse
- * serveur qui les a oubliées. Au-delà, une story n'est plus un contenu qu'on
- * republie ou dont on relit les vues, et la réponse doit rester bornée.
- *
- * Elle vit ici, et non plus seulement sur `PostFeedService`, parce qu'elle
- * borne DEUX choses qui doivent s'accorder : jusqu'où l'archive lit, et à
- * partir de quand le balayage a le droit de masquer. La requête d'archive est
- * gardée par `deletedAt: NOT_DELETED` ; un soft-delete posé à l'échéance la
- * viderait donc en une heure. Le balayage attend la fin de cette fenêtre —
- * il est le lecteur suivant, pas le concurrent.
+ * Combien de temps un contenu éphémère PÉRIMÉ reste lisible par son AUTEUR
+ * dans la requête du TRAY (`getStories`). Depuis 2026-08-12, ce n'est plus la
+ * borne de l'archive : les stories ne sont JAMAIS détruites (cf.
+ * `SWEPT_POST_TYPES`), l'auteur les retrouve toutes dans « Mes stories »
+ * (carrousel personnel), les republie (`POST /posts/:id/republish`, date
+ * fraîche) ou les recharge dans le composer. Cette fenêtre ne borne plus que
+ * la présence des stories expirées de l'auteur DANS LA PAGE DU TRAY — un
+ * historique illimité y noierait les amis hors de la première page de 50.
  */
 export const EPHEMERAL_AUTHOR_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Dérivée, jamais réécrite à la main : c'est ce qui interdit à un type
- * éphémère d'exister sans balayage.
+ * Dérivée, jamais réécrite à la main : tout type de la table des durées
+ * reçoit son échéance (`expiresAt`) à la création.
  */
 export const EPHEMERAL_POST_TYPES = Object.keys(
   EPHEMERAL_POST_TTL_HOURS,
 ) as readonly EphemeralPostType[];
+
+/**
+ * Types éphémères que le balayeur a le droit de DÉTRUIRE, distincts de ceux
+ * qui reçoivent une échéance. Les STORIES n'y figurent plus (2026-08-12) :
+ * l'échéance ne fait que les MASQUER du public (filtres `expiresAt > now`),
+ * l'auteur garde son archive pour toujours — republication, relecture des
+ * vues, rechargement dans le composer. Détruire une story détruisait tout ça.
+ * Les STATUS (1 h de vie, aucune surface d'archive) restent balayés.
+ *
+ * Liste SÉPARÉE et explicite — la dériver de `EPHEMERAL_POST_TTL_HOURS`
+ * réintroduirait mécaniquement STORY dans le balayage au premier refactor.
+ *
+ * Coût assumé : les stories s'accumulent (storyViews/réactions embarquées,
+ * PostMedia). C'est le choix produit « ne plus jamais supprimer » ; une
+ * politique de rétention froide (troncature de storyViews très anciennes)
+ * reste possible SANS toucher aux lignes Post.
+ */
+export const SWEPT_POST_TYPES = ['STATUS'] as const satisfies readonly EphemeralPostType[];
 
 function isEphemeral(type: string): type is EphemeralPostType {
   return Object.prototype.hasOwnProperty.call(EPHEMERAL_POST_TTL_HOURS, type);

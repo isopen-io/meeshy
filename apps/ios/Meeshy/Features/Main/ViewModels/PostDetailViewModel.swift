@@ -32,6 +32,9 @@ class PostDetailViewModel: ObservableObject {
     // le cœur d'un commentaire restait inerte dans le détail de post).
     @Published var commentLikedIds: Set<String> = []
     @Published var commentLikeDelta: [String: Int] = [:]
+    /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
+    /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
+    @Published var editingComment: FeedComment?
     @Published var commentHeartInFlightIds: Set<String> = []
 
     private var commentCursor: String?
@@ -235,6 +238,7 @@ class PostDetailViewModel: ObservableObject {
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
+                        effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
@@ -389,6 +393,7 @@ class PostDetailViewModel: ObservableObject {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: parentId,
+                    effectFlags: c.effectFlags ?? 0,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
                     media: (c.media ?? []).map { $0.toFeedMedia() },
@@ -431,6 +436,42 @@ class PostDetailViewModel: ObservableObject {
             .map(\.id)
         guard !liked.isEmpty else { return }
         commentLikedIds.formUnion(liked)
+    }
+
+    /// Réconciliation par l'agrégat ABSOLU d'un événement cœur de commentaire :
+    /// pose `likes = count` sur la ligne (top-level ou réponse), purge le delta
+    /// optimiste, et dérive « mon cœur » de `reactorUserIds` (la liste des
+    /// User.id ayant réagi — PAS `hasCurrentUser`, qui est calculé côté gateway
+    /// relativement à l'ACTEUR de l'événement, donc faux pour les destinataires
+    /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
+    /// serveur sans jamais compter double.
+    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
+        var resolvedCount = count
+        if let myId = AuthManager.shared.currentUser?.id {
+            if reactorUserIds.contains(myId) {
+                commentLikedIds.insert(commentId)
+            } else if actorUserId == myId {
+                // L'événement décrit MA propre action : agrégat autoritatif.
+                commentLikedIds.remove(commentId)
+            } else if commentLikedIds.contains(commentId) {
+                // Agrégat d'un TIERS pendant que MON like est encore en vol :
+                // il ne me connaît pas — préserver le cœur, compter le mien
+                // par-dessus (l'écho de mon propre like reconfirmera).
+                resolvedCount = count + 1
+            }
+        }
+        commentLikeDelta[commentId] = nil
+        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
+            comments[idx].likes = resolvedCount
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx].likes = resolvedCount
+                repliesMap[key] = replies
+                return
+            }
+        }
     }
 
     /// Like/unlike d'un commentaire — optimistic + réaction socket cœur + rollback.
@@ -783,6 +824,65 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
+    // MARK: - Édition de commentaire (auteur)
+
+    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
+    /// d'insertion — même id), rollback complet si le serveur refuse.
+    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
+    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
+        guard let post else { return }
+        let edited = target.withEditedContent(content, effectFlags: effectFlags)
+        let snapshotComments = comments
+        let snapshotReplies = repliesMap
+        applyCommentUpdated(edited)
+        do {
+            _ = try await postService.updateComment(
+                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
+            )
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            if let parentId = edited.parentId, let replies = repliesMap[parentId] {
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
+            }
+        } catch {
+            comments = snapshotComments
+            repliesMap = snapshotReplies
+            FeedbackToastManager.shared.showError(
+                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
+        }
+    }
+
+    /// Pose une traduction de commentaire fraîchement arrivée (racine ou
+    /// réponse) — uniquement si la langue est préférée et que la ligne n'a pas
+    /// déjà une traduction plus prioritaire affichée.
+    func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
+        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }) else { return }
+        if let idx = comments.firstIndex(where: { $0.id == commentId }), comments[idx].translatedContent == nil {
+            comments[idx].translatedContent = text
+            return
+        }
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }), replies[idx].translatedContent == nil {
+                replies[idx].translatedContent = text
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
+
+    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
+    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
+    func applyCommentUpdated(_ edited: FeedComment) {
+        if let parentId = edited.parentId, var existing = repliesMap[parentId],
+           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
+            existing[idx] = edited
+            repliesMap[parentId] = existing
+            return
+        }
+        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
+            comments[idx] = edited
+        }
+    }
+
     /// Envoi d'un commentaire (top-level OU réponse) portant UN média
     /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
@@ -791,7 +891,10 @@ class PostDetailViewModel: ObservableObject {
     func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
-        let tempId = "tmp_\(UUID().uuidString)"
+        // La ligne optimiste est keyée par le cmid envoyé au gateway : l'écho
+        // `comment:added` porte ce cmid et la remplace en place (pas de doublon),
+        // et un retry REST après timeout est dédoublonné serveur (MutationLog).
+        let tempId = ClientMutationId.generate()
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: tempId,
@@ -823,7 +926,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
-                originalLanguage: nil, location: location
+                originalLanguage: nil, location: location, clientMutationId: tempId
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -990,23 +1093,108 @@ class PostDetailViewModel: ObservableObject {
                     currentUserReactions: data.comment.currentUserReactions,
                     media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
+                // Écho de NOTRE propre envoi : la ligne optimiste est keyée par
+                // le cmid (sendComment/sendReply/submitCommentWithMedia) — la
+                // remplacer EN PLACE. Sans cette réconciliation, l'écho (id
+                // serveur ≠ cmid) passait la dédup par id et insérait un
+                // doublon visible jusqu'au prochain rechargement.
                 if let parentId {
-                    if self.expandedThreads.contains(parentId) {
+                    var reconciledOwnOptimistic = false
+                    if let cmid = data.clientMutationId, var existing = self.repliesMap[parentId],
+                       let optimisticIdx = existing.firstIndex(where: { $0.id == cmid }) {
+                        existing[optimisticIdx] = comment
+                        self.repliesMap[parentId] = existing
+                        reconciledOwnOptimistic = true
+                    }
+                    if !reconciledOwnOptimistic, self.expandedThreads.contains(parentId) {
                         var existing = self.repliesMap[parentId] ?? []
-                        if !existing.contains(where: { $0.id == comment.id }) {
+                        if existing.contains(where: { $0.id == comment.id }) {
+                            reconciledOwnOptimistic = true
+                        } else {
                             existing.insert(comment, at: 0)
                             self.repliesMap[parentId] = existing
                         }
                     }
-                    if let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
+                    // Le +1 du parent n'est dû que pour une réponse VRAIMENT
+                    // nouvelle : la nôtre a déjà incrémenté à l'insertion
+                    // optimiste (sendReply), la re-livraison d'un même id non plus.
+                    if !reconciledOwnOptimistic,
+                       let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
                         self.comments[idx].replies += 1
                     }
                 } else {
-                    if !self.comments.contains(where: { $0.id == comment.id }) {
+                    if let cmid = data.clientMutationId,
+                       let optimisticIdx = self.comments.firstIndex(where: { $0.id == cmid }) {
+                        self.comments[optimisticIdx] = comment
+                    } else if !self.comments.contains(where: { $0.id == comment.id }) {
                         self.comments.insert(comment, at: 0)
                     }
                 }
                 self.post?.commentCount = data.commentCount
+                // Re-persiste les listes réconciliées : la ligne optimiste
+                // (id = cmid) avait été sauvée par sendComment/sendReply — sans
+                // cette réécriture, le fantôme cmid restait en cache et
+                // ré-apparaissait en DOUBLON du vrai commentaire à la prochaine
+                // ouverture (fetch qui APPEND sur la liste issue du cache).
+                let reconciledComments = self.comments
+                let reconciledReplies = parentId.flatMap { self.repliesMap[$0] }
+                Task {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)")
+                    if let parentId, let reconciledReplies {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)")
+                    }
+                }
+            }
+            .store(in: &socketCancellables)
+
+        // Édition en temps réel : remplace la ligne EN PLACE (contenu, effets,
+        // traductions régénérées) — idempotent avec l'optimiste local.
+        socialSocket.commentUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
+                let updated = FeedComment(
+                    id: data.comment.id, author: data.comment.author.name,
+                    authorId: data.comment.author.id,
+                    authorUsername: data.comment.author.username,
+                    authorAvatarURL: data.comment.author.avatar,
+                    content: data.comment.content, timestamp: data.comment.createdAt,
+                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                    parentId: data.comment.parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translated,
+                    currentUserReactions: data.comment.currentUserReactions,
+                    media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+                )
+                self.applyCommentUpdated(updated)
+                // Invalidation locale par réécriture (écho d'un autre appareil) :
+                // les autres vues resservent la version éditée depuis le cache.
+                let snapshot = self.comments
+                Task {
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                }
+            }
+            .store(in: &socketCancellables)
+
+        // Traduction de commentaire arrivée (pipeline async ou demande à la
+        // demande) : pose `translatedContent` si la langue est PRÉFÉRÉE et
+        // qu'aucune traduction n'est déjà affichée — même règle unique que
+        // `FeedViewModel.applyCommentTranslation`.
+        socialSocket.commentTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                self.applyCommentTranslationUpdate(
+                    commentId: data.commentId, language: data.language, text: data.translation.text
+                )
             }
             .store(in: &socketCancellables)
 
@@ -1063,16 +1251,24 @@ class PostDetailViewModel: ObservableObject {
         // Réactions cœur de commentaire en temps réel (miroir de CommentsSheetView) :
         // synchronise `commentLikedIds` (réaction du user courant) ou `commentLikeDelta`
         // (réaction d'un tiers) sans toucher l'optimistic local déjà appliqué.
+        // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
+        // `StoryViewerView.applyCommentReactionEvent`) : l'événement porte
+        // `aggregation.count` (état global après application) et
+        // `hasCurrentUser`. L'ancien ±1 sur `commentLikeDelta` ne purgeait
+        // jamais le delta de sa PROPRE réaction : dès que la base était
+        // rafraîchie (`loadReplies`, refetch), `likes` incluait déjà le like
+        // et l'affichage `likes + delta` comptait DOUBLE.
         socialSocket.commentReactionAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }
             .sink { [weak self] event in
                 guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
-                if event.userId == AuthManager.shared.currentUser?.id {
-                    self.commentLikedIds.insert(event.commentId)
-                } else {
-                    self.commentLikeDelta[event.commentId, default: 0] += 1
-                }
+                self.applyCommentReactionAggregate(
+                    commentId: event.commentId,
+                    count: event.aggregation.count,
+                    reactorUserIds: event.aggregation.userIds,
+                    actorUserId: event.userId
+                )
             }
             .store(in: &socketCancellables)
 
@@ -1081,11 +1277,12 @@ class PostDetailViewModel: ObservableObject {
             .filter { $0.postId == postId }
             .sink { [weak self] event in
                 guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
-                if event.userId == AuthManager.shared.currentUser?.id {
-                    self.commentLikedIds.remove(event.commentId)
-                } else {
-                    self.commentLikeDelta[event.commentId, default: 0] -= 1
-                }
+                self.applyCommentReactionAggregate(
+                    commentId: event.commentId,
+                    count: event.aggregation.count,
+                    reactorUserIds: event.aggregation.userIds,
+                    actorUserId: event.userId
+                )
             }
             .store(in: &socketCancellables)
 

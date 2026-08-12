@@ -130,6 +130,39 @@ export function registerFeedRoutes(
     }
   });
 
+  // GET /posts/stories/mine — Archive COMPLÈTE des stories de l'appelant
+  // (« Mes stories » : en cours ET passées), paginée keyset. Les stories ne
+  // sont plus jamais détruites (cf. ephemeralPosts.SWEPT_POST_TYPES) : cette
+  // route est le chemin d'accès à l'historique illimité, distinct du tray qui
+  // borne l'archive auteur à 7 j pour ne pas noyer les stories des amis.
+  fastify.get('/posts/stories/mine', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const rawCursor = (request.query as Record<string, unknown> | undefined)?.cursor;
+      const cursor = typeof rawCursor === 'string' && rawCursor.length > 0 ? rawCursor : undefined;
+      const rawLimit = Number((request.query as Record<string, unknown> | undefined)?.limit);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50) : 20;
+
+      const result = await feedService.getStories(authContext.registeredUser.id, {
+        cursor, limit, archiveOfAuthor: true,
+      });
+
+      reply.header('Cache-Control', 'private, no-cache');
+      return sendSuccess(reply, result.items, {
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+      });
+    } catch (error) {
+      fastify.log.error(`[GET /posts/stories/mine] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // GET /posts/feed/reels — Vertical full-screen reel thread.
   // `?seed=<reelId>` (réel touché dans le Feed) → thread d'affinité ; sans seed
   // → onglet « Pour toi » (affinité utilisateur seule).

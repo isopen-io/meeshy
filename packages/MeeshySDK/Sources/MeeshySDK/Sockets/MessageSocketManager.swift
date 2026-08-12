@@ -49,7 +49,15 @@ public struct ReactionAggregationEvent: Decodable, Sendable {
 public struct ReactionUpdateEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String?
+    /// `Participant.id` résolu côté serveur — PAS un `User.id`. La ligne
+    /// optimiste locale est keyée par `User.id` (sentinelle `currentUserId`) :
+    /// comparer les deux champs ne matche jamais pour sa propre réaction.
     public let participantId: String?
+    /// `User.id` de l'auteur de la réaction (envoyé par le gateway depuis
+    /// toujours, décodé depuis 2026-08-12). C'est LA clé d'identité stable
+    /// pour reconnaître l'écho de sa propre réaction et dédupliquer contre la
+    /// ligne optimiste.
+    public let userId: String?
     public let emoji: String
     public let action: String?
     public let aggregation: ReactionAggregationEvent?

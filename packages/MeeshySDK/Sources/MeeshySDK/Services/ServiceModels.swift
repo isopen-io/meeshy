@@ -98,6 +98,18 @@ public struct CreatePostRequest: Encodable {
     }
 }
 
+/// Corps de `PATCH /posts/:postId/comments/:commentId` — édition par l'auteur.
+/// `nil` = champ inchangé ; `effectFlags: 0` retire tous les effets.
+public struct UpdateCommentRequest: Encodable {
+    public let content: String?
+    public let effectFlags: Int?
+
+    public init(content: String? = nil, effectFlags: Int? = nil) {
+        self.content = content
+        self.effectFlags = effectFlags
+    }
+}
+
 public struct CreateCommentRequest: Encodable {
     public let content: String
     public let parentId: String?

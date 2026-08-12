@@ -506,6 +506,22 @@ struct PostDetailView: View {
                 onDeleteComment: { target in
                     Task { await viewModel.deleteComment(target) }
                 },
+                onEditComment: { target in
+                    viewModel.clearReply()
+                    viewModel.editingComment = target
+                    composerText = target.content
+                    let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
+                    commentBlurEnabled = flags.contains(.blurred)
+                    commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
+                    HapticFeedback.light()
+                },
+                onRequestTranslation: { target in
+                    let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+                    Task {
+                        try? await PostService.shared.requestCommentTranslation(
+                            postId: postId, commentId: target.id, targetLanguage: lang)
+                    }
+                },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                 presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
@@ -2123,6 +2139,52 @@ struct PostDetailView: View {
     // MARK: - Composer
 
     private var replyBannerView: AnyView? {
+        // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
+        if let editing = viewModel.editingComment {
+            return AnyView(
+                HStack(spacing: 8) {
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(theme.textSecondary)
+                        Text(editing.displayContent)
+                            .font(.caption)
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            viewModel.editingComment = nil
+                            composerText = ""
+                            commentEffects = .none
+                            commentBlurEnabled = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.bold())
+                            .foregroundColor(theme.textMuted)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                    }
+                    .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                    .meeshyTapTarget(44)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(theme.surfaceGradient(tint: accentColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                        )
+                )
+            )
+        }
         guard let reply = viewModel.replyingTo else { return nil }
         return AnyView(
             HStack(spacing: 8) {
@@ -2285,6 +2347,19 @@ struct PostDetailView: View {
     }
 
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        if let editing = viewModel.editingComment {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty || !editing.media.isEmpty else { return }
+            let flags = commentEffects.flags.rawValue
+                | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
+            viewModel.editingComment = nil
+            composerText = ""
+            commentEffects = .none
+            commentBlurEnabled = false
+            commentAttachments.removeAll()
+            Task { await viewModel.updateComment(editing, content: trimmed, effectFlags: Int(flags)) }
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()

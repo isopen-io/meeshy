@@ -1094,7 +1094,7 @@ describe('PostService', () => {
       expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-audio.mp3');
     });
 
-    it('sets expiresAt to 21h from now when reposting as STORY', async () => {
+    it('sets expiresAt to 20h from now when reposting as STORY', async () => {
       const original = makePost({ id: 'src-1', type: PostType.STORY });
       prisma.post.findFirst.mockResolvedValue(original);
       prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-1', ...args.data }));
@@ -1107,10 +1107,10 @@ describe('PostService', () => {
       const createCall = prisma.post.create.mock.calls[0][0];
       const expiresAt = createCall.data.expiresAt as Date;
       expect(expiresAt).toBeInstanceOf(Date);
-      const expectedMs = before + 21 * 3600_000;
+      const expectedMs = before + 20 * 3600_000;
       const actualMs = expiresAt.getTime();
       expect(actualMs).toBeGreaterThanOrEqual(expectedMs);
-      expect(actualMs).toBeLessThanOrEqual(after + 21 * 3600_000);
+      expect(actualMs).toBeLessThanOrEqual(after + 20 * 3600_000);
     });
 
     it('sets expiresAt to 1h from now when reposting as STATUS', async () => {

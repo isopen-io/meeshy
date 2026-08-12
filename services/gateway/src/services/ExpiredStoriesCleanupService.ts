@@ -3,7 +3,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
-import { EPHEMERAL_AUTHOR_ARCHIVE_MS, EPHEMERAL_POST_TYPES } from './posts/ephemeralPosts';
+import { EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
 import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { NOT_DELETED } from './posts/softDelete';
@@ -11,8 +11,13 @@ import { NOT_DELETED } from './posts/softDelete';
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
 
 /**
- * Permanently removes EPHEMERAL Posts whose `expiresAt` has lapsed — stories
- * ET statuts, `EPHEMERAL_POST_TYPES` faisant foi.
+ * Permanently removes SWEPT ephemeral Posts whose `expiresAt` has lapsed —
+ * `SWEPT_POST_TYPES` faisant foi, soit les STATUS uniquement depuis
+ * 2026-08-12. Les STORIES ne sont PLUS JAMAIS détruites : l'échéance ne fait
+ * que les masquer du public (filtres `expiresAt > now` des lectures),
+ * l'auteur garde son archive pour toujours (« Mes stories », republication à
+ * date fraîche via `POST /posts/:id/republish`, rechargement dans le
+ * composer).
  *
  * Le nom de la classe ne dit que « Stories » et reste inchangé volontairement :
  * il est cité par des plans et des analyses archivés que réécrire fausserait.
@@ -128,7 +133,11 @@ export class ExpiredStoriesCleanupService {
     try {
       const softResult = await this.prisma.post.updateMany({
         where: {
-          type: { in: [...EPHEMERAL_POST_TYPES] },
+          // SWEPT_POST_TYPES, pas EPHEMERAL_POST_TYPES : les stories ne sont
+          // plus JAMAIS détruites (archive auteur illimitée, 2026-08-12) —
+          // seule leur échéance les masque du public. Le balayage ne porte
+          // plus que sur les STATUS.
+          type: { in: [...SWEPT_POST_TYPES] },
           expiresAt: { lt: softDeleteCutoff },
           // `NOT_DELETED` (`isSet: false`) et JAMAIS `deletedAt: null` : sur le
           // connecteur MongoDB de Prisma, le filtre nul ne matche que les
@@ -170,7 +179,11 @@ export class ExpiredStoriesCleanupService {
       // fournées horaires au lieu de le faire échouer d'un bloc.
       const toDelete = await this.prisma.post.findMany({
         where: {
-          type: { in: [...EPHEMERAL_POST_TYPES] },
+          // SWEPT_POST_TYPES, pas EPHEMERAL_POST_TYPES : les stories ne sont
+          // plus JAMAIS détruites (archive auteur illimitée, 2026-08-12) —
+          // seule leur échéance les masque du public. Le balayage ne porte
+          // plus que sur les STATUS.
+          type: { in: [...SWEPT_POST_TYPES] },
           deletedAt: { not: null },
           expiresAt: { lt: hardDeleteCutoff },
         },

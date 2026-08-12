@@ -68,13 +68,13 @@ final class StoryBorrowedSoundIngestionTests: XCTestCase {
         XCTAssertEqual(audio?.isBackground, true)
     }
 
-    func test_toStoryGroups_missingExpiresAt_fallsBackTo21hWindow_notDeadOnArrival() {
+    func test_toStoryGroups_missingExpiresAt_fallsBackToPublicWindow_notDeadOnArrival() {
         let createdAt = Date(timeIntervalSince1970: 1_785_000_000)
         let groups = [makeBorrowedSoundStoryPost(createdAt: createdAt, expiresAt: nil)].toStoryGroups()
 
         let item = groups.first?.stories.first
         XCTAssertNotNil(item?.expiresAt)
-        let expected = Calendar.current.date(byAdding: .hour, value: 21, to: createdAt)
+        let expected = Calendar.current.date(byAdding: .hour, value: 20, to: createdAt)
         XCTAssertEqual(item?.expiresAt, expected)
         XCTAssertEqual(item?.isExpired(at: createdAt), false)
     }

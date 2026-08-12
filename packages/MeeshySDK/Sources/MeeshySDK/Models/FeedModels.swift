@@ -366,7 +366,24 @@ public struct FeedComment: Identifiable, Sendable {
     public var displayContent: String { translatedContent ?? content }
 
     public var effects: MessageEffects {
-        MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(effectFlags)))
+        MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(clamping: effectFlags)))
+    }
+
+    /// Copie éditée (édition par l'auteur) : nouveau contenu + effets, tout le
+    /// reste préservé. `content` étant immuable (let), l'édition passe par une
+    /// copie. Un contenu MODIFIÉ invalide `translatedContent` — les traductions
+    /// décrivaient l'ancien texte ; le pipeline serveur régénère et les vues se
+    /// mettent à jour via `comment:translation-updated`.
+    public func withEditedContent(_ newContent: String, effectFlags newFlags: Int) -> FeedComment {
+        FeedComment(
+            id: id, author: author, authorId: authorId, authorUsername: authorUsername,
+            authorAvatarURL: authorAvatarURL,
+            content: newContent, timestamp: timestamp, likes: likes, replies: replies,
+            parentId: parentId, effectFlags: newFlags,
+            originalLanguage: originalLanguage,
+            translatedContent: newContent == content ? translatedContent : nil,
+            currentUserReactions: currentUserReactions, media: media, location: location
+        )
     }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,

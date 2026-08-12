@@ -50,6 +50,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     friendRequest: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    post: {
+      count: jest.fn<any>().mockResolvedValue(0),
+    },
     $runCommandRaw: jest.fn<any>().mockResolvedValue({ n: 0 }),
     ...overrides,
   } as any;

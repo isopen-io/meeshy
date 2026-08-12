@@ -123,6 +123,30 @@ public struct SocketCommentAddedData: Decodable, Sendable {
     public let postId: String
     public let comment: APIPostComment
     public let commentCount: Int
+    /// cmid du POST créateur, ré-émis par le gateway dans l'écho — permet à
+    /// l'ÉMETTEUR de remplacer sa ligne optimiste (insérée sous cet id local)
+    /// au lieu d'en insérer une seconde sous l'id serveur. `nil` quand le
+    /// créateur n'a pas envoyé de `X-Client-Mutation-Id`.
+    public let clientMutationId: String?
+
+    public init(postId: String, comment: APIPostComment, commentCount: Int, clientMutationId: String? = nil) {
+        self.postId = postId
+        self.comment = comment
+        self.commentCount = commentCount
+        self.clientMutationId = clientMutationId
+    }
+}
+
+/// Écho d'édition d'un commentaire (`comment:updated`) — porte le commentaire
+/// COMPLET : le client remplace la ligne en place (idempotent par id).
+public struct SocketCommentUpdatedData: Decodable, Sendable {
+    public let postId: String
+    public let comment: APIPostComment
+
+    public init(postId: String, comment: APIPostComment) {
+        self.postId = postId
+        self.comment = comment
+    }
 }
 
 public struct SocketCommentDeletedData: Decodable, Sendable {
@@ -256,6 +280,7 @@ public protocol SocialSocketProviding: Sendable {
     var statusUnreacted: PassthroughSubject<SocketStatusUnreactedData, Never> { get }
     var conversationDeleted: PassthroughSubject<String, Never> { get }
     var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
+    var commentUpdated: PassthroughSubject<SocketCommentUpdatedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
     var commentReactionAdded: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
@@ -314,6 +339,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let statusUnreacted = PassthroughSubject<SocketStatusUnreactedData, Never>()
     public let conversationDeleted = PassthroughSubject<String, Never>()
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
+    public let commentUpdated = PassthroughSubject<SocketCommentUpdatedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
     public let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
@@ -1047,6 +1073,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         socket.on("conversation:closed") { data, _ in conversationLifecycleHandler(data) }
 
         // --- Comment events ---
+
+        socket.on("comment:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentUpdatedData.self, from: data) { [weak self] payload in
+                self?.commentUpdated.send(payload)
+            }
+        }
 
         socket.on("comment:added") { [weak self] data, _ in
             guard let self else { return }

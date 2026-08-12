@@ -88,6 +88,13 @@ export interface PostComment {
   readonly currentUserReactions?: readonly string[];
   readonly isLikedByMe?: boolean;
   readonly isEdited?: boolean;
+  /**
+   * Effets visuels du commentaire (bitmask partagé avec les messages —
+   * cf. message-effect-flags.ts : GLOW/PULSE/RAINBOW/SPARKLE bits 16-23).
+   * Le champ voyageait déjà dans les payloads runtime mais était invisible
+   * du contrat TS (risque de strip par un schéma de réponse Fastify).
+   */
+  readonly effectFlags?: number;
   readonly deletedAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly author?: PostAuthor;
@@ -299,6 +306,18 @@ export interface CommentAddedEventData {
   readonly postId: string;
   readonly comment: PostComment;
   readonly commentCount: number;
+  /**
+   * cmid du POST créateur (header `X-Client-Mutation-Id`), ré-émis dans
+   * l'écho pour que l'ÉMETTEUR réconcilie sa ligne optimiste (insérée sous
+   * cet id local) au lieu d'en insérer une seconde sous l'id serveur.
+   * Absent pour les clients legacy qui n'envoient pas de cmid.
+   */
+  readonly clientMutationId?: string;
+}
+
+export interface CommentUpdatedEventData {
+  readonly postId: string;
+  readonly comment: PostComment;
 }
 
 export interface CommentDeletedEventData {

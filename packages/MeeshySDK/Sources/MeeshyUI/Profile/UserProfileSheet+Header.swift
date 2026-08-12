@@ -215,12 +215,18 @@ extension UserProfileSheet {
             Divider()
                 .opacity(0.3)
         }
+        // Le fond est posé AVANT le padding : posé après, il remplissait aussi
+        // la bande de `collapsedBar` pt d'écart et la rendait hit-testable —
+        // cet en-tête de section épinglé flotte AU-DESSUS du contenu, la bande
+        // interceptait donc les taps destinés aux cartes (barre d'actions du
+        // haut de liste inopérante). La zone d'écart est couverte visuellement
+        // par la barre compacte opaque quand elle est épinglée.
+        .background(theme.backgroundPrimary)
         // When the big header has scrolled away (progress → 1) the compact
         // identity bar (banner + avatar réduits) pins at the very top; the tabs
         // slide down by its height so they sit JUST BELOW it instead of being
         // covered by the overlay. No gap while expanded (progress 0).
         .padding(.top, ProfileHeaderMetrics.collapsedBar * progress)
-        .background(theme.backgroundPrimary)
     }
 
     // MARK: - Close button (Liquid Glass, top-leading)

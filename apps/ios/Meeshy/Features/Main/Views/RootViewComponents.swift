@@ -736,6 +736,25 @@ struct ThemedFeedOverlay: View {
                 postLikeDelta[event.postId, default: 0] -= 1
             }
         }
+        // Réconciliation canonique du ❤️ (miroir de FeedView) : le gateway route
+        // un ❤️ sur POST/REEL vers `post:liked`/`post:unliked` (compteur ABSOLU,
+        // posé par le ViewModel), PAS vers `post:reaction-added` — les deux
+        // sinks ci-dessus sont donc muets pour un like. Sans cette purge, le
+        // delta optimiste local (+1) restait empilé sur le compteur absolu qui
+        // inclut déjà notre like : chaque like s'affichait EN DOUBLE (N+1 devenu
+        // permanent jusqu'au refetch).
+        .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.insert(event.postId)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.remove(event.postId)
+            }
+        }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
         }

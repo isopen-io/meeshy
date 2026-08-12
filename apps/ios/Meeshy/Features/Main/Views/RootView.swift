@@ -205,6 +205,14 @@ struct RootView: View {
     /// every parent view. The coordinator's `pendingRequest` mirrors the
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
+    /// Page « Mes stories » (en cours + passées) ouverte depuis la tuile
+    /// Stories du bandeau de stats du profil. Hébergée ICI (racine, toujours
+    /// montée) : la feuille de profil peut être présentée depuis n'importe
+    /// quel écran (feed, recherche, détail de post, viewer) — un listener dans
+    /// StoryTrayView n'existait que là où un tray était monté.
+    @State private var showMyStoriesFromProfile = false
+    @State private var myStoriesProfileFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
+    @State private var editingStorySessionFromProfile: StoryEditSession?
 
     /// U1 — namespace de la transition zoom tray→viewer (iOS 18+). Injecté
     /// dans l'environnement pour que la bulle du tray (source) et le cover
@@ -617,6 +625,38 @@ struct RootView: View {
         // story is on top. Read by `ConnectionBanner` via
         // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
         .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+        // Tuile « Stories » du profil → page « Mes stories » (en cours et
+        // passées). Hôte UNIQUE de ce listener : la racine est montée quelle
+        // que soit la provenance de la feuille de profil.
+        .myStoriesSheet(
+            isPresented: $showMyStoriesFromProfile,
+            followUp: $myStoriesProfileFollowUp,
+            viewModel: storyViewModel,
+            userId: AuthManager.shared.currentUser?.id ?? "",
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationListViewModel: conversationViewModel,
+            perform: { action in
+                switch action {
+                case .openViewer(let postId):
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: AuthManager.shared.currentUser?.id ?? "",
+                        singleGroup: true, postId: postId))
+                case .createStory:
+                    storyViewModel.showStoryComposer = true
+                case .editStory(let story):
+                    editingStorySessionFromProfile = StoryEditSession(
+                        story: story,
+                        composer: StoryComposerViewModel(editing: story))
+                case .resumeDraft(let draftId):
+                    storyViewModel.openComposer(resumingDraftId: draftId)
+                }
+            }
+        )
+        .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+            showMyStoriesFromProfile = true
+        }
         // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
         // Exposé / Stage Manager. `connectedScenes.first` le posait sur une
         // scène arbitraire : avec deux fenêtres Meeshy, la fenêtre au premier

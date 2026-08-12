@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { PostType } from '@meeshy/shared/prisma/client';
+import { NOT_DELETED } from '../../services/posts/softDelete';
 import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
@@ -407,6 +409,9 @@ export async function getUserStats(fastify: FastifyInstance) {
         totalTranslations,
         friendRequestsReceived,
         languagesRaw,
+        postsCount,
+        reelsCount,
+        storiesCount,
       ] = await Promise.all([
         fastify.prisma.message.count({
           where: { sender: { userId }, deletedAt: null },
@@ -442,6 +447,19 @@ export async function getUserStats(fastify: FastifyInstance) {
             // clause was redundant. Downstream `.filter(Boolean)` already drops empties.
           },
         }),
+        // Compteurs de contenu du profil (parité stricte avec computeUserStats
+        // dans user-stats.ts — R8 : toute métrique doit vivre dans les DEUX
+        // implémentations). `deletedAt: NOT_DELETED` = champ absent sur Mongo ;
+        // stories comptées SANS filtre d'expiration (archive auteur).
+        fastify.prisma.post.count({
+          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
+        }),
+        fastify.prisma.post.count({
+          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
+        }),
+        fastify.prisma.post.count({
+          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
+        }),
       ]);
 
       const languagesUsed = languagesRaw.length;
@@ -476,6 +494,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       return sendSuccess(reply, {
         totalMessages, totalConversations, totalTranslations,
         friendRequestsReceived, languagesUsed, memberDays,
+        postsCount, reelsCount, storiesCount,
         languages, achievements,
       });
 

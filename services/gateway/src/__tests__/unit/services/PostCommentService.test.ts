@@ -766,3 +766,143 @@ describe('PostCommentService.likeComment', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// updateComment — édition par l'auteur (contenu / effets visuels)
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.updateComment', () => {
+  const COMMENT_ID = 'comment-edit-1';
+  const AUTHOR_ID = 'author-1';
+
+  const setupUpdate = () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({
+      id: COMMENT_ID, postId: 'post-1', authorId: AUTHOR_ID, content: 'Ancien texte',
+    });
+    (mockPrisma.postComment.update as jest.Mock).mockResolvedValue({
+      ...makeComment(COMMENT_ID), content: 'Nouveau texte',
+    });
+    (mockPrisma as any).postMedia = {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    return new PostCommentService(mockPrisma as PrismaClient);
+  };
+
+  it('rejette EMPTY_CONTENT quand un commentaire texte est édité vers du blanc', async () => {
+    const service = setupUpdate();
+
+    await expect(service.updateComment(COMMENT_ID, AUTHOR_ID, { content: '   ' }))
+      .rejects.toThrow('EMPTY_CONTENT');
+    expect(mockPrisma.postComment.update as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('accepte un contenu blanc pour un commentaire à média (retrait de légende)', async () => {
+    const service = setupUpdate();
+    ((mockPrisma as any).postMedia.count as jest.Mock).mockResolvedValue(1);
+
+    const result = await service.updateComment(COMMENT_ID, AUTHOR_ID, { content: '' });
+
+    expect(result?.contentChanged).toBe(true);
+    expect(mockPrisma.postComment.update as jest.Mock).toHaveBeenCalled();
+  });
+
+  it('marque isEdited et purge les traductions quand le contenu change', async () => {
+    const service = setupUpdate();
+
+    const result = await service.updateComment(COMMENT_ID, AUTHOR_ID, { content: 'Nouveau texte' });
+
+    const data = (mockPrisma.postComment.update as jest.Mock).mock.calls[0][0].data;
+    expect(data.isEdited).toBe(true);
+    expect(data.content).toBe('Nouveau texte');
+    // Les traductions stockées décrivent l'ANCIEN texte — les garder les
+    // servirait indéfiniment (les gardes de cache bloquent la régénération).
+    expect(data.translations).toEqual({});
+    // La langue d'origine décrivait aussi l'ANCIEN texte : purge → le pipeline
+    // de retraduction redétecte celle du nouveau contenu.
+    expect(data.originalLanguage).toBeNull();
+    expect(result?.contentChanged).toBe(true);
+  });
+
+  it('un changement d effets seuls conserve traductions, langue et isEdited', async () => {
+    const service = setupUpdate();
+
+    const result = await service.updateComment(COMMENT_ID, AUTHOR_ID, { effectFlags: 65536 });
+
+    const data = (mockPrisma.postComment.update as jest.Mock).mock.calls[0][0].data;
+    expect(data.effectFlags).toBe(65536);
+    expect(data.translations).toBeUndefined();
+    expect(data.originalLanguage).toBeUndefined();
+    expect(data.isEdited).toBeUndefined();
+    expect(result?.contentChanged).toBe(false);
+  });
+
+  it('un contenu identique ne purge pas les traductions ni ne marque isEdited', async () => {
+    const service = setupUpdate();
+
+    await service.updateComment(COMMENT_ID, AUTHOR_ID, { content: 'Ancien texte', effectFlags: 0 });
+
+    const data = (mockPrisma.postComment.update as jest.Mock).mock.calls[0][0].data;
+    expect(data.translations).toBeUndefined();
+    expect(data.originalLanguage).toBeUndefined();
+    expect(data.isEdited).toBeUndefined();
+  });
+
+  it('rejette un non-auteur avec FORBIDDEN', async () => {
+    const service = setupUpdate();
+
+    await expect(service.updateComment(COMMENT_ID, 'intruder', { content: 'Pirate' }))
+      .rejects.toThrow('FORBIDDEN');
+    expect(mockPrisma.postComment.update as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('retourne null pour un commentaire introuvable ou supprimé', async () => {
+    const service = setupUpdate();
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(service.updateComment(COMMENT_ID, AUTHOR_ID, { content: 'x' })).resolves.toBeNull();
+  });
+
+  it('filtre le commentaire vivant par deletedAt NOT_DELETED (champ absent sur Mongo)', async () => {
+    const service = setupUpdate();
+
+    await service.updateComment(COMMENT_ID, AUTHOR_ID, { content: 'x' });
+
+    const where = (mockPrisma.postComment.findFirst as jest.Mock).mock.calls[0][0].where;
+    expect(where.deletedAt).toEqual({ isSet: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCommentAsUpdateResult — relecture au format updateComment (rejeu PATCH)
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.getCommentAsUpdateResult', () => {
+  it('retourne author + media + postId au même format que updateComment', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({
+      ...makeComment('comment-replay-1'),
+      postId: 'post-1',
+    });
+    (mockPrisma as any).postMedia = {
+      findMany: jest.fn().mockResolvedValue([{ id: 'media-1' }]),
+    };
+    const service = new PostCommentService(mockPrisma as PrismaClient);
+
+    const result = await service.getCommentAsUpdateResult('comment-replay-1');
+
+    expect(result?.postId).toBe('post-1');
+    expect(result?.contentChanged).toBe(false);
+    expect(result?.media).toEqual([{ id: 'media-1' }]);
+    const query = (mockPrisma.postComment.findFirst as jest.Mock).mock.calls[0][0];
+    expect(query.where.deletedAt).toEqual({ isSet: false });
+    expect(query.select.author).toBeDefined();
+    expect(query.select.isEdited).toBe(true);
+  });
+
+  it('retourne null pour un commentaire supprimé/introuvable', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+    const service = new PostCommentService(mockPrisma as PrismaClient);
+
+    await expect(service.getCommentAsUpdateResult('gone')).resolves.toBeNull();
+  });
+});

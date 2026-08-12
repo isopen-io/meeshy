@@ -1734,6 +1734,69 @@ final class MessagePersistenceActorTests: XCTestCase {
             "the surviving row keeps the currentUserId sentinel so ownership stays correct")
     }
 
+    // MARK: - appendReaction/removeReaction ownerUserId (identité stable User.id)
+
+    /// Le trou du cap heuristique : un AUTRE utilisateur pose le même emoji côté
+    /// serveur avant que mon écho n'arrive → `aggregation.count` monte à 2, mais
+    /// localement seule ma ligne optimiste existe (1 < 2) → le cap laissait
+    /// passer l'écho de MA propre réaction, qui s'empilait en doublon. Le
+    /// `ownerUserId` (User.id porté par l'écho) matche la ligne optimiste keyée
+    /// par la sentinelle `currentUserId`, indépendamment du cap.
+    func test_appendReaction_ownerUserId_dropsOwnEcho_whenCapRaisedByConcurrentReactor() async throws {
+        let conv = "c_owner1"
+        let msgId = "m_owner1"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_opt",
+            messageId: msgId, participantId: "user_me", emoji: "👍")
+        // Écho de MA réaction, cap déjà monté à 2 par un réacteur concurrent.
+        try await actor.appendReaction(localId: msgId, reactionId: "r_echo",
+            messageId: msgId, participantId: "participant_42", emoji: "👍",
+            maxCount: 2, ownerUserId: "user_me")
+
+        let rows = try reactions(in: conv)
+        XCTAssertEqual(rows.count, 1, "l'écho de ma propre réaction ne doit jamais doubler, même sous cap élevé")
+        XCTAssertEqual(rows.first?.participantId, "user_me")
+
+        // L'écho du réacteur concurrent, lui, doit atterrir.
+        try await actor.appendReaction(localId: msgId, reactionId: "r_other",
+            messageId: msgId, participantId: "participant_99", emoji: "👍",
+            maxCount: 2, ownerUserId: "user_other")
+        XCTAssertEqual(try reactions(in: conv).count, 2)
+    }
+
+    /// Sans aggregation (maxCount nil), le `ownerUserId` suffit à dédupliquer
+    /// l'écho propre — l'ancien code n'avait alors AUCUN rempart.
+    func test_appendReaction_ownerUserId_dropsOwnEcho_withoutAggregation() async throws {
+        let conv = "c_owner2"
+        let msgId = "m_owner2"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_opt",
+            messageId: msgId, participantId: "user_me", emoji: "🎉")
+        try await actor.appendReaction(localId: msgId, reactionId: "r_echo",
+            messageId: msgId, participantId: "participant_42", emoji: "🎉",
+            maxCount: nil, ownerUserId: "user_me")
+
+        XCTAssertEqual(try reactions(in: conv).count, 1)
+    }
+
+    /// L'écho de suppression (keyé Participant.id) doit aussi effacer la ligne
+    /// optimiste keyée User.id — sinon un doublon historique devenait collant.
+    func test_removeReaction_ownerUserId_removesOptimisticRow() async throws {
+        let conv = "c_owner3"
+        let msgId = "m_owner3"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_opt",
+            messageId: msgId, participantId: "user_me", emoji: "👍")
+        try await actor.removeReaction(localId: msgId, emoji: "👍",
+            participantId: "participant_42", ownerUserId: "user_me")
+
+        XCTAssertEqual(try reactions(in: conv).count, 0,
+            "la suppression échoée efface la ligne optimiste malgré la clé divergente")
+    }
+
     /// The cap rises with each genuine new reactor: another user's reaction
     /// (count now 2 server-side) must still land.
     func test_appendReaction_cap_belowAuthoritative_appendsOtherUser() async throws {
