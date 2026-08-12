@@ -315,50 +315,36 @@ export class StatusHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const result = getConnectedUser(userIdOrToken, this.connectedUsers);
-      if (!result) {
-        logger.warn('typing:stop — user not connected', { userId: userIdOrToken });
-        return;
-      }
-      const { user: connectedUser, realUserId: userId } = result;
-
-      const participant = await resolveParticipant({
-        prisma: this.prisma,
-        userIdOrToken,
-        conversationId: normalizedId,
-        connectedUsers: this.connectedUsers,
-      });
-      if (!participant) {
-        logger.warn('typing:stop — not a participant in conversation', { userId, conversationId: normalizedId });
-        return;
-      }
-
-      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
-        userId,
-        connectedUser.isAnonymous
-      );
-
-      // Whether THIS socket was actively broadcasting a typing indicator for
-      // this conversation. A stop must retract exactly what a prior start
-      // broadcast, so the handler proceeds on tracking state — NOT the live
-      // preference, which may have flipped OFF mid-burst. Gating solely on
-      // `shouldShowTyping` stranded such a socket: it stayed in `activeTypers`
-      // (leaked) and peers kept a phantom "typing…" until it disconnected.
-      // Mirrors `handleSocketDisconnecting`, likewise driven by tracking rather
-      // than the current preference. A socket that was never tracked while the
-      // preference is off has nothing to retract, so it still returns early.
-      const wasTracked = (this.activeTypers.get(socket.id) ?? []).some(
+      // A typing:stop retracts a typing:start THIS socket broadcast, and
+      // `activeTypers` is the record of exactly that — `_trackTyping` runs on
+      // every start that cleared the participant and privacy gates. So the
+      // tracking entry is at once the authorisation, the audience and the
+      // payload of the retraction, and nothing else may override it:
+      //
+      //  · No entry ⇒ nothing was ever shown to peers, so there is nothing to
+      //    take back. Returning here BEFORE any I/O also closes an
+      //    amplification asymmetry: typing:start is rate-limited, typing:stop
+      //    is not, and the old path spent `resolveParticipant` + the privacy
+      //    lookup + the blocked-viewer query and then fanned a spurious
+      //    retraction across the whole room for every unmatched packet a client
+      //    cared to send.
+      //  · An entry ⇒ the start already passed the participant and privacy
+      //    gates when it was broadcast. Re-checking them here can only refuse
+      //    to take back something peers have already been shown, which is how a
+      //    participant removed mid-burst — or one who turned the indicator off
+      //    mid-burst — left a phantom "typing…" behind.
+      //  · The entry carries the identity the start went out under, so the
+      //    retraction matches it even across a rename, and owes no lookup.
+      const tracked = (this.activeTypers.get(socket.id) ?? []).find(
         t => t.conversationId === normalizedId
       );
-      if (!shouldShowTyping && !wasTracked) {
-        return;
-      }
+      if (!tracked) return;
+      const userId = tracked.userId;
 
       // Cleanup is unconditional from here: a socket that reaches this point
       // MUST shed its tracking entry and throttle window even if the retraction
-      // below is suppressed (another device still typing) or its identity can't
-      // be resolved — otherwise the leak this guard fixes would reappear on
-      // those paths.
+      // below is suppressed (another device still typing) — otherwise the leak
+      // this guard fixes would reappear on that path.
       this._untrackTyping(socket.id, normalizedId);
       // An explicit stop ends the typing burst, so drop the throttle window for
       // this (user, conversation): the next typing:start is a NEW burst and must
@@ -366,13 +352,10 @@ export class StatusHandler {
       // common "send a message then immediately type the next" flow).
       this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
 
-      const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
-      if (!identity) return;
-
       const typingEvent: TypingEvent = {
         userId: userId,
-        username: identity.username,
-        displayName: identity.displayName,
+        username: tracked.username,
+        displayName: tracked.displayName,
         conversationId: normalizedId,
         isTyping: false
       };

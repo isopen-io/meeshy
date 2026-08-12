@@ -527,9 +527,12 @@ describe('StatusHandler', () => {
       const socket = makeSocket();
       const handler = makeHandler({ prisma });
 
+      // The start is the precondition, not scenery: a stop retracts a start,
+      // so a stop with no start is a different case entirely (covered below).
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
-      const emitFn = ((socket.to as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      const emitFn = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
       expect(emitFn).toHaveBeenCalledWith(
         SERVER_EVENTS.TYPING_STOP,
         expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
@@ -555,23 +558,36 @@ describe('StatusHandler', () => {
       expect(socket.to).not.toHaveBeenCalled();
     });
 
-    it('returns early when user is not in connectedUsers map', async () => {
-      mockGetConnectedUser.mockReturnValue(null);
+    it('retracts even once the user has dropped out of the connectedUsers map', async () => {
+      // The connection map is presence bookkeeping, not the record of what was
+      // broadcast. A retraction peers are owed must not depend on it — losing
+      // the entry between start and stop would otherwise strand the indicator.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
       const socket = makeSocket();
-      const handler = makeHandler();
+      const handler = makeHandler({ prisma });
 
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockGetConnectedUser.mockReturnValue(null);
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
-      expect(socket.to).not.toHaveBeenCalled();
+      const stopEmit = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
+      );
     });
 
-    it('returns early when privacy service disallows typing indicator', async () => {
+    it('stays silent when the matching start was itself refused by the privacy gate', async () => {
+      // Steady-state privacy OFF: the start never broadcast and never tracked,
+      // so the stop has nothing to retract — the pair is silent end to end.
       const privacy = makePrivacyService(false);
       const dbUser = { id: USER_ID, username: 'bob', firstName: null, lastName: null, displayName: null };
       const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
       const socket = makeSocket();
       const handler = makeHandler({ prisma, privacyPreferencesService: privacy });
 
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
       expect(socket.to).not.toHaveBeenCalled();
@@ -585,19 +601,21 @@ describe('StatusHandler', () => {
       await expect(handler.handleTypingStop(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
     });
 
-    it('returns early without broadcasting when caller is not a participant of the conversation', async () => {
+    it('never broadcasts for a non-participant, because a non-participant can never have started', async () => {
+      // Participation is enforced once, at typing:start — the only place that
+      // can put an entry in `activeTypers`. A caller who was never a
+      // participant therefore has nothing tracked and no stop of theirs can
+      // reach the room, without the stop path re-asking the database.
       mockResolveParticipant.mockResolvedValue(null);
       const dbUser = { id: USER_ID, username: 'eve', firstName: null, lastName: null, displayName: 'Eve' };
       const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
       const socket = makeSocket();
       const handler = makeHandler({ prisma });
 
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
       expect(socket.to).not.toHaveBeenCalled();
-      expect(mockResolveParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
-      );
     });
 
     it('does not call statusService.updateLastSeen on typing stop', async () => {
@@ -763,6 +781,83 @@ describe('StatusHandler', () => {
 
       expect(socket.to).not.toHaveBeenCalled();
     });
+
+    // ── the stop path is driven by tracking state alone ──────────────────────
+    // A typing:stop RETRACTS a typing:start this socket previously broadcast.
+    // `activeTypers` is the exact record of what was broadcast, so it is the
+    // only thing the stop needs — and the only thing that can authorise it.
+
+    it('does no I/O and emits nothing for a stop that has no matching start', async () => {
+      // `typing:start` is rate-limited; `typing:stop` is not. A stop with
+      // nothing to retract must therefore cost nothing: it used to run
+      // resolveParticipant + the privacy lookup + the blocked-viewer query
+      // (participant.findMany) and then broadcast a spurious retraction to
+      // every socket in the room — 3 DB round-trips and an N-way fan-out
+      // driven by one unthrottled client packet.
+      const privacy = makePrivacyService(true);
+      const prisma = makePrisma();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, privacyPreferencesService: privacy });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockResolveParticipant).not.toHaveBeenCalled();
+      expect(privacy.shouldShowTypingIndicator).not.toHaveBeenCalled();
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('still retracts the indicator when the typist was removed from the conversation mid-burst', async () => {
+      // Alice starts typing, an admin deactivates her Participant row, then her
+      // client sends the matching stop. Re-checking participation on the stop
+      // path rejected that retraction, so her `activeTypers` entry leaked and
+      // peers kept a phantom "Alice is typing…" until her socket dropped. The
+      // start was already broadcast — refusing to take it back cannot protect
+      // anything it did not already reveal.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockResolveParticipant.mockResolvedValue(null);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(2);
+      const stopEmit = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
+      );
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+    });
+
+    it('retracts under the identity captured at start, without re-reading it', async () => {
+      // Peers matched the start on the identity it carried; the stop must carry
+      // the same one. `activeTypers` already holds it, so the stop path owes no
+      // identity lookup at all — the cache hides that cost only until it is
+      // invalidated (a profile edit), and a rename mid-burst then made the
+      // retraction refer to someone peers were never shown.
+      const findUnique = jest.fn<any>()
+        .mockResolvedValueOnce({ id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice S' })
+        .mockResolvedValue({ id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice Renamed' });
+      const prisma = makePrisma({ user: { findUnique } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      handler.invalidateIdentityCache(USER_ID);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      const stopEmit = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ displayName: 'Alice S', username: 'alice' })
+      );
+      expect(findUnique).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── blocking privacy ─────────────────────────────────────────────────────────
@@ -793,9 +888,10 @@ describe('StatusHandler', () => {
       const socket = makeSocket();
       const handler = makeHandler({ prisma, connectedUsers, userSockets });
 
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
-      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      const toResult = ((socket.to as jest.Mock).mock.results[1] as any).value;
       expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
       const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
       expect(exceptEmit).toHaveBeenCalledWith(
