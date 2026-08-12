@@ -4977,3 +4977,53 @@ défaut.
    `nonisolated` (suppression du dossier médias) reste détachée : aucun boot n'en dépend une fois
    l'intent parti. Tout awaiter aurait mis du `FileManager` sur le MainActor ; tout détacher était le
    défaut d'origine.
+
+## Leçon 127 — un contournement client bien commenté est le procès-verbal d'un défaut serveur (2026-08-12, routine messaging, cycle 82)
+
+`bubble-stream-page.tsx` portait la phrase exacte : « Sessions ANONYMES exclues : la route
+mark-as-read est JWT-only (allowAnonymous: false) — chaque flush partirait en 401 », trois lignes
+après avoir expliqué qu'un écran privé de ce hook voit « son compteur croître indéfiniment ». Tout
+était écrit : la cause, l'effet, et jusqu'au nom de l'option fautive. Personne n'avait suivi la
+flèche jusqu'au serveur.
+
+1. **Un commentaire qui EXPLIQUE pourquoi le client renonce à un appel nomme une cause serveur.**
+   Le grep qui trouve `allowAnonymous`, `JWT-only`, `401`, `403` dans les commentaires du CLIENT est
+   un détecteur de défauts backend, et il est bon marché.
+2. **Deux moitiés d'une même capacité peuvent vivre dans deux fichiers et ne jamais se rencontrer.**
+   Ici le serveur COMPTAIT les non-lus d'un anonyme et les lui POUSSAIT (trois sites délibérés,
+   commentés, testés) mais aucune route ne lui permettait de les ACQUITTER. Chaque moitié était
+   défendable seule ; c'est leur asymétrie qui était le défaut. Chercher la moitié manquante :
+   « qui écrit ce que ce chemin lit ? », « qui remet à zéro ce que ce chemin incrémente ? ».
+3. **Deux verrous en série s'auditent séparément.** La porte (`allowAnonymous: false`) répondait 403
+   AVANT la clé (la garde `where: { userId }`). Corriger la clé seule n'aurait rien changé et le
+   test serait resté rouge sans qu'on sache pourquoi ; corriger la porte seule aurait ouvert sur un
+   403 plus tardif. Prouver CHAQUE verrou par sa propre mutation.
+4. **`authContext.userId` ne contient pas toujours un `User.id`.** La branche anonyme d'auth y écrit
+   `participant.id`. Tout `where: { userId: authContext.userId }` sur `Participant` est donc suspect
+   par construction — il compare un id de participant à une colonne d'utilisateur. Le résolveur
+   partagé (`resolveCallerParticipant`) existe désormais ; la dette restante est nommée dans
+   `tasks/todo.md`.
+
+## Leçon 128 — un double de test qui n'ÉVALUE pas le `where` valide les deux versions du code (2026-08-12, routine messaging, cycle 82)
+
+Le défaut du cycle 82 a traversé des suites vertes pendant des mois parce que chaque test doublait
+`participant.findFirst` par un `mockResolvedValue({ id })` constant : la garde juste et la garde
+fausse rendaient le même participant. Le dépôt possédait DÉJÀ le remède —
+`src/__tests__/helpers/mongo-where.ts` (`findFirstIn`), écrit pour le piège absent-vs-null — et son
+en-tête dit la règle mieux que moi : « Un test qui compare la clause reçue à celle qu'il attend
+passe aussi bien avec une clause juste qu'avec une clause fausse ».
+
+1. **Chercher le helper AVANT d'écrire le double.** J'ai commencé par une fonction `clauseMatches`
+   maison, avec un `if (key === 'bannedAt') return true` — une triche qui aurait masqué exactement la
+   garde de bannissement que j'ajoutais. Le helper du dépôt, lui, distingue `null` d'absent et
+   n'aurait rien laissé passer.
+2. **Le corollaire côté fichiers de test EXISTANTS** : quatre doublaient le module `access-control`
+   en ENTIER, donc rendaient `undefined` toute fonction nouvellement exportée. Le réflexe « ajouter
+   la fonction au mock » aurait recréé le problème une couche plus loin ; `jest.requireActual` +
+   override de la seule fonction voulue garde la règle réelle sous le test.
+3. **Un test qui pinne une requête SUPPRIMÉE doit être réécrit, pas rafistolé.** `mark-unread`
+   relisait deux fois le même participant ; un test verrouillait le second `null`. La bonne
+   réécriture ne remplace pas l'assertion par une équivalente : elle affirme la nouvelle vérité —
+   une seule résolution, et le refus tombe PLUS TÔT (`participant.findFirst` appelé une fois,
+   `message.findFirst` jamais).
+
