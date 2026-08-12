@@ -1,6 +1,6 @@
-# Tête instruite pour le cycle 89 — cinq défauts livrés, six restent, et une porte d'identité toujours fermée
+# Tête instruite pour le cycle 89 — six défauts livrés, cinq restent
 
-*Le cycle 88 a livré CINQ des neuf défauts légués par le 86/87. Les restants sont reproduits plus
+*Le cycle 88 a livré SIX des neuf défauts légués par le 86/87. Les restants sont reproduits plus
 bas **tels que les cycles précédents les ont établis** — site exact, scénario d'échec. **Ne pas
 re-auditer — vérifier puis corriger.***
 
@@ -9,9 +9,10 @@ déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en pa
 
 ## Livré au cycle 88
 
-1. **Le compteur de non-lus de l'invité anonyme** (moitié sûre de l'ancienne priorité 1) —
-   `conversation:join` ne gate plus le push de non-lus sur `userId`. `getUnreadCount` reçoit le
-   `Participant.id`, verrouillé par test.
+1. **L'invité anonyme n'est plus traité en silence par `conversation:join`** (ancienne priorité 1,
+   **les deux moitiés**) — ni le compteur de non-lus ni l'accusé `conversation:joined` ne se gatent
+   plus sur `userId`. Les deux portent le `Participant.id`, verrouillés par test. La lecture des
+   cinq consommateurs clients qui bloquait la seconde moitié a été faite (détail ci-dessous).
 2. **`getTranslation()` lit sous la clé normalisée** (ancienne priorité 2, item 1) — verbatim
    d'abord, forme canonique en repli. Le repli fabriqué `[PT-BR] <original>` ne peut plus se
    produire par manque de clé.
@@ -20,22 +21,35 @@ déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en pa
 4. **Rollback inconditionnel des réactions optimistes** (ancienne priorité 3, item 4).
 5. **Le translator n'envoie plus deux fois chaque audio traduit** (ancienne priorité 3, item 5).
 
-## Priorité 1 — l'accusé `conversation:joined` de l'invité anonyme (moitié NON livrée)
+## Priorité 1 — LIVRÉE au cycle 88 : l'accusé anonyme, et la lecture client qui l'a débloquée
 
-Le cycle 88 a livré la moitié additive (compteur de non-lus) et **laissé l'accusé fermé
-délibérément**. La question est inchangée et reste la même : le `SocketUser` anonyme porte `id` (le
-jeton de session) ET `participantId`, **non interchangeables côté client**. Envoyer la mauvaise
-valeur fait de l'accusé une désinformation d'identité.
+L'item était bloqué par une question d'identité que le cycle 87 n'avait pas voulu trancher à
+l'aveugle. **La lecture client due a été faite** — et elle renverse la difficulté supposée.
 
-**Ce qui débloque l'item, et rien d'autre : lire ce que les clients font de `conversation:joined`**
-(SDK iOS `packages/MeeshySDK`, web). Tant que cette lecture n'est pas faite, ne pas trancher —
-c'est le pari que la leçon 43 déconseille. Les deux tests qui décrivent la rétention portent
-désormais un commentaire qui dit *pourquoi* elle existe (question d'identité ouverte), plus
-« having no userId, does NOT emit ».
+**Les cinq consommateurs de `conversation:joined` n'exploitent QUE `conversationId`. Aucun ne lit
+`userId` :**
 
-Sous-question annexe non instruite : les **stats de conversation** restent elles aussi gatées sur
-`userId`. Contrairement au compteur de non-lus, ce n'est pas un pur additif — c'est diffuser un
-effectif et une liste de présents à un invité de lien. Décision produit, pas correctif.
+| Site | Ce qu'il fait du payload |
+|---|---|
+| web `use-socket-cache-sync.ts` | `invalidateQueries(participants(conversationId))` |
+| web `use-stream-socket.ts` | mémorise l'ObjectId normalisé |
+| web `orchestrator.service.ts` | résout l'identifiant (`meeshy`) → ObjectId |
+| iOS `ConversationSyncEngine.swift` | `cache.participants.invalidate(for: conversationId)` |
+| iOS `ParticipantsView.swift` | filtre sur `conversationId`, jette le payload (`{ _ in }`) |
+
+**La seule contrainte dure est un contrainte de DÉCODAGE, pas de sémantique** :
+`ConversationParticipationEvent.userId` est un `String` **non optionnel** (MessageSocketManager.swift
+:552). Omettre le champ ferait échouer le décodage Swift — l'accusé serait silencieusement jeté sur
+iOS. Le champ doit donc être présent ; sa valeur, elle, n'est lue par personne.
+
+D'où la décision livrée : `participationId = userId ?? participantId`. Le `Participant.id` est
+l'identité que le contrôle d'appartenance vient précisément de résoudre. **Jamais
+`connectedUser.id`** — c'est le jeton de SESSION, un credential, qui n'a rien à faire dans un
+payload d'événement (et qui ne résout aucune ligne Participant).
+
+Sous-question annexe **toujours** non instruite : les **stats de conversation** restent gatées sur
+`userId`. Contrairement à l'accusé, ce n'est pas un pur additif — c'est diffuser un effectif et une
+liste de présents à un invité de lien. Décision produit, pas correctif.
 
 ## Priorité 2 — le pipeline de traduction (trois défauts restants sur quatre)
 
@@ -98,19 +112,31 @@ interrompt toute l'installation). C'est la première chose à faire dans un envi
 RED-prouvé avant correction. Suites complètes vertes des deux côtés : **gateway 654/654 suites,
 16 504/16 504 tests** ; **web 563/563 suites, 12 089 tests passés, 21 ignorés, 0 échec**.*
 
-## 1. L'invité de lien partagé voit enfin son badge de non-lus
+## 1. L'invité de lien partagé rejoignait en silence — accusé ET badge
 
 `conversation:join` gatait TOUTES ses émissions post-join sur `connectedUser.userId` — `undefined`
 pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a laissé passer et que le
-socket EST dans la room. `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id`
-(son en-tête nomme même le chemin anonyme comme le cas courant) : le compteur sort donc du garde.
+socket EST dans la room.
 
-**Le piège évité** : passer `connectedUser.id` (le jeton de session) au lieu de `participantId`. Il
-ne résout AUCUNE ligne Participant et aurait rendu `0` en silence — un badge « correct » et faux. Un
-test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+**Le compteur.** `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` (son
+en-tête nomme même le chemin anonyme comme le cas courant). Piège évité : passer `connectedUser.id`
+(le jeton de session) aurait rendu `0` en silence — un badge « correct » et faux. Un test verrouille
+l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
 
-L'ordre d'émission des utilisateurs enregistrés est préservé (`joined` → non-lus → stats) : le
-compteur s'insère entre deux moitiés du garde plutôt que de passer devant l'accusé.
+**L'accusé.** Le cycle 87 l'avait laissé fermé faute d'avoir lu les clients. **Cette lecture a été
+faite ici**, et elle renverse la difficulté : les cinq consommateurs
+(web `use-socket-cache-sync` / `use-stream-socket` / `orchestrator`, iOS `ConversationSyncEngine` /
+`ParticipantsView`) n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+La seule contrainte dure est de DÉCODAGE : `ConversationParticipationEvent.userId` est un `String`
+**non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé serait
+silencieusement jeté sur iOS. Le champ doit exister ; sa valeur n'est lue par personne. D'où
+`participationId = userId ?? participantId`, une seule résolution d'identité pour les deux
+émissions.
+
+**Ce qui reste fermé, et pourquoi.** Les stats de conversation restent gatées sur `userId` :
+diffuser un effectif et une liste de présents à un invité de lien est une décision produit, pas un
+correctif.
 
 ## 2. `getTranslation()` lisait une clé que personne n'écrit
 

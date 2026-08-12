@@ -4,9 +4,9 @@
 "@meeshy/translator": patch
 ---
 
-Cinq défauts temps réel : un invité sans badge, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
+Cinq défauts temps réel : un invité qui rejoignait en silence, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
 
-## 1. Gateway — l'invité de lien partagé ne recevait rien de `conversation:join`
+## 1. Gateway — l'invité de lien partagé rejoignait en silence
 
 Le handler gatait **toutes** ses émissions post-join sur `connectedUser.userId`,
 `undefined` pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a
@@ -19,10 +19,17 @@ reçoit `participantId`. **Pas `connectedUser.id`** (le jeton de session) : il n
 aucune ligne Participant et aurait rendu `0` en silence, un badge « correct » et faux. Un
 test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
 
-L'accusé `conversation:joined` reste volontairement retenu pour les anonymes : il PORTE
-un `userId`, et l'identité à y mettre pour un participant sans compte demande de lire
-d'abord ce que les clients iOS/web en font. Découpage assumé — cette moitié-ci est
-purement additive, l'autre ne l'est pas.
+**L'accusé `conversation:joined` part lui aussi**, sous la même identité. Le blocage annoncé
+— « quelle identité mettre dans `userId` pour un participant sans compte ? » — s'est dissous à
+la lecture des clients : les cinq consommateurs (web `use-socket-cache-sync`,
+`use-stream-socket`, `orchestrator` ; iOS `ConversationSyncEngine`, `ParticipantsView`)
+n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+La seule contrainte dure est de **décodage** : `ConversationParticipationEvent.userId` est un
+`String` **non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé
+serait silencieusement jeté sur iOS. Le champ doit donc être présent ; sa valeur n'est lue par
+personne. D'où `participationId = userId ?? participantId`, une seule résolution d'identité
+pour les deux émissions.
 
 ## 2. Gateway — une traduction présentée comme telle, mais jamais traduite
 

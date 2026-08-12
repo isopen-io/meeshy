@@ -209,7 +209,7 @@ describe('ConversationHandler', () => {
       );
     });
 
-    it('allows an anonymous member (owns participant) to join without CONVERSATION_JOINED', async () => {
+    it('allows an anonymous member (owns participant) to join the room', async () => {
       // Anonymous SocketUser: identity IS the participantId. The handler now
       // verifies the anonymous user owns the participant for THIS conversation
       // (security fix ccaa9311f) instead of skipping verification entirely.
@@ -226,17 +226,50 @@ describe('ConversationHandler', () => {
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
-      // Valid anonymous member (owns the participant): the handler joins the
-      // room but withholds CONVERSATION_JOINED — non parce que « pas de userId
-      // ⇒ rien », mais parce que l'accusé PORTE un `userId` et qu'on n'a pas
-      // encore tranché quelle identité y mettre pour un participant sans compte
-      // (jeton de session vs `Participant.id`, non interchangeables côté
-      // client). Le compteur de non-lus, lui, n'a pas ce problème et EST
-      // poussé — cf. le test dédié plus bas.
+      // Valid anonymous member (owns the participant): joins the room, et n'est
+      // PAS traité en silence — l'accusé et le compteur partent tous deux, sous
+      // l'identité `Participant.id`. Les tests dédiés plus bas verrouillent
+      // chacun ; ici on ne garantit que l'entrée en room et l'absence d'erreur.
       expect(socket.join).toHaveBeenCalled();
       expect(socket.emit).not.toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOINED,
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
         expect.anything()
+      );
+    });
+
+    it('acknowledges an anonymous join with the Participant.id as identity', async () => {
+      // Aucun consommateur de `conversation:joined` ne lit `userId` — les cinq
+      // sites (web use-socket-cache-sync / use-stream-socket / orchestrator,
+      // iOS ConversationSyncEngine / ParticipantsView) n'exploitent que
+      // `conversationId`. Mais le champ ne peut pas être OMIS : côté iOS,
+      // `ConversationParticipationEvent.userId` est un `String` NON optionnel,
+      // et un payload amputé ferait échouer le décodage Swift — l'accusé serait
+      // silencieusement jeté.
+      //
+      // C'est donc `participantId` qui part : l'identité que le contrôle
+      // d'appartenance vient de résoudre. Surtout PAS `connectedUser.id`, qui
+      // est le jeton de SESSION — un credential n'a rien à faire dans un
+      // payload d'événement.
+      const SESSION_TOKEN = 'anon-session-token';
+      const ANON_PARTICIPANT_ID = 'anon-part-1';
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const connectedUsers = new Map();
+      connectedUsers.set(SESSION_TOKEN, {
+        id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr', resolvedLanguages: [],
+      });
+      const prisma = makePrisma({ id: ANON_PARTICIPANT_ID });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, socketToUser });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOINED,
+        { conversationId: CONV_ID, userId: ANON_PARTICIPANT_ID }
+      );
+      expect(socket.emit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOINED,
+        expect.objectContaining({ userId: SESSION_TOKEN })
       );
     });
 

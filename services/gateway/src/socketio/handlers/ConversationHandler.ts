@@ -156,25 +156,39 @@ export class ConversationHandler {
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
       const registeredUserId = connectedUser.userId;
-      if (registeredUserId) {
+      // L'identité du socket dans cette conversation. Un invité de lien partagé
+      // n'a pas de `userId` : c'est son `Participant.id` qui l'identifie, et
+      // c'est celui que le contrôle d'appartenance vient de résoudre. SURTOUT
+      // PAS `connectedUser.id`, qui est le jeton de SESSION — un credential n'a
+      // rien à faire dans un payload d'événement, et il ne résout d'ailleurs
+      // aucune ligne Participant (`getUnreadCount` rendrait 0 en silence).
+      //
+      // Les deux émissions ci-dessous étaient gatées sur `userId` et laissaient
+      // donc l'invité rejoindre en SILENCE — sans accusé, sans badge — alors
+      // que le contrôle d'appartenance l'a laissé passer et que son socket EST
+      // dans la room.
+      const participationId = registeredUserId ?? connectedUser.participantId;
+
+      if (participationId) {
+        // `userId` ne peut pas être omis pour un anonyme : côté iOS,
+        // `ConversationParticipationEvent.userId` est un `String` NON optionnel
+        // et un payload amputé ferait échouer le décodage Swift — l'accusé
+        // serait silencieusement jeté. Aucun des cinq consommateurs connus ne
+        // LIT ce champ (web use-socket-cache-sync / use-stream-socket /
+        // orchestrator, iOS ConversationSyncEngine / ParticipantsView
+        // n'exploitent que `conversationId`), mais tous exigent qu'il soit là.
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId: registeredUserId
+          userId: participationId
         });
       }
 
-      // Le compteur de non-lus ne se gate PAS sur `userId` : un invité de lien
-      // partagé n'en a pas, et voyait donc son badge rester vide alors que le
-      // contrôle d'appartenance au-dessus l'a laissé passer et que son socket
-      // EST dans la room. `getUnreadCount` accepte indifféremment un
-      // `Participant.id` ou un `User.id` (contrat documenté dans
-      // MessageReadStatusService) — on lui passe celui qu'on a. Le jeton de
-      // session (`connectedUser.id`) ne résout AUCUNE ligne Participant : le
-      // passer rendrait 0 en silence.
-      const unreadTargetId = registeredUserId ?? connectedUser.participantId;
-      if (unreadTargetId) {
+      // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
+      // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
+      // le chemin anonyme comme le cas courant).
+      if (participationId) {
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(unreadTargetId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });

@@ -233,7 +233,7 @@ describe('ConversationHandler', () => {
       expect(socket.join).not.toHaveBeenCalled();
     });
 
-    it('joins room for an anonymous member without emitting conversation:joined', async () => {
+    it('joins room for an anonymous member and acknowledges with the Participant.id', async () => {
       // Anonymous SocketUser: identity IS the participantId. Membership is verified
       // (security fix ccaa9311f) and, having no userId, no conversation:joined is sent.
       const SESSION_TOKEN = 'anon-session-token';
@@ -246,12 +246,14 @@ describe('ConversationHandler', () => {
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      // Valid anonymous member (owns the participant): joins the room. L'accusé
-      // conversation:joined reste retenu — il porte un `userId` et l'identité à
-      // y mettre pour un participant sans compte n'est pas tranchée. Le
-      // compteur de non-lus, lui, est bien poussé (clé `Participant.id`).
+      // Valid anonymous member (owns the participant): joins the room ET reçoit
+      // l'accusé. L'identité portée est le `Participant.id` — jamais le jeton de
+      // session, qui est un credential.
       expect(socket.join).toHaveBeenCalled();
-      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+      expect(socket.emit).toHaveBeenCalledWith('conversation:joined', {
+        conversationId: JOIN_PAYLOAD.conversationId,
+        userId: ANON_PARTICIPANT_ID,
+      });
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
