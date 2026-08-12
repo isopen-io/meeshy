@@ -490,7 +490,8 @@ propres messages ne comptent jamais dans ses non-lus).
 | envoi WS | `MessageHandler._updateUnreadCounts` | +1 chez les destinataires |
 | envoi REST/ZMQ | `MeeshySocketIOManager` | idem |
 | envoi par lien de partage | `broadcastLinkMessage` | idem (seul transport d'un anonyme) |
-| **suppression** | `MessageHandler.handleMessageDelete` | **−1 : le message compte un message qui n'existe plus** |
+| **suppression WS** | `MessageHandler.handleMessageDelete` | **−1 : le message compte un message qui n'existe plus** |
+| **suppression REST** | `broadcastMessageMutation` (les DEUX routes) | idem |
 
 La ligne de suppression a longtemps manque : les quatre premiers appelants sont
 tous des chemins d'ENVOI. Le lecteur voyait le message disparaitre pendant que sa
@@ -500,8 +501,18 @@ le redemander.
 
 **Regle** : tout chemin qui rend un message INVISIBLE a un destinataire (soft
 delete, rappel, expiration, moderation) doit repousser la pastille, exactement
-comme il repousse `emitConversationPreviewUpdate`. Les trois transports REST de
-suppression ne le font pas encore.
+comme il repousse `emitConversationPreviewUpdate`.
+
+Cote REST, la poussee vit dans `broadcastMessageMutation`, l'unique broadcaster
+des cinq routes de mutation — donc **une seule fois** pour les DEUX transports
+de suppression (`DELETE /messages/:id`, celui d'Android, et
+`DELETE /conversations/:id/messages/:id`, celui du SDK iOS). Il n'y en a jamais
+eu trois : les trois autres appelants sont des editions, et une edition ne
+change aucun compte.
+
+C'est le TYPE qui tient la regle, pas la vigilance : `authorId` est **requis**
+sur `eventType: 'deleted'` et **absent** de `'edited'`. Un sixieme transport de
+suppression ne compile pas sans nommer l'auteur.
 
 ---
 

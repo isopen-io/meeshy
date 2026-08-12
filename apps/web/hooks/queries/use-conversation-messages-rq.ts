@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useCallback, useMemo, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useQueryClient, useInfiniteQuery, focusManager } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
@@ -257,6 +257,23 @@ export function useConversationMessagesRQ(
     });
   }, [data?.messages]);
 
+  // Front montant de la reconnexion socket, compté UNE fois pour les deux
+  // rattrapages qui en dépendent : les MESSAGES manqués (« Trigger 1 » plus bas)
+  // et les ACCUSÉS manqués (le lot REST juste en dessous). Chacun détectait —
+  // ou, pour les accusés, ne détectait PAS — ce front pour son compte.
+  const { isSocketConnected } = useConnectionStatus();
+  const [reconnectEpoch, setReconnectEpoch] = useState(0);
+  const prevSocketConnectedRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const prev = prevSocketConnectedRef.current;
+    prevSocketConnectedRef.current = isSocketConnected;
+    // Front false → true seulement : pas au montage initial.
+    if (prev === false && isSocketConnected === true) {
+      setReconnectEpoch((epoch) => epoch + 1);
+    }
+  }, [isSocketConnected]);
+
   // Track latest own message + batch fetch read statuses for own messages
   const batchFetchedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -275,8 +292,18 @@ export function useConversationMessagesRQ(
 
     // Batch fetch read statuses for own messages (once per conversation load)
     // Use ObjectId from loaded messages, not the raw identifier/slug
+    //
+    // `reconnectEpoch` fait partie de la clé : sans lui, le lot ne se relance
+    // que lorsque le DERNIER message à soi change, c'est-à-dire quand on ENVOIE.
+    // Or ces compteurs sont MONOTONES depuis le cycle 85 (`isStaleReceipt`) —
+    // un `read-status:updated` manqué pendant une coupure n'est pas une valeur
+    // en retard qu'un événement suivant corrigerait, c'est un GEL PERMANENT :
+    // l'expéditeur garde une coche « remis » sur un message déjà lu, jusqu'à ce
+    // qu'il en envoie un autre. La reconnexion est le seul instant qui sache
+    // qu'un trou a pu se produire ; le lot s'y rejoue, comme le catch-up des
+    // messages.
     const resolvedConvId = ownMessages[0]?.conversationId ?? conversationId;
-    const fetchKey = `${resolvedConvId}:${ownMessages[0].id}`;
+    const fetchKey = `${resolvedConvId}:${ownMessages[0].id}:${reconnectEpoch}`;
     if (batchFetchedRef.current === fetchKey) return;
     if (!/^[a-f\d]{24}$/i.test(resolvedConvId)) return;
     batchFetchedRef.current = fetchKey;
@@ -304,7 +331,7 @@ export function useConversationMessagesRQ(
         }
       })
       .catch(() => {});
-  }, [conversationId, currentUser?.id, messages]);
+  }, [conversationId, currentUser?.id, messages, reconnectEpoch]);
 
   // Load more function
   const loadMore = useCallback(async () => {
@@ -687,19 +714,14 @@ export function useConversationMessagesRQ(
   }, [conversationId, linkId, queryClient, queryKey, refetch]);
 
   // Trigger 1 — socket reconnect: catch up on messages missed during the
-  // disconnection gap. Fires on the false → true edge only, not on initial mount.
-  const { isSocketConnected } = useConnectionStatus();
-  const prevSocketConnectedRef = useRef<boolean | null>(null);
-
+  // disconnection gap. Le front false → true est compté une seule fois, en tête
+  // du hook (`reconnectEpoch`), et partagé avec le rattrapage des ACCUSÉS —
+  // deux dettes distinctes d'un même instant. `epoch === 0` = aucun front
+  // survenu depuis le montage.
   useEffect(() => {
-    const prev = prevSocketConnectedRef.current;
-    prevSocketConnectedRef.current = isSocketConnected;
-
-    const isReconnect = prev === false && isSocketConnected === true;
-    if (!isReconnect) return;
-
+    if (reconnectEpoch === 0) return;
     void syncNewerMessages();
-  }, [isSocketConnected, syncNewerMessages]);
+  }, [reconnectEpoch, syncNewerMessages]);
 
   // NOTE — il n'y a volontairement PAS de catch-up au montage : ouvrir une
   // conversation relit désormais la dernière page côté serveur
