@@ -58,6 +58,7 @@ import {
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
+import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 
@@ -1054,7 +1055,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       ]);
 
       sendSuccess(reply, {
-        shareLinks,
+        shareLinks: await withAnonymousParticipantCounts(fastify.prisma, shareLinks),
         trackingLinks,
         affiliateTokens,
         contacts: {
