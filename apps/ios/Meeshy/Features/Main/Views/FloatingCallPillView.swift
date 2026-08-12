@@ -152,6 +152,13 @@ struct FloatingCallPillView: View {
                 // passe son seuil WCAG contre les deux arrêts du dégradé.
                 Color.black.opacity(CallBannerContrast.scrimOpacity)
             }
+            // Fondu bas (retour user 2026-08-12) : le décor se termine en
+            // dégradé vers le transparent au lieu d'une arête nette — 6 % du
+            // bas transparent, ~24 % de zone de dégradé, indigo complet
+            // au-dessus (bandes partagées TopBarBottomFade). Posé AVANT
+            // ignoresSafeArea pour que le masque couvre aussi le débord sous
+            // la status bar.
+            .mask(TopBarBottomFade.gradient)
             // Immersif façon WhatsApp : la bannière est posée en tête du
             // VStack de compression (CallPresentationLayer), donc SOUS la
             // status bar — seul son décor déborde jusqu'au bord haut du
