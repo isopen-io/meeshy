@@ -60,6 +60,14 @@ défaut annoncé par la tête du cycle 95 n'avait pas la forme qu'elle lui prêt
 > l'était pas. Pour toute promesse déjà « fermée », se demander une fois de plus : *et la route
 > qui sert le fichier, elle la connaît ?*
 
+## Livré au cycle 94 — **mergé sur `main` le 2026-08-12 (PR #2902, merge `4ecd765e`)**
+
+*Gate local avant merge : 683/683 suites, 16 902/16 902 tests, `tsc --noEmit` propre,
+`forwardAdmission.ts` à 100 % de lignes couvertes, total gateway 95,93 %. Réintégration de `main`
+après merge (PR #2900, calls/video-call) : sans conflit, périmètres disjoints.*
+
+Le détail du garde de transfert est consigné au CHANGELOG et dans la section « Cycle 94 » plus bas.
+
 ## Livré au cycle 95
 
 1. **`carrierMessageStillServesBytes` — les octets suivent la vie du message porteur.** Prédicat
