@@ -75,10 +75,19 @@ jest.mock('../../../services/posts/postVisibility', () => ({
       id: postId, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
       isQuote: false, repostOfId: null, originalRepostOfId: null,
     })),
+  // `post:join`/`post:leave` (review task-9, important #1) : même passthrough
+  // par défaut que `resolveInteractionTarget` ci-dessus — l'audience/la
+  // redirection elles-mêmes restent couvertes par le vrai module dans
+  // `src/__tests__/unit/socketio/PostReactionHandler.test.ts`.
+  resolveConsumptionTarget: jest.fn<(_p: unknown, postId: string) => Promise<unknown>>()
+    .mockImplementation((_prisma: unknown, postId: string) => Promise.resolve({
+      id: postId, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+      isQuote: false, repostOfId: null, originalRepostOfId: null,
+    })),
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');
-const { canUserViewPost } = require('../../../services/posts/postVisibility');
+const { resolveConsumptionTarget } = require('../../../services/posts/postVisibility');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -218,7 +227,11 @@ describe('PostReactionHandler', () => {
       success: true,
       data,
     }));
-    (canUserViewPost as jest.Mock<any>).mockResolvedValue(true);
+    (resolveConsumptionTarget as jest.Mock<any>).mockImplementation((_prisma: unknown, postId: string) =>
+      Promise.resolve({
+        id: postId, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        isQuote: false, repostOfId: null, originalRepostOfId: null,
+      }));
   });
 
   // ── handleAddReaction ────────────────────────────────────────────────────
@@ -609,50 +622,19 @@ describe('PostReactionHandler', () => {
       expect(socket.join).not.toHaveBeenCalled();
     });
 
-    it('returns error when post does not exist', async () => {
-      const { handler } = buildHandler({
-        prisma: { post: { findUnique: jest.fn<any>().mockResolvedValue(null) } },
-      });
-      const socket = makeSocket();
-      const callback = jest.fn<any>();
-
-      await handler.handleJoinPost(socket, { postId: POST_ID }, callback);
-
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Post not found' }));
-      expect(socket.join).not.toHaveBeenCalled();
-    });
-
-    it('returns error when post is soft-deleted (deletedAt non-null)', async () => {
-      const { handler } = buildHandler({
-        prisma: {
-          post: {
-            findUnique: jest.fn<any>().mockResolvedValue({
-              id: POST_ID,
-              authorId: 'author-1',
-              visibility: 'PUBLIC',
-              visibilityUserIds: [],
-              deletedAt: new Date(),
-            }),
-          },
-        },
-      });
-      const socket = makeSocket();
-      const callback = jest.fn<any>();
-
-      await handler.handleJoinPost(socket, { postId: POST_ID }, callback);
-
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Post not found' }));
-    });
-
-    it('returns error when user cannot view post (visibility denied)', async () => {
-      (canUserViewPost as jest.Mock<any>).mockResolvedValueOnce(false);
+    it('returns error when the post cannot be resolved (absent, deleted, or denied — refus indistinct)', async () => {
+      // `post:join` route désormais par `resolveConsumptionTarget` (review
+      // task-9, important #1) : absent/supprimé/refusé sont tous le même
+      // `null` — jamais de code distinct qui divulguerait l'existence d'un
+      // post restreint.
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce(null);
       const { handler } = buildHandler();
       const socket = makeSocket();
       const callback = jest.fn<any>();
 
       await handler.handleJoinPost(socket, { postId: POST_ID }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Forbidden' }));
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Post not found' }));
       expect(socket.join).not.toHaveBeenCalled();
     });
 
@@ -667,10 +649,26 @@ describe('PostReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
-    it('returns error on exception', async () => {
-      const { handler } = buildHandler({
-        prisma: { post: { findUnique: jest.fn<any>().mockRejectedValue(new Error('db error')) } },
+    it('joins the RESOLVED target room (simple repost redirects to its root)', async () => {
+      const ROOT_ID = 'root-post-1';
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce({
+        id: ROOT_ID, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        isQuote: false, repostOfId: null, originalRepostOfId: null,
       });
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleJoinPost(socket, { postId: POST_ID }, callback);
+
+      expect(socket.join).toHaveBeenCalledWith(`post:${ROOT_ID}`);
+      expect(socket.join).not.toHaveBeenCalledWith(`post:${POST_ID}`);
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('returns error on exception', async () => {
+      (resolveConsumptionTarget as jest.Mock<any>).mockRejectedValueOnce(new Error('db error'));
+      const { handler } = buildHandler();
       const socket = makeSocket();
       const callback = jest.fn<any>();
 
@@ -706,6 +704,35 @@ describe('PostReactionHandler', () => {
     });
 
     it('leaves post room and calls callback with success on happy path', async () => {
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleLeavePost(socket, { postId: POST_ID }, callback);
+
+      expect(socket.leave).toHaveBeenCalledWith(`post:${POST_ID}`);
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('leaves the RESOLVED target room (symmetric with handleJoinPost — simple repost redirects to its root)', async () => {
+      const ROOT_ID = 'root-post-1';
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce({
+        id: ROOT_ID, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+        isQuote: false, repostOfId: null, originalRepostOfId: null,
+      });
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleLeavePost(socket, { postId: POST_ID }, callback);
+
+      expect(socket.leave).toHaveBeenCalledWith(`post:${ROOT_ID}`);
+      expect(socket.leave).not.toHaveBeenCalledWith(`post:${POST_ID}`);
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('falls back to the raw postId room when resolution fails — leave never errors on a stale ACL', async () => {
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce(null);
       const { handler } = buildHandler();
       const socket = makeSocket();
       const callback = jest.fn<any>();

@@ -42,7 +42,12 @@ consommation la déclenche (93), et aucune copie ne s'en échappe (94). La même
 > un budget neuf). **Vérifier que la réponse envisagée ferme le trou, plutôt que de la choisir sur
 > sa cohérence apparente avec la sortie voisine.**
 
-## Livré au cycle 94
+## Livré au cycle 94 — **mergé sur `main` le 2026-08-12 (PR #2902, merge `4ecd765e`)**
+
+*Gate local avant merge : 683/683 suites, 16 902/16 902 tests, `tsc --noEmit` propre,
+`forwardAdmission.ts` à 100 % de lignes couvertes, total gateway 95,93 %. Réintégration de `main`
+après merge (PR #2900, calls/video-call) : sans conflit, périmètres disjoints.*
+
 
 1. **`admitMessageForward` — le transfert ne défait plus la destruction.** Garde unique dans
    `services/messaging/forwardAdmission.ts`, appelé depuis `MessagingService.handleMessage` (le

@@ -324,6 +324,31 @@ describe('PostFeedService.getFeed', () => {
     expect(a.currentUserReactions).toEqual(['❤️']);
     expect(b.currentUserReactions).toEqual(['❤️']);
   });
+
+  // Review task-9, critique #1 : un repost simple SOURCÉ depuis une
+  // STORY/STATUS ne redirige JAMAIS ses flags perso vers la racine — il
+  // porte son propre instantané et garde sa PROPRE vie sociale.
+  // `repostOf.type` est déjà chargé par `feedPostInclude`, aucune requête
+  // supplémentaire nécessaire pour trancher.
+  it('keeps its own currentUserReactions for a repost sourced from a STORY — never redirects to the ephemeral root', async () => {
+    const repost = makePost('repost-story-1', {
+      isQuote: false,
+      repostOfId: 'story-root-1',
+      originalRepostOfId: 'story-root-1',
+      repostOf: { id: 'story-root-1', type: 'STORY' },
+    });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('repost-story-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(mockPostReactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', postId: { in: ['repost-story-1'] } } })
+    );
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
