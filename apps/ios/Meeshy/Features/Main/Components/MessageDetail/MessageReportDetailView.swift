@@ -19,6 +19,9 @@ struct MessageReportDetailView: View {
     @State private var selectedReportType: ReportType? = nil
     @State private var reportReason = ""
     @State private var isSubmittingReport = false
+    /// Confirmation avant d'envoyer le signalement — action de modération,
+    /// modale de validation obligatoire (feedback device 2026-07-14).
+    @State private var showReportConfirm = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -53,12 +56,10 @@ struct MessageReportDetailView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            if let reportType = selectedReportType {
+            if selectedReportType != nil {
                 Button {
-                    isSubmittingReport = true
                     HapticFeedback.medium()
-                    onReport?(reportType.rawValue, reportReason.isEmpty ? nil : reportReason)
-                    onDismiss?()
+                    showReportConfirm = true
                 } label: {
                     if isSubmittingReport {
                         ProgressView()
@@ -74,11 +75,31 @@ struct MessageReportDetailView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(MeeshyColors.error)
                 )
+                // While submitting, the label is a bare `ProgressView`: the button
+                // loses its accessible name at the exact moment it is busy, on a
+                // destructive action. Pin the name to the action, as the doctrine
+                // in StatusComposerView:258 requires. Reuses the visible key.
+                .accessibilityLabel(String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
                 .disabled(isSubmittingReport)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedReportType)
+        .confirmationDialog(
+            String(localized: "message-detail.report.confirm.title", defaultValue: "Signaler ce message ?", bundle: .main),
+            isPresented: $showReportConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main), role: .destructive) {
+                guard let reportType = selectedReportType else { return }
+                isSubmittingReport = true
+                onReport?(reportType.rawValue, reportReason.isEmpty ? nil : reportReason)
+                onDismiss?()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+        } message: {
+            Text(String(localized: "message-detail.report.confirm.message", defaultValue: "Le message sera transmis à la modération.", bundle: .main))
+        }
     }
 
     private func reportTypeRow(_ type: ReportType) -> some View {
@@ -94,6 +115,9 @@ struct MessageReportDetailView: View {
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
+                    // Decorative — the reason label immediately restates it; keep
+                    // VoiceOver from announcing the raw SF Symbol name.
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
@@ -112,6 +136,9 @@ struct MessageReportDetailView: View {
                         .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
+                        // Selection affordance — its meaning is now carried by the
+                        // .isSelected trait below, so hide the glyph from VoiceOver.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -125,5 +152,9 @@ struct MessageReportDetailView: View {
                     )
             )
         }
+        // The chosen report reason is otherwise signalled by color + checkmark
+        // alone — expose it to VoiceOver via the trait so non-sighted users know
+        // which reason is active (HIG: never rely on color to convey state).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

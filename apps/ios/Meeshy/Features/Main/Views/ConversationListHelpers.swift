@@ -79,7 +79,7 @@ struct SectionHeaderView: View {
                 }
 
                 // Expand/collapse chevron with rotation animation
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
@@ -122,7 +122,7 @@ struct ConversationPreviewView: View {
     var avatarURL: String? = nil
     var storyState: StoryRingState = .none
     var moodEmoji: String? = nil
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var isDirect: Bool = false
     var onCall: (() -> Void)? = nil
     var onSearch: (() -> Void)? = nil
@@ -163,8 +163,11 @@ struct ConversationPreviewView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     // Titre pleine largeur — peut aller à la ligne (2 lignes).
+                    // displayName (customName prioritaire) : même convention
+                    // que la ligne de liste (ThemedConversationRow) — l'avatar
+                    // reste sur `name` (initiales/couleur du vrai nom).
                     HStack(alignment: .top, spacing: 6) {
-                        Text(conversation.name)
+                        Text(conversation.displayName)
                             .font(.callout.weight(.bold))
                             .foregroundColor(headerContentColor)
                             .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
@@ -316,8 +319,8 @@ struct ConversationPreviewView: View {
     private var headerActions: some View {
         HStack(spacing: 8) {
             if conversation.userState.unreadCount > 0 {
-                Text("\(min(conversation.userState.unreadCount, 99))")
-                    .font(.caption2.weight(.bold))
+                Text(NotificationBadge.displayed(conversation.userState.unreadCount))
+                    .font(.caption2.weight(NotificationBadge.fontWeight))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .frame(minWidth: 20, minHeight: 20)

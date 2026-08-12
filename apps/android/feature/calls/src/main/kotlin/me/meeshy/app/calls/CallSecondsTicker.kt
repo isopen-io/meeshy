@@ -41,4 +41,7 @@ class RealCallSecondsTicker @Inject constructor() : CallSecondsTicker {
 interface CallTickerModule {
     @Binds
     fun bindCallSecondsTicker(impl: RealCallSecondsTicker): CallSecondsTicker
+
+    @Binds
+    fun bindCallHeartbeatTicker(impl: RealCallHeartbeatTicker): CallHeartbeatTicker
 }

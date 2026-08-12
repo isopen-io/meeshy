@@ -16,7 +16,7 @@
 
 import { render } from '@testing-library/react';
 import { act } from 'react';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, isChecking: false }),
@@ -149,6 +149,36 @@ describe('CallManager — reconnect re-join', () => {
     expect(lastJoinEmit(socket)).toBeUndefined();
   });
 
+  it('asks the server to replay a missed ringing call on the very first connect', () => {
+    // Mirrors iOS MessageSocketManager, which fires call:check-active
+    // unconditionally on every connect (including the first) — a page
+    // load/reload during another peer's 60s ringing window must still
+    // surface the incoming-call banner.
+    const socket = makeFakeSocket(false); // not connected at mount
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire('connect'); // first-ever connect for this effect instance
+    });
+
+    expect(socket.emit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_CHECK_ACTIVE);
+  });
+
+  it('asks the server to replay a missed ringing call on reconnect too', () => {
+    const socket = makeFakeSocket(true); // already connected at mount → initial seen
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire('connect'); // reconnect
+    });
+
+    expect(socket.emit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_CHECK_ACTIVE);
+  });
+
   it('tears the call down when the reconnect re-join is rejected with CALL_ENDED', () => {
     const socket = makeFakeSocket(true);
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
@@ -167,5 +197,39 @@ describe('CallManager — reconnect re-join', () => {
     });
 
     expect(useCallStore.getState().isInCall).toBe(false);
+  });
+});
+
+// Regression: `attachListeners`'s cleanup used `socket.off(EVENT)` with no
+// handler argument — real (and this fake) Socket.IO removes EVERY listener
+// registered for that event name, not just CallManager's own. Since
+// `attachListeners` re-runs on every `connect` (reconnect) while a call is
+// active, a sibling component (VideoCallInterface) that separately calls
+// `socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, ...)` has its listener
+// silently deleted the moment CallManager reconnects mid-call.
+describe('CallManager — foreign listeners on shared events survive re-attach', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useCallStore.getState().reset();
+  });
+
+  it('does not remove a listener another component registered for CALL_PARTICIPANT_LEFT', () => {
+    const socket = makeFakeSocket(true); // already connected at mount
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const foreignListener = jest.fn();
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, foreignListener);
+
+    render(<CallManager />);
+    setActiveCall(CALL_ID);
+
+    // A reconnect re-runs attachListeners a second time.
+    act(() => {
+      socket.fire('connect');
+    });
+
+    socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, { callId: CALL_ID, userId: 'peer-1' });
+
+    expect(foreignListener).toHaveBeenCalledWith({ callId: CALL_ID, userId: 'peer-1' });
   });
 });

@@ -20,6 +20,9 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.component.chrome.MeeshyBackground
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,20 +49,36 @@ import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.MeeshyPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
     onBack: () -> Unit,
+    initialTab: ContactsTab? = null,
     viewModel: ContactsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Ouverture ciblee (Reglages -> Utilisateurs bloques) : selectionner l'onglet
+    // demande UNE fois a l'entree, sans voler la main a la navigation interne.
+    androidx.compose.runtime.LaunchedEffect(initialTab) {
+        initialTab?.let(viewModel::selectTab)
+    }
     val tabs = ContactsTab.entries
     val selectedIndex = tabs.indexOf(state.selectedTab)
 
+    MeeshyBackground {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                ),
                 title = { Text(stringResource(R.string.contacts_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -77,7 +96,10 @@ fun ContactsScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(selectedTabIndex = selectedIndex) {
+            TabRow(
+                selectedTabIndex = selectedIndex,
+                containerColor = Color.Transparent,
+            ) {
                 tabs.forEachIndexed { index, tab ->
                     val badge = if (tab == ContactsTab.Requests) state.receivedRequests.size else 0
                     Tab(
@@ -107,6 +129,7 @@ fun ContactsScreen(
                 ContactsTab.Blocked -> BlockedTab()
             }
         }
+    }
     }
 }
 
@@ -216,7 +239,7 @@ private fun RequestRow(
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -234,7 +257,7 @@ private fun SectionHeader(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        color = MeeshyPalette.Indigo500,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
@@ -245,7 +268,7 @@ private fun EmptyState(message: String) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(32.dp),
         )
     }

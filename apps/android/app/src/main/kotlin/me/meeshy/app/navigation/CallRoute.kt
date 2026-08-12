@@ -28,14 +28,16 @@ object CallRoute {
     const val VIDEO_ARG: String = "video"
     const val CALL_ID_ARG: String = "callId"
     const val INCOMING_ARG: String = "incoming"
+    const val ANSWER_ARG: String = "answer"
 
-    /** The `NavHost` route pattern: a static path with five optional query placeholders. */
+    /** The `NavHost` route pattern: a static path with six optional query placeholders. */
     const val PATTERN: String =
         "call?$CONVERSATION_ID_ARG={$CONVERSATION_ID_ARG}" +
             "&$PEER_NAME_ARG={$PEER_NAME_ARG}" +
             "&$VIDEO_ARG={$VIDEO_ARG}" +
             "&$CALL_ID_ARG={$CALL_ID_ARG}" +
-            "&$INCOMING_ARG={$INCOMING_ARG}"
+            "&$INCOMING_ARG={$INCOMING_ARG}" +
+            "&$ANSWER_ARG={$ANSWER_ARG}"
 
     /**
      * Build the concrete route for an outgoing call placed from a chat. The
@@ -60,10 +62,12 @@ object CallRoute {
         conversationId: String,
         callerName: String,
         isVideo: Boolean,
+        autoAnswer: Boolean = false,
     ): String =
         "${path(conversationId, callerName, isVideo)}" +
             "&$CALL_ID_ARG=${Uri.encode(callId)}" +
-            "&$INCOMING_ARG=true"
+            "&$INCOMING_ARG=true" +
+            "&$ANSWER_ARG=$autoAnswer"
 
     /**
      * Map already-decoded navigation arguments into the [CallConfig] the call
@@ -88,6 +92,30 @@ object CallRoute {
             conversationId = conversationId.orEmpty(),
             callId = callId.orEmpty(),
         )
+
+    /**
+     * Rebuild the route that re-opens a still-in-flight call from the floating
+     * pill (the minimise → tap-to-return round trip). An **outgoing** call
+     * re-enters through [path]; an **incoming** one through [incoming] so its
+     * server [CallConfig.callId] and non-outgoing direction survive the round trip.
+     * Either way the Activity-scoped `CallViewModel` is reused on arrival, so the
+     * screen's re-entrant `start()` is inert and the live call is left untouched.
+     */
+    fun reopen(config: CallConfig): String =
+        if (config.isOutgoing) {
+            path(
+                conversationId = config.conversationId,
+                peerName = config.peerName,
+                isVideo = config.isVideo,
+            )
+        } else {
+            incoming(
+                callId = config.callId,
+                conversationId = config.conversationId,
+                callerName = config.peerName,
+                isVideo = config.isVideo,
+            )
+        }
 
     /**
      * Re-dial route from a call-journal row: the natural "tap a past call to

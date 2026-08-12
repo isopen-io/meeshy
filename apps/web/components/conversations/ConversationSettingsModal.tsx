@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -494,7 +495,7 @@ export function ConversationSettingsModal({
               <div className="relative h-28 sm:h-32 overflow-hidden">
                 {otherUser.banner ? (
                   <img
-                    src={otherUser.banner}
+                    src={buildAttachmentUrl(otherUser.banner) ?? undefined}
                     alt=""
                     className="w-full h-full object-cover"
                   />

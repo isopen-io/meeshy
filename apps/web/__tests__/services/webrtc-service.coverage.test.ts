@@ -107,12 +107,26 @@ class FakeRTCPeerConnection {
 // Track / stream factories
 // ---------------------------------------------------------------------------
 
-const makeTrack = (kind: 'audio' | 'video') => ({
-  kind,
-  enabled: true,
-  contentHint: '',
-  stop: jest.fn(),
-});
+let trackIdCounter = 0;
+
+const makeTrack = (kind: 'audio' | 'video'): {
+  kind: 'audio' | 'video';
+  id: string;
+  enabled: boolean;
+  contentHint: string;
+  stop: jest.Mock;
+  clone: jest.Mock;
+} => {
+  const track = {
+    kind,
+    id: `track-${++trackIdCounter}`,
+    enabled: true,
+    contentHint: '',
+    stop: jest.fn(),
+    clone: jest.fn((): ReturnType<typeof makeTrack> => makeTrack(kind)),
+  };
+  return track;
+};
 
 const makeStream = (opts: { audio?: boolean; video?: boolean }) => {
   const tracks: ReturnType<typeof makeTrack>[] = [];
@@ -958,6 +972,45 @@ describe('negotiate', () => {
     await service.negotiate({ iceRestart: false });
     expect(pc.createOffer).toHaveBeenCalledWith(undefined);
   });
+
+  it('defers an ICE restart that arrives while an unrelated offer is in flight, and replays it once that offer settles', async () => {
+    // Reproduces a real dead-call scenario: an A/V-switch renegotiation
+    // (onnegotiationneeded → negotiate()) is in flight when ICE transitions
+    // to 'failed' and fires restartIce() → negotiate({ iceRestart: true }).
+    // The re-entrancy guard used to drop the ICE restart on the floor with
+    // no retry — the connection then stays permanently 'failed'.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    let resolveFirstOffer!: (v: RTCSessionDescriptionInit) => void;
+    pc.createOffer = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<RTCSessionDescriptionInit>((res) => {
+            resolveFirstOffer = res;
+          })
+      )
+      .mockResolvedValue({ type: 'offer' as RTCSdpType, sdp: 'v=0\r\n' });
+
+    const inFlight = service.negotiate();
+    const dropped = service.negotiate({ iceRestart: true });
+    await dropped;
+
+    // The ICE restart must not be silently discarded: it should not fire a
+    // second createOffer yet (the first is still in flight)...
+    expect(pc.createOffer).toHaveBeenCalledTimes(1);
+
+    resolveFirstOffer({ type: 'offer', sdp: 'v=0\r\n' });
+    await inFlight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // ...but must be replayed automatically once the in-flight offer settles.
+    expect(pc.createOffer).toHaveBeenCalledTimes(2);
+    expect(pc.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
+  });
 });
 
 // ===========================================================================
@@ -1145,6 +1198,125 @@ describe('disableVideoSend — autoNegotiate=false', () => {
     await service.disableVideoSend();
     expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(null);
     expect(videoTx.direction).toBe('recvonly');
+  });
+});
+
+// ===========================================================================
+// switchVideoSendTrack — Vague 95
+//
+// handleSwitchCamera (VideoCallInterface.tsx) used to replace every peer
+// connection's video sender with a SINGLE shared track object, then stop and
+// remove only `localStream.getVideoTracks()[0]` — an assumption that breaks
+// the moment enableVideo() has handed a *different* per-peer clone to a
+// non-first peer in a group call (its established "one real track + N
+// clones" ownership model, exercised above by the `enableVideoSend` describe
+// blocks). This method gives camera-switch the same per-peer, bookkeeping-
+// aware replace that enableVideoSend/disableVideoSend already have.
+// ===========================================================================
+
+describe('switchVideoSendTrack', () => {
+  it('throws when no videoTransceiver initialized', async () => {
+    const service = new WebRTCService();
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await expect(service.switchVideoSendTrack(newTrack)).rejects.toThrow(
+      'Video transceiver not initialized'
+    );
+  });
+
+  it('replaces the sender track, updates localStream, and stops the previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const previousTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).toHaveBeenCalledWith(previousTrack);
+    expect(previousTrack.stop).toHaveBeenCalled();
+  });
+
+  it('does not stop/remove anything when the sender had no previous track', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true });
+    // sendVideo: false → video transceiver reserved recvonly, sender.track is null
+    service.addLocalMedia(stream, { sendVideo: false });
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    const videoTx = pc._transceivers.find((t) => t.direction === 'recvonly')!;
+    expect(videoTx.sender.replaceTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.addTrack).toHaveBeenCalledWith(newTrack);
+    expect(stream.removeTrack).not.toHaveBeenCalled();
+  });
+
+  it('does not renegotiate — replaceTrack alone is sufficient once already sendrecv', async () => {
+    const { service, onLocalDescription } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+    onLocalDescription.mockClear();
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    expect(onLocalDescription).not.toHaveBeenCalled();
+  });
+
+  it("keeps a group call's independent per-peer track exclusive (mirrors enableVideoSend ownership)", async () => {
+    const { service: serviceA } = setup();
+    const serviceB = new WebRTCService();
+    serviceB.createPeerConnection('peer-2');
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    const newBaseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.switchVideoSendTrack(newBaseTrack);
+
+    // Only A's own previous track (baseTrack) is stopped/removed — B's clone,
+    // still live and attached to B's own sender, is left completely alone.
+    expect((baseTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    expect((cloneTrack as unknown as { stop: jest.Mock }).stop).not.toHaveBeenCalled();
+    expect(sharedStream.removeTrack).not.toHaveBeenCalledWith(cloneTrack);
+  });
+
+  it('close({ stopLocalTracks: false }) releases the NEW track after a switch, not the stale one', async () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+    await service.createOffer();
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const originalTrack = videoTx.sender.track as ReturnType<typeof makeTrack>;
+
+    const newTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.switchVideoSendTrack(newTrack);
+
+    service.close({ stopLocalTracks: false });
+
+    expect((newTrack as unknown as { stop: jest.Mock }).stop).toHaveBeenCalled();
+    expect(stream.removeTrack).toHaveBeenCalledWith(newTrack);
+    // The original track was already stopped/removed by switchVideoSendTrack
+    // itself, above — close() must not double-touch it via a stale ref.
+    expect(originalTrack.stop).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1707,6 +1879,114 @@ describe('close', () => {
     const onLocalDesc = jest.fn();
     (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
     pc2.onnegotiationneeded!();
+    expect(onLocalDesc).not.toHaveBeenCalled();
+  });
+
+  // In a group call, use-webrtc-p2p.ts keeps ONE WebRTCService per remote
+  // participant but they all share the SAME local MediaStream reference
+  // (addLocalMedia is called with the store's single localStream on every
+  // peer connection). close({ stopLocalTracks: false }) is what
+  // removeParticipant() must use when a single participant leaves (or their
+  // negotiation fails) — stopping the shared hardware tracks there would
+  // kill local audio/video for every OTHER still-connected participant.
+  it('close({ stopLocalTracks: false }) tears down the peer connection without stopping shared local tracks', () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true, video: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: true });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: true });
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(sharedStream.getTracks()[1].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+    expect(serviceA.getCurrentStream()).toBeNull();
+
+    // serviceB's connection (and the shared stream) is unaffected.
+    expect(pcB.close).not.toHaveBeenCalled();
+    expect(serviceB.getCurrentStream()).toBe(sharedStream);
+  });
+
+  // enableVideoSend() attaches a track that is NEVER shared with another
+  // peer's sender in a group call — use-webrtc-p2p.ts's enableVideo() gives
+  // the first peer the literal camera track and every other peer a
+  // `.clone()` specifically so each sender owns an exclusive track object.
+  // close({ stopLocalTracks: false }) must still release THIS instance's own
+  // video track (stop it + remove it from the shared local preview stream)
+  // even though it must not touch the genuinely shared tracks — otherwise a
+  // departed group-call participant's clone (or the original, if peer index
+  // 0 leaves) is orphaned on the shared MediaStream forever.
+  it('close({ stopLocalTracks: false }) still releases the exclusive video track set by enableVideoSend', async () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: false });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: false });
+
+    const baseTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    const cloneTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await serviceA.enableVideoSend(baseTrack);
+    await serviceB.enableVideoSend(cloneTrack);
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(baseTrack.stop).toHaveBeenCalled();
+    expect(sharedStream.removeTrack).toHaveBeenCalledWith(baseTrack);
+    // The genuinely shared track (audio) is untouched by a non-full teardown.
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+
+    // Peer B's own, independent clone track is unaffected.
+    expect(cloneTrack.stop).not.toHaveBeenCalled();
+    expect(pcB.close).not.toHaveBeenCalled();
+  });
+
+  it('close() with no options still stops local tracks (full-teardown default unchanged)', () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+
+    service.close();
+
+    expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+    expect(stream.getTracks()[1].stop).toHaveBeenCalled();
+    expect(pc.close).toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// createPeerConnection — reused without an intervening close() (participant
+// leave→rejoin: use-webrtc-p2p.ts caches one WebRTCService per participantId
+// and only calls close() on full teardown, not on a single participant leave)
+// ===========================================================================
+
+describe('createPeerConnection — reused without close (participant rejoin)', () => {
+  it('resets autoNegotiate and other perfect-negotiation flags on reuse, even without close() first', async () => {
+    const { service } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // sets autoNegotiate=true on the FIRST connection
+
+    // Participant rejoins: a new peer connection is built on the SAME
+    // service instance, with no close() call in between (mirrors
+    // use-webrtc-p2p.ts's per-participant service cache).
+    const pc2 = service.createPeerConnection('p2') as unknown as FakeRTCPeerConnection;
+
+    // A stale autoNegotiate=true would let onnegotiationneeded fire a second,
+    // racing offer concurrently with the explicit createOffer() the rejoin
+    // flow is about to await.
+    const onLocalDesc = jest.fn();
+    (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
+    pc2.onnegotiationneeded!();
+    // negotiate() awaits createOffer() then setLocalDescription() before
+    // emitting onLocalDescription — flush those microtasks before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(onLocalDesc).not.toHaveBeenCalled();
   });
 });

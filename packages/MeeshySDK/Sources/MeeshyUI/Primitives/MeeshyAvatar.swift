@@ -8,6 +8,7 @@ public enum AvatarContext: Sendable {
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
     case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
+    case storyViewerRow         // 44pt — a user row in the "who viewed" list (mood + presence, no redundant story ring)
 
     // Feed
     case feedComposer           // 36pt
@@ -43,7 +44,7 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyTrayCompact, .storyViewer, .conversationHeaderCollapsed,
+        case .storyTrayCompact, .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -60,7 +61,7 @@ public enum AvatarContext: Sendable {
 
     public var showsStoryRing: Bool {
         switch self {
-        case .storyViewer, .postComment, .postReaction, .typingIndicator, .profileEdit:
+        case .storyViewer, .storyViewerRow, .postComment, .postReaction, .typingIndicator, .profileEdit:
             return false
         default: return true
         }
@@ -132,7 +133,7 @@ public enum AvatarContext: Sendable {
         switch self {
         case .postReaction, .typingIndicator, .recentParticipant: return 0
         case .postComment: return 2
-        case .messageBubble, .storyViewer, .feedComposer, .userListItem, .notification,
+        case .messageBubble, .storyViewer, .storyViewerRow, .feedComposer, .userListItem, .notification,
              .conversationHeaderStacked: return 4
         case .profileBanner: return 12
         default: return 8
@@ -220,7 +221,10 @@ public struct MeeshyAvatar: View {
     public var thumbHash: String? = nil
     public var storyState: StoryRingState = .none
     public var moodEmoji: String? = nil
-    public var presenceState: PresenceState = .offline
+    /// Présence de l'avatar. `nil` = aucune donnée (pas de dot). `.offline`
+    /// (hors ligne > 30min) ne rend PAS de dot non plus — seuls online/recent
+    /// (vert) et away (orange) affichent une pastille.
+    public var presenceState: PresenceState? = nil
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -234,7 +238,7 @@ public struct MeeshyAvatar: View {
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState = .offline, enablePulse: Bool? = nil,
+                presenceState: PresenceState? = nil, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -278,9 +282,12 @@ public struct MeeshyAvatar: View {
         return context.showsMoodBadge ? moodEmoji : nil
     }
 
-    private var effectivePresence: PresenceState {
-        guard kind == .user else { return .offline }
-        return context.showsOnlineDot ? presenceState : .offline
+    private var effectivePresence: PresenceState? {
+        guard kind == .user, context.showsOnlineDot else { return nil }
+        // Offline (>30min) : aucun dot. Le gris reste défini dans
+        // PresenceState.dotColor pour les affichages labellisés, pas ici.
+        guard presenceState != .offline else { return nil }
+        return presenceState
     }
 
     private var hasTapHandler: Bool {
@@ -336,8 +343,8 @@ public struct MeeshyAvatar: View {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
                 moodBadge(emoji: emoji)
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
-            } else if effectivePresence != .offline {
-                onlineDot
+            } else if let presence = effectivePresence {
+                onlineDot(for: presence)
                     .offset(badgeOffset(badgeHalfSize: context.onlineDotSize / 2))
             }
         }
@@ -451,7 +458,15 @@ public struct MeeshyAvatar: View {
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
                 }
                 .onAppear {
-                    guard context.animatesMoodBadge else { return }
+                    // `moodScale == 1.0` = pas de pulse en vol pour cette
+                    // identité de vue. Un `.onAppear` peut re-fire sans
+                    // `.onDisappear` intermédiaire (ScrollView, re-parenting) ;
+                    // relancer un `repeatForever` par-dessus un autre les fait
+                    // COMBINER par le moteur (aucun des deux ne se termine
+                    // jamais) et chaque frame les évalue tous, pour toujours
+                    // (hog device 2026-07-03 : `DefaultCombiningAnimation` à
+                    // ~90 % du thread ViewGraphDisplayLink).
+                    guard context.animatesMoodBadge, moodScale == 1.0 else { return }
                     withAnimation(
                         .spring(response: 0.5, dampingFraction: 0.4)
                         .repeatForever(autoreverses: true)
@@ -470,18 +485,12 @@ public struct MeeshyAvatar: View {
         .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 
-    private var dotColor: Color {
-        switch effectivePresence {
-        case .online: return MeeshyColors.success
-        case .away: return MeeshyColors.warning
-        case .offline: return .clear
-        }
-    }
-
     @ViewBuilder
-    private var onlineDot: some View {
+    private func onlineDot(for presence: PresenceState) -> some View {
+        // Couleur via le mapping central PresenceState.dotColor (PresenceStyle) :
+        // vert online/recent, orange away, gris offline.
         let dot = Circle()
-            .fill(dotColor)
+            .fill(presence.dotColor)
             .frame(width: context.onlineDotSize, height: context.onlineDotSize)
             .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
             .onTapGesture {
@@ -490,7 +499,7 @@ public struct MeeshyAvatar: View {
             }
 
         // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
-        if enablePulse && effectivePresence == .online && effectiveStoryState != .none {
+        if enablePulse && presence.pulses && effectiveStoryState != .none {
             dot.pulse(intensity: 0.12)
         } else {
             dot

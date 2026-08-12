@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
 import { decodeCursor, encodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -276,6 +276,54 @@ describe('PostFeedService.getFeed', () => {
     expect(p4.currentUserReactions).toEqual(['👍']);
     expect(p5.currentUserReactions).toEqual(['🔥', '❤️']);
   });
+
+  // Repost simple → racine (chantier reposts cohérents & watermark, tâche 9) :
+  // isLikedByMe/currentUserReactions d'un repost isQuote:false reflètent
+  // l'état du viewer sur l'ORIGINAL — deuxième chemin d'enrichissement
+  // (le premier est PostService.getPostById), même règle exacte.
+
+  it('redirects currentUserReactions to the ROOT for a simple repost', async () => {
+    const repost = makePost('repost-1', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(mockPostReactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', postId: { in: ['root-1'] } } })
+    );
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+
+  it('a QUOTE keeps its own currentUserReactions — no redirect', async () => {
+    const quote = makePost('quote-1', { isQuote: true, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([quote]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getFeed('user-1');
+
+    expect(mockPostReactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', postId: { in: ['quote-1'] } } })
+    );
+  });
+
+  it('two distinct reposts of the SAME original both surface the ONE reaction posed on the root (idempotence)', async () => {
+    const repostA = makePost('repost-a', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    const repostB = makePost('repost-b', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repostA, repostB]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    const a = result.items.find((i: any) => i.id === 'repost-a') as any;
+    const b = result.items.find((i: any) => i.id === 'repost-b') as any;
+    expect(a.currentUserReactions).toEqual(['❤️']);
+    expect(b.currentUserReactions).toEqual(['❤️']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -327,6 +375,250 @@ describe('PostFeedService.getStories', () => {
 
     const where = mockPostFindMany.mock.calls[0][0].where;
     expect(JSON.stringify(where)).not.toContain('updatedAt');
+  });
+
+  // --- Archive de l'auteur -------------------------------------------------
+  //
+  // Le filtre d'expiration ne connaissait AUCUNE exception d'auteur : mes
+  // propres stories disparaissaient de la réponse dès leur expiration. « Mes
+  // stories » ne pouvait donc pas les lister, et le client ne pouvait pas les
+  // garder — un pull-to-refresh écrase son cache avec la réponse serveur.
+  //
+  // Elles restent renvoyées à leur AUTEUR pendant une fenêtre bornée : sans
+  // borne, la réponse enflerait indéfiniment avec l'ancienneté du compte.
+
+  function expiryClause(where: any) {
+    return where.AND.find(
+      (clause: any) =>
+        Array.isArray(clause.OR) &&
+        clause.OR.some((branch: any) => branch.expiresAt?.gt !== undefined)
+    );
+  }
+
+  it('keeps my own expired stories inside the author archive window', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranch).toBeDefined();
+    expect(authorBranch.AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
+  });
+
+  it('bounds the author archive to a finite window in the past', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const before = Date.now();
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const after = Date.now();
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+    const floor = authorBranch.AND.find((c: any) => c.expiresAt)?.expiresAt?.gt as Date;
+
+    expect(floor).toBeInstanceOf(Date);
+    expect(floor.getTime()).toBeLessThan(before);
+    // Le plancher est `serviceNow - WINDOW`, et `serviceNow` est une lecture
+    // d'horloge PROPRE au service, prise APRÈS celle du test. Comparer
+    // `before - floor` à la fenêtre au millième près supposait les deux lectures
+    // égales : dès que l'horloge changeait de milliseconde entre les deux, le
+    // test tombait à `WINDOW - 1` (observé en CI, 604799999 contre 604800000).
+    // L'invariant réel est un encadrement : le plancher tombe dans la fenêtre
+    // ouverte par les deux lectures qui bornent l'appel.
+    expect(floor.getTime()).toBeGreaterThanOrEqual(before - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+    expect(floor.getTime()).toBeLessThanOrEqual(after - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+  });
+
+  it('still hides OTHER authors expired stories', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranches = clause.OR.filter((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranches).toHaveLength(1);
+    expect(authorBranches[0].AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
+  });
+
+  // --- Tombstones du delta-sync -------------------------------------------
+  //
+  // Un delta additif ne peut pas exprimer une disparition : il ne renvoie que
+  // ce qui existe encore. Les suppressions ne voyageaient donc que par l'event
+  // socket `story:deleted`, qui ne couvre pas l'app fermée ou hors-ligne (aucun
+  // replay) — la story restait dans le cache du client jusqu'à l'expiration de
+  // ce cache. Le delta porte maintenant les ids disparus.
+  //
+  // Ça couvre AUSSI l'expiration : `ExpiredStoriesCleanupService` soft-delete
+  // les stories périmées toutes les heures, ce qui pose `deletedAt` et remonte
+  // `updatedAt` — elles entrent alors dans la même fenêtre delta.
+
+  it('returns the ids of stories deleted since the delta cursor', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([])                            // page de stories vivantes
+      .mockResolvedValueOnce([{ id: 'gone-1' }, { id: 'gone-2' }]); // tombstones
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { updatedSince: since });
+
+    expect(result.deletedIds).toEqual(['gone-1', 'gone-2']);
+  });
+
+  it('scopes the tombstone query to deleted stories updated after the cursor', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: since });
+
+    const tombstoneArgs = mockPostFindMany.mock.calls[1][0];
+    expect(tombstoneArgs.where.type).toBe('STORY');
+    expect(tombstoneArgs.where.deletedAt).toEqual({ not: null });
+    expect(tombstoneArgs.where.updatedAt).toEqual({ gt: since });
+    expect(tombstoneArgs.select).toEqual({ id: true });
+  });
+
+  it('applies the same visibility filter to tombstones as to the tray itself', async () => {
+    // Sans ça, le delta divulguerait l'existence de stories que l'utilisateur
+    // n'a jamais eu le droit de voir.
+    mockPostFindMany.mockResolvedValue([]);
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: since });
+
+    const trayVisibility = mockPostFindMany.mock.calls[0][0].where.AND[0];
+    const tombstoneArgs = mockPostFindMany.mock.calls[1][0];
+    expect(tombstoneArgs.where.AND).toEqual(expect.arrayContaining([trayVisibility]));
+  });
+
+  it('issues no tombstone query on a full tray fetch', async () => {
+    // Le full fetch écrase le tray côté client : les disparitions y sont déjà
+    // couvertes par construction, une requête de plus serait du gaspillage.
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(1);
+    expect(result.deletedIds).toEqual([]);
+  });
+
+  // --- Troncature des tombstones ------------------------------------------
+  //
+  // Le plafond des tombstones n'a pas de curseur : rien ne permet de reprendre
+  // la suite. Un client dont les tombstones ont été coupés garde donc des
+  // stories fantômes, et il ne peut le découvrir que si la charge utile le lui
+  // DIT — le plafond était jusqu'ici journalisé côté serveur seulement.
+  //
+  // Le drapeau se prouve par une ligne SONDE (`take: LIMIT + 1`), comme
+  // `hasMore` : `length === LIMIT` ne distingue pas une page coupée d'une
+  // fenêtre de très exactement LIMIT suppressions, qui est COMPLÈTE.
+
+  const tombstoneRows = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ id: `gone-${i}` }));
+
+  it('flags the tombstones as truncated when the cap overflows', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(tombstoneRows(501));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(result.deletedIdsTruncated).toBe(true);
+    expect(result.deletedIds).toHaveLength(500);
+  });
+
+  it('does not flag a window of exactly the cap, which is complete', async () => {
+    // La sonde est ce qui rend cette distinction possible : sans elle, cette
+    // fenêtre COMPLÈTE déclencherait un full fetch inutile à chaque delta.
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(tombstoneRows(500));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(result.deletedIdsTruncated).toBe(false);
+    expect(result.deletedIds).toHaveLength(500);
+  });
+
+  it('asks for one probe row beyond the tombstone cap', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: new Date('2026-07-03T10:00:00Z') });
+
+    expect(mockPostFindMany.mock.calls[1][0].take).toBe(501);
+  });
+
+  it('reports no truncation on a full tray fetch, which queries no tombstone', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect(result.deletedIdsTruncated).toBe(false);
+  });
+
+  // --- Portée des tombstones : la FENÊTRE, pas la page ---------------------
+  //
+  // Le client draine désormais la fenêtre delta page par page
+  // (`StoryViewModel.drainStoryPages`) — jusqu'à 6 requêtes pour une même
+  // fenêtre. La requête de tombstones, elle, ne dépend PAS du curseur : sa
+  // clause est `deletedAt != null AND updatedAt > since`, identique d'une page
+  // à l'autre. La relancer à chaque page referait donc jusqu'à 6 fois la même
+  // lecture de 501 lignes sous filtre de visibilité, pour un résultat que le
+  // client tient déjà depuis la première.
+  //
+  // Elle ne court plus que sur la page qui OUVRE la fenêtre (`cursor` absent).
+  // Le drain client fusionne par union (`formUnion`) et par `||`, jamais par
+  // écrasement : des pages suivantes sans tombstone ne peuvent pas effacer ceux
+  // de la première.
+
+  it('issues no tombstone query on a PAGED delta — they scope the window, not the page', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), 'story-9'),
+    });
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(1);
+    expect(result.deletedIds).toEqual([]);
+    expect(result.deletedIdsTruncated).toBe(false);
+  });
+
+  it('still issues the tombstone query on the page that OPENS the delta window', async () => {
+    // Garde-fou de l'optimisation ci-dessus : couper les tombstones sur la
+    // première page les supprimerait purement et simplement du produit.
+    mockPostFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'gone-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', {
+      updatedSince: new Date('2026-07-03T10:00:00Z'),
+    });
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(2);
+    expect(result.deletedIds).toEqual(['gone-1']);
   });
 
   it('skips the postReaction batch query when the stories list is empty', async () => {
@@ -466,6 +758,17 @@ describe('PostFeedService.getUserPosts', () => {
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
   });
+
+  it('redirects currentUserReactions to the ROOT for a simple repost shown on a profile', async () => {
+    const repost = makePost('up-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -511,6 +814,17 @@ describe('PostFeedService.getCommunityFeed', () => {
     expect(cp3.currentUserReactions).toEqual(['❤️']);
     expect(cp4.currentUserReactions).toEqual([]);
   });
+
+  it('redirects currentUserReactions to the ROOT for a simple repost shown in a community', async () => {
+    const repost = makePost('cp-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '🔥')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -548,6 +862,17 @@ describe('PostFeedService.getBookmarks', () => {
     await service.getBookmarks('user-1');
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
+  });
+
+  it('redirects currentUserReactions to the ROOT for a bookmarked simple repost', async () => {
+    const repost = makePost('bp-repost', { isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostBookmarkFindMany.mockResolvedValue([{ post: repost, createdAt: new Date(), id: 'bk-3' }]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 });
 
@@ -765,6 +1090,17 @@ describe('PostFeedService.getReels', () => {
     expect(byId['r-plain']).toBe(false);
   });
 
+  it('redirects currentUserReactions to the ROOT for a simple repost in the reel viewer', async () => {
+    const repost = makePost('reel-repost', { type: 'REEL', isQuote: false, repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+    mockPostFindMany.mockResolvedValue([repost]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '❤️')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+  });
+
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
     const reel = makePost('r-1', { type: 'REEL' });
     mockPostFindMany.mockResolvedValue([reel]);
@@ -888,5 +1224,114 @@ describe('PostFeedService.getReels — chronological cursor', () => {
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
     expect(result.items).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Partage de position — hoist `metadata.location` → `location` top-level.
+//
+// Un test PAR SURFACE, délibérément séparé : une seule assertion générique
+// sur « le feed » aurait laissé passer les cinq autres méthodes sans hoist
+// (c'est exactement ainsi que ce trou est né — core.ts/comments.ts hissaient
+// déjà la position, mais aucune des 8 surfaces de PostFeedService ne le
+// faisait). Chaque test ci-dessous appelle une méthode DIFFÉRENTE.
+// ---------------------------------------------------------------------------
+
+const GEOTAG = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+
+function makeGeotaggedPost(id: string, overrides: Record<string, unknown> = {}) {
+  return makePost(id, { metadata: { location: GEOTAG }, ...overrides });
+}
+
+describe('PostFeedService — hoist de position par surface', () => {
+  it('getFeed restitue `location` sur un post géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-feed-1')]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
+
+  it('getStories (corps complet) restitue `location` sur une story géolocalisée', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-story-1', { type: 'STORY' })]);
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getReels restitue `location` sur un reel géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-reel-1', { type: 'REEL' })]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+    mockPostBookmarkFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getStatuses restitue `location` sur un statut géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-status-1', { type: 'STATUS' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getDiscoverStatuses restitue `location` sur un statut public géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-discover-1', { type: 'STATUS', visibility: 'PUBLIC' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getDiscoverStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getUserPosts restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-userposts-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getUserPosts('author-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getUserPosts('author-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getCommunityFeed restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-community-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getCommunityFeed('community-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getCommunityFeed('community-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getBookmarks restitue `location` sur un post geolocalise mis en favori', async () => {
+    const post = makeGeotaggedPost('geo-bookmark-1');
+    mockPostBookmarkFindMany.mockResolvedValue([{ post, createdAt: new Date(), id: 'bk-geo-1' }]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it("n'ajoute aucun champ `location` quand le post ne porte aucun lieu", () => {
+    // Garde de non-régression : hoistLocationDeep ne doit rien inventer.
+    const plain = makePost('plain-1');
+    expect((plain as any).location).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -112,6 +113,36 @@ data class CallUiState(
      * independent of [status]; the user may reject it or end-this-and-answer it.
      */
     val waitingBanner: WaitingBannerUi? = null,
+    /**
+     * `true` while the gateway flags the REMOTE peer's sustained bad network
+     * (`call:quality-alert`) — "your contact's connection is unstable". Auto-clears
+     * after 15 s without a fresh alert (iOS `isRemoteQualityDegraded` parity) and is
+     * only surfaced on the media phases.
+     */
+    val isPeerQualityDegraded: Boolean = false,
+    /**
+     * `true` while the remote peer is actively screen-capturing this call
+     * (`call:screen-capture-alert`) — drives the privacy warning banner (iOS
+     * `isRemoteScreenCapturing` parity). Never leaks past the call's media phases.
+     */
+    val isPeerScreenCapturing: Boolean = false,
+    /**
+     * The latest live caption from the remote speaker (`call:translated-segment`),
+     * preferring the server-side translation over the original text — `null` when
+     * captions are quiet or off the media phases.
+     */
+    val captionText: String? = null,
+    /**
+     * `true` while the remote peer's microphone is muted (`call:media-toggled`
+     * audio) — iOS `isRemoteAudioEnabled` parity. Only on the media phases.
+     */
+    val isPeerMuted: Boolean = false,
+    /**
+     * `true` while the remote peer's camera is off DURING A VIDEO CALL
+     * (`call:media-toggled` video) — iOS `isRemoteVideoEnabled` parity, driving
+     * the "camera off" placeholder. Never raised on an audio-only call.
+     */
+    val isPeerCameraOff: Boolean = false,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -144,6 +175,15 @@ data class CallUiState(
 
     val isEnded: Boolean
         get() = status == CallStatus.ENDED
+
+    /**
+     * True when the ended call failed transiently (Failed/ConnectionLost) and a
+     * « Réessayer » is worth offering — parité web retry-on-failure. Uses the
+     * shared [CallRetryPolicy] so the failure set stays one rule across
+     * platforms.
+     */
+    val canRetry: Boolean
+        get() = status == CallStatus.ENDED && CallRetryPolicy.isRetryable(endReason)
 }
 
 /**
@@ -160,8 +200,14 @@ object CallPresenter {
         elapsedSeconds: Long = 0,
         connectionQuality: ConnectionQuality? = null,
         waiting: CallWaitingState = CallWaitingState.EMPTY,
+        peerQualityDegraded: Boolean = false,
+        peerScreenCapturing: Boolean = false,
+        caption: String? = null,
+        peerAudioEnabled: Boolean = true,
+        peerVideoEnabled: Boolean = true,
     ): CallUiState {
         val status = statusOf(state)
+        val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
         return CallUiState(
             status = status,
             peerName = config.peerName,
@@ -173,6 +219,15 @@ object CallPresenter {
             durationLabel = durationLabelFor(status, elapsedSeconds),
             connectionQuality = connectionQualityFor(status, connectionQuality),
             waitingBanner = waiting.pending?.let { WaitingBannerUi(it.callerName, it.isVideo) },
+            // Same suppression rule as the quality indicator: a stale peer
+            // alert/caption never leaks onto a ringing or ended screen.
+            isPeerQualityDegraded = onMediaPhase && peerQualityDegraded,
+            isPeerScreenCapturing = onMediaPhase && peerScreenCapturing,
+            captionText = caption.takeIf { onMediaPhase },
+            isPeerMuted = onMediaPhase && !peerAudioEnabled,
+            // Only a VIDEO call renders a camera indicator — an audio call's
+            // peer "camera off" is its permanent, unremarkable state.
+            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
         )
     }
 

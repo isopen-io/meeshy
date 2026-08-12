@@ -10,6 +10,7 @@ final class StatusViewModelTests: XCTestCase {
     private var mockStatusService: MockStatusService!
     private var mockSocket: MockSocialSocket!
     private var mockAuthManager: MockAuthManager!
+    private var mockPostService: MockPostService!
     private var cancellables: Set<AnyCancellable>!
 
     override func setUp() async throws {
@@ -20,22 +21,25 @@ final class StatusViewModelTests: XCTestCase {
         mockStatusService = MockStatusService()
         mockSocket = MockSocialSocket()
         mockAuthManager = MockAuthManager()
+        mockPostService = MockPostService()
         cancellables = []
         sut = StatusViewModel(
             mode: .friends,
             statusService: mockStatusService,
             socialSocket: mockSocket,
-            authManager: mockAuthManager
+            authManager: mockAuthManager,
+            postService: mockPostService
         )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         cancellables = nil
         sut = nil
         mockStatusService = nil
         mockSocket = nil
         mockAuthManager = nil
-        super.tearDown()
+        mockPostService = nil
+        try await super.tearDown()
     }
 
     // MARK: - Factory Helpers
@@ -245,6 +249,10 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.lastCreateContent, "Party")
         XCTAssertEqual(mockStatusService.lastCreateVisibility, "FRIENDS")
         XCTAssertEqual(mockStatusService.lastCreateVisibilityUserIds, ["u1", "u2"])
+        XCTAssertEqual(
+            mockStatusService.lastCreateOriginalLanguage, "fr",
+            "Le mood part en français par défaut (Prisme, public cible France — directive 2026-07-30)"
+        )
     }
 
     // MARK: - clearStatus() Tests
@@ -654,6 +662,10 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(payload?.type, "STATUS")
         XCTAssertEqual(payload?.moodEmoji, "🎉")
         XCTAssertEqual(payload?.content, "Offline mood")
+        XCTAssertEqual(
+            payload?.originalLanguage, "fr",
+            "La ligne outbox porte la langue française par défaut pour que le rejeu la transmette au gateway"
+        )
     }
 
     func test_recoverUnsentStatus_queriesStatusTypeWithOfflineThreshold() async {
@@ -699,5 +711,42 @@ final class StatusViewModelTests: XCTestCase {
         await offlineSUT.supersedeRecoveredStatus(clientMutationId: "cmid_mood")
 
         XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_mood"])
+    }
+
+    // MARK: - Portée du mood (impressions & vues)
+
+    /// Un mood EST un post (`PostType.STATUS`) et porte `impressionCount` /
+    /// `viewCount`, mais AUCUNE surface ne les alimentait : la barre de moods
+    /// était le seul contenu du produit dont la portée restait à zéro.
+    func test_trackImpression_flushesTheBatchWithTheStatusSource() async {
+        sut.trackImpression("s1")
+        sut.trackImpression("s2")
+
+        try? await Task.sleep(nanoseconds: 3_400_000_000)
+
+        XCTAssertEqual(mockPostService.recordImpressionsCallCount, 1)
+        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s2"])
+        XCTAssertEqual(mockPostService.lastRecordImpressionsSource, "status")
+    }
+
+    /// Une impression par APPARITION : revoir le même mood recompte, sinon le
+    /// compteur plafonnerait à 1 par lancement d'app.
+    func test_trackImpression_countsEveryAppearance_notOncePerStatus() async {
+        sut.trackImpression("s1")
+        sut.trackImpression("s1")
+        sut.trackImpression("s1")
+
+        try? await Task.sleep(nanoseconds: 3_400_000_000)
+
+        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s1", "s1"])
+    }
+
+    func test_markStatusViewed_recordsAUniqueView() async {
+        sut.markStatusViewed("s1")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(mockPostService.viewPostCallCount, 1)
+        XCTAssertEqual(mockPostService.lastViewPostId, "s1")
     }
 }

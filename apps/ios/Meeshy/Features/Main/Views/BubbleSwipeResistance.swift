@@ -27,4 +27,13 @@ enum BubbleSwipeResistance {
         guard absH > minimumDistance(resistance) else { return false }
         return true
     }
+
+    /// Vrai si un widget descendant possède déjà le glissement horizontal —
+    /// scrubbing média (waveform/seek bar, `MediaScrubbingPreferenceKey`) OU
+    /// carrousel inline ouvert (`BubbleInlinePagingPreferenceKey`) — auquel
+    /// cas le swipe reply/forward doit rester désengagé. Combinaison OR :
+    /// un seul des deux suffit.
+    static func isGestureOwnershipClaimed(mediaScrubbing: Bool, inlinePaging: Bool) -> Bool {
+        mediaScrubbing || inlinePaging
+    }
 }

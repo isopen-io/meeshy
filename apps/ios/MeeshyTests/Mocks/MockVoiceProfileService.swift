@@ -20,7 +20,8 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
 
     var getConsentStatusCallCount = 0
     var grantConsentCallCount = 0
-    var lastGrantConsentAgeVerification: Bool?
+    var lastGrantConsentVoiceCloning: Bool?
+    var lastGrantConsentBirthDate: String?
     var revokeConsentCallCount = 0
     var getProfileCallCount = 0
     var getSamplesCallCount = 0
@@ -39,10 +40,11 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
         return try getConsentStatusResult.get()
     }
 
-    nonisolated func grantConsent(ageVerification: Bool, birthDate: String?) async throws -> VoiceConsentResponse {
+    nonisolated func grantConsent(voiceCloningConsent: Bool, birthDate: String?) async throws -> VoiceConsentResponse {
         await MainActor.run {
             grantConsentCallCount += 1
-            lastGrantConsentAgeVerification = ageVerification
+            lastGrantConsentVoiceCloning = voiceCloningConsent
+            lastGrantConsentBirthDate = birthDate
         }
         return try grantConsentResult.get()
     }
@@ -96,7 +98,8 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
     func reset() {
         getConsentStatusCallCount = 0
         grantConsentCallCount = 0
-        lastGrantConsentAgeVerification = nil
+        lastGrantConsentVoiceCloning = nil
+        lastGrantConsentBirthDate = nil
         revokeConsentCallCount = 0
         getProfileCallCount = 0
         getSamplesCallCount = 0

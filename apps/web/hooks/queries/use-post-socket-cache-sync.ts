@@ -89,6 +89,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       queryClient.setQueryData(queryKeys.posts.detail(data.post.id), (old: unknown) =>
         old ? { ...(old as Record<string, unknown>), data: data.post } : old,
       );
+      // A reel edited from any surface must refresh its caption/media on the
+      // reels affinity threads too — otherwise `/feed/reels` and `/reel/:id`
+      // keep the stale pre-edit post until a full refetch.
+      patchReelCaches(queryClient, data.post.id, () => data.post);
     }
 
     function handlePostDeleted(data: PostDeletedEventData) {
@@ -105,6 +109,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
           };
         },
       );
+      // Drop the deleted post from the reels affinity threads and evict its
+      // detail cache so no reel/detail surface can resurface a removed post.
+      removePostFromReelCaches(queryClient, data.postId);
+      queryClient.removeQueries({ queryKey: queryKeys.posts.detail(data.postId) });
     }
 
     function handlePostLiked(data: PostLikedEventData) {
@@ -113,6 +121,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         likeCount: data.likeCount,
         reactionSummary: data.reactionSummary,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, likeCount: data.likeCount }));
     }
 
     function handlePostUnliked(data: PostUnlikedEventData) {
@@ -121,6 +130,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         likeCount: data.likeCount,
         reactionSummary: data.reactionSummary,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, likeCount: data.likeCount }));
     }
 
     function handlePostReposted(data: PostRepostedEventData) {
@@ -152,6 +162,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         ...p,
         commentCount: data.commentCount,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, commentCount: data.commentCount }));
 
       const parentId = data.comment.parentId;
       if (parentId) {
@@ -199,9 +210,21 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         ...p,
         commentCount: data.commentCount,
       }));
+      patchRepostOfCounts(queryClient, data.postId, (original) => ({ ...original, commentCount: data.commentCount }));
 
-      // The delete payload doesn't say whether it was a reply, so drop the id
-      // from every post-scoped comment cache (top-level list AND replies subs).
+      // Deleting a comment soft-deletes its WHOLE reply subtree server-side, so
+      // the payload announces every removed id — not just the target. Dropping
+      // only the target left its expanded replies on screen with nothing to ever
+      // remove them: `getComments` filters `parentId: null`, so a refetch never
+      // returns them and `getReplies` is never called again for a deleted parent.
+      //
+      // Fall back to the target alone when the list is absent (an idempotent
+      // replay can no longer reconstruct the subtree) — exactly the previous
+      // behaviour, never an empty list.
+      const removedIds = new Set(data.deletedCommentIds ?? [data.commentId]);
+
+      // The payload doesn't say whether an id was a reply, so sweep every
+      // post-scoped comment cache (top-level list AND replies subs).
       queryClient.setQueriesData<InfiniteCommentsData>(
         { queryKey: queryKeys.posts.comments(data.postId) },
         (old) => {
@@ -210,7 +233,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
             ...old,
             pages: old.pages.map((page) => ({
               ...page,
-              data: page.data.filter((c) => c.id !== data.commentId),
+              data: page.data.filter((c) => !removedIds.has(c.id)),
             })),
           };
         },
@@ -227,6 +250,17 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
 
     function handlePostReactionAdded(data: PostReactionUpdateEventData) {
+      // `reactionDelta` needs the ORIGINAL's own PRE-patch `reactionSummary` —
+      // a snapshot `repostOf` never carries — so both nested deltas are read
+      // directly from cache BEFORE `patchPostInAllCaches` runs, independently
+      // per cache family. Feed and reels are always patched together by the
+      // SAME optimistic mutation (`useLikePostMutation`), so they share one
+      // delta; detail is NEVER touched by that optimistic mutation, so it is
+      // derived and applied completely independently — reading ahead like
+      // this means the result can never depend on patch ordering.
+      const feedOrReelsDelta = reactionDeltaForEntry(findPostInFeedOrReelsCache(queryClient, data.postId), data);
+      const detailDelta = reactionDeltaForEntry(findPostInDetailCache(queryClient, data.postId), data);
+
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         // Derive the total-count change from the AUTHORITATIVE per-emoji delta
         // (`aggregation.count` minus the cached count for that emoji) rather than
@@ -253,9 +287,27 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
+
+      if (feedOrReelsDelta !== 0) {
+        const bump = (original: NonNullable<Post['repostOf']>) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + feedOrReelsDelta),
+        });
+        patchRepostOfCountsInFeed(queryClient, data.postId, bump);
+        patchRepostOfCountsInReels(queryClient, data.postId, bump);
+      }
+      if (detailDelta !== 0) {
+        patchRepostOfCountsInDetail(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + detailDelta),
+        }));
+      }
     }
 
     function handlePostReactionRemoved(data: PostReactionUpdateEventData) {
+      const feedOrReelsDelta = reactionDeltaForEntry(findPostInFeedOrReelsCache(queryClient, data.postId), data);
+      const detailDelta = reactionDeltaForEntry(findPostInDetailCache(queryClient, data.postId), data);
+
       patchPostInAllCaches(queryClient, data.postId, (p) => {
         const delta = reactionDelta(p, data);
         const newSummary = { ...p.reactionSummary };
@@ -275,6 +327,21 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
               : p.currentUserReactions,
         };
       });
+
+      if (feedOrReelsDelta !== 0) {
+        const bump = (original: NonNullable<Post['repostOf']>) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + feedOrReelsDelta),
+        });
+        patchRepostOfCountsInFeed(queryClient, data.postId, bump);
+        patchRepostOfCountsInReels(queryClient, data.postId, bump);
+      }
+      if (detailDelta !== 0) {
+        patchRepostOfCountsInDetail(queryClient, data.postId, (original) => ({
+          ...original,
+          likeCount: Math.max(0, (original.likeCount ?? 0) + detailDelta),
+        }));
+      }
     }
 
     // ── Comment reaction events ─────────────────────────────────────────
@@ -517,6 +584,13 @@ function reactionDelta(
   return data.aggregation.count - previous;
 }
 
+function reactionDeltaForEntry(
+  entry: { readonly reactionSummary?: Record<string, number> | null } | undefined,
+  data: { readonly emoji: string; readonly aggregation: { readonly count: number } },
+): number {
+  return entry ? reactionDelta(entry, data) : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Shared helper: patch a post in both feed and detail caches
 // ---------------------------------------------------------------------------
@@ -550,6 +624,124 @@ function patchPostInAllCaches(
   });
 
   patchReelCaches(queryClient, postId, patcher);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: patch the NESTED `repostOf` snapshot wherever a given
+// original post is embedded — feed, reels, and post-detail caches. A liked/
+// commented original can appear as `repostOf` on any number of displayed
+// simple reposts, each caching its own stale snapshot of the original's
+// counters (what PostCard/PostDetail/ReelPlayer actually render). The detail
+// sweep is length-filtered to the exact `['posts','detail',id]` shape —
+// `queryKeys.posts.details()` is also a PREFIX of the comments/replies cache
+// families, which carry a `{ pages }` shape, not `{ data: Post }`.
+//
+// Split into per-cache-family pieces (feed+reels vs detail) because the
+// optimistic mutations (`useLikePostMutation`/`useUnlikePostMutation`) only
+// ever touch feed+reels, never detail — so on a reaction event the CORRECT
+// reconciling delta for feed/reels can differ from the one for detail (the
+// former is often already 0, applied optimistically; the latter never is).
+// A single combined sweep using ONE delta for all three caches is only valid
+// when that delta is known to apply uniformly everywhere (Liked/Unliked/
+// CommentAdded/CommentDeleted, which carry an ABSOLUTE authoritative value —
+// setting the same absolute value twice is idempotent, no ordering risk).
+// ---------------------------------------------------------------------------
+
+function patchRepostOfCountsInFeed(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
+
+  queryClient.setQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'), (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({ ...page, data: page.data.map(patchEntry) })),
+    };
+  });
+}
+
+function patchRepostOfCountsInReels(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
+
+  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
+    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({ ...page, data: (page.data ?? []).map(patchEntry) })),
+      };
+    },
+  );
+}
+
+function patchRepostOfCountsInDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  const patchEntry = (p: Post): Post =>
+    p.repostOf && p.repostOf.id === originalId ? { ...p, repostOf: patchOriginal(p.repostOf) } : p;
+
+  const detailKeyLength = queryKeys.posts.details().length + 1;
+  for (const [key, value] of queryClient.getQueriesData<{ data?: Post }>({ queryKey: queryKeys.posts.details() })) {
+    if (key.length !== detailKeyLength) continue;
+    if (!value?.data?.repostOf || value.data.repostOf.id !== originalId) continue;
+    queryClient.setQueryData(key, { ...value, data: patchEntry(value.data) });
+  }
+}
+
+function patchRepostOfCounts(
+  queryClient: ReturnType<typeof useQueryClient>,
+  originalId: string,
+  patchOriginal: (original: NonNullable<Post['repostOf']>) => NonNullable<Post['repostOf']>,
+) {
+  patchRepostOfCountsInFeed(queryClient, originalId, patchOriginal);
+  patchRepostOfCountsInReels(queryClient, originalId, patchOriginal);
+  patchRepostOfCountsInDetail(queryClient, originalId, patchOriginal);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: read-only lookups of a post's CURRENT cached state, used to
+// derive a reaction delta BEFORE any cache is patched — reading ahead of the
+// patch (rather than capturing a value from inside a shared patcher callback
+// invoked once per cache) means the result can never depend on which cache
+// `patchPostInAllCaches` happens to patch first or last.
+// ---------------------------------------------------------------------------
+
+function findPostInFeedOrReelsCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+): Post | undefined {
+  const feed = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+  const fromFeed = feed?.pages.flatMap((page) => page.data).find((p) => p.id === postId);
+  if (fromFeed) return fromFeed;
+
+  const reelsEntries = queryClient.getQueriesData<{ pages?: Array<{ data?: Post[] }> }>({
+    queryKey: [...queryKeys.posts.lists(), 'reels'],
+  });
+  for (const [, value] of reelsEntries) {
+    const fromReels = value?.pages?.flatMap((page) => page.data ?? []).find((p) => p.id === postId);
+    if (fromReels) return fromReels;
+  }
+  return undefined;
+}
+
+function findPostInDetailCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+): Post | undefined {
+  const record = queryClient.getQueryData<{ data?: Post }>(queryKeys.posts.detail(postId));
+  return record?.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -618,6 +810,33 @@ function patchReelCaches(
         pages: old.pages.map((page) => ({
           ...page,
           data: (page.data ?? []).map((p) => (p.id === postId ? patcher(p) : p)),
+        })),
+      };
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: remove a post from every reels affinity thread cache.
+//
+// Mirror of `patchReelCaches` for deletion — a prefix-matched setQueriesData
+// filters the post out of the `foryou` thread and every per-seed thread at
+// once, so a deleted reel disappears from all reel surfaces without a refetch.
+// ---------------------------------------------------------------------------
+
+function removePostFromReelCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+) {
+  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
+    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: (page.data ?? []).filter((p) => p.id !== postId),
         })),
       };
     },

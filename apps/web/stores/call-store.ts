@@ -15,16 +15,50 @@ import type {
   CallParticipant,
   CallControls,
   CallState,
-  CallEndReason,
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
+/**
+ * Join request posed by the live call bubble (`CallSystemMessage`, message
+ * `kind: 'call-live'`). The bubble owns no media/UI — `CallManager` consumes
+ * this request: validates the call is still active via
+ * `GET /conversations/:id/active-call`, then runs the same accept path as an
+ * incoming call. Cold-rehydration-safe: no dependency on a received
+ * `call:initiated` event (works after a mid-call page reload).
+ */
+export interface JoinCallRequest {
+  callId: string;
+  conversationId: string;
+  callType: 'audio' | 'video';
+}
+
+/**
+ * A « Réessayer » offer posed after a call ended in a TRANSIENT failure
+ * (failed / connectionLost). Survives the call teardown ([reset] deliberately
+ * preserves it) so `useVideoCall` — mounted at the conversation level, far from
+ * the in-call UI where the failure is detected — can surface a retry toast for
+ * ITS conversation. Cleared on retry, on a new call, or on dismiss.
+ */
+export interface PendingCallRetry {
+  conversationId: string;
+  type: 'audio' | 'video';
+}
+
+/**
+ * Keyed by `conversationId` so a transient failure on one conversation can
+ * never clobber a still-unconsumed offer for another (only one
+ * `useCallRetryToast` instance is mounted at a time, scoped to the currently
+ * selected conversation — an offer for a conversation the user isn't
+ * currently viewing must survive until they navigate back to it).
+ */
+export type PendingCallRetryMap = Record<string, PendingCallRetry>;
+
 interface CallStoreState extends CallState {
   // Extended state
-  callEndReason: CallEndReason | null;
-  reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
-  isReconnecting: boolean;
+  joinRequest: JoinCallRequest | null;
+  /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
+  pendingRetry: PendingCallRetryMap;
 
   // Server-provided ICE servers (STUN + time-limited TURN credentials).
   // Supplied by the gateway via the initiate/join acks and the
@@ -67,14 +101,17 @@ interface CallStoreState extends CallState {
   startHeartbeat: (callId: string) => void;
   stopHeartbeat: () => void;
 
-  // Actions: Reconnection
-  setReconnecting: (attempt: number) => void;
-
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
 
-  // Actions: End reason
-  setCallEndReason: (reason: CallEndReason) => void;
+  // Actions: Join an ongoing call from its live message bubble
+  requestJoin: (request: JoinCallRequest) => void;
+  clearJoinRequest: () => void;
+
+  // Actions: Retry a transiently-failed call
+  offerCallRetry: (retry: PendingCallRetry) => void;
+  /** Omit `conversationId` to clear every pending offer (used by test teardown). */
+  clearCallRetry: (conversationId?: string) => void;
 
   // Actions: Cleanup
   reset: () => void;
@@ -84,6 +121,17 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let beforeUnloadHandler: (() => void) | null = null;
+
+// Buffer for `call:participant-joined` payloads that arrive while
+// `currentCall` is still null — the initiator's own `call:initiate` ack
+// (use-video-call.ts, P0 fix 2026-07-06) sets `currentCall` asynchronously,
+// so a fast callee can legitimately join (and broadcast participant-joined)
+// before that ack lands. Without this buffer, `addParticipant` used to no-op
+// and the join was lost forever once the ack later overwrote `currentCall`
+// with an empty participants array — the initiator would never create a
+// WebRTC offer for a callee who had, in fact, already joined. Claimed and
+// cleared by `setCurrentCall` once the matching call becomes current.
+const pendingParticipantsByCallId = new Map<string, CallParticipant[]>();
 
 const initialState: CallState = {
   // Current call
@@ -122,19 +170,35 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  callEndReason: null,
-  reconnectAttempt: 0,
   connectionQuality: null,
-  isReconnecting: false,
   iceServers: null,
+  joinRequest: null,
+  pendingRetry: {},
 
   // ===== CALL MANAGEMENT =====
 
   setIceServers: (iceServers) => set({ iceServers }),
 
   setCurrentCall: (call) => {
-    set({ currentCall: call });
+    let nextCall = call;
     if (call) {
+      const pending = pendingParticipantsByCallId.get(call.id);
+      if (pending?.length) {
+        pendingParticipantsByCallId.delete(call.id);
+        const participants = [...call.participants];
+        for (const participant of pending) {
+          const existingIndex = participants.findIndex((p) => p.id === participant.id);
+          if (existingIndex >= 0) {
+            participants[existingIndex] = participant;
+          } else {
+            participants.push(participant);
+          }
+        }
+        nextCall = { ...call, participants };
+      }
+    }
+    set({ currentCall: nextCall });
+    if (nextCall) {
       set({ isInCall: true, error: null });
     }
   },
@@ -153,23 +217,36 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addParticipant: (participant) => {
     const { currentCall } = get();
-    if (currentCall) {
-      const participants = [...currentCall.participants];
-      const existingIndex = participants.findIndex((p) => p.id === participant.id);
-
+    if (!currentCall) {
+      // Buffer instead of dropping — see `pendingParticipantsByCallId` above.
+      // `setCurrentCall` claims this entry once `call.id` matches.
+      if (!participant.callSessionId) return;
+      const pending = pendingParticipantsByCallId.get(participant.callSessionId) ?? [];
+      const existingIndex = pending.findIndex((p) => p.id === participant.id);
       if (existingIndex >= 0) {
-        participants[existingIndex] = participant;
+        pending[existingIndex] = participant;
       } else {
-        participants.push(participant);
+        pending.push(participant);
       }
-
-      set({
-        currentCall: {
-          ...currentCall,
-          participants,
-        },
-      });
+      pendingParticipantsByCallId.set(participant.callSessionId, pending);
+      return;
     }
+
+    const participants = [...currentCall.participants];
+    const existingIndex = participants.findIndex((p) => p.id === participant.id);
+
+    if (existingIndex >= 0) {
+      participants[existingIndex] = participant;
+    } else {
+      participants.push(participant);
+    }
+
+    set({
+      currentCall: {
+        ...currentCall,
+        participants,
+      },
+    });
   },
 
   removeParticipant: (participantId) => {
@@ -214,6 +291,15 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addRemoteStream: (participantId, stream) => {
     const { remoteStreams } = get();
+
+    // Stop the previous stream's tracks if this participant's stream is being
+    // replaced (renegotiation / ICE restart / mid-call A/V switch re-fires
+    // ontrack with a new MediaStream) — mirrors setLocalStream's guard above.
+    const previousStream = remoteStreams.get(participantId);
+    if (previousStream && previousStream !== stream) {
+      previousStream.getTracks().forEach((track) => track.stop());
+    }
+
     const newStreams = new Map(remoteStreams);
     newStreams.set(participantId, stream);
     set({ remoteStreams: newStreams });
@@ -390,26 +476,35 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  // ===== RECONNECTION =====
-
-  setReconnecting: (attempt) => {
-    set({
-      isReconnecting: attempt > 0,
-      reconnectAttempt: attempt,
-    });
-  },
-
   // ===== CONNECTION QUALITY =====
 
   setConnectionQuality: (quality) => {
     set({ connectionQuality: quality });
   },
 
-  // ===== END REASON =====
+  // ===== JOIN FROM LIVE CALL BUBBLE =====
 
-  setCallEndReason: (reason) => {
-    set({ callEndReason: reason });
+  requestJoin: (request) => {
+    // Already in a call (this one or another) — the bubble tap is a no-op;
+    // joining pre-answer or double-joining is never driven from here.
+    if (get().isInCall) {
+      return;
+    }
+    set({ joinRequest: request });
   },
+
+  clearJoinRequest: () => set({ joinRequest: null }),
+
+  offerCallRetry: (retry) =>
+    set((state) => ({ pendingRetry: { ...state.pendingRetry, [retry.conversationId]: retry } })),
+  clearCallRetry: (conversationId) =>
+    set((state) => {
+      if (!conversationId) return { pendingRetry: {} };
+      if (!(conversationId in state.pendingRetry)) return state;
+      const rest = { ...state.pendingRetry };
+      delete rest[conversationId];
+      return { pendingRetry: rest };
+    }),
 
   // ===== CLEANUP =====
 
@@ -441,17 +536,24 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       connection.close();
     });
 
-    // Reset to initial state
+    // Drop any unclaimed buffered participant-joined events (e.g. a call
+    // that was cancelled/rejected before its initiate ack ever landed).
+    pendingParticipantsByCallId.clear();
+
+    // Reset to initial state. `pendingRetry` is DELIBERATELY preserved: a
+    // transient-failure teardown ends the call (this reset) but must leave the
+    // « Réessayer » offer standing for useVideoCall to surface — clearing it
+    // here would erase the offer the failure just posted.
+    const survivingRetry = get().pendingRetry;
     set({
       ...initialState,
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      callEndReason: null,
-      reconnectAttempt: 0,
       connectionQuality: null,
-      isReconnecting: false,
       iceServers: null,
+      joinRequest: null,
+      pendingRetry: survivingRetry,
     });
   },
 }));

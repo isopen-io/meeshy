@@ -226,6 +226,41 @@ final class CallWaitingBannerViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Accessibility hints (parity with IncomingCallView/CallView/FloatingCallPillView)
+
+    /// Every other accept/decline/hangup control in the calling UI pairs
+    /// `.accessibilityLabel` with `.accessibilityHint` (IncomingCallView's
+    /// accept/decline, CallView's `endCallButton`, FloatingCallPillView's
+    /// hangup button). This banner's reject/answer buttons only had labels —
+    /// VoiceOver users got no hint of the resulting action.
+    func test_rejectButton_hasAccessibilityHint() throws {
+        let source = try bannerSource()
+        guard let labelRange = source.range(of: "call.waiting.reject.a11y") else {
+            XCTFail("call.waiting.reject.a11y label not found"); return
+        }
+        let end = source.index(labelRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[labelRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".accessibilityHint("),
+            "Reject button must have .accessibilityHint immediately after its " +
+            ".accessibilityLabel, matching every other call control in the app."
+        )
+    }
+
+    func test_answerButton_hasAccessibilityHint() throws {
+        let source = try bannerSource()
+        guard let labelRange = source.range(of: "call.waiting.answer.a11y") else {
+            XCTFail("call.waiting.answer.a11y label not found"); return
+        }
+        let end = source.index(labelRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[labelRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".accessibilityHint("),
+            "Answer button must have .accessibilityHint immediately after its " +
+            ".accessibilityLabel, matching every other call control in the app."
+        )
+    }
+
     // MARK: - HIG 44x44pt minimum hit target (audit 2026-07-03)
 
     /// Reject/Answer are plain Text-in-Capsule buttons with only

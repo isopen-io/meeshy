@@ -76,6 +76,12 @@ export class BoundedTtlCache<K, V> {
     this.store.delete(key);
   }
 
+  /** Live keys, unfiltered by TTL (a caller doing prefix-matched bulk invalidation
+   *  may still want to delete an entry that's technically expired but not yet swept). */
+  keys(): IterableIterator<K> {
+    return this.store.keys();
+  }
+
   clear(): void {
     this.store.clear();
   }

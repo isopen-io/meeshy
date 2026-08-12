@@ -5,15 +5,22 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.SuggestionsRepository
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.model.friend.ConnectAction
@@ -43,6 +50,8 @@ class DiscoverViewModelTest {
 
     private val userRepository: UserRepository = mockk(relaxed = true)
     private val friendRepository: FriendRepository = mockk(relaxed = true)
+    private val suggestionsRepository: SuggestionsRepository = mockk(relaxed = true)
+    private val workManager: WorkManager = mockk(relaxed = true)
 
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
@@ -58,7 +67,7 @@ class DiscoverViewModelTest {
         blockCache: BlockCache = BlockCache(),
         session: SessionRepository = session(),
     ): DiscoverViewModel =
-        DiscoverViewModel(userRepository, friendRepository, cache, blockCache, session)
+        DiscoverViewModel(userRepository, friendRepository, suggestionsRepository, cache, blockCache, workManager, session)
 
     @Test
     fun `a sub-threshold query clears results and never hits the network`() = runTest {
@@ -151,33 +160,36 @@ class DiscoverViewModelTest {
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Hidden)
 
         vm.connect("me")
-        coVerify(exactly = 0) { friendRepository.sendFriendRequest(any(), any()) }
+        coVerify(exactly = 0) { friendRepository.enqueueSendFriendRequest(any(), any(), any()) }
     }
 
     @Test
-    fun `connect sends a request and flips the row to pending on success`() = runTest {
+    fun `connect queues a durable request, flips the row to pending optimistically and wakes the flusher`() = runTest {
         coEvery { userRepository.searchUsers(any(), any(), any()) } returns
             NetworkResult.Success(listOf(result("alice")))
-        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
-            NetworkResult.Success(request(id = "req-1", receiverId = "alice"))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns "cmid-1"
         val cache = FriendshipCache()
         val vm = viewModel(cache = cache)
         vm.onQueryChanged("alice")
 
         vm.connect("alice")
 
+        // The pending flip is optimistic (through the shared cache), not gated on
+        // any network round-trip — the request merely queued durably.
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Pending)
         assertThat(vm.state.value.pendingActionIds).isEmpty()
         assertThat(cache.status("alice").javaClass.simpleName).isEqualTo("PendingSent")
-        coVerify(exactly = 1) { friendRepository.sendFriendRequest("alice", any()) }
+        coVerify(exactly = 1) { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) }
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
     @Test
-    fun `a failed connect surfaces the error, leaves the row connectable and mints no pending`() = runTest {
+    fun `a null enqueue result neither flips pending nor wakes the flusher`() = runTest {
         coEvery { userRepository.searchUsers(any(), any(), any()) } returns
             NetworkResult.Success(listOf(result("alice")))
-        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
-            NetworkResult.Failure(ApiError("nope"))
+        // A null cmid means nothing was durably queued (e.g. a blank/inert enqueue);
+        // the optimistic flip is keyed to a real queued row, so it must not happen.
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns null
         val cache = FriendshipCache()
         val vm = viewModel(cache = cache)
         vm.onQueryChanged("alice")
@@ -185,9 +197,30 @@ class DiscoverViewModelTest {
         vm.connect("alice")
 
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
-        assertThat(vm.state.value.errorMessage).isEqualTo("nope")
+        assertThat(cache.status("alice")).isEqualTo(me.meeshy.sdk.model.friend.FriendshipStatus.None)
         assertThat(vm.state.value.pendingActionIds).isEmpty()
-        assertThat(cache.isFriend("alice")).isFalse()
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `a failed local enqueue leaves the row connectable with no phantom pending`() = runTest {
+        coEvery { userRepository.searchUsers(any(), any(), any()) } returns
+            NetworkResult.Success(listOf(result("alice")))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } throws
+            RuntimeException("disk full")
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.onQueryChanged("alice")
+
+        vm.connect("alice")
+
+        // Flip-after-enqueue: the throw happens before any cache mutation, so there
+        // is nothing to roll back and never a Pending with no durable row behind it.
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
+        assertThat(vm.state.value.errorMessage).isEqualTo("disk full")
+        assertThat(vm.state.value.pendingActionIds).isEmpty()
+        assertThat(cache.status("alice")).isEqualTo(me.meeshy.sdk.model.friend.FriendshipStatus.None)
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
     @Test
@@ -201,7 +234,7 @@ class DiscoverViewModelTest {
 
         vm.connect("alice")
 
-        coVerify(exactly = 0) { friendRepository.sendFriendRequest(any(), any()) }
+        coVerify(exactly = 0) { friendRepository.enqueueSendFriendRequest(any(), any(), any()) }
     }
 
     @Test
@@ -304,5 +337,145 @@ class DiscoverViewModelTest {
         vm.dismissError()
 
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    // ── Suggestions surface (empty-query, cache-first) ───────────────────────
+
+    @Test
+    fun `loadSuggestions paints the fetched suggestions with connect actions`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("carol"), result("dan")), ageMillis = 0L))
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("carol", "dan").inOrder()
+        assertThat(vm.state.value.rows.map { it.connect })
+            .containsExactly(ConnectAction.Connect, ConnectAction.Connect)
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+        assertThat(vm.state.value.isSuggestionsEmpty).isFalse()
+    }
+
+    @Test
+    fun `a cold suggestions cache shows the loading skeleton`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows).isEmpty()
+        assertThat(vm.state.value.isLoading).isTrue()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+        assertThat(vm.state.value.isSuggestionsEmpty).isFalse()
+    }
+
+    @Test
+    fun `a revalidated-empty suggestions list is a quiet empty state, not a spinner`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0L))
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows).isEmpty()
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isSuggestionsEmpty).isTrue()
+        assertThat(vm.state.value.showEmptyPrompt).isFalse()
+    }
+
+    @Test
+    fun `a failed suggestions revalidation surfaces the error and leaves the skeleton`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } answers {
+            val onError = firstArg<(Throwable) -> Unit>()
+            flow {
+                emit(CacheResult.Empty)
+                onError(RuntimeException("offline"))
+            }
+        }
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.rows).isEmpty()
+    }
+
+    @Test
+    fun `connect works on a suggestion row and flips it to pending`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("alice")), ageMillis = 0L))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns "cmid-1"
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.loadSuggestions()
+
+        vm.connect("alice")
+
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Pending)
+        assertThat(cache.status("alice").javaClass.simpleName).isEqualTo("PendingSent")
+    }
+
+    @Test
+    fun `a cross-screen friendship change re-derives the suggestion rows`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("alice")), ageMillis = 0L))
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.loadSuggestions()
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
+
+        cache.didAcceptRequest("alice")
+
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Contact)
+    }
+
+    @Test
+    fun `loadSuggestions is inert while suggestions are already streaming`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns MutableSharedFlow()
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+        vm.loadSuggestions()
+
+        verify(exactly = 1) { suggestionsRepository.suggestionsStream(any()) }
+    }
+
+    @Test
+    fun `searching cancels the suggestions surface and switches to results`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns MutableSharedFlow()
+        coEvery { userRepository.searchUsers("alice", any(), any()) } returns
+            NetworkResult.Success(listOf(result("alice")))
+        val vm = viewModel()
+        vm.loadSuggestions()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+
+        vm.onQueryChanged("alice")
+
+        assertThat(vm.state.value.isShowingSuggestions).isFalse()
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("alice")
+    }
+
+    @Test
+    fun `retry after a failed cold suggestions load re-runs the stream`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } answers {
+            val onError = firstArg<(Throwable) -> Unit>()
+            flow {
+                emit(CacheResult.Empty)
+                onError(RuntimeException("down"))
+            }
+        } andThenAnswer {
+            flowOf(CacheResult.Fresh(listOf(result("carol")), ageMillis = 0L))
+        }
+        val vm = viewModel()
+        vm.loadSuggestions()
+        assertThat(vm.state.value.errorMessage).isEqualTo("down")
+
+        vm.retry()
+
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("carol")
+        assertThat(vm.state.value.errorMessage).isNull()
+        verify(exactly = 2) { suggestionsRepository.suggestionsStream(any()) }
     }
 }

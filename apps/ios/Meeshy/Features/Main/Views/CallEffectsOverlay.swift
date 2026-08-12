@@ -5,11 +5,14 @@ import MeeshyUI
 // MARK: - Effects Panel Type
 
 // Voice-effects entry (`.audioEffects` / AudioEffectsPanel) removed 2026-07-02:
-// the audio-effects pipeline has no production capture hook —
-// `CallAudioEffectsService.processAudioBuffer` has had zero production callers
-// since the `MeeshyAudioProcessingModule` scaffold was dropped, so the panel
-// silently no-oped: the peer always heard the unmodified voice. Re-add the case
-// and the toolbar button once a real WebRTC capture hook feeds the service.
+// the audio-effects pipeline had no production capture hook — the underlying
+// `processAudioBuffer` had zero production callers since the
+// `MeeshyAudioProcessingModule` scaffold was dropped, so the panel silently
+// no-oped: the peer always heard the unmodified voice. The dead voice-effects
+// engine (service, types, `CallManager`/`WebRTCService` plumbing, tests) was
+// deleted outright in the 2026-07-05 audit — re-introduce the whole feature
+// from scratch (case, toolbar button, and a real WebRTC capture hook) if it's
+// ever revived.
 enum EffectsPanelType: Equatable {
     case videoFilters
 }
@@ -20,6 +23,7 @@ struct CallEffectsOverlay: View {
     @Binding var isExpanded: Bool
     let isVideoEnabled: Bool
     @State private var activePanel: EffectsPanelType?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Received from CallView, NOT instantiated here (`= CallManager.shared`
     // would re-create the @ObservedObject subscription on every parent body
     // re-evaluation — CallView re-evaluates often: pulse animation,
@@ -52,7 +56,7 @@ struct CallEffectsOverlay: View {
                                 ScrollView(.vertical, showsIndicators: false) {
                                     switch panel {
                                     case .videoFilters:
-                                        VideoFiltersPanel()
+                                        VideoFiltersPanel(callManager: callManager)
                                     }
                                 }
                                 .frame(maxHeight: panelMaxHeight)
@@ -76,8 +80,8 @@ struct CallEffectsOverlay: View {
                 .zIndex(10)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: activePanel)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: activePanel)
         // Pinned dark like sibling call chrome (CallWaitingBannerView,
         // FloatingCallPillView) — this overlay currently only mounts inside
         // CallView's forced-dark subtree, but pinning here keeps it correct
@@ -93,7 +97,9 @@ struct CallEffectsOverlay: View {
                 toolbarButton(
                     icon: "camera.filters",
                     label: String(localized: "call.effects.videoFilters", defaultValue: "Filtres"),
-                    isActive: activePanel == .videoFilters || callManager.videoFilters.config.isEnabled,
+                    isActive: activePanel == .videoFilters
+                        || callManager.videoFilters.config.isEnabled
+                        || callManager.videoFilters.config.hasAdvancedFilters,
                     panel: .videoFilters
                 )
             }
@@ -109,7 +115,7 @@ struct CallEffectsOverlay: View {
 
     private func toolbarButton(icon: String, label: String, isActive: Bool, panel: EffectsPanelType) -> some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                 if activePanel == panel {
                     activePanel = nil
                 } else {
@@ -151,7 +157,7 @@ struct CallEffectsOverlay: View {
     // MARK: - Dismiss
 
     private func dismiss() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
             activePanel = nil
             isExpanded = false
         }

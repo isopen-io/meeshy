@@ -90,6 +90,17 @@ export enum NotificationTypeEnum {
   // ===== TRANSLATION/AUDIO EVENTS =====
   TRANSLATION_COMPLETED = 'translation_completed',
   TRANSLATION_FAILED = 'translation_failed',
+  /**
+   * AUCUN PRODUCTEUR. Le gateway ne crée jamais de notification de ce type —
+   * `createTranslationReadyNotification` a été retiré en 2026-08 après
+   * vérification qu'aucun appelant de production ne l'atteignait. La valeur
+   * reste déclarée parce que le SDK iOS la décode et qu'un client déployé ne
+   * doit pas buter dessus, PAS parce que la fonctionnalité existe.
+   *
+   * À ne pas confondre avec le message ZMQ `translation_ready`
+   * (`services/gateway/src/services/zmq-translation/types.ts`), bien vivant :
+   * il annonce une traduction au gateway, il ne notifie personne.
+   */
   TRANSLATION_READY = 'translation_ready',
   TRANSCRIPTION_COMPLETED = 'transcription_completed',
   TRANSCRIPTION_FAILED = 'transcription_failed',
@@ -230,6 +241,21 @@ export interface NotificationContext {
    *  Le client affiche « expirée » et explique ainsi la perte d'accès.
    *  @see schema.prisma Post.expiresAt */
   readonly postExpiresAt?: string;
+  /** GW5 — Date de création ISO du message notifié : la NSE iOS pré-persiste
+   *  la bulle avec le VRAI timestamp serveur (pas l'heure de réception du
+   *  push). @see schema.prisma Message.createdAt */
+  readonly messageCreatedAt?: string;
+  /** GW5 — Type du message notifié (`text`, `audio`, `image`, …) pour que la
+   *  bulle pré-persistée par la NSE porte le bon rendu.
+   *  @see schema.prisma Message.messageType */
+  readonly messageType?: string;
+  /** GW5 — Prisme : traduction du message vers la langue résolue du
+   *  destinataire quand elle existe déjà en DB au fan-out (tronquée à 200
+   *  chars, jamais chiffrée). Absente = le contenu original est déjà dans la
+   *  langue du destinataire (règle Prisme : pas de fallback translations.first). */
+  readonly translatedContent?: string;
+  /** GW5 — Langue de `translatedContent` (code du Prisme, ex. `en`). */
+  readonly translatedLanguage?: string;
 }
 
 /**

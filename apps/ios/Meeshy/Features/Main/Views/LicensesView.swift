@@ -15,7 +15,6 @@ struct LicensesView: View {
         OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),
         OpenSourceLicense(name: "Firebase iOS SDK", author: "Google", licenseType: "Apache 2.0", url: "https://github.com/firebase/firebase-ios-sdk"),
         OpenSourceLicense(name: "Kingfisher", author: "onevcat", licenseType: "MIT", url: "https://github.com/onevcat/Kingfisher"),
-        OpenSourceLicense(name: "WhisperKit", author: "Argmax", licenseType: "MIT", url: "https://github.com/argmaxinc/WhisperKit"),
         OpenSourceLicense(name: "WebRTC", author: "Google", licenseType: "BSD", url: "https://webrtc.org"),
         OpenSourceLicense(name: "Starscream", author: "Dalton Cherry", licenseType: "Apache 2.0", url: "https://github.com/daltoniam/Starscream")
     ]
@@ -40,7 +39,7 @@ struct LicensesView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))
@@ -72,7 +71,7 @@ struct LicensesView: View {
             VStack(spacing: 12) {
                 sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open Source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
-                Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliotheques open source suivantes.", bundle: .main))
+                Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,7 +133,7 @@ struct LicensesView: View {
             )
         }
         .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
-        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le depot dans Safari", bundle: .main))
+        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le dépôt dans Safari", bundle: .main))
         }
     }
 

@@ -11,15 +11,60 @@ import MeeshySDK
 extension StoryComposerView {
     // MARK: - Slide Strip
 
+    /// Chrome de la bande de slides, lisible sur le material de la top bar dans
+    /// les deux thèmes (blanc en sombre, indigo950 en clair). En light mode, le
+    /// blanc historique disparaissait sur le material clair.
+    var slideStripChrome: Color {
+        colorScheme == .dark ? .white : MeeshyColors.indigo950
+    }
+
     var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
+                // C6 — l'ajout de slide a une affordance directe (avant, le
+                // seul chemin était long-press → Dupliquer). Masqué au cap de
+                // 10 slides : on n'affiche que l'utile ; `addSlide()` garde
+                // son guard `canAddSlide` en défense. Masqué aussi en mode
+                // édition : une story publiée = UN slide.
+                if viewModel.canAddSlide && !isEditingExistingStory {
+                    addSlideThumb
+                }
             }
             .padding(.horizontal, 8)
         }
+    }
+
+    var addSlideThumb: some View {
+        let thumbH: CGFloat = 42
+        let thumbW: CGFloat = thumbH * 9 / 16
+        return Button {
+            // Même séquence que la sélection d'une vignette : figer le canvas
+            // courant dans son slide AVANT de basculer, puis recharger le
+            // canvas depuis le nouveau slide (vierge) focusé par addSlide().
+            syncCurrentSlideEffects()
+            withAnimation(.spring(response: 0.25)) { viewModel.addSlide() }
+            restoreCanvas(from: viewModel.currentSlide)
+            HapticFeedback.light()
+        } label: {
+            RoundedRectangle(cornerRadius: 3)
+                .strokeBorder(
+                    slideStripChrome.opacity(0.35),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2.5])
+                )
+                .frame(width: thumbW, height: thumbH)
+                .overlay(
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(slideStripChrome.opacity(0.85))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .accessibilityLabel(
+            String(localized: "story.composer.addSlide", defaultValue: "Ajouter un slide", bundle: .module)
+        )
     }
 
     func slideThumb(slide: StorySlide, index: Int) -> some View {
@@ -47,7 +92,7 @@ extension StoryComposerView {
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(
-                        isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.2),
+                        isSelected ? MeeshyColors.brandPrimary : slideStripChrome.opacity(0.2),
                         lineWidth: isSelected ? 1.5 : 0.5
                     )
             )
@@ -62,12 +107,14 @@ extension StoryComposerView {
                     Label(String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
             }
-            Button {
-                syncCurrentSlideEffects()
-                viewModel.duplicateSlide(at: index)
-                restoreCanvas(from: viewModel.currentSlide)
-            } label: {
-                Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
+            if !isEditingExistingStory {
+                Button {
+                    syncCurrentSlideEffects()
+                    viewModel.duplicateSlide(at: index)
+                    restoreCanvas(from: viewModel.currentSlide)
+                } label: {
+                    Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
+                }
             }
         }
         // Réordonner les slides par glisser-déposer (long-press natif), MÊME mécanisme

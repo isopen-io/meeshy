@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import Combine
 @testable import Meeshy
 
 // MARK: - Async Test Helpers
@@ -43,6 +44,46 @@ extension XCTestCase {
 
         XCTFail("Condition not met within timeout")
     }
+
+    /// Waits for a `@Published`-backed value to satisfy `condition`, driven by
+    /// Combine emissions + an `XCTestExpectation` — NOT a wall-clock sleep.
+    ///
+    /// Use this after triggering a fire-and-forget `Task` whose completion
+    /// isn't otherwise awaitable (e.g. an outbox outcome-stream observer):
+    /// asserting on the mutated `@Published` property right after a fixed
+    /// `Task.sleep` is flaky under CI contention (#1869) — the observer Task
+    /// may not have run yet. Subscribing reacts the instant the mutation
+    /// actually happens instead of hoping a fixed delay was long enough.
+    ///
+    /// `@MainActor`-pinned (this target's `SWIFT_DEFAULT_ACTOR_ISOLATION` is
+    /// `nonisolated`, see project.yml): the `@Published` view models this is
+    /// used with are themselves `@MainActor`, so subscribing here — same
+    /// actor as the caller — avoids any cross-actor hop/Sendable requirement
+    /// on the Combine publisher or the closure. No `@nonobjc` needed: unlike
+    /// the non-generic helpers above, a generic method isn't `@objc`-representable.
+    @MainActor
+    func waitForPublishedValue<P: Publisher>(
+        _ publisher: P,
+        timeout: TimeInterval = 2.0,
+        condition: @escaping (P.Output) -> Bool
+    ) async where P.Failure == Never {
+        let expectation = XCTestExpectation(description: "Published value met condition")
+        // `@Published` replays its CURRENT value synchronously to a new
+        // subscriber, i.e. possibly before `cancellable` below has been
+        // assigned. Guarding with `fulfilled` keeps `fulfill()` to exactly
+        // one call regardless of that race (XCTestExpectation asserts on
+        // over-fulfillment by default).
+        var fulfilled = false
+        var cancellable: AnyCancellable?
+        cancellable = publisher.sink { value in
+            guard !fulfilled, condition(value) else { return }
+            fulfilled = true
+            expectation.fulfill()
+            cancellable?.cancel()
+        }
+        await fulfillment(of: [expectation], timeout: timeout)
+        cancellable?.cancel()
+    }
 }
 
 // MARK: - Main Actor Test Helpers
@@ -60,12 +101,12 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Assert arrays are equal ignoring order
-    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
+    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(Set(lhs), Set(rhs), "Arrays contain different elements", file: file, line: line)
     }
 
     /// Assert dates are approximately equal (within threshold)
-    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #file, line: UInt = #line) {
+    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #filePath, line: UInt = #line) {
         let difference = abs(date1.timeIntervalSince(date2))
         XCTAssertLessThan(difference, threshold, "Dates differ by more than \(threshold) seconds", file: file, line: line)
     }
@@ -78,7 +119,7 @@ extension XCTestCase {
     func assertThrowsError<T, E: Error & Equatable>(
         _ expression: @autoclosure () async throws -> T,
         expectedError: E,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -94,7 +135,7 @@ extension XCTestCase {
     /// Assert async function throws any error
     func assertThrowsAnyError<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -108,7 +149,7 @@ extension XCTestCase {
     /// Assert async function does not throw
     func assertNoThrow<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -231,23 +272,23 @@ actor TestActor {
 
 extension XCTestCase {
     /// Assert collection is not empty
-    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert collection is empty
-    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert optional is nil
-    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #file, line: UInt = #line) {
+    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertNil(optional, message, file: file, line: line)
     }
 
     /// Assert optional is not nil and return unwrapped value
     @discardableResult
-    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #file, line: UInt = #line) -> T? {
+    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #filePath, line: UInt = #line) -> T? {
         XCTAssertNotNil(optional, message, file: file, line: line)
         return optional
     }

@@ -10,6 +10,12 @@ struct ReelAudioBackdrop: View, Equatable {
 
     @State private var phase: CGFloat = 0
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
+
     static func == (lhs: ReelAudioBackdrop, rhs: ReelAudioBackdrop) -> Bool {
         lhs.accentHex == rhs.accentHex && lhs.isActive == rhs.isActive
     }
@@ -32,6 +38,7 @@ struct ReelAudioBackdrop: View, Equatable {
             }
             .frame(maxHeight: 120)
             Image(systemName: "waveform")
+                // doctrine 86i — glyphe décoratif borné, centré derrière le contenu du réel
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundColor(.white.opacity(0.25))
         }
@@ -39,6 +46,8 @@ struct ReelAudioBackdrop: View, Equatable {
         .adaptiveOnChange(of: isActive) { _, active in
             if active { startAnimating() }
         }
+        // Fond purement décoratif : le contenu sémantique du réel est porté par ReelFeedCard.
+        .accessibilityDecorative()
     }
 
     private func barHeight(_ i: Int) -> CGFloat {
@@ -49,6 +58,9 @@ struct ReelAudioBackdrop: View, Equatable {
     }
 
     private func startAnimating() {
+        // Reduce Motion (système ou override in-app) : on fige la waveform sur son
+        // profil statique (phase 0 → silhouette variée) plutôt qu'une boucle infinie.
+        guard !reduceMotion else { return }
         withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
             phase = .pi
         }

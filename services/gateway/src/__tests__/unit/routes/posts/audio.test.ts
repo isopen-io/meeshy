@@ -1,7 +1,6 @@
 /**
  * Unit tests for story audio routes (audio.ts)
- * Tests GET /stories/audio, POST /stories/audio/:audioId/use,
- * GET /static/:filename.
+ * Tests GET /stories/audio, GET /static/:filename.
  * Note: POST /stories/audio (multipart upload) is excluded — requires @fastify/multipart integration.
  *
  * @jest-environment node
@@ -59,9 +58,12 @@ function makePreValidationAuth(authenticated: boolean) {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn<any>().mockResolvedValue(mockAudio),
       findMany: jest.fn<any>().mockResolvedValue([mockAudio]),
+      // `GET /static/:filename` consulte `mutedAt` avant de servir : `null` =
+      // aucun son coupé. Le cas coupé vit dans routes/posts/__tests__/staticMuted.test.ts.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({ ...mockAudio, usageCount: 6 }),
     },
     ...overrides,
@@ -116,7 +118,7 @@ describe('GET /stories/audio — with query filter', () => {
 describe('GET /stories/audio — empty result', () => {
   it('returns 200 with empty array when no audios found', async () => {
     const prisma = makePrisma({
-      storyBackgroundAudio: {
+      sound: {
         findMany: jest.fn<any>().mockResolvedValue([]),
         update: jest.fn<any>().mockResolvedValue({}),
         create: jest.fn<any>().mockResolvedValue(mockAudio),
@@ -135,43 +137,6 @@ describe('GET /stories/audio — invalid limit', () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/stories/audio?limit=999' });
     expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
-
-// ─── POST /stories/audio/:audioId/use ────────────────────────────────────────
-
-describe('POST /stories/audio/:audioId/use — unauthenticated', () => {
-  it('returns 401 when no auth context', async () => {
-    const app = await buildApp({ authenticated: false });
-    const res = await app.inject({ method: 'POST', url: `/stories/audio/${AUDIO_ID}/use`, payload: {} });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio/:audioId/use — success', () => {
-  it('returns 200 when usage count is incremented', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'POST', url: `/stories/audio/${AUDIO_ID}/use`, payload: {} });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio/:audioId/use — non-existent audio', () => {
-  it('returns 200 silently when audio does not exist (update throws, caught silently)', async () => {
-    const prisma = makePrisma({
-      storyBackgroundAudio: {
-        findMany: jest.fn<any>().mockResolvedValue([]),
-        update: jest.fn<any>().mockRejectedValue(new Error('Record not found')),
-        create: jest.fn<any>().mockResolvedValue(mockAudio),
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({ method: 'POST', url: `/stories/audio/${AUDIO_ID}/use`, payload: {} });
-    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

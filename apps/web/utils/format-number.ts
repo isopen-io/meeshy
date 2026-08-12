@@ -13,8 +13,12 @@
  */
 export function formatCompactNumber(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  // Thresholds are the pre-rounding magnitude at which `.toFixed(1)` of the
+  // NEXT tier down would render "1000.0" — e.g. 999_999 / 1000 = 999.999 →
+  // "1000.0K". Promoting at 999_950 (which rounds to 1.0 in the higher tier)
+  // makes the value roll over to "1.0M" instead of printing "1000.0K".
+  if (abs >= 999_950_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 999_950) return `${(value / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(value);
 }

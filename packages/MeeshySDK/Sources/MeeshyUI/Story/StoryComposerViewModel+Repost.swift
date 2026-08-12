@@ -92,21 +92,30 @@ extension StoryComposerViewModel {
         // Preload images via CacheCoordinator (3-tier cache, cancellable).
         // FeedMedia.url is `String?` and MeeshyConfig.resolveMediaURL returns `URL?` with
         // SSRF validation — both guards stay so we never hand a tainted URL to the cache.
-        let mediaList = story.media
+        // Les clés de rangement sont résolues AVANT le chargement — voir
+        // `RepostMediaPreload`, qui documente pourquoi une clé-URL était perdue
+        // par tous les lecteurs et repartait en file hors-ligne comme faux fond.
+        let targets = RepostMediaPreload.targets(for: story, slideId: cloned.id)
         preloadTask = Task { [weak self] in
-            await withTaskGroup(of: (String, UIImage?).self) { group in
-                for media in mediaList {
-                    guard let urlString = media.url,
-                          let url = MeeshyConfig.resolveMediaURL(urlString) else { continue }
-                    let key = url.absoluteString
+            await withTaskGroup(of: (RepostMediaPreload.Target, UIImage?).self) { group in
+                for target in targets {
                     group.addTask {
-                        let image = await CacheCoordinator.shared.images.image(for: key)
-                        return (key, image)
+                        let image = await CacheCoordinator.shared.images
+                            .image(for: target.url.absoluteString)
+                        return (target, image)
                     }
                 }
-                for await (key, image) in group {
+                for await (target, image) in group {
                     guard !Task.isCancelled, let self, let image else { continue }
-                    self.slideImages[key] = image
+                    switch target.destination {
+                    case .slideBackground:
+                        self.slideImages[target.storageKey] = image
+                    case .canvasObject:
+                        // `registerLoadedImage` bump `loadedImagesVersion` :
+                        // sans ce bump le pont image du canvas reste périmé et
+                        // le média préchargé ne s'affiche jamais.
+                        self.registerLoadedImage(image, for: target.storageKey)
+                    }
                 }
             }
         }

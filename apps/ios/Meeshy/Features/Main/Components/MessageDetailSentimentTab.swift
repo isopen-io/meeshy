@@ -18,12 +18,17 @@ struct MessageDetailSentimentTab: View, Equatable {
 
     var body: some View {
         let score = Self.analyzeSentiment(content)
+        let label = Self.sentimentLabel(score)
 
         return VStack(spacing: 16) {
+            // Hero emoji — figé (doctrine 84i/86i : glyphe hero à taille fixe, un
+            // scaling XXXL déborderait la carte) et décoratif : le sentiment est déjà
+            // porté par le libellé + la valeur VoiceOver groupée ci-dessous.
             Text(Self.sentimentEmoji(score))
                 .font(.system(size: 56))
+                .accessibilityHidden(true)
 
-            Text(Self.sentimentLabel(score))
+            Text(label)
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
@@ -51,13 +56,35 @@ struct MessageDetailSentimentTab: View, Equatable {
             }
             .frame(height: 18)
             .padding(.horizontal, 20)
+            // Jauge décorative custom (GeometryReader) : illisible par VoiceOver, sa
+            // valeur est exposée sur l'élément groupé.
+            .accessibilityHidden(true)
 
-            Text(String(format: "Score : %.2f", score))
+            Text(String(format: String(localized: "message-detail.sentiment.score", defaultValue: "Score : %.2f", bundle: .main), score))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+        // Regroupe emoji + libellé + jauge + score en un seul élément VoiceOver
+        // cohérent : « Sentiment » (label) → « Positif, score 0,42 » (value).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(String(localized: "message-detail.sentiment.a11y-label", defaultValue: "Sentiment", bundle: .main)))
+        .accessibilityValue(Text(Self.accessibilityValueText(label: label, score: score)))
+    }
+
+    // MARK: - Accessibility
+
+    /// Composes the VoiceOver value for the grouped sentiment element, folding the
+    /// human label and the numeric score into one announcement (e.g. "Positive,
+    /// score 0.42"). The visual gauge is decorative, so this value is the only way
+    /// VoiceOver conveys the magnitude.
+    static func accessibilityValueText(label: String, score: Double) -> String {
+        String(
+            format: String(localized: "message-detail.sentiment.a11y-value", defaultValue: "%@, score %.2f", bundle: .main),
+            label,
+            score
+        )
     }
 
     // MARK: - Sentiment Analysis (on-device, pure)

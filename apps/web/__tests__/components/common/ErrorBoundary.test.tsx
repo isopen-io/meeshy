@@ -57,6 +57,7 @@ const savedLocation = window.location;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  sessionStorage.clear();
   window.location = {
     ...savedLocation,
     reload: mockReload,
@@ -198,6 +199,68 @@ describe('ErrorBoundary', () => {
 
       const errorArg = onError.mock.calls[0][0];
       expect(errorArg.message).toBe('Test error message');
+    });
+  });
+
+  describe('Stale Deployment Auto-Recovery', () => {
+    // public/chunk-recovery.js already auto-reloads on window
+    // 'error'/'unhandledrejection' events matching these patterns, but that
+    // never fires when React itself catches the failure here first — e.g. a
+    // stale client reference to a chunk a newer deployment already deleted
+    // surfaces as minified React error #130 ("element type is invalid")
+    // inside componentDidCatch instead of an explicit ChunkLoadError
+    // reaching window.
+    //
+    // Asserted via the sessionStorage guard rather than window.location.reload:
+    // jsdom 26+ makes window.location and its methods non-configurable own
+    // properties, so this file's window.location mock (see beforeEach above)
+    // cannot actually intercept reload() calls in this test environment.
+    const RELOAD_GUARD_KEY = '__meeshy_chunk_reload';
+
+    const ThrowMessage = ({ message }: { message: string }) => {
+      throw new Error(message);
+    };
+
+    it('marks the reload guard when a ChunkLoadError is caught', () => {
+      render(
+        <ErrorBoundary>
+          <ThrowMessage message="Loading chunk 1234 failed." />
+        </ErrorBoundary>
+      );
+
+      expect(sessionStorage.getItem(RELOAD_GUARD_KEY)).not.toBeNull();
+    });
+
+    it('marks the reload guard when minified React error #130 is caught', () => {
+      render(
+        <ErrorBoundary>
+          <ThrowMessage message="Minified React error #130; visit https://react.dev/errors/130?args[]=undefined&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings." />
+        </ErrorBoundary>
+      );
+
+      expect(sessionStorage.getItem(RELOAD_GUARD_KEY)).not.toBeNull();
+    });
+
+    it('does not mark the reload guard for an unrelated application error', () => {
+      render(
+        <ErrorBoundary>
+          <ThrowingComponent />
+        </ErrorBoundary>
+      );
+
+      expect(sessionStorage.getItem(RELOAD_GUARD_KEY)).toBeNull();
+    });
+
+    it('does not attempt a second reload in the same session (one-shot guard)', () => {
+      sessionStorage.setItem(RELOAD_GUARD_KEY, 'already-tried');
+
+      render(
+        <ErrorBoundary>
+          <ThrowMessage message="Loading chunk 1234 failed." />
+        </ErrorBoundary>
+      );
+
+      expect(sessionStorage.getItem(RELOAD_GUARD_KEY)).toBe('already-tried');
     });
   });
 

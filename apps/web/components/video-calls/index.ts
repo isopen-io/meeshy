@@ -12,6 +12,3 @@ export { AudioEffectsPanel } from './AudioEffectsPanel';
 export { ConnectionQualityBadge } from './ConnectionQualityBadge';
 export { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 export { OngoingCallBanner } from './OngoingCallBanner';
-
-// Hooks
-export { useWebRTC } from './hooks/useWebRTC';

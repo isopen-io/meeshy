@@ -16,7 +16,35 @@ import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, send
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { COMMUNITY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type {
+  CommunityPreferencesPayload,
+  UserPreferencesCommunityUpdatedEventData,
+} from '@meeshy/shared/types/socketio-events';
+import { broadcastToUser } from '../utils/socket-broadcast';
 import { validatePagination } from '../utils/pagination';
+
+interface CommunityPrefRow {
+  isPinned: boolean;
+  isMuted: boolean;
+  isArchived: boolean;
+  isHidden: boolean;
+  notificationLevel: string;
+  customName: string | null;
+  categoryId: string | null;
+  orderInCategory: number | null;
+}
+
+const toPreferencesPayload = (row: CommunityPrefRow): CommunityPreferencesPayload => ({
+  isPinned: row.isPinned,
+  isMuted: row.isMuted,
+  isArchived: row.isArchived,
+  isHidden: row.isHidden,
+  notificationLevel: row.notificationLevel as CommunityPreferencesPayload['notificationLevel'],
+  customName: row.customName,
+  categoryId: row.categoryId,
+  orderInCategory: row.orderInCategory,
+});
 
 interface CommunityPreferencesBody {
   isPinned?: boolean;
@@ -345,6 +373,14 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
           update: updateData
         });
 
+        const eventPayload: UserPreferencesCommunityUpdatedEventData = {
+          userId,
+          communityId,
+          reset: false,
+          preferences: toPreferencesPayload(preferences as unknown as CommunityPrefRow),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
+
         return sendSuccess(reply, {
           ...preferences,
           isDefault: false
@@ -401,6 +437,14 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
             }
           }
         });
+
+        const resetPayload: UserPreferencesCommunityUpdatedEventData = {
+          userId,
+          communityId,
+          reset: true,
+          preferences: null,
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, resetPayload);
 
         return sendSuccess(reply, { message: 'Preferences deleted successfully' });
       } catch (error: any) {

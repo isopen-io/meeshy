@@ -2,7 +2,9 @@ package me.meeshy.app.contacts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +13,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import javax.inject.Inject
 
 data class BlockedListUiState(
@@ -33,11 +36,15 @@ data class BlockedListUiState(
  * `BlockedViewModel`. Loads via [BlockRepository] (which hydrates the shared
  * [me.meeshy.sdk.friend.BlockCache], so unblocking here flips the resolver's
  * block state everywhere), and unblocks optimistically: the row leaves the list
- * immediately and is restored on network failure.
+ * immediately and the change is delivered **durably** through the outbox — it
+ * survives offline + process death, and a hard-exhausted delivery rolls the
+ * shared block state back so the next load re-hydrates truthfully. Only a local
+ * enqueue failure rolls the row back into the list in place.
  */
 @HiltViewModel
 class BlockedListViewModel @Inject constructor(
     private val blockRepository: BlockRepository,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BlockedListUiState())
@@ -75,17 +82,21 @@ class BlockedListViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            when (val result = blockRepository.unblock(userId)) {
-                is NetworkResult.Success ->
-                    _state.update { it.copy(pendingIds = it.pendingIds - userId) }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            blocked = snapshot,
-                            pendingIds = it.pendingIds - userId,
-                            errorMessage = result.error.message,
-                        )
-                    }
+            try {
+                val cmid = blockRepository.setBlockedDurably(userId, blocked = false)
+                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+                _state.update { it.copy(pendingIds = it.pendingIds - userId) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The local enqueue failed — restore the row so the user can retry.
+                _state.update {
+                    it.copy(
+                        blocked = snapshot,
+                        pendingIds = it.pendingIds - userId,
+                        errorMessage = e.message,
+                    )
+                }
             }
         }
     }

@@ -372,20 +372,308 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
   } as unknown as PrismaClient;
 };
 
+// ---------------------------------------------------------------------------
+// deleteComment — cascade & commentCount invariant
+//
+// Regression: deleting a top-level comment decremented commentCount by exactly 1
+// and never touched its replies. Since addComment increments commentCount for
+// EVERY comment (top-level + reply), a parent with N surviving replies left
+// commentCount over-counted by N and orphaned those replies (invisible via
+// getComments, and getReplies is never called for a deleted parent).
+// ---------------------------------------------------------------------------
+
+const buildPrismaForDelete = (
+  target: { id: string; authorId: string; postId: string; parentId: string | null },
+  subtree: Record<string, Array<{ id: string }>> = {},
+) => {
+  const findFirst = jest.fn().mockResolvedValue(target);
+  const findMany = jest.fn().mockImplementation(async (args: any) => {
+    const parents: string[] = args.where.parentId.in;
+    return parents.flatMap((p) => subtree[p] ?? []);
+  });
+  const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+  const update = jest.fn().mockResolvedValue({});
+  const postUpdate = jest.fn().mockResolvedValue({});
+  // Le retrait des notifications produites par le commentaire lit par commande
+  // brute (le lien vit dans deux chemins JSON, que Prisma ne sait pas filtrer
+  // sur MongoDB). Défaut = fil vide : les cas de cascade ci-dessous portent sur
+  // les compteurs et n'ont pas à se soucier de l'inbox.
+  const runCommandRaw = jest.fn().mockResolvedValue({ cursor: { firstBatch: [] }, ok: 1 });
+  const notificationDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
+  const prisma = {
+    postComment: { findFirst, findMany, updateMany, update },
+    post: { update: postUpdate },
+    $runCommandRaw: runCommandRaw,
+    notification: { deleteMany: notificationDeleteMany },
+  } as unknown as PrismaClient;
+  return { prisma, findMany, updateMany, update, postUpdate, runCommandRaw, notificationDeleteMany };
+};
+
+describe('PostCommentService.deleteComment', () => {
+  it('returns null when the comment does not exist', async () => {
+    const { prisma } = buildPrismaForDelete({ id: 'x', authorId: 'u1', postId: 'p1', parentId: null });
+    (prisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const service = new PostCommentService(prisma);
+    expect(await service.deleteComment('x', 'u1')).toBeNull();
+  });
+
+  it('throws FORBIDDEN when a non-author deletes the comment', async () => {
+    const { prisma } = buildPrismaForDelete({ id: 'c1', authorId: 'owner', postId: 'p1', parentId: null });
+    const service = new PostCommentService(prisma);
+    await expect(service.deleteComment('c1', 'intruder')).rejects.toThrow('FORBIDDEN');
+  });
+
+  it('decrements commentCount by 1 for a leaf top-level comment', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['c1'] } }, data: { deletedAt: expect.any(Date) } }),
+    );
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' }, data: { commentCount: { decrement: 1 } } }),
+    );
+  });
+
+  it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }, { id: 'r2' }] },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    const softDeleted = updateMany.mock.calls[0][0].where.id.in;
+    expect(softDeleted.sort()).toEqual(['c1', 'r1', 'r2']);
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { commentCount: { decrement: 3 } } }),
+    );
+  });
+
+  it('cascades through arbitrary-depth reply chains', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }], r1a: [{ id: 'r1a1' }] },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    const softDeleted = updateMany.mock.calls[0][0].where.id.in;
+    expect(softDeleted.sort()).toEqual(['c1', 'r1', 'r1a', 'r1a1']);
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { commentCount: { decrement: 4 } } }),
+    );
+  });
+
+  it("decrements the direct parent's replyCount by 1 when deleting a reply", async () => {
+    const { prisma, update } = buildPrismaForDelete(
+      { id: 'r1', authorId: 'u1', postId: 'p1', parentId: 'c1' },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('r1', 'u1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'c1' }, data: { replyCount: { decrement: 1 } } }),
+    );
+  });
+
+  it("does not touch replyCount when deleting a top-level comment", async () => {
+    const { prisma, update } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteComment — les notifications que le commentaire a produites
+//
+// Sixième occurrence de la famille des cycles 46/47/48/50/51 : le retrait est
+// DOUX (`deletedAt`), le lien vers la ligne vit dans un blob JSON, et la
+// notification garde une copie DÉNORMALISÉE du contenu retiré (`content` =
+// l'extrait du commentaire). Aucune cascade ne peut se déclencher, aucun filtre
+// à la lecture ne peut rattraper : la ligne ne relit jamais le commentaire.
+//
+// Ce que ces témoins verrouillent, et que les compteurs ci-dessus ne voient
+// pas : le retrait porte sur le SOUS-ARBRE ENTIER — même liste d'ids que le
+// soft-delete — et il n'a pas le droit de transformer une suppression réussie
+// en erreur.
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.deleteComment — retrait des notifications', () => {
+  const announcer = { announceNotificationsRetracted: jest.fn().mockResolvedValue(undefined) };
+
+  beforeEach(() => {
+    announcer.announceNotificationsRetracted.mockClear();
+  });
+
+  it('retire les notifications de TOUT le sous-arbre soft-deleté, pas seulement de la cible', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    await service.deleteComment('c1', 'u1', announcer);
+
+    expect(runCommandRaw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        find: 'Notification',
+        filter: {
+          $or: [
+            { 'context.commentId': { $in: ['c1', 'r1', 'r1a'] } },
+            { 'metadata.commentId': { $in: ['c1', 'r1', 'r1a'] } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("n'annonce le retrait qu'APRÈS le soft-delete durable", async () => {
+    const order: string[] = [];
+    const { prisma, updateMany, runCommandRaw, notificationDeleteMany } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    updateMany.mockImplementation(async () => {
+      order.push('soft-delete');
+      return { count: 1 };
+    });
+    runCommandRaw.mockResolvedValue({
+      cursor: { firstBatch: [{ _id: { $oid: 'n1' }, userId: { $oid: 'u9' } }] },
+      ok: 1,
+    });
+    notificationDeleteMany.mockImplementation(async () => {
+      order.push('retract');
+      return { count: 1 };
+    });
+    const service = new PostCommentService(prisma);
+
+    await service.deleteComment('c1', 'u1', announcer);
+
+    expect(order).toEqual(['soft-delete', 'retract']);
+    expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith([
+      { id: 'n1', userId: 'u9' },
+    ]);
+  });
+
+  /**
+   * Best-effort DÉLIBÉRÉ, comme les quatre effets du retrait de post : quand le
+   * retrait s'exécute, `deletedAt` est déjà committé. Une inbox récalcitrante ne
+   * doit pas transformer une suppression réussie en 500 — le commentaire EST
+   * retiré, c'est l'invariant qui compte pour la personne qui a cliqué.
+   */
+  it('rend la suppression réussie même si le retrait des notifications échoue', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    runCommandRaw.mockRejectedValue(new Error('mongo down'));
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'u1', announcer)).resolves.toEqual(
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('ne retire rien quand la suppression est refusée', async () => {
+    const { prisma, runCommandRaw } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'owner', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'intruder', announcer)).rejects.toThrow('FORBIDDEN');
+    expect(runCommandRaw).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteComment — ce que le retrait REND à son appelant
+//
+// Le soft-delete, le décompte et le retrait des notifications portent déjà sur
+// le SOUS-ARBRE ENTIER (témoins ci-dessus). Mais la valeur de retour ne disait
+// que « c'est fait » : la liste des ids réellement retirés mourait dans la
+// méthode. Son seul appelant — la route DELETE — n'avait donc rien d'autre à
+// annoncer que la cible, et les réponses survivaient à l'écran de tout client
+// qui les avait dépliées (elles ne reviennent d'aucun refetch : `getComments`
+// filtre `parentId: null`, et leur parent supprimé n'est plus rendu, donc
+// `getReplies` n'est plus jamais appelé pour elles).
+//
+// Ces témoins verrouillent le CONTRAT : le retrait rend la même liste que celle
+// qu'il a soft-deletée, cible en tête.
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.deleteComment — les ids retirés remontent à l\'appelant', () => {
+  it('rend la cible seule quand elle n\'a aucune réponse', async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+
+    await expect(service.deleteComment('c1', 'u1')).resolves.toEqual(
+      expect.objectContaining({ deletedCommentIds: ['c1'] }),
+    );
+  });
+
+  it('rend TOUT le sous-arbre retiré, pas seulement la cible', async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }, { id: 'r2' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect([...(result?.deletedCommentIds ?? [])].sort()).toEqual(['c1', 'r1', 'r1a', 'r2']);
+  });
+
+  /**
+   * La liste rendue est la MÊME que celle passée au soft-delete — pas une
+   * seconde dérivation qui pourrait s'en écarter en silence.
+   */
+  it('rend exactement la liste soft-deletée', async () => {
+    const { prisma, updateMany } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }] },
+    );
+    const service = new PostCommentService(prisma);
+
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect(result?.deletedCommentIds).toEqual(updateMany.mock.calls[0][0].where.id.in);
+  });
+});
+
 describe('PostCommentService.addComment — media', () => {
   it('links the pending media to the new comment via commentId and returns it', async () => {
     const postMedia = makePostMediaMock();
     postMedia.findUnique.mockResolvedValue({ id: 'm-1', postId: null, commentId: null });
-    postMedia.update.mockResolvedValue({});
+    postMedia.updateMany.mockResolvedValue({ count: 1 });
     postMedia.findMany.mockResolvedValue([{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'http://x/m-1' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
     const result: any = await service.addComment('post-1', 'a1', 'hi', undefined, 0, 'fr', 'm-1');
 
-    expect(postMedia.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'm-1' }, data: expect.objectContaining({ commentId: 'c-new' }) }),
-    );
+    // La condition est portée par l'ÉCRITURE et non par une lecture préalable :
+    // la base tranche en une opération, donc deux commentaires concurrents ne
+    // peuvent plus réclamer le même média tous les deux.
+    const call = postMedia.updateMany.mock.calls[0][0];
+    expect(call.where.id).toBe('m-1');
+    // Les deux formes MongoDB d'un média libre (null OU champ absent) —
+    // cf. l'incident prod 2026-07-31→08-01 sur `commentId` absent.
+    expect(call.where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
+    // Et la garde de propriété : l'auteur du commentaire, pas n'importe qui.
+    expect(call.where.uploaderId).toBe('a1');
+    expect(call.data).toEqual(expect.objectContaining({ commentId: 'c-new' }));
     expect(result.media).toHaveLength(1);
     expect(result.media[0].id).toBe('m-1');
   });
@@ -393,7 +681,7 @@ describe('PostCommentService.addComment — media', () => {
   it('persists the mobile transcription on the linked audio media', async () => {
     const postMedia = makePostMediaMock();
     postMedia.findUnique.mockResolvedValue({ id: 'm-2', postId: null, commentId: null });
-    postMedia.update.mockResolvedValue({});
+    postMedia.updateMany.mockResolvedValue({ count: 1 });
     postMedia.findMany.mockResolvedValue([{ id: 'm-2', mimeType: 'audio/mp4', fileUrl: 'http://x/m-2' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
@@ -402,7 +690,7 @@ describe('PostCommentService.addComment — media', () => {
       text: 'bonjour', language: 'fr', segments: [],
     } as any);
 
-    const data = postMedia.update.mock.calls[0][0].data;
+    const data = postMedia.updateMany.mock.calls[0][0].data;
     expect(data.commentId).toBe('c-new');
     expect(data.transcription).toEqual(expect.objectContaining({ text: 'bonjour', source: 'mobile' }));
   });
@@ -415,5 +703,66 @@ describe('PostCommentService.addComment — media', () => {
     const service = new PostCommentService(prisma, noopTrackingLinks);
     await expect(service.addComment('post-1', 'a1', 'hi', undefined, 0, 'fr', 'm-3'))
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// likeComment — max-1-reaction-per-user invariant (REST/socket parity)
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.likeComment', () => {
+  const wireCounters = () => {
+    (mockPrisma.commentReaction.groupBy as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.postComment.update as jest.Mock).mockResolvedValue({
+      id: 'c-1', postId: 'post-1', authorId: 'author-1', content: 'Hello',
+      likeCount: 1, reactionSummary: {},
+    });
+  };
+
+  it('returns null when the comment does not exist', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    const result = await service.likeComment('missing', 'u-1', '❤️');
+
+    expect(result).toBeNull();
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('purges the user\'s other-emoji reactions so at most 1 reaction survives (parity with socket)', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
+    (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
+    wireCounters();
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    await service.likeComment('c-1', 'u-1', '👍');
+
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
+      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '👍' } },
+    });
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { comment_user_reaction_unique: { commentId: 'c-1', userId: 'u-1', emoji: '👍' } },
+        create: { commentId: 'c-1', userId: 'u-1', emoji: '👍' },
+      }),
+    );
+  });
+
+  it('stays idempotent for a repeated same-emoji like (safe REST fallback of the socket)', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
+    (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
+    wireCounters();
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    await service.likeComment('c-1', 'u-1', '❤️');
+
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
+      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '❤️' } },
+    });
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} }),
+    );
   });
 });

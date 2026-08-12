@@ -31,6 +31,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     joinCall: mockJoinCall,
     generateIceServers: mockGenerateIceServers,
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
@@ -90,6 +91,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallEndReason } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -316,13 +318,21 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
 
+      // Grace expiry with no re-join is a genuine involuntary disconnect, never
+      // a deliberate call:leave/call:end — endReasonHint distinguishes it so
+      // the resulting endReason is `connectionLost`, not `completed` (the web
+      // retry-on-failure toast only fires for failed/connectionLost).
       expect(mockLeaveCall).toHaveBeenCalledWith({
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
+        endReasonHint: CallEndReason.connectionLost,
       });
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
-      expect(ended.map(e => e.room)).toEqual([`call:${CALL_ID}`, `conversation:${CONV_ID}`]);
+      expect(ended).toHaveLength(1);
+      expect(ended[0].room).toEqual(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`])
+      );
     });
 
     it('does NOT end the call if the participant reconnected to the room by expiry', async () => {
@@ -436,16 +446,56 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
     });
 
     it('re-join (call:join) within the window cancels the pending end', async () => {
-      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        callSessionForJoin: { id: CALL_ID, conversationId: CONV_ID },
+      });
       const { handlers } = setup({ prisma });
 
+      // A GENUINELY successful join — cancelDisconnectGrace only fires once
+      // joinCall has actually resolved (see the "does not cancel grace when
+      // the join itself fails" test below for the other half of this).
+      mockJoinCall.mockResolvedValue({
+        callSession: {
+          id: CALL_ID,
+          mode: 'p2p',
+          participants: [{
+            id: PARTICIPANT_DBID,
+            participantId: PARTICIPANT_ID,
+            callSessionId: CALL_ID,
+            leftAt: null,
+            participant: { userId: USER_ID },
+          }],
+        },
+        iceServers: [],
+      });
+      mockGenerateIceServers.mockReturnValue([]);
+
       await handlers['disconnect']();                 // arm grace
-      // call:join bails after cancel (callSession.findUnique → null makes
-      // resolveParticipantIdFromCall return null), but the cancel already ran.
       await handlers[CALL_EVENTS.JOIN]({ callId: CALL_ID, settings: {} }, jest.fn());
       await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
 
       expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    // CALL-RESILIENCE follow-up (Vague 32) — cancelDisconnectGrace moved to
+    // AFTER joinCall succeeds. A join that fails for a transient reason (DB
+    // hiccup, race) unrelated to the call's real state must not disarm the
+    // grace timer that's the only thing left protecting a still-active call.
+    it('does not cancel the pending grace when the join itself fails', async () => {
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        callSessionForJoin: { id: CALL_ID, conversationId: CONV_ID },
+      });
+      const { handlers } = setup({ prisma });
+
+      mockJoinCall.mockRejectedValue(new Error('DB error'));
+
+      await handlers['disconnect']();                 // arm grace
+      await handlers[CALL_EVENTS.JOIN]({ callId: CALL_ID, settings: {} }, jest.fn());
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).toHaveBeenCalled();
     });
   });
 
@@ -487,6 +537,7 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
         callId: CALL_ID,
         userId: USER_ID,
         participantId: PARTICIPANT_ID,
+        endReasonHint: CallEndReason.connectionLost,
       });
     });
 

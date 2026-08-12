@@ -17,11 +17,16 @@ protocol WebRTCServiceDelegate: AnyObject {
     /// percentage (0–100) — reported to the gateway so the call-summary message
     /// can surface "data spent · network quality" and drive loss alerts.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double)
+    /// C3 — la caméra locale a cessé (ou repris) de délivrer des frames, sur
+    /// interruption de l'`AVCaptureSession`. Seul fait probant : le passage en
+    /// arrière-plan n'éteint PAS la caméra quand un PiP système est actif.
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool)
 }
 
 extension WebRTCServiceDelegate {
     // Optional by default — only CallManager needs the stats tick.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {}
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool) {}
 }
 
 // MARK: - WebRTC Service
@@ -42,7 +47,6 @@ final class WebRTCService {
 
     var videoFilters: VideoFilterPipeline { client.videoFilterPipeline }
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
     var localVideoTrack: Any? { client.localVideoTrack }
     var remoteVideoTrack: Any? { client.remoteVideoTrack }
 
@@ -75,6 +79,10 @@ final class WebRTCService {
     private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
     private var qualityLevelDebounceDate: Date?
+    // Requires two consecutive high-jitter ticks before capping audio bitrate
+    // (see JitterBitrateCapTracker) — a lone jitter blip must not yank the
+    // encoder down and back up on the very next tick.
+    private var jitterBitrateCapTracker = JitterBitrateCapTracker()
     // BWE warm-up anchor — the GCC estimate is ignored while it ramps from
     // its kick-off value (see CallReliabilityPolicy.effectiveQualityLevel).
     private var qualityMonitorStartDate: Date?
@@ -109,7 +117,14 @@ final class WebRTCService {
 
     func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
         do {
-            let servers = iceServers ?? IceServer.defaultServers
+            // Treat an empty array the same as nil: a VoIP push whose
+            // `iceServers` field decodes to zero usable servers (all entries
+            // dropped by the credential-length guard, or an explicit `[]`)
+            // must still fall back to STUN — passing `[]` through to libwebrtc
+            // means no candidate gathering at all beyond host candidates,
+            // which fails behind virtually any NAT.
+            let resolved = iceServers ?? []
+            let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
         } catch {
@@ -127,6 +142,13 @@ final class WebRTCService {
     }
 
     func createOffer() async -> SessionDescription? {
+        // Le data channel doit exister AVANT l'offre pour être négocié dans le
+        // SDP (m=application). Côté offreur uniquement — l'answerer le reçoit
+        // via `didOpen`. Idempotent : les offres de re-négociation (ICE
+        // restart, escalade vidéo) ne créent pas de second channel. Il porte
+        // les segments de transcription ET les messages de contrôle in-band
+        // (`bye` = raccroché instantané sans aller-retour serveur).
+        _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
             Logger.webrtc.info("Created SDP offer")
@@ -242,14 +264,21 @@ final class WebRTCService {
         await client.disableLocalVideo()
     }
 
-    func switchCamera() {
+    /// `completion` reports whether the switch actually succeeded — the
+    /// caller (`CallManager`) uses it to correct any optimistic UI state
+    /// (front/back mirroring) it applied before the async switch resolved.
+    /// Always invoked, exactly once, on the same @MainActor context this
+    /// method inherits.
+    func switchCamera(completion: ((Bool) -> Void)? = nil) {
         let previousTask = switchCameraTask
         switchCameraTask = Task { [weak self] in
             await previousTask?.value
             do {
                 try await self?.client.switchCamera()
+                completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
+                completion?(false)
             }
         }
     }
@@ -259,14 +288,20 @@ final class WebRTCService {
         client.availableCameras()
     }
 
-    func switchToCamera(uniqueID: String) {
+    /// `completion` mirrors `switchCamera(completion:)` — reports whether the switch
+    /// actually succeeded, always invoked exactly once on this method's @MainActor
+    /// context. Optional (defaults to nil) so existing fire-and-forget callers are
+    /// unaffected.
+    func switchToCamera(uniqueID: String, completion: ((Bool) -> Void)? = nil) {
         let previousTask = switchCameraTask
         switchCameraTask = Task { [weak self] in
             await previousTask?.value
             do {
                 try await self?.client.switchToCamera(uniqueID: uniqueID)
+                completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+                completion?(false)
             }
         }
     }
@@ -320,6 +355,7 @@ final class WebRTCService {
         qualityMonitorTask = nil
         lastStats = nil
         qualityMonitorStartDate = nil
+        jitterBitrateCapTracker.reset()
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
@@ -361,9 +397,15 @@ final class WebRTCService {
         } else {
             newBitrate = QualityThresholds.minBitrate
         }
-        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT path.
-        let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs
-            ? QualityThresholds.minBitrate : newBitrate
+        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT
+        // path — but only once the jitter tracker confirms two consecutive
+        // ticks, so a single transient spike doesn't yank bitrate down and
+        // back up on the next tick (audible warble on a link that's fine).
+        let jitterCapped = jitterBitrateCapTracker.record(
+            jitterMs: stats.jitterMs,
+            thresholdMs: QualityThresholds.highJitterThresholdMs
+        )
+        let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
 
         if effectiveBitrate != currentBitrate {
             currentBitrate = effectiveBitrate
@@ -374,7 +416,7 @@ final class WebRTCService {
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            let jitterTag = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+            let jitterTag = jitterCapped
                 ? String(format: " jitter=%.0fms[capped]", stats.jitterMs)
                 : ""
             Logger.webrtc.info("Audio bitrate adjusted to \(effectiveBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps)\(jitterTag))")
@@ -436,38 +478,19 @@ final class WebRTCService {
         )
     }
 
-    // MARK: - DataChannel Transcription (H7)
-
-    func createTranscriptionChannel() -> Bool {
-        client.createDataChannel(label: "transcription")
-    }
-
-    func sendTranscription(_ message: DataChannelTranscriptionMessage) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
+    /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
+    /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
+    /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est
+    /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
+    func sendHangupBye(reason: String = "completed") {
+        let message = DataChannelControlMessage(type: "bye", reason: reason)
+        guard let data = JSONEncoder().encodeOrLog(message, field: "data-channel message",
+                                                   logger: Logger.webrtc) else { return }
         client.sendDataChannelMessage(data)
     }
 
     func sendDTMF(digits: String) {
         client.sendDTMF(digits: digits)
-    }
-
-    // MARK: - Audio Effects
-
-    func setAudioEffect(_ effect: AudioEffectConfig?) {
-        do {
-            try client.setAudioEffect(effect)
-            Logger.webrtc.info("Audio effect set via service: \(effect?.effectType.rawValue ?? "none")")
-        } catch {
-            Logger.webrtc.error("Failed to set audio effect: \(error.localizedDescription)")
-        }
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) {
-        do {
-            try client.updateAudioEffectParams(config)
-        } catch {
-            Logger.webrtc.error("Failed to update audio effect params: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - ICE Restart
@@ -494,7 +517,13 @@ final class WebRTCService {
         pendingCandidateTask = nil
         switchCameraTask?.cancel()
         switchCameraTask = nil
-        client.disconnect()
+        // Uses the flush-aware teardown variant, not a bare disconnect() call:
+        // `endCall()` sends the P2P hangup `bye` on the data channel right
+        // before this runs (CallManager.swift), and closing the peer
+        // connection synchronously after an enqueued-but-unflushed send can
+        // silently drop it — degrading the "instant hangup" fast path back
+        // to the slower socket `call:end` fanout it was built to bypass.
+        client.disconnectAfterFlushingPendingSend()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         connectionState = .closed
@@ -602,6 +631,13 @@ extension WebRTCService: WebRTCClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.webRTCService(self, didReceiveTranscriptionData: data)
+        }
+    }
+
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didChangeCameraInterruption: interrupted)
         }
     }
 }

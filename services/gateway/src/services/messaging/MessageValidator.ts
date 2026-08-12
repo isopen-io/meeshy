@@ -203,10 +203,13 @@ export class MessageValidator {
       return this.createPermissionDenied('Le lien de partage a expiré');
     }
 
-    // Vérifier les limites d'utilisation
-    if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-      return this.createPermissionDenied('Limite d\'utilisation du lien atteinte');
-    }
+    // NB : `maxUses`/`currentUses` est un quota de JOINS (compteur incrémenté
+    // une fois par arrivée anonyme dans routes/anonymous.ts et
+    // routes/conversations/sharing.ts, vérifié contre `maxUses` au moment du
+    // join, exposé par l'admin comme `totalParticipants`/`anonymousCount`). Ce
+    // n'est PAS un budget de messages : re-gater chaque envoi dessus muterait
+    // définitivement tout participant déjà admis dès que le lien est plein. La
+    // limite d'usage se contrôle à l'entrée, jamais sur le chemin d'envoi.
 
     // Vérifier les permissions spécifiques du lien
     if (!shareLink.allowAnonymousMessages) {

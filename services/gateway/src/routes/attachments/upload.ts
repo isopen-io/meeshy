@@ -81,7 +81,11 @@ export async function registerUploadRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
-        if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
+        // `isAnonymous` vaut `true` sur le contexte d'un VISITEUR NU : la garde
+        // `!isAuthenticated && !isAnonymous` était donc toujours fausse et ne
+        // rejetait personne. Un participant anonyme réellement identifié par un
+        // jeton de session porte `isAuthenticated: true` — c'est le seul test utile.
+        if (!authContext || !authContext.isAuthenticated) {
           return sendUnauthorized(reply, 'Authentication required');
         }
 

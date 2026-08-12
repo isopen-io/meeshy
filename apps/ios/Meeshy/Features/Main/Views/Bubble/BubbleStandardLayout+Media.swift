@@ -214,15 +214,15 @@ extension BubbleStandardLayout {
                             isDark: isDark
                         )
                         .equatable()
-                        .padding(8)
+                        .padding(MeeshySpacing.sm)
                         .transition(.opacity)
                     }
                 }
         }
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .stroke(strokeColor, lineWidth: 0.5)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -373,9 +373,9 @@ fileprivate struct BubbleGridCell: View {
                     },
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
-                .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 6)
+                .padding(MeeshySpacing.sm)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .padding(.horizontal, MeeshySpacing.xs + 2)
             }
             .transition(.opacity)
         }
@@ -403,6 +403,10 @@ fileprivate struct BubbleGridCell: View {
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
+                    // Grille multi-média : cellules ~150pt de large — le bouton
+                    // play 64pt écrasait la vignette. 44pt (minimum HIG) en
+                    // multi, 64pt conservé pour la vidéo solo pleine largeur.
+                    playButtonDiameter: solo ? 64 : 44,
                     onDownload: onDownload,
                     onExpand: { fullscreenAttachment = attachment }
                 )
@@ -458,7 +462,7 @@ fileprivate struct BubbleGridCell: View {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -676,8 +680,8 @@ private struct AttachmentBlurOverlayView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Media a voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
-        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour reveler le contenu", bundle: .main))
+        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
         .onLongPressGesture(minimumDuration: 0.3) {
             onReveal()
         }
@@ -738,7 +742,7 @@ struct BubbleCarouselView: View {
             if !hasPlayingInlineVideo {
                 BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
                     .equatable()
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
         }
         .onAppear {
@@ -787,7 +791,7 @@ struct BubbleCarouselView: View {
             } label: {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
@@ -936,10 +940,33 @@ struct BubbleCarouselView: View {
 
     // MARK: - Prefetch
 
+    /// Pure gate: should this attachment kind be prefetched given the
+    /// resolved auto-download policy? Extracted so the wiring in
+    /// `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
+    /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
+    /// burning cellular data against 'Never'/'Wi-Fi only') is testable
+    /// without spinning up the full carousel view.
+    nonisolated static func shouldPrefetchAttachment(
+        kind: MessageAttachment.AttachmentType,
+        allowImage: Bool,
+        allowVideo: Bool
+    ) -> Bool {
+        kind == .video ? allowVideo : allowImage
+    }
+
     private func prefetchAdjacentPages(around index: Int) {
         let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
+        // Respect the user's auto-download policy — mirrors
+        // ConversationMediaHandler.prefetchRecentMedia. Without this gate the
+        // ±1 neighbor prefetch pulled full-size media over cellular
+        // regardless of the 'Never'/'Wi-Fi only' preference.
+        let condition = NetworkConditionMonitor.shared.condition
+        let prefs = MediaDownloadPreferencesStore.shared.preferences
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         for i in prefetchRange {
             let attachment = items[i]
+            guard Self.shouldPrefetchAttachment(kind: attachment.type, allowImage: allowImage, allowVideo: allowVideo) else { continue }
             // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.

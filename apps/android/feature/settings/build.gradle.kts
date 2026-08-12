@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "me.meeshy.feature.settings"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig { minSdk = 26 }
 
@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.work.runtime)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

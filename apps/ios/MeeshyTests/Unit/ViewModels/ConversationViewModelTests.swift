@@ -37,7 +37,7 @@ final class ConversationViewModelTests: XCTestCase {
         MessageSocketManager.shared.isConnected = true
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false
@@ -47,7 +47,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockReactionService = nil
         mockReportService = nil
         mockMessageSocket = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory
@@ -58,7 +58,9 @@ final class ConversationViewModelTests: XCTestCase {
         isDirect: Bool = false,
         participantUserId: String? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
-        dependencies: ConversationDependencies? = nil
+        dependencies: ConversationDependencies? = nil,
+        activeCallService: ActiveCallServiceProviding? = nil,
+        liveCallJoin: LiveCallJoinContext? = nil
     ) -> ConversationViewModel {
         let currentUser = MeeshyUser(id: testUserId, username: "testuser", displayName: "Test User")
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -76,7 +78,9 @@ final class ConversationViewModelTests: XCTestCase {
             reactionService: mockReactionService,
             reportService: mockReportService,
             messageSocket: mockMessageSocket,
-            dependencies: deps
+            dependencies: deps,
+            activeCallService: activeCallService ?? ActiveCallService.shared,
+            liveCallJoin: liveCallJoin ?? .live
         )
         // Activate the VM as the view's `.task` does: `init` is now
         // side-effect-free, so the GRDB observation / initial load / Combine
@@ -229,6 +233,32 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasOlderMessages)
     }
 
+    func test_loadOlderMessages_missingCursorPagination_keepsPaginationOpenOnFullPage() async {
+        // Gateway antérieur au fix de schéma Fastify : `cursorPagination` est
+        // strippé de la réponse. L'ancien `?? false` verrouillait la pagination
+        // après une seule page ; une page pleine doit la laisser ouverte.
+        let initial: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello","createdAt":"2026-01-02T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":null,"limit":50},"hasNewer":null}
+        """)
+        mockMessageService.listResult = .success(initial)
+        let olderData = (0..<50).map { i in
+            "{\"id\":\"older-\(i)\",\"conversationId\":\"\(testConversationId)\",\"senderId\":\"\(testUserId)\",\"content\":\"m\(i)\",\"createdAt\":\"2026-01-01T00:00:\(String(format: "%02d", i)).000Z\"}"
+        }.joined(separator: ",")
+        let older: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[\(olderData)],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockMessageService.listBeforeResult = .success(older)
+        let sut = makeSUT()
+        await sut.loadMessages()
+
+        await sut.loadOlderMessages()
+
+        XCTAssertTrue(sut.hasOlderMessages,
+                      "A gateway stripping cursorPagination must not latch pagination closed after a full page")
+    }
+
     func test_loadMessages_failure_keepsEmptyMessagesAndFinishesLoading() async {
         mockMessageService.listResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error"]))
         let sut = makeSUT()
@@ -254,21 +284,78 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.listCallCount, 1)
     }
 
-    func test_loadMessages_marksConversationAsRead() async {
+    func test_loadMessages_doesNotMarkConversationReadOnOpen() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
-        // markAsRead routes through ConversationSyncEngine + the offline outbox;
-        // the .conversationMarkedRead notification is its observable contract.
+        // Read-exactness (docs/superpowers/specs/2026-07-24-read-exactness-design):
+        // "Badge de non-lus qui ne se vide plus à l'ouverture" — opening a
+        // conversation no longer marks it read. Only messages actually displayed
+        // are reported (visibility accumulator → markAsRead(messageIds:)), and a
+        // partial report never posts the conversation-wide .conversationMarkedRead.
+        // So loadMessages() must NOT post that notification.
+        let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
+        marked.isInverted = true
 
         await sut.loadMessages()
 
-        await fulfillment(of: [marked], timeout: 1.0)
+        await fulfillment(of: [marked], timeout: 0.5)
+    }
+
+    // MARK: - loadOlderMessages Tests (P1 — offline cache fallback)
+
+    /// `loadOlderMessages` used to be network-first: the GRDB pagination
+    /// slide (`messageStore.loadOlder`) only ran inside the `do` block, right
+    /// after a successful REST `listBefore`. When the REST call fails
+    /// (offline / transient network error) the catch block never touched the
+    /// store, so scrolling up while offline looked like there was nothing
+    /// more to load even though a prior online session had already fetched +
+    /// persisted the older page into GRDB. The catch path must now fall back
+    /// to the cached page so reads keep working offline.
+    func test_loadOlderMessages_networkFailure_fallsBackToGRDBCachedOlderMessages() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        // Seed one more message than the store's fixed 200-row initial
+        // window so the oldest is cache-resident but outside the current
+        // slice — exactly the "already cached from a prior session, but out
+        // of window" scenario a real offline scroll-up hits.
+        let conversationId = testConversationId
+        let userId = testUserId
+        let base = Date()
+        let records: [MessageRecord] = (0..<201).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "older-\(i)", conversationId: conversationId,
+                senderId: userId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records {
+                try record.insert(db)
+            }
+        }
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let windowed = await MessageStoreObservationHelper.awaitMessagesCount(equals: 200, in: sut)
+        XCTAssertTrue(windowed, "precondition: the initial window caps at the newest 200 cached messages")
+
+        mockMessageService.listBeforeResult = .failure(
+            NSError(domain: "test", code: -1009, userInfo: [NSLocalizedDescriptionKey: "offline"])
+        )
+
+        await sut.loadOlderMessages()
+
+        let grew = await MessageStoreObservationHelper.awaitMessagesCount(equals: 201, in: sut)
+        XCTAssertTrue(grew, "the offline catch path must surface the GRDB-cached older message")
+        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted first")
     }
 
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
@@ -504,12 +591,64 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Regarde", messageType: .image), "Regarde")
     }
 
-    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() {
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .image), "📷 Photo")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .video), "🎥 Vidéo")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .audio), "🎙️ Message vocal")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .file), "📎 Fichier")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .location), "📍 Position")
+    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() throws {
+        // `optimisticListPreview` résout ses libellés via `String(localized:)`,
+        // donc depuis la langue du simulateur : on fixe la table française pour
+        // juger le code, pas la machine (sinon vert en local fr, rouge en CI en).
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"),
+                                 "localisation « fr » absente du bundle — régression de packaging")
+        let fr = try XCTUnwrap(Bundle(path: path))
+        let loc = Locale(identifier: "fr")
+        func preview(_ type: Message.MessageType) -> String {
+            ConversationViewModel.optimisticListPreview(text: "", messageType: type, bundle: fr, locale: loc)
+        }
+        XCTAssertEqual(preview(.image), "📷 Photo")
+        XCTAssertEqual(preview(.video), "🎥 Vidéo")
+        XCTAssertEqual(preview(.audio), "🎙️ Message vocal")
+        XCTAssertEqual(preview(.file), "📎 Fichier")
+        XCTAssertEqual(preview(.location), "📍 Position")
+    }
+
+    func test_optimisticListPreview_lieuSeul_composeNomPuisAdressePuisPosition() throws {
+        // Lot 2 (spec 2026-07-30) : un message « lieu seul » a un `content`
+        // vide et un messageType .text — sans la branche `location`, son
+        // aperçu de conversation serait vide. « 📍 <nom, à défaut adresse,
+        // à défaut Position> ». Table française fixée : on juge le code, pas
+        // la langue du simulateur.
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"))
+        let fr = try XCTUnwrap(Bundle(path: path))
+        let loc = Locale(identifier: "fr")
+        func preview(_ place: SharedPlace?) -> String {
+            ConversationViewModel.optimisticListPreview(
+                text: "", messageType: .text, location: place, bundle: fr, locale: loc)
+        }
+
+        let nomEtAdresse = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: "Café de Flore",
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(nomEtAdresse), "📍 Café de Flore", "le nom prime sur l'adresse")
+
+        let adresseSeule = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: nil,
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(adresseSeule), "📍 172 boulevard Saint-Germain, Paris")
+
+        let nomVide = SharedPlace(latitude: 48.85, longitude: 2.35, name: "", address: "")
+        XCTAssertEqual(preview(nomVide), "📍 Position",
+                       "nom et adresse vides → libellé localisé de repli")
+
+        let pointBrut = SharedPlace(latitude: 48.85, longitude: 2.35)
+        XCTAssertEqual(preview(pointBrut), "📍 Position")
+    }
+
+    func test_optimisticListPreview_texteAvecLieu_prefereLeTexte() {
+        // Un message qui porte texte ET lieu montre le texte en aperçu — le
+        // lieu n'écrase jamais une légende.
+        let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Café de Flore")
+        XCTAssertEqual(
+            ConversationViewModel.optimisticListPreview(text: "On se voit ici ?", messageType: .text, location: place),
+            "On se voit ici ?"
+        )
     }
 
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
@@ -874,6 +1013,33 @@ final class ConversationViewModelTests: XCTestCase {
         )
         XCTAssertNil(restored?.deletedAt, "Delete failure must roll back deletedAt in GRDB")
         XCTAssertNotNil(sut.error)
+    }
+
+    /// A `.failed` message never reached the server — a REST delete would
+    /// target the bogus optimistic local id, get rejected, and the existing
+    /// rollback (`markUndeleted`) would resurrect the very message the user
+    /// just tried to remove. `.everyone` must route straight to the
+    /// local-only failed-message purge instead of ever calling the network.
+    func test_deleteMessage_failedMessageNeverReachedServer_purgesLocallyWithoutRestCall() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-failed-del", conversationId: testConversationId,
+            senderId: testUserId, content: "never sent", state: .failed
+        )
+        try await persistence.insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "msg-failed-del" }
+
+        await sut.deleteMessage(messageId: "msg-failed-del", mode: .everyone)
+
+        XCTAssertEqual(mockMessageService.deleteCallCount, 0,
+            "a failed message never reached the server — deleting it must never call REST")
+        let deleted = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-failed-del", from: pool
+        ) { $0.deletedAt != nil }
+        XCTAssertNotNil(deleted?.deletedAt, "the failed message must still be purged locally")
     }
 
     /// S11 — a "Delete for me" hide keyed on a temp id must follow the
@@ -1345,13 +1511,88 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_markAsRead_postsNotification() {
         let sut = makeSUT()
+        let expectedId = testConversationId
         let expectation = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
 
         sut.markAsRead()
 
         wait(for: [expectation], timeout: 1.0)
+    }
+
+    // MARK: - Rattrapage : le badge tombe à l'arrivée sur le dernier message
+
+    /// Identifiants d'aspect serveur (24 hex) : le corps de `mark-read` est
+    /// validé sur ce format, un `cid_…` ferait rejeter tout le lot.
+    private static let idOldest = "aaaaaaaaaaaaaaaaaaaaaaa1"
+    private static let idNewest = "aaaaaaaaaaaaaaaaaaaaaaa2"
+
+    /// Le lot vu contient le message le PLUS RÉCENT : l'utilisateur n'a plus de
+    /// retard, le badge doit tomber sans attendre l'aller-retour serveur.
+    func test_markAsRead_seenBatchContainsNewestMessage_clearsBadgeImmediately() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
+    /// Rapporter dix messages sur deux cents ne veut PAS dire que la
+    /// conversation est lue : tant que le dernier message n'a pas été atteint,
+    /// le badge reste. Le vider afficherait un chiffre que le serveur
+    /// corrigerait aussitôt.
+    func test_markAsRead_seenBatchWithoutNewestMessage_leavesBadgeAlone() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idOldest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de
+    /// la conversation. Traiter le dernier message chargé comme le plus récent
+    /// viderait un badge encore dû.
+    func test_markAsRead_windowNotAtTip_doesNotClearBadge() {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: Self.idNewest, content: "B")]
+        sut.hasNewerMessages = true
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Une bulle optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId.
+    /// L'annoncer comme borne de curseur ferait rejeter le corps entier par le
+    /// gateway ; c'est le dernier message CONNU DU SERVEUR qui fait foi.
+    func test_isServerMessageId_rejectsOptimisticClientIds() {
+        XCTAssertTrue(ConversationViewModel.isServerMessageId(Self.idNewest))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("cid_9f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f"))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId(""))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("zzzzzzzzzzzzzzzzzzzzzzzz"))
     }
 
     // MARK: - messageIndex Tests
@@ -1554,7 +1795,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: translation)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertEqual(override??.translatedContent, "Hello")
     }
 
@@ -1564,7 +1805,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: nil)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertNil(override as? MessageTranslation)
     }
 
@@ -2109,6 +2350,120 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(matching.first?.content, "hello")
     }
 
+    // MARK: - hydratePersistedTranslations (grdb-07)
+
+    /// Un message "own" vit en GRDB sous localId=cid mais ses traductions sont
+    /// persistées sous l'id SERVEUR : filtrer les TranslationRecord sur le seul
+    /// localId ne matchait rien — la traduction disparaissait au cold start.
+    func test_hydratePersistedTranslations_ownMessageKeyedByCid_populatesDictUnderServerId() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "cid_abc", serverId: "srv1",
+            conversationId: testConversationId,
+            senderId: "current-user",
+            content: "hello", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Me", senderUsername: "me",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr1", messageLocalId: "srv1", messageServerId: "srv1",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertNotNil(viewModel.messageTranslations["srv1"],
+                        "la traduction persistée sous l'id serveur doit être réhydratée pour un message own keyé par cid")
+        XCTAssertEqual(viewModel.messageTranslations["srv1"]?.first?.translatedContent, "Bonjour")
+    }
+
+    /// Non-régression : un message reçu (localId == serverId) reste hydraté.
+    func test_hydratePersistedTranslations_receivedMessage_stillHydrated() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "srv2", serverId: "srv2",
+            conversationId: testConversationId,
+            senderId: "other-user",
+            content: "hi", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Other", senderUsername: "other",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr2", messageLocalId: "srv2", messageServerId: "srv2",
+            targetLanguage: "fr", translatedContent: "Salut",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertEqual(viewModel.messageTranslations["srv2"]?.first?.translatedContent, "Salut")
+    }
+
     // MARK: - withSendTimeout (S1 — send-clock latency cap)
 
     func test_withSendTimeout_fastOperation_returnsValue() async throws {
@@ -2181,6 +2536,144 @@ final class ConversationViewModelTests: XCTestCase {
         }.count
         XCTAssertEqual(count, 1,
             "mergeIntoMessages must suppress the superseded optimistic row — expected 1 bubble, got \(count)")
+    }
+
+    // MARK: - joinOngoingCall (bulle d'appel vivante, 4 branches)
+
+    private final class MockActiveCallService: ActiveCallServiceProviding, @unchecked Sendable {
+        var result: Result<ActiveCallSession?, Error> = .success(nil)
+        private(set) var callCount = 0
+
+        func activeCall(conversationId: String) async throws -> ActiveCallSession? {
+            callCount += 1
+            return try result.get()
+        }
+    }
+
+    @MainActor
+    private final class LiveCallJoinSpy {
+        var currentCallId: String?
+        var isIdle = true
+        var pendingCallId: String?
+        var rejoinResult = true
+        private(set) var broughtUIForwardCount = 0
+        private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+
+        var context: LiveCallJoinContext {
+            LiveCallJoinContext(
+                currentCallId: { [weak self] in self?.currentCallId },
+                isIdle: { [weak self] in self?.isIdle ?? true },
+                hasPendingIncomingCall: { [weak self] in self?.pendingCallId == $0 },
+                bringCallUIForward: { [weak self] in self?.broughtUIForwardCount += 1 },
+                rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
+                    self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
+                    return self?.rejoinResult ?? true
+                }
+            )
+        }
+    }
+
+    private func makeLiveCallSummary(callId: String = "call-live-1", isVideo: Bool = false) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: callId,
+            initiatorId: "peer-user-1",
+            callType: isVideo ? .video : .audio,
+            outcome: .completed,
+            durationSeconds: 0,
+            bytesTotal: nil,
+            bytesEstimated: false,
+            networkQuality: nil,
+            isLive: true
+        )
+    }
+
+    func test_joinOngoingCall_alreadyOnThisCall_bringsCallUIForward() async {
+        let spy = LiveCallJoinSpy()
+        spy.currentCallId = "call-live-1"
+        spy.isIdle = false
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertEqual(spy.broughtUIForwardCount, 1)
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(service.callCount, 0, "pas de round-trip serveur quand on est déjà sur l'appel")
+    }
+
+    func test_joinOngoingCall_deviceRingingOnThisCall_neverDoubleJoins() async {
+        let spy = LiveCallJoinSpy()
+        spy.pendingCallId = "call-live-1"
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "répondre reste le geste de la bannière/CallKit")
+        XCTAssertEqual(spy.broughtUIForwardCount, 0)
+        XCTAssertEqual(service.callCount, 0)
+    }
+
+    func test_joinOngoingCall_serverStillActive_rejoinsWithRemoteParticipant() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: [
+                ActiveCallParticipant(userId: testUserId, user: nil),
+                ActiveCallParticipant(userId: "peer-user-1", user: ActiveCallParticipantUser(id: "peer-user-1", username: "peer", displayName: "Peer")),
+            ]
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary(isVideo: true))
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.callId, "call-live-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.conversationId, testConversationId)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
+        XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(nil)
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+        FeedbackToastManager.shared.dismiss()
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        // Résolu depuis la MÊME clé/valeur-par-défaut/bundle que le site d'appel
+        // (`ConversationViewModel.joinOngoingCall`) — un littéral français en dur
+        // ne teste plus que la langue du simulateur (cf. `CallsViewModelTests`,
+        // même patron).
+        XCTAssertEqual(
+            FeedbackToastManager.shared.currentToast?.message,
+            String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main)
+        )
+    }
+
+    func test_joinOngoingCall_staleSessionDifferentCallId_treatedAsEnded() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "another-newer-call",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: []
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "une bulle périmée ne rejoint jamais un AUTRE appel")
     }
 
     // MARK: - Helpers

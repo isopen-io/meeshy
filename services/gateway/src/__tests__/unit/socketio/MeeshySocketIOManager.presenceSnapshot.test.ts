@@ -81,8 +81,8 @@ function makePresenceContext(overrides: Partial<{
         }
       }
 
+      (this as any)._drainPendingMessages(userId, isAnonymous).catch(() => {});
       if (!isAnonymous) {
-        (this as any)._drainPendingMessages(socket, userId).catch(() => {});
         (this as any)._emitUnreadCountsSnapshot(socket, userId).catch(() => {});
       }
     } catch (error) {
@@ -157,19 +157,21 @@ describe('_emitPresenceSnapshot drain behaviour (inline logic test)', () => {
       SERVER_EVENTS.PRESENCE_SNAPSHOT,
       expect.objectContaining({ users: expect.any(Array) })
     );
-    expect(drainSpy).toHaveBeenCalledWith(socket, USER_ID);
+    expect(drainSpy).toHaveBeenCalledWith(USER_ID, false);
   });
 
-  it('does NOT drain for anonymous users even on a warm cache', async () => {
+  it('drains for anonymous users too (participant-id key) but skips the unread snapshot', async () => {
     const drainSpy = jest.fn().mockResolvedValue(undefined);
-    const ctx = makePresenceContext({ _drainPendingMessages: drainSpy });
+    const unreadSpy = jest.fn().mockResolvedValue(undefined);
+    const ctx = makePresenceContext({ _drainPendingMessages: drainSpy, _emitUnreadCountsSnapshot: unreadSpy });
 
     ctx.presenceSnapshotCache.set(USER_ID, { users: [], cachedAt: Date.now() });
 
     const socket: SocketLike = { emit: jest.fn() };
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, true);
 
-    expect(drainSpy).not.toHaveBeenCalled();
+    expect(drainSpy).toHaveBeenCalledWith(USER_ID, true);
+    expect(unreadSpy).not.toHaveBeenCalled();
   });
 
   it('drains pending messages on a fresh (non-cached) snapshot', async () => {
@@ -179,7 +181,7 @@ describe('_emitPresenceSnapshot drain behaviour (inline logic test)', () => {
     const socket: SocketLike = { emit: jest.fn() };
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, false);
 
-    expect(drainSpy).toHaveBeenCalledWith(socket, USER_ID);
+    expect(drainSpy).toHaveBeenCalledWith(USER_ID, false);
   });
 
   it('drain failure is swallowed and does not surface to caller', async () => {

@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
@@ -10,8 +11,18 @@ import {
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
+import { enhancedLogger } from '../utils/logger-enhanced';
+import { hoistLocationDeep } from './location/sharedPlace';
+
+const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
 const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
+
+// Plafond des tombstones renvoyés par un delta-sync de stories. Le filtre de
+// visibilité borne déjà au cercle de l'utilisateur : 500 disparitions sur une
+// même fenêtre delta est très large. Au-delà, la troncature est signalée (voir
+// getStories) et le reliquat attend le prochain fetch complet.
+const STORY_TOMBSTONE_LIMIT = 500;
 
 // Feed payloads share the canonical postInclude — alias kept for callsite clarity.
 const feedPostInclude = postInclude;
@@ -67,6 +78,18 @@ const INTEREST_BOOKMARK_SAMPLE = 50;  // derniers bookmarks analysés
 const INTEREST_NORMALIZER = Math.log10(1 + 20); // sature l'affinité d'intérêt à ~20 engagements
 
 export class PostFeedService {
+  /// Fenêtre pendant laquelle un auteur continue de recevoir SES stories
+  /// expirées, pour que « Mes stories » puisse les archiver. Sept jours : au
+  /// -delà, une story n'est plus un contenu qu'on republie ou dont on relit
+  /// les vues, et la réponse doit rester bornée.
+  ///
+  /// Réexportée depuis `posts/ephemeralPosts.ts` plutôt que redéclarée : le
+  /// balayage du contenu éphémère attend la fin de cette fenêtre avant de
+  /// soft-supprimer, parce que la requête ci-dessous est gardée par
+  /// `deletedAt: NOT_DELETED`. Deux copies dériveraient — et le jour où
+  /// celle-ci s'allongerait, le balayage la devancerait en silence.
+  static readonly AUTHOR_ARCHIVE_WINDOW_MS = EPHEMERAL_AUTHOR_ARCHIVE_MS;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly cache?: CacheStore
@@ -190,12 +213,9 @@ export class PostFeedService {
     const items = scored;
 
     const postIds = items.map((s) => s.post.id);
-    const [userReactions, userBookmarks, userReposts] = postIds.length > 0
+    const [userReactionsMap, userBookmarks, userReposts] = postIds.length > 0
       ? await Promise.all([
-          this.prisma.postReaction.findMany({
-            where: { userId, postId: { in: postIds } },
-            select: { postId: true, emoji: true },
-          }),
+          this.resolveUserReactionsMap(userId, items.map((s) => s.post)),
           this.prisma.postBookmark.findMany({
             where: { userId, postId: { in: postIds } },
             select: { postId: true },
@@ -208,18 +228,12 @@ export class PostFeedService {
             select: { repostOfId: true },
           }),
         ])
-      : [[], [], []];
-    const userReactionsMap = new Map<string, string[]>();
-    for (const r of userReactions) {
-      const list = userReactionsMap.get(r.postId) ?? [];
-      list.push(r.emoji);
-      userReactionsMap.set(r.postId, list);
-    }
+      : [new Map<string, string[]>(), [], []];
     const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
     const repostedIds = new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]);
 
     return {
-      items: items.map((s) => ({
+      items: items.map((s) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
@@ -248,19 +262,36 @@ export class PostFeedService {
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
 
+    // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
+    // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
+    // Sans cette exception, le serveur ne les renvoyait jamais et le client ne
+    // pouvait pas les garder non plus — un pull-to-refresh écrase son cache
+    // avec la réponse serveur (`StoryViewModel.storyGroups = groups`).
+    //
+    // Bornée : sans plancher, la réponse enflerait indéfiniment avec
+    // l'ancienneté du compte. Les stories des AUTRES restent filtrées à leur
+    // expiration, comme avant.
+    const authorArchiveFloor = new Date(now.getTime() - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+
     const where: any = {
       deletedAt: NOT_DELETED,
       type: PostType.STORY,
       AND: [
         visibilityFilter,
-        { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
+        {
+          OR: [
+            { expiresAt: { isSet: false } },
+            { expiresAt: { equals: null } },
+            { expiresAt: { gt: now } },
+            { AND: [{ authorId: userId }, { expiresAt: { gt: authorArchiveFloor } }] },
+          ],
+        },
       ],
     };
 
     // G1 delta-sync : `updatedSince` ne renvoie que les stories créées ou
     // modifiées (compteurs, traductions) depuis le timestamp — le client
-    // fusionne avec son cache 24 h. Les disparitions restent couvertes par
-    // les événements socket (story:deleted) et le filtre expiry client.
+    // fusionne avec son cache 24 h.
     // Sans le paramètre, comportement historique complet (rétro-compatible).
     if (options?.updatedSince) {
       where.AND.push({ updatedAt: { gt: options.updatedSince } });
@@ -289,7 +320,10 @@ export class PostFeedService {
         })
       : await this.prisma.post.findMany({
           where,
-          include: feedPostInclude,
+          // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
+          // que l'interstitiel d'identité du viewer résolve la présence AU
+          // moment du switch de groupe (jamais après affichage du slide).
+          include: storyPostInclude,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limit + 1,
         });
@@ -299,6 +333,62 @@ export class PostFeedService {
     const nextCursor = hasMore && stories.length > 0
       ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
       : null;
+
+    // Tombstones du delta-sync — les DISPARITIONS, que le delta ne peut pas
+    // exprimer autrement (il ne renvoie que ce qui existe encore).
+    //
+    // Sans elles, une story supprimée pendant que le client était hors-ligne ou
+    // fermé n'était jamais réconciliée : l'event socket `story:deleted` ne se
+    // rejoue pas, et le merge delta côté client est purement additif. La story
+    // restait dans son cache — illisible et indéboulonnable — jusqu'au full
+    // fetch (24 h) ou un pull-to-refresh.
+    //
+    // Couvre aussi l'expiration : `ExpiredStoriesCleanupService` soft-delete
+    // les stories périmées, ce qui pose `deletedAt` et remonte `updatedAt` —
+    // mais seulement une fois passée la fenêtre d'archive auteur
+    // (`EPHEMERAL_AUTHOR_ARCHIVE_MS`), pas à l'échéance. Le client garde donc
+    // bien son propre filtre d'expiry, et pas seulement « pour ne pas dépendre
+    // du passage du balayeur » : entre l'échéance et le masquage, il est le
+    // SEUL à filtrer. (Avant le cycle 54 le balayage n'appariait aucun post et
+    // ne posait jamais `deletedAt` — ce tombstone ne voyait que les
+    // suppressions décidées.)
+    //
+    // Même `visibilityFilter` que le tray : le delta ne doit pas divulguer
+    // l'existence de stories que l'utilisateur n'a jamais eu le droit de voir.
+    // Lancé ici pour s'exécuter en parallèle des requêtes d'enrichissement.
+    //
+    // Ligne SONDE (`take: LIMIT + 1`), même patron que `hasMore` ci-dessus : le
+    // plafond des tombstones n'a AUCUN curseur de reprise, donc sa troncature
+    // doit voyager jusqu'au client, qui n'a alors qu'un seul recours — refetch
+    // complet, dont le remplacement du tray purge les fantômes. Compter
+    // `length === LIMIT` confondrait une page coupée avec une fenêtre de très
+    // exactement LIMIT suppressions, qui est COMPLÈTE : le client escaladerait
+    // pour rien, à chaque delta, tant que la fenêtre reste sur ce nombre.
+    //
+    // PORTÉE : la FENÊTRE, pas la page — d'où le `!cursorData`. Cette clause ne
+    // dépend pas du curseur, elle est identique d'une page à l'autre. Depuis que
+    // le client draine la fenêtre delta (`StoryViewModel.drainStoryPages`,
+    // jusqu'à 6 pages), la relancer à chaque page referait jusqu'à 6 fois la
+    // même lecture de 501 lignes sous filtre de visibilité, pour un résultat que
+    // le client tient déjà depuis la première page. Elle ne court donc que sur
+    // la page qui OUVRE la fenêtre. Sûr parce que le drain fusionne par union
+    // (`formUnion`) et par `||`, jamais par écrasement : une page suivante sans
+    // tombstone ne peut pas effacer ceux de la première.
+    const deletedIdsPromise: Promise<string[]> = options?.updatedSince && !cursorData
+      ? this.prisma.post
+          .findMany({
+            where: {
+              type: PostType.STORY,
+              deletedAt: { not: null },
+              updatedAt: { gt: options.updatedSince },
+              AND: [visibilityFilter],
+            },
+            select: { id: true },
+            orderBy: { updatedAt: 'desc' },
+            take: STORY_TOMBSTONE_LIMIT + 1,
+          })
+          .then((rows) => rows.map((r) => r.id))
+      : Promise.resolve([]);
 
     const storyIds = stories.map((s) => s.id);
     // Le tray ne rend pas les réactions — la requête batch est coupée en
@@ -325,13 +415,31 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
 
-    const items = stories.map((s) => ({
+    // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
+    // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
+    // toute façon pas de badge de lieu (anneaux + miniature seuls).
+    const items = stories.map((s) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
 
-    return { items, nextCursor, hasMore };
+    const fetchedDeletedIds = await deletedIdsPromise;
+    const deletedIdsTruncated = fetchedDeletedIds.length > STORY_TOMBSTONE_LIMIT;
+    const deletedIds = deletedIdsTruncated
+      ? fetchedDeletedIds.slice(0, STORY_TOMBSTONE_LIMIT)
+      : fetchedDeletedIds;
+    if (deletedIdsTruncated) {
+      // Le drapeau part maintenant AUSSI dans la charge utile : ce log seul ne
+      // disait la troncature qu'à nous, jamais au seul acteur qui pouvait y
+      // remédier.
+      logger.warn(
+        `[getStories] tombstones tronqués à ${STORY_TOMBSTONE_LIMIT} pour user=${userId} — ` +
+        'le client escaladera vers un fetch complet'
+      );
+    }
+
+    return { items, nextCursor, hasMore, deletedIds, deletedIdsTruncated };
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
@@ -373,7 +481,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -413,7 +521,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -551,24 +659,15 @@ export class PostFeedService {
     // Aligné sur `getFeed` : on récupère AUSSI les favoris du viewer pour exposer
     // `isBookmarkedByMe`. Sans lui, le reel viewer ne pouvait pas réhydrater l'état
     // favori → le bookmark « disparaissait » à la réouverture.
-    const [userReactions, userBookmarks] = await Promise.all([
-      this.prisma.postReaction.findMany({
-        where: { userId: viewerUserId, postId: { in: postIds } },
-        select: { postId: true, emoji: true },
-      }),
+    const [userReactionsMap, userBookmarks] = await Promise.all([
+      this.resolveUserReactionsMap(viewerUserId, items),
       this.prisma.postBookmark.findMany({
         where: { userId: viewerUserId, postId: { in: postIds } },
         select: { postId: true },
       }),
     ]);
-    const userReactionsMap = new Map<string, string[]>();
-    for (const r of userReactions) {
-      const list = userReactionsMap.get(r.postId) ?? [];
-      list.push(r.emoji);
-      userReactionsMap.set(r.postId, list);
-    }
     const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
-    return items.map((p) => ({
+    return items.map((p) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
       isBookmarkedByMe: bookmarkedIds.has(p.id),
@@ -710,26 +809,16 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
     }
 
-    const postIds = items.map((p) => p.id);
-    const userReactions = await this.prisma.postReaction.findMany({
-      where: { userId: viewerUserId, postId: { in: postIds } },
-      select: { postId: true, emoji: true },
-    });
-    const userReactionsMap = new Map<string, string[]>();
-    for (const r of userReactions) {
-      const list = userReactionsMap.get(r.postId) ?? [];
-      list.push(r.emoji);
-      userReactionsMap.set(r.postId, list);
-    }
+    const userReactionsMap = await this.resolveUserReactionsMap(viewerUserId, items);
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
       })),
@@ -776,26 +865,16 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
     }
 
-    const communityPostIds = items.map((p) => p.id);
-    const communityUserReactions = await this.prisma.postReaction.findMany({
-      where: { userId: viewerUserId, postId: { in: communityPostIds } },
-      select: { postId: true, emoji: true },
-    });
-    const communityReactionsMap = new Map<string, string[]>();
-    for (const r of communityUserReactions) {
-      const list = communityReactionsMap.get(r.postId) ?? [];
-      list.push(r.emoji);
-      communityReactionsMap.set(r.postId, list);
-    }
+    const communityReactionsMap = await this.resolveUserReactionsMap(viewerUserId, items);
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
       })),
@@ -834,22 +913,10 @@ export class PostFeedService {
       : null;
 
     const posts = items.map((b) => b.post).filter((p) => p && !p.deletedAt);
-    const bookmarkPostIds = posts.map((p) => p.id);
-    const bookmarkUserReactions = bookmarkPostIds.length > 0
-      ? await this.prisma.postReaction.findMany({
-          where: { userId, postId: { in: bookmarkPostIds } },
-          select: { postId: true, emoji: true },
-        })
-      : [];
-    const bookmarkReactionsMap = new Map<string, string[]>();
-    for (const r of bookmarkUserReactions) {
-      const list = bookmarkReactionsMap.get(r.postId) ?? [];
-      list.push(r.emoji);
-      bookmarkReactionsMap.set(r.postId, list);
-    }
+    const bookmarkReactionsMap = await this.resolveUserReactionsMap(userId, posts);
 
     return {
-      items: posts.map((p) => ({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
+      items: posts.map((p) => hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
       nextCursor,
       hasMore,
     };
@@ -933,6 +1000,55 @@ export class PostFeedService {
   /// Source UNIQUE et alignée avec `currentUserReactions` que les surfaces lisent.
   private enrichWithLikeStatus(post: any, currentUserReactions: string[]) {
     return { ...post, isLikedByMe: currentUserReactions.length > 0 };
+  }
+
+  /**
+   * Réactions du viewer par post AFFICHÉ, en redirigeant vers la RACINE pour
+   * un repost SIMPLE (chantier reposts cohérents & watermark, tâche 9) :
+   * `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false`
+   * reflètent l'état de l'utilisateur sur l'ORIGINAL
+   * (`originalRepostOfId ?? repostOfId`), jamais sur le repost lui-même — un
+   * repost simple n'a pas de vie sociale propre. Une citation garde son
+   * propre état.
+   *
+   * Factorisé pour que les CINQ surfaces qui exposent ces flags (feed, réel
+   * viewer, profil, communauté, favoris) appliquent EXACTEMENT la même
+   * règle — celle dont dérive déjà `PostService.getPostById`, l'autre
+   * chemin d'enrichissement gateway (mémoire projet « flags perso post = 2
+   * chemins »). Deux reposts distincts du même original convergent
+   * naturellement sur la même racine, donc affichent la même réaction —
+   * même invariant d'idempotence que l'écriture (like/unlike).
+   */
+  private async resolveUserReactionsMap(
+    viewerUserId: string,
+    posts: ReadonlyArray<{ id: string; isQuote?: boolean; repostOfId?: string | null; originalRepostOfId?: string | null }>,
+  ): Promise<Map<string, string[]>> {
+    if (posts.length === 0) return new Map();
+
+    const targetIdByPostId = new Map<string, string>();
+    for (const post of posts) {
+      const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId);
+      targetIdByPostId.set(post.id, isSimpleRepost ? (post.originalRepostOfId ?? post.repostOfId!) : post.id);
+    }
+
+    const targetIds = [...new Set(targetIdByPostId.values())];
+    const reactions = await this.prisma.postReaction.findMany({
+      where: { userId: viewerUserId, postId: { in: targetIds } },
+      select: { postId: true, emoji: true },
+    });
+
+    const byTargetId = new Map<string, string[]>();
+    for (const r of reactions) {
+      const list = byTargetId.get(r.postId) ?? [];
+      list.push(r.emoji);
+      byTargetId.set(r.postId, list);
+    }
+
+    const result = new Map<string, string[]>();
+    for (const post of posts) {
+      result.set(post.id, byTargetId.get(targetIdByPostId.get(post.id)!) ?? []);
+    }
+    return result;
   }
 
   private affinityScore(authorId: string, viewerId: string, friendIds: string[]): number {

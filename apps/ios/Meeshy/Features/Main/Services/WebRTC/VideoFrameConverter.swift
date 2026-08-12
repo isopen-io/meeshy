@@ -266,6 +266,10 @@ extension VideoFrameConverter {
             let srcV = i420.dataV
             let srcStrideU = Int(i420.strideU)
             let srcStrideV = Int(i420.strideV)
+            // Mirror the Y-plane's defensive clamp above: a source chroma
+            // stride narrower than the chroma width would walk `uRow`/`vRow`
+            // past the end of `dataU`/`dataV` on the last column read below.
+            guard srcStrideU >= chromaWidth, srcStrideV >= chromaWidth else { return nil }
             for row in 0..<chromaHeight {
                 let dstRow = dst.advanced(by: row * dstStride)
                 let uRow = srcU.advanced(by: row * srcStrideU)

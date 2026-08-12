@@ -22,7 +22,9 @@ import UIKit
 /// - `.cancelled` → touchesCancelled (interruption système)
 final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
     /// Échelle cumulée depuis `.began`. Reset à 1.0 dans `reset()`.
-    internal(set) var scale: CGFloat = 1.0
+    /// Calculée uniquement en interne (touchesMoved / reset), lue par les
+    /// consommateurs (`recognizer.scale`) → `private(set)`.
+    private(set) var scale: CGFloat = 1.0
     var initialAverageDistance: CGFloat = 0
 
     static let requiredTouches: Int = 3

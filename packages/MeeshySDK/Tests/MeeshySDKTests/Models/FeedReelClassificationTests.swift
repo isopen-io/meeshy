@@ -108,6 +108,46 @@ struct FeedPostReelDisplayMediaTests {
     func empty() {
         #expect(post(type: "REEL", media: []).primaryReelDisplayMedia == nil)
     }
+
+    // MARK: - reelBackgroundMedia — le VISUEL de fond, distinct du média JOUÉ
+    //
+    // `primaryReelDisplayMedia` préfère l'audio à l'image parce qu'il désigne
+    // ce qu'on LIT. Le fond, lui, doit montrer une image quand il y en a une.
+    // Confondre les deux ferait basculer `ReelFeedCard.kind` sur `.imageOnly`
+    // pour un réel audio à couverture, et l'autoplay ne le prendrait plus.
+
+    @Test("le fond préfère la vidéo")
+    func backgroundPrefersVideo() {
+        let p = post(type: "REEL", media: [.image(), .audio(duration: 10), .video(duration: 20)])
+        #expect(p.reelBackgroundMedia?.type == .video)
+    }
+
+    @Test("un réel audio avec couverture montre l'image, pas le dégradé")
+    func backgroundPrefersImageOverAudio() {
+        let p = post(type: "REEL", media: [.image(), .audio(duration: 10)])
+        #expect(p.reelBackgroundMedia?.type == .image)
+        // La LECTURE reste sur l'audio : le fond ne doit pas la détourner.
+        #expect(p.primaryReelDisplayMedia?.type == .audio)
+    }
+
+    @Test("un réel audio sans image n'a pas de fond visuel")
+    func backgroundNilForAudioOnly() {
+        let p = post(type: "REEL", media: [.audio(duration: 10)])
+        #expect(p.reelBackgroundMedia == nil)
+    }
+
+    @Test("le fond suit le repost quand le post extérieur est vide")
+    func backgroundFollowsRepost() {
+        var p = post(type: "REEL", media: [])
+        p.repost = RepostContent(author: "Marie", content: "", type: "REEL",
+                                 media: [.image(), .audio(duration: 4)])
+        #expect(p.reelBackgroundMedia?.type == .image)
+    }
+
+    @Test("aucun média nulle part : pas de fond")
+    func backgroundNilWhenEmpty() {
+        #expect(post(type: "REEL", media: []).reelBackgroundMedia == nil)
+    }
 }
 
 @Suite("RepostContent reel classification")
@@ -152,39 +192,118 @@ struct RepostContentReelClassificationTests {
     }
 }
 
-@Suite("ReelComposition (creation-time default type)")
+@Suite("ReelComposition (creation-time qualification, règle produit 2026-08-02 + directive durée minimale)")
 struct ReelCompositionTests {
 
-    @Test("any media kind suggests a reel")
-    func suggests() {
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.video]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.image]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.image, .image]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.audio]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.audio, .image]))
+    /// Durée large, au-dessus du plancher — les cas de qualification non liés
+    /// à la durée l'utilisent pour ne pas se soucier du plancher de 3s.
+    private let long = 5000
+
+    private func media(_ kinds: FeedMediaType...) -> [(kind: FeedMediaType, durationMs: Int?)] {
+        kinds.map { (kind: $0, durationMs: long) }
     }
 
-    @Test("no media or only non-reel media does not suggest a reel")
-    func doesNotSuggest() {
-        #expect(ReelComposition.suggestsReel(mediaKinds: []) == false)
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.document]) == false)
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.location]) == false)
+    // MARK: - qualifiesAsReel(mediaKinds:) — video (>=3s) || audio (>=3s) || >= 2 images
+
+    @Test("a video, an audio, or at least two images qualifies as a reel (sufficient duration)")
+    func qualifies() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.video)))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.audio)))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.image, .image)))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.image, .image, .image)))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.audio, .image)))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.video, .image)))
     }
 
-    @Test("media posts default to REEL")
+    @Test("a single image does NOT qualify — the 2→1 removal trap")
+    func singleImageDoesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.image)) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.image, .document)) == false)
+    }
+
+    @Test("no media or only non-reel media never qualifies")
+    func doesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: []) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.document)) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: media(.document, .document)) == false)
+    }
+
+    @Test("a video or audio under 3 seconds does NOT qualify")
+    func shortDurationDoesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .video, durationMs: 2999)]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .audio, durationMs: 2999)]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .video, durationMs: 0)]) == false)
+    }
+
+    @Test("a video or audio at exactly 3 seconds qualifies")
+    func boundaryDurationQualifies() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .video, durationMs: 3000)]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .audio, durationMs: 3000)]))
+    }
+
+    @Test("a missing duration on video/audio does NOT qualify")
+    func nilDurationDoesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .video, durationMs: nil)]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .audio, durationMs: nil)]) == false)
+    }
+
+    @Test("images are never subject to the duration floor")
+    func imagesIgnoreDuration() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [(kind: .image, durationMs: 0), (kind: .image, durationMs: nil)]))
+    }
+
+    // MARK: - qualifiesAsReel(mimeTypes:durationsMs:) — same rule from MIME strings
+
+    @Test("MIME variant mirrors the kinds variant")
+    func mimeMirrorsKinds() {
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["video/mp4"], durationsMs: [long]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["audio/mp4"], durationsMs: [long]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg", "image/png"]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["audio/mpeg", "image/heic"], durationsMs: [long]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg"]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["application/pdf"]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: []) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["IMAGE/JPEG", "Image/PNG"])) // case-insensitive
+    }
+
+    @Test("MIME variant applies the duration floor to video/audio")
+    func mimeAppliesDurationFloor() {
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["video/mp4"], durationsMs: [2999]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["video/mp4"]) == false) // missing duration entry
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["video/mp4"], durationsMs: [3000]))
+    }
+
+    // MARK: - defaultType
+
+    @Test("qualifying compositions default to REEL")
     func defaultsToReel() {
-        #expect(ReelComposition.defaultType(mediaKinds: [.video]) == .reel)
-        #expect(ReelComposition.defaultType(mediaKinds: [.image, .audio]) == .reel)
+        #expect(ReelComposition.defaultType(mediaKinds: media(.video)) == .reel)
+        #expect(ReelComposition.defaultType(mediaKinds: media(.audio)) == .reel)
+        #expect(ReelComposition.defaultType(mediaKinds: media(.image, .image)) == .reel)
+        #expect(ReelComposition.defaultType(mimeTypes: ["audio/mp4"], durationsMs: [long]) == .reel)
+    }
+
+    @Test("a single image defaults to POST even without forcePlainPost")
+    func singleImageDefaultsToPost() {
+        #expect(ReelComposition.defaultType(mediaKinds: media(.image)) == .post)
+        #expect(ReelComposition.defaultType(mimeTypes: ["image/jpeg"]) == .post)
+    }
+
+    @Test("a video under 3 seconds defaults to POST")
+    func shortVideoDefaultsToPost() {
+        #expect(ReelComposition.defaultType(mediaKinds: [(kind: .video, durationMs: 1000)]) == .post)
+        #expect(ReelComposition.defaultType(mimeTypes: ["video/mp4"], durationsMs: [1000]) == .post)
     }
 
     @Test("forcing a plain post overrides the reel default")
     func forcePlainPost() {
-        #expect(ReelComposition.defaultType(mediaKinds: [.video], forcePlainPost: true) == .post)
+        #expect(ReelComposition.defaultType(mediaKinds: media(.video), forcePlainPost: true) == .post)
+        #expect(ReelComposition.defaultType(mimeTypes: ["audio/mp4"], durationsMs: [long], forcePlainPost: true) == .post)
     }
 
-    @Test("text-only posts default to POST")
+    @Test("text-only or document-only posts default to POST")
     func textDefaultsToPost() {
         #expect(ReelComposition.defaultType(mediaKinds: []) == .post)
-        #expect(ReelComposition.defaultType(mediaKinds: [.document]) == .post)
+        #expect(ReelComposition.defaultType(mediaKinds: media(.document)) == .post)
     }
 }

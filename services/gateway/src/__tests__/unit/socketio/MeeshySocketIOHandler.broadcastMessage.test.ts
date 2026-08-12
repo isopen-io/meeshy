@@ -87,38 +87,6 @@ describe('MeeshySocketIOHandler.broadcastMessage', () => {
   });
 });
 
-describe('MeeshySocketIOHandler.sendNotificationToUser', () => {
-  const notification = { type: 'message', body: 'hello' };
-
-  it('calls sendToUser with userId and notification', async () => {
-    const { handler, manager } = makeHandler();
-
-    await (handler as any).sendNotificationToUser('user-1', notification);
-
-    expect(manager.sendToUser).toHaveBeenCalledWith('user-1', expect.any(String), notification);
-  });
-
-  it('resolves without throwing when user not connected (sendToUser returns false)', async () => {
-    const { handler } = makeHandler(makeManager({ sendToUser: jest.fn<any>().mockReturnValue(false) }));
-
-    await expect((handler as any).sendNotificationToUser('user-1', notification)).resolves.toBeUndefined();
-  });
-
-  it('swallows error without throwing', async () => {
-    const { handler } = makeHandler(makeManager({
-      sendToUser: jest.fn<any>().mockImplementation(() => { throw new Error('send failed'); }),
-    }));
-
-    await expect((handler as any).sendNotificationToUser('user-1', notification)).resolves.toBeUndefined();
-  });
-
-  it('is a no-op when socketIOManager is null', async () => {
-    const { handler } = makeHandlerNoManager();
-
-    await expect((handler as any).sendNotificationToUser('user-1', notification)).resolves.toBeUndefined();
-  });
-});
-
 describe('MeeshySocketIOHandler.getConnectedUsers', () => {
   it('returns array from manager', () => {
     const { handler } = makeHandler();

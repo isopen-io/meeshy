@@ -1,9 +1,12 @@
 /**
- * Source unique des utilitaires d'**expiration** (domaine `expiresAt`).
+ * Source unique du prédicat d'**expiration** (domaine `expiresAt`).
  *
- * `formatTimeRemaining` — compte à rebours grossier heures/minutes, miroir « futur »
- * de `classifyRelativeTime` (temps écoulé) ; avant iter 59 réimplémenté à l'identique
- * dans `v2/StatusBar.tsx` et `v2/StoryViewer.tsx`.
+ * Le formatage « temps restant » (compte à rebours heures/minutes) vit exclusivement dans
+ * `@meeshy/shared/utils/time-remaining` (`formatTimeRemaining`) — l'unique implémentation
+ * consommée en production (`v2/StatusBar.tsx`, `v2/StoryViewer.tsx`, `lib/story-transforms.ts`).
+ * Une copie web divergente existait ici : jamais importée hors de son propre test, elle a
+ * silencieusement dérivé (le clamp sous-minute « jamais 0m » de la version partagée n'y était
+ * pas répercuté). Supprimée pour éliminer le doublon mort (single source of truth).
  *
  * `isExpired` — prédicat booléen « la cible est-elle dépassée ? » ; avant iter 60
  * réimplémenté à l'identique (`x && new Date(x) < new Date()`) dans au moins 6 fichiers
@@ -11,31 +14,10 @@
  * `admin/share-links`, `chat/[id]`, `links`). `null`/absent → `false` (« pas
  * d'expiration »), sémantique commune à tous les sites convergés.
  *
- * Purs et sans effet de bord : le « maintenant » est injecté (`nowMs`) plutôt que lu
- * via `Date.now()` par défaut, ce qui rend les fonctions déterministes et testables.
- */
-export function formatTimeRemaining(
-  expiresAt: string | number | Date,
-  nowMs: number = Date.now()
-): string | null {
-  const expiry =
-    expiresAt instanceof Date ? expiresAt.getTime() : new Date(expiresAt).getTime();
-  const diff = expiry - nowMs;
-  if (diff <= 0) return null;
-
-  const minutes = Math.floor(diff / 60_000);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours >= 1) {
-    const remainingMinutes = minutes % 60;
-    return remainingMinutes > 0 ? `${hours}h${remainingMinutes}m` : `${hours}h`;
-  }
-
-  return `${minutes}m`;
-}
-
-/**
- * `true` si `expiresAt` est défini ET strictement dans le passé.
+ * Pur et sans effet de bord : le « maintenant » est injecté (`nowMs`) plutôt que lu
+ * via `Date.now()` par défaut, ce qui rend la fonction déterministe et testable.
+ *
+ * Contrat : `true` si `expiresAt` est défini ET strictement dans le passé.
  * `null`/`undefined`/absent → `false` (interprété comme « sans expiration »).
  * Une date invalide (`NaN`) → `false`.
  */

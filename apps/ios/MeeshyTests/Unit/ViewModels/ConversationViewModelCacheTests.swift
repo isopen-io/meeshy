@@ -237,4 +237,103 @@ final class ConversationViewModelCacheTests: XCTestCase {
         XCTAssertEqual(sut.lastReceivedMessageId, "r2")
         XCTAssertEqual(sut.lastSentMessageId, "s2")
     }
+
+    // MARK: - vm-conv-expired-metadata-01 — .expired/.empty hydratent les métadonnées
+
+    private func makeSUTWithSeams(conversationId: String) -> (ConversationViewModel, DatabaseQueue, MockMessageService) {
+        let authManager = MockAuthManager()
+        let currentUser = MeeshyUser(id: myUserId, username: "me", displayName: "Me")
+        authManager.simulateLoggedIn(user: currentUser)
+
+        let pool = try! makeInMemoryPool()
+        let messageService = MockMessageService()
+        let sut = ConversationViewModel(
+            conversationId: conversationId,
+            unreadCount: 0,
+            isDirect: false,
+            participantUserId: nil,
+            anonymousSession: nil,
+            authManager: authManager,
+            messageService: messageService,
+            conversationService: MockConversationService(),
+            reactionService: MockReactionService(),
+            reportService: MockReportService(),
+            messageSocket: MockMessageSocket(),
+            dependencies: ConversationDependencies(
+                dbPool: pool,
+                persistence: MessagePersistenceActor(dbWriter: pool)
+            )
+        )
+        sut.start()
+        return (sut, pool, messageService)
+    }
+
+    func test_loadMessages_emptyCacheWithGRDBRows_hydratesTranscriptionBeforeNetwork() async throws {
+        // Clé unique → CacheCoordinator .empty garanti (l'ancienne branche
+        // .expired/.empty n'appelait QUE le réseau, sans hydrater GRDB).
+        let convId = "00000000000000000000c0d4"
+        let (sut, pool, messageService) = makeSUTWithSeams(conversationId: convId)
+        // Fixture encodée par le VRAI type (le décodage synthétisé de
+        // MeeshyMessageAttachment exige fileName/filePath/uploadedBy/… — un
+        // JSON minimal échoue en silence dans le guard try? de l'hydratation).
+        var attachment = MeeshyMessageAttachment(
+            id: "att-audio-1",
+            messageId: nil,
+            fileName: "vocal.m4a",
+            originalName: "vocal.m4a",
+            mimeType: "audio/mp4",
+            fileSize: 1_234,
+            filePath: "",
+            fileUrl: "https://cdn.example/vocal.m4a",
+            duration: 3_000,
+            uploadedBy: "sender"
+        )
+        attachment.transcription = try JSONDecoder().decode(
+            MeeshyMessageAttachment.EmbeddedTranscription.self,
+            from: Data(#"{"text":"bonjour","language":"fr"}"#.utf8)
+        )
+        let attachmentsJson = try JSONEncoder().encode([attachment])
+        let senderId = otherUserId
+        try await pool.write { [attachmentsJson, senderId] db in
+            try MessageRecord(
+                localId: "m-audio-1", serverId: "m-audio-1",
+                conversationId: convId, senderId: senderId,
+                content: "vocal", originalLanguage: "fr",
+                messageType: "text", messageSource: "user", contentType: "audio",
+                state: .delivered, retryCount: 0, lastError: nil,
+                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+                replyToId: nil, storyReplyToId: nil,
+                forwardedFromId: nil, forwardedFromConversationId: nil,
+                replyToJson: nil, forwardedFromJson: nil,
+                expiresAt: nil, effectFlags: 0,
+                maxViewOnceCount: nil, viewOnceCount: 0,
+                isEdited: false, editedAt: nil, deletedAt: nil,
+                pinnedAt: nil, pinnedBy: nil,
+                senderName: nil, senderUsername: nil,
+                senderColor: nil, senderAvatarURL: nil,
+                deliveredCount: 0, readCount: 0,
+                deliveredToAllAt: nil, readByAllAt: nil,
+                createdAt: Date(), sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: Date(),
+                attachmentsJson: attachmentsJson, reactionsJson: nil,
+                reactionCount: 0, currentUserReactionsJson: nil,
+                mentionedUsersJson: nil,
+                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+                cachedLastLineWidth: nil, cachedLineCount: nil,
+                cachedTimestampInline: nil,
+                layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+            ).insert(db)
+        }
+        messageService.listResult = .failure(MeeshyError.network(.noConnection))
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(
+            sut.messageTranscriptions["m-audio-1"]?.text, "bonjour",
+            "offline (réseau KO), la transcription persistée en GRDB doit être hydratée — l'ancienne branche .expired/.empty n'hydratait jamais"
+        )
+        XCTAssertTrue(sut.messages.contains(where: { $0.id == "m-audio-1" }),
+                      "le message GRDB est peint même sans réseau")
+    }
+
 }

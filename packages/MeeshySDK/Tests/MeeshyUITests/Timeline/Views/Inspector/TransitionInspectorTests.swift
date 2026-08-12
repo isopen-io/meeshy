@@ -35,6 +35,13 @@ final class TransitionInspectorTests: XCTestCase {
         XCTAssertEqual(TransitionInspector.durationRange.upperBound, 2.0, accuracy: 0.0001)
     }
 
+    func test_kindPicker_onlyOffersCrossfade() {
+        // The picker no longer exposes Dissolve as a selectable option — it
+        // renders identically to Crossfade everywhere, so offering it as a
+        // distinct choice was a false promise (design doc 2026-07-18).
+        XCTAssertEqual(TransitionInspector.availableKinds, [.crossfade])
+    }
+
     func test_kindChanged_emitsCallback() {
         var captured: StoryTransitionKind?
         let view = TransitionInspector(

@@ -14,6 +14,13 @@ struct ShareLinksView: View {
     @State private var showCreate = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -57,9 +64,9 @@ struct ShareLinksView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
@@ -70,6 +77,7 @@ struct ShareLinksView: View {
             Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -150,25 +158,35 @@ struct ShareLinksView: View {
         }
     }
 
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // instead of a hand-rolled VStack — same structure the peer settings screen
+    // `BlockedUsersView` already reuses. `compact` keeps it sized for this
+    // in-scroll section; the brand accent (shareAccentHex) is preserved.
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            // Decorative empty-state hero glyph (≥40pt) — its meaning is carried
-            // by the title below; kept fixed + hidden from VoiceOver (doctrine 84i/86i).
-            Image(systemName: "link.badge.plus")
-                .font(.system(size: 40))
-                .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
-                .accessibilityHidden(true)
-            Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
-            Text(String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main))
-                .font(.footnote)
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(40)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        EmptyStateView(
+            icon: "link.badge.plus",
+            title: String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main),
+            subtitle: String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main),
+            accentColor: MeeshyColors.shareAccentHex,
+            compact: true
+        )
+        .padding(.vertical, 24)
+    }
+
+    // Single interpolated localized unit (was a number concatenated with a
+    // standalone word — broke pluralization/word-order across locales).
+    private func joinedCountLabel(_ count: Int) -> String {
+        String(localized: "share.links.joined_count", defaultValue: "\(count) rejoints", bundle: .main)
+    }
+
+    private func rowAccessibilityLabel(_ link: MyShareLink) -> String {
+        let status = link.isActive
+            ? String(localized: "share.links.status.active", defaultValue: "Actif", bundle: .main)
+            : String(localized: "share.links.status.inactive", defaultValue: "Inactif", bundle: .main)
+        var parts = [link.displayName, status, joinedCountLabel(link.currentUses)]
+        if let conv = link.conversationTitle { parts.append(conv) }
+        return parts.joined(separator: ", ")
     }
 
     private func shareLinkRow(_ link: MyShareLink) -> some View {
@@ -192,7 +210,7 @@ struct ShareLinksView: View {
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text("\(link.currentUses) \(String(localized: "share.links.joined_label", defaultValue: "rejoints", bundle: .main))")
+                    Text(joinedCountLabel(link.currentUses))
                         .font(.caption)
                         .foregroundColor(MeeshyColors.shareAccent)
                     if let conv = link.conversationTitle {
@@ -203,6 +221,12 @@ struct ShareLinksView: View {
                     }
                 }
             }
+            // The active/inactive state was signalled ONLY by the (hidden) badge
+            // glyph's colour/shape — invisible to VoiceOver. Fold the row's text
+            // into one element and surface the status word explicitly so it no
+            // longer relies on colour alone (WCAG 1.4.1; doctrine 155i/164i).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(rowAccessibilityLabel(link))
 
             Spacer()
 
@@ -217,7 +241,7 @@ struct ShareLinksView: View {
             .padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.right")
+            Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)

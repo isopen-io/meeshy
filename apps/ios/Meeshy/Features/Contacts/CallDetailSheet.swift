@@ -10,6 +10,17 @@ struct CallDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
+    private var unknownCallerFallback: String {
+        String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
+    }
+    /// No live `Conversation` here (call-journal entry, not an open conversation) — the
+    /// documented fallback tier applies: deterministic per-caller color, shared by the
+    /// header avatar, the redial buttons, and every `detailRow` icon (never a hardcoded
+    /// brand color — see apps/ios/CLAUDE.md "Conversation Accent Color").
+    private var accentHex: String {
+        DynamicColorGenerator.colorForName(record.displayName(fallback: unknownCallerFallback))
+    }
+    private var accentColor: Color { Color(hex: accentHex) }
 
     var body: some View {
         ScrollView {
@@ -21,6 +32,12 @@ struct CallDetailSheet: View {
                 details
             }
             .padding(20)
+            // iPad/Mac width cap — mirrors FloatingCallPillView's established
+            // 560pt ceiling: without it, `redialButtons`/`detailRow`'s Spacer()
+            // stretch edge-to-edge on a wide sheet instead of reading as a
+            // centered, compact record. Full width on iPhone (<560pt).
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .presentationDetents([.medium, .large])
@@ -30,15 +47,14 @@ struct CallDetailSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        let name = record.displayName
-        let color = DynamicColorGenerator.colorForName(name)
+        let name = record.displayName(fallback: unknownCallerFallback)
         return VStack(spacing: 10) {
             MeeshyAvatar(
                 name: name,
                 context: .profileSheet,
-                accentColor: color,
+                accentColor: accentHex,
                 avatarURL: record.avatarURL,
-                presenceState: (record.peer?.isOnline ?? false) ? .online : .offline
+                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
             )
             Text(name)
                 .font(MeeshyFont.relative(20, weight: .bold))
@@ -80,7 +96,7 @@ struct CallDetailSheet: View {
             guard let peer = record.peer else { return }
             CallStarter.start(
                 userId: peer.userId,
-                displayName: record.displayName,
+                displayName: record.displayName(fallback: unknownCallerFallback),
                 isVideo: isVideo,
                 conversationId: record.conversationId
             )
@@ -94,7 +110,7 @@ struct CallDetailSheet: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Capsule().fill(MeeshyColors.indigo500))
+            .background(Capsule().fill(accentColor))
         }
         .accessibilityLabel(title)
     }
@@ -118,7 +134,7 @@ struct CallDetailSheet: View {
             if !record.durationLabel.isEmpty {
                 detailRow(
                     icon: "clock",
-                    label: String(localized: "calls.detail.duration", defaultValue: "Duree", bundle: .main),
+                    label: String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main),
                     value: record.durationLabel
                 )
             }
@@ -146,7 +162,7 @@ struct CallDetailSheet: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.subheadline)
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundColor(accentColor)
                 .frame(width: 24)
                 .accessibilityHidden(true)
             Text(label)

@@ -130,6 +130,17 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// Cleared on the next `setCurrentSlide` call.
     public var onCompletion: (() -> Void)?
 
+    /// Anti-freeze content-ready failsafe. If `markContentReady(slideId:)` is
+    /// never called for the current slide within this many seconds of pending
+    /// (a `Kind` the per-layer readiness evaluation doesn't cover, an eval that
+    /// is never re-triggered, a canvas retained off-window…), the timer
+    /// force-activates so the story auto-advances instead of freezing with the
+    /// ring stuck at 0. Independent of the per-layer 2 s failsafes — it is the
+    /// last line of defence at the single auto-advance choke point. Set to `0`
+    /// to disable (tests that assert pure gating semantics). Paused / backgrounded
+    /// pending time is NOT counted.
+    public var contentReadyFailsafe: TimeInterval = 6.0
+
     // MARK: - State
 
     public private(set) var currentSlideId: String?
@@ -141,6 +152,8 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     private var duration: TimeInterval = 0
     private var elapsed: TimeInterval = 0
     private var completionFired: Bool = false
+    /// Accumulated pending (pre-content-ready) time, gating `contentReadyFailsafe`.
+    private var pendingElapsed: TimeInterval = 0
 
     /// `CADisplayLink` driving the countdown. Optional so tests that
     /// drive the timer via `_advanceClockForTesting(by:)` never have
@@ -189,6 +202,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         isPaused = false
         isPlaybackStalled = false
         completionFired = false
+        pendingElapsed = 0
         lastTick = nil
         // Pending state — display link is allowed to tick (it will
         // observe `isActive == false` and refuse to advance the
@@ -216,6 +230,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         isPaused = false
         isPlaybackStalled = false
         completionFired = false
+        pendingElapsed = 0
         lastTick = nil
         onProgressChange?(0)
     }
@@ -237,7 +252,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     }
 
     public func _advanceClockForTesting(by seconds: TimeInterval) {
-        advanceClock(by: seconds)
+        integrate(by: seconds)
     }
 
     /// Teardown déterministe : invalide le display link 60 Hz et coupe les
@@ -273,26 +288,34 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        guard isActive, !isPaused, !isPlaybackStalled else {
-            // Pending / paused / stalled : record but do not advance the
-            // accumulator. The next resume (`markContentReady`, `setPaused(false)`,
-            // `setPlaybackStalled(false)`) resets `lastTick` so the first
-            // resumed tick advances by zero (no jump).
-            lastTick = link.timestamp
-            return
-        }
+        // All gating (active countdown vs pending failsafe vs paused/stalled) is
+        // delegated to `integrate`. `lastTick == nil` after a (re)seed skips the
+        // first delta so resume from pause/stall/pending has no jump.
         if let last = lastTick {
-            advanceClock(by: link.timestamp - last)
+            integrate(by: link.timestamp - last)
         }
         lastTick = link.timestamp
     }
 
-    /// Test-only override : runs the active-state logic deterministically
-    /// regardless of whether the display link is wired. Used by the gating
-    /// test suite which constructs `StoryReaderTimerController(useDisplayLink: false)`.
-    private func advanceClock(by delta: TimeInterval) {
-        guard isActive, !isPaused, !isPlaybackStalled, duration > 0 else { return }
-        elapsed = min(duration, elapsed + max(0, delta))
+    /// Integrates `delta` seconds into the countdown when active, or into the
+    /// pending content-ready failsafe when not yet active. Runs deterministically
+    /// regardless of whether the display link is wired — the gating test suite
+    /// drives it through `_advanceClockForTesting(by:)` with `useDisplayLink: false`.
+    private func integrate(by delta: TimeInterval) {
+        let d = max(0, delta)
+        guard isActive else {
+            // Pending : arm the anti-freeze failsafe. Paused / backgrounded time
+            // is not counted (guard on `isPaused`); a disabled failsafe (0) never
+            // force-activates, preserving pure gating semantics for tests.
+            guard !isPaused, contentReadyFailsafe > 0 else { return }
+            pendingElapsed += d
+            if pendingElapsed >= contentReadyFailsafe, let id = currentSlideId {
+                markContentReady(slideId: id)
+            }
+            return
+        }
+        guard !isPaused, !isPlaybackStalled, duration > 0 else { return }
+        elapsed = min(duration, elapsed + d)
         progress = elapsed / duration
         onProgressChange?(progress)
         if progress >= 1, !completionFired {

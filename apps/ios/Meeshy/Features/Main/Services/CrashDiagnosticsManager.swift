@@ -223,12 +223,11 @@ final class CrashDiagnosticsManager: NSObject {
     // MARK: - Persistence
 
     private func loadPersisted() {
-        let isoFormatter = ISO8601DateFormatter()
         var loaded: [CrashDiagnostic] = []
         for (url, diag) in decodeAllReports() {
             loaded.append(diag)
             loadedFileURLs.insert(url)
-            let when = isoFormatter.string(from: diag.timestamp)
+            let when = diag.timestamp.formatted(.iso8601)
             Logger.crash.error("Restored \(diag.kind.rawValue, privacy: .public) @ \(when, privacy: .public): \(diag.summary, privacy: .public)")
         }
         pending = loaded
@@ -268,15 +267,23 @@ final class CrashDiagnosticsManager: NSObject {
 
         if sorted.count > Self.maxStoredReports {
             for url in sorted.dropFirst(Self.maxStoredReports) {
-                try? FileManager.default.removeItem(at: url)
+                FileManager.default.removeItemLogging(at: url, context: "crash report cap eviction", logger: Logger.crash)
             }
         }
 
         let decoder = Self.makeDecoder()
         var result: [(URL, CrashDiagnostic)] = []
         for url in sorted.prefix(Self.maxStoredReports) {
-            guard let data = try? Data(contentsOf: url),
-                  let diag = try? decoder.decode(CrashDiagnostic.self, from: data) else { continue }
+            // Le fichier vient d'être listé : un échec ici est une I/O ou un
+            // rapport écrit par une version antérieure du schéma.
+            guard let data = try? Data(contentsOf: url) else {
+                Logger.crash.error("Stored crash report unreadable: \(url.lastPathComponent, privacy: .public)")
+                continue
+            }
+            guard let diag = decoder.decodeOrLog(CrashDiagnostic.self, from: data,
+                                                 field: "crash report",
+                                                 id: url.lastPathComponent,
+                                                 logger: Logger.crash) else { continue }
             result.append((url, diag))
         }
         return result
@@ -287,7 +294,7 @@ final class CrashDiagnosticsManager: NSObject {
     /// arrive *after* this call intact for the next launch.
     private func clearLoadedFiles() {
         for url in loadedFileURLs {
-            try? FileManager.default.removeItem(at: url)
+            FileManager.default.removeItemLogging(at: url, context: "surfaced crash report cleanup", logger: Logger.crash)
         }
         loadedFileURLs.removeAll()
     }
@@ -296,7 +303,7 @@ final class CrashDiagnosticsManager: NSObject {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
         let dir = docs.appendingPathComponent(directoryName, isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            FileManager.default.createDirectoryLogging(at: dir, context: "crash reports directory", logger: Logger.crash)
         }
         return dir
     }
@@ -339,9 +346,21 @@ final class CrashDiagnosticsManager: NSObject {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = .prettyPrinted
-        guard let data = try? encoder.encode(diag) else { return }
+        // Ce fichier EST le rapport de crash : s'il n'est pas écrit, le
+        // diagnostic est définitivement perdu au prochain lancement.
+        let data: Data
+        do {
+            data = try encoder.encode(diag)
+        } catch {
+            Logger.crash.error("Crash report encode failed, diagnostic lost: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         let url = dir.appendingPathComponent("\(diag.id.uuidString).json")
-        try? data.write(to: url, options: .atomic)
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            Logger.crash.error("Crash report not written to disk, diagnostic lost: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 
@@ -414,8 +433,12 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
     nonisolated private static func persistMetricPayload(_ json: Data, end: Date) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("metrickit", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        FileManager.default.createDirectoryLogging(at: dir, context: "metrickit directory", logger: Logger.crash)
         let name = "metric-\(Int(end.timeIntervalSince1970)).json"
-        try? json.write(to: dir.appendingPathComponent(name))
+        do {
+            try json.write(to: dir.appendingPathComponent(name))
+        } catch {
+            Logger.crash.error("MetricKit payload not persisted: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

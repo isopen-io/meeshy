@@ -45,6 +45,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
+    /// C3 — observateurs d'interruption de la session de capture de CET appel.
+    /// Scopés sur `object: capturer.captureSession` : `CameraView` instancie une
+    /// SECONDE `AVCaptureSession` dans le process (composeur story), et un
+    /// `object: nil` couperait la vidéo d'appel sur un événement sans rapport.
+    private var captureInterruptionObservers: [NSObjectProtocol] = []
     /// Génération de session : incrémentée par `disconnect()` ET `configure()`.
     /// Capturée avant l'await non-cancellation-aware de `startCapture` et
     /// re-comparée après : sans ce token, un appel terminé pendant le warm-up
@@ -52,6 +57,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// caméra allumée sans aucun chemin d'extinction. Un simple booléen ne
     /// suffit pas : un raccrocher→recomposer rapide le remettait à false
     /// avant la reprise de l'await (capture orpheline ressuscitée).
+    ///
+    /// The post-await re-comparison itself must run on MainActor: `startCapture`/
+    /// `stopCapture` resume on whatever queue AVCaptureSession's ObjC completion
+    /// fired on (not guaranteed MainActor), while `disconnect()` — always
+    /// MainActor-isolated, since callers are @MainActor — mutates this same var
+    /// synchronously. Every call site wraps its generation check in
+    /// `await MainActor.run { ... }` so the two never interleave.
     private var sessionGeneration = 0
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
@@ -76,9 +88,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?
-    private let _audioEffectsService: CallAudioEffectsService
-
-    var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
@@ -88,8 +97,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     var remoteVideoTrack: Any? { remoteVideoTrack_ }
 
     override init() {
-        self._audioEffectsService = CallAudioEffectsService()
-
         // PERF-001: reuse the process-wide cached factory (initialized lazily once).
         // SSL init is performed inside the factory's lazy block.
         self.factory = WebRTCSharedFactory.factory
@@ -292,39 +299,81 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] captureDevices probe")
         let cams = RTCCameraVideoCapturer.captureDevices()
         Logger.webrtc.info("[WEBRTC] captureDevices count=\(cams.count)")
-        guard let camera = Self.pickCaptureDevice(preferring: .front) else {
-            // Aucune caméra : simulator iOS (device list vide) OU Mac sans caméra.
-            // Renvoyer l'erreur typée fait remonter l'échec proprement au lieu de
-            // laisser RTCCameraVideoCapturer throw une NSException plus tard.
-            Logger.webrtc.error("[WEBRTC] no capture device available — throwing noCameraAvailable")
-            throw WebRTCError.noCameraAvailable
-        }
-        // Sur Mac la caméra rapporte `.unspecified` ; ne pas présumer "front".
-        usingFrontCamera = camera.position == .front
-
-        Logger.webrtc.info("[WEBRTC] selectFormat begin")
-        let selectedFormat = selectFormat(for: camera)
-        guard let format = selectedFormat else {
-            Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
-            throw WebRTCError.noCameraFormatAvailable
-        }
-
-        let fps = targetFrameRate(for: format)
         let generation = sessionGeneration
-        Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
-        try await capturer.startCapture(with: camera, format: format, fps: fps)
-        if generation != sessionGeneration {
+        let camera: AVCaptureDevice
+        let format: AVCaptureDevice.Format
+        let fps: Int
+        do {
+            guard let pickedCamera = Self.pickCaptureDevice(preferring: .front) else {
+                // Aucune caméra : simulator iOS (device list vide) OU Mac sans caméra.
+                // Renvoyer l'erreur typée fait remonter l'échec proprement au lieu de
+                // laisser RTCCameraVideoCapturer throw une NSException plus tard.
+                Logger.webrtc.error("[WEBRTC] no capture device available — throwing noCameraAvailable")
+                throw WebRTCError.noCameraAvailable
+            }
+            camera = pickedCamera
+            // Sur Mac la caméra rapporte `.unspecified` ; ne pas présumer "front".
+            usingFrontCamera = camera.position == .front
+
+            Logger.webrtc.info("[WEBRTC] selectFormat begin")
+            guard let selectedFormat = selectFormat(for: camera) else {
+                Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
+                throw WebRTCError.noCameraFormatAvailable
+            }
+            format = selectedFormat
+
+            fps = targetFrameRate(for: format)
+            // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
+            // warm-up caméra doit être vue. Après les gardes device/format, pour ne
+            // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
+            // sans caméra : `pickCaptureDevice` throw plus haut).
+            observeCaptureInterruptions(of: capturer.captureSession)
+            Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
+            try await capturer.startCapture(with: camera, format: format, fps: fps)
+        } catch {
+            // Revert to a clean "no video" state on ANY failure past this point
+            // (no camera device / no usable format / `startCapture` itself
+            // failing on real hardware — camera busy, single-camera device,
+            // AVCaptureSession config error). Without this, `hasLocalVideoTrack`
+            // (keyed off `localVideoTrack_?.isEnabled`, see its doc-comment)
+            // kept reporting true to every caller — toggleVideo's catch blocks,
+            // unhold video recovery, CallView's self-preview gate — even though
+            // this capturer never captured a single frame: a UI/capture desync
+            // that never self-corrected for the rest of the call.
+            // `await MainActor.run`: `startCapture`'s throw can resume on an
+            // arbitrary executor (mirrors the isStale check below), so this
+            // must not mutate `videoCapturer`/`localVideoTrack_` off MainActor.
+            // Identity-guarded like that same check: a concurrent disconnect()
+            // or a new call's setup may already have replaced these properties.
+            await MainActor.run {
+                if videoCapturer === capturer {
+                    localVideoTrack_ = nil
+                    videoCapturer = nil
+                    videoFilterDelegate = nil
+                }
+            }
+            throw error
+        }
+        // See `sessionGeneration` doc: this check-and-clear must be serialized
+        // against disconnect() on MainActor, not run on whatever thread the
+        // capture-session completion resumed us on.
+        let isStale = await MainActor.run { () -> Bool in
+            guard generation != sessionGeneration else { return false }
             // L'appel s'est terminé (ou un nouvel appel a été configuré)
-            // pendant le warm-up : on éteint la caméra via la référence
-            // LOCALE et on ne nil-e les propriétés que si elles pointent
-            // encore notre capturer — un nouvel appel a pu poser les siennes.
-            Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
-            await capturer.stopCapture()
+            // pendant le warm-up : on ne nil-e les propriétés que si elles
+            // pointent encore notre capturer — un nouvel appel a pu poser les siennes.
             if videoCapturer === capturer {
                 localVideoTrack_ = nil
                 videoCapturer = nil
                 videoFilterDelegate = nil
             }
+            return true
+        }
+        if isStale {
+            // On éteint la caméra via la référence LOCALE (déjà détachée des
+            // propriétés partagées ci-dessus si elle leur appartenait encore).
+            Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
+            await capturer.stopCapture()
             throw CancellationError()
         }
         // applyVideoEncoding() is deferred — it runs once the video track is
@@ -865,7 +914,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // suspended inside startCapture/stopCapture it finishes atomically —
         // the new task then runs after and leaves the camera in the correct state.
         toggleVideoTask?.cancel()
-        toggleVideoTask = Task { [weak self] in
+        // @MainActor on the Task literal: this function is a synchronous, non-isolated
+        // entry point (P2PWebRTCClient is not @MainActor), so a bare `Task { }` here
+        // would run on the cooperative pool, not necessarily on the same queue as
+        // disconnect()'s synchronous videoCapturer/sessionGeneration mutations. Pinning
+        // the task to MainActor keeps it serialized with every other mutation site.
+        toggleVideoTask = Task { @MainActor [weak self] in
             guard let self, !Task.isCancelled else { return }
             if enabled {
                 await self.restartCapturerIfStopped()
@@ -875,9 +929,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    /// Whether a local camera track currently exists (drives the UI's
-    /// self-preview / camera-toggle affordance).
-    var hasLocalVideoTrack: Bool { localVideoTrack_ != nil }
+    /// Whether local video is currently being sent (drives the UI's
+    /// self-preview / camera-toggle affordance, `effectiveSwapStreams`, and
+    /// the bitrate/quality policy's `isSendingVideo` gate). Deliberately keyed
+    /// off `isEnabled`, NOT `localVideoTrack_ != nil` — `disableLocalVideo()`
+    /// keeps the track object alive (just disabled + capture stopped) so a
+    /// later `enableLocalVideo()` can cheaply resume the SAME track instead of
+    /// rebuilding the capturer. A raw nil-check would therefore stay `true`
+    /// through every survival-triggered downgrade, silently breaking the
+    /// `localVideoSuspendedTile` fallback and `effectiveSwapStreams` in
+    /// CallView.swift for the rest of the call.
+    var hasLocalVideoTrack: Bool { localVideoTrack_?.isEnabled == true }
 
     /// Mid-call audio→video upgrade (FaceTime-style asymmetric — we control our
     /// own outbound video only). Lazily builds the camera track, attaches it to
@@ -958,7 +1020,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
-            if generation != sessionGeneration {
+            let isStale = await MainActor.run { generation != sessionGeneration }
+            if isStale {
                 Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
                 await capturer.stopCapture()
                 return
@@ -996,8 +1059,23 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
-        try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        if generation != sessionGeneration {
+        do {
+            try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        } catch {
+            // Mirror the two guard-throws above: a failed startCapture must not leave
+            // usingFrontCamera claiming the switch succeeded. restartCapturerIfStopped()
+            // reads this flag to decide which physical camera to resume — a stale value
+            // here would target the camera that just failed to start (capturer is now
+            // stopped, capturing nothing) instead of the one the user was actually seeing
+            // before this attempt. CallManager already reverts its own optimistic
+            // isUsingFrontCamera mirroring flag on this same failure (see
+            // CallManagerSwitchCameraFailureCorrectionSourceTests) — this keeps the
+            // internal capture-restart target in sync with that correction.
+            usingFrontCamera.toggle()
+            throw error
+        }
+        let isStale = await MainActor.run { generation != sessionGeneration }
+        if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
             await capturer.stopCapture()
             return
@@ -1051,7 +1129,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        if generation != sessionGeneration {
+        let isStale = await MainActor.run { generation != sessionGeneration }
+        if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")
             await capturer.stopCapture()
             return
@@ -1072,7 +1151,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 let numericKeys = [
                     "currentRoundTripTime", "availableOutgoingBitrate",
                     "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived"
+                    "packetsSent", "bytesSent", "bytesReceived", "jitter"
                 ]
                 var parsed: [CallStats.RawEntry] = []
                 parsed.reserveCapacity(report.statistics.count)
@@ -1105,6 +1184,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - DataChannel
 
     func createDataChannel(label: String) -> Bool {
+        // Idempotent : les re-négociations (ICE restart, escalade vidéo)
+        // repassent par createOffer — ne jamais empiler un second channel
+        // sur la même peer connection.
+        if transcriptionDataChannel != nil { return true }
         guard let pc = peerConnection else { return false }
         let config = RTCDataChannelConfiguration()
         config.isOrdered = true
@@ -1137,7 +1220,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     private func startDataChannelPing() {
         stopDataChannelPing()
-        dataChannelPingTask = Task { [weak self] in
+        // @MainActor: keeps every transcriptionDataChannel read/send serialized with
+        // disconnect()'s synchronous teardown of the same property (see toggleVideo).
+        dataChannelPingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds))
                 guard !Task.isCancelled, let self else { break }
@@ -1151,22 +1236,63 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         dataChannelPingTask = nil
     }
 
-    // MARK: - Audio Effects
+    // MARK: - Interruption de capture (C3)
 
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {
-        try _audioEffectsService.setEffect(effect)
-        Logger.webrtc.info("Audio effect set: \(effect?.effectType.rawValue ?? "none")")
+    /// Republie les interruptions de la session de capture de CET appel vers le
+    /// delegate, sous forme d'un booléen typé.
+    ///
+    /// Aucune lecture d'`AVCaptureSession.InterruptionReason` : une session
+    /// interrompue ne délivre plus de frames, quelle qu'en soit la raison, et le
+    /// booléen reste donc juste. C'est aussi ce qui met le code à l'abri de la
+    /// croissance de l'énumération (iOS 26 y ajoute
+    /// `.sensitiveContentMitigationActivated`) — il n'y a pas de `switch` à
+    /// tenir à jour, donc pas de `default` à oublier.
+    ///
+    /// La session ne sert QU'À la vidéo ici : WebRTC gère l'audio par
+    /// `RTCAudioSession`, séparément.
+    private func observeCaptureInterruptions(of session: AVCaptureSession) {
+        stopObservingCaptureInterruptions()
+        let center = NotificationCenter.default
+        captureInterruptionObservers = [
+            center.addObserver(
+                forName: AVCaptureSession.wasInterruptedNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] _ in
+                // `Task { @MainActor }` : le bloc d'observation est `@Sendable`,
+                // or `delegate` est un existentiel non-Sendable. On le lit donc
+                // DANS le domaine MainActor plutôt que de le faire traverser —
+                // même idiome que le reste du fichier.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    Logger.webrtc.info("[WEBRTC] capture session interrupted — peer will be notified")
+                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: true)
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureSession.interruptionEndedNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    Logger.webrtc.info("[WEBRTC] capture session interruption ended")
+                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: false)
+                }
+            }
+        ]
     }
 
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {
-        try _audioEffectsService.updateParams(config)
+    private func stopObservingCaptureInterruptions() {
+        let center = NotificationCenter.default
+        captureInterruptionObservers.forEach(center.removeObserver)
+        captureInterruptionObservers = []
     }
 
     // MARK: - Disconnect
 
     func disconnect() {
         sessionGeneration += 1
-        _audioEffectsService.reset()
         toggleVideoTask?.cancel()
         toggleVideoTask = nil
         stopDataChannelPing()
@@ -1194,8 +1320,35 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
+        stopObservingCaptureInterruptions()
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
+    }
+
+    func disconnectAfterFlushingPendingSend() {
+        guard let channel = transcriptionDataChannel, channel.bufferedAmount > 0 else {
+            disconnect()
+            return
+        }
+        // Captured before the wait: `configure()` and `disconnect()` both bump
+        // `sessionGeneration`, so if a fresh call reuses this same client
+        // instance while we're waiting, the mismatch below stops this stale
+        // flush from tearing down the NEW call's peer connection.
+        let generation = sessionGeneration
+        let pollInterval = Duration.milliseconds(QualityThresholds.dataChannelFlushPollIntervalMilliseconds)
+        let deadline = ContinuousClock.now + .milliseconds(QualityThresholds.dataChannelFlushTimeoutMilliseconds)
+        // @MainActor: this task's own disconnect() call at the end must never race a
+        // fresh configure()/disconnect() pair from a rapid redial, both of which mutate
+        // sessionGeneration/peerConnection synchronously on MainActor.
+        Task { @MainActor [weak self] in
+            while ContinuousClock.now < deadline {
+                guard let self, self.sessionGeneration == generation else { return }
+                guard (self.transcriptionDataChannel?.bufferedAmount ?? 0) > 0 else { break }
+                try? await Task.sleep(for: pollInterval)
+            }
+            guard let self, self.sessionGeneration == generation else { return }
+            self.disconnect()
+        }
     }
 
     deinit {
@@ -1365,7 +1518,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
 
-        for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {
+        // Snapshot m-line indices before mutating `lines`, then insert from the
+        // last section backward — inserting at index i shifts every subsequent
+        // line by +1, which would desync a forward-walking loop's remaining
+        // (stale) indices once more than one m-section exists (e.g. audio+video).
+        // Walking in reverse means every remaining index still points at its
+        // original line, since only later positions have shifted.
+        let mLineIndices = lines.indices.filter { lines[$0].hasPrefix("m=audio ") || lines[$0].hasPrefix("m=video ") }
+        for i in mLineIndices.reversed() {
             var insertIdx = i + 1
             while insertIdx < lines.count && !lines[insertIdx].hasPrefix("m=") {
                 if lines[insertIdx].hasPrefix("a=extmap:") {
@@ -1448,7 +1608,7 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
     // `!==` guard makes a second delivery of the same track a no-op.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
         Logger.webrtc.info("[WEBRTC] didStartReceivingOn mediaType=\(transceiver.mediaType.rawValue)")
-        deliverRemoteTrack(transceiver.receiver.track)
+        deliverRemoteTrack(transceiver.receiver.track, from: peerConnection)
     }
 
     // P0-2 (FIX 2026-06-06) — onTrack under Unified-Plan. Fires on
@@ -1460,22 +1620,31 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
     // is a Plan-B legacy callback that libwebrtc may not emit under Unified-Plan.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
         Logger.webrtc.info("[WEBRTC] didAddReceiver kind=\(rtpReceiver.track?.kind ?? "nil", privacy: .public)")
-        deliverRemoteTrack(rtpReceiver.track)
+        deliverRemoteTrack(rtpReceiver.track, from: peerConnection)
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        deliverRemoteTrack(stream.videoTracks.first)
-        deliverRemoteTrack(stream.audioTracks.first)
+        deliverRemoteTrack(stream.videoTracks.first, from: peerConnection)
+        deliverRemoteTrack(stream.audioTracks.first, from: peerConnection)
     }
 
     /// Routes a freshly-received remote track to the delegate exactly once. Both
     /// `didStartReceivingOn` (unified-plan, primary) and `didAdd stream:` (legacy
     /// fallback) can fire for the same track — the `!==` guard prevents attaching
     /// the same track to the renderer twice.
-    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?) {
+    ///
+    /// `disconnect()` calls `peerConnection?.close()` then nils the property —
+    /// `.close()` synchronously queues these WebRTC-thread callbacks, which land
+    /// on the main queue AFTER `disconnect()` has already returned. If a new call
+    /// reuses this client (redial, or a fast VoIP-push-driven incoming call) and
+    /// calls `configure()` before the stale block runs, it would otherwise deliver
+    /// call A's track into call B's state. Comparing against the originating
+    /// `RTCPeerConnection` instance (captured at the delegate call site, not the
+    /// `self.peerConnection` snapshotted here) makes every stale callback a no-op.
+    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?, from peerConnection: RTCPeerConnection) {
         guard let track else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             if let videoTrack = track as? RTCVideoTrack {
                 guard self.remoteVideoTrack_ !== videoTrack else { return }
                 self.remoteVideoTrack_ = videoTrack
@@ -1518,8 +1687,11 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         @unknown default: .new
         }
         Logger.webrtc.info("peerConnectionState (authority): \(state.rawValue, privacy: .public)")
+        // Identity guard: see `deliverRemoteTrack` — a stale `.closed`/`.failed` from a
+        // just-torn-down connection must not drive the FSM of a call that has already
+        // moved on (e.g. attemptReconnection() firing on a healthy new call).
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             self.delegate?.webRTCClient(self, didChangeConnectionState: state)
         }
     }
@@ -1548,8 +1720,12 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
             return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")
         }()
         Logger.webrtc.info("ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
+        // Identity guard: see `deliverRemoteTrack` — without this, a candidate generated
+        // by a connection that's already being torn down gets tagged with the CURRENT
+        // call's callId/remoteUserId by CallManager and relayed into the new call's
+        // signaling, polluting its negotiation.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             self.delegate?.webRTCClient(self, didGenerateCandidate: iceCandidate)
         }
     }
@@ -1562,8 +1738,11 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         Logger.webrtc.info("Data channel opened: \(dataChannel.label)")
         guard dataChannel.label == "transcription" else { return }
         dataChannel.delegate = self
+        // Identity guard: see `deliverRemoteTrack` — a data channel opened by a torn-down
+        // connection must not overwrite the new call's transcriptionDataChannel.
         DispatchQueue.main.async { [weak self] in
-            self?.transcriptionDataChannel = dataChannel
+            guard let self, self.peerConnection === peerConnection else { return }
+            self.transcriptionDataChannel = dataChannel
         }
     }
 }
@@ -1577,19 +1756,28 @@ extension P2PWebRTCClient: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         let state = dataChannel.readyState
         Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(state.rawValue)")
+        // Identity guard: see `deliverRemoteTrack` — a stale state notification from a
+        // torn-down call's data channel must not start/stop the keep-alive ping owned by
+        // the NEW call's transcriptionDataChannel.
         DispatchQueue.main.async { [weak self] in
+            guard let self, dataChannel === self.transcriptionDataChannel else { return }
             if state == .open {
-                self?.startDataChannelPing()
+                self.startDataChannelPing()
             } else {
-                self?.stopDataChannelPing()
+                self.stopDataChannelPing()
             }
         }
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         let data = buffer.data
+        // Identity guard: see `deliverRemoteTrack` — a stale in-band message (notably
+        // `{"type":"bye"}`, see `DataChannelInbound`) from a torn-down call's data channel
+        // must not be forwarded as if it belonged to the call now in progress: CallManager
+        // reads `currentCallId` (the NEW call's id) without validating the message's origin
+        // channel, so an unguarded stale "bye" would hang up the wrong, active call.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, dataChannel === self.transcriptionDataChannel else { return }
             self.delegate?.webRTCClient(self, didReceiveDataChannelMessage: data)
         }
     }
@@ -1634,11 +1822,9 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func sendDataChannelMessage(_ data: Data) {}
     func sendDTMF(digits: String) {}
     func disconnect() {}
+    func disconnectAfterFlushingPendingSend() {}
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
     var videoFilterPipeline = VideoFilterPipeline()
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }
 
 #endif

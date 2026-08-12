@@ -7,35 +7,40 @@ import PencilKit
 // MARK: - StoryComposerViewModel + Elements
 
 extension StoryComposerViewModel {
-    /// Pure resolver for the composer's source language.
+    /// Langue source par défaut d'un élément de story fraîchement créé (texte,
+    /// média, audio) et de la story elle-même à l'ouverture du composer.
     ///
-    /// Per CLAUDE.md "Prisme Linguistique", the source language assigned to a
-    /// newly authored story element (text, media, audio) MUST come from the
-    /// user's in-app content preferences (`systemLanguage` then
-    /// `regionalLanguage`), NEVER from the device locale or the active
-    /// keyboard. A French speaker typing on an English keyboard still produces
-    /// French content; using `UITextInputMode.primaryLanguage` here would
-    /// mislabel that content as English and poison the translation pipeline.
-    ///
-    /// Resolution order matches `MeeshyUser.preferredContentLanguages` and the
-    /// gateway's `resolveUserLanguage()`:
-    /// 1. `systemLanguage` (primary in-app language)
-    /// 2. `regionalLanguage` (secondary in-app language)
-    /// 3. Hardcoded `"fr"` fallback.
-    nonisolated public static func resolveComposerSourceLanguage(
-        user: MeeshyUser?
-    ) -> String {
-        if let sys = user?.systemLanguage, !sys.isEmpty {
-            return sys
-        }
-        if let reg = user?.regionalLanguage, !reg.isEmpty {
-            return reg
-        }
-        return "fr"
-    }
+    /// Directive produit 2026-07-30 (public cible premier : la France) : le
+    /// composer démarre TOUJOURS en français, à parité avec la barre
+    /// universelle (`DefaultComposerLanguage` côté app). Ni la locale
+    /// appareil, ni le clavier actif (`UITextInputMode` — premier clavier
+    /// ACTIVÉ, pas celui de la frappe), ni la langue de LECTURE
+    /// (`systemLanguage`/`regionalLanguage`, des préférences de CONSOMMATION)
+    /// ne pilotent ce défaut : chacun de ces signaux a déjà mal étiqueté du
+    /// contenu français. La pastille langue de l'éditeur de texte reste le
+    /// choix EXPLICITE de l'auteur (directive 2026-07-25) et prime toujours
+    /// sur ce défaut via `updateElementLanguage`.
+    nonisolated public static var defaultSourceLanguage: String { "fr" }
 
-    var detectedKeyboardLanguage: String {
-        Self.resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
+    /// Réduit un identifiant de clavier à un code de langue exploitable, ou
+    /// `nil` quand ce n'en est pas un.
+    ///
+    /// `UITextInputMode.primaryLanguage` ne renvoie pas QUE des langues : le
+    /// clavier emoji annonce `emoji`, la dictée `dictation`. Les prendre pour
+    /// argent comptant produirait une story dont la langue source est « emoji »
+    /// — intraduisible, et absente du sélecteur de langues.
+    nonisolated static func normalisedWritingLanguage(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // Même réduction que `StoryPrismeMatch.base` côté SDK — ce dernier est
+        // interne à MeeshySDK, donc invisible ici : normalisation officielle,
+        // puis repli qui rabote la région et la casse (`pt-BR` → `pt`).
+        let base = MeeshyUser.normalizeLanguageCode(trimmed)
+            ?? trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" })
+                .first.map { $0.lowercased() } ?? trimmed.lowercased()
+        guard !base.isEmpty, base != "emoji", base != "dictation" else { return nil }
+        return base
     }
 
     var currentEffects: StoryEffects {
@@ -45,6 +50,47 @@ extension StoryComposerViewModel {
             slide.effects = newValue
             currentSlide = slide
         }
+    }
+
+    /// Ratio (largeur / hauteur) du canvas courant, piloté par l'image de fond :
+    /// paysage → 16:9 horizontal, sinon 9:16 vertical par défaut. Lu par le
+    /// cadrage du canvas composer (`StoryComposerView+Canvas`) — réactif car
+    /// `currentEffects` dérive de `slides` (@Published).
+    var currentCanvasRatio: CGFloat {
+        CGFloat(currentEffects.canvasAspect.ratio)
+    }
+
+    /// Vrai si un média d'arrière-plan REMPLIT tout le canvas (aspectFill : mode
+    /// `nil`/auto ou `"fill"`). Faux sans média visuel de fond, ou en mode
+    /// `"fit"` (letterbox) : dans ces cas le fond ne couvre pas le canvas et on
+    /// matérialise ses contours (directive user 2026-07-14).
+    var backgroundFillsCanvas: Bool {
+        Self.backgroundFillsCanvas(for: currentEffects)
+    }
+
+    /// Résolution pure (testable) : un fond visuel remplit le canvas sauf en
+    /// mode `"fit"`. Le double-tap du fond cycle `nil` (auto = aspectFill) →
+    /// `"fit"` (aspectFit) → `"fill"` (aspectFill) — seul `"fit"` laisse des
+    /// bandes vides. Le fit-mode du fond vit sur `backgroundTransform`.
+    static func backgroundFillsCanvas(for effects: StoryEffects) -> Bool {
+        guard effects.resolvedBackgroundMedia != nil else { return false }
+        return effects.backgroundTransform?.videoFitMode != "fit"
+    }
+
+    /// Ratio de canvas à PERSISTER (`nil` = pas de fond, portrait 9:16 par
+    /// défaut) dérivé du fond d'un slide : « l'import du fond impose le cadre
+    /// et forme du Canvas ». Ratio CONTINU du fond (pas de snap binaire
+    /// portrait/landscape, directive user 2026-07-14), clampé à [9/21, 21/9]
+    /// pour éviter un canvas dégénéré sur un fond au ratio extrême (panorama,
+    /// capture ultra-haute).
+    static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
+        guard let bg = effects.resolvedBackgroundMedia else { return nil }
+        return clampedCanvasRatio(bg.aspectRatio)
+    }
+
+    /// Clamp pur, testé indirectement via `canvasAspectRatio(forBackgroundOf:)`.
+    private static func clampedCanvasRatio(_ ratio: Double) -> Double {
+        min(21.0 / 9.0, max(9.0 / 21.0, ratio))
     }
 
     var isContentToolActive: Bool {
@@ -185,7 +231,7 @@ extension StoryComposerViewModel {
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var effects = currentEffects
         var texts = effects.textObjects
@@ -200,8 +246,63 @@ extension StoryComposerViewModel {
         return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
+    /// Pose une pastille de lieu en BAS de slide, centrée (brief T20) — hors
+    /// timeline : elle reste visible tant que la slide l'est. Écrit dans
+    /// `currentEffects`, la seule source de vérité (et la seule unité persistée
+    /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
+    /// deux lieux successifs ne se superposent pas exactement.
     @discardableResult
+    func addLocation(place: SharedPlace) -> StoryLocationObject {
+        let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
+        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset)
+        var effects = currentEffects
+        effects.locationObjects.append(badge)
+        currentEffects = effects
+        selectedElementId = badge.id
+        bringToFront(id: badge.id)
+        return currentEffects.locationObjects.first { $0.id == badge.id } ?? badge
+    }
+
+    func removeLocation(id: String) {
+        var effects = currentEffects
+        effects.locationObjects.removeAll { $0.id == id }
+        currentEffects = effects
+        if selectedElementId == id { selectedElementId = nil }
+    }
+
+    /// C13 — les stickers suivent le modèle moderne : `currentEffects` est la
+    /// SEULE source de vérité (parité addText). L'ancien chemin @State View
+    /// canvas-authored révertait les mutations VM/canvas au sync suivant.
+    /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
+    /// exactement au même point.
+    @discardableResult
+    func addSticker(emoji: String) -> StorySticker {
+        let count = currentEffects.stickerObjects?.count ?? 0
+        let offset = Double(count % 5) * 0.04
+        let sticker = StorySticker(emoji: emoji, x: 0.5 + offset, y: 0.5 + offset)
+        var effects = currentEffects
+        var stickers = effects.stickerObjects ?? []
+        stickers.append(sticker)
+        effects.stickerObjects = stickers
+        currentEffects = effects
+        bringToFront(id: sticker.id)
+        return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
+    @discardableResult
+    /// Point d'entrée protocolaire (`StoryComposerProviding`) : génère un id
+    /// frais et délègue à la variante `id`-explicite.
     func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil) -> StoryMediaObject? {
+        addMediaObject(kind: kind, toSlideId: toSlideId, id: UUID().uuidString)
+    }
+
+    /// Variante avec id explicite. Le composer passe l'`objectId` qui a servi à
+    /// nommer le fichier temp `{objectId}.{ext}` : ainsi `obj.id` == nom-de-fichier
+    /// == `composerKey` dérivé par `StoryBackgroundLayer.configure`. Sans cet
+    /// alignement, le bitmap du fond (stocké sous `obj.id` dans `loadedImages`)
+    /// n'est jamais retrouvé par la clé issue du fichier → fond `.clear` →
+    /// canvas noir (bug user 2026-07-20).
+    func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil, id: String) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
         // Resolve the target slide. If the caller pinned a specific id (e.g., the
         // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
@@ -226,6 +327,7 @@ extension StoryComposerViewModel {
         let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
         let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
         let obj = StoryMediaObject(
+            id: id,
             postMediaId: "",
             kind: kind,
             placement: "media",
@@ -243,7 +345,7 @@ extension StoryComposerViewModel {
             // (user report 2026-05-27).
             isBackground: shouldBeBackground,
             loop: shouldBeBackground,
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
@@ -273,6 +375,13 @@ extension StoryComposerViewModel {
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
         medias[mediaIdx].duration = Double(duration)
+        // Fige la durée NATIVE de l'asset à la première pose (= import). Sert de
+        // borne au rognage (on ne peut pas étendre un clip au-delà du média
+        // source). Les changements de fenêtre ultérieurs (timeline editor) ne
+        // l'écrasent pas.
+        if medias[mediaIdx].intrinsicDuration == nil {
+            medias[mediaIdx].intrinsicDuration = Double(duration)
+        }
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
     }
@@ -317,9 +426,56 @@ extension StoryComposerViewModel {
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
         medias[mediaIdx].aspectRatio = aspectRatio
         effects.mediaObjects = medias
+        // « L'import de l'image de fond impose le cadre et forme du Canvas » : dès
+        // que la forme réelle du fond est connue (mesure asset après import, ou
+        // recadrage), le ratio du canvas suit — paysage → 16:9, sinon 9:16.
+        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
         slides[targetIndex].effects = effects
         // Miroir dans le side-cache si d'autres surfaces le lisent.
         mediaAspectRatios[id] = CGFloat(aspectRatio)
+    }
+
+    /// Insère une piste EMPRUNTÉE à la bibliothèque de sons.
+    ///
+    /// Se distingue d'`addAudioObject` sur deux points, et les deux comptent :
+    /// - `soundId` est renseigné et `postMediaId` reste vide — c'est ce couple
+    ///   qui dit au serveur « enregistre un usage, ne capture rien, ne crédite
+    ///   personne d'autre » ;
+    /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
+    ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
+    @discardableResult
+    func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+        guard canAddMedia else { return nil }
+        let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
+        let obj = StoryAudioPlayerObject(
+            postMediaId: "",
+            placement: "overlay",
+            x: 0.5,
+            y: 0.65,
+            volume: 1.0,
+            waveformSamples: sound.waveform,
+            isBackground: hasExistingBackgroundAudio ? nil : true,
+            duration: sound.durationSeconds.map { Float($0) },
+            sourceLanguage: Self.defaultSourceLanguage,
+            // Le titre de l'auteur, quand il existe, sert de nom de piste dans
+            // la timeline. Sans titre on laisse `nil` : le libellé par défaut se
+            // compose à l'affichage, dans la langue du lecteur.
+            name: sound.hasAuthoredTitle ? sound.title : nil,
+            mediaURL: sound.fileUrl,
+            soundId: sound.id,
+            soundAuthorUsername: sound.uploader?.username
+        )
+        var effects = currentEffects
+        var audios = effects.audioPlayerObjects ?? []
+        audios.append(obj)
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+        selectedElementId = obj.id
+        bringToFront(id: obj.id)
+        if let seconds = sound.durationSeconds {
+            autoExtendDuration(forElementEnd: Float(seconds))
+        }
+        return obj
     }
 
     @discardableResult
@@ -337,7 +493,7 @@ extension StoryComposerViewModel {
             volume: 1.0,
             waveformSamples: [],
             isBackground: hasExistingBackgroundAudio ? nil : true,
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
@@ -363,13 +519,17 @@ extension StoryComposerViewModel {
         effects.mediaObjects?.removeAll { $0.id == id }
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
+        // Retirer l'image de fond rend au canvas sa forme verticale par défaut.
+        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
         currentEffects = effects
         if selectedElementId == id { selectedElementId = nil }
         // Si on supprime le texte en cours d'édition flottante, sortir du mode.
         if textEditingMode.activeTextId == id { textEditingMode = .inactive }
-        loadedImages.removeValue(forKey: id)
-        loadedVideoURLs.removeValue(forKey: id)
-        loadedAudioURLs.removeValue(forKey: id)
+        // C9 Inc.3 — retrait PARESSEUX : l'historique global peut restaurer
+        // cet élément ; ses ressources partent en staging, pas à la poubelle.
+        if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
+        if let url = loadedVideoURLs.removeValue(forKey: id) { retiredVideoURLs[id] = url }
+        if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
         mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }
@@ -466,6 +626,9 @@ extension StoryComposerViewModel {
                 // Matérialise le flag à `false` pour neutraliser la règle legacy.
                 effects.mediaObjects![idx].isBackground = false
             }
+            // Promotion → le canvas épouse la forme du nouveau fond ; rétrogradation
+            // → retour au canvas vertical par défaut (plus aucune image de fond).
+            effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
             return
         }
@@ -499,12 +662,38 @@ extension StoryComposerViewModel {
     }
 
     /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
+    /// Passe par le mémento : glisser le slider à 0 vaut mute un-bouton, et
+    /// l'unmute suivant restaurera le niveau quitté.
     func setAudioVolume(audioId: String, volume: Float) {
         var effects = currentEffects
         guard var audios = effects.audioPlayerObjects,
               let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
-        audios[i].volume = max(0, min(1, volume))
+        audios[i].setVolumePreservingMuteMemento(min(1, volume))
         effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
+    /// Mute un-bouton d'une piste AUDIO (chip canvas, cellule du panneau Son).
+    /// Persisté via `volume` (0 = muet) + mémento de restauration — le reader
+    /// d'un autre utilisateur n'entend donc jamais une piste mutée par l'auteur.
+    func toggleAudioMute(id: String) {
+        var effects = currentEffects
+        guard var audios = effects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == id }) else { return }
+        audios[i].toggleMute()
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
+    /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
+    /// Médias). No-op pour une image — rien à couper.
+    func toggleMediaMute(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let i = medias.firstIndex(where: { $0.id == id }),
+              medias[i].kind == .video else { return }
+        medias[i].toggleMute()
+        effects.mediaObjects = medias
         currentEffects = effects
     }
 

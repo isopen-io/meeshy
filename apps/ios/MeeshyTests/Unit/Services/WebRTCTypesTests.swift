@@ -22,6 +22,27 @@ final class QualityThresholdsHeartbeatTests: XCTestCase {
     }
 }
 
+// MARK: - Pending Answer Action Safety Net vs SDP Offer Timeout Ordering
+
+/// Regression guard: the CXAnswerCallAction safety net (`holdPendingAnswerAction`
+/// in CallManager) MUST fire strictly AFTER `sdpOfferTimeoutSeconds`. If it fired
+/// first, CallKit would be told the call "connected" (starting the Recents
+/// elapsed timer) only for the SDP-offer timeout to fail the call moments
+/// later — Recents would show a call that lasted the gap between the two
+/// timeouts but never actually connected.
+@MainActor
+final class QualityThresholdsPendingAnswerActionSafetyNetTests: XCTestCase {
+
+    func test_pendingAnswerActionSafetyNetSeconds_isStrictlyGreaterThanSdpOfferTimeout() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pendingAnswerActionSafetyNetSeconds,
+            QualityThresholds.sdpOfferTimeoutSeconds,
+            "the safety net must never force-fulfill the answer action before the SDP-offer " +
+            "timeout has a chance to fail the call — otherwise CallKit shows a phantom 'connected' call"
+        )
+    }
+}
+
 // MARK: - Audio Bitrate Tier Constants
 
 /// `adjustBitrate` in WebRTCService drives Opus audio bitrate through three tiers:
@@ -93,14 +114,19 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
                           "highJitterThresholdMs must be < excellentRTT to catch jitter-induced degradation on otherwise-healthy paths")
     }
 
-    func test_videoFairRTT_is200ms() {
-        XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
-                       "RTT boundary between good and fair video tiers (200 ms)")
+    func test_videoFairRTT_is300ms() {
+        XCTAssertEqual(QualityThresholds.videoFairRTT, 300.0, accuracy: 0.001,
+                       "RTT boundary between good and fair video tiers — 300 ms tolerates a 4G/international baseline without flagging the indicator 'fair'")
     }
 
-    func test_videoPoorRTT_is300ms() {
-        XCTAssertEqual(QualityThresholds.videoPoorRTT, 300.0, accuracy: 0.001,
-                       "RTT boundary between fair and poor video tiers (300 ms)")
+    func test_videoPoorRTT_is500ms() {
+        XCTAssertEqual(QualityThresholds.videoPoorRTT, 500.0, accuracy: 0.001,
+                       "RTT boundary between fair and poor video tiers — 500 ms (~250 ms one-way) covers an Africa↔Asia backbone hop (155-221 ms) plus a mobile last mile")
+    }
+
+    func test_poorRTT_is800ms() {
+        XCTAssertEqual(QualityThresholds.poorRTT, 800.0, accuracy: 0.001,
+                       "RTT boundary between poor and critical video tiers — 800 ms is the ITU-T G.114 conversational acceptability limit (~400 ms one-way)")
     }
 
     func test_videoFairPacketLoss_is3percent() {
@@ -302,24 +328,41 @@ final class VideoQualityLevelFromRttTests: XCTestCase {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.02), .good)
     }
 
+    func test_good_rttElevatedBaseline_notFair() {
+        // 250 ms RTT (4G / intercontinental baseline) with no loss must stay
+        // 'good', not fall to 'fair' — this is the mislabelled-degraded case the
+        // recalibration fixes (was 'fair' under the 200 ms boundary).
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 250, packetLoss: 0), .good)
+    }
+
     func test_fair_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 250, packetLoss: 0), .fair)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 350, packetLoss: 0), .fair)
     }
 
     func test_fair_lossDominated() {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.04), .fair)
     }
 
+    func test_fair_rttHigh_notPoor() {
+        // 400 ms RTT, no loss: distant but usable → 'fair', not 'poor'.
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 400, packetLoss: 0), .fair)
+    }
+
     func test_poor_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 400, packetLoss: 0), .poor)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 650, packetLoss: 0), .poor)
     }
 
     func test_poor_lossDominated() {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.07), .poor)
     }
 
+    func test_poor_rttVeryHigh_notCritical() {
+        // 600 ms RTT, no loss: bad but not dead → 'poor', not 'critical'.
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0), .poor)
+    }
+
     func test_critical_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0), .critical)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 900, packetLoss: 0), .critical)
     }
 
     func test_critical_lossDominated() {
@@ -331,7 +374,7 @@ final class VideoQualityLevelFromRttTests: XCTestCase {
     }
 
     func test_worstAxisWins_lossGoodButRttCritical() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0.001), .critical)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 900, packetLoss: 0.001), .critical)
     }
 }
 
@@ -594,18 +637,22 @@ final class QualityThresholdsVideoTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000)
     }
 
-    func test_turnDefaultCredentialTTLSeconds_is480() {
-        // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
-        // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.
-        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 480, accuracy: 0.001)
+    func test_turnDefaultCredentialTTLSeconds_matchesGatewayDefault() {
+        // Mirrors TURNCredentialService.credentialTTL's default (86400s / 24h,
+        // services/gateway/src/services/TURNCredentialService.ts) — the gateway raised
+        // it from 600s (CALL-FIX 2026-06-25) after the short value silently killed
+        // TURN-relayed calls once credentials expired mid-call. This client-side
+        // fallback (used only when a signalling path carries no explicit ttl, e.g. a
+        // VoIP push) must not drift back to a value that misrepresents the real TTL.
+        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 86400, accuracy: 0.001)
     }
 
     func test_turnRefreshFires_at80PercentOfDefaultTTL() {
         // scheduleTURNCredentialRefresh applies an 80% factor: refreshDelay = ttl * 0.8.
-        // With the default TTL the refresh should fire at 384 s.
+        // With the default TTL the refresh should fire at 69120 s.
         let refreshAt = QualityThresholds.turnDefaultCredentialTTLSeconds * 0.8
-        XCTAssertEqual(refreshAt, 384.0, accuracy: 0.001,
-                       "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
+        XCTAssertEqual(refreshAt, 69120.0, accuracy: 0.001,
+                       "TURN credential refresh must fire at 80% of the 86400 s default TTL.")
     }
 }
 
@@ -733,9 +780,9 @@ final class QualityThresholdsPiPTests: XCTestCase {
 @MainActor
 final class QualityThresholdsPiPLayoutTests: XCTestCase {
 
-    func test_pipTopClearance_is20() {
-        XCTAssertEqual(QualityThresholds.pipTopClearance, 20,
-                       "Fixed clearance above safe area top — minimize chevron + badge room")
+    func test_pipTopClearance_is60() {
+        XCTAssertEqual(QualityThresholds.pipTopClearance, 60,
+                       "Fixed clearance above safe area top — full chrome row (8 pt top padding + 44 pt chevron/badge + 8 pt breathing room): the duration badge now lives top-trailing, exactly where the PiP rests by default")
     }
 
     func test_pipBottomClearance_is130() {
@@ -1003,6 +1050,30 @@ final class AddTransportCCTests: XCTestCase {
             result.contains("a=extmap:6 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"),
             "When extmapStartId (5) is taken, Transport-CC must be assigned ID 6"
         )
+    }
+
+    func test_addTransportCC_appliesToBothMLines_whenVideoIsTheLastLine() {
+        // Regression for a forward-walking-index bug: a fixed `0..<lines.count`
+        // range computed before any insertion desyncs once the audio insertion
+        // shifts every later line by +1. With no attribute lines trailing the
+        // video m-line (and no terminating \r\n to leave a buffering empty
+        // element), the shifted video m-line index used to fall outside the
+        // original loop bound and never received its own extmap.
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\nm=video 9 UDP/TLS/RTP/SAVPF 96"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        let ccURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+        let lines = result.components(separatedBy: "\r\n")
+
+        guard let audioIdx = lines.firstIndex(where: { $0.hasPrefix("m=audio ") }),
+              let videoIdx = lines.firstIndex(where: { $0.hasPrefix("m=video ") }) else {
+            return XCTFail("expected both m-lines to survive munging")
+        }
+        let audioSection = lines[audioIdx..<videoIdx]
+        let videoSection = lines[videoIdx...]
+        XCTAssertTrue(audioSection.contains(where: { $0.contains(ccURI) }),
+                      "audio m-section must contain its own Transport-CC extmap")
+        XCTAssertTrue(videoSection.contains(where: { $0.contains(ccURI) }),
+                      "video m-section must also contain a Transport-CC extmap, not just audio")
     }
 }
 
@@ -1656,106 +1727,5 @@ final class CallReliabilityPolicyTests: XCTestCase {
             secondsInAttempt: QualityThresholds.reconnectAttemptBudgetSeconds
         )
         XCTAssertEqual(outcome, .retry)
-    }
-}
-
-// MARK: - DataChannelTranscriptionMessage Decodable
-
-// @MainActor required: DataChannelTranscriptionMessage is defined in the app target
-// with SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor, so its Decodable init and all stored
-// property getters are @MainActor-isolated. The test bundle uses nonisolated by default,
-// so this class must explicitly opt into @MainActor to access those members.
-@MainActor
-final class DataChannelTranscriptionMessageTests: XCTestCase {
-
-    func test_decode_fullMessage_succeeds() throws {
-        let json = """
-        {
-            "type": "transcription-segment",
-            "text": "Bonjour le monde",
-            "speakerId": "user_abc",
-            "startTime": 1.23,
-            "isFinal": true,
-            "language": "fr",
-            "translatedText": "Hello world",
-            "translatedLanguage": "en"
-        }
-        """.data(using: .utf8)!
-        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        // Capture @MainActor-isolated properties before XCTAssert autoclosures
-        // (XCTAssert* @autoclosure params are nonisolated — can't access @MainActor members directly).
-        let type = msg.type
-        let text = msg.text
-        let speakerId = msg.speakerId
-        let startTime = msg.startTime
-        let isFinal = msg.isFinal
-        let language = msg.language
-        let translatedText = msg.translatedText
-        let translatedLanguage = msg.translatedLanguage
-        XCTAssertEqual(type, "transcription-segment")
-        XCTAssertEqual(text, "Bonjour le monde")
-        XCTAssertEqual(speakerId, "user_abc")
-        XCTAssertEqual(startTime, 1.23, accuracy: 0.001)
-        XCTAssertTrue(isFinal)
-        XCTAssertEqual(language, "fr")
-        XCTAssertEqual(translatedText, "Hello world")
-        XCTAssertEqual(translatedLanguage, "en")
-    }
-
-    func test_decode_withNilOptionals_succeeds() throws {
-        let json = """
-        {
-            "type": "transcription-segment",
-            "text": "Test",
-            "speakerId": "uid",
-            "startTime": 0.0,
-            "isFinal": false,
-            "language": "en"
-        }
-        """.data(using: .utf8)!
-        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        let translatedText = msg.translatedText
-        let translatedLanguage = msg.translatedLanguage
-        XCTAssertNil(translatedText)
-        XCTAssertNil(translatedLanguage)
-    }
-
-    func test_decode_pingMessage_failsBecauseOfMissingRequiredFields() {
-        // Ping messages sent by startDataChannelPing are {"type":"ping"} — they
-        // deliberately fail to decode as DataChannelTranscriptionMessage. The
-        // receiver uses try? and silently discards non-transcription messages.
-        let json = """
-        {"type":"ping"}
-        """.data(using: .utf8)!
-        // Decode outside autoclosure: @MainActor-isolated decode must not run
-        // inside the nonisolated @autoclosure of XCTAssertNil.
-        let result = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        XCTAssertNil(result,
-                     "Ping messages must not decode as DataChannelTranscriptionMessage — " +
-                     "the receiver correctly ignores them via try?")
-    }
-
-    func test_decode_partialFinalFlag_false() throws {
-        let json = """
-        {"type":"t","text":"hi","speakerId":"s","startTime":0,"isFinal":false,"language":"en"}
-        """.data(using: .utf8)!
-        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        let isFinal = msg.isFinal
-        XCTAssertFalse(isFinal)
-    }
-
-    func test_type_isSendable() {
-        // Compile-time check — DataChannelTranscriptionMessage must be Sendable
-        // since it crosses the WebRTC nonisolated boundary into the @MainActor Task.
-        let _: any Sendable = DataChannelTranscriptionMessage(
-            type: "transcription-segment",
-            text: "x",
-            speakerId: "y",
-            startTime: 0,
-            isFinal: true,
-            language: "fr",
-            translatedText: nil,
-            translatedLanguage: nil
-        )
     }
 }

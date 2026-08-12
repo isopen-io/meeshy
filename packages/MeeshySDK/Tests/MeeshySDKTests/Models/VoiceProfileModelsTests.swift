@@ -137,16 +137,16 @@ final class VoiceProfileModelsTests: XCTestCase {
     }
 
     // MARK: - VoiceConsentStatus
+    // Wire format gateway : le schema de réponse Fastify de
+    // GET/POST /voice-profile/consent ne sérialise que les trois timestamps ;
+    // les booléens (hasConsent, voiceCloningEnabled…) sont dérivés côté SDK.
 
-    func test_voiceConsentStatus_decodesAllFields() throws {
+    func test_voiceConsentStatus_decodesGatewayTimestamps() throws {
         let json = """
         {
-            "hasConsent": true,
-            "consentedAt": "2026-02-28T15:00:00.000Z",
-            "ageVerified": true,
-            "ageVerifiedAt": "2026-02-28T15:00:00.000Z",
-            "voiceCloningEnabled": true,
-            "voiceCloningEnabledAt": "2026-03-01T10:00:00.000Z"
+            "voiceRecordingConsentAt": "2026-02-28T15:00:00.000Z",
+            "voiceCloningEnabledAt": "2026-03-01T10:00:00.000Z",
+            "ageVerificationConsentAt": "2026-02-28T15:00:00.000Z"
         }
         """.data(using: .utf8)!
 
@@ -162,12 +162,9 @@ final class VoiceProfileModelsTests: XCTestCase {
     func test_voiceConsentStatus_decodesWithNullDates() throws {
         let json = """
         {
-            "hasConsent": false,
-            "consentedAt": null,
-            "ageVerified": false,
-            "ageVerifiedAt": null,
-            "voiceCloningEnabled": false,
-            "voiceCloningEnabledAt": null
+            "voiceRecordingConsentAt": null,
+            "voiceCloningEnabledAt": null,
+            "ageVerificationConsentAt": null
         }
         """.data(using: .utf8)!
 
@@ -177,25 +174,42 @@ final class VoiceProfileModelsTests: XCTestCase {
         XCTAssertFalse(status.voiceCloningEnabled)
     }
 
+    // MARK: - VoiceConsentRequest
+
+    func test_voiceConsentRequest_encodesGatewayWireKeys() throws {
+        let request = VoiceConsentRequest(
+            voiceRecordingConsent: true, voiceCloningConsent: true, birthDate: "2000-01-31")
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(json["voiceRecordingConsent"] as? Bool, true)
+        XCTAssertEqual(json["voiceCloningConsent"] as? Bool, true)
+        XCTAssertEqual(json["birthDate"] as? String, "2000-01-31")
+        XCTAssertNil(json["consentGiven"], "legacy key must not leak on the wire")
+    }
+
     // MARK: - VoiceConsentResponse
 
     func test_voiceConsentResponse_decodes() throws {
         let json = """
-        { "success": true, "consentedAt": "2026-04-01T12:00:00.000Z" }
+        {
+            "voiceRecordingConsentAt": "2026-04-01T12:00:00.000Z",
+            "voiceCloningEnabledAt": null,
+            "ageVerificationConsentAt": null
+        }
         """.data(using: .utf8)!
 
         let response = try makeDecoder().decode(VoiceConsentResponse.self, from: json)
-        XCTAssertTrue(response.success)
         XCTAssertNotNil(response.consentedAt)
+        XCTAssertNil(response.voiceCloningEnabledAt)
     }
 
     func test_voiceConsentResponse_decodesWithNullDate() throws {
         let json = """
-        { "success": false, "consentedAt": null }
+        { "voiceRecordingConsentAt": null, "voiceCloningEnabledAt": null, "ageVerificationConsentAt": null }
         """.data(using: .utf8)!
 
         let response = try makeDecoder().decode(VoiceConsentResponse.self, from: json)
-        XCTAssertFalse(response.success)
         XCTAssertNil(response.consentedAt)
     }
 

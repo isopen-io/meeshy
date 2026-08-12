@@ -162,20 +162,30 @@ final class ReaderRendererConsistencyTests: XCTestCase {
         }
     }
 
-    // MARK: 6. Dissolve does not affect opacity in either implementation
+    // MARK: 6. Dissolve — resolver degrades to a crossfade ramp, canonical primitive stays pass-through
 
-    func test_opacity_dissolveTransition_matchesRendererPassThrough() {
+    func test_opacity_dissolveTransition_resolverDegradesToCrossfadeRamp() {
+        // C4 — the LIVE resolver renders dissolve as an equivalent crossfade
+        // opacity ramp (the reader has no per-pixel compositor). The canonical
+        // `clipTransitionOpacity` primitive stays crossfade-only so the MP4
+        // export path (`DissolveVideoCompositor` / CIDissolveTransition) keeps
+        // the real per-pixel dissolve.
         let media = makeMedia(id: "a", start: 0, duration: 5)
-        let trans = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .dissolve, duration: 1.0)
+        let dissolve = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .dissolve, duration: 1.0)
+        let crossfade = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .crossfade, duration: 1.0)
 
         for t in stride(from: 0.0, through: 5.0, by: 0.5) {
             let resolver = ReaderTransitionResolver.opacity(
-                for: media, transitions: [trans], currentTime: Float(t))
-            let renderer = StoryRenderer.clipTransitionOpacity(
-                for: media, transitions: [trans], transitionStart: 4.0, at: t)
-            XCTAssertEqual(Double(resolver), renderer, accuracy: 0.0001,
-                           "Dissolve must be pass-through in both implementations at t=\(t)")
-            XCTAssertEqual(resolver, 1.0, accuracy: 0.0001)
+                for: media, transitions: [dissolve], currentTime: Float(t))
+            let crossfadeEquivalent = canonicalOutgoing(
+                media: media, transition: crossfade, mediaEnd: 5.0, at: t)
+            XCTAssertEqual(Double(resolver), crossfadeEquivalent, accuracy: 0.0001,
+                           "Live dissolve must ramp exactly like a crossfade at t=\(t)")
+
+            let primitive = StoryRenderer.clipTransitionOpacity(
+                for: media, transitions: [dissolve], transitionStart: 4.0, at: t)
+            XCTAssertEqual(primitive, 1.0, accuracy: 0.0001,
+                           "The canonical primitive must stay crossfade-only at t=\(t)")
         }
     }
 }

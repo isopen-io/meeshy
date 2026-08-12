@@ -13,6 +13,10 @@ struct SettingsView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
+    /// Choix explicite de langue d'interface — `nil` = suit la langue
+    /// principale du compte. Lu une fois au montage depuis `UILanguageOverride`.
+    @State private var interfaceLanguageChoice: String? = UILanguageOverride.explicitChoice
+    @State private var showInterfaceLanguageRestartHint = false
     /// Q6 (P1) — driver d'overlay pendant `await authManager.logout()`.
     /// L'alert iOS native ne permet pas un spinner inline sur son bouton,
     /// donc on affiche un overlay sobre tant que la quiesce-then-purge
@@ -54,6 +58,19 @@ struct SettingsView: View {
         .sheet(isPresented: $showStats) { UserStatsView() }
         .sheet(isPresented: $showAffiliate) { AffiliateView() }
         .sheet(isPresented: $showDataExport) { DataExportView() }
+        // iOS ne relit `AppleLanguages` qu'au démarrage : l'écran courant reste
+        // dans l'ancienne langue, et le taire ferait passer un réglage qui
+        // marche pour un réglage mort — c'est précisément le reproche qui avait
+        // fait retirer ce contrôle.
+        .alert(String(localized: "settings.interface_language.restart.title",
+                      defaultValue: "Langue enregistrée", bundle: .main),
+               isPresented: $showInterfaceLanguageRestartHint) {
+            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { }
+        } message: {
+            Text(String(localized: "settings.interface_language.restart.message",
+                        defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
+                        bundle: .main))
+        }
         .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
             Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive) {
@@ -79,7 +96,7 @@ struct SettingsView: View {
             if isLoggingOut {
                 ZStack {
                     Color.black.opacity(0.45).ignoresSafeArea()
-                    VStack(spacing: 14) {
+                    VStack(spacing: MeeshySpacing.md + 2) {
                         ProgressView()
                             .progressViewStyle(.circular)
                             .controlSize(.large)
@@ -176,7 +193,7 @@ struct SettingsView: View {
             HapticFeedback.light()
             router.push(.profile)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.md + 2) {
                 MeeshyAvatar(
                     name: authManager.currentUser?.displayName ?? "?",
                     context: .conversationList,
@@ -184,7 +201,7 @@ struct SettingsView: View {
                     presenceState: .online
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                     Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", bundle: .main))
                         .font(MeeshyFont.relative(17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
@@ -195,7 +212,7 @@ struct SettingsView: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
@@ -215,7 +232,7 @@ struct SettingsView: View {
                 showPrivacySettings = true
             } label: {
                 settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -228,7 +245,7 @@ struct SettingsView: View {
                 showSecurity = true
             } label: {
                 settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -241,7 +258,7 @@ struct SettingsView: View {
                 showBlockedUsers = true
             } label: {
                 settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -254,7 +271,7 @@ struct SettingsView: View {
                 showDeleteAccount = true
             } label: {
                 settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.6))
                 }
@@ -269,7 +286,7 @@ struct SettingsView: View {
     private var appearanceSection: some View {
         settingsSection(title: String(localized: "settings.section.appearance", bundle: .main), icon: "paintbrush.fill", color: MeeshyColors.warningHex) {
             settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", bundle: .main), color: theme.preference.tintColor) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(ThemePreference.allCases, id: \.self) { pref in
                         Button {
                             HapticFeedback.light()
@@ -279,44 +296,118 @@ struct SettingsView: View {
                             }
                             syncThemeToPrefs(pref)
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: pref.icon)
                                     .font(MeeshyFont.relative(14))
-                                Text(pref.label)
+                                Text(themeLabel(for: pref))
                                     .font(MeeshyFont.relative(9, weight: .medium))
+                                    // Un seul segment = une seule ligne, à sa
+                                    // largeur idéale : sans `fixedSize`, le
+                                    // HStack compressait d'abord ces libellés
+                                    // (« Au… », « So… ») alors que la place ne
+                                    // manquait pas — le Spacer de la row doit
+                                    // céder avant le texte.
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.sm + 2)
+                            .padding(.vertical, MeeshySpacing.xs + 2)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
-                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(pref.label)")
+                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
                         .accessibilityValue(theme.preference == pref ? String(localized: "common.selected", bundle: .main) : "")
                         .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
                 }
             }
+            // Le picker avait été retiré le 2026-07-20 : il écrivait
+            // `application.interfaceLanguage`, que personne ne relisait. Il
+            // revient branché sur `UILanguageOverride`, qui applique
+            // réellement la langue au lancement depuis le 2026-07-25 — c'était
+            // le fil manquant, pas le contrôle qui était en trop.
+            interfaceLanguageRow
+        }
+    }
 
-            settingsRow(icon: "globe", title: String(localized: "settings.interface_language", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                Picker("", selection: Binding(
-                    get: { prefs.application.interfaceLanguage },
-                    set: { val in prefs.updateApplication { $0.interfaceLanguage = val } }
-                )) {
-                    ForEach(LanguageData.interfaceLanguages, id: \.code) { lang in
-                        HStack {
-                            Text(lang.flag)
-                            Text(lang.nativeName)
-                        }
-                        .tag(lang.code)
+    /// Libellés localisés des segments de thème — `ThemePreference.label`
+    /// (SDK) renvoie du français en dur, qui fuyait tel quel dans les six
+    /// autres langues de l'interface.
+    private func themeLabel(for pref: ThemePreference) -> String {
+        switch pref {
+        case .system:
+            return String(localized: "settings.theme.auto", defaultValue: "Auto", bundle: .main)
+        case .light:
+            return String(localized: "settings.theme.light", defaultValue: "Clair", bundle: .main)
+        case .dark:
+            return String(localized: "settings.theme.dark", defaultValue: "Sombre", bundle: .main)
+        }
+    }
+
+    /// Langue de l'interface — choix propre à l'affichage, sans effet sur les
+    /// langues de traduction du profil. « Automatique » suit la langue
+    /// principale du compte, ce que faisait l'app jusqu'ici.
+    private var interfaceLanguageRow: some View {
+        settingsRow(icon: "globe",
+                    title: String(localized: "settings.interface_language",
+                                  defaultValue: "Langue de l'interface", bundle: .main),
+                    color: MeeshyColors.indigo600Hex) {
+            Menu {
+                Button {
+                    selectInterfaceLanguage(nil)
+                } label: {
+                    Label(automaticLanguageLabel,
+                          systemImage: interfaceLanguageChoice == nil ? "checkmark" : "")
+                }
+                ForEach(UILanguageOverride.selectableCodes, id: \.self) { code in
+                    Button {
+                        selectInterfaceLanguage(code)
+                    } label: {
+                        Label(Self.interfaceLanguageLabel(code),
+                              systemImage: interfaceLanguageChoice == code ? "checkmark" : "")
                     }
                 }
-                .pickerStyle(.menu)
-                .tint(MeeshyColors.indigo400)
+            } label: {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Text(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
+                         ?? automaticLanguageLabel)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel(String(localized: "settings.interface_language",
+                                       defaultValue: "Langue de l'interface", bundle: .main))
+            .accessibilityValue(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
+                                ?? automaticLanguageLabel)
         }
+    }
+
+    private var automaticLanguageLabel: String {
+        String(localized: "settings.interface_language.automatic",
+               defaultValue: "Automatique", bundle: .main)
+    }
+
+    /// Nom de la langue DANS cette langue — un utilisateur qui cherche l'arabe
+    /// reconnaît « العربية », pas « Arabe ».
+    private static func interfaceLanguageLabel(_ code: String) -> String {
+        let locale = Locale(identifier: code)
+        return locale.localizedString(forIdentifier: code)?.capitalized ?? code
+    }
+
+    /// Enregistre le choix et prévient : `AppleLanguages` n'est relu qu'au
+    /// démarrage, donc l'écran courant reste dans l'ancienne langue.
+    private func selectInterfaceLanguage(_ code: String?) {
+        HapticFeedback.light()
+        UILanguageOverride.explicitChoice = code
+        UILanguageOverride.applyIfNeeded()
+        interfaceLanguageChoice = code
+        showInterfaceLanguageRestartHint = true
     }
 
     // MARK: - Notifications Section
@@ -361,7 +452,7 @@ struct SettingsView: View {
                 showNotificationSettings = true
             } label: {
                 settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -380,7 +471,7 @@ struct SettingsView: View {
                 showDataStorage = true
             } label: {
                 settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -393,7 +484,7 @@ struct SettingsView: View {
                 showMediaDownload = true
             } label: {
                 settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -406,7 +497,7 @@ struct SettingsView: View {
                 showDataExport = true
             } label: {
                 settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -425,7 +516,7 @@ struct SettingsView: View {
                 showVoiceProfileManage = true
             } label: {
                 settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -438,7 +529,7 @@ struct SettingsView: View {
                 showVoiceProfileWizard = true
             } label: {
                 settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -485,7 +576,7 @@ struct SettingsView: View {
                 router.push(.starredMessages)
             } label: {
                 settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -495,10 +586,23 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
+                router.push(.bookmarks)
+            } label: {
+                settingsRow(icon: "bookmark.fill", title: String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main), color: MeeshyColors.indigo400Hex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.bookmarks.hint", defaultValue: "Voir les posts et les réels que vous avez enregistrés", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
                 showStats = true
             } label: {
                 settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -511,7 +615,7 @@ struct SettingsView: View {
                 showAffiliate = true
             } label: {
                 settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -530,7 +634,7 @@ struct SettingsView: View {
                 showSupport = true
             } label: {
                 settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -549,7 +653,7 @@ struct SettingsView: View {
                 showAbout = true
             } label: {
                 settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -562,7 +666,7 @@ struct SettingsView: View {
                 showTerms = true
             } label: {
                 settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -575,7 +679,7 @@ struct SettingsView: View {
                 showPrivacyPolicy = true
             } label: {
                 settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -588,7 +692,7 @@ struct SettingsView: View {
                 showLicenses = true
             } label: {
                 settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -707,8 +811,8 @@ struct SettingsView: View {
 
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
     }

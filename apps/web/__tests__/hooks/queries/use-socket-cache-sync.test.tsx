@@ -29,9 +29,12 @@ let messageDeletedCallback: ((messageId: string) => void) | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
-let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) | null = null;
-let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) | null = null;
-let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationJoinedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) | null = null;
+let conversationLeftCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => void) | null = null;
+let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => void) | null = null;
+let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
@@ -41,6 +44,7 @@ let conversationJoinErrorCallback: ((data: { conversationId: string; reason: str
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
 let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string }) => void) | null = null;
 let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
+let preferencesUpdatedCallback: ((data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -85,9 +89,22 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onAudioTranslation: jest.fn(() => jest.fn()),
     onAttachmentStatusUpdated: jest.fn(() => jest.fn()),
     onParticipantRoleUpdated: jest.fn(() => jest.fn()),
-    onPreferencesUpdated: jest.fn(() => jest.fn()),
-    onConversationJoined: jest.fn(() => jest.fn()),
-    onConversationLeft: jest.fn(() => jest.fn()),
+    onPreferencesUpdated: (callback: (data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) => {
+      preferencesUpdatedCallback = callback;
+      return jest.fn();
+    },
+    onConversationJoined: (callback: (data: { conversationId: string; userId: string }) => void) => {
+      conversationJoinedCallback = callback;
+      return jest.fn();
+    },
+    onConversationParticipantJoined: (callback: (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) => {
+      conversationParticipantJoinedCallback = callback;
+      return jest.fn();
+    },
+    onConversationLeft: (callback: (data: { conversationId: string; userId: string }) => void) => {
+      conversationLeftCallback = callback;
+      return jest.fn();
+    },
     onConversationNew: jest.fn(() => jest.fn()),
     onConversationDeleted: (callback: (data: { userId: string; conversationId: string }) => void) => {
       conversationDeletedCallback = callback;
@@ -160,8 +177,6 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     },
     conversations: {
       all: ['conversations'],
-      lists: () => ['conversations', 'list'],
-      list: (filters?: Record<string, unknown>) => ['conversations', 'list', filters],
       infinite: () => ['conversations', 'infinite'],
       details: () => ['conversations', 'detail'],
       detail: (id: string) => ['conversations', 'detail', id],
@@ -172,7 +187,14 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     },
     preferences: {
       all: ['user-preferences'],
+      category: (category: string) => ['user-preferences', category],
       categories: () => ['user-preferences', 'categories'],
+    },
+    communities: {
+      preferences: {
+        detail: (communityId: string) => ['communities', 'preferences', communityId],
+        list: () => ['communities', 'preferences', 'list'],
+      },
     },
     users: {
       all: ['users'],
@@ -291,6 +313,7 @@ describe('useSocketCacheSync', () => {
     messagePinnedCallback = null;
     messageUnpinnedCallback = null;
     userUpdatedCallback = null;
+    preferencesUpdatedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -356,22 +379,94 @@ describe('useSocketCacheSync', () => {
       expect(cachedData.pages[0].messages).toHaveLength(3);
     });
 
-    it('should add new message to simple list cache', () => {
+    // A `message:new` that lands while the conversation's message list has no
+    // cache entry yet (initial fetch in flight, or conversation never opened in
+    // this session) used to be dropped on the floor: `setQueryData` bails out on
+    // `!old`, and the socket layer had already marked the id as "seen" for 5
+    // minutes, so no re-delivery ever repaired the gap. Combined with
+    // `staleTime: Infinity`, the message stayed invisible across reloads.
+    // Invalidating the key makes the in-flight (or next) fetch re-read from the
+    // server, which is the only source that can close the gap.
+    it('invalidates the messages query when no cache entry exists yet', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
 
-      queryClient.setQueryData(['messages', 'list', 'conv-1'], mockMessages);
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
 
-      renderHook(() => useSocketCacheSync(), { wrapper });
-
-      const newMessage = createMockMessage('msg-new', 'New message');
       act(() => {
-        newMessageCallback?.(newMessage);
+        newMessageCallback?.(createMockMessage('msg-missed', 'Arrived during initial fetch'));
       });
 
-      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1']) as Message[];
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-1', 'infinite'],
+      });
+    });
 
-      expect(cachedData[0].id).toBe('msg-new');
-      expect(cachedData).toHaveLength(3);
+    it('does not invalidate the messages query when the message was written to cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'New message'));
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-1', 'infinite'],
+      });
+    });
+
+    // The home page opens the global conversation by its slug
+    // (`conversationId="meeshy"`), so its cache entry is keyed by the slug while
+    // the socket payload carries the resolved ObjectId. Writing only to the
+    // ObjectId key left that screen frozen until a reload.
+    it('writes into a cache entry keyed by the conversation slug', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'meeshy', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'Realtime into slug cache'));
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'meeshy', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages[0].id).toBe('msg-new');
+      expect(cached.pages[0].messages).toHaveLength(3);
+    });
+
+    it('leaves other conversations’ caches untouched', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const otherMessage = { ...mockMessages[0], id: 'other-1', conversationId: 'conv-2' } as Message;
+      queryClient.setQueryData(['messages', 'list', 'conv-2', 'infinite'], {
+        pages: [{ messages: [otherMessage], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'For conv-1 only'));
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-2', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages.map((m) => m.id)).toEqual(['other-1']);
     });
 
     it('should not add duplicate message', () => {
@@ -449,7 +544,10 @@ describe('useSocketCacheSync', () => {
     it('should update conversation with latest message', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['conversations', 'list', undefined], [mockConversation]);
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
 
       renderHook(() => useSocketCacheSync(), { wrapper });
 
@@ -458,9 +556,59 @@ describe('useSocketCacheSync', () => {
         newMessageCallback?.(newMessage);
       });
 
-      const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      const conversations = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
 
       expect(conversations[0].lastMessage?.id).toBe('msg-new');
+    });
+  });
+
+  describe('List view — conversationId: null, enabled: true', () => {
+    it('still updates the conversation list cache (lastMessage + reorder) on message:new', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const otherConversation = { ...mockConversation, id: 'conv-2', title: 'Other' } as Conversation;
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [otherConversation, mockConversation], pagination: { total: 2, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      const newMessage = createMockMessage('msg-new', 'From the list view', 'conv-1');
+      act(() => {
+        newMessageCallback?.(newMessage);
+      });
+
+      const infiniteCache = queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      };
+      const orderedIds = infiniteCache.pages.flatMap((p) => p.conversations.map((c) => c.id));
+      expect(orderedIds[0]).toBe('conv-1');
+      expect(infiniteCache.pages[0].conversations[0].lastMessage?.id).toBe('msg-new');
+    });
+
+    it('still writes into an existing messages cache entry on message:new', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      const newMessage = createMockMessage('msg-new', 'While browsing the list', 'conv-1');
+      act(() => {
+        newMessageCallback?.(newMessage);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cachedData.pages[0].messages[0].id).toBe('msg-new');
+      expect(cachedData.pages[0].messages).toHaveLength(3);
     });
   });
 
@@ -487,6 +635,26 @@ describe('useSocketCacheSync', () => {
       const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
       expect(updatedMessage?.content).toBe('Edited content');
       expect(updatedMessage?.isEdited).toBe(true);
+    });
+
+    it('updates a cache entry keyed by the conversation slug', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'meeshy', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      act(() => {
+        messageEditedCallback?.({ ...mockMessages[0], content: 'Edited from socket' } as Message);
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'meeshy', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages[0].content).toBe('Edited from socket');
     });
 
     it('should ignore a stale out-of-order edit older than the currently cached edit', () => {
@@ -743,11 +911,167 @@ describe('useSocketCacheSync', () => {
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       const conv = cached.pages[0].conversations[0];
-      expect((conv as any).lastMessageAt).toBe(newTime);
+      // `Conversation.lastMessageAt` is a `Date` — that is what the REST
+      // transformer puts in this cache. The socket payload's ISO string is
+      // materialised so a single conversation never carries both shapes.
+      expect(conv.lastMessageAt).toEqual(new Date(newTime));
+    });
+
+    it('keeps the cached date when the event carries an unparseable one', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationUpdatedCallback?.({
+          conversationId: 'conv-1',
+          updatedBy: { id: 'user-1' },
+          updatedAt: 'not-a-date',
+          lastMessageAt: 'not-a-date',
+        });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations[0].lastMessageAt).toEqual(mockConversation.lastMessageAt);
+    });
+  });
+
+  describe('Conversation Participant Joined Handler', () => {
+    // L'effectif que porte l'événement est ABSOLU : il se POSE. C'est ce qui le
+    // sépare d'un delta — il RATTRAPE une dérive au lieu de la continuer. Cache
+    // à 4, serveur à 9 : un incrément rendrait 5 et garderait l'écart à jamais
+    // (`staleTime: Infinity` ne relit rien de lui-même).
+    it('pose l\'effectif du serveur plutôt que d\'incrémenter le cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString(), memberCount: 9 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(9);
+    });
+
+    it('increments memberCount when a member is actually added', () => {
+      // Le pendant montant de `participant-left`. Sans lui, l'effectif ne
+      // connaissait que des soustractions et dérivait vers le bas — et
+      // `staleTime: Infinity` ne le relit jamais de lui-même.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(5);
+    });
+
+    it('laisse conversation:joined SANS effet sur l\'effectif', () => {
+      // `conversation:joined` porte aussi l'ack self-only du socket qui REJOINT
+      // LA ROOM — à chaque ouverture de fil, avec le même payload. Incrémenter
+      // dessus gonflait la ligne de liste d'une unité par ouverture,
+      // indéfiniment : trois ouvertures suffisaient à afficher un groupe de 4
+      // comme un groupe de 7.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(4);
+    });
+
+    it('laisse conversation:left SANS effet sur l\'effectif', () => {
+      // Le pendant exact : `conversation:left` n'est émis que par
+      // `socket.emit` après `socket.leave(room)` — la FERMETURE d'un fil.
+      // Décrémenter dessus retirait un membre à chaque fermeture. Les deux
+      // erreurs se compensaient en partie, jamais exactement : une reconnexion
+      // rejoint sans `leave`, et la soustraction était bornée à 0 quand
+      // l'addition ne l'était pas.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+        conversationLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(4);
+    });
+
+    it('invalide tout de même la liste des participants sur conversation:joined', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationJoinedCallback?.({ conversationId: 'conv-1', userId: 'current-user' });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
+      );
     });
   });
 
   describe('Conversation Participant Left Handler', () => {
+    // Symétrique du témoin d'adhésion : le compte absolu rattrape vers le BAS
+    // aussi. Cache à 5, serveur à 2 — un décrément rendrait 4.
+    it('pose l\'effectif du serveur plutôt que de décrémenter le cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 5 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString(), memberCount: 2 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
+    });
+
     it('decrements memberCount when a participant leaves', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
@@ -801,6 +1125,29 @@ describe('useSocketCacheSync', () => {
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
     });
 
+    it('leaves memberCount alone when the banned person had already left', () => {
+      // Bannir un ancien membre reste possible — c'est ce qui l'empêche de
+      // revenir par un lien de partage — mais ce bannissement-là ne retire
+      // aucune appartenance. Décrémenter quand même fait dériver le compteur
+      // vers le bas, et la dérive persiste : `staleTime: Infinity` ne relit
+      // jamais de lui-même.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString(), membershipEnded: false });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
     it('invalidates participants query on participant-banned', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
       const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
@@ -831,6 +1178,49 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
       );
+    });
+
+    it('leaves memberCount alone when the unban restored nothing', () => {
+      // Lever le bannissement de quelqu'un qui était parti de lui-même le rend
+      // libre de revenir ; ça ne le fait pas rentrer. Incrémenter ici
+      // afficherait un membre de plus que la conversation n'en a.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', membershipRestored: false });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
+    it('restores memberCount when a participant is unbanned', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      // A ban decrements the cached count; the unban is its exact inverse. Left
+      // un-incremented, every ban/unban round-trip drifts the displayed member
+      // count one lower than reality until an unrelated full refetch.
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString() });
+        conversationParticipantUnbannedCallback?.({ conversationId: 'conv-1', userId: 'user-2' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
     });
   });
 
@@ -866,6 +1256,41 @@ describe('useSocketCacheSync', () => {
       });
 
       expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeUndefined();
+    });
+  });
+
+  describe('Preferences Updated Handler — community scope (F71)', () => {
+    it('invalidates the community preferences detail and list queries', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        preferencesUpdatedCallback?.({ communityId: 'community-1', reset: false, preferences: {} });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['communities', 'preferences', 'community-1'] })
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['communities', 'preferences', 'list'] })
+      );
+    });
+
+    it('does not touch community queries for the category-scoped variant', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        preferencesUpdatedCallback?.({ category: 'notifications' } as any);
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: expect.arrayContaining(['communities']) })
+      );
     });
   });
 
@@ -1022,6 +1447,37 @@ describe('useSocketCacheSync', () => {
       expect(cached.pages[0].messages).toHaveLength(1);
     });
 
+    it('invalidates the messages query when no cache entry exists yet', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link', createdAt: new Date().toISOString() } });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] });
+    });
+
+    it('does not invalidate when the message did land in a cache entry', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com', createdAt: new Date().toISOString() } });
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] });
+    });
+
     it('ignores link messages without a conversationId', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
@@ -1127,10 +1583,18 @@ describe('useSocketCacheSync', () => {
     it('removes the rejected conversation from the conversations list cache', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['conversations', 'list', undefined], [
-        { ...mockConversation, id: 'conv-1' },
-        { ...mockConversation, id: 'conv-2' },
-      ] as Conversation[]);
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [
+              { ...mockConversation, id: 'conv-1' },
+              { ...mockConversation, id: 'conv-2' },
+            ] as Conversation[],
+            pagination: { total: 2, offset: 0, limit: 20, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
 
       renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
 
@@ -1138,7 +1602,9 @@ describe('useSocketCacheSync', () => {
         conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'banned', message: 'You are banned' });
       });
 
-      const convs = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      const convs = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
       expect(convs.map((c) => c.id)).not.toContain('conv-1');
       expect(convs.map((c) => c.id)).toContain('conv-2');
     });

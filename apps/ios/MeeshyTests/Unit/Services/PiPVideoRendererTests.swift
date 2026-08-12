@@ -169,6 +169,25 @@ final class PiPVideoRendererTests: XCTestCase {
         )
     }
 
+    // MARK: - Detach flush ordering (no cross-thread race on the display layer)
+
+    func test_flushOnQueue_existsAndUsesQueueSync() {
+        XCTAssertTrue(
+            Self.source.contains("func flushOnQueue()"),
+            "PiPVideoRenderer must expose flushOnQueue() so callers on another thread " +
+            "(PiPCallController.detachRenderer, on MainActor) can flush the display layer " +
+            "without racing an in-flight consume() call on the renderer's own queue"
+        )
+        guard let range = Self.source.range(of: "func flushOnQueue()") else { return }
+        let bodyFragment = String(Self.source[range.lowerBound...].prefix(200))
+        XCTAssertTrue(
+            bodyFragment.contains("queue.sync"),
+            "flushOnQueue must use queue.sync (not queue.async) — the caller needs the flush to have " +
+            "actually completed before it returns, so a fast re-attach creating a new renderer/queue " +
+            "on the same persistent surface can't race a still-pending async flush from the old one"
+        )
+    }
+
     // MARK: - Rotation callback
 
     func test_rotation_debounced() {

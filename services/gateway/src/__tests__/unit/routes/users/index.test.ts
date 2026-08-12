@@ -69,6 +69,12 @@ const mockPresenceFns = {
 
 jest.mock('../../../../routes/users/presence', () => mockPresenceFns);
 
+const mockContactsMatchFns = {
+  matchContacts: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/contacts-match', () => mockContactsMatchFns);
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { userRoutes } from '../../../../routes/users/index';
@@ -122,5 +128,8 @@ describe('userRoutes — registers all route handler groups', () => {
 
     // Presence routes
     expect(mockPresenceFns.getUsersPresence).toHaveBeenCalledWith(mockFastify);
+
+    // Contacts matching route
+    expect(mockContactsMatchFns.matchContacts).toHaveBeenCalledWith(mockFastify);
   });
 });

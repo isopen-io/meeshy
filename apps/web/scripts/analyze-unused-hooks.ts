@@ -38,7 +38,6 @@ const FRONTEND_DIR = process.cwd();
 const hookFiles = [
   'compatibility-hooks.ts',
   'use-advanced-message-loader.ts',
-  'use-anonymous-messages.ts',
   'use-auth-guard.ts',
   'use-auth.ts',
   'use-conversation-messages.ts',

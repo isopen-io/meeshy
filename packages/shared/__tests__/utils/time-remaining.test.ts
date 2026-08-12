@@ -18,6 +18,12 @@ describe('formatTimeRemaining', () => {
     expect(formatTimeRemaining(NOW + 59 * MIN, NOW)).toBe('59m');
   });
 
+  it('rounds a positive sub-minute remainder up to 1m (never 0m)', () => {
+    expect(formatTimeRemaining(NOW + 1, NOW)).toBe('1m');
+    expect(formatTimeRemaining(NOW + 30_000, NOW)).toBe('1m');
+    expect(formatTimeRemaining(NOW + MIN - 1, NOW)).toBe('1m');
+  });
+
   it('formats an hour-or-more remainder with a leftover as XhYm', () => {
     expect(formatTimeRemaining(NOW + 90 * MIN, NOW)).toBe('1h30m');
     expect(formatTimeRemaining(NOW + 23 * HOUR + 59 * MIN, NOW)).toBe('23h59m');

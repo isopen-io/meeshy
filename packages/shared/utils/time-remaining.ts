@@ -13,6 +13,11 @@
  * Retourne `null` quand la cible est déjà atteinte (`diff <= 0`) — l'appelant décide alors du rendu
  * (rien, ou un libellé « Expiré »). Sinon : `< 1 h` → `Xm` ; `>= 1 h` avec reste → `XhYm` ;
  * `>= 1 h` sans reste → `Xh`.
+ *
+ * Un reste strictement positif mais sous la minute (`0 < diff < 60 s`) est arrondi à `1m` — jamais
+ * `0m` : `null` (déjà "Expiré") est la seule sémantique du zéro. Une story dans sa dernière minute
+ * (état atteint par CHAQUE story avant expiration) affichait sinon un « 0m » trompeur au lieu de la
+ * plus petite unité restante.
  */
 export function formatTimeRemaining(targetMs: number, nowMs: number): string | null {
   const diffMs = targetMs - nowMs;
@@ -22,5 +27,5 @@ export function formatTimeRemaining(targetMs: number, nowMs: number): string | n
   const hours = Math.floor(minutes / 60);
 
   if (hours >= 1) return `${hours}h${minutes % 60 > 0 ? `${minutes % 60}m` : ''}`;
-  return `${minutes}m`;
+  return `${Math.max(1, minutes)}m`;
 }

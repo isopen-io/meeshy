@@ -1,5 +1,6 @@
 package me.meeshy.ui.component
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiCategory
 import me.meeshy.ui.R
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -62,29 +68,62 @@ fun EmojiQuickStrip(
     accentColor: Color = MeeshyPalette.Indigo500,
     ownReactions: Set<String> = emptySet(),
     onExpand: (() -> Unit)? = null,
+    highlightedIndex: Int? = null,
+    onTileBounds: ((Int, Rect) -> Unit)? = null,
 ) {
+    // Scrub mode (bounds requested): keep the pill as a BACKGROUND shape only,
+    // without clipping — a hovered tile scaled ×1.35 must overflow the pill.
+    // Non-scrub callers (chat) keep the original clipped pill.
+    val scrubMode = onTileBounds != null
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .let { base ->
+                if (scrubMode) {
+                    base.background(
+                        MeeshyTheme.tokens.backgroundSecondary,
+                        RoundedCornerShape(MeeshyRadius.pill),
+                    )
+                } else {
+                    base
+                        .clip(RoundedCornerShape(MeeshyRadius.pill))
+                        .background(MeeshyTheme.tokens.backgroundSecondary)
+                }
+            }
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        emojis.forEach { emoji ->
+        emojis.forEachIndexed { index, emoji ->
             EmojiTile(
                 emoji = emoji,
                 isMine = emoji in ownReactions,
+                isHighlighted = highlightedIndex == index,
                 accentColor = accentColor,
                 onClick = { onReact(emoji) },
+                onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
             )
         }
         if (onExpand != null) {
             val expandLabel = stringResource(R.string.emoji_picker_expand)
+            val plusIndex = emojis.size
+            val plusScale by animateFloatAsState(
+                targetValue = if (highlightedIndex == plusIndex) 1.35f else 1f,
+                animationSpec = MeeshyMotion.bouncySpring(),
+                label = "emojiPlusScale",
+            )
             Box(
                 modifier = Modifier
                     .size(36.dp)
+                    .let { base ->
+                        val report = onTileBounds
+                        if (report != null) {
+                            base.onGloballyPositioned { report(plusIndex, it.boundsInRoot()) }
+                        } else {
+                            base
+                        }
+                    }
+                    .graphicsLayer { scaleX = plusScale; scaleY = plusScale }
                     .clip(CircleShape)
                     .background(MeeshyTheme.tokens.backgroundTertiary)
                     .clickable(onClick = onExpand)
@@ -106,13 +145,24 @@ fun EmojiQuickStrip(
 private fun EmojiTile(
     emoji: String,
     isMine: Boolean,
+    isHighlighted: Boolean,
     accentColor: Color,
     onClick: () -> Unit,
+    onBounds: ((Rect) -> Unit)?,
 ) {
     val reactLabel = stringResource(R.string.emoji_react_with, emoji)
+    val scale by animateFloatAsState(
+        targetValue = if (isHighlighted) 1.35f else 1f,
+        animationSpec = MeeshyMotion.bouncySpring(),
+        label = "emojiTileScale",
+    )
     Box(
         modifier = Modifier
             .size(36.dp)
+            .let { base ->
+                if (onBounds != null) base.onGloballyPositioned { onBounds(it.boundsInRoot()) } else base
+            }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .background(if (isMine) accentColor.copy(alpha = 0.22f) else Color.Transparent)
             .let { base ->

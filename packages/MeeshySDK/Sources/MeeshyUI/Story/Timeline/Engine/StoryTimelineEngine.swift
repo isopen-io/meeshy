@@ -30,6 +30,8 @@ public final class StoryTimelineEngine {
     public var onTimeUpdate: ((Float) -> Void)?
     public var onPlaybackEnd: (() -> Void)?
     public var onElementBecameActive: ((String) -> Void)?
+    /// Dernier clip signalé — sert à n'émettre que les CHANGEMENTS.
+    private var lastActiveClipId: String?
     public var onError: ((Error) -> Void)?
 
     public var currentProjectSnapshot: TimelineProject? { currentProject }
@@ -47,6 +49,21 @@ public final class StoryTimelineEngine {
     // nonisolated(unsafe): read in deinit (off main thread safe — only written
     // from shutdown() which is @MainActor, deinit is the sole reader off-actor).
     private nonisolated(unsafe) var didShutdown: Bool = false
+
+    // MARK: Internal drive clock (D0.1)
+    //
+    // Une slide SANS vidéo foreground (fond vidéo + textes/stickers — le cas
+    // le plus courant) produit une AVMutableComposition VIDE : l'AVPlayer ne
+    // progresse jamais et le transport est mort. Quand la composition n'a
+    // aucune piste, la lecture est pilotée par ce timer main-thread qui
+    // avance `currentTime` jusqu'à `slideDuration` (l'AudioMixer, moteur
+    // séparé, joue en parallèle pour les slides audio-only).
+    private var driveTimer: Timer?
+    private var driveLastTimestamp: CFTimeInterval = 0
+
+    private var usesInternalClock: Bool {
+        composition?.tracks.isEmpty ?? true
+    }
 
     public init(audioMixer: AudioMixerProviding? = nil) {
         self.audioMixer = audioMixer ?? AudioMixer()
@@ -156,8 +173,15 @@ public final class StoryTimelineEngine {
             self.playerItem = item
             self.player = player
 
-            attachTimeObserver()
-            attachEndObserver()
+            // Composition vide (aucune vidéo foreground) → l'horloge interne
+            // pilote le temps. Les observers AVPlayer ne doivent alors PAS
+            // être attachés : sur un item vide, l'observer périodique peut
+            // tirer un kCMTimeZero après un seek et écraser le currentTime
+            // que l'horloge interne vient de poser (flake reproduit en CI).
+            if !composition.tracks.isEmpty {
+                attachTimeObserver()
+                attachEndObserver()
+            }
 
             do {
                 try audioMixer.configure(audios: project.audioPlayerObjects, urls: mediaURLs)
@@ -220,7 +244,15 @@ public final class StoryTimelineEngine {
 
     public func play() {
         guard player != nil, let project = currentProject else { return }
-        player?.play()
+        if usesInternalClock {
+            // Fin de slide déjà atteinte → replay depuis 0 (parité avec le
+            // comportement AVPlayer où play() après end rejoue le dernier frame
+            // sans repartir ; ici le transport interne repart proprement).
+            if currentTime >= project.slideDuration { currentTime = 0 }
+            startDriveClock()
+        } else {
+            player?.play()
+        }
         do {
             try audioMixer.play()
         } catch {
@@ -238,10 +270,63 @@ public final class StoryTimelineEngine {
     }
 
     public func pause() {
+        stopDriveClock()
         player?.pause()
         audioMixer.pause()
         isPlaying = false
         NotificationCenter.default.post(name: .timelineDidStopPlaying, object: self)
+    }
+
+    private func startDriveClock() {
+        stopDriveClock()
+        driveLastTimestamp = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.driveClockTick() }
+        }
+        // .common : le timer continue de tirer pendant les gestes de scroll
+        // de la sheet timeline (le mode default gèle pendant le tracking).
+        RunLoop.main.add(timer, forMode: .common)
+        driveTimer = timer
+    }
+
+    private func stopDriveClock() {
+        driveTimer?.invalidate()
+        driveTimer = nil
+    }
+
+    /// Point de sortie UNIQUE de l'horloge : les trois sources de temps
+    /// (horloge interne, seek, observateur AVPlayer) passent ici.
+    ///
+    /// `onElementBecameActive` n'était émis de NULLE PART — `TimelineViewModel`
+    /// s'y abonnait pour faire suivre l'inspecteur au clip franchi, et
+    /// n'entendait jamais rien. Le signal part d'ici, et UNIQUEMENT sur
+    /// changement : le republier à chaque frame réécrirait la sélection 60
+    /// fois par seconde et empêcherait l'utilisateur d'en choisir une autre
+    /// pendant la lecture.
+    private func publishTime(_ seconds: Float) {
+        onTimeUpdate?(seconds)
+        guard let project = currentProject else { return }
+        let active = ActiveClipResolver.activeClipId(at: seconds, in: project)
+        guard active != lastActiveClipId else { return }
+        lastActiveClipId = active
+        if let active { onElementBecameActive?(active) }
+    }
+
+    private func driveClockTick() {
+        guard let project = currentProject else { stopDriveClock(); return }
+        let now = CACurrentMediaTime()
+        let dt = Float(now - driveLastTimestamp)
+        driveLastTimestamp = now
+        let next = min(project.slideDuration, currentTime + max(0, dt))
+        currentTime = next
+        publishTime(next)
+        if next >= project.slideDuration {
+            stopDriveClock()
+            audioMixer.pause()
+            isPlaying = false
+            NotificationCenter.default.post(name: .timelineDidStopPlaying, object: self)
+            onPlaybackEnd?()
+        }
     }
 
     public func toggle() {
@@ -263,13 +348,13 @@ public final class StoryTimelineEngine {
             guard let project = currentProject else { return }
             let clamped = max(0, min(project.slideDuration, time))
             currentTime = clamped
-            if let player {
+            if let player, !usesInternalClock {
                 let cmtime = CMTime(seconds: Double(clamped), preferredTimescale: 600)
                 let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.05, preferredTimescale: 600)
                 player.seek(to: cmtime, toleranceBefore: tolerance, toleranceAfter: tolerance)
             }
             audioMixer.seek(to: clamped)
-            onTimeUpdate?(clamped)
+            publishTime(clamped)
         }
     }
 
@@ -302,7 +387,7 @@ public final class StoryTimelineEngine {
             let seconds = Float(CMTimeGetSeconds(cmtime))
             MainActor.assumeIsolated {
                 self.currentTime = seconds
-                self.onTimeUpdate?(seconds)
+                self.publishTime(seconds)
             }
         }
     }
@@ -323,6 +408,7 @@ public final class StoryTimelineEngine {
     }
 
     private func tearDown() {
+        stopDriveClock()
         if let token = timeObserver {
             player?.removeTimeObserver(token)
             timeObserver = nil

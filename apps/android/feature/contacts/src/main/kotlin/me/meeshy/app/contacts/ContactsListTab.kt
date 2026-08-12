@@ -30,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,13 +38,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactFilter
+import me.meeshy.sdk.model.friend.ContactFilterCounts
+import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
-
-/** Success-green presence dot (semantic colour, kept static per the design system). */
-private val OnlineIndicator = Color(0xFF34D399)
+import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The Contacts (all-friends) tab — the online-first friend list with a filter
@@ -69,20 +69,24 @@ fun ContactsListTab(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
-        FilterRow(selected = state.filter, onSelect = viewModel::setFilter)
+        FilterRow(selected = state.filter, counts = state.filterCounts, onSelect = viewModel::setFilter)
 
         when {
             state.showSkeleton -> Centered { CircularProgressIndicator() }
             state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
             state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
             state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
-            else -> FriendList(state.visibleFriends)
+            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor)
         }
     }
 }
 
 @Composable
-private fun FilterRow(selected: ContactFilter, onSelect: (ContactFilter) -> Unit) {
+private fun FilterRow(
+    selected: ContactFilter,
+    counts: ContactFilterCounts,
+    onSelect: (ContactFilter) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -90,27 +94,29 @@ private fun FilterRow(selected: ContactFilter, onSelect: (ContactFilter) -> Unit
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SELECTABLE_FILTERS.forEach { filter ->
+            val label = stringResource(filter.labelRes)
+            val count = counts.forFilter(filter)
             FilterChip(
                 selected = selected == filter,
                 onClick = { onSelect(filter) },
-                label = { Text(stringResource(filter.labelRes)) },
+                label = { Text("$label  $count") },
             )
         }
     }
 }
 
 @Composable
-private fun FriendList(friends: List<FriendRequestUser>) {
+private fun FriendList(friends: List<FriendRequestUser>, moodEmojiFor: (String) -> String?) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        items(friends, key = { it.id }) { friend -> FriendRow(friend) }
+        items(friends, key = { it.id }) { friend -> FriendRow(friend, moodEmoji = moodEmojiFor(friend.id)) }
     }
 }
 
 @Composable
-private fun FriendRow(friend: FriendRequestUser) {
+private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
         modifier = Modifier
@@ -122,6 +128,7 @@ private fun FriendRow(friend: FriendRequestUser) {
             name = name,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(friend.id.ifBlank { name })),
+            moodEmoji = moodEmoji,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -135,15 +142,15 @@ private fun FriendRow(friend: FriendRequestUser) {
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        if (friend.isOnline == true) {
+        meeshyPresenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
             Surface(
-                color = OnlineIndicator,
+                color = dot,
                 shape = CircleShape,
                 modifier = Modifier
                     .size(10.dp)
@@ -160,7 +167,7 @@ private fun ErrorState(onRetry: () -> Unit) {
             Text(
                 text = stringResource(R.string.contacts_list_error),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.contacts_list_retry)) }
@@ -174,7 +181,7 @@ private fun EmptyMessage(message: String) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(32.dp),
         )
     }

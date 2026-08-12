@@ -97,6 +97,12 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
+            // Dépôt (Files / Finder) et collage d'URL `file://` résolus par la
+            // barre : chaque `.file` est DÉJÀ copié dans notre conteneur, cette
+            // surface en devient propriétaire et route vers ses pipelines
+            // existants (déclaré avant `accentColor` → doit apparaître ici pour
+            // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
+            onIngest: { items in handleComposerIngest(items) },
             accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             // Hide file/photo attachments in the notification preview composer
@@ -125,7 +131,8 @@ extension ConversationView {
                 : nil,
             customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
                                         || !composerState.preparingAttachments.isEmpty
-                                        || composerState.isLoadingMedia)
+                                        || composerState.isLoadingMedia
+                                        || composerState.pendingPlace != nil)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
             isEditMode: composerState.editingMessageId != nil,
@@ -148,7 +155,10 @@ extension ConversationView {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
+            // sans lui le bouton d'envoi reste inactif pour un message
+            // « lieu seul », que les gardes acceptent pourtant désormais.
+            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording || composerState.pendingPlace != nil,
             // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
             // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
             // bouton d'envoi serait mort ~22s par message en réseau dégradé
@@ -219,8 +229,8 @@ extension ConversationView {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: accentColor) { place in
+                handleLocationSelection(place)
             }
         }
         .sheet(isPresented: $composerState.showContactPicker) {
@@ -236,6 +246,17 @@ extension ConversationView {
             handlePhotoSelection(items)
         }
         // C. Tap pending image → MeeshyImageEditorView
+        //
+        // Bug fix (2026-07-09): `isPresented` used to be driven solely by
+        // `editingPendingAttachmentId != nil` while the content required a
+        // SEPARATE `pendingThumbnails[id]` lookup to succeed. Whenever that
+        // dictionary lookup missed — a since-removed attachment, a thumbnail
+        // that failed to generate, any race between the tap and the
+        // dictionaries settling — the cover still presented (isPresented was
+        // already true) but its content body evaluated to nothing, which
+        // reads to the user as the composer "crashing" on tap: a full-screen
+        // cover appears with no way to dismiss it from inside. The two must
+        // share one source of truth so the cover can never present empty.
         .fullScreenCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
             set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
@@ -268,6 +289,12 @@ extension ConversationView {
                         }
                     }
                 }
+            } else {
+                // The thumbnail vanished out from under the presentation
+                // (attachment removed mid-race, or generation never
+                // succeeded) — never present a silently-empty cover; give the
+                // user a dismissable state instead.
+                attachmentPreviewUnavailableFallback { scrollState.editingPendingAttachmentId = nil }
             }
         }
         // D. Tap pending video → VideoPreviewView
@@ -487,7 +514,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la reponse", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -737,6 +764,9 @@ extension ConversationView {
                 ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
                 }
+                if let place = composerState.pendingPlace {
+                    pendingPlaceTile(place)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -814,16 +844,7 @@ extension ConversationView {
 
                 // Delete button — top-right corner
                 Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        let id = attachment.id
-                        if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
-                        composerState.pendingAttachments.removeAll { $0.id == id }
-                        if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        composerState.pendingThumbnails.removeValue(forKey: id)
-                    }
+                    removePendingAttachment(attachment)
                 } label: {
                     Image(systemName: "xmark")
                         // Doctrine 82i : glyphe de suppression dans un cadre tap fixe 18×18 → figé.
@@ -846,6 +867,45 @@ extension ConversationView {
                 .lineLimit(1)
                 .frame(width: 60)
         }
+        // Long-press → full-screen quick-look (image enlarged / video playing),
+        // mirroring the recent-media strip's context-menu preview pattern
+        // (RecentMediaStrip.swift). Staged attachments already have their
+        // media locally (pendingMediaFiles), so this needs no PHAsset
+        // resolution — it's a much lighter version of the same idea.
+        .contextMenu {
+            Button(role: .destructive) {
+                removePendingAttachment(attachment)
+            } label: {
+                Label(
+                    String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main),
+                    systemImage: "trash"
+                )
+            }
+        } preview: {
+            if attachment.type == .image || attachment.type == .video {
+                AttachmentQuickLookPreview(
+                    kind: attachment.type == .video ? .video : .image,
+                    fileURL: composerState.pendingMediaFiles[attachment.id],
+                    thumbnail: composerState.pendingThumbnails[attachment.id]
+                )
+            }
+        }
+    }
+
+    /// Removes a staged attachment: drops it from the tray, deletes its temp
+    /// file, and stops playback if it was the currently-playing audio note.
+    /// Shared by the tile's delete button and its long-press menu action.
+    private func removePendingAttachment(_ attachment: MessageAttachment) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            let id = attachment.id
+            if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
+            composerState.pendingAttachments.removeAll { $0.id == id }
+            if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            composerState.pendingThumbnails.removeValue(forKey: id)
+        }
     }
 
     // MARK: - Preparation Cancellation
@@ -861,6 +921,12 @@ extension ConversationView {
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
         case .image:
+            // Guard at the source: only open the editor when a thumbnail
+            // genuinely exists to show. The fullScreenCover below has its own
+            // defense-in-depth fallback for the (rarer) case where the
+            // thumbnail vanishes AFTER presentation starts, but there is no
+            // reason to open the cover at all for an id that has none now.
+            guard composerState.pendingThumbnails[attachment.id] != nil else { return }
             scrollState.editingPendingAttachmentId = attachment.id
         case .video:
             if let url = composerState.pendingMediaFiles[attachment.id] {
@@ -872,6 +938,32 @@ extension ConversationView {
             }
         default:
             break
+        }
+    }
+
+    /// Dismissable full-screen fallback for the (rare) race where a pending
+    /// attachment's thumbnail is gone by the time its editor cover presents —
+    /// see the doc-comment on the "C. Tap pending image" fullScreenCover.
+    private func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "photo.badge.exclamationmark")
+                    .font(.system(size: 40))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(String(localized: "conversation.view.composer.attachmentUnavailable",
+                            defaultValue: "Pi\u{00E8}ce jointe indisponible", bundle: .main))
+                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .foregroundColor(.white)
+                Button(action: onDismiss) {
+                    Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.white.opacity(0.15)))
+                }
+            }
         }
     }
 
@@ -934,6 +1026,50 @@ extension ConversationView {
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
+        }
+    }
+
+    /// Tuile d'aperçu du lieu en attente d'envoi — même gabarit 56×56 que
+    /// `attachmentPreviewTile`, mais pour un `SharedPlace` : depuis la Task
+    /// 11/12 il ne vit plus dans `pendingAttachments`, donc sans cette tuile
+    /// dédiée le choix d'un lieu ne produirait plus aucun retour visuel dans
+    /// le composer (régression que l'ancien `MessageAttachment.location`
+    /// couvrait par accident).
+    private func pendingPlaceTile(_ place: SharedPlace) -> some View {
+        let label = place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
+        return VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                locationTileFallback()
+
+                Button {
+                    removePendingPlace()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(label)", bundle: .main))
+                .offset(x: 5, y: -5)
+            }
+
+            Text(label)
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    private func removePendingPlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.pendingPlace = nil
         }
     }
 

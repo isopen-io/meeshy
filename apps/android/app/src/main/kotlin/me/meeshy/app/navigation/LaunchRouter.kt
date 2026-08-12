@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation
 
+import me.meeshy.sdk.model.call.WaitingCall
+
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
  * [MainActivity] extracts these from the Android `Intent` extras (thin, untestable
@@ -15,6 +17,8 @@ data class LaunchExtras(
     val conversationId: String? = null,
     val callerName: String? = null,
     val isVideo: Boolean = false,
+    /** Bouton « Répondre » de la notification CallStyle : décrocher directement. */
+    val autoAnswer: Boolean = false,
 )
 
 /**
@@ -40,8 +44,65 @@ object LaunchRouter {
             conversationId = extras.conversationId.orEmpty(),
             callerName = extras.callerName.orEmpty(),
             isVideo = extras.isVideo,
+            autoAnswer = extras.autoAnswer,
         )
         !extras.conversationId.isNullOrBlank() -> Routes.chat(extras.conversationId)
         else -> null
+    }
+
+    /**
+     * Route a **socket-delivered** incoming-call offer — the foreground path, where
+     * the app is open and the realtime socket (not FCM) carries `call:initiated`.
+     * Rings by deep-linking into the incoming-call screen exactly like the push path
+     * ([route]/[CallRoute.incoming]), reusing the same [LaunchExtras] plumbing.
+     *
+     * Gated on **not already being on the call screen**: a second offer arriving
+     * mid-call is the call-waiting scenario, owned by `CallViewModel`'s banner, so
+     * this yields `null` and leaves the active call screen in place. The offer's
+     * [WaitingCall.callId] is always non-blank (the mapper drops idless frames), so
+     * the produced route always adopts the server id — the screen answers rather
+     * than re-initiates.
+     */
+    fun routeIncomingSocketOffer(offer: WaitingCall, currentRoute: String?): String? =
+        if (currentRoute == CallRoute.PATTERN) {
+            null
+        } else {
+            route(
+                LaunchExtras(
+                    callId = offer.callId,
+                    callerName = offer.callerName,
+                    isVideo = offer.isVideo,
+                ),
+            )
+        }
+
+    /** Prefixes de deep link menant a la validation d'un magic link — le lien du
+     *  MAIL (`https://meeshy.me/...`, App Link) et son alias de scheme custom. */
+    private val MAGIC_LINK_PREFIXES = listOf(
+        "meeshy://auth/magic-link",
+        "https://meeshy.me/auth/magic-link",
+    )
+
+    /**
+     * Traduit l'URI d'un intent VIEW en route interne, ou `null` si l'URI ne nous
+     * concerne pas. Seul le magic link passe par ici : les autres deep links
+     * (join, chat, profil) sont matches par les `navDeepLink` du NavHost au
+     * demarrage — le magic link ne peut PAS l'etre, car sa destination doit etre
+     * atteignable HORS authentification et sur un intent chaud (`onNewIntent`).
+     *
+     * Le token reste ENCODE tel quel dans la route produite : l'argument de
+     * navigation le decode une seule fois a l'arrivee — le decoder ici le ferait
+     * decoder deux fois et casserait tout token contenant `%` ou `+`.
+     */
+    fun routeForDeepLink(dataUri: String?): String? {
+        if (dataUri == null) return null
+        val prefix = MAGIC_LINK_PREFIXES.firstOrNull { dataUri.startsWith(it) } ?: return null
+        val query = dataUri.removePrefix(prefix).removePrefix("?")
+        val token = query.split('&')
+            .firstOrNull { it.startsWith("token=") }
+            ?.removePrefix("token=")
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return "auth/magic-link?token=$token"
     }
 }

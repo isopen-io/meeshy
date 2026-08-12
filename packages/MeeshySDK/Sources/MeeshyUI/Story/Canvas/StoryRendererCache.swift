@@ -84,6 +84,14 @@ public final class StoryRendererCache: @unchecked Sendable {
         public nonisolated let mediaPostMediaId: String?
         public nonisolated let textContent: String?
         public nonisolated let stickerEmoji: String?
+        /// Empreinte de contenu EXHAUSTIVE (hash de l'encodage JSON complet de
+        /// l'élément), fournie par le caller. `nil` pour le compositor export
+        /// (items figés — la calculer 60×/s serait du gaspillage) ; non-nil
+        /// pour le canvas composer `.edit`, où N'IMPORTE QUEL champ peut muter
+        /// à id constant (fontSize, textColor, backgroundStyle, volume…) — la
+        /// « Limitation by design » documentée plus haut ne s'applique alors
+        /// plus : le cache devient sûr en édition live.
+        public nonisolated let contentHash: Int?
 
         public nonisolated init(id: String,
                                 position: CGPoint,
@@ -94,7 +102,8 @@ public final class StoryRendererCache: @unchecked Sendable {
                                 languages: [String] = [],
                                 mediaPostMediaId: String? = nil,
                                 textContent: String? = nil,
-                                stickerEmoji: String? = nil) {
+                                stickerEmoji: String? = nil,
+                                contentHash: Int? = nil) {
             self.id = id
             self.position = position
             self.scale = scale
@@ -105,6 +114,7 @@ public final class StoryRendererCache: @unchecked Sendable {
             self.mediaPostMediaId = mediaPostMediaId
             self.textContent = textContent
             self.stickerEmoji = stickerEmoji
+            self.contentHash = contentHash
         }
     }
 
@@ -118,6 +128,7 @@ public final class StoryRendererCache: @unchecked Sendable {
     private var lastSlideId: String?
     private var lastLanguages: [String] = []
     private var lastMode: RenderMode?
+    private var lastRenderSize: CGSize?
 
     /// Number of cache hits since the last `invalidate()`. Read by tests to
     /// confirm consecutive frames actually reuse layers.
@@ -142,14 +153,34 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// time. This protects future multilingual export pipelines from serving
     /// a stale wrong-language layer when the coarse-grained scope check
     /// (`invalidateIfNeeded(languages:)`) is not flipped between calls.
+    /// - Parameters:
+    ///   - contentHash: empreinte de contenu exhaustive de l'élément (voir
+    ///     `ItemSignature.contentHash`). Passer une valeur en `.edit` rend le
+    ///     cache sûr face aux mutations à id constant ; laisser `nil` pour
+    ///     l'export (contrat « item figé » historique).
+    ///   - reconfigure: sur MISS avec une layer déjà cachée pour cet id, offre
+    ///     d'abord la layer existante au caller. Retourner une layer = adoption
+    ///     in-place (elle est re-stockée sous la nouvelle signature — chemin
+    ///     continuité vidéo : la `StoryMediaLayer` garde son `AVPlayer` à
+    ///     travers un changement de géométrie). Retourner `nil` = rebâtir via
+    ///     `build`.
     public func layer(for item: any RenderableItem,
                       at time: Double,
                       languages: [String],
+                      contentHash: Int? = nil,
+                      reconfigure: ((any RenderableItem, CALayer) -> CALayer?)? = nil,
                       build: (any RenderableItem) -> CALayer) -> CALayer {
-        let sig = Self.makeSignature(for: item, at: time, languages: languages)
+        let sig = Self.makeSignature(for: item, at: time, languages: languages,
+                                     contentHash: contentHash)
         if let cached = layerCache[item.id], cached.signature == sig {
             cacheHitCount += 1
             return cached.layer
+        }
+        if let cached = layerCache[item.id],
+           let adopted = reconfigure?(item, cached.layer) {
+            layerCache[item.id] = CachedLayer(signature: sig, layer: adopted)
+            cacheMissCount += 1
+            return adopted
         }
         let layer = build(item)
         layerCache[item.id] = CachedLayer(signature: sig, layer: layer)
@@ -189,6 +220,7 @@ public final class StoryRendererCache: @unchecked Sendable {
         lastSlideId = nil
         lastLanguages = []
         lastMode = nil
+        lastRenderSize = nil
         cacheHitCount = 0
         cacheMissCount = 0
     }
@@ -200,19 +232,28 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// This is the single entry point compositors use at the top of each
     /// `startRequest`. For a single export session the context is stable
     /// across all frames, so this is a no-op after the first frame.
+    /// `renderSize` participe au scope quand il est fourni : les layers cachées
+    /// sont projetées en render-space (bounds/position en pixels écran), donc
+    /// un resize du canvas (fond 16:9 imposé, rotation, split view) doit
+    /// flusher — sinon les layers réutilisées gardent la projection de
+    /// l'ancienne taille. `nil` (défaut) = non scopé, contrat historique du
+    /// compositor export dont la taille est fixe pour la session.
     @discardableResult
     public func invalidateIfNeeded(slideId: String,
                                    languages: [String],
-                                   mode: RenderMode) -> Bool {
+                                   mode: RenderMode,
+                                   renderSize: CGSize? = nil) -> Bool {
         if lastSlideId == slideId
             && lastLanguages == languages
-            && lastMode == mode {
+            && lastMode == mode
+            && (renderSize == nil || lastRenderSize == renderSize) {
             return false
         }
         invalidate()
         lastSlideId = slideId
         lastLanguages = languages
         lastMode = mode
+        lastRenderSize = renderSize
         return true
     }
 
@@ -235,7 +276,8 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// cache miss instead of returning the previous wrong-language layer.
     static func makeSignature(for item: any RenderableItem,
                               at time: Double,
-                              languages: [String]) -> ItemSignature {
+                              languages: [String],
+                              contentHash: Int? = nil) -> ItemSignature {
         let overrides = StoryRenderer.applyKeyframes(
             keyframes: keyframes(of: item),
             at: time,
@@ -273,7 +315,8 @@ public final class StoryRendererCache: @unchecked Sendable {
             languages: languages,
             mediaPostMediaId: mediaPostMediaId,
             textContent: textContent,
-            stickerEmoji: stickerEmoji
+            stickerEmoji: stickerEmoji,
+            contentHash: contentHash
         )
     }
 
@@ -326,6 +369,7 @@ extension StoryRendererCache.ItemSignature: Hashable {
             && lhs.mediaPostMediaId == rhs.mediaPostMediaId
             && lhs.textContent == rhs.textContent
             && lhs.stickerEmoji == rhs.stickerEmoji
+            && lhs.contentHash == rhs.contentHash
     }
 
     public nonisolated func hash(into hasher: inout Hasher) {
@@ -340,5 +384,6 @@ extension StoryRendererCache.ItemSignature: Hashable {
         hasher.combine(mediaPostMediaId)
         hasher.combine(textContent)
         hasher.combine(stickerEmoji)
+        hasher.combine(contentHash)
     }
 }

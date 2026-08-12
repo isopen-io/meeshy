@@ -103,6 +103,13 @@ extension StoryCanvasUIView {
             pushSlidePlayheadToLayers()
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
+            forEachMediaLayer { $0.startAlignedIfActive() }
+            // Le « GO » de fin de chargement a pu tomber PENDANT la pause : il
+            // reste alors armé plutôt que consommé sous le gel (cf.
+            // `fireContentReadyIfNeeded`). Les lignes ci-dessus VIENNENT de le
+            // rejouer — on le solde donc ici, AVANT `startAudioPlayback` qui le
+            // ré-arme légitimement si le contenu n'est toujours pas prêt.
+            pendingBackgroundActivation = false
             if window != nil, !completionFired {
                 startAudioPlayback()
             }
@@ -134,23 +141,33 @@ extension StoryCanvasUIView {
     /// `rebuildLayers()` (les layers `.edit` sont reconstruits à neuf à chaque
     /// mutation) et au flip du drapeau.
     func applyEditPlayback() {
-        guard mode == .edit, playsVideoInEditMode else { return }
+        // Preview timeline active → l'engine possède audio ET transport ;
+        // les boucles vidéo libres de l'édition reprennent à la sortie.
+        guard mode == .edit, (playsVideoInEditMode || playsAudioInEditMode),
+              !isTimelinePreviewActive else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
-        // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
-        // Idempotent / call-aware via la source unique.
+        // l'audio des vidéos qui bouclent ET des clips audio soit audible même
+        // silent-switch ON. Idempotent / call-aware via la source unique.
         if AVAudioSession.sharedInstance().category != .playback {
             MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
-        // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
-        // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
-        backgroundLayer.isPlaybackActive = true
-        // Foreground : marque chaque layer pour qu'elle (re)joue — y compris
-        // après un swap d'URL async (cache local résolu) — et démarre le
-        // player déjà attaché. Le loop est armé par `attachPlayer` (loop en
-        // `.edit`).
-        forEachMediaLayer { layer in
-            layer.playsInEditMode = true
-            layer.avPlayer?.play()
+        if playsVideoInEditMode {
+            // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
+            // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
+            backgroundLayer.isPlaybackActive = true
+            // Foreground : marque chaque layer pour qu'elle (re)joue — y compris
+            // après un swap d'URL async (cache local résolu) — et démarre le
+            // player déjà attaché. Le loop est armé par `attachPlayer` (loop en
+            // `.edit`).
+            forEachMediaLayer { layer in
+                layer.playsInEditMode = true
+                layer.avPlayer?.play()
+            }
+        }
+        if playsAudioInEditMode {
+            // Clips audio / voix : configure + joue le mixer (gate revision →
+            // no-op si le contenu audio n'a pas changé depuis le dernier pass).
+            reconfigureAudioForPlayback()
         }
     }
 
@@ -182,7 +199,13 @@ extension StoryCanvasUIView {
         // ne sont pas prêts (cf. `contentReadyFired`), la vidéo bg attend —
         // le user-spec exige que ni vidéo ni audio bg ne joue tant que la
         // slide n'est pas visuellement complète.
-        if contentReadyFired {
+        // Gate de pause : `startPlayback()` est ré-entré à l'attachement window
+        // et aux transitions de mode, qui peuvent survenir ALORS QUE l'hôte a
+        // gelé la lecture (interstitiel d'identité, overlay commentaires,
+        // appel). Sans ce test, la vidéo de fond et les foreground repartaient
+        // sous le gel — la story s'entendait pendant l'interlude. L'intention
+        // est armée à la place, et soldée par `setStoryPlaybackPaused(false)`.
+        if contentReadyFired, !isPlaybackPaused {
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
         } else {
@@ -212,6 +235,9 @@ extension StoryCanvasUIView {
         // sondage détecte aussi la reprise alors que le playhead est gelé.
         refreshPlaybackHealth(now: link.timestamp)
         advancePlayheadIfActive(by: link.targetTimestamp - link.timestamp)
+        // Le volume suit le playhead : posé APRÈS l'avancée, sinon l'automation
+        // retarderait d'une image sur l'image affichée.
+        applyVolumeAutomation(at: Float(currentTime.seconds))
     }
 
     /// Avance le playhead canvas (`currentTime`) si la lecture est active.
@@ -250,6 +276,13 @@ extension StoryCanvasUIView {
         // `clamped >= effectiveDuration` qui fire `onCompletion`.
         onPlaybackTime?(clamped)
         rebuildLayers()
+        // Closing de slide piloté par le playhead : l'état de sortie est
+        // re-dérivé à chaque tick depuis `clamped` (aucune CAAnimation
+        // autonome), donc pause / stall / seek restent frame-exacts.
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if clamped >= effectiveDuration {
             stopPlayback()
             if !completionFired {
@@ -335,9 +368,47 @@ extension StoryCanvasUIView {
             isPrimaryMediaPending: mediaPending
         )
         isPlaybackStalled = !progressing
+
+        // C-DIR3 — self-heal : un player `.paused` alors que rien ne le pause
+        // (ni user, ni échec) ne se relancera JAMAIS seul — les didSet
+        // `isPlaybackActive` ne rejouent que sur changement de valeur. Vécu
+        // device (iPhone 16 Pro Max) : story figée au boot jusqu'à un
+        // long-press/relâcher manuel. La sonde re-drive le chemin canonique
+        // du resume, avec grâce et budget bornés (règle pure testée).
+        if status == .paused, !isPlaybackPaused, !failed {
+            if playbackPausedProbeSince == nil { playbackPausedProbeSince = now }
+        } else {
+            playbackPausedProbeSince = nil
+        }
+        if StoryPlaybackHealth.shouldKickPlayback(
+            status: status,
+            isUserPaused: isPlaybackPaused,
+            isFailed: failed,
+            pausedSinceSeconds: playbackPausedProbeSince.map { now - $0 } ?? 0,
+            kicksDelivered: playbackSelfHealKicks
+        ) {
+            playbackSelfHealKicks += 1
+            playbackPausedProbeSince = nil
+            kickPlayback()
+        }
+
         guard progressing != lastProgressingEmitted else { return }
         lastProgressingEmitted = progressing
         onPlaybackProgressing?(progressing)
+    }
+
+    /// C-DIR3 — re-drive la lecture par le chemin canonique du resume en
+    /// FORÇANT les didSet (flip false→true) : exactement ce que le cycle
+    /// long-press/relâcher réparait à la main sur device. Loggé pour le
+    /// diagnostic terrain (Console.app, catégorie story-media).
+    func kickPlayback() {
+        storyMediaLog.info("playback self-heal kick #\(self.playbackSelfHealKicks, privacy: .public) — primary player stuck .paused while gates say play")
+        pushSlidePlayheadToLayers()
+        backgroundLayer.isPlaybackActive = false
+        backgroundLayer.isPlaybackActive = true
+        foregroundVideosPlaybackActive = false
+        foregroundVideosPlaybackActive = true
+        forEachMediaLayer { $0.startAlignedIfActive() }
     }
 
     /// Remet l'état de santé à « progressant » au démarrage d'une session de
@@ -347,6 +418,8 @@ extension StoryCanvasUIView {
         isPlaybackStalled = false
         lastProgressingEmitted = true
         playbackStallSince = nil
+        playbackPausedProbeSince = nil
+        playbackSelfHealKicks = 0
     }
 
     /// Test-only seam : drive the health core with an injected `timeControlStatus`
@@ -379,6 +452,10 @@ extension StoryCanvasUIView {
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         onPlaybackTime?(clamped)
         rebuildLayers()
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if !completionFired,
            mode == .play,
            currentTime.seconds >= effectiveDuration {

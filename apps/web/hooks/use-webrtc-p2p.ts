@@ -17,6 +17,8 @@ import type {
   CallSignalEvent,
   WebRTCSignal,
   CALL_ERROR_CODES,
+  CallRequestIceServersEvent,
+  CallIceServersRefreshedEvent,
 } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -25,6 +27,18 @@ export interface UseWebRTCP2POptions {
   userId?: string;
   onError?: (error: Error) => void;
 }
+
+// Gap fix (2026-07-07) — the gateway has always exposed a full TURN
+// credential refresh round-trip (`call:request-ice-servers` /
+// `call:ice-servers-refreshed`, mirroring the HMAC secret's rotation TTL) and
+// iOS has consumed it since the SOTA reliability pass, but web never had a
+// single call site for either event: a call outliving the TURN credential
+// TTL (default ~3600s) with no refresh armed would silently retry ICE
+// restarts with expired credentials, unrecoverable for a peer behind
+// symmetric NAT. This default is a conservative fallback for the FIRST
+// refresh only — the real TTL from the server response reschedules every
+// refresh after that (see `scheduleTurnRefresh` below).
+const DEFAULT_TURN_CREDENTIAL_TTL_SECONDS = 3600;
 
 export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const {
@@ -40,6 +54,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new');
+  // Real mid-call stall signal, derived from stalledPeersRef — unlike
+  // connectionState (an RTCPeerConnectionState, which never carries the
+  // string 'reconnecting'), this is what callers (e.g. call:analytics'
+  // reconnectionCount) must observe to detect an actual reconnect.
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   // Store WebRTC services per participant
   const webrtcServicesRef = useRef<Map<string, WebRTCService>>(new Map());
@@ -61,6 +80,64 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   // the same `WebRTCService` and silently orphaning the first
   // `RTCPeerConnection`. This ref closes that window synchronously.
   const offerInFlightRef = useRef<Set<string>>(new Set());
+  // TURN credential refresh timer — see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc above.
+  const turnRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reconnexion mid-call (parité iOS/Android) : par participant, « a déjà
+  // connecté » et « en stall », pour n'émettre call:reconnecting/reconnected
+  // qu'aux VRAIS edges mid-call — l'ICE pré-connexion est la phase Connecting,
+  // jamais un stall. Le restart lui-même vit dans webrtc-service (grace timer
+  // + restartIce SOTA) ; ici on tient seulement le serveur informé pour qu'il
+  // suspende son cleanup et que le statut/analytics reflètent la reconnexion.
+  const connectedPeersRef = useRef<Set<string>>(new Set());
+  const stalledPeersRef = useRef<Set<string>>(new Set());
+  const reconnectAttemptRef = useRef(0);
+  // Negotiation epoch tracking (glare/stale-signal guard — mirrors iOS
+  // CallManager's per-peer negotiationId high-water mark; see
+  // packages/shared/types/video-call.ts WebRTCSignalBase.negotiationId).
+  // Web never stamped this field: when an iOS caller sent the initial offer
+  // (epoch 1), web's answer carried no negotiationId, which iOS's own
+  // stale-signal guard reads as epoch 0 — strictly less than its own
+  // high-water mark of 1 — and silently drops as stale. The iOS caller then
+  // timed out waiting for an answer the web callee had actually sent.
+  // Keyed per peer since one tab can hold connections to several participants.
+  const negotiationIdsRef = useRef<Map<string, number>>(new Map());
+
+  const bumpOutgoingNegotiationId = useCallback((peerId: string): number => {
+    const next = (negotiationIdsRef.current.get(peerId) ?? 0) + 1;
+    negotiationIdsRef.current.set(peerId, next);
+    return next;
+  }, []);
+
+  const currentNegotiationId = useCallback((peerId: string): number => {
+    return negotiationIdsRef.current.get(peerId) ?? 0;
+  }, []);
+
+  const trackIncomingNegotiationId = useCallback((peerId: string, incoming: number | undefined): void => {
+    const generation = incoming ?? 0;
+    const current = negotiationIdsRef.current.get(peerId) ?? 0;
+    if (generation > current) {
+      negotiationIdsRef.current.set(peerId, generation);
+    }
+  }, []);
+
+  /** Emits `call:request-ice-servers`; the response is applied by the
+   * `call:ice-servers-refreshed` listener registered below. */
+  const requestFreshTurnCredentials = useCallback(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+    socket.emit(CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS, { callId } as CallRequestIceServersEvent);
+    logger.debug('[useWebRTCP2P]', 'Requested fresh TURN credentials', { callId });
+  }, [callId]);
+
+  /** Arms the next refresh at 80% of `ttlSeconds` (floor 60s so a degenerate
+   * TTL never disarms the refresh entirely, mirroring the iOS policy). */
+  const scheduleTurnRefresh = useCallback((ttlSeconds: number) => {
+    if (turnRefreshTimerRef.current) clearTimeout(turnRefreshTimerRef.current);
+    const delayMs = Math.max(ttlSeconds * 0.8, 60) * 1000;
+    turnRefreshTimerRef.current = setTimeout(() => {
+      requestFreshTurnCredentials();
+    }, delayMs);
+  }, [requestFreshTurnCredentials]);
 
   const drainIceCandidateQueue = useCallback(async (peerId: string, service: WebRTCService) => {
     const queuedCandidates = iceCandidateQueueRef.current.get(peerId) || [];
@@ -109,6 +186,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               candidate: candidateInit.candidate || '',
               sdpMLineIndex: candidateInit.sdpMLineIndex ?? undefined,
               sdpMid: candidateInit.sdpMid ?? undefined,
+              negotiationId: currentNegotiationId(participantId),
             };
 
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -139,10 +217,17 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               logger.error('[useWebRTCP2P]', 'Cannot relay renegotiation SDP: socket/userId missing', { participantId });
               return;
             }
+            // An answer echoes the epoch it's responding to (already tracked
+            // when the offer that triggered it was received); an offer we
+            // initiate ourselves (renegotiation) bumps to a new epoch.
+            const negotiationId =
+              description.type === 'answer'
+                ? currentNegotiationId(participantId)
+                : bumpOutgoingNegotiationId(participantId);
             const signal: WebRTCSignal =
               description.type === 'answer'
-                ? { type: 'answer', from: userId, to: participantId, sdp: description.sdp ?? '' }
-                : { type: 'offer', from: userId, to: participantId, sdp: description.sdp ?? '' };
+                ? { type: 'answer', from: userId, to: participantId, sdp: description.sdp ?? '', negotiationId }
+                : { type: 'offer', from: userId, to: participantId, sdp: description.sdp ?? '', negotiationId };
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, { callId, signal } as CallSignalEvent, () => {});
             logger.info('[useWebRTCP2P]', 'Renegotiation SDP relayed', { participantId, type: description.type });
           },
@@ -173,10 +258,51 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             });
             setIceConnectionState(state);
 
-            if (state === 'failed') {
-              setError('ICE connection failed');
-              toast.error('Connection failed. Retrying...');
-              onError?.(new Error('ICE_CONNECTION_FAILED'));
+            if (state === 'connected' || state === 'completed') {
+              connectedPeersRef.current.add(participantId);
+              const wasStalled = stalledPeersRef.current.delete(participantId);
+              if (wasStalled) {
+                if (stalledPeersRef.current.size === 0) {
+                  setIsReconnecting(false);
+                }
+                if (userId) {
+                  // Le restart mené par webrtc-service a abouti — le serveur
+                  // repasse l'appel `active`.
+                  meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
+                    callId,
+                    participantId: userId,
+                  });
+                }
+              }
+            } else if (state === 'disconnected' || state === 'failed') {
+              // Stall MID-CALL seulement : le serveur suspend son cleanup et
+              // marque l'appel `reconnecting` pendant que webrtc-service mène
+              // grace + restartIce. Le schéma exige un participantId non vide ;
+              // le serveur résout le SIEN (anti-usurpation), le userId suffit.
+              if (
+                userId &&
+                connectedPeersRef.current.has(participantId) &&
+                !stalledPeersRef.current.has(participantId)
+              ) {
+                stalledPeersRef.current.add(participantId);
+                setIsReconnecting(true);
+                reconnectAttemptRef.current = Math.min(reconnectAttemptRef.current + 1, 10);
+                meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTING, {
+                  callId,
+                  participantId: userId,
+                  attempt: reconnectAttemptRef.current,
+                });
+              }
+              if (state === 'disconnected') {
+                // A network change (Wi-Fi↔cellular, ICE restart ahead) is
+                // exactly when a stale TURN credential most likely bites — get
+                // ahead of it instead of waiting for the periodic refresh.
+                requestFreshTurnCredentials();
+              } else {
+                setError('ICE connection failed');
+                toast.error('Connection failed. Retrying...');
+                onError?.(new Error('ICE_CONNECTION_FAILED'));
+              }
             }
           },
 
@@ -211,7 +337,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
       return service;
     },
-    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId, iceServers
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, requestFreshTurnCredentials, currentNegotiationId, bumpOutgoingNegotiationId]  // CRITICAL: Added userId, iceServers
   );
 
   /**
@@ -267,6 +393,37 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     });
     return stream;
   }, [localStream, initializeLocalStream, callId]);
+
+  /**
+   * Tear down and forget everything about ONE participant's signaling state —
+   * call this when they leave for good (after confirming, at the call site,
+   * that they haven't rejoined within the grace window). Scoped mirror of
+   * `cleanup()` below: without this, a departed participant's stale
+   * `remoteDescriptionSetRef`/`iceCandidateQueueRef` entry survives and
+   * misroutes the *new* connection a same-session rejoin creates — the
+   * rejoin's initial answer gets treated as a renegotiation answer, and its
+   * ICE candidates skip buffering and get silently dropped against a
+   * connection that was never `setRemoteDescription`'d.
+   */
+  const removeParticipant = useCallback(
+    (participantId: string) => {
+      const service = webrtcServicesRef.current.get(participantId);
+      if (service) {
+        // Never stop the shared local stream here — it's the same
+        // MediaStream reference every other still-connected participant's
+        // service is sending. Only the full-call teardown (cleanup() below,
+        // or call-store's reset()) may release the hardware tracks.
+        service.close({ stopLocalTracks: false });
+        webrtcServicesRef.current.delete(participantId);
+      }
+      iceCandidateQueueRef.current.delete(participantId);
+      remoteDescriptionSetRef.current.delete(participantId);
+      offerInFlightRef.current.delete(participantId);
+      negotiationIdsRef.current.delete(participantId);
+      removePeerConnection(participantId);
+    },
+    [removePeerConnection]
+  );
 
   /**
    * Create and send offer
@@ -326,6 +483,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           from: userId,
           to: targetUserId,
           sdp: offer.sdp || '',
+          negotiationId: bumpOutgoingNegotiationId(targetUserId),
         };
 
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -338,24 +496,33 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         logger.error('[useWebRTCP2P]', 'Failed to create offer', { error });
         setConnecting(false);
 
+        // The peer connection may already have been created and registered
+        // (addPeerConnection above) by the time createOffer()/the socket
+        // check/etc. throws — without this it stays open and registered
+        // forever, an orphaned RTCPeerConnection leak.
+        removeParticipant(targetUserId);
+
         const message = error instanceof Error ? error.message : 'Failed to create offer';
         setError(message);
         toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, removeParticipant, bumpOutgoingNegotiationId]
   );
 
   /**
    * Handle incoming offer
    */
   const handleOffer = useCallback(
-    async (offer: RTCSessionDescriptionInit, fromUserId: string) => {
+    async (offer: RTCSessionDescriptionInit, fromUserId: string, negotiationId?: number) => {
       // Synchronous — runs before the first `await` below, closing the race
       // window a duplicate delivery (live relay + buffered replay) would
       // otherwise slip through. See offerInFlightRef's doc comment.
       offerInFlightRef.current.add(fromUserId);
+      // Track the offer's epoch BEFORE answering, so the answer below echoes
+      // it back exactly — this is the fix for iOS dropping web's answer.
+      trackIncomingNegotiationId(fromUserId, negotiationId);
       try {
         logger.debug('[useWebRTCP2P]', 'Handling offer', { fromUserId, callId });
         setConnecting(true);
@@ -402,6 +569,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           from: userId,
           to: fromUserId,
           sdp: answer.sdp || '',
+          negotiationId: currentNegotiationId(fromUserId),
         };
 
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -417,6 +585,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         logger.error('[useWebRTCP2P]', 'Failed to handle offer', { error });
         setConnecting(false);
 
+        // See createOffer's matching comment — the peer connection may
+        // already be registered by the time createAnswer()/the socket
+        // check/etc. throws; without this it leaks, open and registered
+        // forever.
+        removeParticipant(fromUserId);
+
         const message = error instanceof Error ? error.message : 'Failed to handle offer';
         setError(message);
         toast.error(message);
@@ -425,14 +599,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         offerInFlightRef.current.delete(fromUserId);
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue, removeParticipant, trackIncomingNegotiationId, currentNegotiationId]
   );
 
   /**
    * Handle incoming answer
    */
   const handleAnswer = useCallback(
-    async (answer: RTCSessionDescriptionInit, fromUserId: string) => {
+    async (answer: RTCSessionDescriptionInit, fromUserId: string, negotiationId?: number) => {
       try {
         logger.debug('[useWebRTCP2P]', 'Handling answer', { fromUserId, callId });
 
@@ -440,6 +614,8 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         if (!service) {
           throw new Error('WebRTC service not found for participant');
         }
+
+        trackIncomingNegotiationId(fromUserId, negotiationId);
 
         // Set remote description (the answer)
         await service.setRemoteDescription(answer);
@@ -458,16 +634,17 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, setError, onError, drainIceCandidateQueue]
+    [callId, setError, onError, drainIceCandidateQueue, trackIncomingNegotiationId]
   );
 
   /**
    * Handle incoming ICE candidate
    */
   const handleIceCandidate = useCallback(
-    async (candidate: RTCIceCandidateInit, fromUserId: string) => {
+    async (candidate: RTCIceCandidateInit, fromUserId: string, negotiationId?: number) => {
       try {
         logger.debug('[useWebRTCP2P]', 'Handling ICE candidate', { fromUserId, callId });
+        trackIncomingNegotiationId(fromUserId, negotiationId);
 
         const service = webrtcServicesRef.current.get(fromUserId);
         // Buffer the candidate until BOTH the service exists AND its remote
@@ -492,18 +669,39 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         // Don't show error to user - ICE candidates can fail individually
       }
     },
-    [callId]
+    [callId, trackIncomingNegotiationId]
   );
 
   /**
    * Turn the local camera ON mid-call (audio→video upgrade, FaceTime-style).
    * Acquires a single camera track and attaches it to every peer (cloning for
    * additional peers), flipping each reserved video transceiver to sendrecv
-   * and renegotiating. Works while ringing or connected.
+   * and renegotiating.
+   *
+   * Throws if no peer connection exists yet (e.g. still ringing, before the
+   * caller's own createOffer or the callee's first offer signal has run) —
+   * the caller MUST NOT treat a resolved promise as "video is on" when there
+   * is nothing to attach a camera track to. Silently no-op'ing here used to
+   * let handleToggleVideo (VideoCallInterface) flip controls.videoEnabled to
+   * true and tell the peer video is enabled, while no camera track was ever
+   * acquired — a UI/media desync with nothing to recover it automatically.
+   *
+   * The peer list is read TWICE: once before `getUserMedia()` (fail fast,
+   * without prompting for camera permission, when nobody is connected yet)
+   * and again right after it resolves, immediately before distributing the
+   * track (Vague 97). `getUserMedia()` can take human-scale time (the
+   * permission prompt), and a peer joining an ALREADY-active group call
+   * during that window is an ordinary sequence, not adversarial timing. A
+   * stale pre-await snapshot used to permanently exclude that peer: its
+   * video transceiver stays recvonly forever, with no later event ever
+   * re-triggering enableVideoSend for it. If the second read comes back
+   * empty (every peer left while the prompt was pending), the just-acquired
+   * camera is released instead of leaking a live, unattached capture.
    */
   const enableVideo = useCallback(async (): Promise<void> => {
-    const services = Array.from(webrtcServicesRef.current.values());
-    if (services.length === 0) return;
+    if (webrtcServicesRef.current.size === 0) {
+      throw new Error('NO_PEER_CONNECTION');
+    }
     const cam = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
@@ -514,6 +712,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     });
     const baseTrack = cam.getVideoTracks()[0];
     if (!baseTrack) return;
+    const services = Array.from(webrtcServicesRef.current.values());
+    if (services.length === 0) {
+      cam.getTracks().forEach((track) => track.stop());
+      throw new Error('NO_PEER_CONNECTION');
+    }
     await Promise.all(
       services.map((service, index) =>
         service.enableVideoSend(index === 0 ? baseTrack : baseTrack.clone())
@@ -521,6 +724,51 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     );
     logger.info('[useWebRTCP2P]', 'Local video enabled (upgrade)', { callId });
   }, [callId]);
+
+  /**
+   * Switch the local camera between front/back mid-call (FaceTime-style flip
+   * — Vague 95). Mirrors enableVideo()'s "one real track + N clones"
+   * ownership model — giving the first peer the literal camera track and
+   * every other peer a `.clone()` — so each peer's WebRTCService instance
+   * (via switchVideoSendTrack) can safely stop/release only the exact track
+   * it owns.
+   *
+   * Before this existed, VideoCallInterface's handleSwitchCamera replaced
+   * every sender with a SINGLE shared track object while assuming
+   * `localStream` held only one video track — an assumption that breaks the
+   * moment a group call has clones in flight, silently orphaning a live
+   * camera capture on every switch beyond the first.
+   *
+   * Same double-read-around-getUserMedia() as enableVideo() (Vague 97): a
+   * peer joining WHILE the flip's camera prompt is pending is excluded from
+   * the initial pre-await snapshot, so the peer list is re-read right after
+   * `getUserMedia()` resolves, immediately before distributing the track.
+   */
+  const switchCamera = useCallback(
+    async (facingMode: 'user' | 'environment'): Promise<void> => {
+      if (webrtcServicesRef.current.size === 0) {
+        throw new Error('NO_PEER_CONNECTION');
+      }
+      const cam = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: false,
+      });
+      const baseTrack = cam.getVideoTracks()[0];
+      if (!baseTrack) return;
+      const services = Array.from(webrtcServicesRef.current.values());
+      if (services.length === 0) {
+        cam.getTracks().forEach((track) => track.stop());
+        throw new Error('NO_PEER_CONNECTION');
+      }
+      await Promise.all(
+        services.map((service, index) =>
+          service.switchVideoSendTrack(index === 0 ? baseTrack : baseTrack.clone())
+        )
+      );
+      logger.info('[useWebRTCP2P]', 'Camera switched', { callId, facingMode });
+    },
+    [callId]
+  );
 
   /**
    * Turn the local camera OFF mid-call (video→audio downgrade). Stops outbound
@@ -559,6 +807,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     webrtcServicesRef.current.clear();
     iceCandidateQueueRef.current.clear();
     remoteDescriptionSetRef.current.clear();
+    connectedPeersRef.current.clear();
+    stalledPeersRef.current.clear();
+    setIsReconnecting(false);
+    negotiationIdsRef.current.clear();
+    reconnectAttemptRef.current = 0;
 
     logger.info('[useWebRTCP2P]', 'Cleanup completed', { callId });
   }, [callId, removePeerConnection]);
@@ -628,6 +881,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           // (A/V switch or ICE restart) — apply it in place (glare-safe)
           // instead of tearing down and rebuilding the peer connection.
           if (existingService && isEstablished) {
+            // Track BEFORE handing off — the resulting answer (emitted via
+            // the service's onLocalDescription callback) echoes whatever
+            // currentNegotiationId(peer) holds at that point.
+            trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation offer', { error, from: signal.from });
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
@@ -647,13 +904,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               callId,
             });
           } else {
-            handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from);
+            handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from, signal.negotiationId);
           }
           break;
 
         case 'answer':
           // Answer to one of our renegotiation offers vs. the initial answer.
           if (existingService && isEstablished) {
+            trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation answer', { error, from: signal.from });
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
@@ -662,7 +920,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               onError?.(error instanceof Error ? error : new Error(message));
             });
           } else {
-            handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from);
+            handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from, signal.negotiationId);
           }
           break;
 
@@ -672,7 +930,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             candidate: signal.candidate,
             sdpMLineIndex: signal.sdpMLineIndex,
             sdpMid: signal.sdpMid,
-          }, signal.from);
+          }, signal.from, signal.negotiationId);
           break;
 
         default:
@@ -685,17 +943,58 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     return () => {
       socket.off(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
     };
-  }, [callId, handleOffer, handleAnswer, handleIceCandidate]);
+  }, [callId, handleOffer, handleAnswer, handleIceCandidate, trackIncomingNegotiationId]);
+
+  /**
+   * TURN credential refresh (see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc
+   * above) — arms the periodic refresh on mount/callId change, applies a
+   * received refresh to the store AND every already-established peer
+   * connection (WebRTCService.setIceServers applies live via
+   * RTCPeerConnection.setConfiguration when the connection already exists),
+   * then reschedules using the real TTL from the response.
+   */
+  useEffect(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+
+    const handleIceServersRefreshed = (event: CallIceServersRefreshedEvent) => {
+      if (event.callId !== callId || !event.iceServers?.length) return;
+
+      logger.info('[useWebRTCP2P]', 'TURN credentials refreshed', {
+        callId,
+        serverCount: event.iceServers.length,
+        ttl: event.ttl,
+      });
+
+      useCallStore.getState().setIceServers(event.iceServers);
+      webrtcServicesRef.current.forEach((service) => service.setIceServers(event.iceServers));
+      scheduleTurnRefresh(event.ttl);
+    };
+
+    socket.on(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, handleIceServersRefreshed);
+    scheduleTurnRefresh(DEFAULT_TURN_CREDENTIAL_TTL_SECONDS);
+
+    return () => {
+      socket.off(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, handleIceServersRefreshed);
+      if (turnRefreshTimerRef.current) {
+        clearTimeout(turnRefreshTimerRef.current);
+        turnRefreshTimerRef.current = null;
+      }
+    };
+  }, [callId, scheduleTurnRefresh]);
 
   return {
     connectionState,
     iceConnectionState,
+    isReconnecting,
     initializeLocalStream,
     ensureLocalStream,
     createOffer,
     enableVideo,
     disableVideo,
+    switchCamera,
     applyQualityTier,
+    removeParticipant,
     cleanup,
   };
 }

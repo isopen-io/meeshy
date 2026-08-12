@@ -27,6 +27,9 @@ const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
 const mockGetActiveCallForConversation = jest.fn<any>();
 const mockListHistory = jest.fn<any>();
+const mockFinalizeCallSummary = jest.fn<any>();
+const mockBroadcastCallEndedIfTerminal = jest.fn<any>();
+const mockInvalidateSignalCache = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -47,6 +50,9 @@ jest.mock('../../../services/CallService', () => ({
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),
     listHistory: (...args: any[]) => mockListHistory(...args),
+    finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
+    broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
+    invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
   })),
 }));
 
@@ -461,6 +467,11 @@ describe('callRoutes', () => {
 
       expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:end — le pair est notifié en temps réel via call:ended.
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
+      // Parité socket call:end — le cache de session `call:signal` (TTL 2s)
+      // est invalidé immédiatement après l'écriture de `leftAt` par endCall().
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
     });
 
     it('allows an admin member to end the call', async () => {
@@ -765,8 +776,13 @@ describe('callRoutes', () => {
 
   describe('DELETE /calls/:callId/participants/:participantId — leaveCall', () => {
     it('allows a user to leave their own participation (participantId === userId)', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
       const session = makeCallSession();
+      mockGetCallSession.mockResolvedValueOnce(session);
       mockLeaveCall.mockResolvedValueOnce(session);
 
       const req = makeRequest({
@@ -784,10 +800,48 @@ describe('callRoutes', () => {
         participantId: PART_ID,
       });
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:leave — call:ended diffusé si le leave a terminé l'appel
+      // (broadcastCallEndedIfTerminal auto-gardé sur le statut terminal).
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
+      // Parité socket call:leave — le cache de session `call:signal` (TTL 2s)
+      // est invalidé immédiatement après l'écriture de `leftAt` par leaveCall().
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('invalidates the signal cache even when the call stays non-terminal (group call continues)', async () => {
+      // Unlike broadcastCallEndedIfTerminal (auto-guarded on terminal status),
+      // invalidateSignalCache must fire unconditionally: a group-call leave
+      // that does NOT end the session still writes `leftAt` for the departing
+      // participant, and the stale cached snapshot could still let call:signal
+      // relay ICE/SDP targeting them within the 2s TTL.
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      const session = makeCallSession({ status: 'active', endedAt: null });
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockLeaveCall.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: USER_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(mockInvalidateSignalCache).toHaveBeenCalledWith(CALL_ID);
     });
 
     it('uses authContext.participantId for leaveParticipantId even when leaving own slot', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
       const req = makeRequest({
@@ -809,8 +863,12 @@ describe('callRoutes', () => {
       );
     });
 
-    it('resolves leaveParticipantId from the DB when authContext.participantId absent (registered self-leave)', async () => {
-      const { routes, reply } = setup();
+    it('resolves leaveParticipantId from the caller\'s own membership when authContext.participantId absent (registered self-leave)', async () => {
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
       mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
@@ -824,13 +882,38 @@ describe('callRoutes', () => {
         reply
       );
 
-      // No Participant row resolves for USER_ID in this test's (empty) prisma
-      // mock, so the code falls back to the raw participantId — same
-      // behavior as before, but now reached via an explicit DB lookup
-      // instead of blindly trusting a User.id as a Participant.id.
       expect(mockLeaveCall).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: USER_ID })
+        expect.objectContaining({ participantId: membership.id })
       );
+    });
+
+    it('returns 403 when a non-member self-leaves a call they have no relation to', async () => {
+      // Security regression guard (2026-07-10): a caller with no Participant
+      // row in this call's conversation must be rejected outright, never
+      // silently resolved to their raw userId and passed into
+      // CallService.leaveCall() — that fallback previously let ANY
+      // authenticated user end an arbitrary direct call by targeting their
+      // own userId as `participantId`, with zero conversation relationship
+      // required.
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: USER_ID },
+        authContext: { userId: USER_ID, participantId: undefined, type: 'registered' },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
     it('allows a moderator to remove another participant, using the TARGET participant id (not the moderator\'s own)', async () => {
@@ -950,8 +1033,12 @@ describe('callRoutes', () => {
         reply
       );
 
+      // The unconditional caller-membership gate (added 2026-07-10) now
+      // rejects with NOT_A_PARTICIPANT before ever reaching the
+      // moderator-role check below it.
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
     it('returns 404 on CALL_NOT_FOUND error', async () => {
@@ -975,7 +1062,12 @@ describe('callRoutes', () => {
     });
 
     it('returns 400 on leaveCall error', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockRejectedValueOnce(new Error('NOT_IN_CALL: not a participant'));
 
       const req = makeRequest({
@@ -992,7 +1084,12 @@ describe('callRoutes', () => {
     });
 
     it('uses fallback message on error without message', async () => {
-      const { routes, reply } = setup();
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockRejectedValueOnce({});
 
       const req = makeRequest({

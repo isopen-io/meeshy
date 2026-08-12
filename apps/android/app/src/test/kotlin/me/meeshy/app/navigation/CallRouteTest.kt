@@ -196,6 +196,43 @@ class CallRouteTest {
     }
 
     @Test
+    fun `reopen rebuilds an outgoing call into an outgoing route`() {
+        val config = CallConfig(
+            peerId = "",
+            peerName = "Ann / Bob & Co",
+            isVideo = true,
+            isOutgoing = true,
+            conversationId = "conv-1",
+        )
+
+        val decoded = configOf(CallRoute.reopen(config))
+
+        assertThat(decoded.isOutgoing).isTrue()
+        assertThat(decoded.conversationId).isEqualTo("conv-1")
+        assertThat(decoded.peerName).isEqualTo("Ann / Bob & Co")
+        assertThat(decoded.isVideo).isTrue()
+    }
+
+    @Test
+    fun `reopen preserves the server callId and direction of an incoming call`() {
+        val config = CallConfig(
+            peerId = "u2",
+            peerName = "Bob",
+            isVideo = false,
+            isOutgoing = false,
+            conversationId = "conv-9",
+            callId = "call-9",
+        )
+
+        val decoded = configOf(CallRoute.reopen(config))
+
+        assertThat(decoded.isOutgoing).isFalse()
+        assertThat(decoded.callId).isEqualTo("call-9")
+        assertThat(decoded.conversationId).isEqualTo("conv-9")
+        assertThat(decoded.peerName).isEqualTo("Bob")
+    }
+
+    @Test
     fun `redial threads a history record's conversation, resolved name and media into the route`() {
         val config = configOf(CallRoute.redial(callRecord(conversationId = "conv-99", isVideo = true)))
 

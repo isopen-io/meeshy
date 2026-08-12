@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Video } from 'lucide-react';
+import { Phone, PhoneOff, Video, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
@@ -25,8 +25,16 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
 
   // Play ringtone on mount
   useEffect(() => {
+    let cancelled = false;
+
     // Dynamically import ringtone utility
     import('@/utils/ringtone').then(({ getRingtone }) => {
+      // The call may already be gone (answered elsewhere, cancelled,
+      // superseded) by the time this chunk resolves — never start ringing
+      // for a notification that already unmounted.
+      if (cancelled) {
+        return;
+      }
       ringtoneRef.current = getRingtone();
       ringtoneRef.current.play();
     }).catch((error) => {
@@ -35,6 +43,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
 
     // Cleanup on unmount
     return () => {
+      cancelled = true;
       if (ringtoneRef.current) {
         ringtoneRef.current.stop();
         ringtoneRef.current = null;
@@ -70,11 +79,15 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           </Avatar>
         </div>
 
-        {/* Video call icon */}
+        {/* Call type icon — the actual media type (audio/video), never assumed */}
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Video className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          {call.type === 'video' ? (
+            <Video className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          ) : (
+            <Mic className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          )}
           <span className="text-sm font-medium text-green-600 dark:text-green-400">
-            {t('calls.incoming.videoCall')}
+            {call.type === 'video' ? t('calls.incoming.videoCall') : t('calls.incoming.audioCall')}
           </span>
         </div>
 

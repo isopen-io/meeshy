@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
+import { generateNickname } from '../utils/anonymous-nickname';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -19,7 +21,11 @@ const joinAnonymousSchema = z.object({
   username: z.string().optional(),
   email: z.email().optional().or(z.literal('')),
   birthday: z.iso.datetime().optional().or(z.literal('')),
-  language: z.string().default('fr'),
+  // Normalise at the write boundary: the participant `language` feeds the
+  // translation-target set (MessageTranslationService), which is keyed lowercase.
+  // Storing 'EN' / 'en-US' verbatim would inject a duplicated, never-matching NLLB
+  // target (Prisme rule #1 miss). `normalizeLanguageForDedup` also strips region subtags.
+  language: z.string().transform((v) => normalizeLanguageForDedup(v)).default('fr'),
   deviceFingerprint: z.string().optional()
 });
 
@@ -33,14 +39,6 @@ function generateSessionToken(deviceFingerprint?: string): string {
   const randomPart = crypto.randomBytes(16).toString('hex');
   const devicePart = deviceFingerprint ? crypto.createHash('md5').update(deviceFingerprint).digest('hex').slice(0, 8) : '';
   return `anon_${timestamp}_${randomPart}_${devicePart}`;
-}
-
-// Helper pour generer un username automatique
-function generateNickname(firstName: string, lastName: string): string {
-  const cleanFirstName = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const lastNameInitials = lastName.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2);
-  const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${cleanFirstName}_${lastNameInitials}${randomSuffix}`;
 }
 
 // Helper pour verifier l'IP et extraire le pays (simulation)
@@ -257,8 +255,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees
-      if (shareLink.allowedLanguages.length > 0 && !shareLink.allowedLanguages.includes(body.language)) {
+      // Verifier langues autorisees (case-insensitive : body.language est normalise
+      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
+      if (
+        shareLink.allowedLanguages.length > 0 &&
+        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
+      ) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
 
@@ -918,11 +920,13 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       allActiveParticipants.forEach(p => {
         if (p.type === 'user' && p.user) {
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage);
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage);
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage);
+          // Canonicalise BCP-47/casse via le SSOT : 'en', 'EN' et 'en-US' comptent
+          // pour UNE langue (`.toLowerCase()` brut laissait 'en-us' ≠ 'en' → stat gonflée)
+          if (p.user.systemLanguage) languageSet.add(normalizeLanguageForDedup(p.user.systemLanguage));
+          if (p.user.regionalLanguage) languageSet.add(normalizeLanguageForDedup(p.user.regionalLanguage));
+          if (p.user.customDestinationLanguage) languageSet.add(normalizeLanguageForDedup(p.user.customDestinationLanguage));
         } else {
-          if (p.language) languageSet.add(p.language);
+          if (p.language) languageSet.add(normalizeLanguageForDedup(p.language));
         }
       });
 

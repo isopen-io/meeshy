@@ -142,7 +142,7 @@ struct MemberRow: View {
                 context: .userListItem,
                 accentColor: accentColor,
                 avatarURL: user?.avatar,
-                presenceState: user?.isOnline == true ? .online : .offline
+                presenceState: UserPresence(isOnline: user?.isOnline ?? false).state
             )
 
             VStack(alignment: .leading, spacing: 2) {

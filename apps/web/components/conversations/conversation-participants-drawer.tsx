@@ -50,7 +50,7 @@ import { getUserInitials } from '@/lib/avatar-utils';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { getUserStatus, isPresenceActive, PRESENCE_DOT_CLASS } from '@/lib/user-status';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials, isParticipantModerator } from '@/utils/participant-helpers';
 
 interface ConversationParticipantsDrawerProps {
@@ -248,14 +248,14 @@ export function ConversationParticipantsDrawer({
         );
       });
 
-  // Separer en ligne / hors ligne via getUserStatus (temps reel)
+  // Separer actifs (dot rendu : online + away + idle, < 5min) / hors ligne via getUserStatus (temps reel)
   const onlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+    return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const offlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+    return !isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
 
   // Pagination : limiter le rendu
@@ -371,6 +371,7 @@ export function ConversationParticipantsDrawer({
     const user = (participant.userId ? getUserByIdFn(participant.userId) as ParticipantUser : undefined) || rawUser;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
+    const status = getUserStatus(user);
 
     return (
       <motion.div
@@ -406,16 +407,12 @@ export function ConversationParticipantsDrawer({
                 </AvatarFallback>
               </Avatar>
             )}
-            {isOnline ? (
-              <OnlineIndicator
-                isOnline={getUserStatus(user) === 'online'}
-                status={getUserStatus(user)}
-                size="md"
-                className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
-              />
-            ) : (
-              <div className="absolute -bottom-0 -right-0 h-3 w-3 bg-gray-400 rounded-full border-2 border-white dark:border-gray-900" />
-            )}
+            <OnlineIndicator
+              isOnline={status === 'online'}
+              status={status}
+              size="md"
+              className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
+            />
           </div>
 
           {/* Nom + pseudo */}
@@ -731,7 +728,7 @@ export function ConversationParticipantsDrawer({
                 >
                   <div className="flex items-center justify-between mb-3 px-2">
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                      <div className={`h-2 w-2 rounded-full ${PRESENCE_DOT_CLASS.online}`} />
                       {t('conversationUI.online')}
                     </span>
                     <Badge variant="secondary" className="backdrop-blur-sm bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/30">
@@ -752,7 +749,8 @@ export function ConversationParticipantsDrawer({
                   )}
                 </motion.div>
 
-                {/* Section Hors ligne */}
+                {/* Section Hors ligne — groupement conservé, sans dot gris d'en-tête
+                    (offline ne rend jamais de dot ; le libellé suffit) */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -760,7 +758,6 @@ export function ConversationParticipantsDrawer({
                 >
                   <div className="flex items-center justify-between mb-3 px-2">
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-gray-400" />
                       {t('conversationDetails.offline')}
                     </span>
                     <Badge variant="outline" className="backdrop-blur-sm bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30">

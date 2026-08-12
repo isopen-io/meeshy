@@ -1,5 +1,6061 @@
 # @meeshy/shared
 
+## 1.10.2
+
+### Patch Changes
+
+- ac3c088: L'enrichissement d'une pièce jointe (transcription, audio traduit) atteint enfin les lecteurs qui ne sont pas dans le fil
+
+  `message:attachment-updated` — le delta émis quand Whisper finit de transcrire une note
+  vocale, puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — n'était diffusé
+  que dans la room `conversation:<id>`. Deux audiences le perdaient :
+
+  - **Le lecteur resté sur la liste de conversations.** iOS ne rejoint une room de
+    conversation qu'à l'OUVERTURE du fil : au lancement de l'app, un lecteur sur la liste
+    n'est dans aucune room de conversation. Son SDK applique pourtant ce delta sans regarder
+    quel fil est ouvert (`ConversationSyncEngine.handleAttachmentUpdated` patche le message
+    en cache de n'importe quelle conversation) — la room personnelle n'est donc pas une
+    audience plus large pour le principe, c'est l'endroit où l'écriture atterrit vraiment.
+  - **Le lecteur hors ligne.** Le `message:new` mis en file à l'ENVOI porte la pièce jointe
+    telle qu'elle était alors : sans transcription, sans audio traduit, les deux arrivant une
+    à deux secondes plus tard. Sans rejeu de l'enrichissement, la copie rejouée à la
+    reconnexion reste définitivement celle-là.
+
+  Même classe de défaut que l'aperçu de liste qui ne se retraduisait jamais : le Prisme
+  (« il s'applique à TOUT le contenu, transcriptions audio comprises ») dépendait de la
+  ROUTE du lecteur — avoir le fil ouvert au moment où Whisper a fini — et non de ses
+  préférences de langue.
+
+  L'émission chaîne désormais la room de conversation et les rooms personnelles de tous les
+  participants (une seule copie par socket, `emitToConversationParticipants`), et met
+  l'enrichissement en file pour les participants hors ligne sous le nouveau
+  `eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` à la
+  reconnexion. La clé de dédup est l'id de la PIÈCE JOINTE : l'identité par défaut
+  `(messageId, eventType)` ferait superséder l'enrichissement de la première pièce jointe
+  par celui de la seconde sur un message à deux audios. Le payload n'est pas filtré par
+  langue du destinataire — les clients REMPLACENT la carte de traductions de la pièce
+  jointe, donc un sous-ensemble par lecteur effacerait les langues déjà en cache.
+
+  Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+  d'avant), jamais vers le silence.
+
+## 1.10.1
+
+### Patch Changes
+
+- 70a0e04: user:updated — les composants du nom voyagent en groupe, et iOS applique enfin l'événement
+
+  La gateway diffusait `user:updated` à tous les contacts depuis des mois ; le web
+  l'appliquait, iOS n'avait aucun listener. Un interlocuteur qui changeait d'avatar
+  ou de nom restait figé sur la ligne de liste, l'en-tête et le sélecteur de
+  transfert jusqu'au prochain refetch complet.
+
+  Le payload envoie désormais les quatre composants du nom ensemble
+  (`displayName`, `firstName`, `lastName`, `username`) dès que l'un change : un
+  delta partiel est irrecomposable chez un client qui ne stocke que le nom déjà
+  composé. `null` y signifie EFFACÉ, seule façon de faire retomber le nom sur le
+  composant suivant.
+
+## 1.10.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.9.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+## 1.8.13
+
+### Patch Changes
+
+- fcc82a6: Le web applique enfin le Prisme Linguistique à la ligne de liste, et la langue
+  d'origine cesse de rétrograder la langue primaire du lecteur.
+
+  Le cycle précédent a mis `lastMessageTranslations` et `lastMessageOriginalLanguage`
+  sur le fil de `GET /conversations`. Le web n'en voyait rien : le type `Conversation`
+  ne déclarait pas ces champs, `transformConversationData` — un objet construit à la
+  main — les jetait, et `formatLastMessage` rendait `lastMessage.content` brut. Quatre
+  couches, aucune donnée. Un lecteur francophone lisait « Hello » dans sa sidebar et
+  « Bonjour » une fois le fil ouvert, alors que la traduction était déjà arrivée.
+
+  `resolveLastMessagePreview` (`@meeshy/shared`) devient le jumeau TypeScript de
+  `MeeshyConversation.resolvedLastMessagePreview`, et la chaîne web est câblée de
+  bout en bout : type → transformer → résolveur → ligne.
+
+  **Correctif de règle, sur les deux plateformes.** Le résolveur iOS court-circuitait
+  dès que la langue d'origine apparaissait _quelque part_ dans le prisme du lecteur.
+  Cette formulation par appartenance rétrograde silencieusement la langue PRIMAIRE
+  dès que la langue d'origine occupe un rang inférieur — précisément ce que produit
+  la locale appareil, entrée en 4e priorité. Prisme `['fr', 'en']`, message anglais,
+  traduction française disponible : elle rendait « Hello ». `CLAUDE.md` dit l'inverse
+  noir sur blanc — « un utilisateur francophone avec un iPhone en anglais voit
+  TOUJOURS ses messages en français (priorité 1) » — et le chemin du CORPS des
+  messages appliquait déjà la bonne règle en ne comparant qu'à la langue de tête.
+
+  Le prisme est désormais parcouru par RANG : la langue d'origine y concourt à sa
+  place, et la première langue servie gagne — par traduction, ou parce que le message
+  est déjà écrit dedans. La règle #3 est inchangée : jamais de repli sur une
+  traduction quelconque.
+
+## 1.8.12
+
+### Patch Changes
+
+- 6df3fac: Un message envoyé par lien de partage n'arrivait en temps réel sur aucun client mobile.
+
+  `link:message:new` n'a jamais eu qu'un seul auditeur : le web. iOS
+  (`MeeshySDK/Sockets/MessageSocketManager.swift`) et Android
+  (`sdk-core/socket/MessageSocketManager.kt`) n'enregistrent qu'un listener de création,
+  `message:new`. Or l'envoi par lien est le **seul** transport d'envoi dont dispose un participant
+  anonyme : un invité qui écrivait dans une conversation partagée n'apparaissait donc chez aucun
+  membre iOS ou Android — ni en direct par la room, ni au reconnect par la file hors ligne, qui
+  rejouait ce même event unique. Le message ne surgissait qu'au prochain refetch complet, que rien
+  ne déclenchait.
+
+  Les deux diffuseurs — la room live (`broadcastLinkMessage`) et le rejeu hors ligne
+  (`MeeshySocketIOManager._drainPendingMessages`) — passent désormais par un seul point d'appel
+  public, `linkMessageEmissions`, qui met les **deux** events sur le fil, chacun dans sa forme :
+  `link:message:new` garde son enveloppe `{ message }`, `message:new` transporte le message
+  lui-même. Rejouer l'enveloppe sous `message:new` aurait donné aux clients mobiles un payload sans
+  `conversationId` au premier niveau, donc non routable.
+
+  Additif, jamais substitutif : le web continue de recevoir l'event qu'il écoute déjà. Les deux
+  copies portent le même `id` et les deux gestionnaires web dédupent dessus, donc le second arrivé
+  est un no-op quel que soit l'ordre ; la pastille de non-lus ne se déduit d'aucun des deux (valeur
+  absolue de `conversation:unread-updated`), il n'y a rien à double-compter.
+
+## 1.8.11
+
+### Patch Changes
+
+- f2c0708: Le Prisme Linguistique s'applique enfin à l'aperçu de la liste de conversations.
+
+  `GET /conversations` ne transportait ni les traductions du dernier message ni sa
+  langue d'origine : la ligne de liste restait dans la langue de l'expéditeur pour
+  tout le monde, à chaque démarrage à froid. Le résolveur client existait pourtant
+  (`MeeshyConversation.resolvedLastMessagePreview`), et sa documentation attendait
+  explicitement ce câblage serveur.
+
+  La réponse porte désormais, au niveau conversation, `lastMessageOriginalLanguage`
+  et `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte aux
+  langues du prisme du LECTEUR (`resolveUserLanguagesOrdered`), tronquée au même
+  plafond que `lastMessage.content`, débarrassée des traductions chiffrées et de la
+  langue d'origine (qui EST déjà `lastMessage.content`). `null` quand il ne reste
+  rien, pour que le client retombe sur l'original — règle #3 du Prisme.
+
+  Coût nul côté base : `Message.translations` est une colonne JSON du même
+  document, pas une relation.
+
+## 1.8.10
+
+### Patch Changes
+
+- a7427af: Supprimer un commentaire annonce enfin le fil qu'il emporte — ses réponses restaient à l'écran, et rien ne les en enlevait jamais.
+
+  `PostCommentService.deleteComment` soft-delete le SOUS-ARBRE ENTIER depuis le cycle qui a corrigé
+  l'invariant de `commentCount` : la cible et tous ses descendants, sur la même liste d'ids, et le
+  retrait des notifications porte déjà sur cette même liste. Mais cette liste mourait dans la méthode —
+  la valeur de retour ne disait que `{ success: true }`.
+
+  Son seul appelant, la route `DELETE /posts/:postId/comments/:commentId`, n'avait donc rien d'autre à
+  annoncer que la cible : `broadcastCommentDeleted` partait avec le seul `commentId`. Chez tout client
+  qui avait déplié les réponses du commentaire supprimé, ces réponses restaient affichées — des lignes
+  que le serveur venait de retirer.
+
+  **Et aucun rechargement ne les enlevait.** `getComments` filtre `parentId: null` : le parent
+  supprimé n'est plus rendu, donc `getReplies` n'est plus jamais appelé pour ses réponses. Le fil ne
+  se nettoyait qu'au rechargement complet de la page. Le compteur, lui, était juste depuis le début —
+  il voyage en ABSOLU (`commentCount`), donc l'écran affichait « 3 commentaires » au-dessus de quatre
+  lignes visibles.
+
+  **Le correctif tient en une liste qui remonte.** `deleteComment` rend désormais
+  `deletedCommentIds` — exactement la liste qu'il a soft-deletée, jamais une seconde dérivation (après
+  le soft-delete, la reconstruire demanderait de relire des lignes que `NOT_DELETED` masque
+  désormais). La route la place dans le payload, et le web en purge tous ses caches de commentaires
+  d'un coup, réponses comprises.
+
+  Le web était le SEUL client à montrer ce défaut. iOS (`repliesMap[id] = nil` +
+  `expandedThreads.remove(id)`) et Android (`CommentRepliesState.removedThread`) compensaient déjà,
+  chacun par sa propre traversée locale — deux re-dérivations indépendantes d'une liste que le serveur
+  connaissait et taisait. `deletedCommentIds` les rend caduques : c'est le gain de fond, au-delà du
+  défaut visible sur le web.
+
+  `CommentDeletedEventData.deletedCommentIds` est **optionnel** pour rester additif : iOS et Android
+  gardent le comportement d'avant sans changer une ligne. Un client qui le lit se replie sur
+  `[commentId]` quand il est absent — c'est le cas du rejeu idempotent (`onDuplicate`), qui ne rend
+  qu'un `{ id }` parce que la suppression a déjà eu lieu et que son sous-arbre n'est plus
+  reconstructible par une lecture vivante. Le repli reproduit exactement le comportement d'avant ce
+  correctif ; une liste vide, elle, ferait survivre la cible elle-même à l'écran.
+
+## 1.8.9
+
+### Patch Changes
+
+- 2218e08: La famille est complète : toute notification qui DÉSIGNE un message hérite de son échéance.
+
+  Le lot précédent a branché les trois producteurs que l'éventail d'un message appelle — message
+  régulier, réponse, mention — et a laissé en backlog les deux autres ancrés sur un
+  `context.messageId`. Les voici, et l'un des deux n'existait pas vraiment.
+
+  **La réaction.** `createReactionNotification` lisait déjà le message pour en tirer l'extrait
+  (`select: { content: true }`) : `expiresAt` voyage dans la même lecture, aucune requête ajoutée. Une
+  réaction à un message éphémère ouvrait sinon, après expiration, un message absent.
+
+  **La mention ajoutée par ÉDITION.** `reconcileEditedMentions` est le second appelant de
+  `createMentionNotificationsBatch` — le paramètre existait depuis le lot précédent, personne ne le
+  lui passait. Les deux transports REST chargent déjà le message par `include` (donc `expiresAt` est
+  là) ; le transport socket ajoute un champ à un `select` qu'il émettait déjà. Aucune requête ajoutée
+  là non plus.
+
+  **La traduction prête n'était pas un producteur.** `createTranslationReadyNotification` n'avait
+  AUCUN appelant de production — un test était sa seule invocation dans tout le dépôt. Il n'a jamais
+  écrit une ligne, et aucun client n'a jamais reçu ce type. Retiré. `NotificationTypeEnum.TRANSLATION_READY`
+  reste déclaré (le SDK iOS le décode) mais porte désormais la mention explicite qu'aucun producteur
+  ne l'émet — la leçon du lot précédent : une valeur déclarée n'est pas une fonctionnalité, et sans
+  cette note l'énumération redonnerait à tout audit un cinquième cas à instruire.
+
+  L'énumération est vérifiable et fait partie de la revue : quatre méthodes `create*` posent un
+  `context.messageId`, les quatre estampillent l'échéance.
+
+- 7c2fb34: Une notification ne survit plus au message éphémère qu'elle annonce.
+
+  `createMessageNotification` refuse déjà de créer une notification pour un message DÉJÀ expiré. Rien
+  ne disait ce qu'il advient de celle qui est créée AVANT l'expiration : le message éphémère disparaît
+  quelques minutes plus tard, la ligne reste. Elle ne montre rien (l'extrait d'un message protégé est
+  déjà un libellé générique), elle ne mène nulle part (`action: view_message` ouvre un message absent),
+  et son badge non lu ne peut plus être décrémenté par une lecture — on ne lit pas ce qui n'est plus là.
+
+  `Notification.expiresAt` existait pour exactement ça, depuis l'origine du modèle, et le type partagé
+  le publie jusqu'aux clients (`state.expiresAt`, `isNotificationExpired`). Aucun producteur ne
+  l'écrivait, aucune lecture ne l'honorait : les deux moitiés d'une même règle, mortes chacune de son
+  côté. Ce lot les rebranche.
+
+  **Producteur.** La notification hérite de l'échéance du message qu'elle désigne — message régulier,
+  réponse et mention. Le chemin `new_message` la prend de sa propre relecture VIVANTE (celle de la
+  garde d'admission : aucune lecture ajoutée) ; la réponse et les mentions la reçoivent de l'éventail,
+  qui la tient déjà, plutôt que de la relire une fois par destinataire. Les deux sources ne peuvent pas
+  diverger : `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite.
+
+  **Lectures.** Un filtre à la lecture, et non un balayage : contrairement au rappel, la péremption
+  n'est pas un événement — personne ne passe à l'instant T, et un balayage périodique laisserait
+  toujours une fenêtre. Le filtre est exact à la milliseconde et ne coûte aucune écriture. Les sept
+  lectures qui répondent à la même question — liste REST et son total, compte non-lus REST, les deux
+  compteurs poussés par socket, le badge embarqué dans le push, le digest e-mail — la posent désormais
+  par une seule unité, `visibleNotificationsWhere`. `emitCountsUpdate` portait déjà en commentaire la
+  trace d'une divergence passée entre le prédicat du badge et celui de la liste ; sept copies l'auraient
+  rejouée.
+
+  **Index.** `Notification[userId, isRead]` devient `[userId, isRead, expiresAt]` — un remplacement, pas
+  un index de plus : l'ancienne clé est un préfixe de la nouvelle. Sans `expiresAt` dans l'index, le
+  filtre force un fetch de document par candidat sur un compteur qui tourne à CHAQUE notification créée,
+  donc une fois par destinataire de chaque message ; avec, les deux branches du OU restent des plages
+  d'index et le compte reste couvert. Migration `010_notification_expiry_index.js` pour les bases
+  existantes (idempotente, crée avant de supprimer).
+
+  Ce que ce lot ne fait pas : la ligne expirée reste en base (elle ne porte aucune copie du contenu), et
+  un badge déjà affiché ne se corrige qu'au prochain recalcul — cohérence à terme, pas immédiate.
+
+- e4ada9e: Débannir quelqu'un qui était parti de lui-même le faisait rentrer.
+
+  `PATCH …/participants/:userId/ban` cherche sa cible **sans filtrer `isActive`**, et c'est
+  délibéré : bannir un ancien membre est précisément ce qui l'empêche de revenir par un lien de
+  partage, `resolveConversationEntry` refusant toute entrée sur `bannedAt`. Cette capacité n'est pas
+  retirée. Mais les deux moitiés du geste écrivaient sans condition —
+  `ban: { bannedAt: now, isActive: false, leftAt: now }`,
+  `unban: { bannedAt: null, isActive: true, leftAt: null }` — et composées sur un ancien membre,
+  elles font autre chose que ce que leurs noms annoncent.
+
+  **Bannir effaçait le départ.** `leftAt` était réécrit à l'instant du bannissement alors qu'il datait
+  un départ volontaire vieux de plusieurs mois. L'information n'était pas remplacée par une
+  meilleure : elle était perdue, et c'est elle qui aurait permis au débannissement de savoir quoi
+  rendre.
+
+  **Débannir faisait entrer.** `{ isActive: true, leftAt: null }` sur une personne que le bannissement
+  n'avait pas sortie — parce qu'elle était déjà dehors — n'annule rien : ça CRÉE une appartenance. Le
+  débannissement devenait une **quatrième porte d'entrée** dans la conversation, la seule qui
+  n'obéisse pas à `resolveConversationEntry`, qui ne redonne ni rang ni permissions de nouvel arrivant
+  (l'ancien `admin` retrouvait son rang dans une ligne périmée — l'inverse exact de ce que la
+  leçon 89 exige), et qui rebranchait de force les sockets de quelqu'un qui était parti seul.
+
+  La décision vit désormais dans une unité pure, `services/conversations/conversationBanState.ts` :
+  un bannissement ne retire une appartenance que s'il en trouve une ; un débannissement ne rend que ce
+  que le bannissement a pris. Il lève l'interdiction dans tous les cas — sinon « débannir » ne lèverait
+  rien, et toutes les portes continueraient de refuser. Savoir laquelle des deux histoires s'est
+  produite ne demande aucun champ nouveau : le bannissement laisse la trace dans la ligne
+  (`leftAt === bannedAt` ⟺ c'est lui qui a mis fin à l'appartenance), et l'égalité est **exacte par
+  construction**, les deux champs recevant le même objet `Date`. Les lignes écrites avant ce cycle
+  portent toutes cette égalité, donc conservent à l'identique le comportement qu'elles ont toujours eu :
+  aucune réparation de base n'est nécessaire.
+
+  **Le débannissement n'oubliait pas la ligne mise en cache.** `participant-lookup-cache` mémorise
+  `isActive` 30 s pour éviter une lecture par message envoyé ; le bannissement l'invalide, le
+  débannissement ne le faisait pas. Pendant une demi-minute, la personne réintégrée restait
+  `isActive: false` pour le chemin d'envoi et chacun de ses messages était refusé sans qu'aucune ligne
+  en base ne le justifie.
+
+  **Les compteurs de membres des clients suivaient l'événement, pas le fait.**
+  `conversation:participant-banned` et `conversation:participant-unbanned` portent maintenant
+  `membershipEnded` / `membershipRestored`. Web (`use-socket-cache-sync`) et iOS
+  (`ConversationListViewModel`) décrémentaient et incrémentaient sans condition : bannir un ancien
+  membre faisait dériver le compteur vers le bas, durablement côté iOS où la valeur fausse est
+  persistée dans le cache local. Les deux champs sont optionnels et leur absence se lit comme `true` —
+  un serveur antérieur à ce contrat ne bannissait qu'en retirant. Android expose bien les deux
+  événements mais n'en dérive aucun effectif : rien à corriger de ce côté.
+
+## 1.8.8
+
+### Patch Changes
+
+- 36911f8: `build-info` nomme son miroir Python et corrige la portée qu'il s'attribuait.
+
+  L'en-tête du helper décrivait un seul Dockerfile et un seul stage `runner`, et annonçait des valeurs
+  exposées par `/health` et `/info`. Trois écarts avec le dépôt : les Dockerfiles sont ceux des trois
+  services — le translator en deux variantes (`Dockerfile`, `Dockerfile.py310`) —, les stages
+  d'exécution ne portent pas tous le même nom, et seul `/health` expose ces champs.
+
+  Surtout, le contrat était muet sur le fait que le translator, écrit en Python, porte un miroir de ce
+  helper : `services/translator/src/utils/build_info.py`. Les deux fichiers doivent garder des noms de
+  champs identiques pour que les `/health` des trois services se comparent sans traduction — une
+  contrainte qu'aucun test ne rattrape et que rien n'énonçait. Elle est désormais écrite là où on la
+  lit avant de modifier le type.
+
+## 1.8.7
+
+### Patch Changes
+
+- 5647020: Un message envoyé par lien de partage atteint désormais les participants hors ligne.
+
+  `POST /links/:identifier/messages` et son jumeau authentifié `/messages/auth` créaient le
+  message puis l'annonçaient par une seule ligne :
+  `io.to(conversation:<id>).emit(LINK_MESSAGE_NEW)`. Cette room ne contient que les sockets
+  **connectées**. Aucun des deux chemins n'enfilait quoi que ce soit dans
+  `RedisDeliveryQueue`, donc un participant hors ligne à cet instant ne recevait rien à la
+  reconnexion — `_drainPendingMessages` n'avait rien à rejouer, et le client web ne refetch
+  pas (`staleTime: Infinity`). Le message n'apparaissait qu'au prochain refetch complet et
+  sans rapport de la conversation.
+
+  C'est la classe d'événement la plus grave à laquelle ce trou pouvait rester ouvert : pas un
+  compteur de réactions périmé mais un **message entier**, sur le seul transport d'envoi dont
+  dispose un participant anonyme.
+
+  Correctif : un diffuseur unique `broadcastLinkMessage` nommant les **deux** audiences
+  (room live + file hors ligne) par lequel passent les deux routes, un nouvel `eventType`
+  `'link-message'` rejoué en `link:message:new` par le drain, et — pour que la prochaine
+  famille d'événements soit un appel plutôt qu'une sixième copie — une implémentation unique
+  de la troisième audience (`offlineParticipantQueue`) à laquelle délèguent désormais les
+  cinq fan-out jusqu'ici recopiés dans `MessageHandler`, `MeeshySocketIOManager`,
+  `reactionOfflineQueue` et `AttachmentReactionHandler`.
+
+## 1.8.6
+
+### Patch Changes
+
+- 49a661d: Echo the clientMessageId back to a share-link message's author, and withhold it from its peers
+
+  The share-link send routes persist the `clientMessageId` the client sends
+  (`message.create` writes it) but never gave it back. Neither the 201 body nor
+  the `link:message:new` payload carried it, so an author had no way to tie the
+  server's message to the optimistic row already on screen: reconciliation by cid
+  is impossible when the cid never comes back, and the message renders twice.
+
+  The nominal `message:send` path settled this contract already (Phase 4 §6.2) and
+  splits it in two: the sender's payload keeps the cid so the by-cid promotion can
+  run; the peers' broadcast is stripped of it so a third party never learns the
+  sender's optimistic-id space. The share-link routes now follow the same rule
+  through the same helper — `buildLinkMessagePayload` builds the author's payload,
+  `stripClientMessageId` derives the peers'.
+
+  Consequently the 201 body and the socket payload are no longer byte-identical;
+  they are equal modulo `clientMessageId`, which is what the response-contract
+  test now asserts. `stripClientMessageId` became generic and type-preserving:
+  returning `Record<string, unknown>` re-widened every typed payload passing
+  through it, which is exactly what broke the typed `link:message:new` emit whose
+  contract requires `id`/`conversationId`/`senderId`.
+
+  Also declares `clientMessageId` in `sendMessageBodySchema`. Both routes read it
+  and the Zod schema requires it, but the published request contract omitted its
+  only mandatory field. Declared without `required`, so Zod stays the single
+  validator and the error body for a missing cid is unchanged.
+
+- 9b5921f: `link:message:new` now carries the routing keys its consumers need
+
+  Socket.IO does not transport the room name to the receiving side, so the payload
+  is the only routing a client has. `LinkMessageNewEventData.message` was typed
+  `Record<string, unknown>` — a shape that expressed no contract at all — and the
+  gateway built it without `conversationId` or `senderId`. Both are now required by
+  the type and emitted by both share-link routes.
+
+- 94e7074: Add `sharedPlaceResponseSchema` as the single response shape for a shared place
+
+  A shared place was described inline by each response schema that hoists
+  `metadata.location`. Because fast-json-stringify truncates any undeclared
+  property without a signal, a surface that copies the shape slightly wrong — or
+  forgets it — loses the position with nothing to show for it. That is precisely
+  what happened to both share-link send routes.
+
+  The two existing copies in `api-schemas.ts` now spread this constant (overriding
+  only `description`), and the share-link message schema uses it too.
+
+## 1.8.5
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - dedupe missed-call notifications across racing terminal paths
+  - dead call:check-active replay + web listener leak on unmount (#2574)
+  - presence check for immediate high-priority email must target ROOMS.user, not the bare user id
+  - corrige ITMS-90035 a la source — identifier des stubs de frameworks sans code
+  - colore mentions et hashtags de façon adaptative light/dark dans posts/commentaires/reels/moods
+  - accepte [beta] {beta} et guillemets en plus de (beta)
+  - unifie l'affichage de la progression audio (waveform, pourcentage, minuteur)
+  - synchronise le badge non-lu de la conversation au chargement initial
+  - le push APNs n'écrase plus la facette liste posée par le socket message:new
+  - repli sur l'identité locale quand un écho socket omet l'enveloppe expéditeur
+  - hasLocalVideoTrack survives a survival downgrade, camera-switch mirroring desync on failure
+  - un retry de transcription n'ecrase plus une transcription livree
+  - drop translations completing after a message is soft-deleted (#2566)
+  - drop translations completing after a message is soft-deleted
+  - transcription-segment guard used literal 'ended' instead of CALL_TERMINAL_STATUSES (#2564)
+  - guard call:ended against a stale/unrelated callId (#2562)
+  - synchronisation fiable des non-lus — gateway + web + iOS (#2560)
+  - guard against stale transcription callbacks and redundant CallKit mute round-trip (#2559)
+  - résout l'auteur du DM immédiatement au bump temps réel
+  - résout 8 warnings Xcode Cloud (concurrence, code mort, dépréciation)
+  - résout 3/4 warnings Xcode Cloud sur StoryExporter
+  - résout 2 warnings Xcode Cloud (fullSync, switch exhaustif)
+  - résout les warnings de concurrence sur ExtractionBox
+  - propage draftId au chemin de publication en ligne
+  - normalize source language sent to translator (Prisme parity)
+  - fan out disconnectUser/sendToUser/isUserInConversationRoom across all devices
+  - ajoute la clé hashtag.results.empty au catalogue (7 langues)
+  - fusionne ancienneté et « Republier » sur une ligne de pied
+  - sync own message reactions across devices via reactor userId
+  - reduce deprecated ISO 639-1 aliases (iw/in/ji) to canonical codes
+  - route friend-request read-marking through NotificationService (multi-device bell sync)
+  - déclare metadata dans messageSchema — la bulle d'appel restait figée sur "en cours"
+  - traduction audio cassee en prod — TTS opus + echec silencieux (#2565)
+  - align canEditMessage SSOT with the real 24h edit window
+
+## 1.8.4
+
+### Patch Changes
+
+- 27d78d9: **`detectMentionAtCursor` — frontière gauche e-mail (shared).** Le détecteur de
+  mention sous le curseur renvoyait une mention pour n'importe quel `@` précédant le
+  curseur sans espace/retour à la ligne — y compris un `@` interne à une adresse
+  e-mail (`bob@alice`). C'était le seul chemin de mention où l'invariant
+  `NAME_BOUNDARY_LEFT` (SSOT `mention-parser`, déjà appliqué à `parseMentions`,
+  `hasMentions`, `extractMentions`, `mentionsToLinks` et `MENTION_REGEX`) manquait.
+
+  Conséquence observable : le composer d'**édition** (`EditMessageView`, qui appelle
+  la fonction partagée et ne garde que le charset via `isValidMentionQuery`) ouvrait
+  l'autocomplete de mention en tapant une adresse e-mail, là où le composer d'**envoi**
+  (`useMentions`, qui applique déjà `NAME_BOUNDARY_LEFT`) le supprimait correctement —
+  une divergence entre les deux composers.
+
+  Correction : `detectMentionAtCursor` applique désormais la même frontière gauche
+  `NAME_BOUNDARY_LEFT`. Un `@` collé après un caractère de nom (lettre/chiffre/`_`/`-`,
+  Unicode) n'ouvre plus de mention. Aucun changement de signature ni d'API.
+
+## 1.8.3
+
+### Patch Changes
+
+- 6d5cb1e: Deux corrections de robustesse alignant le code sur son contrat documenté.
+
+  **`RedisDeliveryQueue.peek()` — ordre de rejeu (gateway).** Le chemin rapide de
+  `peek()` (aucune entrée en repli mémoire) renvoyait la tranche Redis dans l'ordre
+  brut de la liste (ordre de slot), sans le tri `byEnqueuedAt` qu'appliquent
+  `drain()` et le chemin mixte de `peek()`. Or `ENQUEUE_DEDUP_LUA` remplace un
+  événement mutable **sur place** — il conserve le slot FIFO d'origine tout en
+  estampillant un `enqueuedAt` plus récent — donc l'ordre de slot peut diverger de
+  l'ordre chronologique. L'aperçu remontait alors un ordre de rejeu que le client
+  en reconnexion ne verra jamais (p. ex. une édition avant le message qu'elle cible),
+  violant l'invariant « order by enqueuedAt exactly like drain() » de `peek()`
+  lui-même. Correction : lecture complète `(0, -1)` puis tri par `enqueuedAt` **avant**
+  d'appliquer la limite (un `lrange(0, limit-1)` borné découpe en ordre de slot et
+  peut écarter l'entrée chronologiquement la plus ancienne).
+
+  **`CommonSchemas.pagination` — coercion défensive (shared).** Les transforms
+  `limit`/`offset` appliquaient `|| défaut` à la chaîne brute **avant** `parseInt`,
+  ne rattrapant donc que `undefined`/`''` : `'abc'` produisait `NaN` et `'-5'` passait
+  tel quel, l'un comme l'autre pouvant fuiter dans un `take`/`skip` Prisma. Le repli
+  est désormais appliqué **après** `parseInt`, avec bornage (`limit` 1..100,
+  `offset` ≥ 0), à l'image du `validatePagination` de la gateway. Couvre `pagination`
+  et `messagePagination`. Aucun changement de schéma, d'API ni de migration.
+
+## 1.8.2
+
+### Patch Changes
+
+- f16a057: Offline delivery queue for reactions — a reaction added or removed while a participant is offline is now replayed on reconnect, closing the gap that only covered message edits/deletes.
+
+  Gateway: `ReactionHandler` enqueues `reaction-added`/`reaction-removed` events for offline conversation participants (excluding the reacting actor and every online peer), mirroring the existing `MessageHandler` edit/delete enqueue. On reconnect `MeeshySocketIOManager` drains these entries and replays them as `reaction:added` / `reaction:removed`, so an offline peer's cached reaction counts converge instead of staying stale until an unrelated full refetch. The single-reaction swap path also queues the replaced emoji's removal. Reaction entries never carry a delivery receipt.
+
+  Shared: `QueuedMessagePayload.eventType` gains `'reaction-added'` and `'reaction-removed'`.
+
+## 1.8.1
+
+### Patch Changes
+
+- 71046e6: Présence : palette verte rétablie + source de vérité centralisée.
+
+  Nouvelle source de vérité partagée `@meeshy/shared/utils/user-presence` (`getUserPresenceStatus`) : le flag backend `isOnline` (actif < 1 min) est désormais autoritatif pour l'état online (garde anti-stale au-delà de 30 min), la décroissance 60s/5min/30min sur `lastActiveAt` reste inchangée.
+
+  Palette conforme à la convention produit : vert `#34D399` = online/recent (pulse sur online), orange `#FBBF24` = away 5–30 min, gris `#9CA3AF` = hors ligne. Mapping couleur centralisé dans `lib/user-status.ts` (`PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS`/`PRESENCE_TEXT_CLASS`) et consommé par toutes les surfaces (OnlineIndicator, badges, labels, StreamSidebar, v2 Avatar/ContactCard/ConversationItem, recherche).
+
+  Un `typing:start` reçu force l'état online de l'émetteur dans le user-store : une personne en train d'écrire affiche toujours la pastille verte.
+
+## 1.8.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - serialize per-user \_seq allocation+emit to preserve SyncEngine ordering (#1713)
+  - pinned-message banner (chat §C read side) (#1715)
+  - serialize thermal video downgrade, fix unhold error swallow, TURN/STUN reliability (#1692)
+  - stop dependabot proposing Next.js major bumps (#1694)
+  - reply-count pills — pure ReplyThreads SSOT (#1684)
+  - two realtime correctness bugs — presence list leak + moderator-delete offline enqueue (iter 144) (#1685)
+  - fix WebRTC task isolation races, dead analytics field, ObservedObject re-subscription (#1665)
+  - getUserLanguagePreferences injects deviceLocale — parity with display resolution (iter 143) (#1666)
+  - synchronise la présence du profil avec la liste de conversations (#1664)
+  - UA detection — specific platform swallowed by generic token (iter 142) (#1662)
+  - who-reacted breakdown sheet — pure ReactionBreakdown SSOT (#1663)
+  - overnight DND morning tail bound to window start day (iter 141) (#1661)
+  - restore DELETE/PUT/PATCH in CORS preflight
+  - web rejoin race + signaling leak, gateway zombie-socket scoping + DND bypass (#1660)
+  - idempotent attachment:reaction — no re-broadcast on a no-op add/remove (iter 141) (#1659)
+  - pure ConversationSections SSOT — pinned/others split, no phantom empty section (#1657)
+  - snapToScale honors octave wrap — auto-tune no longer mis-snaps B (iter 139) (#1656)
+  - formatFileSize rolls Ko→Mo — no more "1024 Ko" (iter 138) (#1655)
+  - clicksByHour in UTC — coherent with clicksByDate (iter 137) (#1654)
+  - gateway call-lifecycle fanout hardening + iOS accessibility/HIG fixes (#1653)
+  - FIFO drain order — a memory-fallback edit no longer replays before its Redis-backed new (iter 136) (#1652)
+  - discard-draft affordance (§B draft lifecycle) (#1651)
+  - locationCount never incremented on the live path — count by messageType like recompute (iter 135) (#1650)
+  - dropped ICE restart never recovered when a renegotiation was already in flight (web) (#1649)
+  - idempotent reaction:add — no re-broadcast/re-notify on a no-op re-react (iter 134) (#1648)
+  - iconified empty-state card (iOS parity §B) (#1647)
+  - aggregate packet loss across all inbound streams (iter 133) (#1646)
+  - orphan-recovery gaps, duration anchor drift, dead push, quality-monitor loop, banner re-arm (#1645)
+  - email fragments no longer linkified/extracted as mentions — unify SSOT left boundary (iter 132) (#1644)
+  - pure empty-state decision (iOS parity §B) (#1643)
+  - quality-first dedup — a newer basic no longer downgrades a premium (iter 129) (#1640)
+  - "End &amp; Answer" never answered the waiting call + third caller silently dropped (#1639)
+  - draft-aware ordering + draft row preview (iOS parity §B) (#1638)
+  - message-list route ignored frozen receipts, under-counting delivered/read vs read-status endpoints (#1637)
+  - bouton 'voir la conversation' sur l'ecran d'appel (minimise + ouvre le DM)
+  - minimiser l'appel en pilule flottante (voir la conversation pendant l'appel)
+  - call:end recovery bypassed the wide fanout + web never sent call:heartbeat (#1636)
+  - clamp truncateFilename output for maxLength &lt; 4 (iter 128) (#1635)
+  - faire aboutir l'appel SORTANT Android (peerId du joiner)
+  - fermer automatiquement l'ecran d'appel termine
+  - persist reply reference with draft (iOS DraftStore parity) (#1633)
+  - scope anonymous membership check to the target conversation (#1634)
+  - missed-call notification skipped on force-end cleanup + dead field names in adaptive degradation (#1631)
+  - per-conversation text draft auto-save/restore (iOS parity) (#1630)
+  - batch read-statuses ignored frozen receipts, under-counting vs single-message endpoint (#1629)
+  - faire aboutir l'appel entrant WebRTC (join-with-ACK + to-field)
+  - demander la permission micro/camera au runtime avant le media
+  - disconnect-grace missed calls never notified + stale perfect-negotiation state on rejoin (#1627)
+  - extract preprocessContent to a pure module so its test guards production (iter 126) (#1628)
+  - anonymous socket joins ROOMS.user room so unread badge updates live (#1626)
+  - importer le media WebRTC P1-P4 (moteur + coordinateur + video)
+  - faire sonner l'appel entrant au niveau app (offer socket foreground)
+  - filter STT alternatives by region, drop tautology + var shadowing (#1620)
+  - EMOJI_PATTERN range swallowed CJK/Kana/Hangul (#1622)
+  - split delete into "for everyone" vs "for me" (iOS parity) (#1624)
+  - extract normalizeMarkdown to a pure module so its test guards production (#1621)
+  - version-bump gap in initiateCall cleanup + web quality-report never emitted (#1606)
+  - release dedup key on failure so retries aren't swallowed (#1608)
+  - unify sanitizer dangerous-key guard, close sanitizeMongoQuery prototype-pollution gap (#1605)
+  - key message-translation cache by preferred language (iter 124) (#1613)
+  - NLLB language-map coverage, uppercase URL scheme, group senderName SSOT (#1602)
+  - is_list_item bullet class was an unintended char range (#1593)
+  - deliver notification:new to the right room + close anon typing/reaction cross-conversation gap (#1588)
+  - stop duplicate message:new re-broadcast on sequential retry + linkify mixed-case mentions (#1592)
+  - render a live sub-minute countdown as 1m, not 0m (#1590)
+  - call banner swipe-to-collapse bubble (#1618)
+  - header typing-avatar chips (stacked + overflow) (#1616)
+  - evict sockets from call room on GC force-end (#1601)
+  - remove duplicate/false typing:stop on multi-device disconnect (#1617)
+  - correct destructured prop name in DraggableParticipantOverlay (#1597)
+  - callee accepting an audio-only call no longer activates camera/transmits video (#1614)
+  - callee accepting an audio-only call no longer activates camera/transmits video
+  - enforce the 2-hour message-edit window (#1612)
+  - resolve mixed-case @mentions via OR+equals, not case-broken `in` (#1611)
+  - header-level typing indicator + group member subtitle (#1607)
+  - declarer les permissions media appels (RECORD_AUDIO/CAMERA)
+  - nom de conv/appel direct = autre participant, pas soi
+  - Reels P6 — boutons flottants alignes iOS (+ Contacts au radial)
+  - Reels P5 — reels dans le Feed (carte + lancement gate)
+  - Reels P4 — route nav + lancement Feed + item radial
+  - Reels P3 — module :feature:reels + ViewModel + ecran vertical
+  - Reels P2 — Media3 + atome ReelVideoSurface
+  - Reels P1 — API getReels + repo + plan de portage
+  - habillage Profile (MeeshyBackground gradient + tokens)
+  - retirer la deconnexion de la vue principale (reste dans Reglages)
+  - route notification:new to ROOMS.user, not raw userId (#1604)
+  - polish — habillage Contacts (gradient + tokens)
+  - polish — habillage Calls (MeeshyBackground gradient)
+  - fold typing roster into scroll-to-bottom control (#1603)
+  - Option A — retrait bottom nav -> MeeshyMenuFab radial
+  - keyed typing-participants roster + label SSOT (#1599)
+  - P2-S2 Chat increment 1 — fond gradient + app bar transparent
+  - P2-S3 Feed habillage glass + formateur date partage
+  - P2-S5 Notifications — timestamp ISO -> label localise
+  - hydrater currentUser au boot (me() renvoie {user}, pas MeeshyUser)
+  - P2-S4 Reglages — icones colorees de section + tokens
+  - P2-S4 habillage Reglages (MeeshyBackground + chrome transparent)
+  - enforce read⇒delivered in markMessagesAsRead
+  - P2-S1 barre de recherche glass en bas (parite iOS)
+  - P2-S1 retirer les chips filtres Material (parite iOS)
+  - mapper userPreferences (debloque pin/mute/archive/customName)
+  - P2-S1 sections repliables liste conv (CollapsibleSection)
+  - P2-S1 resoudre le nom des conversations directes
+  - P2-S1 habillage liste conv (MeeshyBackground+glass+grand titre)
+  - GC missed-call notifications, force-leave timer cleanup, web offer/TURN-refresh gaps (#1594)
+  - swipe-to-reply gesture with rubber-band commit core (#1595)
+  - scroll-to-bottom control with unread badge + preview (#1591)
+  - all-or-nothing group delivery semantics for own-message checks (#1587)
+  - tap a quoted-reply preview to scroll to the original (#1584)
+  - P1-8 MeeshyToast (feedback pill + notification card)
+  - P1-7 MeeshyMenuFab (menu radial iOS = stack vertical staggere)
+  - P1-7 FloatingGradientFab (FAB gradient corail/indigo)
+  - P1-6 CollapsibleSection (sections repliables liste conv)
+  - P1-5 MeeshyAvatar v2 (ring/presence/mood + fill gradient)
+  - apiCall degrade sur reponse malformee au lieu de crasher
+  - degrade SerializationException to a PARSE failure instead of crashing
+  - affiliate relations no longer leak presence to non-friends
+  - call:join never acked failures (gateway+web) + 2 P2034 gaps in CallService
+  - use RFC 7232 §3.2 weak comparison for If-None-Match
+  - gate cached translation path with conversation-membership check
+  - chat @-mention autocomplete + roster display-name resolution
+  - repair phantom-ringing fanout gap + call teardown edge cases
+  - dedup on the resolved message id, not the constant "latest"
+  - in-conversation message search + search-highlight wiring
+  - restore F84 load-more offset fix reverted by a stale merge
+  - P0-4 primitives chrome glass + habillage pilote Notifications
+  - P0-3 typographie rounded Nunito (substitut SF Pro Rounded)
+  - P0-2 ColorScheme Material complet indigo (zero surface grise)
+  - improve iOS quality, accessibility and fix CI flakiness
+  - restore web P0 initiator UI + check-active replay + transient-error whitelist silently dropped by 8ebd497b, absorb PR #1558's boot-floor/race fixes
+  - converge getParticipantDisplayName to canonical name resolver
+  - P0-1 verrouiller les design tokens sur la parite iOS
+  - count text messages by messageType in incremental path to match recompute (F85)
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - bound participantId cache + reset typing throttle on stop
+  - \_segment_text no longer drops a short sentence before a huge one (F85)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - join rooms before marking socket connected to close message-loss race
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - close TOCTOU race that could regress the delivered/read cursor
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - réaligner 3 source-guards CallView hérités du merge main
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - exact @mention resolution — anchor Unicode name boundaries
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - unify timeout via withTimeout helper, fix leaked timers
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - keep attachments on message:edit realtime broadcast
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - ne plus exposer l'email des co-participants (PII)
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - corrections du review présence (conformité + decay)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - localize message quick-action menu — iter 71i
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - scope push notification collapse-id per-conversation (#1140)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - fix hover-prefetch cache key mismatch crashing on new message
+  - sync reels cache on post edit/delete (socket + optimistic) (#1615)
+  - recharger sur erreur de chunk perime attrapee par ErrorBoundary
+  - recover socket.io realtime delivery after reconnect_failed
+  - converge formatDuration onto shared formatClock (iter 74)
+  - converge local formatDuration onto shared formatClock
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - remove duplicate copyToClipboard import breaking the build
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - remove duplicate getUserInitials import in u/[id] page
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - pin espnet==202412 — 202511 exige numpy>=2.0 et casse le build Docker
+  - emoji extraction stripped CJK/Kana/Hangul, leaving CJK text untranslated (#1625)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.7.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - serialize thermal video downgrade, fix unhold error swallow, TURN/STUN reliability (#1692)
+  - stop dependabot proposing Next.js major bumps (#1694)
+  - reply-count pills — pure ReplyThreads SSOT (#1684)
+  - fix WebRTC task isolation races, dead analytics field, ObservedObject re-subscription (#1665)
+  - getUserLanguagePreferences injects deviceLocale — parity with display resolution (iter 143) (#1666)
+  - synchronise la présence du profil avec la liste de conversations (#1664)
+  - UA detection — specific platform swallowed by generic token (iter 142) (#1662)
+  - who-reacted breakdown sheet — pure ReactionBreakdown SSOT (#1663)
+  - overnight DND morning tail bound to window start day (iter 141) (#1661)
+  - fix hover-prefetch cache key mismatch crashing on new message
+  - web rejoin race + signaling leak, gateway zombie-socket scoping + DND bypass (#1660)
+  - idempotent attachment:reaction — no re-broadcast on a no-op add/remove (iter 141) (#1659)
+  - pure ConversationSections SSOT — pinned/others split, no phantom empty section (#1657)
+  - snapToScale honors octave wrap — auto-tune no longer mis-snaps B (iter 139) (#1656)
+  - formatFileSize rolls Ko→Mo — no more "1024 Ko" (iter 138) (#1655)
+  - clicksByHour in UTC — coherent with clicksByDate (iter 137) (#1654)
+  - gateway call-lifecycle fanout hardening + iOS accessibility/HIG fixes (#1653)
+  - FIFO drain order — a memory-fallback edit no longer replays before its Redis-backed new (iter 136) (#1652)
+  - discard-draft affordance (§B draft lifecycle) (#1651)
+  - locationCount never incremented on the live path — count by messageType like recompute (iter 135) (#1650)
+  - dropped ICE restart never recovered when a renegotiation was already in flight (web) (#1649)
+  - idempotent reaction:add — no re-broadcast/re-notify on a no-op re-react (iter 134) (#1648)
+  - iconified empty-state card (iOS parity §B) (#1647)
+  - aggregate packet loss across all inbound streams (iter 133) (#1646)
+  - orphan-recovery gaps, duration anchor drift, dead push, quality-monitor loop, banner re-arm (#1645)
+  - email fragments no longer linkified/extracted as mentions — unify SSOT left boundary (iter 132) (#1644)
+  - pure empty-state decision (iOS parity §B) (#1643)
+  - quality-first dedup — a newer basic no longer downgrades a premium (iter 129) (#1640)
+  - "End &amp; Answer" never answered the waiting call + third caller silently dropped (#1639)
+  - draft-aware ordering + draft row preview (iOS parity §B) (#1638)
+  - message-list route ignored frozen receipts, under-counting delivered/read vs read-status endpoints (#1637)
+  - bouton 'voir la conversation' sur l'ecran d'appel (minimise + ouvre le DM)
+  - minimiser l'appel en pilule flottante (voir la conversation pendant l'appel)
+  - call:end recovery bypassed the wide fanout + web never sent call:heartbeat (#1636)
+  - clamp truncateFilename output for maxLength &lt; 4 (iter 128) (#1635)
+  - faire aboutir l'appel SORTANT Android (peerId du joiner)
+  - fermer automatiquement l'ecran d'appel termine
+  - persist reply reference with draft (iOS DraftStore parity) (#1633)
+  - scope anonymous membership check to the target conversation (#1634)
+  - missed-call notification skipped on force-end cleanup + dead field names in adaptive degradation (#1631)
+  - per-conversation text draft auto-save/restore (iOS parity) (#1630)
+  - batch read-statuses ignored frozen receipts, under-counting vs single-message endpoint (#1629)
+  - faire aboutir l'appel entrant WebRTC (join-with-ACK + to-field)
+  - demander la permission micro/camera au runtime avant le media
+  - disconnect-grace missed calls never notified + stale perfect-negotiation state on rejoin (#1627)
+  - extract preprocessContent to a pure module so its test guards production (iter 126) (#1628)
+  - anonymous socket joins ROOMS.user room so unread badge updates live (#1626)
+  - importer le media WebRTC P1-P4 (moteur + coordinateur + video)
+  - faire sonner l'appel entrant au niveau app (offer socket foreground)
+  - filter STT alternatives by region, drop tautology + var shadowing (#1620)
+  - EMOJI_PATTERN range swallowed CJK/Kana/Hangul (#1622)
+  - split delete into "for everyone" vs "for me" (iOS parity) (#1624)
+  - sync reels cache on post edit/delete (socket + optimistic) (#1615)
+  - extract normalizeMarkdown to a pure module so its test guards production (#1621)
+  - version-bump gap in initiateCall cleanup + web quality-report never emitted (#1606)
+  - release dedup key on failure so retries aren't swallowed (#1608)
+  - unify sanitizer dangerous-key guard, close sanitizeMongoQuery prototype-pollution gap (#1605)
+  - key message-translation cache by preferred language (iter 124) (#1613)
+  - NLLB language-map coverage, uppercase URL scheme, group senderName SSOT (#1602)
+  - is_list_item bullet class was an unintended char range (#1593)
+  - deliver notification:new to the right room + close anon typing/reaction cross-conversation gap (#1588)
+  - stop duplicate message:new re-broadcast on sequential retry + linkify mixed-case mentions (#1592)
+  - render a live sub-minute countdown as 1m, not 0m (#1590)
+  - call banner swipe-to-collapse bubble (#1618)
+  - header typing-avatar chips (stacked + overflow) (#1616)
+  - evict sockets from call room on GC force-end (#1601)
+  - remove duplicate/false typing:stop on multi-device disconnect (#1617)
+  - correct destructured prop name in DraggableParticipantOverlay (#1597)
+  - callee accepting an audio-only call no longer activates camera/transmits video (#1614)
+  - callee accepting an audio-only call no longer activates camera/transmits video
+  - enforce the 2-hour message-edit window (#1612)
+  - resolve mixed-case @mentions via OR+equals, not case-broken `in` (#1611)
+  - header-level typing indicator + group member subtitle (#1607)
+  - declarer les permissions media appels (RECORD_AUDIO/CAMERA)
+  - nom de conv/appel direct = autre participant, pas soi
+  - Reels P6 — boutons flottants alignes iOS (+ Contacts au radial)
+  - recharger sur erreur de chunk perime attrapee par ErrorBoundary
+  - Reels P5 — reels dans le Feed (carte + lancement gate)
+  - Reels P4 — route nav + lancement Feed + item radial
+  - Reels P3 — module :feature:reels + ViewModel + ecran vertical
+  - Reels P2 — Media3 + atome ReelVideoSurface
+  - Reels P1 — API getReels + repo + plan de portage
+  - habillage Profile (MeeshyBackground gradient + tokens)
+  - retirer la deconnexion de la vue principale (reste dans Reglages)
+  - route notification:new to ROOMS.user, not raw userId (#1604)
+  - polish — habillage Contacts (gradient + tokens)
+  - polish — habillage Calls (MeeshyBackground gradient)
+  - fold typing roster into scroll-to-bottom control (#1603)
+  - Option A — retrait bottom nav -> MeeshyMenuFab radial
+  - keyed typing-participants roster + label SSOT (#1599)
+  - P2-S2 Chat increment 1 — fond gradient + app bar transparent
+  - P2-S3 Feed habillage glass + formateur date partage
+  - P2-S5 Notifications — timestamp ISO -> label localise
+  - hydrater currentUser au boot (me() renvoie {user}, pas MeeshyUser)
+  - P2-S4 Reglages — icones colorees de section + tokens
+  - P2-S4 habillage Reglages (MeeshyBackground + chrome transparent)
+  - enforce read⇒delivered in markMessagesAsRead
+  - P2-S1 barre de recherche glass en bas (parite iOS)
+  - P2-S1 retirer les chips filtres Material (parite iOS)
+  - mapper userPreferences (debloque pin/mute/archive/customName)
+  - P2-S1 sections repliables liste conv (CollapsibleSection)
+  - P2-S1 resoudre le nom des conversations directes
+  - P2-S1 habillage liste conv (MeeshyBackground+glass+grand titre)
+  - GC missed-call notifications, force-leave timer cleanup, web offer/TURN-refresh gaps (#1594)
+  - swipe-to-reply gesture with rubber-band commit core (#1595)
+  - scroll-to-bottom control with unread badge + preview (#1591)
+  - all-or-nothing group delivery semantics for own-message checks (#1587)
+  - tap a quoted-reply preview to scroll to the original (#1584)
+  - P1-8 MeeshyToast (feedback pill + notification card)
+  - P1-7 MeeshyMenuFab (menu radial iOS = stack vertical staggere)
+  - P1-7 FloatingGradientFab (FAB gradient corail/indigo)
+  - P1-6 CollapsibleSection (sections repliables liste conv)
+  - P1-5 MeeshyAvatar v2 (ring/presence/mood + fill gradient)
+  - apiCall degrade sur reponse malformee au lieu de crasher
+  - degrade SerializationException to a PARSE failure instead of crashing
+  - affiliate relations no longer leak presence to non-friends
+  - call:join never acked failures (gateway+web) + 2 P2034 gaps in CallService
+  - use RFC 7232 §3.2 weak comparison for If-None-Match
+  - gate cached translation path with conversation-membership check
+  - chat @-mention autocomplete + roster display-name resolution
+  - repair phantom-ringing fanout gap + call teardown edge cases
+  - dedup on the resolved message id, not the constant "latest"
+  - in-conversation message search + search-highlight wiring
+  - restore F84 load-more offset fix reverted by a stale merge
+  - P0-4 primitives chrome glass + habillage pilote Notifications
+  - P0-3 typographie rounded Nunito (substitut SF Pro Rounded)
+  - P0-2 ColorScheme Material complet indigo (zero surface grise)
+  - improve iOS quality, accessibility and fix CI flakiness
+  - restore web P0 initiator UI + check-active replay + transient-error whitelist silently dropped by 8ebd497b, absorb PR #1558's boot-floor/race fixes
+  - converge getParticipantDisplayName to canonical name resolver
+  - P0-1 verrouiller les design tokens sur la parite iOS
+  - count text messages by messageType in incremental path to match recompute (F85)
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - bound participantId cache + reset typing throttle on stop
+  - \_segment_text no longer drops a short sentence before a huge one (F85)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - two realtime correctness bugs — presence list leak + moderator-delete offline enqueue (iter 144) (#1685)
+  - restore DELETE/PUT/PATCH in CORS preflight
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - pin espnet==202412 — 202511 exige numpy>=2.0 et casse le build Docker
+  - emoji extraction stripped CJK/Kana/Hangul, leaving CJK text untranslated (#1625)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.6.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - serialize thermal video downgrade, fix unhold error swallow, TURN/STUN reliability (#1692)
+  - stop dependabot proposing Next.js major bumps (#1694)
+  - reply-count pills — pure ReplyThreads SSOT (#1684)
+  - fix WebRTC task isolation races, dead analytics field, ObservedObject re-subscription (#1665)
+  - getUserLanguagePreferences injects deviceLocale — parity with display resolution (iter 143) (#1666)
+  - synchronise la présence du profil avec la liste de conversations (#1664)
+  - UA detection — specific platform swallowed by generic token (iter 142) (#1662)
+  - who-reacted breakdown sheet — pure ReactionBreakdown SSOT (#1663)
+  - overnight DND morning tail bound to window start day (iter 141) (#1661)
+  - fix hover-prefetch cache key mismatch crashing on new message
+  - web rejoin race + signaling leak, gateway zombie-socket scoping + DND bypass (#1660)
+  - idempotent attachment:reaction — no re-broadcast on a no-op add/remove (iter 141) (#1659)
+  - pure ConversationSections SSOT — pinned/others split, no phantom empty section (#1657)
+  - snapToScale honors octave wrap — auto-tune no longer mis-snaps B (iter 139) (#1656)
+  - formatFileSize rolls Ko→Mo — no more "1024 Ko" (iter 138) (#1655)
+  - clicksByHour in UTC — coherent with clicksByDate (iter 137) (#1654)
+  - gateway call-lifecycle fanout hardening + iOS accessibility/HIG fixes (#1653)
+  - FIFO drain order — a memory-fallback edit no longer replays before its Redis-backed new (iter 136) (#1652)
+  - discard-draft affordance (§B draft lifecycle) (#1651)
+  - locationCount never incremented on the live path — count by messageType like recompute (iter 135) (#1650)
+  - dropped ICE restart never recovered when a renegotiation was already in flight (web) (#1649)
+  - idempotent reaction:add — no re-broadcast/re-notify on a no-op re-react (iter 134) (#1648)
+  - iconified empty-state card (iOS parity §B) (#1647)
+  - aggregate packet loss across all inbound streams (iter 133) (#1646)
+  - orphan-recovery gaps, duration anchor drift, dead push, quality-monitor loop, banner re-arm (#1645)
+  - email fragments no longer linkified/extracted as mentions — unify SSOT left boundary (iter 132) (#1644)
+  - pure empty-state decision (iOS parity §B) (#1643)
+  - quality-first dedup — a newer basic no longer downgrades a premium (iter 129) (#1640)
+  - "End &amp; Answer" never answered the waiting call + third caller silently dropped (#1639)
+  - draft-aware ordering + draft row preview (iOS parity §B) (#1638)
+  - message-list route ignored frozen receipts, under-counting delivered/read vs read-status endpoints (#1637)
+  - bouton 'voir la conversation' sur l'ecran d'appel (minimise + ouvre le DM)
+  - minimiser l'appel en pilule flottante (voir la conversation pendant l'appel)
+  - call:end recovery bypassed the wide fanout + web never sent call:heartbeat (#1636)
+  - clamp truncateFilename output for maxLength &lt; 4 (iter 128) (#1635)
+  - faire aboutir l'appel SORTANT Android (peerId du joiner)
+  - fermer automatiquement l'ecran d'appel termine
+  - persist reply reference with draft (iOS DraftStore parity) (#1633)
+  - scope anonymous membership check to the target conversation (#1634)
+  - missed-call notification skipped on force-end cleanup + dead field names in adaptive degradation (#1631)
+  - per-conversation text draft auto-save/restore (iOS parity) (#1630)
+  - batch read-statuses ignored frozen receipts, under-counting vs single-message endpoint (#1629)
+  - faire aboutir l'appel entrant WebRTC (join-with-ACK + to-field)
+  - demander la permission micro/camera au runtime avant le media
+  - disconnect-grace missed calls never notified + stale perfect-negotiation state on rejoin (#1627)
+  - extract preprocessContent to a pure module so its test guards production (iter 126) (#1628)
+  - anonymous socket joins ROOMS.user room so unread badge updates live (#1626)
+  - importer le media WebRTC P1-P4 (moteur + coordinateur + video)
+  - faire sonner l'appel entrant au niveau app (offer socket foreground)
+  - filter STT alternatives by region, drop tautology + var shadowing (#1620)
+  - EMOJI_PATTERN range swallowed CJK/Kana/Hangul (#1622)
+  - split delete into "for everyone" vs "for me" (iOS parity) (#1624)
+  - sync reels cache on post edit/delete (socket + optimistic) (#1615)
+  - extract normalizeMarkdown to a pure module so its test guards production (#1621)
+  - version-bump gap in initiateCall cleanup + web quality-report never emitted (#1606)
+  - release dedup key on failure so retries aren't swallowed (#1608)
+  - unify sanitizer dangerous-key guard, close sanitizeMongoQuery prototype-pollution gap (#1605)
+  - key message-translation cache by preferred language (iter 124) (#1613)
+  - NLLB language-map coverage, uppercase URL scheme, group senderName SSOT (#1602)
+  - is_list_item bullet class was an unintended char range (#1593)
+  - deliver notification:new to the right room + close anon typing/reaction cross-conversation gap (#1588)
+  - stop duplicate message:new re-broadcast on sequential retry + linkify mixed-case mentions (#1592)
+  - render a live sub-minute countdown as 1m, not 0m (#1590)
+  - call banner swipe-to-collapse bubble (#1618)
+  - header typing-avatar chips (stacked + overflow) (#1616)
+  - evict sockets from call room on GC force-end (#1601)
+  - remove duplicate/false typing:stop on multi-device disconnect (#1617)
+  - correct destructured prop name in DraggableParticipantOverlay (#1597)
+  - callee accepting an audio-only call no longer activates camera/transmits video (#1614)
+  - callee accepting an audio-only call no longer activates camera/transmits video
+  - enforce the 2-hour message-edit window (#1612)
+  - resolve mixed-case @mentions via OR+equals, not case-broken `in` (#1611)
+  - header-level typing indicator + group member subtitle (#1607)
+  - declarer les permissions media appels (RECORD_AUDIO/CAMERA)
+  - nom de conv/appel direct = autre participant, pas soi
+  - Reels P6 — boutons flottants alignes iOS (+ Contacts au radial)
+  - recharger sur erreur de chunk perime attrapee par ErrorBoundary
+  - Reels P5 — reels dans le Feed (carte + lancement gate)
+  - Reels P4 — route nav + lancement Feed + item radial
+  - Reels P3 — module :feature:reels + ViewModel + ecran vertical
+  - Reels P2 — Media3 + atome ReelVideoSurface
+  - Reels P1 — API getReels + repo + plan de portage
+  - habillage Profile (MeeshyBackground gradient + tokens)
+  - retirer la deconnexion de la vue principale (reste dans Reglages)
+  - route notification:new to ROOMS.user, not raw userId (#1604)
+  - polish — habillage Contacts (gradient + tokens)
+  - polish — habillage Calls (MeeshyBackground gradient)
+  - fold typing roster into scroll-to-bottom control (#1603)
+  - Option A — retrait bottom nav -> MeeshyMenuFab radial
+  - keyed typing-participants roster + label SSOT (#1599)
+  - P2-S2 Chat increment 1 — fond gradient + app bar transparent
+  - P2-S3 Feed habillage glass + formateur date partage
+  - P2-S5 Notifications — timestamp ISO -> label localise
+  - hydrater currentUser au boot (me() renvoie {user}, pas MeeshyUser)
+  - P2-S4 Reglages — icones colorees de section + tokens
+  - P2-S4 habillage Reglages (MeeshyBackground + chrome transparent)
+  - enforce read⇒delivered in markMessagesAsRead
+  - P2-S1 barre de recherche glass en bas (parite iOS)
+  - P2-S1 retirer les chips filtres Material (parite iOS)
+  - mapper userPreferences (debloque pin/mute/archive/customName)
+  - P2-S1 sections repliables liste conv (CollapsibleSection)
+  - P2-S1 resoudre le nom des conversations directes
+  - P2-S1 habillage liste conv (MeeshyBackground+glass+grand titre)
+  - GC missed-call notifications, force-leave timer cleanup, web offer/TURN-refresh gaps (#1594)
+  - swipe-to-reply gesture with rubber-band commit core (#1595)
+  - scroll-to-bottom control with unread badge + preview (#1591)
+  - all-or-nothing group delivery semantics for own-message checks (#1587)
+  - tap a quoted-reply preview to scroll to the original (#1584)
+  - P1-8 MeeshyToast (feedback pill + notification card)
+  - P1-7 MeeshyMenuFab (menu radial iOS = stack vertical staggere)
+  - P1-7 FloatingGradientFab (FAB gradient corail/indigo)
+  - P1-6 CollapsibleSection (sections repliables liste conv)
+  - P1-5 MeeshyAvatar v2 (ring/presence/mood + fill gradient)
+  - apiCall degrade sur reponse malformee au lieu de crasher
+  - degrade SerializationException to a PARSE failure instead of crashing
+  - affiliate relations no longer leak presence to non-friends
+  - call:join never acked failures (gateway+web) + 2 P2034 gaps in CallService
+  - use RFC 7232 §3.2 weak comparison for If-None-Match
+  - gate cached translation path with conversation-membership check
+  - chat @-mention autocomplete + roster display-name resolution
+  - repair phantom-ringing fanout gap + call teardown edge cases
+  - dedup on the resolved message id, not the constant "latest"
+  - in-conversation message search + search-highlight wiring
+  - restore F84 load-more offset fix reverted by a stale merge
+  - P0-4 primitives chrome glass + habillage pilote Notifications
+  - P0-3 typographie rounded Nunito (substitut SF Pro Rounded)
+  - P0-2 ColorScheme Material complet indigo (zero surface grise)
+  - improve iOS quality, accessibility and fix CI flakiness
+  - restore web P0 initiator UI + check-active replay + transient-error whitelist silently dropped by 8ebd497b, absorb PR #1558's boot-floor/race fixes
+  - converge getParticipantDisplayName to canonical name resolver
+  - P0-1 verrouiller les design tokens sur la parite iOS
+  - count text messages by messageType in incremental path to match recompute (F85)
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - bound participantId cache + reset typing throttle on stop
+  - \_segment_text no longer drops a short sentence before a huge one (F85)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - two realtime correctness bugs — presence list leak + moderator-delete offline enqueue (iter 144) (#1685)
+  - restore DELETE/PUT/PATCH in CORS preflight
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - pin espnet==202412 — 202511 exige numpy>=2.0 et casse le build Docker
+  - emoji extraction stripped CJK/Kana/Hangul, leaving CJK text untranslated (#1625)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.5.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - serialize thermal video downgrade, fix unhold error swallow, TURN/STUN reliability (#1692)
+  - stop dependabot proposing Next.js major bumps (#1694)
+  - reply-count pills — pure ReplyThreads SSOT (#1684)
+  - fix WebRTC task isolation races, dead analytics field, ObservedObject re-subscription (#1665)
+  - getUserLanguagePreferences injects deviceLocale — parity with display resolution (iter 143) (#1666)
+  - synchronise la présence du profil avec la liste de conversations (#1664)
+  - UA detection — specific platform swallowed by generic token (iter 142) (#1662)
+  - who-reacted breakdown sheet — pure ReactionBreakdown SSOT (#1663)
+  - overnight DND morning tail bound to window start day (iter 141) (#1661)
+  - fix hover-prefetch cache key mismatch crashing on new message
+  - web rejoin race + signaling leak, gateway zombie-socket scoping + DND bypass (#1660)
+  - idempotent attachment:reaction — no re-broadcast on a no-op add/remove (iter 141) (#1659)
+  - pure ConversationSections SSOT — pinned/others split, no phantom empty section (#1657)
+  - snapToScale honors octave wrap — auto-tune no longer mis-snaps B (iter 139) (#1656)
+  - formatFileSize rolls Ko→Mo — no more "1024 Ko" (iter 138) (#1655)
+  - clicksByHour in UTC — coherent with clicksByDate (iter 137) (#1654)
+  - gateway call-lifecycle fanout hardening + iOS accessibility/HIG fixes (#1653)
+  - FIFO drain order — a memory-fallback edit no longer replays before its Redis-backed new (iter 136) (#1652)
+  - discard-draft affordance (§B draft lifecycle) (#1651)
+  - locationCount never incremented on the live path — count by messageType like recompute (iter 135) (#1650)
+  - dropped ICE restart never recovered when a renegotiation was already in flight (web) (#1649)
+  - idempotent reaction:add — no re-broadcast/re-notify on a no-op re-react (iter 134) (#1648)
+  - iconified empty-state card (iOS parity §B) (#1647)
+  - aggregate packet loss across all inbound streams (iter 133) (#1646)
+  - orphan-recovery gaps, duration anchor drift, dead push, quality-monitor loop, banner re-arm (#1645)
+  - email fragments no longer linkified/extracted as mentions — unify SSOT left boundary (iter 132) (#1644)
+  - pure empty-state decision (iOS parity §B) (#1643)
+  - quality-first dedup — a newer basic no longer downgrades a premium (iter 129) (#1640)
+  - "End &amp; Answer" never answered the waiting call + third caller silently dropped (#1639)
+  - draft-aware ordering + draft row preview (iOS parity §B) (#1638)
+  - message-list route ignored frozen receipts, under-counting delivered/read vs read-status endpoints (#1637)
+  - bouton 'voir la conversation' sur l'ecran d'appel (minimise + ouvre le DM)
+  - minimiser l'appel en pilule flottante (voir la conversation pendant l'appel)
+  - call:end recovery bypassed the wide fanout + web never sent call:heartbeat (#1636)
+  - clamp truncateFilename output for maxLength &lt; 4 (iter 128) (#1635)
+  - faire aboutir l'appel SORTANT Android (peerId du joiner)
+  - fermer automatiquement l'ecran d'appel termine
+  - persist reply reference with draft (iOS DraftStore parity) (#1633)
+  - scope anonymous membership check to the target conversation (#1634)
+  - missed-call notification skipped on force-end cleanup + dead field names in adaptive degradation (#1631)
+  - per-conversation text draft auto-save/restore (iOS parity) (#1630)
+  - batch read-statuses ignored frozen receipts, under-counting vs single-message endpoint (#1629)
+  - faire aboutir l'appel entrant WebRTC (join-with-ACK + to-field)
+  - demander la permission micro/camera au runtime avant le media
+  - disconnect-grace missed calls never notified + stale perfect-negotiation state on rejoin (#1627)
+  - extract preprocessContent to a pure module so its test guards production (iter 126) (#1628)
+  - anonymous socket joins ROOMS.user room so unread badge updates live (#1626)
+  - importer le media WebRTC P1-P4 (moteur + coordinateur + video)
+  - faire sonner l'appel entrant au niveau app (offer socket foreground)
+  - filter STT alternatives by region, drop tautology + var shadowing (#1620)
+  - EMOJI_PATTERN range swallowed CJK/Kana/Hangul (#1622)
+  - split delete into "for everyone" vs "for me" (iOS parity) (#1624)
+  - sync reels cache on post edit/delete (socket + optimistic) (#1615)
+  - extract normalizeMarkdown to a pure module so its test guards production (#1621)
+  - version-bump gap in initiateCall cleanup + web quality-report never emitted (#1606)
+  - release dedup key on failure so retries aren't swallowed (#1608)
+  - unify sanitizer dangerous-key guard, close sanitizeMongoQuery prototype-pollution gap (#1605)
+  - key message-translation cache by preferred language (iter 124) (#1613)
+  - NLLB language-map coverage, uppercase URL scheme, group senderName SSOT (#1602)
+  - is_list_item bullet class was an unintended char range (#1593)
+  - deliver notification:new to the right room + close anon typing/reaction cross-conversation gap (#1588)
+  - stop duplicate message:new re-broadcast on sequential retry + linkify mixed-case mentions (#1592)
+  - render a live sub-minute countdown as 1m, not 0m (#1590)
+  - call banner swipe-to-collapse bubble (#1618)
+  - header typing-avatar chips (stacked + overflow) (#1616)
+  - evict sockets from call room on GC force-end (#1601)
+  - remove duplicate/false typing:stop on multi-device disconnect (#1617)
+  - correct destructured prop name in DraggableParticipantOverlay (#1597)
+  - callee accepting an audio-only call no longer activates camera/transmits video (#1614)
+  - callee accepting an audio-only call no longer activates camera/transmits video
+  - enforce the 2-hour message-edit window (#1612)
+  - resolve mixed-case @mentions via OR+equals, not case-broken `in` (#1611)
+  - header-level typing indicator + group member subtitle (#1607)
+  - declarer les permissions media appels (RECORD_AUDIO/CAMERA)
+  - nom de conv/appel direct = autre participant, pas soi
+  - Reels P6 — boutons flottants alignes iOS (+ Contacts au radial)
+  - recharger sur erreur de chunk perime attrapee par ErrorBoundary
+  - Reels P5 — reels dans le Feed (carte + lancement gate)
+  - Reels P4 — route nav + lancement Feed + item radial
+  - Reels P3 — module :feature:reels + ViewModel + ecran vertical
+  - Reels P2 — Media3 + atome ReelVideoSurface
+  - Reels P1 — API getReels + repo + plan de portage
+  - habillage Profile (MeeshyBackground gradient + tokens)
+  - retirer la deconnexion de la vue principale (reste dans Reglages)
+  - route notification:new to ROOMS.user, not raw userId (#1604)
+  - polish — habillage Contacts (gradient + tokens)
+  - polish — habillage Calls (MeeshyBackground gradient)
+  - fold typing roster into scroll-to-bottom control (#1603)
+  - Option A — retrait bottom nav -> MeeshyMenuFab radial
+  - keyed typing-participants roster + label SSOT (#1599)
+  - P2-S2 Chat increment 1 — fond gradient + app bar transparent
+  - P2-S3 Feed habillage glass + formateur date partage
+  - P2-S5 Notifications — timestamp ISO -> label localise
+  - hydrater currentUser au boot (me() renvoie {user}, pas MeeshyUser)
+  - P2-S4 Reglages — icones colorees de section + tokens
+  - P2-S4 habillage Reglages (MeeshyBackground + chrome transparent)
+  - enforce read⇒delivered in markMessagesAsRead
+  - P2-S1 barre de recherche glass en bas (parite iOS)
+  - P2-S1 retirer les chips filtres Material (parite iOS)
+  - mapper userPreferences (debloque pin/mute/archive/customName)
+  - P2-S1 sections repliables liste conv (CollapsibleSection)
+  - P2-S1 resoudre le nom des conversations directes
+  - P2-S1 habillage liste conv (MeeshyBackground+glass+grand titre)
+  - GC missed-call notifications, force-leave timer cleanup, web offer/TURN-refresh gaps (#1594)
+  - swipe-to-reply gesture with rubber-band commit core (#1595)
+  - scroll-to-bottom control with unread badge + preview (#1591)
+  - all-or-nothing group delivery semantics for own-message checks (#1587)
+  - tap a quoted-reply preview to scroll to the original (#1584)
+  - P1-8 MeeshyToast (feedback pill + notification card)
+  - P1-7 MeeshyMenuFab (menu radial iOS = stack vertical staggere)
+  - P1-7 FloatingGradientFab (FAB gradient corail/indigo)
+  - P1-6 CollapsibleSection (sections repliables liste conv)
+  - P1-5 MeeshyAvatar v2 (ring/presence/mood + fill gradient)
+  - apiCall degrade sur reponse malformee au lieu de crasher
+  - degrade SerializationException to a PARSE failure instead of crashing
+  - affiliate relations no longer leak presence to non-friends
+  - call:join never acked failures (gateway+web) + 2 P2034 gaps in CallService
+  - use RFC 7232 §3.2 weak comparison for If-None-Match
+  - gate cached translation path with conversation-membership check
+  - chat @-mention autocomplete + roster display-name resolution
+  - repair phantom-ringing fanout gap + call teardown edge cases
+  - dedup on the resolved message id, not the constant "latest"
+  - in-conversation message search + search-highlight wiring
+  - restore F84 load-more offset fix reverted by a stale merge
+  - P0-4 primitives chrome glass + habillage pilote Notifications
+  - P0-3 typographie rounded Nunito (substitut SF Pro Rounded)
+  - P0-2 ColorScheme Material complet indigo (zero surface grise)
+  - improve iOS quality, accessibility and fix CI flakiness
+  - restore web P0 initiator UI + check-active replay + transient-error whitelist silently dropped by 8ebd497b, absorb PR #1558's boot-floor/race fixes
+  - converge getParticipantDisplayName to canonical name resolver
+  - P0-1 verrouiller les design tokens sur la parite iOS
+  - count text messages by messageType in incremental path to match recompute (F85)
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - bound participantId cache + reset typing throttle on stop
+  - \_segment_text no longer drops a short sentence before a huge one (F85)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - two realtime correctness bugs — presence list leak + moderator-delete offline enqueue (iter 144) (#1685)
+  - restore DELETE/PUT/PATCH in CORS preflight
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - pin espnet==202412 — 202511 exige numpy>=2.0 et casse le build Docker
+  - emoji extraction stripped CJK/Kana/Hangul, leaving CJK text untranslated (#1625)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.4.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reply-count pills — pure ReplyThreads SSOT (#1684)
+  - fix WebRTC task isolation races, dead analytics field, ObservedObject re-subscription (#1665)
+  - getUserLanguagePreferences injects deviceLocale — parity with display resolution (iter 143) (#1666)
+  - synchronise la présence du profil avec la liste de conversations (#1664)
+  - UA detection — specific platform swallowed by generic token (iter 142) (#1662)
+  - who-reacted breakdown sheet — pure ReactionBreakdown SSOT (#1663)
+  - overnight DND morning tail bound to window start day (iter 141) (#1661)
+  - fix hover-prefetch cache key mismatch crashing on new message
+  - web rejoin race + signaling leak, gateway zombie-socket scoping + DND bypass (#1660)
+  - idempotent attachment:reaction — no re-broadcast on a no-op add/remove (iter 141) (#1659)
+  - pure ConversationSections SSOT — pinned/others split, no phantom empty section (#1657)
+  - snapToScale honors octave wrap — auto-tune no longer mis-snaps B (iter 139) (#1656)
+  - formatFileSize rolls Ko→Mo — no more "1024 Ko" (iter 138) (#1655)
+  - clicksByHour in UTC — coherent with clicksByDate (iter 137) (#1654)
+  - gateway call-lifecycle fanout hardening + iOS accessibility/HIG fixes (#1653)
+  - FIFO drain order — a memory-fallback edit no longer replays before its Redis-backed new (iter 136) (#1652)
+  - discard-draft affordance (§B draft lifecycle) (#1651)
+  - locationCount never incremented on the live path — count by messageType like recompute (iter 135) (#1650)
+  - dropped ICE restart never recovered when a renegotiation was already in flight (web) (#1649)
+  - idempotent reaction:add — no re-broadcast/re-notify on a no-op re-react (iter 134) (#1648)
+  - iconified empty-state card (iOS parity §B) (#1647)
+  - aggregate packet loss across all inbound streams (iter 133) (#1646)
+  - orphan-recovery gaps, duration anchor drift, dead push, quality-monitor loop, banner re-arm (#1645)
+  - email fragments no longer linkified/extracted as mentions — unify SSOT left boundary (iter 132) (#1644)
+  - pure empty-state decision (iOS parity §B) (#1643)
+  - quality-first dedup — a newer basic no longer downgrades a premium (iter 129) (#1640)
+  - "End &amp; Answer" never answered the waiting call + third caller silently dropped (#1639)
+  - draft-aware ordering + draft row preview (iOS parity §B) (#1638)
+  - message-list route ignored frozen receipts, under-counting delivered/read vs read-status endpoints (#1637)
+  - bouton 'voir la conversation' sur l'ecran d'appel (minimise + ouvre le DM)
+  - minimiser l'appel en pilule flottante (voir la conversation pendant l'appel)
+  - call:end recovery bypassed the wide fanout + web never sent call:heartbeat (#1636)
+  - clamp truncateFilename output for maxLength &lt; 4 (iter 128) (#1635)
+  - faire aboutir l'appel SORTANT Android (peerId du joiner)
+  - fermer automatiquement l'ecran d'appel termine
+  - persist reply reference with draft (iOS DraftStore parity) (#1633)
+  - scope anonymous membership check to the target conversation (#1634)
+  - missed-call notification skipped on force-end cleanup + dead field names in adaptive degradation (#1631)
+  - per-conversation text draft auto-save/restore (iOS parity) (#1630)
+  - batch read-statuses ignored frozen receipts, under-counting vs single-message endpoint (#1629)
+  - faire aboutir l'appel entrant WebRTC (join-with-ACK + to-field)
+  - demander la permission micro/camera au runtime avant le media
+  - disconnect-grace missed calls never notified + stale perfect-negotiation state on rejoin (#1627)
+  - extract preprocessContent to a pure module so its test guards production (iter 126) (#1628)
+  - anonymous socket joins ROOMS.user room so unread badge updates live (#1626)
+  - importer le media WebRTC P1-P4 (moteur + coordinateur + video)
+  - faire sonner l'appel entrant au niveau app (offer socket foreground)
+  - filter STT alternatives by region, drop tautology + var shadowing (#1620)
+  - EMOJI_PATTERN range swallowed CJK/Kana/Hangul (#1622)
+  - split delete into "for everyone" vs "for me" (iOS parity) (#1624)
+  - sync reels cache on post edit/delete (socket + optimistic) (#1615)
+  - extract normalizeMarkdown to a pure module so its test guards production (#1621)
+  - version-bump gap in initiateCall cleanup + web quality-report never emitted (#1606)
+  - release dedup key on failure so retries aren't swallowed (#1608)
+  - unify sanitizer dangerous-key guard, close sanitizeMongoQuery prototype-pollution gap (#1605)
+  - key message-translation cache by preferred language (iter 124) (#1613)
+  - NLLB language-map coverage, uppercase URL scheme, group senderName SSOT (#1602)
+  - is_list_item bullet class was an unintended char range (#1593)
+  - deliver notification:new to the right room + close anon typing/reaction cross-conversation gap (#1588)
+  - stop duplicate message:new re-broadcast on sequential retry + linkify mixed-case mentions (#1592)
+  - render a live sub-minute countdown as 1m, not 0m (#1590)
+  - call banner swipe-to-collapse bubble (#1618)
+  - header typing-avatar chips (stacked + overflow) (#1616)
+  - evict sockets from call room on GC force-end (#1601)
+  - remove duplicate/false typing:stop on multi-device disconnect (#1617)
+  - correct destructured prop name in DraggableParticipantOverlay (#1597)
+  - callee accepting an audio-only call no longer activates camera/transmits video (#1614)
+  - callee accepting an audio-only call no longer activates camera/transmits video
+  - enforce the 2-hour message-edit window (#1612)
+  - resolve mixed-case @mentions via OR+equals, not case-broken `in` (#1611)
+  - header-level typing indicator + group member subtitle (#1607)
+  - declarer les permissions media appels (RECORD_AUDIO/CAMERA)
+  - nom de conv/appel direct = autre participant, pas soi
+  - Reels P6 — boutons flottants alignes iOS (+ Contacts au radial)
+  - recharger sur erreur de chunk perime attrapee par ErrorBoundary
+  - Reels P5 — reels dans le Feed (carte + lancement gate)
+  - Reels P4 — route nav + lancement Feed + item radial
+  - Reels P3 — module :feature:reels + ViewModel + ecran vertical
+  - Reels P2 — Media3 + atome ReelVideoSurface
+  - Reels P1 — API getReels + repo + plan de portage
+  - habillage Profile (MeeshyBackground gradient + tokens)
+  - retirer la deconnexion de la vue principale (reste dans Reglages)
+  - route notification:new to ROOMS.user, not raw userId (#1604)
+  - polish — habillage Contacts (gradient + tokens)
+  - polish — habillage Calls (MeeshyBackground gradient)
+  - fold typing roster into scroll-to-bottom control (#1603)
+  - Option A — retrait bottom nav -> MeeshyMenuFab radial
+  - keyed typing-participants roster + label SSOT (#1599)
+  - P2-S2 Chat increment 1 — fond gradient + app bar transparent
+  - P2-S3 Feed habillage glass + formateur date partage
+  - P2-S5 Notifications — timestamp ISO -> label localise
+  - hydrater currentUser au boot (me() renvoie {user}, pas MeeshyUser)
+  - P2-S4 Reglages — icones colorees de section + tokens
+  - P2-S4 habillage Reglages (MeeshyBackground + chrome transparent)
+  - enforce read⇒delivered in markMessagesAsRead
+  - P2-S1 barre de recherche glass en bas (parite iOS)
+  - P2-S1 retirer les chips filtres Material (parite iOS)
+  - mapper userPreferences (debloque pin/mute/archive/customName)
+  - P2-S1 sections repliables liste conv (CollapsibleSection)
+  - P2-S1 resoudre le nom des conversations directes
+  - P2-S1 habillage liste conv (MeeshyBackground+glass+grand titre)
+  - GC missed-call notifications, force-leave timer cleanup, web offer/TURN-refresh gaps (#1594)
+  - swipe-to-reply gesture with rubber-band commit core (#1595)
+  - scroll-to-bottom control with unread badge + preview (#1591)
+  - all-or-nothing group delivery semantics for own-message checks (#1587)
+  - tap a quoted-reply preview to scroll to the original (#1584)
+  - P1-8 MeeshyToast (feedback pill + notification card)
+  - P1-7 MeeshyMenuFab (menu radial iOS = stack vertical staggere)
+  - P1-7 FloatingGradientFab (FAB gradient corail/indigo)
+  - P1-6 CollapsibleSection (sections repliables liste conv)
+  - P1-5 MeeshyAvatar v2 (ring/presence/mood + fill gradient)
+  - apiCall degrade sur reponse malformee au lieu de crasher
+  - degrade SerializationException to a PARSE failure instead of crashing
+  - affiliate relations no longer leak presence to non-friends
+  - call:join never acked failures (gateway+web) + 2 P2034 gaps in CallService
+  - use RFC 7232 §3.2 weak comparison for If-None-Match
+  - gate cached translation path with conversation-membership check
+  - chat @-mention autocomplete + roster display-name resolution
+  - repair phantom-ringing fanout gap + call teardown edge cases
+  - dedup on the resolved message id, not the constant "latest"
+  - in-conversation message search + search-highlight wiring
+  - restore F84 load-more offset fix reverted by a stale merge
+  - P0-4 primitives chrome glass + habillage pilote Notifications
+  - P0-3 typographie rounded Nunito (substitut SF Pro Rounded)
+  - P0-2 ColorScheme Material complet indigo (zero surface grise)
+  - improve iOS quality, accessibility and fix CI flakiness
+  - restore web P0 initiator UI + check-active replay + transient-error whitelist silently dropped by 8ebd497b, absorb PR #1558's boot-floor/race fixes
+  - converge getParticipantDisplayName to canonical name resolver
+  - P0-1 verrouiller les design tokens sur la parite iOS
+  - count text messages by messageType in incremental path to match recompute (F85)
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - bound participantId cache + reset typing throttle on stop
+  - \_segment_text no longer drops a short sentence before a huge one (F85)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - two realtime correctness bugs — presence list leak + moderator-delete offline enqueue (iter 144) (#1685)
+  - restore DELETE/PUT/PATCH in CORS preflight
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - pin espnet==202412 — 202511 exige numpy>=2.0 et casse le build Docker
+  - emoji extraction stripped CJK/Kana/Hangul, leaving CJK text untranslated (#1625)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.3.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - improve iOS quality, accessibility and fix CI flakiness
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
+  - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - comprehensive UX/UI quality and accessibility improvements
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
+## 1.2.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - first/last-name fields in the profile editor (§K) (#1556)
+  - stop scroll ticks re-rendering the whole list body
+  - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
+  - forward message language to conversation stats so languageDistribution stops freezing (F84)
+  - regional (content) language preference (§L) (#1530)
+  - apply query filters to status-breakdown groupBy in getAffiliateStats (F83)
+  - offline-queued notification-preference backend sync (§L) (#1526)
+  - fold participant-scoped counts to users so leaderboards stop duplicating/hiding users (F82)
+  - stop stripping ZWNJ/ZWJ — preserve emoji, Persian & Indic text (F82)
+  - web initiator never entered its own call + gateway phantom-cleanup killed live cross-conversation calls
+  - per-event notification type toggles (§L)
+  - DND quiet-hours schedule editor (§L) (#1517)
+  - remove dead NOTIFICATION socket event + fix broken Prisma import (F77)
+  - honor failureWindowMs so isolated failures no longer trip the breaker (F77)
+  - validate E.164 by digit count, not prefixed string length (F80)
+  - guard CallsViewModel.loadCalls() against stale-filter races
+  - durable notification master toggles (§L) (#1512)
+  - honor bidirectional blocking on typing indicators
+  - persisted interface language (settings-interface-language) (#1508)
+  - close concurrent-call and cross-call correctness gaps in WebRTC/CallKit stack
+  - auto-detect Spanish UI language — es was missing from detectBestInterfaceLanguage (F79)
+  - clear stale typing indicators on ConversationSocketHandler teardown
+  - persisted light/dark/system theme (settings-theme-mode) (#1504)
+  - isUrlOnly no longer absorbs CJK/Thai text glued to a URL (F76)
+  - web never replayed a missed ringing call on reconnect + rate-limit call:check-active
+  - getEmailValidationError agrees with isValidEmail (F73)
+  - remove dead voice-effects audio pipeline
+  - phantom-ringing callees now get the call_cancel push from GC tier 1 too
+  - optimistic + offline profile edit incl. content languages (§K) (#1500)
+  - reactionSummary self-heals from authoritative Reaction rows
+  - durable Room cache for the profile stats/timeline dashboard (§K) (#1496)
+  - capitalize hyphenated/apostrophe names + strip CR from displayName (F72)
+  - stop toasting transient call:error codes iOS already treats as non-fatal
+  - clear qualityDegradedStreaks on GC-forced call end too
+  - community pin/mute/archive/hide no longer stale across devices (F71)
+  - relay real error code on call:toggle-audio/video failure
+  - renegotiate video SDP direction on CallKit hold/unhold
+  - chip release during active edge auto-scroll no longer drops
+  - getInitials emits broken half-surrogate for emoji names (F68)
+  - profile 30-day activity timeline sparkline (§K)
+  - make calendarDayDiff DST-immune (F67)
+  - guard setAudioEffect against a dead capture-hook collision risk
+  - real-time presence broadcast bypassed blocking check
+  - stats projection SSOT + read-only dashboard section (#1489)
+  - reapply AVAudioSession mode on A/V switch, track cumulative reconnect count
+  - terminal-write protocol for orphaned sessions, rate-limit backgrounded/foregrounded, sweep quality-streak leak
+  - stop truncateFilename overflow + formatCompactNumber "1000.0K" boundary (F65/F66)
+  - unconditional VoIP registration, dark-chrome text contrast, defensive audio unwraps (#1484)
+  - extract shared CallTypeBadgeView, drop unreachable a11y label (#1476)
+  - treat Mongo P2034 write-conflict as retryable on endCall/leaveCall too (#1480)
+  - stop orphaning offline messages after a Redis blip, bound participantId cache
+  - secondary identity rows — languages · country · timezone
+  - dual-emit message:read-status-updated alongside legacy event
+  - profile-header enrichment — presence · completion ring · E2EE · member-since (#1482)
+  - support hyphenated usernames end-to-end via MENTION_HANDLE_CHARS SSOT (F60)
+  - derive worker drain lanes from a kind→lane SSOT (#1478)
+  - make post/comment reaction removal idempotent
+  - header title follows displayName like the list row
+  - normalize language-code case at all write/read boundaries (F63/F64)
+  - close duplicate-reaction race in AttachmentReactionService
+  - three-state presence dot on friend rows (#1474)
+  - text tool — centered editing, 6 new fonts, visible weights, diamond/cloud/speech frames
+  - ship customName (and unstrip reaction) in the list payload
+  - socket conversation:updated no longer clobbers DM display names
+  - resolveUserLanguage lowercases in-app prefs — case parity with resolveUserLanguagesOrdered (F62)
+  - stop CallView defaulting callManager to CallManager.shared (P1-16)
+  - @username fallback uses the module's Unicode boundary, not ASCII (#1464)
+  - per-filter chip counts on the Contacts list (#1470)
+  - drop the chip on Épingles to pin the conversation
+  - bump CallSession.version on all terminal writers
+  - comment_reaction honors commentLikeEnabled, no opt-out bypass (F59)
+  - durable Room cache for Discover suggestions cold-start paint (#1466)
+  - stop stale offline broadcast on anonymous reconnect race
+  - comment-reaction carries the real postType, no REEL/STATUS collapse (F58)
+  - edge auto-scroll while dragging the chip (Phase 3)
+  - auto-scroll aux bords pendant le drag de chip (Phase 3 long-press)
+  - STUN-only fallback no longer strands calls without TURN
+  - friends Room cache for cold-start paint (#1461)
+  - the card sits flush under the expiry line — top vertical alignment (C-DIR5)
+  - media load failures speak up (C16, targeted audit 4)
+  - empty texts are purged when inline editing ends (C15, targeted audit 3)
+  - VoiceOver speaks the UI's language on the chrome (C14, targeted audit 1)
+  - gradient backgrounds end-to-end — format, three renderers, palette row (C11)
+  - trim redundant comments that overflowed a byte-bounded test window
+  - complete fr/en/es/de coverage for all 108 story.\* keys (C12)
+  - unbreak pre-existing structural/behavioral CI tests
+  - discreet undo/redo — header icons exist only when the trajectory allows (C9 inc.4+5)
+  - hasMentions Unicode-aware — detect accented @DisplayName (F57)
+  - global undo/redo apply snapshots; media purge becomes lazy (C9 inc.3)
+  - close camera-state race, guard doomed CallKit transactions, drop dead code
+  - durable offline friend-request send with cmid idempotency (#1458)
+  - global undo capture — one debounced trigger, gap-free by construction (C9 inc.2)
+  - HistoryStore — pure state stack for global undo (C9 inc.1)
+  - carded canvas no longer reserves the hidden header, viewport zoom resets on carding (C-DIR4 bug 4)
+  - hung-participant detector in call-reliability-report
+  - letterbox takes the slide background colour in full-chrome (C-DIR4 bug 2)
+  - letterbox du canvas 9:16 aux couleurs du fond du slide en présentation libre (BUG-2 C-DIR4)
+  - background colour applies instantly + draft resume no longer restores an empty composer (C-DIR4 bugs 1&3)
+  - stickers get a single source of truth — currentEffects passthrough (C13)
+  - self-heal playback when the primary player is stuck .paused (C-DIR3)
+  - reword close() comment so it doesn't self-match the new test
+  - flush pending DataChannel bye before peer connection teardown
+  - unified chrome — header follows the FABs, collapsed-band handle removed (C-DIR2 b/c/d)
+  - stickers are reachable again — picker wired into the Text panel (C8)
+  - nonisolated data-channel value types — unbreak CallSignalIndicatorTests compile
+  - durable offline block/unblock via the outbox (block-outbox-durable)
+  - the add-story badge no longer gets clipped (user report)
+  - ghost handle to recover hidden chrome (C3)
+  - unbreak main build — register CallSignalGlyph.swift in pbxproj, hoist typealias out of ViewBuilder body
+  - slide opening effect reachable by gesture from the Fond panel — VM-owned state (C1)
+  - the Transitions sheet becomes real — slide opening-effect picker (C7)
+  - transient quality pills, color-coded signal glyph, WhatsApp-style banner, instant remote hangup
+  - add-slide affordance at the end of the slide strip (C6)
+  - gesture exit for viewport zoom — double-tap resets, near-identity pinch snaps to 1.0 (C4)
+  - exécution phasée — le run se termine connecté au compte de test
+  - timeline FAB/tile/swipe-up open the timeline sheet instead of an empty band panel (C5)
+  - sync reels affinity caches on post edit/delete (F55)
+  - cache-first Discover suggestions (empty-query) (#1451)
+  - single-flight SUB receive + silence watchdog — translation return channel self-heals
+  - map Mongo P2034 write conflict on join to the existing conflict-retry path
+  - Dynamic Type for MentionSuggestionPanel (139i)
+  - background URLs are allow-listed — no more viewer IP-leak (W7)
+  - hard-delete no longer orphans media rows forever (G7)
+  - single canonical visibility filter (G5)
+  - reaction self-echo no longer double-counts likeCount (F56)
+  - zoom transition on secondary surfaces (U1 inc.2)
+  - zoom transition from tray bubble to viewer on iOS 18+ (U1 inc.1)
+  - stop logging DTMF digits and transcript content
+  - EXCEPT/ONLY can no longer publish without an audience (W6)
+  - Blocked-users tab + BlockCache SSOT binding the resolver seam (#1446)
+  - EXCEPT/ONLY audience picker in the story composer (W3 inc.2)
+  - COMMUNITY visibility in the story composer + visibilityUserIds plumbing (W3 inc.1)
+  - intra-slide crossfades render in the web viewer (W1 inc.4)
+  - intra-slide crossfades finally render at playback (R14)
+  - Dynamic Type for KeypadTab (138i)
+  - local mutations persist through the dirty-flush path (R12 inc.2)
+  - silent refresh consumes the G1 delta-sync (R8 inc.1)
+  - Discover live user-search with inline connect (#1443)
+  - keyset cursor pagination on the stories tray (G1c)
+  - lean tray projection on GET /posts/feed/stories (G1b)
+  - undo/redo history survives a hard crash (E4 inc.2)
+  - Dynamic Type for MessageListView swipe indicator (136i)
+  - remove dead FirebaseNotificationService FCM sender (F51)
+  - unit-fetch out-of-tray stories by postId on deep link (R4 inc.2)
+  - Dynamic Type for SyncPill (135i)
+  - close duplicate-reaction race with atomic upsert
+  - forward real postType + ephemeral context on socket reaction notifications
+  - hop CXPlayDTMFCallAction to MainActor; tie TURN TTL to CallCleanupService
+  - online-first friends list + cross-screen cache reconciliation (#1434)
+  - guard mark-unread cursor rewind against a fresher concurrent read
+  - friendship & relationship-state SSOT (#1431)
+  - remove dead handleIncomingOffer, dedupe call-notice presentation logic
+  - exclude source language from story caption translation targets
+  - the draft-resume card replaces the bare text alert (U4 increment 2)
+  - DraftResumeCard building block (U4 increment 1)
+  - Dynamic Type + a11y for AchievementBadgeView (134i)
+  - regenerate pbxproj — drop phantom AudioEffectsPanel.swift reference
+  - viewedAt timestamp alongside isViewed — soft migration (R11)
+  - replay message edits/deletes to offline recipients too
+  - VoiceOver custom actions for prev/next story navigation (U6 increment 2)
+  - VoiceOver announces slide changes in the reader (U6 increment 1)
+  - preload the next slide's media (W5)
+  - live story deletion and per-text-object translation merge (W4)
+  - legacy story content resolves over the full language chain (R10)
+  - fix two self-inflicted test assertions from the previous commit
+  - client expiry fallback aligned with the server's 21h (G6)
+  - read overlay text from canonical `text`, not legacy `content`
+  - CXAnswerCallAction hold + system-PiP frozen-frame placeholder
+  - key typing-indicator roster by userId, not display name
+  - adaptive video-sender-cap plan (network + thermal) (#1417)
+  - haptic ticks on slide change and buffering freeze/resume (U2)
+  - live translation + delete on the feed realtime hook (W4)
+  - stop leaking CallParticipant.analytics on active-call route
+  - enqueue offline recipients on the WS message:send path too
+  - foreground media-object keyframes animate too (W1 increment 2)
+  - text-object keyframes animate in the web reader (W1 increment 1)
+  - auto-advance timer freezes while the primary video buffers (W2)
+  - textObjects translate to the audience's real languages (G3)
+  - single translation pipeline for story content (G2)
+  - identity-aware active-call teardown (#1415)
+  - encrypt the stories tray store like every other social store (R9)
+  - logout purges the story draft AND the persisted publish queue (E9)
+  - actually run the legacy offline-queue migration at boot (E6)
+  - the queue cleans up its media copies (E10 disk leak)
+  - last-message preview excludes soft-deleted messages
+  - screen-capture participant spoofing, pocket-dial, HIG hit targets, stale-peer cleanup
+  - sniff the URL extension before routing media to disk stores (R7)
+  - story view receipts are durable via the outbox (R6)
+  - chip drop moves the conversation onto a section header
+  - delta-sync via ?updatedSince on the stories tray (G1)
+  - debounce the sending clock glyph for sub-200ms sends (B.4)
+  - write-ahead makes the online publish survive process kills (E5)
+  - undo/redo history survives the timeline sheet lifecycle (E4)
+  - flush the open timeline into the slide before persisting (E3)
+  - deep-link container serves the cached tray before forcing network (R4)
+  - identity interstitial between story groups (user directive)
+  - call-reliability-report — prod health report for the multi-hour calls goal
+  - periodic in_progress analytics snapshots survive app kills
+  - update two source-guard tests for the TURN-refresh watchdog refactor
+  - split press-state detector from long-press trigger
+  - discreet buffering indicator during mid-slide stalls (R3)
+  - propagate deviceLocale to the last 2 resolveUserLanguage sites
+  - freeze timeline while the bg image bitmap is still loading (R2)
+  - debounced draft autosave — editing survives hard crashes (E1)
+  - retry TURN refresh on dropped ACK, surface busy/failure feedback, finish a11y hints
+  - DM dedup reopens the most recently ACTIVE duplicate
+  - auto-dismiss call-waiting banner on remote end (#1411)
+  - buildEffects no longer wipes timeline-authored fields (E2)
+  - pin viewed-story media until expiry (R5 wiring)
+  - serialize updateOnNewMessage per conversation to stop a lost-update race
+  - direct-DM creation is idempotent — reopen the existing DM
+  - pinning exempts keys from DiskCacheStore eviction (R5)
+  - amplify row scale animation dampingFraction for visible rebounce
+  - freeze timeline while slide audio is still caching (R1)
+  - Dynamic Type for MoodReplyConfirmationOverlay (132i)
+  - persist end-of-call analytics on CallParticipant
+  - Dynamic Type + a11y for MessageDetailSheet hero glyphs (131i)
+  - apply URL-only translation guard on all 3 entry points
+  - negotiationTimeMs separates WebRTC setup from human ring time
+  - add negotiationTimeMs metric for WebRTC connection timing
+  - Dynamic Type for ReelFeedCard glyphs (130i)
+  - wire dead PiP rotation hook, fix VoiceOver double-read, fix Dynamic Type clipping
+  - guard REST message-delete lastMessageAt with optimistic concurrency
+  - re-anchor already-answered source-guard on the real subscriber
+  - call_answered_elsewhere silent push — multi-device socketless ring dismissal
+  - call-waiting banner for a second incoming call (#1403)
+  - la liste de conversations scrolle à nouveau — retrait du DragGesture plein-ligne
+  - call_cancel silent push ends phantom ringing (client side)
+  - fan out sendToUser to device tokens in parallel
+  - call_cancel background push kills phantom ringing on socketless devices
+  - rate-limit reconnect/ICE-refresh handlers, remove dead signaling hook
+  - quality-alert requires sustained degradation and excludes the reporter
+  - remove unauthenticated-admin debug notification routes
+  - quality-monitor warm-up gate fails closed when start date is nil
+  - GC tier 3 spares multi-hour calls with fresh heartbeats
+  - Dynamic Type + a11y for CameraView (129i)
+  - re-wire MessageDraftMediaStore + 2 test files into pbxproj, purge warnings
+  - useSocialSocket retries once the socket bootstraps
+  - Dynamic Type for FeedPostCard action-bar glyphs (128i)
+  - forward badge as android notificationCount (F1 Android)
+  - keep the literal videoToggleTask?.cancel() call CI checks for
+  - toggleVideo() can run two concurrent camera/transceiver actuations on rapid double-tap
+  - GC force-end never fanned out call:ended to ringing callee's user room
+  - typing:start/stop now require active conversation membership
+  - WebRTC-plumbing outbound emits (call-webrtc-plumbing-emits) (#1393)
+  - Dynamic Type for BubbleDeliveryCheck status glyphs (127i)
+  - photothèque du composer — long press vidéo, actions Ajouter/Sélectionner/Éditer, présélection picker, Liquid Glass iOS 26 (#1389)
+  - correct two false-positive assertions from prior commit
+  - getReels curseur chronologique (lossless) + languageCodeSchema accepte les 639-3
+  - CallEffectsOverlay ObservedObject re-subscription bug + a11y/dead-code cleanup
+  - resync feed room + typing keepalive across reconnect/long sessions
+  - badge unread embarqué dans le push — badge d'icône iOS et widget gelés app fermée (F1)
+  - appel jamais décroché = missed (critère answeredAt) + garde FSM reconnecting
+  - refactor conversation row long-press gesture with proper priority
+  - fallback pendingCount cohérent avec pendingUIItems sur échec de lecture (item H cause D)
+  - reclaim visibility-timeout des rows .inflight orphelines (item H)
+  - les pièces jointes du brouillon survivent au kill (phase 2 — câblage)
+  - store durable des pièces jointes de brouillon de message (phase 1)
+  - Dynamic Type + VoiceOver for conversation composer (iter 126i)
+  - pure video-survival auto-disable policy (#1387)
+  - curseur getReplies aligné asc + codes langue 639-3 acceptés
+  - call:ended atteint l'appelé qui sonne (fanout rooms user)
+  - réaligne le garde AdjustBitrate sur le merge BWE gated + pbxproj regen
+  - auto-save du brouillon au passage en background (D1)
+  - auto-retry of failed messages now forwards clientMessageId
+  - indicateur qualité fiable + écran d'appel décalé de 30pt
+  - action « Enregistrer » dans le menu appui-long (composant unifié)
+  - Dynamic Type + VoiceOver for AttachmentLoadingTile (iter 125i)
+  - hooks onSaveRequested sur les viewers SDK + câblage du fullscreen média des bulles
+  - report « downloaded » best-effort dans le coordinateur unifié (parité P7-9)
+  - câbler audio + galerie média sur le composant unifié Enregistrer
+  - Dynamic Type + VoiceOver for iPad panel header (iter 124i)
+  - implement drag-to-reorder during long-press with smooth transition
+  - correct offset windows and setEffect precondition in new tests
+  - atomic conditional consume closes brute-force TOCTOU on SMS reset attempt caps
+  - remplacement 1-réaction-par-user + gate messages système dans toggleReaction
+  - adjust scale animation timing for smoother rebounce
+  - sémantique de remplacement 1-réaction-par-user + gate messages système
+  - resolve duplicate CallEffectsOverlayAccessibilityTests class
+  - restore VideoConfig, actually used by P2PWebRTCClient
+  - implement row scale animation reset on menu dismiss
+  - thread-safety, dead code, and VoiceOver gaps in calling stack
+  - add long-press scale animation to conversation rows
+  - connection-quality classification core + live signal indicator (#1381)
+  - type decodePayload's corrupt-payload error as MeeshyError
+  - gate FRIENDS-visibility posts through buildVisibilityFilter
+  - re-join call room on socket reconnect (production component)
+  - idempotence du remove de réaction sur le chemin socket
+  - DELETE de réaction idempotent (not-found → succès, pas 404)
+  - pure telecom-connection policy (ConnectionService state reports) + reporter fold (#1377)
+  - totalMembers exclut le sender par identité (pas -1 aveugle)
+  - bootRecovery détecte aussi les fichiers média visuels manquants au crash
+  - annuler un envoi média offline balaie ses fichiers (fuite disque)
+  - pure call-audio policy (ringback/ringtone/cues) + tone controller fold (#1375)
+  - le merge edit-into-send offline détruisait les médias en attente
+  - dead-letter immédiat des rejets serveur 4xx permanents dans l'outbox
+  - watermark conversation-list dérivé de l'horloge locale (R15b)
+  - watermark de gap-recovery messages empoisonné par clock-skew (R15a)
+  - SyncEngine A5.4 — resync notifications au reconnect (fenêtre aveugle)
+  - SyncEngine A5.3 — resync notifications sur gap de séquence
+  - SyncEngine A5.2 — hook gapDetected sur SyncSeqTracker
+  - SyncEngine A5.1 — décodage \_seq + tracker de gap (bénéfice multi-device)
+  - terminal statuses are immutable — leave/disconnect can no longer rewrite missed as completed
+  - unify REST/socket CallService instance, harden markCallAsMissed, remove dead beacon fallback
+  - report downloaded pour les documents (gap P7-9 P3 comblé)
+  - enforce maxUses cap atomically (F47 TOCTOU)
+  - BlockActionCoordinator — block/unblock durable pour les sites Views (R6-4 complet)
+  - BlockedViewModel.unblock via l'outbox durable (R6-4 incr.2, 1/N sites)
+  - primitive block optimiste + fix caveat swipe labels périmés (R6-4 incrément 1/2)
+  - atomic increments for calibrateProfile counters (lost-update race)
+  - release active-call claim on ringing-timeout missed + self-heal leaked claims
+  - verrous + master PIN purgés au logout (P7-11, invariant 9)
+  - ConversationLockManager logout hook — purge cross-account leak (P7-11)
+  - close cap TOCTOU — reserve slot atomically before creating relation (F47)
+  - réconciliation complète périodique — purge des conversations fantômes hard-supprimées (P7-10)
+  - release active-call claim on missed-timeout, harden signaling authz, fix waiting-banner reject
+  - propagate profile changes to conversation partners (USER_UPDATED)
+  - une panne gateway ne consomme plus le budget de retries de l'outbox (P7-7)
+  - le composer ne se verrouille plus pendant qu'un message est sur l'horloge ⏳
+  - live in-call duration timer (slice call-duration-timer) (#1371)
+  - purge du cache HTTP URLCache au logout (T15b-b, invariant 9)
+  - C8 — dédup des sockets same-user au join (last join wins)
+  - document Dynamic Type freeze doctrine for FeedView chrome (iter 123i)
+  - tolerate GRDB Date round-trip noise in markEdited ordering guard
+  - decode editedAt onto APIMessage (CI compile failure)
+  - guard message:edited against out-of-order stale delivery
+  - atomic increments in ConversationMessageStats edit/delete hooks (F48)
+  - stop clearing ringing timeout on early-join; fix web duplicate-offer race
+  - call:join ne désarme plus le ringing timer — l'answer SDP et les chemins terminaux le possèdent
+  - Dynamic Type + VoiceOver for EmojiPickerSheet (iter 122i)
+  - Dynamic Type for message context menu (iter 121i)
+  - réconciliation call:end aussi sur ACK-échec (chaos-test 2)
+  - joinCall transitionne vers RINGING — l'early-join du callee n'est pas un décrochage (item F matérialisé)
+  - version-guard call-termination writes, align REST/socket end-call authorization
+  - guard read/delivery cursors against out-of-order regression
+  - deep-link a full-screen call push into the incoming-call screen
+  - un appel sortant non décroché ne bascule plus en écran connecté 00:00 — garde FSM .reconnecting, horloge d'appel, bannières Dynamic Island, avatars duo + fond profil
+  - hide decorative conversation backdrop from VoiceOver (iter 120i)
+  - grâces disconnect affinées — extension si socket vivant, grâce courte pré-answer (chaos-tests prod)
+  - guard stale ICE-restart/call-waiting async continuations
+  - close lost-update race on message reaction summary
+  - Dynamic Type + VoiceOver for message-bubble media grid (iter 119i)
+  - route FCM call pushes to a full-screen incoming-call notification (#1354)
+  - reconcile with concurrent session's merged fix, keep only the surviving bug
+  - pre-existing CI failures — PiP filter button a11y hint, dead localization keys, stale auto-hide test
+  - CallKit informé sur tout teardown .failed, TURN préservé sur End & Answer, bannière call-waiting nettoyée, indicateur signaling dégradé
+  - iOS CallKit/TURN/banner triad + gateway endCall idempotency gap
+  - un restart/blip ne tue plus un appel établi — ownership disconnect, réhydratation boot, hygiène timers
+  - recover socket.io realtime delivery after reconnect_failed
+  - réaligner 3 source-guards CallView hérités du merge main
+  - exact @mention resolution — anchor Unicode name boundaries
+  - pure incoming-call push decision core (#1347)
+  - Dynamic Type + VoiceOver for ConversationView message-row affordances (iter 118i)
+  - gateway audit follow-through — leftAt persistence, missing summary index, force-leave missed path, ICE rate limit
+  - drop stale retranslation results (edit ordering race)
+  - survive gateway restart — active P2P call no longer cut by signaling-socket drop
+  - remove dead previewRouter + unify conversation preview width (deferred NITs)
+  - dedup key must include messageId, not just conversation
+  - appels — vidéo distante, join VoIP fiable, chrono CallKit, contrôles cadre
+  - Dynamic Type in action menu + inert-modifier cleanup (deferred review)
+  - call:missed contract + video layout on remote escalation
+  - restore call metric glyphs and move call time bottom-right
+  - contraste blanc-sur-verre en Light + a11y overlay (déférés revue)
+  - dedicated Calls bottom-nav tab + re-dial gesture (calls-tab-nav) (#1340)
+  - dismissContextMenu — purge asyncAfter annulable
+  - bannière DM strippée sur la route LIST (schéma minimal)
+  - remove dead activeCallSession() call breaking sdk-tests compile
+  - close call:heartbeat authz gap to strict active-participant check
+  - gate CallKit plateforme — le simulateur pilote l'appel in-app
+  - add missing banner arg to APIConversationUser test fixture
+  - Dynamic Type + VoiceOver for StoryViewerView canvas (iter 117i)
+  - stale-broadcast ordering races + unbounded conversationId cache
+  - remontee banniere de profil (DM) + boutons header conversation en glass
+  - hide decorative onboarding backdrop from VoiceOver + Dynamic Type CTA (iter 116i)
+  - evict VoIP dedup entry on CallKit report failure (busy path)
+  - close initiateCall/joinCall TOCTOU races on concurrent starts
+  - Dynamic Type doctrine for CallView control bar (iter 115i)
+  - update stale transcription-segment tests for active-participant authz
+  - Dynamic Type + VoiceOver for StoryExportShareSheet (iter 114i)
+  - hide dead voice-effects panel (video filters only)
+  - coalesce reconnect triggers, epoch half-open re-arm, TURN refresh at restart, stuck-muted fallback
+  - raffinements apercu long-press conversation
+  - redesign system call bubble — compact, direction-aware, timestamped
+  - Dynamic Type + VoiceOver for OnboardingFlowView chrome (iter 113i)
+  - close conversation-membership authz bypass on transcription-segment
+  - thread real conversationId into outgoing call route (call-nav-conversation-thread)
+  - apercu long-press conversation enrichi (banniere, avatar, actions, dernier message)
+  - action Renommer dans le menu contextuel conversation
+  - Dynamic Type + VoiceOver for OnboardingStepViews (iter 112i)
+  - close membership-check bypass, post call-summary on every terminal path
+  - restore reaction notifications on the socket path
+  - bind the realtime socket to the auth session (realtime-session-coordinator) (#1321)
+  - restore CallMediaConfig.swift — VideoConfig is a real prod dependency
+  - scope Opus SDP munging to audio, enforce per-call authz, drop dead code
+  - converge formatDuration onto shared formatClock (iter 74)
+  - idempotent P2002 handling on message reaction add
+  - zoom in/out sur l'overlay long-press conversation
+  - Dynamic Type for StatusBubbleOverlay (iter 111i)
+  - MessageMoreSheet en grille verre (Liquid Glass iOS 26)
+  - Dynamic Type + VoiceOver for ReelsPlayerView (iter 110i)
+  - fold CallSignalManager into CallViewModel (VM-fold)
+  - restore conversation long-press menu (remove .onDrag conflict)
+  - ACK-based call:initiate (emitInitiate + pure parser) (#1311)
+  - custom conversation context menu (icons on iOS 26)
+  - clear participant heartbeat on mid-call leave
+  - preserve supported ISO 639-3 language codes in normalizeLanguageCode
+  - add safety-net expiry for stuck remote typing indicators
+  - converge local formatDuration onto shared formatClock
+  - stop SDP-munging RED into audio offers/answers, use setCodecPreferences
+  - typed FRIEND_REQUEST_NEW/ACCEPTED/REJECTED events
+  - context-menu icons + story quit alert legibility
+  - Dynamic Type + VoiceOver for StoryTrayView (iter 109i)
+  - apply late/refreshed TURN credentials to a live peer connection
+  - recent/missed-calls list UI (CallHistoryViewModel + screen) (#1304)
+  - native-lean long-press menu (reactions + bubble + vertical list)
+  - emit friend-request:cancelled so the other party's list syncs live
+  - Dynamic Type for StoryViewerView sidebar/header (iter 108i)
+  - resistant swipe on audio/video bubbles
+  - route quick affordances to native MessageMoreSheet
+  - menu longpress - new components + MessageDetailSheet decomposition
+  - Dynamic Type + VoiceOver for FeedPostCard media (iter 107i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 106i)
+  - serialize camera switch, close stale peer connection, fix VoIP dedup eviction
+  - VoiceOver labels for feed attachment remove buttons (iter 105i)
+  - Dynamic Type + VoiceOver for AudioEffectsPanel (iter 105i)
+  - Dynamic Type + VoiceOver for VideoFilterControlView (iter 105i)
+  - Dynamic Type + VoiceOver for ShareLinksView (iter 104i)
+  - VoiceOver labels for AudioFullscreenView icon-only controls (iter 103i)
+  - supprime à nouveau le doublon d'import copyToClipboard (régression réintroduite) (#1291)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f) (#1284)
+  - Dynamic Type + VoiceOver for EditPostSheet (iter 100i)
+  - Dynamic Type + VoiceOver for ConversationMediaGalleryView (iter 103i)
+  - Dynamic Type + VoiceOver + content selection for LicensesView (iter 98i)
+  - finish Dynamic Type + VoiceOver for LoginView (iter 102i)
+  - resolve committed merge-conflict markers in routine uiux docs
+  - Dynamic Type + VoiceOver for TrackingLinksView (iter 101i)
+  - adopte la source unique copyToClipboard dans TwoFactorSettings (F30-f)
+  - Dynamic Type + VoiceOver for CommunityLinkDetailView (iter 99i) (#1272)
+  - supprime le doublon d'import copyToClipboard (régression merge parallèle) (#1266)
+  - resolve committed conflict markers from triple 93i collision
+  - Dynamic Type + VoiceOver + content copy for SupportView (iter 95i) (#1262)
+  - remove duplicate copyToClipboard import introduced by main merge
+  - call-history repository (REST + Room cache-first SWR)
+  - Dynamic Type + VoiceOver for ConversationListView overlays (iter 94i)
+  - remove duplicate copyToClipboard import breaking the build
+  - source unique presse-papier pour les pages links — iter 70
+  - Dynamic Type + VoiceOver for ForwardPickerSheet (iter 100i)
+  - Dynamic Type for MessageOverlayMenu (iter 99i)
+  - Dynamic Type + VoiceOver for UserStatsView (iter 98i)
+  - copy diagnostics via long-press menu in AboutView (iter 98i)
+  - remove duplicate accessibilityElement on AffiliateView stat card (iter 92i)
+  - trim background-observer comment to fit CI's fixed-window source test
+  - serialize hold/unhold video ops, fix glare-path state leak, GC race guard
+  - update quality-report test for participant-gated persistCallStats
+  - moderator-kick wrong-participant, quality-report authz gap, ringing-call CallKit gap
+  - thread-safe audio effect counters, cache-first filter switch, a11y hint (#1257)
+  - Dynamic Type + destructive-red token for EffectsPickerView (iter 87i)
+  - source unique formatFileSize — iter 70
+  - relocate stragglin docs, drop orphan MARK dividers
+  - annule les vérifications de disponibilité obsolètes (AbortController) — iter 70
+  - split StoryComposerView into view-builder extensions
+  - Dynamic Type + VoiceOver for AddParticipantSheet (iter 97i)
+  - pure call-journal model (CallRecord + CallDirection/CallMediaType) (#1254)
+  - clôture F30 — unification presse-papiers via source unique (iter 70)
+  - Dynamic Type + VoiceOver for NotificationSettingsView (iter 96i)
+  - source unique de validation d'ObjectId MongoDB — iter 69 (#1251)
+  - split StoryCanvasUIView into method extensions
+  - split StoryComposerViewModel into method extensions
+  - extract free top-level types into dedicated files
+  - widen access private→internal on the 3 refactor targets
+  - content selection + VoiceOver for TwoFactorSetupView (iter 95i)
+  - converge conversation-share clipboard fallback on copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for SharePickerView (iter 94i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 94i)
+  - Dynamic Type + VoiceOver for MemberManagementSection (iter 94i)
+  - Dynamic Type for SharePickerView (iter 94i)
+  - Dynamic Type for LocationPickerView (iter 93i)
+  - Dynamic Type + VoiceOver for LocationPickerView (iter 93i)
+  - converge partage conversation (fallback presse-papier) vers copyToClipboard (F30-d, iter 68)
+  - Dynamic Type + VoiceOver for ConversationPreferencesTab (iter 93i)
+  - CallSignalManager — inbound call:\* → SharedFlow<CallEvent> + outbound emit table (#1230)
+  - render comment audio/media in feed preview + fix notification badge truncation
+  - Dynamic Type + VoiceOver for AffiliateView (iter 92i)
+  - Dynamic Type + VoiceOver for NewConversationView (iter 91i)
+  - Dynamic Type + VoiceOver for CommunityLinksView (iter 91i)
+  - Dynamic Type + VoiceOver AffiliateView (iter 91i)
+  - Dynamic Type + VoiceOver for AffiliateView (iter 91i)
+  - converge partage conversation vers copyToClipboard (F30-d)
+  - Dynamic Type + VoiceOver for DataExportView (iter 91i)
+  - stop audio-toggle self-echo, rate-limit transcription relay, reset PiP fps
+  - Dynamic Type + VoiceOver DataExportView (iter 90i)
+  - Dynamic Type for NewConversationView (iter 90i)
+  - converge copie identifiant groupe vers copyToClipboard (F30-c)
+  - Dynamic Type + VoiceOver for MagicLinkView (iter 90i)
+  - converge partage feed/reel vers copyToClipboard (F30-b)
+  - Dynamic Type + VoiceOver + palette for EffectsPickerView (iter 89i)
+  - converge copie contenu/lien vers la source unique copyToClipboard (F30-a) (#1216)
+  - Dynamic Type + i18n/render fixes for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for DeleteAccountView (iter 88i)
+  - Dynamic Type + VoiceOver for voice profile wizard (iter 87i)
+  - remove duplicate getUserInitials import in u/[id] page
+  - route legacy slide.mediaURL background via directURLIfAny (WS5.4a)
+  - retire le code mort du filtre temps-reel Story
+  - restaure isExpired reverté par le même merge parallèle — iter 64 (#1210)
+  - retire le dead StoryFilteredLayer, extrait StoryFilterKind
+  - notify peer on local SDP failure, drop dead emitCallEnd overload
+  - Dynamic Type + VoiceOver for storage & auto-download settings (iter 83i)
+  - retire les références orphelines ReplyThread du pbxproj
+  - story par défaut en Contacts + filtres par média
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63 (#1208)
+  - inbound call:\* signalling event models + pure CallEvent mapper (#1207)
+  - Dynamic Type + VoiceOver headers for AboutView (iter 86i)
+  - restaure formatCompactNumber reverté par un merge parallèle — iter 63
+  - source unique de la troncature de texte (truncate) — iter 62 (#1203)
+  - VoiceOver selection semantics for the language picker (iter 85i)
+  - Dynamic Type + VoiceOver for StarredMessagesView (iter 85i)
+  - source unique du formatage de durée média (formatClock) — iter 62
+  - corrections du review présence (conformité + decay)
+  - source unique du compteur compact (formatCompactNumber) — iter 61 (#1201)
+  - Dynamic Type + VoiceOver for EditProfileView (iter 84i)
+  - source unique du prédicat d'expiration (isExpired) — iter 60 (#1199)
+  - présence datée + colorée après le pseudo (fiche profil, Lot 6 iOS)
+  - keep PR1157/PR1148 catalog-backed localization (fix dead keys)
+  - Dynamic Type + i18n parity for legal screens (iter 83i)
+  - unify sheet grabber affordance (iter 79i)
+  - source unique du « temps restant avant expiration » — iter 59 (#1187)
+  - Dynamic Type parity for call-screen inline glyphs (iter 79ib)
+  - Dynamic Type for the feed attachment composer (iter 79i)
+  - source unique du temps restant avant expiration — iter 59
+  - restore contacts avatar initials to getUserInitials (iter 59, anti-régression F26c-c(b))
+  - Dynamic Type for the fullscreen audio player (iter 82i)
+  - complete ConversationSettingsView localization (iter 78i)
+  - Dynamic Type for the active sessions screen (iter 82i)
+  - source unique de la classification du temps relatif — iter 58 (#1177)
+  - relay real toggle-media errors + unify CallService instance (RC-4)
+  - RelativeTimeFormatter.lastSeenString (Lot 6 iOS)
+  - localize ConversationLockSheet + VoiceOver/Dynamic Type (iter 81i)
+  - source unique des initiales — profil public → getUserInitials (iter 58, F26c-c(c))
+  - source unique des initiales — page profil app/u/[id] → getUserInitials (iter 58)
+  - stop duplicate Socket.IO listener registration on reconnect-adjacent calls (iter 57)
+  - source unique des initiales — famille contacts → getUserInitials — iter 57 (#1181)
+  - import Combine in OfflineQueueTests (CI restore)
+  - add missing import Combine to OfflineQueueTests (unblock sdk-tests CI)
+  - CountryPicker VoiceOver labels + sheet grabber (iter 80i)
+  - Dynamic Type for the feed post composer (iter 78i)
+  - initiales admin/users → getUserInitials + fix(gateway/test) createUnifiedAuthMiddleware mock — iter 56 (#1170)
+  - consolidate destructive/error/expired reds to MeeshyColors.error (iter 78i)
+  - complete story-viewer localization catalog (iter 79i)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice) (#1169)
+  - localize MessageOverlayMenu message menu (iter 78ib)
+  - localize Router route/scene titles + deep-link error (iter 79i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials — iter 55 (#1167)
+  - :feature:calls CallViewModel + minimal call screen (Calls slice)
+  - Dynamic Type for the link preview card (iter 78i)
+  - source unique des initiales — MemberSelectionStep → getUserInitials (iter 55)
+  - tokenize semantic hardcoded colors to MeeshyColors (iter 78i)
+  - supprime le module mort utils/user.ts (clôt le cluster getUserDisplayName) — iter 54 (#1163)
+  - localize SharePickerView chrome strings (iter 77i) (#1162)
+  - Dynamic Type ConversationDashboardView (iter 71i)
+  - source unique du nom d'affichage (username-first → canonique) — iter 53 (#1161)
+  - source unique du nom d'affichage (déjà displayName-first) — iter 52 (#1159)
+  - Dynamic Type for the invite friends sheet (iter 76i)
+  - source unique des initiales d'avatar (objet) — iter 51 (#1158)
+  - localize message quick-action menu — iter 71i
+  - source unique des initiales d'avatar (string) — iter 50 (#1156)
+  - harden call signaling against payload spoofing + DoS
+  - mark EmojiGridCategoryTests @MainActor (iter 71i)
+  - Dynamic Type 2FA security flow (iter 71i)
+  - pure call-lifecycle FSM (core:model) (#1153)
+  - localize emoji-picker category VoiceOver labels (iter 71i)
+  - source unique du nom d'affichage — copies locales (iter 50)
+  - source unique du nom d'affichage utilisateur (iter 49) (#1147)
+  - Dynamic Type for the voice profile management screen (iter 75i)
+  - consolidate hardcoded hex tints to MeeshyColors tokens on Support/Report screens (iter 71i)
+  - categorised + searchable sticker picker (#1135)
+  - localize 6 hardcoded French VoiceOver labels/hints (iter 71i)
+  - source unique de la validation d'email + dernière horloge inline (iter 48) (#1146)
+  - Dynamic Type for the conversation dashboard (iter 74i)
+  - unifier formatDuration sur le canonique formatClock (iter 47) (#1141)
+  - hoist actor-isolated pendingCount() out of XCTAssert autoclosure
+  - re-apply await-hoist in PendingStatusQueueTests (merge reverted 87f85d68d)
+  - restore iOS work reverted by the PresenceVisibilityService merge (84fedd79)
+  - remove orphaned ReplyThreadOverlay.swift (complete #1122 cluster removal)
+  - présence colorée + datée sur la fiche profil (Lot 6 web)
+  - grace period before treating a transient socket drop as call-leave (P0-7)
+  - localize hardcoded French VoiceOver strings (iter 73i)
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact (unblocks CI)
+  - Dynamic Type for the feed comments sheet (iter 72i)
+  - hoist await out of XCTAssert autoclosure (iter 71i unblock)
+  - unifier formatFileSize sur la source canonique partagée (iter 46) (#1136)
+  - wire invite-user-modal row aria-label to selection state
+  - guard call-waiting pending-clear against newer overwrite (#1133)
+  - remove dead ReplyThreadOverlay to unblock iOS compile (iter 71i)
+  - Dynamic Type for the 2FA security flow (iter 71i)
+  - hoist await out of XCTAssertEqual autoclosure in PendingStatusQueueTests
+  - remove ReplyThreadOverlay.swift resurrected by a merge artifact
+  - guard call-waiting pending-clear against newer overwrite
+  - repair invite-modal result row broken by merge (unblocks CI)
+  - cap lastMessage.content preview at 300 code points in GET /conversations
+  - PATCH /messages/:messageId now broadcasts message:edited and retranslates
+  - join rooms before marking socket connected to close message-loss race
+  - close TOCTOU race that could resurrect a deleted message with edited content
+  - close TOCTOU race that could regress the delivered/read cursor
+  - dedup offline delivery queue by messageId+eventType, not messageId alone
+  - SyncEngine A3.2 — pagination cursor keyset composite /sync
+  - SyncEngine A2.1 — emitWithSeq sur notification:new (event pilote \_seq)
+  - SyncEngine A3.1 — endpoint /sync read-only, collection messages
+  - SyncEngine A1 — UserEventSeq + SequenceService.nextSeq atomique
+  - sliding window des sessions trusted — champ lastActivityAt (P7-3)
+  - recordView — catch P2002 différencié + log des pannes réelles (P7-2)
+  - AgentAdminRelay ne démarrait jamais — connect() avant subscribe()
+  - harden two lost-update/out-of-order races on shared counter & cursor
+  - unify 5 bounded-cache copies into a single BoundedTtlCache SSOT
+  - bound participant-lookup cache (FIFO 5000 + expired sweep)
+  - appels tués à tort — garde socket-zombie + sémantique leftAt (C5, 14 sites)
+  - bound resolveConversationId identifier→ObjectId cache (FIFO 2000)
+  - endCall() resolves pre-answer hangups as missed, not completed
+  - claim activeCallId — matcher aussi les documents sans le champ
+  - bound StatusHandler identityCache to stop unbounded typing-path growth
+  - unify timeout via withTimeout helper, fix leaked timers
+  - memoize participantLookup to cut per-message DB round-trip (B.3)
+  - keep attachments on message:edit realtime broadcast
+  - resolve Participant.id before handleMessage in agent + non-blocking-translation paths
+  - ne plus exposer l'email des co-participants (PII)
+  - respecter les prefs présence dans les listes (Lot 5)
+  - drop dead-on-read maintenance of cursor.unreadCount (iter 57 / F23c)
+  - mock createUnifiedAuthMiddleware in profile-extended tests
+  - retry transient push failures + stop deactivating tokens on provider outages
+  - scope push notification collapse-id per-conversation (#1140)
+  - respecter les prefs privacy dans presence:snapshot (Lot 2, E1)
+  - mock createUnifiedAuthMiddleware in profile.test (unblock CI)
+  - ne pas divulguer la présence des membres via /links (Lot 2, E2)
+  - retire la présence des payloads friend-requests (Lot 4)
+  - typage viewer dans /users/search (authContext cast)
+  - unifier la résolution d'avatar participant + corriger notSeenBy (iter 47)
+  - gate présence dans /users/search (Lot 4)
+  - batch resolveForTargets + gate /users/presence (Lot 2)
+  - mock createUnifiedAuthMiddleware in profile.test.ts (unblock CI)
+  - gate présence sur les lookups email/phone/id dédiés (Lot 3 fin)
+  - gate présence sur la fiche profil (Lot 3/6)
+  - PresenceVisibilityService (Lot 1/6 présence)
+  - unread-count batch must exclude each participant's own messages (iter 46 / F23b)
+  - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
+  - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
+  - batch unread counts in one read (F23, iter 45)
+  - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
+  - repair stale outer-exception test in translation_processor
+  - stop dividing torch threads by async worker count — inference ran 2× slow
+  - sequential language fan-out — budgets now cover real inference time
+  - proportional inference budget — long texts are translated again
+  - boot import failure no longer permanently kills the audio pipeline
+  - pin floating ML deps to stop non-deterministic Docker build breaks
+  - sync uv.lock project version (unblock Test Python CI)
+  - restore numpy<1.24 ESPnet constraint (revert breaking Dependabot #825)
+  - import ESM avec extension .js + test-garde des imports relatifs
+  - add .js extension to mention-parser import — prod gateway crash-loop
+  - helper pur resolvePresenceVisibility (Lot 1/6 présence)
+
 ## 1.1.0
 
 ### Minor Changes

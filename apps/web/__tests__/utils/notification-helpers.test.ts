@@ -13,6 +13,7 @@ import {
   requiresUserAction,
   getActorDisplayName,
   formatNotificationTimeAgo,
+  groupNotificationsByDate,
 } from '@/utils/notification-helpers';
 import { NotificationTypeEnum } from '@/types/notification';
 import type { Notification } from '@/types/notification';
@@ -390,6 +391,21 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(getNotificationLink(n)).toBe('/story/s1');
     });
 
+    it('route friend_story_comment vers /story sans metadata (préfixe `friend_`)', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_STORY_COMMENT, context: { postId: 's3', commentId: 'c3' } });
+      expect(getNotificationLink(n)).toBe('/story/s3#comment-c3');
+    });
+
+    it('route story_new_comment vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_NEW_COMMENT, context: { postId: 's4', commentId: 'c4' } });
+      expect(getNotificationLink(n)).toBe('/story/s4#comment-c4');
+    });
+
+    it('route story_thread_reply vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_THREAD_REPLY, context: { postId: 's5', commentId: 'c5' } });
+      expect(getNotificationLink(n)).toBe('/story/s5#comment-c5');
+    });
+
     it('route status_reaction vers /mood/:postId (status partage mood)', () => {
       const n = makeNotif({ type: NotificationTypeEnum.STATUS_REACTION, context: { postId: 'st1' } });
       expect(getNotificationLink(n)).toBe('/mood/st1');
@@ -428,6 +444,31 @@ describe('notification-helpers - Structure Groupée V2', () => {
     it('comment_reply via metadata (postId+commentId) → /post#comment', () => {
       const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REPLY, context: {}, metadata: { postId: 'pc', commentId: 'cc' } as any });
       expect(getNotificationLink(n)).toBe('/post/pc#comment-cc');
+    });
+
+    it('comment_reply avec parentCommentId (context) → ?parent=…#comment-…', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.COMMENT_REPLY,
+        context: { postId: 'p3', commentId: 'r1', parentCommentId: 'c9' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p3?parent=c9#comment-r1');
+    });
+
+    it('replie sur metadata.parentCommentId si absent du context', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.STORY_THREAD_REPLY,
+        context: { postId: 's6', commentId: 'r2' },
+        metadata: { parentCommentId: 'c7' } as any,
+      });
+      expect(getNotificationLink(n)).toBe('/story/s6?parent=c7#comment-r2');
+    });
+
+    it('parentCommentId sans commentId → pas de ?parent (lien inchangé)', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.POST_COMMENT,
+        context: { postId: 'p4', parentCommentId: 'c1' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p4');
     });
 
     it('comment_reaction sans postId → null (gap données gateway)', () => {
@@ -611,10 +652,28 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(formatContentPublishedAt(sixMinAgo, t)).toBe('il y a 6 min');
     });
 
+    it('utilise « il y a {count}h » pour aujourd\'hui au-delà d\'une heure', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const threeHoursAgo = new Date(2026, 5, 15, 11, 0);
+      expect(formatContentPublishedAt(threeHoursAgo.toISOString(), t, 'fr')).toBe('il y a 3h');
+      jest.useRealTimers();
+    });
+
     it('utilise « hier {time} » pour la veille', () => {
       const now = new Date();
       const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 14, 30);
       expect(formatContentPublishedAt(yesterday.toISOString(), t, 'fr').startsWith('hier ')).toBe(true);
+    });
+
+    // Le bucket jour est calculé via calendarDayDiff (SSOT DST-safe), pas via un
+    // delta fixe de 24 h : l'avant-veille reste une date absolue même un jour de
+    // transition heure d'été/hiver. La correction DST elle-même est couverte par
+    // packages/shared/__tests__/utils/calendar-date.test.ts.
+    it('utilise une date absolue pour l\'avant-veille (2 jours)', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const twoDaysAgo = new Date(2026, 5, 13, 14, 0);
+      expect(formatContentPublishedAt(twoDaysAgo.toISOString(), t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      jest.useRealTimers();
     });
 
     it('utilise une date+heure absolue au-delà', () => {
@@ -668,6 +727,86 @@ describe('notification-helpers - Structure Groupée V2', () => {
       const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       const n = mk({ subtitle: 'Story', context: { postExpiresAt: future } });
       expect(buildNotificationContextLine(n, t)).toBe('Story');
+    });
+  });
+
+  describe('groupNotificationsByDate', () => {
+    const labels = {
+      today: 'today',
+      yesterday: 'yesterday',
+      thisWeek: 'thisWeek',
+      thisMonth: 'thisMonth',
+      older: 'older',
+    };
+
+    // Facteur déterministe : createdAt injectable, reste minimal.
+    const at = (createdAt: Date): Notification => ({
+      id: `n_${createdAt.getTime()}`,
+      userId: 'u',
+      type: NotificationTypeEnum.NEW_MESSAGE,
+      priority: 'normal',
+      content: '',
+      actor: { id: 'a', username: 'a', displayName: 'A', avatar: null },
+      context: {},
+      metadata: {},
+      state: { isRead: false, readAt: null, createdAt },
+      delivery: { emailSent: false, pushSent: false },
+    });
+
+    const bucketOf = (
+      created: Date,
+      now: Date
+    ): string | undefined =>
+      groupNotificationsByDate([at(created)], labels, now).find(
+        (g) => g.notifications.length > 0
+      )?.label;
+
+    it('range une notification vieille de 3 jours dans « this week » — même un dimanche (bug d’effondrement du bucket)', () => {
+      const sunday = new Date(2026, 6, 5, 12, 0, 0); // dimanche 2026-07-05
+      const threeDaysAgo = new Date(2026, 6, 2, 9, 0, 0); // jeudi 2026-07-02
+      expect(bucketOf(threeDaysAgo, sunday)).toBe('thisWeek');
+    });
+
+    it('n’émet jamais de bucket « today » redondant pour la fenêtre semaine un dimanche', () => {
+      const sunday = new Date(2026, 6, 5, 12, 0, 0);
+      const groups = groupNotificationsByDate(
+        [at(new Date(2026, 6, 5, 8, 0, 0)), at(new Date(2026, 6, 3, 8, 0, 0))],
+        labels,
+        sunday
+      );
+      const today = groups.find((g) => g.label === 'today');
+      const thisWeek = groups.find((g) => g.label === 'thisWeek');
+      expect(today?.notifications).toHaveLength(1); // le dimanche même
+      expect(thisWeek?.notifications).toHaveLength(1); // vendredi J-2
+    });
+
+    it('reste cohérent en milieu de semaine : J-5 tombe dans « this week », pas « this month »', () => {
+      const wednesday = new Date(2026, 6, 8, 12, 0, 0); // mercredi 2026-07-08
+      const fiveDaysAgo = new Date(2026, 6, 3, 9, 0, 0); // vendredi 2026-07-03
+      expect(bucketOf(fiveDaysAgo, wednesday)).toBe('thisWeek');
+    });
+
+    it('classe today / yesterday / this week / this month / older aux bonnes bornes', () => {
+      const now = new Date(2026, 6, 20, 12, 0, 0); // lundi 2026-07-20
+      expect(bucketOf(new Date(2026, 6, 20, 1, 0, 0), now)).toBe('today');
+      expect(bucketOf(new Date(2026, 6, 19, 23, 0, 0), now)).toBe('yesterday');
+      expect(bucketOf(new Date(2026, 6, 15, 9, 0, 0), now)).toBe('thisWeek'); // J-5
+      expect(bucketOf(new Date(2026, 6, 2, 9, 0, 0), now)).toBe('thisMonth'); // J-18, même mois
+      expect(bucketOf(new Date(2026, 5, 25, 9, 0, 0), now)).toBe('older'); // mois précédent
+    });
+
+    it('préserve l’ordre canonique des buckets et supprime les groupes vides', () => {
+      const now = new Date(2026, 6, 20, 12, 0, 0);
+      const groups = groupNotificationsByDate(
+        [
+          at(new Date(2026, 5, 25, 9, 0, 0)), // older
+          at(new Date(2026, 6, 20, 1, 0, 0)), // today
+          at(new Date(2026, 6, 15, 9, 0, 0)), // thisWeek
+        ],
+        labels,
+        now
+      );
+      expect(groups.map((g) => g.label)).toEqual(['today', 'thisWeek', 'older']);
     });
   });
 });

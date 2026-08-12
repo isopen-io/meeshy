@@ -87,5 +87,34 @@ public enum FeedDatabaseMigrations {
                 t.add(column: "reactionSummaryJson", .blob)
             }
         }
+
+        // Lieu partagé sur un post/commentaire de feed — même schéma que
+        // `messages_location` (Task 15) : colonne texte nullable, les lignes
+        // existantes décodent en `nil`.
+        migrator.registerMigration("feed_location") { db in
+            try db.alter(table: "feed_posts") { t in
+                t.add(column: "locationJson", .text)
+            }
+            try db.alter(table: "feed_comments") { t in
+                t.add(column: "locationJson", .text)
+            }
+        }
+
+        // Média d'un commentaire (miroir de `feed_posts.mediaJson`). Sans cette
+        // colonne, `comment:media-updated` — la transcription et les variantes
+        // TTS d'un audio de commentaire — n'avait aucun foyer persistant : le
+        // média revenait brut au prochain démarrage à froid. Blob nullable →
+        // les lignes existantes décodent en `nil`.
+        //
+        // Enregistrée EN DERNIER, comme toute migration ajoutée depuis :
+        // `DatabaseMigrator` compare la liste enregistrée au journal appliqué en
+        // se calant sur le préfixe déjà joué. Insérer une migration AVANT une
+        // migration déjà appliquée rejouerait cette dernière (« duplicate
+        // column »).
+        migrator.registerMigration("feed_v3_comment_media") { db in
+            try db.alter(table: "feed_comments") { t in
+                t.add(column: "mediaJson", .blob)
+            }
+        }
     }
 }

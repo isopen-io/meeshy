@@ -57,4 +57,71 @@ class StoryContentResolverTest {
         assertThat(resolved.content).isEqualTo("hola")
         assertThat(resolved.isTranslated).isTrue()
     }
+
+    @Test
+    fun `without override the Prisme picks the preferred translation`() {
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
+                StoryTranslation(language = "fr", content = "texte francais"),
+                StoryTranslation(language = "es", content = "texto espanol"),
+            )),
+            prefs(system = "fr"),
+        )
+        assertThat(resolved.content).isEqualTo("texte francais")
+        assertThat(resolved.isTranslated).isTrue()
+        assertThat(resolved.languageCode).isEqualTo("fr")
+    }
+
+    @Test
+    fun `an override wins over the preferred chain`() {
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
+                StoryTranslation(language = "fr", content = "texte francais"),
+                StoryTranslation(language = "es", content = "texto espanol"),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "es",
+        )
+        assertThat(resolved.content).isEqualTo("texto espanol")
+        assertThat(resolved.languageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `the override match is case-insensitive`() {
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
+                StoryTranslation(language = "fr", content = "texte francais"),
+                StoryTranslation(language = "es", content = "texto espanol"),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "ES",
+        )
+        assertThat(resolved.content).isEqualTo("texto espanol")
+    }
+
+    @Test
+    fun `an override without a matching translation falls back to the preferred chain`() {
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
+                StoryTranslation(language = "fr", content = "texte francais"),
+                StoryTranslation(language = "es", content = "texto espanol"),
+            )),
+            prefs(system = "fr"),
+            overrideLanguage = "de",
+        )
+        assertThat(resolved.content).isEqualTo("texte francais")
+    }
+
+    @Test
+    fun `no matching translation at all shows the original, never an arbitrary one`() {
+        val resolved = StoryContentResolver.resolve(
+            item("original english", listOf(
+                StoryTranslation(language = "it", content = "testo"),
+            )),
+            prefs(system = "fr"),
+        )
+        assertThat(resolved.content).isEqualTo("original english")
+        assertThat(resolved.isTranslated).isFalse()
+        assertThat(resolved.languageCode).isNull()
+    }
 }

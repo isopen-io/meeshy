@@ -50,6 +50,16 @@ data class CachePolicy(
             keepForMillis = 24 * 60 * 60_000L,
         )
 
+        // Mood statuses live ~24h and the bar shifts quickly as friends post, so it
+        // is fresh only briefly (a return to the feed within the minute serves the
+        // last bar with no revalidation) and kept for the mood lifetime so a warm
+        // re-entry paints the last bar instantly while a background refresh reconciles
+        // it — the Android analogue of iOS `CacheCoordinator.statuses`.
+        val Statuses = CachePolicy(
+            freshForMillis = 60_000L,
+            keepForMillis = 24 * 60 * 60_000L,
+        )
+
         val Notifications = CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 24 * 60 * 60_000L,
@@ -61,6 +71,15 @@ data class CachePolicy(
         val CallHistory = CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 90L * 24 * 60 * 60_000L,
+        )
+
+        // The empty-query "discover people" suggestions shift as the social graph
+        // does but not by the second; fresh for a minute so a return to the tab
+        // paints instantly, kept a few hours so a cold revisit still shows the last
+        // list while it revalidates.
+        val Suggestions = CachePolicy(
+            freshForMillis = 60_000L,
+            keepForMillis = 6 * 60 * 60_000L,
         )
     }
 }

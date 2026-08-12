@@ -8,12 +8,18 @@ public struct ComposerControlsLayer: View {
     @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var bandStateMachine: BandStateMachine
-    @Binding var areFabsVisible: Bool
+
+    /// Contexte de chrome construit par le parent (`StoryComposerView+Chrome`),
+    /// site UNIQUE de son calcul. Passé en valeur : cette couche ne recompose
+    /// plus sa propre résolution d'état effectif, qui divergeait de celle du
+    /// header.
+    let chrome: ComposerChromeContext
 
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    @Binding var showSoundLibrary: Bool
 
     /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). En mode dessin
     /// (Option A) le canvas reste PLEIN — ce drawer flotte par-dessus son bas.
@@ -21,79 +27,98 @@ public struct ComposerControlsLayer: View {
     let bandMinHeight: CGFloat
     let bandMaxHeight: CGFloat
 
-    /// Drawer dessin replié « totalement » (poignée seule). Tirer le grabber sous le
-    /// min le replie (sans quitter le dessin) ; le tirer vers le haut le redéplie.
-    @Binding var bandDrawerCollapsed: Bool
-
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
     /// panneau de contrôles média redondant dans le composer.
     let onOpenMediaCrop: (String) -> Void
 
+    /// Ferme le panneau actif QUEL QUE SOIT le chemin (chevron « Retour »,
+    /// swipe-down, grabber sous le minimum, tap sur le fond du canvas). Applicateur
+    /// unique tenu par le parent : il seul peut effacer les overrides ViewModel
+    /// (dessin, timeline) sans lesquels l'état effectif re-forcerait aussitôt le
+    /// panneau.
+    let onDismissActivePanel: () -> Void
+
+    /// C8 — ouvre le picker de stickers (sheet présentée par StoryComposerView).
+    var onOpenStickerPicker: (() -> Void)? = nil
+
+    /// T20 — ouvre le sélecteur de lieu (sheet présentée par StoryComposerView,
+    /// qui tient la fabrique injectée par l'app).
+    var onOpenLocationPicker: (() -> Void)? = nil
+
+    /// Reporte la hauteur RÉELLE rendue de `ComposerBottomBand` (content-driven) au
+    /// parent, qui la réserve pour scaler le canvas exactement au-dessus. `0` quand
+    /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
+    var onBandHeightChange: ((CGFloat) -> Void)? = nil
+
+    /// Reporte la position Y (coord GLOBALES écran) du BORD SUPÉRIEUR réel de la
+    /// band. Contrairement à `onBandHeightChange` (taille de layout, qui peut
+    /// sous-estimer si le contenu déborde son `.frame(height:)` ou reste stale
+    /// après un resize), `minY` global reflète TOUJOURS le haut visuellement
+    /// rendu — le parent y colle le bas du canvas pour qu'il ne soit JAMAIS
+    /// recouvert (bug troncature 2026-07-20). `.greatestFiniteMagnitude` = band
+    /// repliée (aucune réserve).
+    var onBandTopYChange: ((CGFloat) -> Void)? = nil
+
     public init(
         viewModel: StoryComposerViewModel,
+        chrome: ComposerChromeContext,
         bandStateMachine: Binding<BandStateMachine>,
-        areFabsVisible: Binding<Bool>,
         selectedFilter: Binding<StoryFilter?>,
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
         showVoiceRecorderSheet: Binding<Bool>,
+        showSoundLibrary: Binding<Bool>,
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
-        bandDrawerCollapsed: Binding<Bool>,
-        onOpenMediaCrop: @escaping (String) -> Void
+        onBandHeightChange: ((CGFloat) -> Void)? = nil,
+        onBandTopYChange: ((CGFloat) -> Void)? = nil,
+        onOpenMediaCrop: @escaping (String) -> Void,
+        onDismissActivePanel: @escaping () -> Void,
+        onOpenStickerPicker: (() -> Void)? = nil,
+        onOpenLocationPicker: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
+        self.chrome = chrome
         self._bandStateMachine = bandStateMachine
-        self._areFabsVisible = areFabsVisible
         self._selectedFilter = selectedFilter
         self._fgMediaItem = fgMediaItem
         self._showAudioDocumentPicker = showAudioDocumentPicker
         self._showVoiceRecorderSheet = showVoiceRecorderSheet
+        self._showSoundLibrary = showSoundLibrary
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
-        self._bandDrawerCollapsed = bandDrawerCollapsed
+        self.onBandHeightChange = onBandHeightChange
+        self.onBandTopYChange = onBandTopYChange
         self.onOpenMediaCrop = onOpenMediaCrop
+        self.onDismissActivePanel = onDismissActivePanel
+        self.onOpenStickerPicker = onOpenStickerPicker
+        self.onOpenLocationPicker = onOpenLocationPicker
     }
 
     /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
     /// (plus seulement DESSIN). L'utilisateur veut la poignée rétractable jusqu'à
     /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
-    private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
+    private var isBandResizable: Bool { chrome.effectiveBandState.allowsCollapsibleDrawer }
 
-    /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
-    /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
-    /// du panneau dessin dès que l'outil dessin est actif, même si la machine d'état
-    /// est restée `.hidden` (chemin d'entrée FAB, état restauré…). Sans ça le band
-    /// partagé ne s'affichait pas pour le dessin (bug user 2026-06-01 « dessin devrait
-    /// afficher le ComposerBottomBand aussi »).
-    private var effectiveBandState: BandState {
-        // On se cale sur `drawingEditingMode.isActive` (et non `activeTool`) car
-        // c'est lui qui pilote l'affichage des contrôleurs flottants : tant que les
-        // bulles de dessin sont à l'écran, le band partagé doit l'être aussi —
-        // les deux états peuvent diverger selon le chemin d'entrée.
-        if viewModel.drawingEditingMode.isActive, bandStateMachine.state == .hidden {
-            return .toolPanel(.drawing)
-        }
-        return bandStateMachine.state
-    }
-
-    /// FABs are visible when the band is hidden; when a band panel is open,
-    /// FABs hide to free space. Swiping down on the band dismisses it and
-    /// restores FABs.
+    /// C-DIR2 (d) : FABs et header partagent la MÊME règle, et désormais le MÊME
+    /// argument — la résolution de l'état effectif vit dans le contexte, plus
+    /// dans cette couche (le header lisait l'état brut, les FABs l'effectif).
     private var shouldShowFABs: Bool {
-        areFabsVisible && effectiveBandState == .hidden
+        ComposerChromePolicy.fullChromeVisible(chrome)
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
-            // FABs — visible only when the band is hidden
+            // Barre d'outils horizontale — visible only when the band is hidden
+            // (directive 2026-07-10 : outils en bas, centrés, à portée de pouce).
             if shouldShowFABs {
                 HStack {
+                    Spacer()
                     ComposerFABColumn(
                         mediaBadge: mediaBadge,
                         sonBadge: sonBadge,
@@ -110,13 +135,66 @@ public struct ComposerControlsLayer: View {
                             // `tapFAB` seul ouvrait un band sans contrôles (bug user 2026-06-01).
                             if cat == .drawing {
                                 viewModel.selectTool(.drawing)
+                            } else if cat == .timeline {
+                                // Intention UNIQUE d'ouverture (S4) : la machine
+                                // gère `.timeline` comme un outil normal (cf.
+                                // `BandStateMachineTests`) — plus de flip solo
+                                // du flag ViewModel, seule source du bug de
+                                // réservation d'espace du canvas (§0 du rapport).
+                                bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                             } else {
                                 bandStateMachine.tapFAB(cat)
                             }
                         },
-                        onSwipeUp: { cat in bandStateMachine.swipeUpOnFAB(cat) },
-                        onSwipeDownAny: { areFabsVisible = false }
+                        onSwipeUp: { cat in
+                            if cat == .timeline {
+                                bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
+                            } else {
+                                bandStateMachine.swipeUpOnFAB(cat)
+                            }
+                        },
+                        onSwipeDownAny: { bandStateMachine.hideChrome() }
                     )
+                    Spacer()
+                }
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                // FABs posés SUR le canvas : leur lisibilité suit la
+                // luminance du FOND de la slide, pas le thème de l'app
+                // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
+                .environment(\.colorScheme, viewModel.canvasChromeScheme)
+                // D4 — masquer le chrome n'était atteignable QUE par
+                // `onSwipeDownAny`, un swipe physique sur la rangée de FABs :
+                // VoiceOver intercepte les swipes pour sa propre navigation,
+                // donc ce geste n'existait pour personne naviguant au rotor.
+                // `fabRestoreHandle` (juste en dessous) a déjà son pendant
+                // « Afficher les outils » — celui-ci est le SEUL côté resté
+                // gestuel. Même canal que le swipe (`bandStateMachine
+                // .hideChrome()`), exposé en action nommée sur le conteneur
+                // du chrome plutôt que redécouvert au hasard d'un swipe.
+                .accessibilityAction(named: Text(String(
+                    localized: "story.composer.hideTools",
+                    defaultValue: "Masquer les outils",
+                    bundle: .module
+                ))) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        bandStateMachine.hideChrome()
+                    }
+                }
+            }
+
+            // C3 — état « chrome caché » (barre d'outils masquée par
+            // swipe-down, band fermé) : l'écran était NU, sans aucune
+            // affordance de récupération — seul un tap « au hasard » sur le
+            // canvas ramenait les outils. Une poignée fantôme discrète (même
+            // grammaire que le grabber du band replié) marque le point de
+            // retour : tap ou swipe-up = réafficher les outils. Le tap sur le
+            // fond du canvas reste actif en parallèle. CENTRÉE, alignée sur la
+            // barre horizontale (2026-07-10).
+            if chrome.isChromeHidden && chrome.isBandHidden {
+                HStack {
+                    Spacer()
+                    fabRestoreHandle
                     Spacer()
                 }
                 .padding(.bottom, 16)
@@ -124,27 +202,45 @@ public struct ComposerControlsLayer: View {
             }
 
             // Band — with swipe-down to dismiss
-            if effectiveBandState != .hidden {
+            if !chrome.isBandHidden {
                 ComposerBottomBand(
-                    state: effectiveBandState,
+                    state: chrome.effectiveBandState,
                     viewModel: viewModel,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    showSoundLibrary: $showSoundLibrary,
+                    // La machine gère `.timeline` de façon générique depuis le
+                    // refactor 2026-07-14 (`BandStateMachineTests.
+                    // tapTileTimelineSwapsOpenPanel`) — le spécial-cas qui
+                    // sautait `tapTile`/`selectTool` pour `.timeline` datait
+                    // de l'ère « timeline en sheet » et empêchait le switch-chip
+                    // Timeline de fonctionner depuis un AUTRE panneau déjà
+                    // ouvert (bug reproduit simulateur : le chip restait sans
+                    // effet, aucun panneau ne changeait). Passe désormais par
+                    // `openTimeline` (S4, intention UNIQUE d'ouverture partagée
+                    // avec les 5 autres sites) pour `.timeline` — comportement
+                    // strictement identique (`tapTile`/`selectTool` inchangés),
+                    // seule la mutation du flag ViewModel est centralisée.
                     onTapTile: { tool in
                         if tool == .timeline {
-                            viewModel.isTimelineVisible = true
+                            bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                         } else {
+                            viewModel.isTimelineVisible = false
                             bandStateMachine.tapTile(tool)
-                            viewModel.selectTool(tool)
                         }
+                        viewModel.selectTool(tool)
                     },
-                    onBackFromToolPanel: { bandStateMachine.backFromToolPanel() },
-                    onCloseFormatPanel: {
-                        bandStateMachine.closeFormatPanel()
-                        viewModel.selectedElementId = nil
-                    },
+                    // Les quatre chemins de sortie passent par le MÊME
+                    // applicateur : « Retour », swipe-down, grabber sous le
+                    // minimum et tap sur le fond du canvas ne peuvent plus
+                    // diverger. Chacun fermait auparavant un sous-ensemble
+                    // différent des overrides (timeline, dessin, sélection), si
+                    // bien que le chevron du panneau DESSIN était un no-op
+                    // visuel — l'état effectif re-forçait aussitôt le panneau.
+                    onBackFromToolPanel: onDismissActivePanel,
+                    onCloseFormatPanel: onDismissActivePanel,
                     onEditMedia: { mediaId in
                         // Édition d'un média depuis la liste d'outils → éditeur
                         // d'image plein écran (plus de panneau intermédiaire).
@@ -174,25 +270,27 @@ public struct ComposerControlsLayer: View {
                         viewModel.deleteElement(id: textId)
                     },
                     onShowInTimeline: {
-                        viewModel.isTimelineVisible = true
+                        // 6e chemin d'ouverture (challenge S4, attaque
+                        // bloquante confirmée) : ce callback est câblé aux
+                        // boutons « Timeline » des lignes média/texte
+                        // (`ComposerToolPanelHost.swift`), atteignables
+                        // uniquement quand un panneau (média/texte) est DÉJÀ
+                        // ouvert — `effectiveBandState` ne force
+                        // `.toolPanel(.timeline)` que depuis `.hidden`, donc
+                        // flipper le flag seul ne changeait RIEN de visible.
+                        // `openTimeline` swappe le panneau comme n'importe
+                        // quel autre outil.
+                        bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                     },
+                    onOpenStickerPicker: onOpenStickerPicker,
+                    onOpenLocationPicker: onOpenLocationPicker,
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,
-                    onResizeDismiss: {
-                        // Grabber tiré sous le min → on REPLIE le drawer (poignée
-                        // seule), pour TOUT outil : le canvas devient 100 % visible
-                        // et l'outil reste actif (en dessin, le contrôleur flottant
-                        // des bulles reste visible). Re-déplier via le grabber ; pour
-                        // fermer l'outil → chevron retour du band (2026-06-02, étend
-                        // le repli dessin à tous les outils).
-                        bandDrawerCollapsed = true
-                    },
-                    drawingCollapsed: isBandResizable && bandDrawerCollapsed,
-                    onExpandDrawer: {
-                        // Grabber (replié) tiré vers le haut → on redéplie le drawer.
-                        bandDrawerCollapsed = false
-                    }
+                    // C-DIR2 (b), directive user 2026-07-04 : tirer le grabber
+                    // sous le min ne replie PLUS le band en poignée — il FERME
+                    // le panneau et rend les FABs.
+                    onResizeDismiss: onDismissActivePanel
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 // En mode dessin le grabber pilote le RESIZE — on désarme le
@@ -204,29 +302,93 @@ public struct ComposerControlsLayer: View {
                             // Swipe down: dismiss band → show FABs
                             if value.translation.height > 40,
                                abs(value.translation.height) > abs(value.translation.width) {
-                                bandStateMachine.swipeDownOnBand()
-                                // If band is now hidden, ensure FABs come back
-                                if bandStateMachine.state == .hidden {
-                                    areFabsVisible = true
-                                }
-                            }
-                            // Swipe left/right: switch category
-                            if abs(value.translation.width) > abs(value.translation.height),
-                               abs(value.translation.width) > 40 {
-                                bandStateMachine.swipeHorizontalOnBand()
+                                onDismissActivePanel()
                             }
                         }
                 )
+                // Hauteur RÉELLE rendue de la band (content-driven) → réservée par
+                // le parent pour scaler le canvas exactement au-dessus.
+                .background(
+                    GeometryReader { p in
+                        Color.clear
+                            .onAppear {
+                                onBandHeightChange?(p.size.height)
+                                onBandTopYChange?(p.frame(in: .global).minY)
+                            }
+                            .adaptiveOnChange(of: p.size.height) { _, h in
+                                onBandHeightChange?(h)
+                            }
+                            // Le HAUT réel de la band (coord globales) — source de
+                            // vérité pour la réserve du canvas (immunise frame/
+                            // overflow/stale). Suivre minY directement.
+                            .adaptiveOnChange(of: p.frame(in: .global).minY) { _, y in
+                                onBandTopYChange?(y)
+                            }
+                    }
+                )
             }
         }
-        .ignoresSafeArea(edges: .bottom)
+        // PAS d'`.ignoresSafeArea(edges: .bottom)` ici : il étendait le LAYOUT
+        // sous l'indicateur d'accueil, si bien que la dernière rangée du
+        // panneau d'outil et la barre de FABs finissaient à 16 pt du bord
+        // PHYSIQUE — donc à cheval sur la zone du geste système (constat user
+        // 2026-07-30 « des contrôleurs hors du viewport »). Le verre du band
+        // continue pourtant de saigner jusqu'en bas : c'est
+        // `ComposerBottomBand.bandBackground` qui porte son propre
+        // `.ignoresSafeArea(edges: .bottom)`, sur le FOND seul. Même règle que
+        // `emptyStateLargePicker`, qui réservait déjà `safeAreaBottomInset`.
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: bandStateMachine.state)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: areFabsVisible)
-        .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
-            // Slide switch invalidates any open formatPanel (id from previous slide).
-            bandStateMachine.reset()
-            areFabsVisible = true
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: chrome.isChromeHidden)
+        // Band repliée (FABs seuls / dessin immersif) → réserve 0 : le canvas
+        // redevient plein écran, les FABs flottent par-dessus.
+        .adaptiveOnChange(of: chrome.isBandHidden) { _, hidden in
+            if hidden {
+                onBandHeightChange?(0)
+                // Band repliée → aucun bord haut à réserver (canvas plein écran).
+                onBandTopYChange?(.greatestFiniteMagnitude)
+            }
         }
+        .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
+            // Slide switch invalidates any open formatPanel (id from previous
+            // slide). `reset()` restaure aussi le chrome — un changement de
+            // slide efface tout, y compris un masquage volontaire.
+            bandStateMachine.reset()
+        }
+    }
+
+    // MARK: - Poignée de récupération du chrome (C3)
+
+    private var fabRestoreHandle: some View {
+        Capsule()
+            .fill(Color.white.opacity(0.28))
+            .frame(width: 34, height: 5)
+            .padding(.horizontal, 26)   // zone tappable large, centrée sur la barre
+            // 5 + 16 + 16 = 37 pt de haut : SOUS le minimum HIG, alors que c'est
+            // l'UNIQUE recours quand le chrome est masqué. Le débord de contact
+            // le porte à 44 sans bouger le rendu ni la hauteur de layout.
+            .padding(.vertical, 16)
+            .composerHitTarget()
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    bandStateMachine.showChrome()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onEnded { value in
+                        if value.translation.height < -20 {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                bandStateMachine.showChrome()
+                            }
+                        }
+                    }
+            )
+            .accessibilityLabel(String(
+                localized: "story.composer.showTools",
+                defaultValue: "Afficher les outils",
+                bundle: .module
+            ))
+            .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Badges

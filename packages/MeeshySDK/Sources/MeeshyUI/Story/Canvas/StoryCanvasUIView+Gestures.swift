@@ -70,6 +70,18 @@ extension StoryCanvasUIView {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
 
+        // Sortie GESTUELLE du zoom viewport (C4) : zoomé + double-tap sur une
+        // zone sans item foreground → reset (convention photo-viewer). Le
+        // cycle videoFitMode ci-dessous reste le double-tap fond à l'échelle 1 ;
+        // un double-tap sur un ITEM garde son édition dédiée même zoomé.
+        if CanvasViewportZoomPolicy.doubleTapResetsViewport(
+            isViewportZoomed: isViewportZoomed,
+            hitItemId: hitTestItem(at: location)
+        ) {
+            onViewportZoomResetRequested?()
+            return
+        }
+
         // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
         // Use `resolveManipulationTarget` to honour the active manipulation
         // layer (so a tap on the bg in `.background` layer triggers the cycle
@@ -104,6 +116,7 @@ extension StoryCanvasUIView {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
         return nil
     }
 
@@ -213,6 +226,8 @@ extension StoryCanvasUIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            lastBgSnapX = nil
+            lastBgSnapY = nil
 
             // Bring-to-front au touch : couvre tap simple ET début de drag.
             // Skip pour le background media (toujours derrière les fg) — le
@@ -229,26 +244,38 @@ extension StoryCanvasUIView {
             // - y est mappé sur `1920 * scaleFactor` pour rester cohérent quand
             //   le canvas n'a pas un ratio exactement 9:16.
             let geo = CanvasGeometry(renderSize: bounds.size)
-            let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
+            // Hauteur design projetée à l'écran pour CE canvas (9:16 → 1920×scale,
+            // 16:9 → 607.5×scale) — même base que la projection des layers, donc
+            // le geste écran→normalisé round-trip quel que soit le ratio du canvas.
+            let renderHeightForDesign = geo.render(geo.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
-            let dyNorm = Double(translation.y / renderHeightFor1920)
+            let dyNorm = Double(translation.y / renderHeightForDesign)
 
-            // Unification BG/FG (2026-05-29) : pour le bg, on ne snap pas
-            // (le bg media n'a pas de "position" sémantique sur les rails
-            // 0.18/0.25/0.5/0.75/0.82 — il est centré et se zoom/pan dans
-            // ses propres bounds). updatePosition mute mediaObjects[bg].x/y
-            // qui est lu par le converter bgTransform de rebuildLayers et
-            // appliqué via applyContentTransform sur le contentLayer du bg.
+            // Unification BG/FG (2026-05-29) : updatePosition mute
+            // mediaObjects[bg].x/y qui est lu par le converter bgTransform de
+            // rebuildLayers et appliqué via applyContentTransform sur le
+            // contentLayer du bg.
             //
             // Sensibilité réduite (× 0.5) pour le pan BG : le geste s'applique
             // au repositionnement d'une image qui couvre déjà tout le canvas,
             // donc un déplacement 1:1 du doigt à la position normalisée est
             // trop sensible pour ajuster finement le cadrage (user feedback
             // 2026-05-29 : « avec une faible sensibilité »).
+            //
+            // Snap de CADRAGE (directive user 2026-07-14) : contrairement au
+            // foreground (rails 0.18/0.25/0.5/0.75/0.82), le bg s'accroche au
+            // centre (0.5) et aux bords (0.0/1.0) — « centrer ou coller la
+            // bordure que l'utilisateur approche ». Guides + haptic à l'entrée.
             if id == backgroundMediaObjectId {
                 let rawX = clamp(dragStartSlideX + dxNorm * 0.5)
                 let rawY = clamp(dragStartSlideY + dyNorm * 0.5)
-                slide = updatePosition(slideId: id, x: rawX, y: rawY)
+                let (snappedX, didSnapX) = snapBackground(rawX)
+                let (snappedY, didSnapY) = snapBackground(rawY)
+                noteBackgroundSnap(x: didSnapX ? snappedX : nil,
+                                   y: didSnapY ? snappedY : nil)
+                updateSnapGuides(x: didSnapX ? snappedX : nil,
+                                 y: didSnapY ? snappedY : nil)
+                slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
                 onItemModified?(slide)
                 return
             }
@@ -263,6 +290,8 @@ extension StoryCanvasUIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            lastBgSnapX = nil
+            lastBgSnapY = nil
             hideSnapGuides()
             slideContentRevision &+= 1
             rebuildLayers()
@@ -276,6 +305,29 @@ extension StoryCanvasUIView {
             return (target, true)
         }
         return (value, false)
+    }
+
+    /// Snap du CADRAGE d'arrière-plan : ramène la position normalisée vers le
+    /// centre (0.5) ou un bord (0.0 / 1.0) quand l'utilisateur s'en approche.
+    /// Pure et `nonisolated` pour être testable sans monter de vue.
+    nonisolated func snapBackground(_ value: Double) -> (snapped: Double, didSnap: Bool) {
+        for target in Self.backgroundSnapTargets where abs(value - target) < Self.backgroundSnapTolerance {
+            return (target, true)
+        }
+        return (value, false)
+    }
+
+    /// Émet un tap haptique léger UNIQUEMENT à l'entrée dans une nouvelle zone
+    /// de snap (transition), pour matérialiser l'accroche magnétique sans
+    /// vibrer en continu tant que le doigt reste dans la zone.
+    func noteBackgroundSnap(x: Double?, y: Double?) {
+        if x != lastBgSnapX || y != lastBgSnapY {
+            if (x != nil && x != lastBgSnapX) || (y != nil && y != lastBgSnapY) {
+                HapticFeedback.light()
+            }
+        }
+        lastBgSnapX = x
+        lastBgSnapY = y
     }
 
     func updateSnapGuides(x: Double?, y: Double?) {
@@ -375,7 +427,7 @@ extension StoryCanvasUIView {
         let geo = CanvasGeometry(renderSize: bounds.size)
         func renderPosition(x: Double, y: Double) -> CGPoint {
             let designX = geo.designLength(forNormalized: CGFloat(x))
-            let designY = CGFloat(y) * CanvasGeometry.designHeight
+            let designY = geo.designHeightLength(forNormalized: CGFloat(y))
             return geo.render(CGPoint(x: designX, y: designY))
         }
 
@@ -406,14 +458,21 @@ extension StoryCanvasUIView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
-            // Text scale is baked into the rendered `fontSize` at configure-time
-            // (see `StoryTextLayer.configure`: `text.fontSize * text.scale`).
-            // Applying scale again on the CATextLayer.transform would
-            // double-scale the glyphs during the gesture and snap back to the
-            // correct size only at .ended → user-perceived "text grows then
-            // shrinks while dragging" (regression report 2026-05-27).
-            let rotation = CGFloat(text.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
+            // Échelle LIVE pendant le pinch (user 2026-07-11 « le zoom/dézoom
+            // de texte doit être rendu en temps réel ») : le scale d'un texte
+            // est CUIT dans `fontSize` au configure (`text.fontSize ×
+            // text.scale`, cf. StoryTextLayer) — la layer restait donc FIGÉE à
+            // sa taille d'avant-geste, seul le rebuild `.ended` montrait la
+            // nouvelle taille. On applique un ratio transitoire (scale modèle
+            // courant / scale cuit lu sur `StoryTextLayer.textObject`) par-
+            // dessus la rotation ; hors geste le ratio vaut 1 (pas de
+            // double-scale — régression 2026-05-27 toujours couverte) et le
+            // rebuild de fin de geste re-rend les glyphes NETS à la taille
+            // finale.
+            let bakedScale = (layer as? StoryTextLayer)?.textObject?.scale ?? text.scale
+            layer.transform = Self.liveTextGestureTransform(rotationDegrees: text.rotation,
+                                                            modelScale: text.scale,
+                                                            bakedScale: bakedScale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
@@ -432,19 +491,57 @@ extension StoryCanvasUIView {
             let rotation = CGFloat(sticker.rotation * .pi / 180)
             layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
+        } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
+            // La pastille position rasterise son scale dans `bounds` au
+            // configure (StoryLocationLayer mesure le badge à fontSize ×
+            // scale) — même contrainte que le texte : le modèle était bien
+            // muté par updatePosition/updateScale/updateRotation mais la
+            // layer restait FIGÉE pendant tout le geste et téléportait au
+            // rebuild `.ended` (constat user 2026-07-30 « le sticker de
+            // position ne bouge pas »). Ratio transitoire par-dessus la
+            // rotation ; le rebuild de fin de geste re-rasterise NET.
+            let bakedScale = (layer as? StoryLocationLayer)?.locationObject?.scale ?? location.scale
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.position = renderPosition(x: location.x, y: location.y)
+            layer.transform = Self.liveTextGestureTransform(rotationDegrees: location.rotation,
+                                                            modelScale: location.scale,
+                                                            bakedScale: bakedScale)
+            CATransaction.commit()
         }
     }
 
+    /// Transform de geste LIVE d'un texte : rotation modèle + ratio d'échelle
+    /// transitoire (scale modèle courant ÷ scale cuit dans le rendu au dernier
+    /// configure). L'échelle uniforme commute avec la rotation 2D — l'ordre de
+    /// composition est donc indifférent. `bakedScale` ≤ 0 (layer jamais
+    /// configurée, données corrompues) → rotation seule, jamais de division
+    /// invalide. Pure et `nonisolated` pour être testable sans monter de vue.
+    nonisolated static func liveTextGestureTransform(rotationDegrees: Double,
+                                                     modelScale: Double,
+                                                     bakedScale: Double) -> CATransform3D {
+        let rotation = CATransform3DMakeRotation(CGFloat(rotationDegrees * .pi / 180), 0, 0, 1)
+        guard bakedScale > 0, modelScale > 0 else { return rotation }
+        let ratio = CGFloat(modelScale / bakedScale)
+        return CATransform3DScale(rotation, ratio, ratio, 1)
+    }
+
     func hitTestItem(at point: CGPoint) -> String? {
-        guard let hit = itemsContainer.hitTest(point) else { return nil }
-        var current: CALayer? = hit
-        while let c = current {
-            if let id = c.name,
-               !id.isEmpty,
-               c.superlayer === itemsContainer || c === itemsContainer {
-                return id
+        // Itération manuelle des layers NOMMÉES par zPosition décroissant :
+        // `CALayer.hitTest` natif ignore les zPosition ET se fait avaler par
+        // les overlays pleine-toile sans nom (layer de DESSIN, zPosition
+        // 9999) — dès qu'un dessin existait, plus AUCUN item n'était
+        // touchable et le pan retombait sur le fond (bug user 2026-07-11).
+        let named = (itemsContainer.sublayers ?? []).enumerated()
+            .filter { !($0.element.name ?? "").isEmpty }
+            .sorted {
+                if $0.element.zPosition != $1.element.zPosition {
+                    return $0.element.zPosition > $1.element.zPosition
+                }
+                return $0.offset > $1.offset
             }
-            current = c.superlayer
+        for (_, layer) in named where layer.hitTest(point) != nil {
+            return layer.name
         }
         return nil
     }

@@ -56,3 +56,10 @@ export function useCommentsList(
   if (!commentsQuery.data) return [];
   return commentsQuery.data.pages.flatMap((page) => page.data);
 }
+
+export function useCommentRepliesList(
+  repliesQuery: ReturnType<typeof useCommentRepliesQuery>,
+): PostComment[] {
+  if (!repliesQuery.data) return [];
+  return repliesQuery.data.pages.flatMap((page) => page.data);
+}

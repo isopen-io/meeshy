@@ -60,6 +60,26 @@ describe('attachments i18n', () => {
     expect(body).toContain('+1🎵');
     expect(body).toContain('📷 Foto');
   });
+  it('localise l’unité de taille selon la langue (pas de « Mo » français en anglais/allemand)', () => {
+    const en = formatSingleAttachmentLabelI18n('en', { type: 'video', duration: 135000, fileSize: 15_000_000 });
+    expect(en).toContain('14.3 MB');
+    expect(en).not.toContain('Mo');
+    const de = formatSingleAttachmentLabelI18n('de', { type: 'audio', fileSize: 500_000 });
+    expect(de).toContain('488 KB');
+    expect(de).not.toContain('Ko');
+  });
+  it('roule Ko → Mo au bord du mébioctet (jamais "1024 Ko")', () => {
+    // 1_048_500 o < 1 Mio mais /1024 = 1023.93 → .toFixed(0) rendait "1024 Ko".
+    // Le tier doit basculer sur la valeur ARRONDIE, comme formatCallDataSize.
+    const label = formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 1_048_500 });
+    expect(label).not.toContain('1024 Ko');
+    expect(label).toContain('1.0 Mo');
+  });
+  it('garde les Ko sous le bord de rollover', () => {
+    // 500_000 / 1024 = 488.28 → "488 Ko" (aucune régression du tier Ko).
+    expect(formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 500_000 }))
+      .toContain('488 Ko');
+  });
 });
 
 function makeContentHarness(usersById: Record<string, any>) {
@@ -74,7 +94,9 @@ function makeContentHarness(usersById: Record<string, any>) {
         (where.id.in as string[]).map(id => ({ id, ...(usersById[id] ?? {}) })),
     },
     conversation: { findUnique: async () => null },
-    userPreferences: { findUnique: async () => null },
+    post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
+      userPreferences: { findUnique: async () => null },
+    userConversationPreferences: { findMany: async () => [] },
     notification: {
       create: async (args: any) => { created.push(args.data); return { id: 'n1', ...args.data, createdAt: new Date() }; },
       count: async () => 0,
@@ -100,6 +122,33 @@ describe('contenu localisé par destinataire', () => {
     await svc.createPostLikeNotification({ actorId: 'a', postId: 'p', postAuthorId: 'r', emoji: '❤️', postType: 'STORY' });
     expect(created[0].content).toBe('reacted ❤️ to your story');
   });
+  it('comment_reaction REEL, destinataire en → corps et metadata.postType conscients du réel (F58)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'REEL',
+    });
+    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s reel');
+    expect(created[0].metadata.postType).toBe('REEL');
+  });
+  it('comment_reaction STATUS ne s’effondre pas vers POST dans metadata.postType (F58)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'fr' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '🔥', postAuthorName: 'Bob', postType: 'STATUS',
+    });
+    expect(created[0].content).toBe('User a a réagi 🔥 à votre commentaire sur le statut de Bob');
+    expect(created[0].metadata.postType).toBe('STATUS');
+  });
+  it('comment_reaction sans postType retombe sur POST (rétro-compat)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '❤️', postAuthorName: 'Bob',
+    });
+    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s post');
+    expect(created[0].metadata.postType).toBe('POST');
+  });
 });
 
 describe('batch — langue par destinataire', () => {
@@ -107,7 +156,9 @@ describe('batch — langue par destinataire', () => {
     const { svc, created } = makeContentHarness({
       a: { systemLanguage: 'en' }, b: { systemLanguage: 'de' }, x: { displayName: 'X' },
     });
-    await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'] });
+    // Audience PUBLIC : ce cas porte sur la LANGUE du contenu, pas sur le droit
+    // de voir. Un post public admet tout le monde, la garde est un no-op ici.
+    await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'], visibility: 'PUBLIC' });
     const byUser = new Map(created.map((d: any) => [d.userId, d.content]));
     expect(byUser.get('a')).toBe('mentioned you');
     expect(byUser.get('b')).toBe('hat dich erwähnt');
@@ -119,6 +170,7 @@ describe('login new device', () => {
     const pushed: any[] = [];
     const prisma: any = {
       user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [] },
+      post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
       userPreferences: { findUnique: async () => null },
       notification: { create: async (a: any) => ({ id: 'n', ...a.data, createdAt: new Date() }), count: async () => 0 },
       conversation: { findUnique: async () => null },

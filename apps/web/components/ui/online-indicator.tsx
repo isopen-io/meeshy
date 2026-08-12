@@ -2,13 +2,14 @@
 
 import { cn } from '@/lib/utils';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserStatus, PRESENCE_DOT_CLASS, type UserStatus } from '@/lib/user-status';
 
 interface OnlineIndicatorProps {
   isOnline: boolean;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-  // Support pour statut détaillé (online/away/offline)
-  status?: 'online' | 'away' | 'offline';
+  // Support pour statut détaillé (online/away/idle/offline)
+  status?: UserStatus;
   // Tooltip personnalisé
   tooltip?: string;
   // Timestamp de dernière activité pour tooltip détaillé
@@ -29,22 +30,21 @@ export function OnlineIndicator({
     lg: 'h-4 w-4',
   };
 
-  // Couleurs selon le statut
-  const statusColors = {
-    online: 'bg-green-500',    // Vert : en ligne (< 5 min)
-    away: 'bg-orange-400',     // Orange : inactif (5-30 min)
-    offline: 'bg-gray-400',    // Gris : hors ligne (> 30 min)
-  };
-
   // Messages par défaut
-  const defaultTooltips = {
+  const defaultTooltips: Record<UserStatus, string> = {
     online: 'En ligne',
-    away: 'Inactif',
+    away: 'Absent',
+    idle: 'Inactif',
     offline: 'Hors ligne',
   };
 
-  // Déterminer le statut effectif
-  const effectiveStatus = status || (isOnline ? 'online' : 'offline');
+  // Déterminer le statut effectif — sans prop status, dériver via la règle canonique
+  const effectiveStatus = status ?? getUserStatus({ isOnline, lastActiveAt });
+
+  // Au-dela de 5min (offline) : aucun indicateur (dot masqué). Le gris AFFICHÉ
+  // est l'état idle (3-5min) ; le gris offline reste défini dans
+  // PRESENCE_DOT_CLASS pour les usages labellisés, pas ici.
+  if (effectiveStatus === 'offline') return null;
 
   // Générer le tooltip
   let finalTooltip = tooltip || defaultTooltips[effectiveStatus];
@@ -73,7 +73,7 @@ export function OnlineIndicator({
       className={cn(
         'rounded-full border-2 border-white transition-colors duration-500',
         sizeClasses[size],
-        statusColors[effectiveStatus],
+        PRESENCE_DOT_CLASS[effectiveStatus],
         className
       )}
       title={finalTooltip}

@@ -130,29 +130,10 @@ interface CallStatusIndicatorProps {
 
 ## Custom Hooks
 
-### useWebRTC
-Manages WebRTC media streams and browser compatibility:
-
-```typescript
-const {
-  localStream,
-  isInitializing,
-  error,
-  checkBrowserSupport,
-  getLocalStream,
-  switchCamera,
-  toggleAudio,
-  toggleVideo,
-  stopLocalStream,
-} = useWebRTC({ onError });
-```
-
-**Features:**
-- Browser compatibility checks
-- HTTPS requirement validation
-- Camera/microphone access
-- Camera switching (mobile)
-- Track enable/disable
+There is intentionally no `useWebRTC` hook in this directory: an earlier one was written
+but never wired into the mounted tree (media is acquired/switched via `useWebRTCP2P`,
+`@/hooks/use-webrtc-p2p.ts`, and `VideoCallInterface.handleSwitchCamera`), and has been
+removed to avoid misleading future audits (see `tasks/calls-fonctionnel-todo.md`, wave 33).
 
 Socket.IO signaling (`call:signal`, `call:join`, `call:leave`, `call:toggle-audio`,
 `call:toggle-video`, `call:initiated`, `call:participant-joined`, `call:participant-left`,

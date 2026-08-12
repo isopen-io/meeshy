@@ -12,14 +12,14 @@ final class MessageDraftMediaStoreTests: XCTestCase {
     private let userId = "user-tests"
     private var conversationId = ""
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         conversationId = "conv-\(UUID().uuidString)"
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         MessageDraftMediaStore.purge(userId: userId, conversationId: conversationId)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeTempFile(named name: String, contents: String = "media-bytes") throws -> URL {
