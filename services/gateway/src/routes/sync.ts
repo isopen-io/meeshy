@@ -21,6 +21,33 @@ import { computeETag, ifNoneMatchMatches } from '../utils/etag';
  * streams ; un stream épuisé conserve sa clé (report) pour ne rien re-livrer.
  */
 
+/**
+ * Retrait appliqué au `checkpoint` rendu au client, en millisecondes.
+ *
+ * `checkpoint` est un WATERMARK : le client le renvoie en `since` au tour
+ * suivant, et la borne serveur est STRICTE (`updatedAt > since`). Tout ce qui
+ * n'est pas dans CETTE réponse mais porte un `updatedAt` antérieur au
+ * checkpoint tombe donc dans un trou DÉFINITIF — le client ne le redemandera
+ * jamais.
+ *
+ * Deux fenêtres produisent exactement cela, et le retrait couvre les deux :
+ *
+ * 1. Le checkpoint était pris APRÈS les lectures : toute ligne écrite entre la
+ *    requête et l'horodatage était invisible ici et exclue du tour suivant.
+ *    Corrigé en ancrant le checkpoint au DÉBUT du handler.
+ * 2. `@updatedAt` est estampillé par Prisma à la CONSTRUCTION de l'écriture,
+ *    pas à son commit. Une ligne estampillée T peut n'être visible qu'à T+δ :
+ *    un checkpoint pris même avant nos lectures laisserait passer les
+ *    écritures en vol. Seul un retrait ferme cette seconde fenêtre.
+ *
+ * Le coût est une RELECTURE bornée (les changements des dernières secondes
+ * reviennent une fois de plus), que le client déduplique par `id`. C'est la
+ * seule direction sûre, et c'est la règle que le SDK iOS documente déjà côté
+ * client (`SyncWatermark` : « la fenêtre ne saute jamais une mise à jour
+ * réelle, au pire elle en relit »).
+ */
+export const SYNC_CHECKPOINT_LAG_MS = 5_000;
+
 const MAX_ITEMS_PER_COLLECTION = 1000;
 const GAP_THRESHOLD = 10_000;
 const SUPPORTED_COLLECTIONS = ['messages'] as const;
@@ -137,6 +164,14 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     const sinceDate = new Date(since);
     const cap = Math.min(limit ?? MAX_ITEMS_PER_COLLECTION, MAX_ITEMS_PER_COLLECTION);
 
+    // Watermark rendu au client — voir SYNC_CHECKPOINT_LAG_MS. Ancré AVANT
+    // toute lecture puis retiré du lag, et jamais RECULÉ sous le `since` déjà
+    // acquitté : un watermark qui régresse rejouerait sans fin une fenêtre
+    // déjà livrée à un client qui interroge plus souvent que le lag.
+    const checkpoint = new Date(
+      Math.max(sinceDate.getTime(), Date.now() - SYNC_CHECKPOINT_LAG_MS)
+    );
+
     // Gap detection EXACTE (A1) : le client annonce le dernier `_seq` vu ; si
     // le serveur a émis > GAP_THRESHOLD events depuis, le delta temporel ne
     // suffit plus → full resync requis.
@@ -152,13 +187,23 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
 
     const messagesCol = collectionsResult.messages as { nextCursor?: string | null } | undefined;
 
+    const hasMore = Object.values(collectionsResult).some(
+      (c) => (c as { truncated?: boolean }).truncated === true,
+    );
+
+    // Une page TRONQUÉE n'a pas livré toute la fenêtre, et le reste est un
+    // ARRIÉRÉ : ses `updatedAt` sont ANTÉRIEURS au checkpoint. Avancer le
+    // watermark ici affirmerait une couverture non démontrée, et le client qui
+    // l'adopterait perdrait tout l'arriéré d'un coup — définitivement, la
+    // borne serveur étant stricte. Le watermark reste donc où il est : la
+    // suite se réclame par `nextCursor`, et seule la page qui CLÔT le parcours
+    // (`hasMore: false`) rend un checkpoint adoptable. Même règle que
+    // `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
     const payload = {
-      checkpoint: new Date().toISOString(),
+      checkpoint: (hasMore ? sinceDate : checkpoint).toISOString(),
       checkpointSeq,
       collections: collectionsResult,
-      hasMore: Object.values(collectionsResult).some(
-        (c) => (c as { truncated?: boolean }).truncated === true,
-      ),
+      hasMore,
       // Pilote mono-collection : le token top-level EST celui de `messages`.
       // Multi-collection (A6) le namespacera par collection.
       nextCursor: messagesCol?.nextCursor ?? null,

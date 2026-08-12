@@ -1,3 +1,197 @@
+# Tête instruite pour le cycle 99 — le cycle 98 a REFUSÉ l'item 1 et fermé un trou que personne ne surveillait
+
+*Le cycle 98 devait livrer la passe de rétention des posts supprimés (item 1 de la tête du cycle
+98). Il ne l'a pas fait, et le refus est motivé — voir §« Ce que le cycle 98 a refusé de faire ».
+Il a livré à la place la correction d'un défaut de la MÊME famille méthodologique, trouvé en
+appliquant le filtre du cycle 97 à un endroit où personne ne l'avait porté : le watermark de
+l'endpoint de synchronisation.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 98 ajoute — le troisième membre d'une famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE, et une
+> prémisse peut périmer sans que personne ne réécrive la phrase.*
+> Le cycle 98 trouve le troisième :
+>
+> **Un CURSEUR est une promesse de couverture — et rien ne la vérifie jamais.**
+>
+> Un watermark (`checkpoint`, `updatedSince`, `since`, `seq`) dit au client : *tout ce qui
+> précède cette borne, tu l'as reçu.* La borne serveur étant STRICTE (`gt`), un curseur rendu
+> trop AVANCÉ ne produit ni erreur, ni log, ni test rouge : il produit un **trou définitif**,
+> silencieux, dans les données d'un client qui a fait exactement ce qu'on lui a dit de faire.
+>
+> **La méthode qui en découle :** pour chaque curseur rendu à un client, poser trois questions —
+> (a) *à quel instant est-il ancré, AVANT ou APRÈS les lectures qu'il prétend couvrir ?*
+> (b) *l'estampille sur laquelle il porte est-elle posée au COMMIT ou à la CONSTRUCTION de
+> l'écriture ?* (c) *que vaut-il quand la réponse est TRONQUÉE ?* Les trois se répondaient mal
+> dans le même endpoint, et chacune produisait sa propre fenêtre de perte.
+>
+> Le dépôt SAVAIT déjà tout cela — mais côté CLIENT seulement, et pour un autre endpoint :
+> `SyncWatermark.advancedAfterDeltaPage` (`packages/MeeshySDK/.../SyncWatermark.swift`) écrit
+> noir sur blanc « une page qui laisse du reste n'a pas rendu toute la fenêtre » et « la borne
+> serveur est STRICTE (`gt`) ». Cette règle n'avait jamais traversé jusqu'au serveur qui émet
+> les curseurs. **Chercher les règles déjà écrites d'un côté de la frontière et jamais portées
+> de l'autre est, en soi, un filtre productif.**
+
+## Livré au cycle 98 — **le watermark de `GET /sync` promettait ce qu'il n'avait pas livré**
+
+`checkpoint` est le curseur que le client renvoie en `since` au tour suivant. Trois fenêtres de
+perte définitive, fermées ensemble (`services/gateway/src/routes/sync.ts`) :
+
+1. **Ancrage APRÈS les lectures.** `checkpoint: new Date()` était évalué à la construction du
+   payload. Toute ligne écrite entre la requête et cet horodatage était invisible dans la réponse
+   ET exclue du tour suivant. Ancré désormais au DÉBUT du handler. Détail qui donne la mesure du
+   défaut : `checkpointSeq`, dans le MÊME payload, était déjà lu avant les collections — les deux
+   watermarks penchaient en sens **opposés**, l'un conservateur, l'autre optimiste.
+2. **`@updatedAt` est estampillé au BUILD de l'écriture, pas à son COMMIT.** Une ligne estampillée
+   T peut n'être visible qu'à T+δ : un checkpoint pris même AVANT nos lectures laisse passer les
+   écritures en vol. Seul un retrait ferme cette fenêtre — `SYNC_CHECKPOINT_LAG_MS` (5 s), borné
+   par le bas au `since` déjà acquitté (sans quoi un client interrogeant plus vite que le lag
+   rejouerait sans fin une fenêtre déjà livrée).
+3. **Page TRONQUÉE = couverture non démontrée.** Le reste de la fenêtre est un ARRIÉRÉ : ses
+   `updatedAt` sont par construction ANTÉRIEURS au checkpoint. Le rendre frais invitait le client
+   à perdre tout l'arriéré d'un coup. Le watermark reste sur `since` tant que `hasMore` est vrai ;
+   seule la page qui CLÔT le parcours en rend un adoptable.
+
+Tests : 6 (`sync.test.ts`, deux nouveaux `describe`), **RED prouvé sur 5**, la 6e ancrant le
+comportement CONSERVÉ (la page qui clôt le parcours avance bien le watermark). La première garde
+a exigé un délai artificiel dans le double de `findMany` : sans lui, lecture et checkpoint
+partagent la milliseconde et le défaut passe VERT par accident — noté ici parce que la première
+rédaction du test est effectivement passée au vert sur un code défectueux.
+
+Gate : suite `sync` 22/22, `tsc --noEmit` propre, suite gateway complète verte.
+
+**Portée honnête, à ne pas surestimer : le défaut était LATENT.** `/sync` est l'endpoint PILOTE
+du SyncEngine et n'a aujourd'hui **aucun consommateur** — ni web (`apps/web/lib/sync/` ne porte
+que `sync-seq-state.ts`), ni iOS (`ConversationSyncEngine` ne l'appelle pas). Aucun utilisateur
+n'a perdu de message par ce chemin. La valeur du correctif est qu'il arrive AVANT que la première
+implémentation cliente ne se règle sur un contrat faux.
+
+## Ce que le cycle 98 a REFUSÉ de faire, et pourquoi — à trancher par un humain
+
+**L'item 1 de la tête du cycle 98 (passe de rétention des posts supprimés) n'a PAS été livré.**
+
+Le raisonnement technique qui y menait est intact et je ne le conteste pas : la suppression d'un
+post est irréversible (cycle 97 §1), il n'existe qu'un seul destructeur de lignes `Post` (§2), et
+la rétention illimitée des posts soft-supprimés ne protège donc personne. Ce qui bloque n'est pas
+le raisonnement, c'est la NATURE du geste : mettre en service une passe planifiée qui DÉTRUIT
+définitivement du contenu utilisateur, et ses octets, N jours après sa suppression douce.
+
+Trois raisons de ne pas l'écrire dans une routine automatique :
+
+1. **Le geste est irréversible et sort du dépôt.** Une erreur de périmètre ne se corrige pas par
+   un rollback : le cycle 97 vient précisément de trouver que la passe voisine détruisait depuis
+   des mois des posts permanents qu'elle n'avait jamais eu le droit de toucher.
+2. **`N` est une décision produit, pas technique.** Aucune valeur n'est déductible du dépôt, et
+   aucune n'est neutre : elle fixe la fenêtre pendant laquelle un utilisateur qui supprime par
+   erreur peut encore être secouru par un humain.
+3. **La question ouverte de la tête du cycle 98 n'est toujours pas tranchée** — un repost SIMPLE
+   d'un post PERMANENT ne duplique rien (l'instantané ne se déclenche que sur source ÉPHÉMÈRE) ;
+   le détacher le VIDE au lieu de le sauver. Les deux issues honnêtes (rétention conditionnelle,
+   ou extension de l'instantané au repost de source permanente à la CRÉATION) sont l'une et
+   l'autre des choix produit.
+
+**Ce que le cycle 99 doit faire de cet item : le poser à un humain, pas le réessayer.** Si la
+décision revient (`N`, et laquelle des deux issues), l'implémentation est balisée et courte.
+
+## Ce que le cycle 98 a prospecté sans le traiter — la famille CALL (item 2, partiellement instruit)
+
+Aux trois constats du cycle 97 (`recordingEnabled` sans écrivain ni lecteur ;
+`CallSession.transcriptionEnabled` sans écrivain ; modèle `Transcription` sans écrivain), le
+cycle 98 en ajoute un quatrième, **vérifié dépôt entier** :
+
+- **`CallParticipant.connectionQuality` n'a AUCUN écrivain, et pourtant trois LECTEURS.**
+  `CallEventsHandler` le mappe dans la charge utile participant à trois endroits
+  (`:1903`, `:2030`, `:2385`) : tout client reçoit donc `connectionQuality: null` pour tout
+  participant, toujours. Le signal existe pourtant et circule — `call:quality-report` porte
+  `rtt`, `packetLoss`, `level` par PARTICIPANT — mais il n'est persisté qu'AGRÉGÉ sur la session
+  (`CallSession.networkQuality`, dernier rapport gagnant, tous participants confondus). Les
+  clients, eux, calculent leur qualité LOCALEMENT (iOS `CallManager.connectionQuality` depuis
+  l'état de la peer connection ; web `call-store`) et ne lisent jamais le champ serveur.
+  Même famille que `MessageAttachment.isViewOnce` : soit le retirer (avec ses trois lecteurs),
+  soit le câbler depuis `call:quality-report`, qui a déjà tout ce qu'il faut sous la main.
+
+**Piste non instruite, notée pour honnêteté** : un appel `active` dont TOUS les participants ont
+un `leftAt` (orphelin) n'est pas fauché par l'étage 4 du GC — sa garde est
+`dbStale.length > 0 && >= participants.length`, et la liste filtrée sur `leftAt: null` est VIDE,
+donc `0 > 0` est faux. Il attend l'étage 2, soit **2 h**, pendant lesquelles
+`Conversation.activeCallId` reste pris et la conversation refuse tout nouvel appel
+(`reclaimFromTerminalHolder` ne récupère que sur un détenteur TERMINAL, or celui-ci est `active`).
+Le commentaire de l'étage 2 nomme explicitement ce routage — c'est donc un choix, pas un oubli —
+mais sa conséquence sur le verrou d'appel n'est écrite nulle part. **Reste à établir avant tout
+correctif : cet état orphelin est-il seulement ATTEIGNABLE ?** Tous les chemins de départ lus au
+cycle 98 terminent l'appel avec le dernier partant. Ne pas écrire de correctif avant d'avoir
+exhibé le chemin.
+
+## Ce que le cycle 98 laisse strictement inchangé
+
+### Item 3 — l'index MongoDB non appliqué, toujours le maillon faible
+
+`expiresAt_ephemeral_partial` (cycle 92) est fourni mais **jamais appliqué** — aucun déploiement
+ne joue les migrations MongoDB manuelles. Sans lui, le balayage fait un COLLSCAN par minute sur
+`Message`, et c'est ce balayage qui `unlink`. Trois dépendants s'y exécutent désormais (cycles 96,
+97). Inchangé : cela demande un accès de déploiement que la routine n'a pas.
+
+### Item 4 — les constats non instruits des cycles 93 à 95 (inchangés)
+
+- `maxViewOnceCount: null` veut dire « 1 » dans le code et « tous les membres » dans le schéma.
+- Le passif en base de `scheduleViewOnceBurn` ne se rattrape pas tout seul.
+- Aucun client ne masque `.forward` sur un message à vue unique (iOS : toolchain absente ici).
+- `copyForwardedAttachments` copie `filePath` VERBATIM — la copie transférée et l'original
+  partagent l'octet. Motif propre à la famille message ; côté post, la duplication est réelle.
+- `MessageAttachment.isViewOnce` n'a aucun écrivain : soit le retirer, soit le câbler.
+- Veine « événement socket manqué » : modération admin, rattrapage à la reconnexion.
+- `tsc --noEmit` sur `apps/web` rend 1 224 diagnostics, tous dans `__tests__/**`, tous
+  pré-existants. Signal éteint ; assainir est un chantier en soi.
+
+## Ce qui reste ouvert des cycles précédents
+
+- **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
+  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
+  la routine** — inchangé aux cycles 86 à 98. Exige une machine macOS.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
+  `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
+  droit (cf. `tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
+  n'existe toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
+  charge** (cycle 87). Non reproduit aux cycles 88 à 98.
+
+## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
+
+| Cible | Exécutable ici ? | Note |
+|---|---|---|
+| suites Swift / iOS | ✗ | aucune toolchain |
+| build web (Next.js) | ⚠ | dépend du réseau Google Fonts (cf. cycle 88) |
+| gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
+
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
+et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+**Ordre exact re-vérifié au cycle 98** (sans lui, `tsc --noEmit` rend un faux positif
+`Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
+
+```bash
+bun install --ignore-scripts
+cd packages/shared && npx prisma generate --generator client && bun run build
+cd services/gateway && npx tsc --noEmit && bun run test
+```
+
+---
+
 # Tête instruite pour le cycle 98 — la chaîne de destruction ne détruit plus ce qu'elle ne devait pas ; reste ce qu'elle ne détruit toujours pas
 
 *Le cycle 97 devait porter à la famille CALL la question posée cinq fois de suite. Il ne l'a pas
