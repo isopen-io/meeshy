@@ -364,7 +364,17 @@ export class PostFeedService {
     // `length === LIMIT` confondrait une page coupée avec une fenêtre de très
     // exactement LIMIT suppressions, qui est COMPLÈTE : le client escaladerait
     // pour rien, à chaque delta, tant que la fenêtre reste sur ce nombre.
-    const deletedIdsPromise: Promise<string[]> = options?.updatedSince
+    //
+    // PORTÉE : la FENÊTRE, pas la page — d'où le `!cursorData`. Cette clause ne
+    // dépend pas du curseur, elle est identique d'une page à l'autre. Depuis que
+    // le client draine la fenêtre delta (`StoryViewModel.drainStoryPages`,
+    // jusqu'à 6 pages), la relancer à chaque page referait jusqu'à 6 fois la
+    // même lecture de 501 lignes sous filtre de visibilité, pour un résultat que
+    // le client tient déjà depuis la première page. Elle ne court donc que sur
+    // la page qui OUVRE la fenêtre. Sûr parce que le drain fusionne par union
+    // (`formUnion`) et par `||`, jamais par écrasement : une page suivante sans
+    // tombstone ne peut pas effacer ceux de la première.
+    const deletedIdsPromise: Promise<string[]> = options?.updatedSince && !cursorData
       ? this.prisma.post
           .findMany({
             where: {
